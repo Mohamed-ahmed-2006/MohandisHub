@@ -1,0 +1,46 @@
+// ---------------------------------------------------------------------------
+// Auth validation schemas — Zod schemas for request bodies
+// ---------------------------------------------------------------------------
+
+import { z } from 'zod';
+
+export const registerSchema = z.object({
+  email: z.string().email('Invalid email format.').max(255),
+  password: z
+    .string()
+    .min(8, 'Password must be at least 8 characters.')
+    .max(128, 'Password must not exceed 128 characters.')
+    .regex(/[A-Z]/, 'Password must contain at least one uppercase letter.')
+    .regex(/[a-z]/, 'Password must contain at least one lowercase letter.')
+    .regex(/[0-9]/, 'Password must contain at least one digit.'),
+  displayName: z
+    .string()
+    .min(2, 'Display name must be at least 2 characters.')
+    .max(100, 'Display name must not exceed 100 characters.')
+    .trim(),
+  role: z.enum(['customer', 'expert', 'business']),
+  phone: z.string().max(20).optional(),
+  dateOfBirth: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, 'Date of birth must be in YYYY-MM-DD format.')
+    .refine(
+      (val) => {
+        const dob = new Date(val);
+        const today = new Date();
+        const age = today.getFullYear() - dob.getFullYear();
+        const monthDiff = today.getMonth() - dob.getMonth();
+        const dayDiff = today.getDate() - dob.getDate();
+        const actualAge = monthDiff < 0 || (monthDiff === 0 && dayDiff < 0) ? age - 1 : age;
+        return actualAge >= 20;
+      },
+      { message: 'You must be at least 20 years old to register.' },
+    ),
+});
+
+export const loginSchema = z.object({
+  email: z.string().email('Invalid email format.'),
+  password: z.string().min(1, 'Password is required.'),
+});
+
+export type RegisterInput = z.infer<typeof registerSchema>;
+export type LoginInput = z.infer<typeof loginSchema>;

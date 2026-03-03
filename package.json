@@ -1,0 +1,38 @@
+{
+  "name": "mohandishub",
+  "private": true,
+  "version": "0.1.0",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "scripts": {
+    "prepare": "husky install",
+    "predev": "npm run build -w @mohandishub/shared",
+    "dev": "concurrently -n web,api -c blue,green \"npm run dev:web\" \"npm run dev:api\"",
+    "dev:web": "npm run dev -w @mohandishub/web",
+    "dev:api": "npm run dev -w @mohandishub/api",
+    "build": "npm run build -w @mohandishub/shared && npm run build -w @mohandishub/api && npm run build -w @mohandishub/web",
+    "typecheck": "npm run build -w @mohandishub/shared && npm run typecheck -w @mohandishub/shared && npm run typecheck -w @mohandishub/api && npm run typecheck -w @mohandishub/web",
+    "lint": "npm run lint -w @mohandishub/shared && npm run lint -w @mohandishub/api && npm run lint -w @mohandishub/web",
+    "test": "npm run build -w @mohandishub/shared && npm run test -w @mohandishub/shared && npm run test -w @mohandishub/api && npm run test -w @mohandishub/web",
+    "format": "prettier . --write",
+    "format:check": "prettier . --check"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.22.0",
+    "@next/eslint-plugin-next": "^15.2.0",
+    "concurrently": "^9.1.2",
+    "eslint": "^9.22.0",
+    "eslint-plugin-import": "^2.31.0",
+    "globals": "^16.0.0",
+    "husky": "^9.1.7",
+    "lint-staged": "^15.5.0",
+    "prettier": "^3.5.3",
+    "typescript": "^5.8.2",
+    "typescript-eslint": "^8.26.1"
+  }
+}

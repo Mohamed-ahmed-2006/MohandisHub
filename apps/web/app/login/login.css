@@ -1,0 +1,29 @@
+.login-page-main {
+  min-height: 100vh;
+  padding-top: 4rem;
+  padding-bottom: 4rem;
+}
+
+.login-page-title {
+  font-family: var(--font-sora), sans-serif;
+  font-size: 1.875rem;
+  font-weight: 600;
+}
+
+.login-page-description {
+  margin-top: 0.75rem;
+  color: hsl(var(--text-soft));
+}
+
+.login-page-back-link {
+  margin-top: 1.5rem;
+  display: inline-block;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: hsl(var(--accent));
+  text-decoration: none;
+}
+
+.login-page-back-link:hover {
+  text-decoration: underline;
+}

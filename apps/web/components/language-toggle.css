@@ -1,0 +1,45 @@
+.language-toggle-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid hsl(var(--border));
+  background: hsl(var(--surface-strong));
+  color: hsl(var(--foreground));
+  border-radius: 999px;
+  min-width: 2.8rem;
+  padding: 0.45rem 0.75rem;
+  cursor: pointer;
+  font-size: 0.8rem;
+  font-weight: 700;
+  transition:
+    background-color 420ms ease,
+    color 420ms ease,
+    border-color 420ms ease,
+    transform 320ms ease;
+}
+
+.language-toggle-button:focus-visible {
+  outline: 2px solid hsl(var(--accent));
+  outline-offset: 2px;
+}
+
+.language-toggle-target {
+  opacity: 0.9;
+  color: hsl(var(--accent));
+  transition:
+    transform 360ms ease,
+    opacity 360ms ease;
+}
+
+.language-toggle-button:hover {
+  transform: translateY(-1px);
+}
+
+.language-toggle-button:hover .language-toggle-target {
+  opacity: 1;
+  transform: scale(1.08);
+}
+
+.language-toggle-button:active .language-toggle-target {
+  transform: scale(0.94);
+}

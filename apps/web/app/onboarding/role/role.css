@@ -1,0 +1,53 @@
+.role-selection-page-main {
+  min-height: 100vh;
+  padding-top: 4rem;
+  padding-bottom: 4rem;
+}
+
+.role-selection-page-title {
+  font-family: var(--font-sora), sans-serif;
+  font-size: 1.875rem;
+  font-weight: 600;
+}
+
+.role-selection-page-description {
+  margin-top: 0.75rem;
+  max-width: 42rem;
+  color: hsl(var(--text-soft));
+}
+
+.role-selection-card-grid {
+  margin-top: 2rem;
+  display: grid;
+  gap: 1rem;
+}
+
+.role-selection-card {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 1.25rem;
+}
+
+.role-selection-card-title {
+  font-family: var(--font-sora), sans-serif;
+  font-size: 1.5rem;
+  font-weight: 600;
+}
+
+.role-selection-card-description {
+  margin-top: 0.5rem;
+  font-size: 0.875rem;
+  line-height: 1.7;
+  color: hsl(var(--text-soft));
+}
+
+.role-selection-continue-button {
+  width: 100%;
+}
+
+@media (min-width: 768px) {
+  .role-selection-card-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}

@@ -1,0 +1,30 @@
+.api-health-badge {
+  display: inline-flex;
+  border-radius: 999px;
+  padding: 0.25rem 0.75rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.api-health-badge-loading {
+  background-color: rgba(148, 163, 184, 0.24);
+  color: hsl(var(--foreground));
+}
+
+.api-health-badge-healthy {
+  background-color: rgba(16, 185, 129, 0.24);
+  color: #059669;
+}
+
+html[data-theme='dark'] .api-health-badge-healthy {
+  color: #34d399;
+}
+
+.api-health-badge-error {
+  background-color: rgba(244, 63, 94, 0.22);
+  color: #e11d48;
+}
+
+html[data-theme='dark'] .api-health-badge-error {
+  color: #fb7185;
+}

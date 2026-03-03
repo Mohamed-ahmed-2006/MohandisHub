@@ -1,0 +1,179 @@
+.home-page-main {
+  min-height: 100vh;
+  position: relative;
+}
+
+.home-page-floating-controls {
+  position: fixed;
+  top: 0.85rem;
+  right: 0.85rem;
+  z-index: 60;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+[dir='rtl'] .home-page-floating-controls {
+  right: auto;
+  left: 0.85rem;
+}
+
+.home-page-container {
+  padding-top: 2rem;
+  padding-bottom: 2.5rem;
+}
+
+.home-page-navbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  border-radius: 1rem;
+  border: 1px solid hsl(var(--border));
+  background-color: color-mix(in srgb, hsl(var(--surface-strong)) 76%, transparent);
+  padding: 0.75rem 1rem;
+  backdrop-filter: blur(8px);
+}
+
+.home-page-brand {
+  font-family: var(--font-sora), sans-serif;
+  font-size: 1.25rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: hsl(var(--foreground));
+  text-decoration: none;
+}
+
+.home-page-nav-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+[dir='rtl'] .home-page-nav-actions {
+  flex-direction: row-reverse;
+}
+
+.home-page-hero-section {
+  padding-top: 4rem;
+}
+
+.home-page-hero-title {
+  margin-top: 1.25rem;
+  max-width: 48rem;
+  font-family: var(--font-sora), sans-serif;
+  font-size: 2.25rem;
+  font-weight: 600;
+  line-height: 1.15;
+}
+
+.home-page-hero-description {
+  margin-top: 1.25rem;
+  max-width: 42rem;
+  font-size: 1rem;
+  line-height: 1.7;
+  color: hsl(var(--text-soft));
+}
+
+.home-page-hero-actions {
+  margin-top: 2rem;
+}
+
+.home-page-hero-cta-button {
+  padding: 0.75rem 1.5rem;
+}
+
+.home-page-section {
+  padding-top: 4rem;
+}
+
+.home-page-section-title {
+  font-family: var(--font-sora), sans-serif;
+  font-size: 1.75rem;
+  font-weight: 600;
+}
+
+.home-page-feature-grid,
+.home-page-steps-grid {
+  margin-top: 1.5rem;
+  display: grid;
+  gap: 1rem;
+}
+
+.home-page-feature-title {
+  font-family: var(--font-sora), sans-serif;
+  font-size: 1.25rem;
+  font-weight: 600;
+}
+
+.home-page-feature-description,
+.home-page-step-text {
+  margin-top: 0.5rem;
+  font-size: 0.875rem;
+  line-height: 1.7;
+  color: hsl(var(--text-soft));
+}
+
+.home-page-step-label {
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: hsl(var(--accent));
+}
+
+.home-page-footer {
+  margin-top: 5rem;
+  border-top: 1px solid hsl(var(--border));
+  padding-top: 1.5rem;
+  padding-bottom: 1.5rem;
+  font-size: 0.875rem;
+  color: hsl(var(--text-soft));
+}
+
+@media (min-width: 640px) {
+  .home-page-floating-controls {
+    top: 1.1rem;
+    right: 1.1rem;
+  }
+
+  [dir='rtl'] .home-page-floating-controls {
+    right: auto;
+    left: 1.1rem;
+  }
+
+  .home-page-container {
+    padding-top: 2.5rem;
+  }
+
+  .home-page-navbar {
+    padding: 0.75rem 1.5rem;
+  }
+
+  .home-page-hero-section,
+  .home-page-section {
+    padding-top: 5rem;
+  }
+
+  .home-page-hero-title {
+    font-size: 3rem;
+  }
+
+  .home-page-hero-description {
+    font-size: 1.125rem;
+  }
+
+  .home-page-section-title {
+    font-size: 1.875rem;
+  }
+}
+
+@media (min-width: 768px) {
+  .home-page-feature-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .home-page-steps-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}

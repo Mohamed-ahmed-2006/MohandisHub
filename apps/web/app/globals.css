@@ -1,0 +1,100 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import '../components/ui/shared-ui.css';
+@import '../components/api-health-badge.css';
+@import '../components/theme-toggle.css';
+@import '../components/language-toggle.css';
+@import '../components/auth/auth.css';
+@import './home.css';
+@import './login/login.css';
+@import './onboarding/role/role.css';
+@import './onboarding/customer/onboarding-customer.css';
+@import './onboarding/expert/onboarding-expert.css';
+@import './onboarding/business/onboarding-business.css';
+
+:root {
+  --background: 36 33% 98%;
+  --foreground: 214 30% 16%;
+  --muted: 210 20% 95%;
+  --accent: 27 90% 55%;
+  --card: 0 0% 100%;
+  --border: 212 24% 88%;
+  --surface-strong: 0 0% 100%;
+  --text-soft: 215 25% 32%;
+  --shadow-soft: 0 14px 45px -25px rgba(0, 0, 0, 0.25);
+}
+
+html[data-theme='dark'] {
+  --background: 220 24% 10%;
+  --foreground: 210 28% 94%;
+  --muted: 220 19% 16%;
+  --accent: 27 95% 60%;
+  --card: 221 22% 14%;
+  --border: 220 14% 26%;
+  --surface-strong: 220 21% 12%;
+  --text-soft: 214 24% 76%;
+  --shadow-soft: 0 18px 45px -26px rgba(0, 0, 0, 0.6);
+}
+
+* {
+  box-sizing: border-box;
+  border-color: hsl(var(--border));
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-manrope), sans-serif;
+  color: hsl(var(--foreground));
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background:
+    radial-gradient(circle at 12% 15%, rgba(255, 201, 120, 0.3), transparent 35%),
+    radial-gradient(circle at 90% 10%, rgba(164, 197, 255, 0.25), transparent 38%),
+    linear-gradient(180deg, #fcfaf5 0%, #f8f7f3 100%);
+  transition:
+    background-color 420ms ease,
+    color 420ms ease,
+    border-color 420ms ease,
+    box-shadow 420ms ease;
+}
+
+html[data-theme='dark'] body {
+  background:
+    radial-gradient(circle at 12% 12%, rgba(255, 182, 74, 0.15), transparent 34%),
+    radial-gradient(circle at 86% 8%, rgba(80, 125, 255, 0.2), transparent 36%),
+    linear-gradient(180deg, #11151d 0%, #0f131b 100%);
+}
+
+a,
+button,
+input,
+article,
+header,
+footer,
+section,
+div,
+p,
+h1,
+h2,
+h3,
+span {
+  transition:
+    background-color 420ms ease,
+    color 420ms ease,
+    border-color 420ms ease,
+    box-shadow 420ms ease,
+    transform 360ms ease,
+    opacity 360ms ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition-duration: 1ms !important;
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}
