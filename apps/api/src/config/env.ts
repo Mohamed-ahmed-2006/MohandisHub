@@ -27,10 +27,11 @@ const envSchema = z.object({
   DIDIT_BASE_URL: z.string().url().default('https://verification.didit.me/v3'),
 
   // OTP delivery providers
-  OTP_EMAIL_PROVIDER: z.enum(['console', 'sendgrid']).default('console'),
+  OTP_EMAIL_PROVIDER: z.enum(['console', 'brevo', 'sendgrid']).default('console'),
   OTP_SMS_PROVIDER: z.enum(['console', 'twilio']).default('console'),
+  BREVO_API_KEY: z.string().optional(),
   SENDGRID_API_KEY: z.string().optional(),
-  EMAIL_FROM: z.string().default('noreply@mohandishub.com'),
+  EMAIL_FROM: z.string().default('noreply@mohandishub.app'),
   TWILIO_ACCOUNT_SID: z.string().optional(),
   TWILIO_AUTH_TOKEN: z.string().optional(),
   TWILIO_PHONE_NUMBER: z.string().optional(),

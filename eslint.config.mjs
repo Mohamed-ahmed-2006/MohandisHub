@@ -6,7 +6,13 @@ import tseslint from 'typescript-eslint';
 
 export default [
   {
-    ignores: ['**/node_modules/**', '**/.next/**', '**/dist/**', '**/coverage/**'],
+    ignores: [
+      '**/node_modules/**',
+      '**/.next/**',
+      '**/dist/**',
+      '**/coverage/**',
+      'apps/api/vitest.config.ts',
+    ],
   },
   js.configs.recommended,
   ...tseslint.configs.recommendedTypeChecked,
@@ -27,6 +33,10 @@ export default [
     },
     rules: {
       '@typescript-eslint/no-explicit-any': 'error',
+      '@typescript-eslint/no-unused-vars': [
+        'error',
+        { argsIgnorePattern: '^_', varsIgnorePattern: '^_' },
+      ],
       '@typescript-eslint/consistent-type-imports': ['error', { prefer: 'type-imports' }],
       'import/order': [
         'error',

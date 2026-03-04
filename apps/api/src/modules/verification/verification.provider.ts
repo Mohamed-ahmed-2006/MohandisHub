@@ -62,7 +62,6 @@ export class ManualVerificationProvider implements IVerificationProvider {
     return Promise.resolve({ sessionId });
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   handleWebhook(_payload: unknown, _headers?: WebhookHeaders): Promise<VerificationWebhookResult> {
     // Manual verification doesn't use webhooks — approval is done
     // through internal admin endpoints.
@@ -319,7 +318,6 @@ export class DiditVerificationProvider implements IVerificationProvider {
 export class IdenfyVerificationProvider implements IVerificationProvider {
   readonly name = 'idenfy';
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   createSession(_params: {
     userId: string;
     email: string;
@@ -331,11 +329,7 @@ export class IdenfyVerificationProvider implements IVerificationProvider {
     );
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  handleWebhook(
-    _unusedPayload: unknown,
-    _headers?: WebhookHeaders,
-  ): Promise<VerificationWebhookResult> {
+  handleWebhook(_payload: unknown, _headers?: WebhookHeaders): Promise<VerificationWebhookResult> {
     return Promise.reject(new Error('Idenfy webhook handling not yet implemented.'));
   }
 }

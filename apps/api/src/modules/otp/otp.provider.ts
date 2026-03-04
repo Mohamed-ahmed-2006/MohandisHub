@@ -61,6 +61,48 @@ export class ConsoleSmsSender implements IOtpSender {
   }
 }
 
+// ── Brevo email sender (production) ──────────────────────────────────────
+
+export class BrevoEmailSender implements IOtpSender {
+  readonly channel: OtpChannel = 'email';
+
+  async send(params: { destination: string; code: string; displayName: string }): Promise<boolean> {
+    const { env } = await import('../../config/env.js');
+
+    if (!env.BREVO_API_KEY) {
+      throw new Error('Brevo email sender not configured. Set BREVO_API_KEY in .env');
+    }
+
+    const response = await fetch('https://api.brevo.com/v3/smtp/email', {
+      method: 'POST',
+      headers: {
+        accept: 'application/json',
+        'content-type': 'application/json',
+        'api-key': env.BREVO_API_KEY,
+      },
+      body: JSON.stringify({
+        sender: { name: 'MohandisHub', email: env.EMAIL_FROM },
+        to: [{ email: params.destination, name: params.displayName }],
+        subject: 'MohandisHub — Verify your email',
+        htmlContent: [
+          `<h2>Hello ${params.displayName},</h2>`,
+          `<p>Your verification code is: <strong>${params.code}</strong></p>`,
+          `<p>This code expires in 10 minutes.</p>`,
+          `<p style="color:#888;">If you did not request this, please ignore this email.</p>`,
+        ].join(''),
+      }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      logger.error('Brevo email send failed', { status: response.status, body: errorText });
+      return false;
+    }
+
+    return true;
+  }
+}
+
 // ── SendGrid email sender (production stub) ──────────────────────────────
 
 export class SendGridEmailSender implements IOtpSender {
@@ -69,22 +111,6 @@ export class SendGridEmailSender implements IOtpSender {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   send(params: { destination: string; code: string; displayName: string }): Promise<boolean> {
     // TODO: Implement with @sendgrid/mail
-    //
-    // import sgMail from '@sendgrid/mail';
-    // sgMail.setApiKey(env.SENDGRID_API_KEY);
-    //
-    // await sgMail.send({
-    //   to: params.destination,
-    //   from: env.EMAIL_FROM,
-    //   subject: 'MohandisHub — Verify your email',
-    //   html: `
-    //     <h2>Hello ${params.displayName},</h2>
-    //     <p>Your verification code is: <strong>${params.code}</strong></p>
-    //     <p>This code expires in 10 minutes.</p>
-    //   `,
-    // });
-    // return true;
-
     throw new Error('SendGrid email sender not configured. Set SENDGRID_API_KEY in .env');
   }
 }
@@ -123,6 +149,8 @@ export const createOtpSender = (
     switch (emailProvider) {
       case 'console':
         return new ConsoleEmailSender();
+      case 'brevo':
+        return new BrevoEmailSender();
       case 'sendgrid':
         return new SendGridEmailSender();
       default:
