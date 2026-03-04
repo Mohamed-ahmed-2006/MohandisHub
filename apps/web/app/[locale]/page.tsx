@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation';
 
 import { ApiHealthBadge } from '@/components/api-health-badge';
 import { LanguageToggle } from '@/components/language-toggle';
+import { SiteLogo } from '@/components/site-logo';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { ButtonLink } from '@/components/ui/button-link';
 import { Card } from '@/components/ui/card';
@@ -46,7 +47,7 @@ const HomePage = async ({ params }: HomePageProps) => {
       <Container className="home-page-container">
         <header className="home-page-navbar">
           <Link href={buildLocalePath(typedLocale, '/')} className="home-page-brand">
-            {dictionary.common.appName}
+            <SiteLogo />
           </Link>
           <nav className="home-page-nav-actions">
             <ButtonLink

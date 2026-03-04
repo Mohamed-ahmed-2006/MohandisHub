@@ -32,10 +32,6 @@
   display: inline-flex;
   align-items: center;
   text-decoration: none;
-  font-family: var(--font-sora), sans-serif;
-  font-size: 1.25rem;
-  font-weight: 700;
-  color: hsl(var(--foreground));
 }
 
 .auth-form-shell {

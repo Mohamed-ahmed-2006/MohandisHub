@@ -8,6 +8,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { AuthForm } from '@/components/auth/auth-form';
 import type { AuthMode } from '@/components/auth/auth-mode-switch';
 import { LanguageToggle } from '@/components/language-toggle';
+import { SiteLogo } from '@/components/site-logo';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { Container } from '@/components/ui/container';
 import { buildLocalePath } from '@/lib/i18n/path';
@@ -98,7 +99,7 @@ export const AuthFormScreen = ({
       <Container className="auth-page-container">
         <header className="auth-page-header">
           <Link href={backToHomePath} className="auth-page-brand-link">
-            {dictionary.common.appName}
+            <SiteLogo />
           </Link>
         </header>
 

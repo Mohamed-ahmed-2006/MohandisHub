@@ -20,6 +20,14 @@ const sora = Sora({
 export const metadata: Metadata = {
   title: 'MohandisHub',
   description: 'Engineering services marketplace connecting customers, experts, and businesses.',
+  icons: {
+    icon: [
+      { url: '/icons/favicon-light.png', media: '(prefers-color-scheme: light)' },
+      { url: '/icons/favicon-dark.png', media: '(prefers-color-scheme: dark)' },
+      { url: '/icons/favicon-light.png' },
+    ],
+    apple: [{ url: '/icons/favicon-light.png' }],
+  },
 };
 
 type RootLayoutProps = Readonly<{

@@ -6,6 +6,7 @@
 @import '../components/api-health-badge.css';
 @import '../components/theme-toggle.css';
 @import '../components/language-toggle.css';
+@import '../components/site-logo.css';
 @import '../components/auth/auth.css';
 @import './home.css';
 @import './login/login.css';
