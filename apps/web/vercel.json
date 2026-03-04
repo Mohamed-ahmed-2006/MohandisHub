@@ -1,4 +1,4 @@
 {
-  "installCommand": "npm install --include=dev",
+  "installCommand": "cd ../.. && npm install --include=dev",
   "buildCommand": "cd ../.. && npm run build -w @mohandishub/shared && cd apps/web && next build"
 }
