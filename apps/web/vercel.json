@@ -1,0 +1,3 @@
+{
+  "buildCommand": "cd ../.. && npm run build -w @mohandishub/shared && cd apps/web && next build"
+}
