@@ -56,8 +56,6 @@ export class AuthService {
       role: input.role,
       phone: input.phone,
       dateOfBirth: input.dateOfBirth,
-      acceptedTermsAt: input.acceptedTermsAt,
-      termsVersion: input.termsVersion,
     });
 
     // Create role-specific profile
@@ -69,10 +67,7 @@ export class AuthService {
         await this.authRepository.createExpertProfile(userRow.id);
         break;
       case 'business':
-        await this.authRepository.createBusinessProfile(
-          userRow.id,
-          input.companyName ?? 'Unnamed Company',
-        );
+        await this.authRepository.createBusinessProfile(userRow.id);
         break;
     }
 
@@ -116,8 +111,6 @@ export class AuthService {
         message: 'Invalid email or password.',
       });
     }
-
-    await this.authRepository.updateLastLoginAt(userRow.id);
 
     const verificationStatus = await this.getVerificationStatus(userRow);
     const { tokens, rawRefreshToken } = await this.issueTokens(userRow, verificationStatus, meta);
@@ -277,7 +270,6 @@ export class AuthService {
       avatarUrl: user.avatar_url,
       dateOfBirth: user.date_of_birth ? user.date_of_birth.toISOString().slice(0, 10) : null,
       role: user.primary_role,
-      plan: user.plan_slug,
       emailVerified: user.email_verified_at !== null,
       verificationStatus,
       createdAt: user.created_at.toISOString(),

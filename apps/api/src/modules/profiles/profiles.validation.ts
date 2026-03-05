@@ -50,8 +50,6 @@ export const updateExpertProfileSchema = z.object({
   portfolioUrl: z.string().url().max(500).optional(),
   languages: z.array(z.string().max(50)).max(10).optional(),
   educationSummary: z.string().max(2000).optional(),
-  profileVisibility: z.enum(['public', 'unlisted', 'draft']).optional(),
-  profileCompletedAt: z.string().datetime().nullable().optional(),
 });
 
 // ── Business profile update ──────────────────────────────────────────────
@@ -80,8 +78,6 @@ export const updateBusinessProfileSchema = z.object({
   socialTwitter: z.string().url().max(500).optional(),
   employeesCount: z.number().int().min(1).max(100000).optional(),
   foundedYear: z.number().int().min(1800).max(new Date().getFullYear()).optional(),
-  profileVisibility: z.enum(['public', 'unlisted', 'draft']).optional(),
-  profileCompletedAt: z.string().datetime().nullable().optional(),
 });
 
 // ── Admin review ─────────────────────────────────────────────────────────

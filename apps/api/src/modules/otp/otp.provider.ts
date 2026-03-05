@@ -96,7 +96,7 @@ export class BrevoEmailSender implements IOtpSender {
     if (!response.ok) {
       const errorText = await response.text();
       logger.error('Brevo email send failed', { status: response.status, body: errorText });
-      throw new Error(`Brevo API error ${response.status}: ${errorText}`);
+      return false;
     }
 
     return true;

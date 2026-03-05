@@ -5,7 +5,7 @@
 import type { UserRole } from '@mohandishub/shared';
 import type { VerificationStatus } from '@mohandishub/shared';
 
-/** Row returned from the `users` table (plan_slug from join with plans). */
+/** Row returned from the `users` table. */
 export type UserRow = {
   id: string;
   email: string;
@@ -15,8 +15,6 @@ export type UserRow = {
   avatar_url: string | null;
   date_of_birth: Date | null;
   primary_role: UserRole;
-  plan_id: string;
-  plan_slug: string;
   email_verified_at: Date | null;
   phone_verified_at: Date | null;
   is_active: boolean;

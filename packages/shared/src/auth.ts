@@ -13,11 +13,6 @@ export type RegisterBody = {
   role: UserRole;
   phone?: string;
   dateOfBirth: string; // ISO date string 'YYYY-MM-DD'
-  companyName?: string; // required when role === 'business'
-  /** When the user accepted the current Terms & Conditions (ISO timestamp). */
-  acceptedTermsAt?: string;
-  /** Version of terms accepted (e.g. '2024-01'). */
-  termsVersion?: string;
 };
 
 /** Payload sent when logging in. */
@@ -49,7 +44,6 @@ export type AuthUser = {
   avatarUrl: string | null;
   dateOfBirth: string | null;
   role: UserRole;
-  plan: string; // plan slug, e.g. 'free' (default); other plans added by admin later
   emailVerified: boolean;
   verificationStatus: VerificationStatus | null; // null for customers
   createdAt: string;

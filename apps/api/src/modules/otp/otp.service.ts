@@ -73,21 +73,11 @@ export class OtpService {
 
     // 7. Send the code
     const sender = createOtpSender(channel, env.OTP_EMAIL_PROVIDER, env.OTP_SMS_PROVIDER);
-    let sent = false;
-    try {
-      sent = await sender.send({
-        destination,
-        code,
-        displayName: user.display_name,
-      });
-    } catch (err) {
-      logger.error('OTP send error', { userId, channel, error: err });
-      throw new HttpError({
-        statusCode: 502,
-        code: 'OTP_SEND_FAILED',
-        message: 'Failed to send the verification code. Please try again.',
-      });
-    }
+    const sent = await sender.send({
+      destination,
+      code,
+      displayName: user.display_name,
+    });
 
     if (!sent) {
       logger.error('Failed to send OTP', { userId, channel, destination });

@@ -1,6 +1,5 @@
 import { notFound } from 'next/navigation';
 
-import { ExpertOnboardingClient } from '@/components/onboarding/expert-onboarding-client';
 import { Container } from '@/components/ui/container';
 import { isSupportedLocale } from '@/lib/i18n/config';
 import { getDictionary } from '@/lib/i18n/get-dictionary';
@@ -27,7 +26,6 @@ const ExpertOnboardingPage = async ({ params }: ExpertOnboardingPageProps) => {
         <p className="expert-onboarding-page-description">
           {dictionary.onboarding.expert.description}
         </p>
-        <ExpertOnboardingClient locale={locale} dictionary={dictionary} />
       </Container>
     </main>
   );

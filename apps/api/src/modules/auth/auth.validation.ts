@@ -20,7 +20,6 @@ export const registerSchema = z.object({
     .trim(),
   role: z.enum(['customer', 'expert', 'business']),
   phone: z.string().max(20).optional(),
-  companyName: z.string().min(2, 'Company name must be at least 2 characters.').max(200).optional(),
   dateOfBirth: z
     .string()
     .regex(/^\d{4}-\d{2}-\d{2}$/, 'Date of birth must be in YYYY-MM-DD format.')
@@ -36,32 +35,6 @@ export const registerSchema = z.object({
       },
       { message: 'You must be at least 20 years old to register.' },
     ),
-  acceptedTermsAt: z.string().min(1, 'Accepted terms timestamp is required.').optional(),
-  termsVersion: z.string().max(20).optional(),
-}).superRefine((data, ctx) => {
-  if (data.role === 'business') {
-    if (!data.companyName || data.companyName.trim().length < 2) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ['companyName'],
-        message: 'Company name is required for business accounts.',
-      });
-    }
-    if (!data.phone || data.phone.trim().length === 0) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ['phone'],
-        message: 'Phone number is required for business accounts.',
-      });
-    }
-  }
-  if (!data.acceptedTermsAt) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      path: ['acceptedTermsAt'],
-      message: 'You must accept the Terms and Conditions.',
-    });
-  }
 });
 
 export const loginSchema = z.object({

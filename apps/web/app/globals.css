@@ -8,15 +8,12 @@
 @import '../components/language-toggle.css';
 @import '../components/site-logo.css';
 @import '../components/auth/auth.css';
-@import '../components/onboarding/onboarding.css';
 @import './home.css';
 @import './login/login.css';
-@import './legal.css';
 @import './onboarding/role/role.css';
 @import './onboarding/customer/onboarding-customer.css';
 @import './onboarding/expert/onboarding-expert.css';
 @import './onboarding/business/onboarding-business.css';
-@import './app-home.css';
 
 :root {
   --background: 36 33% 98%;
