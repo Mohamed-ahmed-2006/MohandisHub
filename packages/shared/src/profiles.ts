@@ -10,6 +10,16 @@ export type DocumentStatus = 'pending' | 'under_review' | 'approved' | 'rejected
 export type AcademicRecordStatus = 'pending' | 'under_review' | 'approved' | 'rejected';
 export type AdminReviewType = 'identity' | 'academic' | 'business_docs';
 
+// ── Customer profile (notification preferences from 006) ───────────────────
+
+/** Preferred channels for notifications (stored in customer_profiles.notification_preferences). */
+export type CustomerNotificationPreferences = {
+  email?: boolean;
+  push?: boolean;
+  sms?: boolean;
+  marketing?: boolean;
+};
+
 // ── Identity document types ──────────────────────────────────────────────
 
 export type IdentityDocumentType = 'national_id' | 'driving_license' | 'passport';
@@ -80,6 +90,9 @@ export type AcademicRecord = {
 
 export type AvailabilityStatus = 'available' | 'busy' | 'offline';
 
+/** Who can see the profile: public (search), unlisted (link only), draft (hidden). */
+export type ProfileVisibility = 'public' | 'unlisted' | 'draft';
+
 export type ExpertProfile = {
   id: string;
   userId: string;
@@ -92,6 +105,8 @@ export type ExpertProfile = {
   city: string | null;
   country: string;
   availabilityStatus: AvailabilityStatus;
+  profileVisibility: ProfileVisibility;
+  profileCompletedAt: string | null;
   employer: string | null;
   jobTitle: string | null;
   linkedinUrl: string | null;
@@ -114,6 +129,7 @@ export type UpdateExpertProfileBody = {
   hourlyRate?: number;
   city?: string;
   country?: string;
+  profileVisibility?: ProfileVisibility;
   employer?: string;
   jobTitle?: string;
   linkedinUrl?: string;
@@ -152,6 +168,8 @@ export type BusinessProfile = {
   socialTwitter: string | null;
   employeesCount: number | null;
   foundedYear: number | null;
+  profileVisibility: ProfileVisibility;
+  profileCompletedAt: string | null;
   verificationStatus: VerificationStatus;
   identityVerified: boolean;
   businessVerified: boolean;
@@ -177,6 +195,7 @@ export type UpdateBusinessProfileBody = {
   ownerTitle?: string;
   ownerEmail?: string;
   ownerPhone?: string;
+  profileVisibility?: ProfileVisibility;
   socialFacebook?: string;
   socialLinkedin?: string;
   socialTwitter?: string;

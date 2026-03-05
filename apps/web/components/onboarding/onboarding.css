@@ -1,0 +1,601 @@
+/* ═══════════════════════════════════════════════════════════════════════
+   Onboarding shared styles
+   ═══════════════════════════════════════════════════════════════════════ */
+
+/* ── Flow shell ─────────────────────────────────────────────────────── */
+
+.onboarding-flow-shell {
+  margin-top: 2rem;
+}
+
+/* ── Stepper ────────────────────────────────────────────────────────── */
+
+.onboarding-stepper {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-bottom: 2rem;
+}
+
+.onboarding-stepper-header {
+  margin-bottom: 0.25rem;
+}
+
+.onboarding-stepper-progress-text {
+  font-size: 0.82rem;
+  color: hsl(var(--text-soft));
+  font-weight: 600;
+}
+
+.onboarding-stepper-track {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+}
+
+.onboarding-stepper-step {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.35rem;
+  flex: 1;
+}
+
+.onboarding-stepper-dot {
+  width: 2rem;
+  height: 2rem;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.8rem;
+  font-weight: 700;
+  flex-shrink: 0;
+  border: 2px solid hsl(var(--border));
+  background-color: hsl(var(--surface-strong));
+  color: hsl(var(--text-soft));
+}
+
+.onboarding-stepper-step-active .onboarding-stepper-dot {
+  border-color: hsl(var(--accent));
+  background-color: hsl(var(--accent));
+  color: #fff;
+}
+
+.onboarding-stepper-step-complete .onboarding-stepper-dot {
+  border-color: hsl(var(--accent));
+  background-color: hsl(var(--accent));
+  color: #fff;
+}
+
+.onboarding-stepper-number {
+  font-size: 0.8rem;
+}
+
+.onboarding-stepper-check {
+  font-size: 0.85rem;
+}
+
+.onboarding-stepper-label {
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-align: center;
+  color: hsl(var(--text-soft));
+  max-width: 6rem;
+  line-height: 1.3;
+}
+
+.onboarding-stepper-step-active .onboarding-stepper-label {
+  color: hsl(var(--foreground));
+}
+
+.onboarding-stepper-step-complete .onboarding-stepper-label {
+  color: hsl(var(--foreground));
+}
+
+/* ── Step Content ───────────────────────────────────────────────────── */
+
+.onboarding-step-content {
+  min-height: 20rem;
+}
+
+/* ── Email Verification ─────────────────────────────────────────────── */
+
+.email-verification-shell {
+  max-width: 28rem;
+  margin-inline: auto;
+  text-align: center;
+}
+
+.email-verification-title {
+  font-family: var(--font-sora), sans-serif;
+  font-size: 1.5rem;
+  font-weight: 700;
+  margin: 0;
+}
+
+.email-verification-subtitle {
+  margin-top: 0.5rem;
+  color: hsl(var(--text-soft));
+  font-size: 0.92rem;
+}
+
+.email-verification-destination {
+  margin-top: 0.5rem;
+  font-size: 0.82rem;
+  color: hsl(var(--text-soft));
+}
+
+.email-verification-dev-hint {
+  margin-top: 0.75rem;
+  padding: 0.6rem 0.75rem;
+  border-radius: 0.5rem;
+  background: color-mix(in srgb, hsl(var(--accent)) 12%, transparent);
+  border: 1px solid color-mix(in srgb, hsl(var(--accent)) 30%, transparent);
+  font-size: 0.8rem;
+  color: hsl(var(--foreground));
+  line-height: 1.45;
+}
+
+.email-verification-form {
+  margin-top: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+}
+
+.email-verification-field-group {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.35rem;
+  width: 100%;
+}
+
+.email-verification-field-label {
+  font-size: 0.84rem;
+  font-weight: 700;
+}
+
+.email-verification-code-input {
+  width: 100%;
+  max-width: 12rem;
+  min-height: 2.8rem;
+  border-radius: 0.75rem;
+  border: 1px solid hsl(var(--border));
+  background-color: hsl(var(--surface-strong));
+  color: hsl(var(--foreground));
+  text-align: center;
+  font-size: 1.4rem;
+  font-weight: 700;
+  letter-spacing: 0.4em;
+}
+
+.email-verification-code-input:focus-visible {
+  outline: 2px solid hsl(var(--accent));
+  outline-offset: 2px;
+}
+
+.email-verification-verify-button {
+  width: 100%;
+  max-width: 16rem;
+  min-height: 2.7rem;
+  border-radius: 0.8rem;
+  border: 1px solid transparent;
+  background-color: hsl(var(--accent));
+  color: #fff;
+  font-size: 0.93rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.email-verification-verify-button:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+.email-verification-verify-button:focus-visible {
+  outline: 2px solid hsl(var(--accent));
+  outline-offset: 2px;
+}
+
+.email-verification-resend {
+  margin-top: 0.75rem;
+}
+
+.email-verification-countdown {
+  font-size: 0.84rem;
+  color: hsl(var(--text-soft));
+}
+
+.email-verification-resend-button {
+  border: none;
+  background: transparent;
+  color: hsl(var(--accent));
+  font-size: 0.85rem;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 0;
+}
+
+.email-verification-resend-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.email-verification-error {
+  margin-top: 0.75rem;
+  color: rgb(196, 42, 42);
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+html[data-theme='dark'] .email-verification-error {
+  color: rgb(255, 161, 161);
+}
+
+.email-verification-success {
+  padding: 2rem 0;
+}
+
+.email-verification-success-icon {
+  font-size: 3rem;
+  color: hsl(var(--accent));
+}
+
+.email-verification-success-title {
+  font-family: var(--font-sora), sans-serif;
+  font-size: 1.4rem;
+  font-weight: 700;
+  margin-top: 0.75rem;
+}
+
+.email-verification-success-message {
+  margin-top: 0.5rem;
+  color: hsl(var(--text-soft));
+  font-size: 0.9rem;
+}
+
+.email-verification-continue-button {
+  margin-top: 1.5rem;
+  min-height: 2.7rem;
+  min-width: 10rem;
+  border-radius: 0.8rem;
+  border: 1px solid transparent;
+  background-color: hsl(var(--accent));
+  color: #fff;
+  font-size: 0.93rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.email-verification-continue-button:focus-visible {
+  outline: 2px solid hsl(var(--accent));
+  outline-offset: 2px;
+}
+
+/* ── KYC Step ───────────────────────────────────────────────────────── */
+
+.kyc-step-shell {
+  max-width: 28rem;
+  margin-inline: auto;
+  text-align: center;
+  padding: 1rem 0;
+}
+
+.kyc-step-title {
+  font-family: var(--font-sora), sans-serif;
+  font-size: 1.4rem;
+  font-weight: 700;
+  margin: 0;
+}
+
+.kyc-step-description {
+  margin-top: 0.5rem;
+  color: hsl(var(--text-soft));
+  font-size: 0.92rem;
+}
+
+.kyc-step-error {
+  margin-top: 0.75rem;
+  color: rgb(196, 42, 42);
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+html[data-theme='dark'] .kyc-step-error {
+  color: rgb(255, 161, 161);
+}
+
+.kyc-step-button {
+  margin-top: 1.5rem;
+  min-height: 2.7rem;
+  min-width: 12rem;
+  border-radius: 0.8rem;
+  border: 1px solid transparent;
+  background-color: hsl(var(--accent));
+  color: #fff;
+  font-size: 0.93rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.kyc-step-button:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+.kyc-step-button:focus-visible {
+  outline: 2px solid hsl(var(--accent));
+  outline-offset: 2px;
+}
+
+.kyc-step-status {
+  margin-top: 1.25rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.kyc-step-status-pending {
+  color: hsl(var(--accent));
+}
+
+.kyc-step-status-verified {
+  color: rgb(20, 140, 80);
+}
+
+html[data-theme='dark'] .kyc-step-status-verified {
+  color: rgb(110, 220, 160);
+}
+
+.kyc-step-status-rejected {
+  color: rgb(196, 42, 42);
+}
+
+html[data-theme='dark'] .kyc-step-status-rejected {
+  color: rgb(255, 161, 161);
+}
+
+.kyc-step-check-icon {
+  font-size: 1.2rem;
+}
+
+.kyc-step-spinner {
+  width: 1rem;
+  height: 1rem;
+  border: 2px solid hsl(var(--border));
+  border-top-color: hsl(var(--accent));
+  border-radius: 50%;
+  animation: kyc-spin 0.8s linear infinite;
+}
+
+@keyframes kyc-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.kyc-step-refresh-button,
+.kyc-step-continue-button {
+  border: none;
+  background: transparent;
+  color: hsl(var(--accent));
+  font-size: 1.2rem;
+  cursor: pointer;
+  padding: 0.2rem;
+  border-radius: 0.3rem;
+}
+
+.kyc-step-refresh-button:focus-visible,
+.kyc-step-continue-button:focus-visible {
+  outline: 2px solid hsl(var(--accent));
+  outline-offset: 2px;
+}
+
+/* ── Form Shell ─────────────────────────────────────────────────────── */
+
+.onboarding-form-shell {
+  max-width: 40rem;
+}
+
+.onboarding-form-title {
+  font-family: var(--font-sora), sans-serif;
+  font-size: 1.35rem;
+  font-weight: 700;
+  margin: 0 0 1.25rem;
+}
+
+.onboarding-form-error {
+  margin-bottom: 0.75rem;
+  padding: 0.5rem 0.75rem;
+  border-radius: 0.5rem;
+  background-color: rgba(217, 74, 74, 0.12);
+  color: rgb(151, 30, 30);
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.onboarding-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+}
+
+/* ── Field groups ───────────────────────────────────────────────────── */
+
+.onboarding-field-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  flex: 1;
+}
+
+.onboarding-field-label {
+  font-size: 0.84rem;
+  font-weight: 700;
+}
+
+.onboarding-field-input,
+.onboarding-field-select {
+  width: 100%;
+  min-height: 2.6rem;
+  border-radius: 0.75rem;
+  border: 1px solid hsl(var(--border));
+  background-color: hsl(var(--surface-strong));
+  color: hsl(var(--foreground));
+  padding-inline: 0.8rem;
+  font-size: 0.93rem;
+}
+
+.onboarding-field-input:focus-visible,
+.onboarding-field-select:focus-visible {
+  outline: 2px solid hsl(var(--accent));
+  outline-offset: 2px;
+}
+
+.onboarding-field-textarea {
+  width: 100%;
+  border-radius: 0.75rem;
+  border: 1px solid hsl(var(--border));
+  background-color: hsl(var(--surface-strong));
+  color: hsl(var(--foreground));
+  padding: 0.55rem 0.8rem;
+  font-size: 0.93rem;
+  font-family: inherit;
+  resize: vertical;
+}
+
+.onboarding-field-textarea:focus-visible {
+  outline: 2px solid hsl(var(--accent));
+  outline-offset: 2px;
+}
+
+.onboarding-field-hint {
+  color: hsl(var(--text-soft));
+  font-size: 0.78rem;
+}
+
+.onboarding-field-row {
+  display: flex;
+  gap: 0.75rem;
+}
+
+/* ── Fieldsets ──────────────────────────────────────────────────────── */
+
+.onboarding-fieldset {
+  border: 1px solid hsl(var(--border));
+  border-radius: 0.85rem;
+  padding: 1rem 1rem 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+}
+
+.onboarding-fieldset-legend {
+  font-family: var(--font-sora), sans-serif;
+  font-size: 1.05rem;
+  font-weight: 700;
+  padding-inline: 0.5rem;
+}
+
+.onboarding-fieldset-description {
+  margin: 0;
+  color: hsl(var(--text-soft));
+  font-size: 0.84rem;
+}
+
+/* ── Submit button ──────────────────────────────────────────────────── */
+
+.onboarding-form-submit-button {
+  margin-top: 0.25rem;
+  min-height: 2.7rem;
+  border-radius: 0.8rem;
+  border: 1px solid transparent;
+  background-color: hsl(var(--accent));
+  color: #fff;
+  font-size: 0.93rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.onboarding-form-submit-button:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+.onboarding-form-submit-button:focus-visible {
+  outline: 2px solid hsl(var(--accent));
+  outline-offset: 2px;
+}
+
+/* ── Complete state ─────────────────────────────────────────────────── */
+
+.onboarding-complete-shell {
+  text-align: center;
+  padding: 3rem 0;
+}
+
+.onboarding-complete-checkmark {
+  width: 4rem;
+  height: 4rem;
+  margin-inline: auto;
+  border-radius: 50%;
+  background-color: hsl(var(--accent));
+  color: #fff;
+  font-size: 2rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.onboarding-complete-heading {
+  font-family: var(--font-sora), sans-serif;
+  font-size: 1.5rem;
+  font-weight: 700;
+  margin-top: 1rem;
+}
+
+.onboarding-complete-cta {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 1.25rem;
+  min-height: 2.7rem;
+  min-width: 10rem;
+  border-radius: 0.8rem;
+  background-color: hsl(var(--accent));
+  color: #fff;
+  font-size: 0.93rem;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.onboarding-complete-cta:focus-visible {
+  outline: 2px solid hsl(var(--accent));
+  outline-offset: 2px;
+}
+
+.onboarding-complete-message {
+  margin-top: 1.25rem;
+  border-radius: 0.75rem;
+  border: 1px solid hsl(var(--border));
+  background-color: color-mix(in srgb, hsl(var(--muted)) 68%, transparent);
+  padding: 0.75rem 1rem;
+  text-align: center;
+  font-size: 0.88rem;
+  color: hsl(var(--text-soft));
+}
+
+/* ── Responsive ─────────────────────────────────────────────────────── */
+
+@media (max-width: 640px) {
+  .onboarding-field-row {
+    flex-direction: column;
+    gap: 0.9rem;
+  }
+}

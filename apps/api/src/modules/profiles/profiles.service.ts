@@ -49,6 +49,8 @@ export class ProfilesService {
       hourlyRate?: number | undefined;
       city?: string | undefined;
       country?: string | undefined;
+      profileVisibility?: 'public' | 'unlisted' | 'draft' | undefined;
+      profileCompletedAt?: string | null | undefined;
       employer?: string | undefined;
       jobTitle?: string | undefined;
       linkedinUrl?: string | undefined;
@@ -68,6 +70,8 @@ export class ProfilesService {
     if (input.hourlyRate !== undefined) dbFields.hourly_rate = input.hourlyRate;
     if (input.city !== undefined) dbFields.city = input.city;
     if (input.country !== undefined) dbFields.country = input.country;
+    if (input.profileVisibility !== undefined) dbFields.profile_visibility = input.profileVisibility;
+    if (input.profileCompletedAt !== undefined) dbFields.profile_completed_at = input.profileCompletedAt;
     if (input.employer !== undefined) dbFields.employer = input.employer;
     if (input.jobTitle !== undefined) dbFields.job_title = input.jobTitle;
     if (input.linkedinUrl !== undefined) dbFields.linkedin_url = input.linkedinUrl;
@@ -121,6 +125,8 @@ export class ProfilesService {
       ownerTitle?: string | undefined;
       ownerEmail?: string | undefined;
       ownerPhone?: string | undefined;
+      profileVisibility?: 'public' | 'unlisted' | 'draft' | undefined;
+      profileCompletedAt?: string | null | undefined;
       socialFacebook?: string | undefined;
       socialLinkedin?: string | undefined;
       socialTwitter?: string | undefined;
@@ -154,6 +160,8 @@ export class ProfilesService {
     if (input.socialTwitter !== undefined) dbFields.social_twitter = input.socialTwitter;
     if (input.employeesCount !== undefined) dbFields.employees_count = input.employeesCount;
     if (input.foundedYear !== undefined) dbFields.founded_year = input.foundedYear;
+    if (input.profileVisibility !== undefined) dbFields.profile_visibility = input.profileVisibility;
+    if (input.profileCompletedAt !== undefined) dbFields.profile_completed_at = input.profileCompletedAt;
 
     const row = await this.repo.updateBusinessProfile(userId, dbFields);
     if (!row) {
@@ -439,6 +447,8 @@ export class ProfilesService {
       city: row.city,
       country: row.country ?? 'Egypt',
       availabilityStatus: row.availability_status,
+      profileVisibility: (row.profile_visibility as ExpertProfile['profileVisibility']) ?? 'public',
+      profileCompletedAt: row.profile_completed_at ? row.profile_completed_at.toISOString() : null,
       employer: row.employer,
       jobTitle: row.job_title,
       linkedinUrl: row.linkedin_url,
@@ -475,6 +485,8 @@ export class ProfilesService {
       ownerTitle: row.owner_title,
       ownerEmail: row.owner_email,
       ownerPhone: row.owner_phone,
+      profileVisibility: (row.profile_visibility as BusinessProfile['profileVisibility']) ?? 'public',
+      profileCompletedAt: row.profile_completed_at ? row.profile_completed_at.toISOString() : null,
       socialFacebook: row.social_facebook,
       socialLinkedin: row.social_linkedin,
       socialTwitter: row.social_twitter,

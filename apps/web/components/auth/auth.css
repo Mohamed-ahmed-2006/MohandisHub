@@ -182,6 +182,29 @@ html[data-theme='dark'] .auth-form-field-error {
   color: rgb(255, 161, 161);
 }
 
+.auth-form-terms-group {
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 0.5rem;
+}
+
+.auth-form-checkbox {
+  width: 1.1rem;
+  height: 1.1rem;
+  margin-top: 0.2rem;
+  accent-color: hsl(var(--accent));
+  cursor: pointer;
+}
+
+.auth-form-terms-text {
+  flex: 1;
+  min-width: 0;
+  font-size: 0.85rem;
+  color: hsl(var(--text-soft));
+  line-height: 1.5;
+}
+
 .auth-form-submit-button {
   margin-top: 0.25rem;
   min-height: 2.7rem;
@@ -255,4 +278,150 @@ html[data-theme='dark'] .auth-form-field-error {
     margin-top: 2.4rem;
     padding: 1.5rem;
   }
+}
+
+/* ── Register step indicator ──────────────────────────────────────── */
+
+.auth-register-stepper {
+  margin-top: 0.85rem;
+}
+
+/* ── Role selection cards (signup step 1) ────────────────────────── */
+
+.auth-role-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  margin-top: 1.1rem;
+}
+
+.auth-role-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  width: 100%;
+  padding: 0.9rem 1rem;
+  border: 1px solid hsl(var(--border));
+  border-radius: 0.85rem;
+  background-color: hsl(var(--surface-strong));
+  color: hsl(var(--foreground));
+  text-align: start;
+  cursor: pointer;
+  transition:
+    border-color 0.18s,
+    background-color 0.18s;
+}
+
+.auth-role-card:hover {
+  border-color: hsl(var(--accent));
+  background-color: color-mix(in srgb, hsl(var(--accent)) 6%, hsl(var(--surface-strong)));
+}
+
+.auth-role-card:focus-visible {
+  outline: 2px solid hsl(var(--accent));
+  outline-offset: 2px;
+}
+
+.auth-role-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.auth-role-card-title {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: hsl(var(--foreground));
+}
+
+.auth-role-card-description {
+  margin: 0;
+  font-size: 0.82rem;
+  color: hsl(var(--text-soft));
+  line-height: 1.45;
+}
+
+.auth-role-card-arrow {
+  font-size: 1.1rem;
+  color: hsl(var(--text-soft));
+  flex-shrink: 0;
+  transition:
+    color 0.18s,
+    transform 0.18s;
+}
+
+.auth-role-card:hover .auth-role-card-arrow {
+  color: hsl(var(--accent));
+  transform: translateX(2px);
+}
+
+[dir='rtl'] .auth-role-card:hover .auth-role-card-arrow {
+  transform: translateX(-2px);
+}
+
+/* ── Role bar (back button + selected role label) ────────────────── */
+
+.auth-form-role-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 0.75rem;
+  padding: 0.45rem 0.6rem;
+  border-radius: 0.65rem;
+  background-color: hsl(var(--muted));
+  border: 1px solid hsl(var(--border));
+}
+
+.auth-form-back-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  border: none;
+  background: transparent;
+  color: hsl(var(--text-soft));
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0;
+}
+
+.auth-form-back-button:hover {
+  color: hsl(var(--accent));
+}
+
+.auth-form-back-button:focus-visible {
+  outline: 2px solid hsl(var(--accent));
+  outline-offset: 2px;
+  border-radius: 0.25rem;
+}
+
+.auth-form-selected-role {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: hsl(var(--accent));
+  padding: 0.2rem 0.6rem;
+  border-radius: 99px;
+  background-color: color-mix(in srgb, hsl(var(--accent)) 12%, transparent);
+  border: 1px solid color-mix(in srgb, hsl(var(--accent)) 28%, transparent);
+}
+
+/* ── Legal notice (T&C / Privacy Policy) ────────────────────────── */
+
+.auth-legal-notice {
+  margin: 0.85rem 0 0;
+  font-size: 0.78rem;
+  color: hsl(var(--text-soft));
+  text-align: center;
+  line-height: 1.55;
+}
+
+.auth-legal-link {
+  color: hsl(var(--accent));
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.auth-legal-link:hover {
+  text-decoration: underline;
 }

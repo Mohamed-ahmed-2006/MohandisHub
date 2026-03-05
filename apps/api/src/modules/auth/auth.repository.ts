@@ -24,16 +24,30 @@ export class AuthRepository {
   // ── User CRUD ──────────────────────────────────────────────────────────
 
   async findUserByEmail(email: string): Promise<UserRow | null> {
-    const { rows } = await this.db.query<UserRow>('SELECT * FROM users WHERE email = $1 LIMIT 1', [
-      email.toLowerCase(),
-    ]);
+    const { rows } = await this.db.query<UserRow>(
+      `SELECT u.id, u.email, u.password_hash, u.phone, u.display_name, u.avatar_url,
+              u.date_of_birth, u.primary_role, u.plan_id, p.slug AS plan_slug,
+              u.email_verified_at, u.phone_verified_at, u.is_active, u.created_at, u.updated_at
+       FROM users u
+       JOIN plans p ON u.plan_id = p.id
+       WHERE u.email = $1 AND u.deleted_at IS NULL
+       LIMIT 1`,
+      [email.toLowerCase()],
+    );
     return rows[0] ?? null;
   }
 
   async findUserById(id: string): Promise<UserRow | null> {
-    const { rows } = await this.db.query<UserRow>('SELECT * FROM users WHERE id = $1 LIMIT 1', [
-      id,
-    ]);
+    const { rows } = await this.db.query<UserRow>(
+      `SELECT u.id, u.email, u.password_hash, u.phone, u.display_name, u.avatar_url,
+              u.date_of_birth, u.primary_role, u.plan_id, p.slug AS plan_slug,
+              u.email_verified_at, u.phone_verified_at, u.is_active, u.created_at, u.updated_at
+       FROM users u
+       JOIN plans p ON u.plan_id = p.id
+       WHERE u.id = $1 AND u.deleted_at IS NULL
+       LIMIT 1`,
+      [id],
+    );
     return rows[0] ?? null;
   }
 
@@ -44,11 +58,12 @@ export class AuthRepository {
     role: UserRole;
     phone?: string | undefined;
     dateOfBirth: string;
+    acceptedTermsAt?: string | undefined;
+    termsVersion?: string | undefined;
   }): Promise<UserRow> {
-    const { rows } = await this.db.query<UserRow>(
-      `INSERT INTO users (email, password_hash, display_name, primary_role, phone, date_of_birth)
-       VALUES ($1, $2, $3, $4, $5, $6)
-       RETURNING *`,
+    await this.db.query(
+      `INSERT INTO users (email, password_hash, display_name, primary_role, phone, date_of_birth, accepted_terms_at, terms_version)
+       VALUES ($1, $2, $3, $4, $5, $6, $7::timestamptz, $8)`,
       [
         params.email.toLowerCase(),
         params.passwordHash,
@@ -56,9 +71,18 @@ export class AuthRepository {
         params.role,
         params.phone ?? null,
         params.dateOfBirth,
+        params.acceptedTermsAt ?? null,
+        params.termsVersion ?? null,
       ],
     );
-    return rows[0]!;
+    const created = await this.findUserByEmail(params.email.toLowerCase());
+    if (!created) throw new Error('User creation failed');
+    return created;
+  }
+
+  /** Set last_login_at to now() for the user. */
+  async updateLastLoginAt(userId: string): Promise<void> {
+    await this.db.query('UPDATE users SET last_login_at = now() WHERE id = $1', [userId]);
   }
 
   // ── Role-specific profile creation (called at registration) ────────────
@@ -71,10 +95,10 @@ export class AuthRepository {
     await this.db.query('INSERT INTO expert_profiles (user_id) VALUES ($1)', [userId]);
   }
 
-  async createBusinessProfile(userId: string): Promise<void> {
+  async createBusinessProfile(userId: string, companyName: string): Promise<void> {
     await this.db.query(
       `INSERT INTO business_profiles (user_id, company_name) VALUES ($1, $2)`,
-      [userId, 'Unnamed Company'], // placeholder, updated during onboarding
+      [userId, companyName],
     );
   }
 

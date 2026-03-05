@@ -40,12 +40,15 @@ export class ProfilesRepository {
       hourly_rate: number;
       city: string;
       country: string;
+      profile_visibility: string;
+      profile_completed_at: string | null;
       employer: string;
       job_title: string;
       linkedin_url: string;
       portfolio_url: string;
       languages: string[];
       education_summary: string;
+      certifications_count: number;
     }>,
   ): Promise<ExpertProfileRow | null> {
     const entries = Object.entries(fields).filter(([, v]) => v !== undefined);
@@ -97,6 +100,8 @@ export class ProfilesRepository {
       social_twitter: string;
       employees_count: number;
       founded_year: number;
+      profile_visibility: string;
+      profile_completed_at: string | null;
     }>,
   ): Promise<BusinessProfileRow | null> {
     const entries = Object.entries(fields).filter(([, v]) => v !== undefined);

@@ -70,6 +70,8 @@ export type ExpertProfileRow = {
   city: string | null;
   country: string;
   availability_status: AvailabilityStatus;
+  profile_visibility: string;
+  profile_completed_at: Date | null;
   employer: string | null;
   job_title: string | null;
   linkedin_url: string | null;
@@ -112,6 +114,8 @@ export type BusinessProfileRow = {
   social_twitter: string | null;
   employees_count: number | null;
   founded_year: number | null;
+  profile_visibility: string;
+  profile_completed_at: Date | null;
   verification_status: VerificationStatus;
   identity_verified: boolean;
   business_verified: boolean;

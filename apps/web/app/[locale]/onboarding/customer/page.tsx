@@ -1,5 +1,6 @@
 import { notFound } from 'next/navigation';
 
+import { CustomerOnboardingClient } from '@/components/onboarding/customer-onboarding-client';
 import { Container } from '@/components/ui/container';
 import { isSupportedLocale } from '@/lib/i18n/config';
 import { getDictionary } from '@/lib/i18n/get-dictionary';
@@ -26,6 +27,7 @@ const CustomerOnboardingPage = async ({ params }: CustomerOnboardingPageProps) =
         <p className="customer-onboarding-page-description">
           {dictionary.onboarding.customer.description}
         </p>
+        <CustomerOnboardingClient locale={locale} dictionary={dictionary} />
       </Container>
     </main>
   );

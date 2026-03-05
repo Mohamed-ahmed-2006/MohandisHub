@@ -1,4 +1,4 @@
-import type { ApiSuccessBody } from '@mohandishub/shared';
+import type { ApiSuccessBody, ServicesCatalogResponse } from '@mohandishub/shared';
 
 import { asyncHandler } from '../../utils/async-handler.js';
 
@@ -16,4 +16,14 @@ const status = asyncHandler((_req, res) => {
   res.status(200).json(response);
 });
 
-export const servicesController = { status };
+const catalog = asyncHandler((_req, res) => {
+  const data = servicesService.getCatalog();
+  const response: ApiSuccessBody<ServicesCatalogResponse> = {
+    ok: true,
+    data,
+  };
+
+  res.status(200).json(response);
+});
+
+export const servicesController = { status, catalog };

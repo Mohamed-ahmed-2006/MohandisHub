@@ -27,7 +27,9 @@ const envSchema = z.object({
   DIDIT_BASE_URL: z.string().url().default('https://verification.didit.me/v3'),
 
   // OTP delivery providers
-  OTP_EMAIL_PROVIDER: z.enum(['console', 'brevo', 'sendgrid']).default('console'),
+  OTP_EMAIL_PROVIDER: z
+    .enum(['console', 'brevo', 'sendgrid'])
+    .default(process.env.BREVO_API_KEY ? 'brevo' : 'console'),
   OTP_SMS_PROVIDER: z.enum(['console', 'twilio']).default('console'),
   BREVO_API_KEY: z.string().optional(),
   SENDGRID_API_KEY: z.string().optional(),

@@ -1,30 +1,37 @@
 'use client';
 
 import type { UserRole } from '@mohandishub/shared';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useMemo, useState } from 'react';
 
 import { AuthModeSwitch, type AuthMode } from '@/components/auth/auth-mode-switch';
 import { isApiClientError, useAuth } from '@/components/auth/auth-provider';
-import { AuthRoleSwitch } from '@/components/auth/auth-role-switch';
 import { AuthStatusBanner } from '@/components/auth/auth-status-banner';
+import { OnboardingStepper } from '@/components/onboarding/onboarding-stepper';
 import { buildLocalePath } from '@/lib/i18n/path';
 import type { Dictionary, Locale } from '@/lib/i18n/types';
 
 type RegisterRole = Exclude<UserRole, 'admin'>;
 
-type FieldName = 'email' | 'password' | 'displayName' | 'dateOfBirth' | 'phone';
+type FieldName = 'email' | 'password' | 'displayName' | 'companyName' | 'dateOfBirth' | 'phone' | 'acceptedTermsAt';
 
 type AuthFormProps = {
   locale: Locale;
   mode: AuthMode;
   role: RegisterRole;
   dictionary: Dictionary['auth'];
+  registerSteps?: string[];
+  stepLabel?: string;
+  ofLabel?: string;
+  backLabel?: string;
   onModeChange: (nextMode: AuthMode) => void;
   onRoleChange: (nextRole: RegisterRole) => void;
+  onBackToRoleSelect?: () => void;
 };
 
 type RegisterFormValues = {
+  companyName: string; // business only
   displayName: string;
   email: string;
   password: string;
@@ -79,7 +86,7 @@ const extractFieldErrors = (details: unknown): Partial<Record<FieldName, string>
     return {};
   }
 
-  const fields: FieldName[] = ['email', 'password', 'displayName', 'dateOfBirth', 'phone'];
+  const fields: FieldName[] = ['email', 'password', 'displayName', 'companyName', 'dateOfBirth', 'phone', 'acceptedTermsAt'];
   const parsedErrors: Partial<Record<FieldName, string>> = {};
 
   fields.forEach((field) => {
@@ -98,15 +105,8 @@ const extractFieldErrors = (details: unknown): Partial<Record<FieldName, string>
 };
 
 const getPostAuthPath = (locale: Locale, role: RegisterRole): string => {
-  if (role === 'expert') {
-    return buildLocalePath(locale, '/onboarding/expert');
-  }
-
-  if (role === 'business') {
-    return buildLocalePath(locale, '/onboarding/business');
-  }
-
-  return buildLocalePath(locale, '/onboarding/customer');
+  void role;
+  return buildLocalePath(locale, '/app');
 };
 
 export const AuthForm = ({
@@ -114,8 +114,13 @@ export const AuthForm = ({
   mode,
   role,
   dictionary,
+  registerSteps,
+  stepLabel = 'Step',
+  ofLabel = 'of',
+  backLabel = 'Back',
   onModeChange,
-  onRoleChange,
+  onRoleChange: _onRoleChange,
+  onBackToRoleSelect,
 }: AuthFormProps) => {
   const router = useRouter();
   const { login, register, isReady } = useAuth();
@@ -126,6 +131,7 @@ export const AuthForm = ({
   });
 
   const [registerValues, setRegisterValues] = useState<RegisterFormValues>({
+    companyName: '',
     displayName: '',
     email: '',
     password: '',
@@ -137,6 +143,7 @@ export const AuthForm = ({
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [statusVariant, setStatusVariant] = useState<'error' | 'success' | 'info'>('info');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [termsAccepted, setTermsAccepted] = useState(false);
 
   const submitLabel = useMemo(() => {
     if (isSubmitting) {
@@ -164,6 +171,14 @@ export const AuthForm = ({
 
   const validateRegister = (): Partial<Record<FieldName, string>> => {
     const errors: Partial<Record<FieldName, string>> = {};
+
+    if (role === 'business') {
+      if (!registerValues.companyName.trim()) {
+        errors.companyName = dictionary.validation.required;
+      } else if (registerValues.companyName.trim().length < 2 || registerValues.companyName.trim().length > 200) {
+        errors.companyName = dictionary.validation.invalidCompanyName;
+      }
+    }
 
     if (!registerValues.displayName.trim()) {
       errors.displayName = dictionary.validation.required;
@@ -194,8 +209,18 @@ export const AuthForm = ({
       errors.dateOfBirth = dictionary.validation.minimumAge;
     }
 
-    if (registerValues.phone.length > 20) {
+    if (role === 'business') {
+      if (!registerValues.phone.trim()) {
+        errors.phone = dictionary.validation.phoneRequired;
+      } else if (registerValues.phone.trim().length > 20) {
+        errors.phone = dictionary.validation.invalidPhone;
+      }
+    } else if (registerValues.phone.length > 20) {
       errors.phone = dictionary.validation.invalidPhone;
+    }
+
+    if (!termsAccepted) {
+      errors.acceptedTermsAt = dictionary.validation.acceptTermsRequired;
     }
 
     return errors;
@@ -237,10 +262,13 @@ export const AuthForm = ({
         password: registerValues.password,
         role,
         dateOfBirth: registerValues.dateOfBirth,
+        acceptedTermsAt: new Date().toISOString(),
+        termsVersion: '2024-01',
+        ...(role === 'business' && registerValues.companyName.trim().length > 0
+          ? { companyName: registerValues.companyName.trim() }
+          : {}),
         ...(registerValues.phone.trim().length > 0
-          ? {
-              phone: registerValues.phone.trim(),
-            }
+          ? { phone: registerValues.phone.trim() }
           : {}),
       };
 
@@ -268,7 +296,12 @@ export const AuthForm = ({
         setStatusMessage(error.message);
       } else {
         setStatusVariant('error');
-        setStatusMessage(dictionary.errors.generic);
+        const isNetworkError =
+          error instanceof TypeError ||
+          (error instanceof Error && /fetch|network|connection|refused/i.test(error.message));
+        setStatusMessage(
+          isNetworkError ? dictionary.errors.networkError : dictionary.errors.generic,
+        );
       }
     } finally {
       setIsSubmitting(false);
@@ -279,8 +312,34 @@ export const AuthForm = ({
     void handleSubmit(event);
   };
 
+  // ── Role-aware labels ──────────────────────────────────────────────
+  const registerTitle = mode === 'register'
+    ? { customer: dictionary.register.customerTitle, expert: dictionary.register.expertTitle, business: dictionary.register.businessTitle }[role]
+    : dictionary.login.title;
+
+  const registerSubtitle = mode === 'register'
+    ? { customer: dictionary.register.customerSubtitle, expert: dictionary.register.expertSubtitle, business: dictionary.register.businessSubtitle }[role]
+    : dictionary.login.subtitle;
+
+  const displayNameLabel = {
+    customer: dictionary.register.displayNameCustomerLabel,
+    expert: dictionary.register.displayNameExpertLabel,
+    business: dictionary.register.displayNameBusinessLabel,
+  }[role];
+
+  const dobLabel = {
+    customer: dictionary.register.dateOfBirthLabel,
+    expert: dictionary.register.dateOfBirthLabel,
+    business: dictionary.register.dateOfBirthBusinessLabel,
+  }[role];
+
+  const dobHint = role === 'expert' ? dictionary.register.dateOfBirthExpertHint : null;
+
+  const phoneLabel = role === 'business' ? dictionary.register.phoneBusinessLabel : dictionary.register.phoneLabel;
+  const phoneHint = role === 'business' ? dictionary.register.phoneBusinessHint : dictionary.register.phoneHint;
+
   return (
-    <section className="auth-form-shell" aria-live="polite">
+    <section className="auth-form-shell" aria-live="polite" suppressHydrationWarning>
       <AuthModeSwitch
         mode={mode}
         loginLabel={dictionary.common.login}
@@ -288,33 +347,65 @@ export const AuthForm = ({
         onModeChange={onModeChange}
       />
 
-      {mode === 'register' ? (
-        <AuthRoleSwitch
-          role={role}
-          labels={{
-            customer: dictionary.roles.customer,
-            expert: dictionary.roles.expert,
-            business: dictionary.roles.business,
-          }}
-          onRoleChange={onRoleChange}
-        />
+      {mode === 'register' && registerSteps ? (
+        <div className="auth-register-stepper">
+          <OnboardingStepper
+            steps={registerSteps}
+            currentStep={1}
+            stepLabel={stepLabel}
+            ofLabel={ofLabel}
+          />
+        </div>
+      ) : null}
+
+      {mode === 'register' && onBackToRoleSelect ? (
+        <div className="auth-form-role-bar">
+          <button type="button" className="auth-form-back-button" onClick={onBackToRoleSelect}>
+            &#8592; {backLabel}
+          </button>
+          <span className="auth-form-selected-role">{dictionary.roles[role]}</span>
+        </div>
       ) : null}
 
       <header className="auth-form-header">
         <h1 className="auth-form-title">
-          {mode === 'login' ? dictionary.login.title : dictionary.register.title}
+          {mode === 'login' ? dictionary.login.title : registerTitle}
         </h1>
         <p className="auth-form-subtitle">
-          {mode === 'login' ? dictionary.login.subtitle : dictionary.register.subtitle}
+          {mode === 'login' ? dictionary.login.subtitle : registerSubtitle}
         </p>
       </header>
 
       {statusMessage ? <AuthStatusBanner variant={statusVariant} message={statusMessage} /> : null}
 
       <form className="auth-form" onSubmit={handleFormSubmit} noValidate>
+        {/* Business only: Company name — first field */}
+        {mode === 'register' && role === 'business' ? (
+          <label className="auth-form-field-group">
+            <span className="auth-form-field-label">{dictionary.register.companyNameLabel}</span>
+            <input
+              type="text"
+              className="auth-form-field-input"
+              placeholder={dictionary.register.companyNamePlaceholder}
+              value={registerValues.companyName}
+              onChange={(event) =>
+                setRegisterValues((current) => ({
+                  ...current,
+                  companyName: event.target.value,
+                }))
+              }
+              autoComplete="organization"
+            />
+            {fieldErrors.companyName ? (
+              <span className="auth-form-field-error">{fieldErrors.companyName}</span>
+            ) : null}
+          </label>
+        ) : null}
+
+        {/* displayName — label differs per role */}
         {mode === 'register' ? (
           <label className="auth-form-field-group">
-            <span className="auth-form-field-label">{dictionary.register.displayNameLabel}</span>
+            <span className="auth-form-field-label">{displayNameLabel}</span>
             <input
               type="text"
               className="auth-form-field-input"
@@ -327,6 +418,9 @@ export const AuthForm = ({
               }
               autoComplete="name"
             />
+            {role === 'business' ? (
+              <span className="auth-form-field-hint">{dictionary.register.displayNameBusinessHint}</span>
+            ) : null}
             {fieldErrors.displayName ? (
               <span className="auth-form-field-error">{fieldErrors.displayName}</span>
             ) : null}
@@ -384,7 +478,7 @@ export const AuthForm = ({
         {mode === 'register' ? (
           <>
             <label className="auth-form-field-group">
-              <span className="auth-form-field-label">{dictionary.register.dateOfBirthLabel}</span>
+              <span className="auth-form-field-label">{dobLabel}</span>
               <input
                 type="date"
                 className="auth-form-field-input"
@@ -396,13 +490,16 @@ export const AuthForm = ({
                   }))
                 }
               />
+              {dobHint ? (
+                <span className="auth-form-field-hint">{dobHint}</span>
+              ) : null}
               {fieldErrors.dateOfBirth ? (
                 <span className="auth-form-field-error">{fieldErrors.dateOfBirth}</span>
               ) : null}
             </label>
 
             <label className="auth-form-field-group">
-              <span className="auth-form-field-label">{dictionary.register.phoneLabel}</span>
+              <span className="auth-form-field-label">{phoneLabel}</span>
               <input
                 type="tel"
                 className="auth-form-field-input"
@@ -415,12 +512,39 @@ export const AuthForm = ({
                 }
                 autoComplete="tel"
               />
-              <span className="auth-form-field-hint">{dictionary.register.phoneHint}</span>
+              <span className="auth-form-field-hint">{phoneHint}</span>
               {fieldErrors.phone ? (
                 <span className="auth-form-field-error">{fieldErrors.phone}</span>
               ) : null}
             </label>
           </>
+        ) : null}
+
+        {mode === 'register' ? (
+          <label className="auth-form-field-group auth-form-terms-group">
+            <input
+              type="checkbox"
+              className="auth-form-checkbox"
+              checked={termsAccepted}
+              onChange={(e) => setTermsAccepted(e.target.checked)}
+              aria-describedby={fieldErrors.acceptedTermsAt ? 'terms-error' : undefined}
+            />
+            <span className="auth-form-terms-text">
+              {dictionary.register.acceptTermsPrefix}{' '}
+              <Link href={buildLocalePath(locale, '/privacy')} className="auth-legal-link">
+                {dictionary.register.privacyPolicy}
+              </Link>{' '}
+              {dictionary.register.acceptTermsConnector}{' '}
+              <Link href={buildLocalePath(locale, '/terms')} className="auth-legal-link">
+                {dictionary.register.termsAndConditions}
+              </Link>
+            </span>
+            {fieldErrors.acceptedTermsAt ? (
+              <span id="terms-error" className="auth-form-field-error">
+                {fieldErrors.acceptedTermsAt}
+              </span>
+            ) : null}
+          </label>
         ) : null}
 
         <button

@@ -40,7 +40,17 @@ Copy-Item apps/api/.env.example apps/api/.env
 Copy-Item apps/web/.env.example apps/web/.env.local
 ```
 
-3. Start local development:
+Edit `apps/api/.env`: set `DATABASE_URL` to your PostgreSQL connection string, and set `JWT_SECRET` and `JWT_REFRESH_SECRET` to long random strings (min 32 chars).
+
+3. Run database migrations (required for auth to work):
+
+```bash
+npm run migrate -w @mohandishub/api
+```
+
+See `apps/api/MIGRATE.md` if the database already has tables or you get migration errors.
+
+4. Start local development:
 
 ```bash
 npm run dev
@@ -68,6 +78,7 @@ npm exec --yes --package socket.io-client -- node -e "const { io } = require('so
 - `npm run dev` - run web + api concurrently
 - `npm run dev:web` - run Next.js only
 - `npm run dev:api` - run API only
+- `npm run migrate -w @mohandishub/api` - run database migrations (see apps/api/MIGRATE.md)
 - `npm run build` - build shared, api, web
 - `npm run typecheck` - strict TS checks
 - `npm run lint` - lint all workspaces
@@ -76,7 +87,7 @@ npm exec --yes --package socket.io-client -- node -e "const { io } = require('so
 
 ## Notes
 
-- `DATABASE_URL` is optional for booting the API, but required for any DB query paths.
+- **DATABASE_URL** is required for auth and any DB-backed endpoints. Run `npm run migrate -w @mohandishub/api` after setting it (see `apps/api/MIGRATE.md`).
 - Core modules (`auth`, `users`, `services`, `wallet`, `chat`) are scaffolded for expansion.
 - Current implemented endpoints:
   - `GET /health`
