@@ -515,6 +515,9 @@ export const enDictionary: Dictionary = {
     depositPayWithCard: 'Pay with card',
     depositRedirecting: 'Redirecting to payment…',
     depositError: 'Could not create payment. Try again.',
+    depositMinAmount: 'Minimum card deposit is 50 EGP.',
+    depositSuccess: 'Deposit successful. Your balance has been updated.',
+    depositCancelled: 'Deposit was cancelled.',
   },
   homeSearch: {
     welcomeBack: 'Welcome back',

@@ -128,6 +128,16 @@ const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!
 
 Use Stripe test cards: `4242 4242 4242 4242` (success), `4000 0000 0000 0002` (decline).
 
+### Local development — webhooks
+
+Stripe cannot reach `localhost`. To test deposits locally, forward webhooks with Stripe CLI:
+
+```bash
+stripe listen --forward-to localhost:4000/api/wallet/stripe-webhook
+```
+
+Use the webhook signing secret printed by the CLI (starts with `whsec_`) in your `.env` as `STRIPE_WEBHOOK_SECRET`. Without this, the webhook never fires and the wallet balance will not update after checkout.
+
 ## 10. Production Checklist
 
 - [ ] Replace test keys with live keys

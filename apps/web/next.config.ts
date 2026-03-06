@@ -11,7 +11,7 @@ const nextConfig: NextConfig = {
     ],
   },
   rewrites() {
-    return [
+    return Promise.resolve([
       {
         source: '/api/:path*',
         destination: `${apiTarget}/api/:path*`,
@@ -20,7 +20,7 @@ const nextConfig: NextConfig = {
         source: '/health',
         destination: `${apiTarget}/health`,
       },
-    ];
+    ]);
   },
 };
 

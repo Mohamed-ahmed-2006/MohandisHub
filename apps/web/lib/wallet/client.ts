@@ -74,7 +74,10 @@ export const walletApiClient = {
     accessToken: string,
     amount: number,
     currency: string = 'EGP',
+    returnUrl?: string,
   ): Promise<{ checkoutUrl: string; sessionId: string }> => {
+    const reqBody: { amount: number; currency: string; returnUrl?: string } = { amount, currency };
+    if (returnUrl) reqBody.returnUrl = returnUrl;
     const response = await fetch(`${getApiBaseUrl()}/api/wallet/deposit/stripe`, {
       method: 'POST',
       credentials: 'include',
@@ -82,7 +85,7 @@ export const walletApiClient = {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${accessToken}`,
       },
-      body: JSON.stringify({ amount, currency }),
+      body: JSON.stringify(reqBody),
     });
 
     if (!response.ok) {
@@ -102,10 +105,10 @@ export const walletApiClient = {
       });
     }
 
-    const body = (await response.json()) as ApiSuccessBody<{
+    const resBody = (await response.json()) as ApiSuccessBody<{
       checkoutUrl: string;
       sessionId: string;
     }>;
-    return body.data;
+    return resBody.data;
   },
 };

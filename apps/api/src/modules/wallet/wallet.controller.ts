@@ -56,21 +56,39 @@ function parseDepositBody(body: unknown): { amount: number; currency: string; re
   return out;
 }
 
+const STRIPE_MIN_AMOUNT_EGP = 50;
+
 const createStripeCheckout = asyncHandler(async (req, res) => {
   const userId = getUserId(req);
   const { amount, currency, returnUrl } = parseDepositBody(req.body);
+  if (typeof amount !== 'number' || !Number.isFinite(amount) || amount <= 0) {
+    throw new HttpError({
+      statusCode: 400,
+      code: 'INVALID_AMOUNT',
+      message: 'Valid amount is required.',
+    });
+  }
+  const currencyUpper = currency.toUpperCase();
+  if (currencyUpper === 'EGP' && amount < STRIPE_MIN_AMOUNT_EGP) {
+    throw new HttpError({
+      statusCode: 400,
+      code: 'AMOUNT_TOO_LOW',
+      message: `Minimum card deposit is ${STRIPE_MIN_AMOUNT_EGP} EGP.`,
+    });
+  }
   const base = (
     returnUrl ||
     env.CORS_ORIGIN ||
     env.API_PUBLIC_URL ||
     'http://localhost:3000'
   ).replace(/\/$/, '');
+  const successBase = returnUrl ? returnUrl.replace(/\/$/, '') : base;
   const result = await walletService.createStripeCheckout(
     userId,
     amount,
     currency,
-    `${base}/app/wallet?stripe=success`,
-    `${base}/app/wallet?stripe=cancelled`,
+    `${successBase}?stripe=success`,
+    `${successBase}?stripe=cancelled`,
   );
   res.json({ ok: true, data: result });
 });

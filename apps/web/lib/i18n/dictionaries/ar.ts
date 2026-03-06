@@ -526,6 +526,9 @@ export const arDictionary: Dictionary = {
     depositPayWithCard: 'الدفع بالبطاقة',
     depositRedirecting: 'جاري التحويل للدفع…',
     depositError: 'تعذر إنشاء الدفع. حاول مرة أخرى.',
+    depositMinAmount: 'الحد الأدنى للإيداع بالبطاقة 50 جنيه.',
+    depositSuccess: 'تم الإيداع بنجاح. تم تحديث رصيدك.',
+    depositCancelled: 'تم إلغاء الإيداع.',
   },
   homeSearch: {
     welcomeBack: 'مرحباً بعودتك',

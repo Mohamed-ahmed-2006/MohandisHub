@@ -2,7 +2,7 @@
 
 import type { ServiceCategory, ServiceSearchResult, Wallet } from '@mohandishub/shared';
 import Image from 'next/image';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 
 import { WalletDepositModal } from './wallet-deposit-modal';
@@ -132,6 +132,7 @@ const CITY_AREAS: Record<string, string[]> = {
 
 export const AppHomeScreen = ({ locale, dictionary }: AppHomeScreenProps) => {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { authUser, accessToken, isAuthenticated, isReady, authGuard } = useAuth();
 
   const [categories, setCategories] = useState<ServiceCategory[]>([]);
@@ -152,6 +153,41 @@ export const AppHomeScreen = ({ locale, dictionary }: AppHomeScreenProps) => {
 
   const [wallet, setWallet] = useState<Wallet | null>(null);
   const [showDeposit, setShowDeposit] = useState(false);
+  const [stripeMessage, setStripeMessage] = useState<'success' | 'cancelled' | null>(null);
+
+  useEffect(() => {
+    const stripe = searchParams.get('stripe');
+    if (stripe === 'success' || stripe === 'cancelled') {
+      setStripeMessage(stripe);
+      const url = new URL(window.location.href);
+      url.searchParams.delete('stripe');
+      window.history.replaceState({}, '', url.pathname + url.search);
+      if (stripe === 'success' && accessToken) {
+        void walletApiClient
+          .getMyWallet(accessToken)
+          .then(setWallet)
+          .catch(() => {});
+        let attempts = 0;
+        const maxAttempts = 15;
+        const pollInterval = setInterval(() => {
+          attempts += 1;
+          if (attempts > maxAttempts) {
+            clearInterval(pollInterval);
+            return;
+          }
+          void (async () => {
+            try {
+              const updated = await walletApiClient.getMyWallet(accessToken);
+              setWallet(updated);
+            } catch {
+              // ignore
+            }
+          })();
+        }, 2000);
+        return () => clearInterval(pollInterval);
+      }
+    }
+  }, [searchParams, accessToken]);
 
   useEffect(() => {
     if (!isReady) return;
@@ -233,6 +269,23 @@ export const AppHomeScreen = ({ locale, dictionary }: AppHomeScreenProps) => {
   return (
     <main className="home-main">
       <Container className="home-container">
+        {stripeMessage && (
+          <div className={`home-stripe-message home-stripe-message--${stripeMessage}`} role="alert">
+            {stripeMessage === 'success'
+              ? (dictionary.wallet.depositSuccess ??
+                'Deposit successful. Your balance has been updated.')
+              : (dictionary.wallet.depositCancelled ?? 'Deposit was cancelled.')}
+            <button
+              type="button"
+              className="home-stripe-message-dismiss"
+              onClick={() => setStripeMessage(null)}
+              aria-label="Dismiss"
+            >
+              ×
+            </button>
+          </div>
+        )}
+
         {/* Welcome + Wallet */}
         <section className="home-welcome-section">
           <div className="home-welcome-row">

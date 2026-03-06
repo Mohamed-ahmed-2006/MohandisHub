@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 
+import { isApiClientError } from '@/lib/auth/client';
 import type { Dictionary } from '@/lib/i18n/types';
 import { walletApiClient } from '@/lib/wallet/client';
 
@@ -67,15 +68,30 @@ export const WalletDepositModal = ({
       setError(d.depositError);
       return;
     }
+    if (num < 50) {
+      setError(d.depositMinAmount ?? 'Minimum card deposit is 50 EGP.');
+      return;
+    }
     setLoading(true);
     setError(null);
     try {
-      const { checkoutUrl } = await walletApiClient.createStripeCheckout(accessToken, num, 'EGP');
+      const returnUrl =
+        typeof window !== 'undefined'
+          ? `${window.location.origin}${window.location.pathname}`
+          : undefined;
+      const { checkoutUrl } = await walletApiClient.createStripeCheckout(
+        accessToken,
+        num,
+        'EGP',
+        returnUrl,
+      );
       onDepositCreated?.();
       onClose();
       window.location.href = checkoutUrl;
-    } catch {
-      setError(d.depositError);
+    } catch (err) {
+      const msg =
+        isApiClientError(err) && err.code === 'AMOUNT_TOO_LOW' ? err.message : d.depositError;
+      setError(msg);
     } finally {
       setLoading(false);
     }

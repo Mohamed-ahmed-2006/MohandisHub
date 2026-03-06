@@ -473,6 +473,9 @@ export type Dictionary = {
     depositPayWithCard: string;
     depositRedirecting: string;
     depositError: string;
+    depositMinAmount?: string;
+    depositSuccess?: string;
+    depositCancelled?: string;
   };
   homeSearch: {
     welcomeBack: string;
