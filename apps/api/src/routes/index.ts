@@ -1,9 +1,10 @@
 import { Router } from 'express';
 
+import { adminRouter } from '../modules/admin/admin.routes.js';
 import { authRouter } from '../modules/auth/auth.routes.js';
 import { chatRouter } from '../modules/chat/chat.routes.js';
 import { otpRouter } from '../modules/otp/otp.routes.js';
-import { adminRouter, profilesRouter } from '../modules/profiles/profiles.routes.js';
+import { profilesRouter } from '../modules/profiles/profiles.routes.js';
 import { servicesRouter } from '../modules/services/services.routes.js';
 import { usersRouter } from '../modules/users/users.routes.js';
 import { verificationRouter } from '../modules/verification/verification.routes.js';

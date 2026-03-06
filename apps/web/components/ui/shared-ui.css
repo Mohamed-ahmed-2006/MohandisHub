@@ -1,7 +1,7 @@
 .container-root {
   margin: 0 auto;
   width: 100%;
-  max-width: 72rem;
+  max-width: 92rem;
   padding-inline: 1rem;
 }
 
@@ -18,46 +18,65 @@
 }
 
 .card-root {
-  border-radius: 1rem;
+  border-radius: var(--radius-md);
   border: 1px solid hsl(var(--border));
-  background-color: hsl(var(--card));
+  background-color: color-mix(in srgb, hsl(var(--card)) 84%, transparent);
   padding: 1.5rem;
-  box-shadow: var(--shadow-soft);
+  box-shadow: var(--shadow-soft-lg);
+  backdrop-filter: blur(12px);
 }
 
 .button-link {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border-radius: 0.75rem;
+  gap: 0.4rem;
+  min-height: 2.75rem;
+  border-radius: 999px;
   border: 1px solid transparent;
-  padding: 0.625rem 1.25rem;
+  padding: 0.75rem 1.3rem;
   font-size: 0.875rem;
   font-weight: 600;
+  line-height: 1.1;
   text-decoration: none;
   cursor: pointer;
+  transition:
+    transform 180ms ease,
+    filter 180ms ease,
+    background-color 180ms ease,
+    border-color 180ms ease,
+    color 180ms ease;
 }
 
 .button-link:focus-visible {
-  outline: 2px solid hsl(var(--accent));
-  outline-offset: 2px;
+  transform: translateY(-1px);
 }
 
 .button-link-primary {
+  box-shadow: 0 12px 25px -18px hsl(var(--accent) / 0.9);
   background-color: hsl(var(--accent));
   color: #fff;
 }
 
 .button-link-primary:hover {
-  filter: brightness(1.06);
+  filter: brightness(1.05);
+  transform: translateY(-1px);
 }
 
 .button-link-secondary {
   border-color: hsl(var(--border));
-  background-color: hsl(var(--surface-strong));
+  background-color: color-mix(in srgb, hsl(var(--surface-strong)) 80%, transparent);
   color: hsl(var(--foreground));
 }
 
 .button-link-secondary:hover {
   background-color: hsl(var(--muted));
+  transform: translateY(-1px);
+}
+
+.button-link:disabled,
+.button-link[aria-disabled='true'] {
+  opacity: 0.6;
+  cursor: not-allowed;
+  pointer-events: none;
 }

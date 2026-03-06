@@ -35,6 +35,7 @@ export const LanguageToggle = ({ locale, targetLabel, ariaLabel }: LanguageToggl
       className="language-toggle-button"
       aria-label={ariaLabel}
       onClick={handleToggle}
+      suppressHydrationWarning
     >
       <span className="language-toggle-target">{targetLabel}</span>
     </button>

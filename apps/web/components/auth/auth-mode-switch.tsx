@@ -33,6 +33,7 @@ export const AuthModeSwitch = ({
             onClick={() => onModeChange(option)}
             role="tab"
             aria-selected={mode === option}
+            suppressHydrationWarning
           >
             {option === 'login' ? loginLabel : registerLabel}
           </button>

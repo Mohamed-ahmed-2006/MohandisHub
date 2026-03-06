@@ -18,9 +18,7 @@ export const ApiHealthBadge = () => {
 
   useEffect(() => {
     const controller = new AbortController();
-    const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000';
-
-    void fetch(`${apiBaseUrl}/health`, {
+    void fetch('/health', {
       method: 'GET',
       signal: controller.signal,
       cache: 'no-store',

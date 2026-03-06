@@ -1,13 +1,11 @@
 import { notFound } from 'next/navigation';
 
-import { Container } from '@/components/ui/container';
+import { BusinessOnboardingScreen } from '@/components/onboarding/business-onboarding-screen';
 import { isSupportedLocale } from '@/lib/i18n/config';
 import { getDictionary } from '@/lib/i18n/get-dictionary';
 
 type BusinessOnboardingPageProps = {
-  params: Promise<{
-    locale: string;
-  }>;
+  params: Promise<{ locale: string }>;
 };
 
 const BusinessOnboardingPage = async ({ params }: BusinessOnboardingPageProps) => {
@@ -19,16 +17,7 @@ const BusinessOnboardingPage = async ({ params }: BusinessOnboardingPageProps) =
 
   const dictionary = getDictionary(locale);
 
-  return (
-    <main className="business-onboarding-page-main">
-      <Container>
-        <h1 className="business-onboarding-page-title">{dictionary.onboarding.business.title}</h1>
-        <p className="business-onboarding-page-description">
-          {dictionary.onboarding.business.description}
-        </p>
-      </Container>
-    </main>
-  );
+  return <BusinessOnboardingScreen locale={locale} dictionary={dictionary} />;
 };
 
 export default BusinessOnboardingPage;

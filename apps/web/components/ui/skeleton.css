@@ -1,0 +1,76 @@
+/* ── Skeleton loading placeholders ──────────────────────────────────────── */
+
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    hsl(var(--muted)) 25%,
+    hsl(var(--muted) / 0.6) 50%,
+    hsl(var(--muted)) 75%
+  );
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.5s ease-in-out infinite;
+  border-radius: 0.25rem;
+}
+
+@keyframes skeleton-shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+.skeleton-line {
+  height: 0.875rem;
+  margin-bottom: 0.5rem;
+}
+
+.skeleton-line:last-child {
+  margin-bottom: 0;
+}
+
+.skeleton-text-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.skeleton-avatar {
+  flex-shrink: 0;
+}
+
+.skeleton-card {
+  padding: 1.25rem;
+  border: 1px solid hsl(var(--border));
+  border-radius: 0.5rem;
+  background: hsl(var(--card));
+}
+
+.skeleton-card-title {
+  height: 1.25rem;
+  width: 60%;
+  margin-bottom: 1rem;
+}
+
+.skeleton-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.skeleton-form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+}
+
+.skeleton-label {
+  height: 0.875rem;
+  width: 6rem;
+}
+
+.skeleton-input {
+  height: 2.5rem;
+  width: 100%;
+}

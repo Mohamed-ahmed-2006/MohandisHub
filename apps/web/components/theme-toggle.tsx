@@ -25,6 +25,7 @@ export const ThemeToggle = ({
       aria-label={isDark ? switchToLightLabel : switchToDarkLabel}
       aria-pressed={isDark}
       onClick={toggleTheme}
+      suppressHydrationWarning
     >
       <span className="theme-toggle-icon-track" aria-hidden="true">
         <span className="theme-toggle-icon-knob" />

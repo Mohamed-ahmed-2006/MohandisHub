@@ -11,10 +11,14 @@ export type UserRow = {
   email: string;
   password_hash: string;
   phone: string | null;
+  phone_code: string | null;
+  nationality: string | null;
   display_name: string;
   avatar_url: string | null;
   date_of_birth: Date | null;
   primary_role: UserRole;
+  plan_id: string | null;
+  plan_slug: string;
   email_verified_at: Date | null;
   phone_verified_at: Date | null;
   is_active: boolean;

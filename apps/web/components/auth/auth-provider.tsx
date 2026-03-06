@@ -3,8 +3,8 @@
 import type { AuthUser, LoginBody, RegisterBody, UserRole } from '@mohandishub/shared';
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 
-import type { ApiClientError } from '@/lib/auth/client';
-import { ApiClientRequestError, authApiClient } from '@/lib/auth/client';
+import { authUserCache } from '@/lib/auth/auth-cache';
+import { authApiClient } from '@/lib/auth/client';
 import { sessionStore } from '@/lib/auth/session-store';
 
 type RegisterRole = Exclude<UserRole, 'admin'>;
@@ -26,7 +26,8 @@ type AuthContextValue = {
   login: (input: LoginBody) => Promise<AuthUser>;
   register: (input: RegisterInput) => Promise<AuthUser>;
   logout: () => Promise<void>;
-  refreshSession: () => Promise<boolean>;
+  refreshSession: () => Promise<string | null>;
+  updateAuthUser: () => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -43,11 +44,13 @@ const clearSessionState = (
   sessionStore.clear();
   setAccessToken(null);
   setAuthUser(null);
+  authUserCache.clear();
+  window.localStorage.removeItem(AUTH_SESSION_HINT_KEY);
 };
 
 export const AuthProvider = ({ children }: AuthProviderProps) => {
   const [authUser, setAuthUser] = useState<AuthUser | null>(null);
-  const [accessToken, setAccessToken] = useState<string | null>(sessionStore.getAccessToken());
+  const [accessToken, setAccessToken] = useState<string | null>(null);
   const [isReady, setIsReady] = useState(false);
 
   const setSessionToken = useCallback((token: string | null) => {
@@ -63,18 +66,19 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     window.localStorage.removeItem(AUTH_SESSION_HINT_KEY);
   }, []);
 
-  const refreshSession = useCallback(async (): Promise<boolean> => {
+  const refreshSession = useCallback(async (): Promise<string | null> => {
     try {
       const refreshed = await authApiClient.refresh();
       setSessionToken(refreshed.tokens.accessToken);
 
       const me = await authApiClient.me(refreshed.tokens.accessToken);
       setAuthUser(me);
+      authUserCache.set(me);
 
-      return true;
+      return refreshed.tokens.accessToken;
     } catch {
       clearSessionState(setAccessToken, setAuthUser);
-      return false;
+      return null;
     }
   }, [setSessionToken]);
 
@@ -88,6 +92,13 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       return () => {
         isMounted = false;
       };
+    }
+
+    const cached = authUserCache.get();
+    const cachedToken = sessionStore.getAccessToken();
+    if (cached && cachedToken) {
+      setAuthUser(cached);
+      setAccessToken(cachedToken);
     }
 
     void (async () => {
@@ -114,6 +125,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
 
       const me = await authApiClient.me(result.tokens.accessToken);
       setAuthUser(me);
+      authUserCache.set(me);
 
       return me;
     },
@@ -127,6 +139,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
 
       const me = await authApiClient.me(result.tokens.accessToken);
       setAuthUser(me);
+      authUserCache.set(me);
 
       return me;
     },
@@ -139,6 +152,15 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     } finally {
       clearSessionState(setAccessToken, setAuthUser);
     }
+  }, []);
+
+  const updateAuthUser = useCallback(async (): Promise<void> => {
+    const currentToken = sessionStore.getAccessToken();
+    if (!currentToken) return;
+
+    const me = await authApiClient.me(currentToken);
+    setAuthUser(me);
+    authUserCache.set(me);
   }, []);
 
   const authGuard = useMemo<AuthGuardState>(
@@ -166,8 +188,19 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       register,
       logout,
       refreshSession,
+      updateAuthUser,
     }),
-    [accessToken, authGuard, authUser, isReady, login, logout, refreshSession, register],
+    [
+      accessToken,
+      authGuard,
+      authUser,
+      isReady,
+      login,
+      logout,
+      refreshSession,
+      register,
+      updateAuthUser,
+    ],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
@@ -183,6 +216,4 @@ export const useAuth = (): AuthContextValue => {
   return context;
 };
 
-export const isApiClientError = (error: unknown): error is ApiClientError => {
-  return error instanceof ApiClientRequestError;
-};
+export { isApiClientError } from '@/lib/auth/client';

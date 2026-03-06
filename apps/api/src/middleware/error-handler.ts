@@ -27,6 +27,7 @@ export const errorHandler: ErrorRequestHandler = (error, _req, res, next) => {
   logger.error('Unhandled error', {
     requestId,
     error: error instanceof Error ? error.message : 'Unknown error',
+    ...(error instanceof Error && error.stack ? { stack: error.stack } : {}),
   });
 
   const body: ApiErrorBody = {
@@ -34,7 +35,11 @@ export const errorHandler: ErrorRequestHandler = (error, _req, res, next) => {
     error: {
       code: 'INTERNAL_SERVER_ERROR',
       message:
-        env.NODE_ENV === 'production' ? 'An unexpected error occurred' : 'Unhandled exception',
+        env.NODE_ENV === 'production'
+          ? 'An unexpected error occurred'
+          : error instanceof Error
+            ? error.message
+            : 'Unhandled exception',
       ...(requestId ? { requestId } : {}),
     },
   };

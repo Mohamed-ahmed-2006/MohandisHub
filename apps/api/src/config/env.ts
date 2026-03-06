@@ -8,6 +8,7 @@ const envSchema = z.object({
   PORT: z.coerce.number().int().positive().default(4000),
   DATABASE_URL: z.string().url().optional(),
   CORS_ORIGIN: z.string().default('http://localhost:3000'),
+  API_PUBLIC_URL: z.string().url().optional(),
 
   // Auth / JWT
   JWT_SECRET: z.string().min(32, 'JWT_SECRET must be at least 32 characters'),
@@ -35,6 +36,16 @@ const envSchema = z.object({
   TWILIO_ACCOUNT_SID: z.string().optional(),
   TWILIO_AUTH_TOKEN: z.string().optional(),
   TWILIO_PHONE_NUMBER: z.string().optional(),
+
+  // Cryptomus — crypto payments (wallet deposit)
+  CRYPTOMUS_MERCHANT_ID: z.string().uuid().optional(),
+  CRYPTOMUS_API_KEY: z.string().optional(),
+  CRYPTOMUS_WEBHOOK_KEY: z.string().optional(),
+
+  // Stripe — card payments (wallet deposit)
+  STRIPE_SECRET_KEY: z.string().optional(),
+  STRIPE_WEBHOOK_SECRET: z.string().optional(),
+  STRIPE_PUBLISHABLE_KEY: z.string().optional(),
 });
 
 const parsed = envSchema.safeParse(process.env);

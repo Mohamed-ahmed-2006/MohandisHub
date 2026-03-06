@@ -1,0 +1,86 @@
+.verify-email-loading {
+  text-align: center;
+  color: hsl(var(--text-soft));
+  padding: 3rem 0;
+}
+
+.verify-email-shell {
+  text-align: center;
+}
+
+.verify-email-shell .auth-form-header {
+  text-align: center;
+}
+
+.verify-email-destination {
+  margin-top: 0.75rem;
+  margin-bottom: 0;
+  font-size: 0.88rem;
+  color: hsl(var(--text-soft));
+}
+
+.verify-email-destination strong {
+  color: hsl(var(--foreground));
+  font-weight: 600;
+}
+
+.verify-email-form {
+  margin-top: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+}
+
+.verify-email-code-input {
+  text-align: center;
+  font-size: 1.5rem;
+  font-weight: 700;
+  letter-spacing: 0.35em;
+  font-variant-numeric: tabular-nums;
+}
+
+.verify-email-continue {
+  margin-top: 1rem;
+}
+
+.verify-email-resend-row {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 2rem;
+}
+
+.verify-email-resend-countdown {
+  font-size: 0.84rem;
+  color: hsl(var(--text-soft));
+}
+
+.verify-email-resend-button {
+  border: none;
+  background: transparent;
+  color: hsl(var(--accent));
+  font-size: 0.85rem;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 0;
+}
+
+.verify-email-resend-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.verify-email-resend-button:focus-visible {
+  border-radius: 0.3rem;
+}
+
+.verify-email-dev-hint {
+  margin: 0.75rem 0 0;
+  font-size: 0.8rem;
+  color: hsl(var(--text-soft));
+  background-color: color-mix(in srgb, hsl(var(--muted)) 68%, transparent);
+  border: 1px solid hsl(var(--border));
+  border-radius: 0.8rem;
+  padding: 0.7rem 0.85rem;
+  text-align: start;
+}

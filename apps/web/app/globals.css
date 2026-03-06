@@ -3,28 +3,48 @@
 @tailwind utilities;
 
 @import '../components/ui/shared-ui.css';
+@import '../components/ui/skeleton.css';
 @import '../components/api-health-badge.css';
 @import '../components/theme-toggle.css';
 @import '../components/language-toggle.css';
 @import '../components/site-logo.css';
 @import '../components/auth/auth.css';
+@import '../components/onboarding/onboarding.css';
 @import './home.css';
 @import './login/login.css';
+@import './legal.css';
 @import './onboarding/role/role.css';
 @import './onboarding/customer/onboarding-customer.css';
 @import './onboarding/expert/onboarding-expert.css';
 @import './onboarding/business/onboarding-business.css';
+@import './app-home.css';
+@import '../components/app/app-shell.css';
+@import '../components/profile/profile-screen.css';
+@import '../components/admin/admin-verification-screen.css';
 
 :root {
   --background: 36 33% 98%;
   --foreground: 214 30% 16%;
   --muted: 210 20% 95%;
   --accent: 27 90% 55%;
+  --primary: 27 90% 55%;
+  --primary-foreground: 0 0% 100%;
   --card: 0 0% 100%;
   --border: 212 24% 88%;
   --surface-strong: 0 0% 100%;
   --text-soft: 215 25% 32%;
   --shadow-soft: 0 14px 45px -25px rgba(0, 0, 0, 0.25);
+  --success: 142 60% 35%;
+  --warning: 36 80% 40%;
+  --destructive: 0 70% 45%;
+  --focus-ring: 27 90% 55%;
+  --focus-shadow: 0 0 0 3px hsl(var(--focus-ring) / 0.18);
+  --surface-elevated: 0 0% 100% / 0.82;
+  --surface-panel: 0 0% 100% / 0.68;
+  --radius-sm: 0.75rem;
+  --radius-md: 1rem;
+  --radius-lg: 1.25rem;
+  --shadow-soft-lg: 0 24px 60px -34px rgba(15, 23, 42, 0.28);
 }
 
 html[data-theme='dark'] {
@@ -32,11 +52,30 @@ html[data-theme='dark'] {
   --foreground: 210 28% 94%;
   --muted: 220 19% 16%;
   --accent: 27 95% 60%;
+  --primary: 27 95% 60%;
+  --primary-foreground: 0 0% 100%;
   --card: 221 22% 14%;
   --border: 220 14% 26%;
   --surface-strong: 220 21% 12%;
   --text-soft: 214 24% 76%;
   --shadow-soft: 0 18px 45px -26px rgba(0, 0, 0, 0.6);
+  --success: 142 50% 45%;
+  --warning: 36 80% 55%;
+  --destructive: 0 65% 55%;
+  --focus-ring: 27 95% 60%;
+  --focus-shadow: 0 0 0 3px hsl(var(--focus-ring) / 0.24);
+  --surface-elevated: 221 22% 14% / 0.84;
+  --surface-panel: 221 22% 14% / 0.7;
+  --shadow-soft-lg: 0 28px 72px -34px rgba(0, 0, 0, 0.58);
+}
+
+html {
+  color-scheme: light;
+  scroll-behavior: smooth;
+}
+
+html[data-theme='dark'] {
+  color-scheme: dark;
 }
 
 * {
@@ -44,10 +83,16 @@ html[data-theme='dark'] {
   border-color: hsl(var(--border));
 }
 
+*::selection {
+  background-color: hsl(var(--accent) / 0.2);
+}
+
 body {
   margin: 0;
+  min-height: 100vh;
   font-family: var(--font-manrope), sans-serif;
   color: hsl(var(--foreground));
+  line-height: 1.5;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   background:
@@ -59,6 +104,40 @@ body {
     color 420ms ease,
     border-color 420ms ease,
     box-shadow 420ms ease;
+}
+
+img {
+  display: block;
+  max-width: 100%;
+}
+
+a {
+  color: inherit;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: hsl(var(--text-soft) / 0.74);
+}
+
+:where(a, button, input, select, textarea, [role='button']):focus-visible {
+  outline: none;
+  box-shadow: var(--focus-shadow);
+}
+
+:where(button, [type='button'], [type='submit']) {
+  touch-action: manipulation;
+}
+
+main {
+  position: relative;
 }
 
 html[data-theme='dark'] body {
@@ -97,5 +176,6 @@ span {
     transition-duration: 1ms !important;
     animation-duration: 1ms !important;
     animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
   }
 }

@@ -1,6 +1,7 @@
 .home-page-main {
   min-height: 100vh;
   position: relative;
+  isolation: isolate;
 }
 
 .home-page-floating-controls {
@@ -19,8 +20,8 @@
 }
 
 .home-page-container {
-  padding-top: 2rem;
-  padding-bottom: 2.5rem;
+  padding-top: 1.5rem;
+  padding-bottom: 3.5rem;
 }
 
 .home-page-navbar {
@@ -28,11 +29,15 @@
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
-  border-radius: 1rem;
+  position: sticky;
+  top: 1rem;
+  z-index: 20;
+  border-radius: 999px;
   border: 1px solid hsl(var(--border));
-  background-color: color-mix(in srgb, hsl(var(--surface-strong)) 76%, transparent);
+  background-color: color-mix(in srgb, hsl(var(--surface-panel)) 86%, transparent);
   padding: 0.75rem 1rem;
-  backdrop-filter: blur(8px);
+  box-shadow: var(--shadow-soft-lg);
+  backdrop-filter: blur(14px);
 }
 
 .home-page-brand {
@@ -57,62 +62,69 @@
 }
 
 .home-page-hero-section {
-  padding-top: 4rem;
+  padding-top: 5rem;
 }
 
 .home-page-hero-title {
-  margin-top: 1.25rem;
-  max-width: 48rem;
+  margin-top: 1.4rem;
+  max-width: 52rem;
   font-family: var(--font-sora), sans-serif;
-  font-size: 2.25rem;
-  font-weight: 600;
-  line-height: 1.15;
+  font-size: clamp(2.4rem, 6vw, 4.8rem);
+  font-weight: 700;
+  line-height: 1.02;
+  letter-spacing: -0.04em;
+  text-wrap: balance;
 }
 
 .home-page-hero-description {
-  margin-top: 1.25rem;
-  max-width: 42rem;
-  font-size: 1rem;
-  line-height: 1.7;
+  margin-top: 1.35rem;
+  max-width: 44rem;
+  font-size: clamp(1rem, 2vw, 1.15rem);
+  line-height: 1.8;
   color: hsl(var(--text-soft));
+  text-wrap: pretty;
 }
 
 .home-page-hero-actions {
-  margin-top: 2rem;
+  margin-top: 2.25rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.85rem;
 }
 
 .home-page-hero-cta-button {
-  padding: 0.75rem 1.5rem;
+  min-width: 11rem;
 }
 
 .home-page-section {
-  padding-top: 4rem;
+  padding-top: 5rem;
 }
 
 .home-page-section-title {
   font-family: var(--font-sora), sans-serif;
-  font-size: 1.75rem;
-  font-weight: 600;
+  font-size: clamp(1.65rem, 3vw, 2.1rem);
+  font-weight: 700;
+  letter-spacing: -0.03em;
 }
 
 .home-page-feature-grid,
 .home-page-steps-grid {
-  margin-top: 1.5rem;
+  margin-top: 1.75rem;
   display: grid;
-  gap: 1rem;
+  gap: 1.1rem;
 }
 
 .home-page-feature-title {
   font-family: var(--font-sora), sans-serif;
-  font-size: 1.25rem;
-  font-weight: 600;
+  font-size: 1.2rem;
+  font-weight: 700;
 }
 
 .home-page-feature-description,
 .home-page-step-text {
-  margin-top: 0.5rem;
-  font-size: 0.875rem;
-  line-height: 1.7;
+  margin-top: 0.65rem;
+  font-size: 0.94rem;
+  line-height: 1.75;
   color: hsl(var(--text-soft));
 }
 
@@ -127,8 +139,8 @@
 .home-page-footer {
   margin-top: 5rem;
   border-top: 1px solid hsl(var(--border));
-  padding-top: 1.5rem;
-  padding-bottom: 1.5rem;
+  padding-top: 1.75rem;
+  padding-bottom: 1.75rem;
   font-size: 0.875rem;
   color: hsl(var(--text-soft));
 }
@@ -145,28 +157,16 @@
   }
 
   .home-page-container {
-    padding-top: 2.5rem;
+    padding-top: 2rem;
   }
 
   .home-page-navbar {
-    padding: 0.75rem 1.5rem;
+    padding: 0.85rem 1.5rem;
   }
 
   .home-page-hero-section,
   .home-page-section {
     padding-top: 5rem;
-  }
-
-  .home-page-hero-title {
-    font-size: 3rem;
-  }
-
-  .home-page-hero-description {
-    font-size: 1.125rem;
-  }
-
-  .home-page-section-title {
-    font-size: 1.875rem;
   }
 }
 
@@ -177,5 +177,22 @@
 
   .home-page-steps-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 639px) {
+  .home-page-navbar {
+    top: 0.6rem;
+    border-radius: 1.1rem;
+    padding-inline: 0.85rem;
+  }
+
+  .home-page-hero-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .home-page-hero-cta-button {
+    width: 100%;
   }
 }

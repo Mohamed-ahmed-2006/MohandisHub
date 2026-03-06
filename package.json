@@ -13,6 +13,7 @@
     "prepare": "husky || true",
     "predev": "npm run build -w @mohandishub/shared",
     "dev": "concurrently -n web,api -c blue,green \"npm run dev:web\" \"npm run dev:api\"",
+    "predev:api": "node scripts/kill-port.js",
     "dev:web": "npm run dev -w @mohandishub/web",
     "dev:api": "npm run dev -w @mohandishub/api",
     "build": "npm run build -w @mohandishub/shared && npm run build -w @mohandishub/api && npm run build -w @mohandishub/web",

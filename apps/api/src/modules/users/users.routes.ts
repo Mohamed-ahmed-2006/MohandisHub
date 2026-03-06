@@ -1,10 +1,27 @@
 import { Router } from 'express';
 
+import { authenticate } from '../../middleware/authenticate.js';
+import { requireEmailVerified } from '../../middleware/require-email-verified.js';
+
 import { usersController } from './users.controller.js';
 
 const usersRouter = Router();
 
-usersRouter.get('/', usersController.listUsers);
-usersRouter.get('/:id', usersController.getUserById);
+usersRouter.patch('/me', authenticate, requireEmailVerified, usersController.updateMe);
+usersRouter.post(
+  '/me/request-email-change',
+  authenticate,
+  requireEmailVerified,
+  usersController.requestEmailChange,
+);
+usersRouter.post(
+  '/me/confirm-email-change',
+  authenticate,
+  requireEmailVerified,
+  usersController.confirmEmailChange,
+);
+
+usersRouter.get('/', authenticate, requireEmailVerified, usersController.listUsers);
+usersRouter.get('/:id', authenticate, requireEmailVerified, usersController.getUserById);
 
 export { usersRouter };

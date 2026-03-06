@@ -1,11 +1,11 @@
 // ---------------------------------------------------------------------------
 // Profiles routes — user profile + document submission
-// Admin routes — verification review panel
 // ---------------------------------------------------------------------------
 
 import { Router } from 'express';
 
 import { authenticate } from '../../middleware/authenticate.js';
+import { requireEmailVerified } from '../../middleware/require-email-verified.js';
 
 import { profilesController } from './profiles.controller.js';
 
@@ -14,41 +14,59 @@ import { profilesController } from './profiles.controller.js';
 const profilesRouter = Router();
 
 // Expert profile
-profilesRouter.get('/expert', authenticate, profilesController.getExpertProfile);
-profilesRouter.patch('/expert', authenticate, profilesController.updateExpertProfile);
+profilesRouter.get(
+  '/expert',
+  authenticate,
+  requireEmailVerified,
+  profilesController.getExpertProfile,
+);
+profilesRouter.patch(
+  '/expert',
+  authenticate,
+  requireEmailVerified,
+  profilesController.updateExpertProfile,
+);
 
 // Business profile
-profilesRouter.get('/business', authenticate, profilesController.getBusinessProfile);
-profilesRouter.patch('/business', authenticate, profilesController.updateBusinessProfile);
+profilesRouter.get(
+  '/business',
+  authenticate,
+  requireEmailVerified,
+  profilesController.getBusinessProfile,
+);
+profilesRouter.patch(
+  '/business',
+  authenticate,
+  requireEmailVerified,
+  profilesController.updateBusinessProfile,
+);
 
-// Identity documents (expert + business)
-profilesRouter.post('/identity-documents', authenticate, profilesController.submitIdentityDocument);
-profilesRouter.get('/identity-documents', authenticate, profilesController.getIdentityDocuments);
+// Identity documents (expert + business) — no requireVerified so unverified users can submit for KYC
+profilesRouter.post(
+  '/identity-documents',
+  authenticate,
+  requireEmailVerified,
+  profilesController.submitIdentityDocument,
+);
+profilesRouter.get(
+  '/identity-documents',
+  authenticate,
+  requireEmailVerified,
+  profilesController.getIdentityDocuments,
+);
 
-// Academic records (expert only)
-profilesRouter.post('/academic-records', authenticate, profilesController.submitAcademicRecord);
-profilesRouter.get('/academic-records', authenticate, profilesController.getAcademicRecords);
+// Academic records (expert only) — no requireVerified so onboarding users can submit
+profilesRouter.post(
+  '/academic-records',
+  authenticate,
+  requireEmailVerified,
+  profilesController.submitAcademicRecord,
+);
+profilesRouter.get(
+  '/academic-records',
+  authenticate,
+  requireEmailVerified,
+  profilesController.getAcademicRecords,
+);
 
-// ── Admin routes (/api/admin) ────────────────────────────────────────────
-
-const adminRouter = Router();
-
-// All admin routes require authentication (admin role enforced in controller)
-adminRouter.use(authenticate);
-
-// Pending verifications dashboard
-adminRouter.get('/verification/pending', profilesController.getPendingVerifications);
-
-// Review identity document
-adminRouter.post('/identity/:docId/review', profilesController.reviewIdentityDocument);
-
-// Review academic record
-adminRouter.post('/academic/:recordId/review', profilesController.reviewAcademicRecord);
-
-// Review business documents (commercial register, trade license, etc.)
-adminRouter.post('/business/:userId/review', profilesController.reviewBusinessDocs);
-
-// View any user's full profile (for admin review context)
-adminRouter.get('/user/:userId/profile', profilesController.getAnyUserProfile);
-
-export { adminRouter, profilesRouter };
+export { profilesRouter };

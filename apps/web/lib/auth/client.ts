@@ -3,7 +3,10 @@ import type {
   ApiSuccessBody,
   AuthUser,
   LoginBody,
+  OtpChannel,
   RegisterBody,
+  SendOtpResult,
+  VerifyOtpResult,
 } from '@mohandishub/shared';
 
 import { getApiBaseUrl } from '@/lib/env';
@@ -43,6 +46,9 @@ export class ApiClientRequestError extends Error implements ApiClientError {
     this.details = details;
   }
 }
+
+export const isApiClientError = (error: unknown): error is ApiClientError =>
+  error instanceof ApiClientRequestError;
 
 const isApiErrorBody = (value: unknown): value is ApiErrorBody => {
   if (!value || typeof value !== 'object') {
@@ -144,6 +150,26 @@ export const authApiClient = {
     return apiRequest<{ message: string }>({
       method: 'POST',
       path: '/api/auth/logout',
+    });
+  },
+  sendOtp: async (accessToken: string, channel: OtpChannel): Promise<SendOtpResult> => {
+    return apiRequest<SendOtpResult>({
+      method: 'POST',
+      path: '/api/otp/send',
+      body: { channel },
+      accessToken,
+    });
+  },
+  verifyOtp: async (
+    accessToken: string,
+    channel: OtpChannel,
+    code: string,
+  ): Promise<VerifyOtpResult> => {
+    return apiRequest<VerifyOtpResult>({
+      method: 'POST',
+      path: '/api/otp/verify',
+      body: { channel, code },
+      accessToken,
     });
   },
 };

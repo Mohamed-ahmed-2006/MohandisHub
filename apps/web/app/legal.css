@@ -1,0 +1,57 @@
+/* Legal pages (privacy, terms) styles */
+
+.legal-page-main {
+  min-height: 100vh;
+  padding-block: 2.5rem 4rem;
+}
+
+.legal-page-container {
+  max-width: 52rem;
+  margin-inline: auto;
+  padding-inline: 1rem;
+}
+
+.legal-page-title {
+  margin: 0 0 1rem;
+  font-family: var(--font-sora), sans-serif;
+  font-size: clamp(2rem, 4vw, 2.75rem);
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  color: hsl(var(--foreground));
+}
+
+.legal-page-content {
+  border: 1px solid hsl(var(--border));
+  border-radius: var(--radius-lg);
+  background-color: color-mix(in srgb, hsl(var(--surface-panel)) 88%, transparent);
+  padding: 1.4rem;
+  color: hsl(var(--text-soft));
+  font-size: 0.98rem;
+  line-height: 1.8;
+  box-shadow: var(--shadow-soft-lg);
+  backdrop-filter: blur(12px);
+}
+
+.legal-page-content h2 {
+  margin-top: 2rem;
+  margin-bottom: 0.7rem;
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: hsl(var(--foreground));
+}
+
+.legal-page-content p {
+  margin: 0 0 0.95rem;
+}
+
+.legal-page-content a {
+  color: hsl(var(--accent));
+  text-decoration-thickness: 0.08em;
+  text-underline-offset: 0.18em;
+}
+
+@media (min-width: 768px) {
+  .legal-page-content {
+    padding: 2rem 2.2rem;
+  }
+}

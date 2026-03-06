@@ -6,6 +6,7 @@ import { env } from './config/env.js';
 import { errorHandler } from './middleware/error-handler.js';
 import { notFoundHandler } from './middleware/not-found.js';
 import { requestIdMiddleware } from './middleware/request-id.js';
+import { walletController } from './modules/wallet/wallet.controller.js';
 import { healthRouter } from './routes/health.routes.js';
 import { apiRouter } from './routes/index.js';
 
@@ -19,6 +20,21 @@ export const createApp = () => {
       origin: env.CORS_ORIGIN,
       credentials: true,
     }),
+  );
+  // Webhooks must receive raw body for signature verification
+  app.use(
+    '/api/wallet/cryptomus-webhook',
+    express.raw({ type: 'application/json' }),
+    (req, res, next) => {
+      void walletController.cryptomusWebhook(req, res, next);
+    },
+  );
+  app.use(
+    '/api/wallet/stripe-webhook',
+    express.raw({ type: 'application/json' }),
+    (req, res, next) => {
+      void walletController.stripeWebhook(req, res, next);
+    },
   );
   app.use(express.json({ limit: '1mb' }));
   app.use(cookieParser());
