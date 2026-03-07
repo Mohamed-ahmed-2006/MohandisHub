@@ -482,6 +482,7 @@ export type Dictionary = {
     depositCancelled?: string;
   };
   plan: {
+    subtitle?: string;
     currentPlan: string;
     noPlans: string;
     choosePlan: string;

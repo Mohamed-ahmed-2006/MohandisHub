@@ -127,6 +127,7 @@ export class AuthService {
         email: user.email,
         error: error instanceof Error ? error.message : String(error),
       });
+      // Do not throw: return generic success so we don't leak info or break the flow.
     }
 
     return { message: PASSWORD_RESET_GENERIC_MESSAGE };
@@ -341,7 +342,12 @@ export class AuthService {
   }
 
   private buildPasswordResetLink(rawToken: string): string {
-    return new URL(`/auth/reset-password?token=${encodeURIComponent(rawToken)}`, env.WEB_PUBLIC_URL)
+    const base =
+      env.WEB_PUBLIC_URL ?? env.CORS_ORIGIN ?? env.API_PUBLIC_URL ?? 'https://mohandishub.app';
+    const baseStr =
+      typeof base === 'string' ? base.trim().replace(/\/$/, '') : 'https://mohandishub.app';
+    const baseUrl = baseStr.startsWith('http') ? baseStr : `https://${baseStr}`;
+    return new URL(`/auth/reset-password?token=${encodeURIComponent(rawToken)}`, baseUrl)
       .toString()
       .trim();
   }

@@ -2,9 +2,8 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 
 import { ApiHealthBadge } from '@/components/api-health-badge';
-import { LanguageToggle } from '@/components/language-toggle';
+import { HomePageFloatingControls } from '@/components/home-page-floating-controls';
 import { SiteLogo } from '@/components/site-logo';
-import { ThemeToggle } from '@/components/theme-toggle';
 import { ButtonLink } from '@/components/ui/button-link';
 import { Card } from '@/components/ui/card';
 import { Container } from '@/components/ui/container';
@@ -31,19 +30,7 @@ const HomePage = async ({ params }: HomePageProps) => {
 
   return (
     <main className="home-page-main">
-      <div className="home-page-floating-controls">
-        <LanguageToggle
-          locale={typedLocale}
-          targetLabel={dictionary.language.target}
-          ariaLabel={dictionary.language.switchLabel}
-        />
-        <ThemeToggle
-          switchToLightLabel={dictionary.theme.switchToLight}
-          switchToDarkLabel={dictionary.theme.switchToDark}
-          darkLabel={dictionary.theme.darkLabel}
-          lightLabel={dictionary.theme.lightLabel}
-        />
-      </div>
+      <HomePageFloatingControls locale={typedLocale} dictionary={dictionary} />
       <Container className="home-page-container">
         <header className="home-page-navbar">
           <Link href={buildLocalePath(typedLocale, '/')} className="home-page-brand">

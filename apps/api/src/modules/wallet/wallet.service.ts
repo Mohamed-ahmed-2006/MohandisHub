@@ -149,8 +149,58 @@ export class WalletService {
     return { checkoutUrl: url, sessionId: session.id };
   }
 
+  /**
+   * Confirm a Stripe Checkout session and credit the wallet if not already done.
+   * Safe to call when returning from success URL (idempotent if webhook already ran).
+   */
+  async confirmStripeSession(userId: string, sessionId: string): Promise<{ credited: boolean }> {
+    if (!stripe || !env.STRIPE_SECRET_KEY) {
+      throw new HttpError({
+        statusCode: 503,
+        code: 'STRIPE_UNAVAILABLE',
+        message: 'Card payments are not configured.',
+      });
+    }
+    const session = await stripe.checkout.sessions.retrieve(sessionId, {
+      expand: [],
+    });
+    const orderId = session.metadata?.order_id;
+    const metaUserId = session.metadata?.user_id;
+    if (!orderId || metaUserId !== userId) {
+      throw new HttpError({
+        statusCode: 400,
+        code: 'INVALID_SESSION',
+        message: 'Invalid or expired checkout session.',
+      });
+    }
+    if (session.payment_status !== 'paid') {
+      return { credited: false };
+    }
+    const deposit = await this.repo.findDepositRequestByOrderId(orderId);
+    if (!deposit || deposit.status !== 'pending') {
+      return { credited: deposit?.status === 'paid' };
+    }
+    const amount = (session.amount_total ?? 0) / 100;
+    await this.repo.creditWallet(
+      deposit.wallet_id,
+      deposit.user_id,
+      amount,
+      `Card deposit (Stripe)`,
+      'stripe',
+      session.id,
+    );
+    await this.repo.updateDepositRequestStatus(orderId, 'paid', session.id);
+    return { credited: true };
+  }
+
   async handleStripeWebhook(rawBody: Buffer | string, signature: string): Promise<void> {
-    if (!stripe || !env.STRIPE_WEBHOOK_SECRET) return;
+    if (!stripe || !env.STRIPE_WEBHOOK_SECRET) {
+      throw new HttpError({
+        statusCode: 503,
+        code: 'STRIPE_WEBHOOK_NOT_CONFIGURED',
+        message: 'Stripe webhook secret is not configured. Set STRIPE_WEBHOOK_SECRET.',
+      });
+    }
     let event: {
       type: string;
       data: {

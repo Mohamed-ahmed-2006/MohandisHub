@@ -179,7 +179,9 @@ export class AdminRepository {
     const entries = Object.entries(fields).filter(([, v]) => v !== undefined);
     const columns = entries.map(([k]) => k);
     const placeholders = entries.map((_, i) => `$${i + 1}`);
-    const values = entries.map(([, v]) => v);
+    const values = entries.map(([k, v]) =>
+      k === 'features' && Array.isArray(v) ? JSON.stringify(v) : v,
+    );
 
     const { rows } = await this.db.query<PlanRow>(
       `INSERT INTO plans (${columns.join(', ')}) VALUES (${placeholders.join(', ')}) RETURNING *`,
@@ -193,7 +195,9 @@ export class AdminRepository {
     if (entries.length === 0) return this.getPlan(planId);
 
     const setClauses = entries.map(([key], i) => `${key} = $${i + 2}`);
-    const values = entries.map(([, v]) => v);
+    const values = entries.map(([k, v]) =>
+      k === 'features' && Array.isArray(v) ? JSON.stringify(v) : v,
+    );
 
     const { rows } = await this.db.query<PlanRow>(
       `UPDATE plans SET ${setClauses.join(', ')} WHERE id = $1 RETURNING *`,

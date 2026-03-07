@@ -34,11 +34,6 @@ export const AppSidebar = ({
 
   const navItems: NavItem[] = [
     { href: '/app', label: dictionary.nav.home },
-    {
-      href: '/app?post=1',
-      label: dictionary.needs?.postNeed ?? 'Post a Need',
-      roles: ['customer'],
-    },
     { href: '/app/settings', label: dictionary.nav.settings },
     { href: '/app/chat', label: dictionary.nav.chat },
     { href: '/app/history', label: dictionary.nav.history },

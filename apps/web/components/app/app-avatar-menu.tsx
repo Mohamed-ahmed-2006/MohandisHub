@@ -83,16 +83,6 @@ export const AppAvatarMenu = ({
           >
             {dictionary.nav.settings}
           </Link>
-          {role === 'customer' && (
-            <Link
-              href={buildLocalePath(locale, '/app?post=1')}
-              className="app-avatar-dropdown-item"
-              role="menuitem"
-              onClick={() => setOpen(false)}
-            >
-              {dictionary.needs?.postNeed ?? 'Post a Need'}
-            </Link>
-          )}
           <Link
             href={buildLocalePath(locale, '/app/plan')}
             className="app-avatar-dropdown-item"

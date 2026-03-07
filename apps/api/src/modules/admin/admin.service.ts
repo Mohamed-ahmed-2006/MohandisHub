@@ -154,7 +154,8 @@ export class AdminService {
     if (input.trialDays !== undefined) dbFields.trial_days = input.trialDays;
     if (input.maxServices !== undefined) dbFields.max_services = input.maxServices;
     if (input.maxProjects !== undefined) dbFields.max_projects = input.maxProjects;
-    if (input.features !== undefined) dbFields.features = JSON.stringify(input.features);
+    if (input.features !== undefined)
+      dbFields.features = Array.isArray(input.features) ? input.features : [];
     if (input.sortOrder !== undefined) dbFields.sort_order = input.sortOrder;
 
     try {
@@ -185,7 +186,8 @@ export class AdminService {
     if (input.trialDays !== undefined) dbFields.trial_days = input.trialDays;
     if (input.maxServices !== undefined) dbFields.max_services = input.maxServices;
     if (input.maxProjects !== undefined) dbFields.max_projects = input.maxProjects;
-    if (input.features !== undefined) dbFields.features = JSON.stringify(input.features);
+    if (input.features !== undefined)
+      dbFields.features = Array.isArray(input.features) ? input.features : [];
     if (input.sortOrder !== undefined) dbFields.sort_order = input.sortOrder;
     if (input.isActive !== undefined) dbFields.is_active = input.isActive;
 

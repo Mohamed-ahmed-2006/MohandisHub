@@ -83,11 +83,12 @@ const createStripeCheckout = asyncHandler(async (req, res) => {
     'http://localhost:3000'
   ).replace(/\/$/, '');
   const successBase = returnUrl ? returnUrl.replace(/\/$/, '') : base;
+  // Stripe replaces {CHECKOUT_SESSION_ID} with the real session id on redirect
   const result = await walletService.createStripeCheckout(
     userId,
     amount,
     currency,
-    `${successBase}?stripe=success`,
+    `${successBase}?stripe=success&session_id={CHECKOUT_SESSION_ID}`,
     `${successBase}?stripe=cancelled`,
   );
   res.json({ ok: true, data: result });
@@ -105,6 +106,24 @@ const createCryptoDeposit = asyncHandler(async (req, res) => {
   }
   const baseUrl = returnUrl;
   const result = await walletService.createCryptoDeposit(userId, amount, currency, baseUrl);
+  res.json({ ok: true, data: result });
+});
+
+const confirmStripeSession = asyncHandler(async (req, res) => {
+  const userId = getUserId(req);
+  const body = req.body as { sessionId?: unknown } | undefined;
+  const query = req.query as { session_id?: unknown };
+  const sessionIdFromBody = typeof body?.sessionId === 'string' ? body.sessionId.trim() : '';
+  const sessionIdFromQuery = typeof query?.session_id === 'string' ? query.session_id.trim() : '';
+  const sessionId = sessionIdFromBody || sessionIdFromQuery;
+  if (!sessionId) {
+    throw new HttpError({
+      statusCode: 400,
+      code: 'MISSING_SESSION',
+      message: 'session_id or sessionId is required.',
+    });
+  }
+  const result = await walletService.confirmStripeSession(userId, sessionId);
   res.json({ ok: true, data: result });
 });
 
@@ -137,6 +156,7 @@ export const walletController = {
   getMyTransactions,
   createStripeCheckout,
   createCryptoDeposit,
+  confirmStripeSession,
   cryptomusWebhook,
   stripeWebhook,
 };

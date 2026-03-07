@@ -30,6 +30,7 @@ const makeUserRow = (): UserRow => ({
   email_verified_at: null,
   phone_verified_at: null,
   is_active: true,
+  is_admin: false,
   created_at: new Date(),
   updated_at: new Date(),
 });

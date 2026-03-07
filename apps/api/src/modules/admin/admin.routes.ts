@@ -5,6 +5,7 @@
 import { Router } from 'express';
 
 import { authenticate } from '../../middleware/authenticate.js';
+import { loadAdminFromDb } from '../../middleware/load-admin-from-db.js';
 import { requireEmailVerified } from '../../middleware/require-email-verified.js';
 import { requireRole } from '../../middleware/require-role.js';
 import { profilesController } from '../profiles/profiles.controller.js';
@@ -13,7 +14,7 @@ import { adminController } from './admin.controller.js';
 
 const adminRouter = Router();
 
-adminRouter.use(authenticate, requireEmailVerified, requireRole('admin'));
+adminRouter.use(authenticate, requireEmailVerified, loadAdminFromDb, requireRole('admin'));
 
 // Dashboard
 adminRouter.get('/dashboard/stats', adminController.getDashboardStats);

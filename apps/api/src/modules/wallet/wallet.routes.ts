@@ -17,5 +17,6 @@ walletRouter.get('/me', walletController.getMyWallet);
 walletRouter.get('/me/transactions', walletController.getMyTransactions);
 walletRouter.post('/deposit/stripe', walletController.createStripeCheckout);
 walletRouter.post('/deposit/crypto', walletController.createCryptoDeposit);
+walletRouter.post('/deposit/confirm-stripe', walletController.confirmStripeSession);
 
 export { walletRouter };

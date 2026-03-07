@@ -58,24 +58,47 @@ export const CustomerDashboard = ({ locale, dictionary, accessToken, categories 
     setSaving(true);
     setError(null);
     const form = e.currentTarget;
-    const data = {
-      title: (form.elements.namedItem('title') as HTMLInputElement).value,
-      description: (form.elements.namedItem('description') as HTMLTextAreaElement).value,
-      budgetType: (form.elements.namedItem('budgetType') as HTMLSelectElement).value,
-      budgetAmount: parseFloat((form.elements.namedItem('budgetAmount') as HTMLInputElement).value),
+    const title = (form.elements.namedItem('title') as HTMLInputElement).value.trim();
+    const description = (
+      form.elements.namedItem('description') as HTMLTextAreaElement
+    ).value.trim();
+    const budgetType = (form.elements.namedItem('budgetType') as HTMLSelectElement).value as
+      | 'fixed'
+      | 'hourly';
+    const budgetAmountRaw = parseFloat(
+      (form.elements.namedItem('budgetAmount') as HTMLInputElement).value,
+    );
+    const budgetAmount =
+      Number.isFinite(budgetAmountRaw) && budgetAmountRaw >= 1 ? budgetAmountRaw : 0;
+    const categoryIdVal = (form.elements.namedItem('categoryId') as HTMLSelectElement).value.trim();
+    const timelineDaysRaw = parseInt(
+      (form.elements.namedItem('timelineDays') as HTMLInputElement).value,
+      10,
+    );
+    const timelineDays =
+      Number.isInteger(timelineDaysRaw) && timelineDaysRaw >= 1 ? timelineDaysRaw : undefined;
+
+    if (budgetAmount < 1) {
+      setError(d.budgetPlaceholder ?? 'Please enter a valid budget amount (at least 1).');
+      setSaving(false);
+      return;
+    }
+
+    const data: Parameters<typeof needsApiClient.createNeed>[1] = {
+      title,
+      description,
+      budgetType,
+      budgetAmount,
       currency: 'EGP',
-      ...((form.elements.namedItem('categoryId') as HTMLSelectElement).value
-        ? { categoryId: (form.elements.namedItem('categoryId') as HTMLSelectElement).value }
-        : {}),
-      ...(parseInt((form.elements.namedItem('timelineDays') as HTMLInputElement).value, 10)
-        ? {
-            timelineDays: parseInt(
-              (form.elements.namedItem('timelineDays') as HTMLInputElement).value,
-              10,
-            ),
-          }
-        : {}),
     };
+    if (
+      categoryIdVal &&
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(categoryIdVal)
+    ) {
+      data.categoryId = categoryIdVal;
+    }
+    if (timelineDays != null) data.timelineDays = timelineDays;
+
     try {
       await needsApiClient.createNeed(accessToken, data);
       setShowForm(false);
@@ -115,66 +138,86 @@ export const CustomerDashboard = ({ locale, dictionary, accessToken, categories 
     <section className="dashboard-section" ref={sectionRef}>
       <div className="dashboard-section-header">
         <h2 className="dashboard-section-title">{d.myNeeds ?? 'My Needs'}</h2>
-        <button
-          type="button"
-          className="dashboard-primary-btn"
-          onClick={() => setShowForm(!showForm)}
-        >
-          {showForm ? dictionary.common.back : (d.postNeed ?? 'Post a Need')}
+        <button type="button" className="dashboard-primary-btn" onClick={() => setShowForm(true)}>
+          {d.postNeed ?? 'Post a Need'}
         </button>
       </div>
 
       {showForm && (
-        <form className="dashboard-form" onSubmit={(e) => void handleCreate(e)}>
-          {error && <p className="dashboard-error">{error}</p>}
-          <input
-            name="title"
-            className="dashboard-input"
-            placeholder={d.titlePlaceholder ?? 'Title'}
-            required
-          />
-          <textarea
-            name="description"
-            className="dashboard-textarea"
-            placeholder={d.descPlaceholder ?? 'Describe what you need...'}
-            required
-          />
-          <div className="dashboard-form-row">
-            <select name="categoryId" className="dashboard-select">
-              <option value="">{d.anyCategory ?? 'Category (optional)'}</option>
-              {categories.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {categoryName(c)}
-                </option>
-              ))}
-            </select>
-            <select name="budgetType" className="dashboard-select" required>
-              <option value="fixed">{d.fixed ?? 'Fixed'}</option>
-              <option value="hourly">{d.hourly ?? 'Hourly'}</option>
-            </select>
+        <div className="plan-modal-overlay" onClick={() => setShowForm(false)}>
+          <div
+            className="plan-modal"
+            onClick={(e) => e.stopPropagation()}
+            style={{ maxWidth: 560 }}
+          >
+            <h3 className="plan-modal-title">{d.postNeed ?? 'Post a Need'}</h3>
+            <form className="dashboard-form" onSubmit={(e) => void handleCreate(e)}>
+              {error && <p className="dashboard-error">{error}</p>}
+              <input
+                name="title"
+                className="dashboard-input"
+                placeholder={d.titlePlaceholder ?? 'Title'}
+                required
+              />
+              <textarea
+                name="description"
+                className="dashboard-textarea"
+                placeholder={d.descPlaceholder ?? 'Describe what you need...'}
+                required
+              />
+              <div className="dashboard-form-row">
+                <select name="categoryId" className="dashboard-select">
+                  <option value="">{d.anyCategory ?? 'Category (optional)'}</option>
+                  {categories.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {categoryName(c)}
+                    </option>
+                  ))}
+                </select>
+                <select name="budgetType" className="dashboard-select" required>
+                  <option value="fixed">{d.fixed ?? 'Fixed'}</option>
+                  <option value="hourly">{d.hourly ?? 'Hourly'}</option>
+                </select>
+              </div>
+              <div className="dashboard-form-row">
+                <input
+                  name="budgetAmount"
+                  type="number"
+                  min="1"
+                  step="0.01"
+                  className="dashboard-input"
+                  placeholder={d.budgetPlaceholder ?? 'Budget amount'}
+                  required
+                />
+                <input
+                  name="timelineDays"
+                  type="number"
+                  min="1"
+                  className="dashboard-input"
+                  placeholder={d.timelinePlaceholder ?? 'Timeline (days)'}
+                />
+              </div>
+              <div
+                className="dashboard-form-row"
+                style={{ justifyContent: 'flex-end', gap: '0.5rem' }}
+              >
+                <button
+                  type="button"
+                  className="plan-modal-cancel"
+                  onClick={() => {
+                    setShowForm(false);
+                    setError(null);
+                  }}
+                >
+                  {dictionary.common.back}
+                </button>
+                <button type="submit" className="dashboard-primary-btn" disabled={saving}>
+                  {saving ? '...' : (d.submitNeed ?? 'Submit')}
+                </button>
+              </div>
+            </form>
           </div>
-          <div className="dashboard-form-row">
-            <input
-              name="budgetAmount"
-              type="number"
-              min="1"
-              step="0.01"
-              className="dashboard-input"
-              placeholder={d.budgetPlaceholder ?? 'Budget amount'}
-              required
-            />
-            <input
-              name="timelineDays"
-              type="number"
-              min="1"
-              className="dashboard-input"
-              placeholder={d.timelinePlaceholder ?? 'Timeline (days)'}
-            />
-          </div>
-          <button type="submit" className="dashboard-primary-btn" disabled={saving}>
-            {saving ? '...' : (d.submitNeed ?? 'Submit')}
-          </button>
-        </form>
+        </div>
       )}
 
       {loading ? (

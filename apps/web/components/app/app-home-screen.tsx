@@ -161,35 +161,51 @@ export const AppHomeScreen = ({ locale, dictionary }: AppHomeScreenProps) => {
 
   useEffect(() => {
     const stripe = searchParams.get('stripe');
+    const sessionId = searchParams.get('session_id');
     if (stripe === 'success' || stripe === 'cancelled') {
       setStripeMessage(stripe);
-      const url = new URL(window.location.href);
-      url.searchParams.delete('stripe');
-      window.history.replaceState({}, '', url.pathname + url.search);
+      const intervalRef: { current: ReturnType<typeof setInterval> | null } = { current: null };
       if (stripe === 'success' && accessToken) {
-        void walletApiClient
-          .getMyWallet(accessToken)
-          .then(setWallet)
-          .catch(() => {});
-        let attempts = 0;
-        const maxAttempts = 30;
-        const pollInterval = setInterval(() => {
-          attempts += 1;
-          if (attempts > maxAttempts) {
-            clearInterval(pollInterval);
-            return;
-          }
-          void (async () => {
+        void (async () => {
+          if (sessionId) {
             try {
-              const updated = await walletApiClient.getMyWallet(accessToken);
-              setWallet(updated);
+              await walletApiClient.confirmStripeSession(accessToken, sessionId);
             } catch {
-              // ignore
+              // e.g. invalid session or already credited; still refetch
             }
-          })();
-        }, 2000);
-        return () => clearInterval(pollInterval);
+          }
+          try {
+            const updated = await walletApiClient.getMyWallet(accessToken);
+            setWallet(updated);
+          } catch {
+            // ignore
+          }
+          const maxAttempts = 30;
+          let attempts = 0;
+          intervalRef.current = setInterval(() => {
+            attempts += 1;
+            if (attempts > maxAttempts && intervalRef.current) {
+              clearInterval(intervalRef.current);
+              intervalRef.current = null;
+              return;
+            }
+            void walletApiClient
+              .getMyWallet(accessToken)
+              .then(setWallet)
+              .catch(() => {});
+          }, 2000);
+        })();
       }
+      const t = setTimeout(() => {
+        const url = new URL(window.location.href);
+        url.searchParams.delete('stripe');
+        url.searchParams.delete('session_id');
+        window.history.replaceState({}, '', url.pathname + url.search);
+      }, 500);
+      return () => {
+        clearTimeout(t);
+        if (intervalRef.current) clearInterval(intervalRef.current);
+      };
     }
   }, [searchParams, accessToken]);
 
@@ -225,6 +241,21 @@ export const AppHomeScreen = ({ locale, dictionary }: AppHomeScreenProps) => {
         .then(setWallet)
         .catch(() => {});
     }
+  }, [accessToken]);
+
+  // Refetch wallet when tab becomes visible (e.g. returning from Stripe checkout)
+  useEffect(() => {
+    if (!accessToken) return;
+    const onVisible = () => {
+      void walletApiClient
+        .getMyWallet(accessToken)
+        .then(setWallet)
+        .catch(() => {});
+    };
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') onVisible();
+    });
+    return () => document.removeEventListener('visibilitychange', onVisible);
   }, [accessToken]);
 
   const handleSearch = useCallback(async () => {

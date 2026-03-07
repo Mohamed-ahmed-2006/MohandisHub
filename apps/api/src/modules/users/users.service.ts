@@ -182,6 +182,7 @@ export class UsersService {
       avatarUrl: user.avatar_url,
       dateOfBirth: user.date_of_birth ? user.date_of_birth.toISOString().slice(0, 10) : null,
       role: user.primary_role,
+      isAdmin: user.is_admin === true,
       plan: user.plan_slug,
       emailVerified: user.email_verified_at !== null,
       verificationStatus,

@@ -111,4 +111,41 @@ export const walletApiClient = {
     }>;
     return resBody.data;
   },
+
+  /** Confirm a Stripe checkout session (call after redirect with session_id). Credits wallet if not already done. */
+  confirmStripeSession: async (
+    accessToken: string,
+    sessionId: string,
+  ): Promise<{ credited: boolean }> => {
+    const response = await fetch(
+      `${getApiBaseUrl()}/api/wallet/deposit/confirm-stripe?session_id=${encodeURIComponent(sessionId)}`,
+      {
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+        },
+      },
+    );
+
+    if (!response.ok) {
+      const rawErrorBody: unknown = await response.json().catch(() => null);
+      const maybeError = rawErrorBody as ApiErrorBody | null;
+      if (maybeError && maybeError.error) {
+        throw new ApiClientRequestError({
+          code: maybeError.error.code,
+          message: maybeError.error.message,
+          status: response.status,
+        });
+      }
+      throw new ApiClientRequestError({
+        code: 'HTTP_ERROR',
+        message: `Request failed with status ${response.status}`,
+        status: response.status,
+      });
+    }
+
+    const body = (await response.json()) as ApiSuccessBody<{ credited: boolean }>;
+    return body.data;
+  },
 };
