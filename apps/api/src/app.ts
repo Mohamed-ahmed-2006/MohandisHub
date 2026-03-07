@@ -15,9 +15,20 @@ export const createApp = () => {
 
   app.disable('x-powered-by');
   app.use(requestIdMiddleware);
+  const allowedOrigins: string[] = [env.CORS_ORIGIN];
+  if (env.CORS_EXTRA_ORIGINS) {
+    allowedOrigins.push(
+      ...env.CORS_EXTRA_ORIGINS.split(',')
+        .map((o) => o.trim())
+        .filter(Boolean),
+    );
+  }
   app.use(
     cors({
-      origin: env.CORS_ORIGIN,
+      origin: (origin, cb) => {
+        if (!origin || allowedOrigins.includes(origin)) return cb(null, true);
+        return cb(null, false);
+      },
       credentials: true,
     }),
   );

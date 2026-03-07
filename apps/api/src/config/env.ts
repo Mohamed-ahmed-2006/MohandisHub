@@ -8,6 +8,8 @@ const envSchema = z.object({
   PORT: z.coerce.number().int().positive().default(4000),
   DATABASE_URL: z.string().url().optional(),
   CORS_ORIGIN: z.string().default('http://localhost:3000'),
+  // Optional: comma-separated list for multiple origins (e.g. "https://mohandishub.app,https://www.mohandishub.app")
+  CORS_EXTRA_ORIGINS: z.string().optional(),
   API_PUBLIC_URL: z.string().url().optional(),
 
   // Auth / JWT
