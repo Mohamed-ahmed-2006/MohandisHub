@@ -28,6 +28,22 @@ export type LoginBody = {
   password: string;
 };
 
+/** Payload sent when requesting a password reset email. */
+export type ForgotPasswordBody = {
+  email: string;
+};
+
+/** Payload sent when resetting a password with a reset token. */
+export type ResetPasswordBody = {
+  token: string;
+  password: string;
+};
+
+/** Generic response for auth actions that only return a message. */
+export type AuthMessageResult = {
+  message: string;
+};
+
 /** JWT access-token payload (decoded). */
 export type AccessTokenPayload = {
   sub: string; // user id

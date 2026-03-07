@@ -25,6 +25,7 @@ const MIGRATION_FILES = [
   '008_wallet_transactions.sql',
   '009_services.sql',
   '010_deposit_requests.sql',
+  '011_password_reset_tokens.sql',
 ];
 
 function parseArgs(): { from?: string } {
