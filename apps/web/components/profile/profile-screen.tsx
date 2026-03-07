@@ -11,9 +11,12 @@ import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 
 import { useAuth } from '@/components/auth/auth-provider';
+import { LanguageToggle } from '@/components/language-toggle';
+import { ThemeToggle } from '@/components/theme-toggle';
 import { Container } from '@/components/ui/container';
 import { SkeletonForm } from '@/components/ui/skeleton';
 import { COUNTRIES } from '@/lib/data/countries';
+import { LANGUAGES } from '@/lib/data/languages';
 import { buildLocalePath } from '@/lib/i18n/path';
 import type { Dictionary, Locale } from '@/lib/i18n/types';
 import { profilesApiClient } from '@/lib/profiles/client';
@@ -38,7 +41,7 @@ type ProfileScreenProps = {
   dictionary: Dictionary;
 };
 
-type TabId = 'account' | 'profile' | 'documents';
+type TabId = 'account' | 'profile' | 'documents' | 'preferences';
 
 const COMPANY_SIZES = ['1-10', '11-50', '51-200', '201-500', '500+'] as const;
 
@@ -412,10 +415,9 @@ export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
       jobTitle: val('jobTitle'),
       linkedinUrl: val('linkedinUrl'),
       portfolioUrl: val('portfolioUrl'),
-      languages: ((form.elements.namedItem('languages') as HTMLInputElement)?.value || '')
-        .split(',')
-        .map((s) => s.trim())
-        .filter(Boolean),
+      languages: Array.from(
+        (form.elements.namedItem('languages') as HTMLSelectElement)?.selectedOptions ?? [],
+      ).map((o) => o.value),
       educationSummary: val('educationSummary'),
     });
     setSaving(true);
@@ -506,12 +508,13 @@ export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
       show: hasRoleProfile,
     },
     { id: 'documents', label: dictionary.profile.documentsTab, show: hasRoleProfile },
+    { id: 'preferences', label: dictionary.profile.preferencesTab ?? 'Preferences', show: true },
   ];
 
   return (
     <main className="profile-screen-main">
       <Container className="profile-screen-container">
-        <h1 className="profile-screen-pageTitle">{dictionary.profile.title}</h1>
+        <h1 className="profile-screen-pageTitle">{dictionary.nav.settings}</h1>
 
         <div className="profile-screen-tabs">
           {tabs
@@ -636,11 +639,18 @@ export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
                 </div>
                 <div className="profile-screen-field">
                   <label className="profile-screen-label">{pf.countryLabel}</label>
-                  <input
+                  <select
                     name="country"
-                    className="profile-screen-input"
+                    className="profile-screen-select"
                     defaultValue={expertProfile.country ?? ''}
-                  />
+                  >
+                    <option value="">—</option>
+                    {COUNTRIES.map((c) => (
+                      <option key={c.code} value={locale === 'ar' ? c.nameAr : c.nameEn}>
+                        {locale === 'ar' ? c.nameAr : c.nameEn}
+                      </option>
+                    ))}
+                  </select>
                 </div>
               </div>
               <div className="profile-screen-row">
@@ -683,12 +693,18 @@ export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
               </div>
               <div className="profile-screen-field">
                 <label className="profile-screen-label">{pf.languagesLabel}</label>
-                <input
+                <select
                   name="languages"
-                  className="profile-screen-input"
-                  defaultValue={expertProfile.languages?.join(', ') ?? ''}
-                  placeholder={pf.languagesHint}
-                />
+                  className="profile-screen-select"
+                  multiple
+                  defaultValue={expertProfile.languages ?? []}
+                >
+                  {LANGUAGES.map((l) => (
+                    <option key={l.code} value={locale === 'ar' ? l.nameAr : l.nameEn}>
+                      {locale === 'ar' ? l.nameAr : l.nameEn}
+                    </option>
+                  ))}
+                </select>
               </div>
               <div className="profile-screen-field">
                 <label className="profile-screen-label">{pf.educationSummaryLabel}</label>
@@ -951,9 +967,35 @@ export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
               {dictionary.profile.documents.academicDescription}
             </p>
             <p className="profile-screen-noDocuments">{dictionary.profile.documents.noDocuments}</p>
-            <p className="profile-screen-hint">
-              Document upload UI will be added in a future update.
-            </p>
+          </section>
+        )}
+
+        {activeTab === 'preferences' && (
+          <section className="profile-screen-card">
+            <h2 className="profile-screen-sectionTitle">
+              {dictionary.profile.preferencesTab ?? 'Preferences'}
+            </h2>
+            <div className="profile-screen-pref-row">
+              <div className="profile-screen-pref-item">
+                <span className="profile-screen-label">{dictionary.language.switchLabel}</span>
+                <LanguageToggle
+                  locale={locale}
+                  targetLabel={dictionary.language.target}
+                  ariaLabel={dictionary.language.switchLabel}
+                />
+              </div>
+              <div className="profile-screen-pref-item">
+                <span className="profile-screen-label">
+                  {dictionary.theme.darkLabel} / {dictionary.theme.lightLabel}
+                </span>
+                <ThemeToggle
+                  switchToLightLabel={dictionary.theme.switchToLight}
+                  switchToDarkLabel={dictionary.theme.switchToDark}
+                  darkLabel={dictionary.theme.darkLabel}
+                  lightLabel={dictionary.theme.lightLabel}
+                />
+              </div>
+            </div>
           </section>
         )}
       </Container>

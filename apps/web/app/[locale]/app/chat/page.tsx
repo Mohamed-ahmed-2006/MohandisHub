@@ -1,6 +1,6 @@
 import { notFound } from 'next/navigation';
 
-import { ComingSoonPage } from '@/components/app/coming-soon-page';
+import { ChatScreen } from '@/components/app/chat-screen';
 import { isSupportedLocale } from '@/lib/i18n/config';
 import { getDictionary } from '@/lib/i18n/get-dictionary';
 
@@ -12,7 +12,7 @@ const ChatPage = async ({ params }: ChatPageProps) => {
   const { locale } = await params;
   if (!isSupportedLocale(locale)) notFound();
   const dictionary = getDictionary(locale);
-  return <ComingSoonPage locale={locale} dictionary={dictionary} title={dictionary.nav.chat} />;
+  return <ChatScreen locale={locale} dictionary={dictionary} />;
 };
 
 export default ChatPage;

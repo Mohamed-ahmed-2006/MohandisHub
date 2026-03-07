@@ -243,6 +243,7 @@ export type Dictionary = {
     upgradePlan: string;
     logout: string;
     settings: string;
+    history: string;
     helpSupport: string;
     menuOpen: string;
     menuClose: string;
@@ -478,6 +479,45 @@ export type Dictionary = {
     depositSuccess?: string;
     depositCancelled?: string;
   };
+  plan: {
+    currentPlan: string;
+    noPlans: string;
+    choosePlan: string;
+    activePlan: string;
+    monthly: string;
+    confirmTitle: string;
+    confirmText: string;
+    confirm: string;
+    subscribeSuccess: string;
+  };
+  needs: {
+    myNeeds: string;
+    postNeed: string;
+    titlePlaceholder: string;
+    descPlaceholder: string;
+    anyCategory: string;
+    fixed: string;
+    hourly: string;
+    budgetPlaceholder: string;
+    timelinePlaceholder: string;
+    submitNeed: string;
+    noNeeds: string;
+    bidsCount: string;
+    viewBids: string;
+    awarded: string;
+    bidsFor: string;
+    noBids: string;
+    award: string;
+    availableNeeds: string;
+    myBids: string;
+    noOpenNeeds: string;
+    postedBy: string;
+    placeBid: string;
+    bidAmountPlaceholder: string;
+    bidMessagePlaceholder: string;
+    bidDeliveryPlaceholder: string;
+    submitBid: string;
+  };
   homeSearch: {
     welcomeBack: string;
     serviceType: string;
@@ -504,6 +544,7 @@ export type Dictionary = {
     expertTab: string;
     businessTab: string;
     documentsTab: string;
+    preferencesTab: string;
     backToApp: string;
     saveSuccess: string;
     saveError: string;

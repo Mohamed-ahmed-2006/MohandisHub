@@ -9,6 +9,8 @@ import { useAuth } from '@/components/auth/auth-provider';
 import { OnboardingStepper } from '@/components/onboarding/onboarding-stepper';
 import { SiteLogo } from '@/components/site-logo';
 import { Container } from '@/components/ui/container';
+import { COUNTRIES } from '@/lib/data/countries';
+import { LANGUAGES } from '@/lib/data/languages';
 import { buildLocalePath } from '@/lib/i18n/path';
 import type { Dictionary, Locale } from '@/lib/i18n/types';
 import { profilesApiClient } from '@/lib/profiles/client';
@@ -99,10 +101,9 @@ export const ExpertOnboardingScreen = ({ locale, dictionary }: Props) => {
       jobTitle: val('jobTitle'),
       linkedinUrl: val('linkedinUrl'),
       portfolioUrl: val('portfolioUrl'),
-      languages: ((form.elements.namedItem('languages') as HTMLInputElement)?.value || '')
-        .split(',')
-        .map((s) => s.trim())
-        .filter(Boolean),
+      languages: Array.from(
+        (form.elements.namedItem('languages') as HTMLSelectElement)?.selectedOptions ?? [],
+      ).map((o) => o.value),
       educationSummary: val('educationSummary'),
     });
 
@@ -231,11 +232,12 @@ export const ExpertOnboardingScreen = ({ locale, dictionary }: Props) => {
                   name="title"
                   className="onboarding-input"
                   placeholder={dict.profileForm.titlePlaceholder}
+                  required
                 />
               </div>
               <div className="onboarding-field">
                 <label className="onboarding-label">{dict.profileForm.headlineLabel}</label>
-                <input type="text" name="headline" className="onboarding-input" />
+                <input type="text" name="headline" className="onboarding-input" required />
               </div>
               <div className="onboarding-field">
                 <label className="onboarding-label">{dict.profileForm.bioLabel}</label>
@@ -284,7 +286,14 @@ export const ExpertOnboardingScreen = ({ locale, dictionary }: Props) => {
               <div className="onboarding-row">
                 <div className="onboarding-field">
                   <label className="onboarding-label">{dict.profileForm.countryLabel}</label>
-                  <input type="text" name="country" className="onboarding-input" />
+                  <select name="country" className="onboarding-input" required>
+                    <option value="">—</option>
+                    {COUNTRIES.map((c) => (
+                      <option key={c.code} value={locale === 'ar' ? c.nameAr : c.nameEn}>
+                        {locale === 'ar' ? c.nameAr : c.nameEn}
+                      </option>
+                    ))}
+                  </select>
                 </div>
                 <div className="onboarding-field">
                   <label className="onboarding-label">{dict.profileForm.employerLabel}</label>
@@ -308,12 +317,14 @@ export const ExpertOnboardingScreen = ({ locale, dictionary }: Props) => {
                 </div>
                 <div className="onboarding-field">
                   <label className="onboarding-label">{dict.profileForm.languagesLabel}</label>
-                  <input
-                    type="text"
-                    name="languages"
-                    className="onboarding-input"
-                    placeholder={dict.profileForm.languagesHint}
-                  />
+                  <select name="languages" className="onboarding-input" multiple required>
+                    {LANGUAGES.map((l) => (
+                      <option key={l.code} value={locale === 'ar' ? l.nameAr : l.nameEn}>
+                        {locale === 'ar' ? l.nameAr : l.nameEn}
+                      </option>
+                    ))}
+                  </select>
+                  <span className="onboarding-hint">{dict.profileForm.languagesHint}</span>
                 </div>
               </div>
               <div className="onboarding-field">
@@ -399,10 +410,16 @@ export const ExpertOnboardingScreen = ({ locale, dictionary }: Props) => {
                   type="button"
                   className="onboarding-cta-button"
                   onClick={() => setStep('documents')}
+                  disabled={kycStatus !== 'verified' && kycStatus !== 'pending'}
                 >
                   {dictionary.common.next}
                 </button>
               </div>
+              {kycStatus !== 'verified' && kycStatus !== 'pending' && (
+                <p className="onboarding-hint">
+                  Complete identity verification or submit for manual review before continuing.
+                </p>
+              )}
             </div>
           )}
 

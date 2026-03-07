@@ -56,7 +56,7 @@ const HomePage = async ({ params }: HomePageProps) => {
               variant="secondary"
             />
             <ButtonLink
-              href={`${buildLocalePath(typedLocale, '/auth')}?mode=register&role=customer`}
+              href={`${buildLocalePath(typedLocale, '/auth')}?mode=register`}
               label={dictionary.common.signUp}
             />
           </nav>
@@ -68,7 +68,7 @@ const HomePage = async ({ params }: HomePageProps) => {
           <p className="home-page-hero-description">{dictionary.home.description}</p>
           <div className="home-page-hero-actions">
             <ButtonLink
-              href={`${buildLocalePath(typedLocale, '/auth')}?mode=register&role=customer`}
+              href={`${buildLocalePath(typedLocale, '/auth')}?mode=register`}
               label={dictionary.common.getStarted}
               className="home-page-hero-cta-button"
             />

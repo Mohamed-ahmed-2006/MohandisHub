@@ -411,10 +411,16 @@ export const BusinessOnboardingScreen = ({ locale, dictionary }: Props) => {
                   type="button"
                   className="onboarding-cta-button"
                   onClick={() => setStep('documents')}
+                  disabled={kycStatus !== 'verified' && kycStatus !== 'pending'}
                 >
                   {dictionary.common.next}
                 </button>
               </div>
+              {kycStatus !== 'verified' && kycStatus !== 'pending' && (
+                <p className="onboarding-hint">
+                  Complete identity verification or submit for manual review before continuing.
+                </p>
+              )}
             </div>
           )}
 

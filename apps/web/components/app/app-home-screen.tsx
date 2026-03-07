@@ -5,6 +5,8 @@ import Image from 'next/image';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 
+import { CustomerDashboard } from './customer-dashboard';
+import { ExpertDashboard } from './expert-dashboard';
 import { WalletDepositModal } from './wallet-deposit-modal';
 
 import { useAuth } from '@/components/auth/auth-provider';
@@ -14,6 +16,8 @@ import { buildLocalePath } from '@/lib/i18n/path';
 import type { Dictionary, Locale } from '@/lib/i18n/types';
 import { servicesApiClient } from '@/lib/services/client';
 import { walletApiClient } from '@/lib/wallet/client';
+
+import '@/app/dashboard.css';
 
 type AppHomeScreenProps = {
   locale: Locale;
@@ -168,7 +172,7 @@ export const AppHomeScreen = ({ locale, dictionary }: AppHomeScreenProps) => {
           .then(setWallet)
           .catch(() => {});
         let attempts = 0;
-        const maxAttempts = 15;
+        const maxAttempts = 30;
         const pollInterval = setInterval(() => {
           attempts += 1;
           if (attempts > maxAttempts) {
@@ -286,7 +290,7 @@ export const AppHomeScreen = ({ locale, dictionary }: AppHomeScreenProps) => {
           </div>
         )}
 
-        {/* Welcome + Wallet */}
+        {/* Welcome + Wallet + Post a need (customers) */}
         <section className="home-welcome-section">
           <div className="home-welcome-row">
             <div>
@@ -294,24 +298,70 @@ export const AppHomeScreen = ({ locale, dictionary }: AppHomeScreenProps) => {
                 {d.welcomeBack}, {authUser.displayName}
               </h1>
             </div>
-            {wallet && (
-              <div className="home-balance-chip">
-                <span className="home-balance-label">{dictionary.wallet.balance}</span>
-                <span className="home-balance-amount">
-                  {wallet.balance.toFixed(2)} {wallet.currency}
-                </span>
+            <div className="home-welcome-actions">
+              {authUser.role === 'customer' && (
                 <button
                   type="button"
-                  className="home-balance-add"
-                  onClick={() => setShowDeposit(true)}
-                  aria-label={dictionary.wallet.deposit}
+                  className="home-post-need-btn"
+                  onClick={() => {
+                    const ev = new CustomEvent('customer-dashboard-post-need');
+                    window.dispatchEvent(ev);
+                  }}
                 >
-                  +
+                  {dictionary.needs?.postNeed ?? 'Post a Need'}
                 </button>
-              </div>
-            )}
+              )}
+              {wallet ? (
+                <div className="home-balance-chip">
+                  <span className="home-balance-label">{dictionary.wallet.balance}</span>
+                  <span className="home-balance-amount">
+                    {wallet.balance.toFixed(2)} {wallet.currency}
+                  </span>
+                  <button
+                    type="button"
+                    className="home-balance-refresh"
+                    onClick={() => {
+                      if (accessToken)
+                        void walletApiClient
+                          .getMyWallet(accessToken)
+                          .then(setWallet)
+                          .catch(() => {});
+                    }}
+                    aria-label="Refresh balance"
+                  >
+                    ↻
+                  </button>
+                  <button
+                    type="button"
+                    className="home-balance-add"
+                    onClick={() => setShowDeposit(true)}
+                    aria-label={dictionary.wallet.deposit}
+                  >
+                    +
+                  </button>
+                </div>
+              ) : null}
+            </div>
           </div>
         </section>
+
+        {/* Role-based dashboard */}
+        {authUser.role === 'customer' && accessToken && (
+          <CustomerDashboard
+            locale={locale}
+            dictionary={dictionary}
+            accessToken={accessToken}
+            categories={categories}
+          />
+        )}
+        {(authUser.role === 'expert' || authUser.role === 'business') && accessToken && (
+          <ExpertDashboard
+            locale={locale}
+            dictionary={dictionary}
+            accessToken={accessToken}
+            categories={categories}
+          />
+        )}
 
         {/* Search Bar */}
         <section className="home-search-card">

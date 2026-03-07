@@ -1,0 +1,183 @@
+.plan-screen-main {
+  padding: 2rem 0;
+}
+
+.plan-screen-container {
+  max-width: 900px;
+}
+
+.plan-screen-title {
+  font-size: 1.5rem;
+  font-weight: 700;
+  margin-bottom: 0.5rem;
+}
+
+.plan-screen-current {
+  color: hsl(var(--muted-foreground));
+  margin-bottom: 1.5rem;
+}
+
+.plan-screen-balance {
+  color: hsl(var(--primary));
+  font-weight: 600;
+}
+
+.plan-screen-msg {
+  padding: 0.75rem 1rem;
+  border-radius: var(--radius);
+  margin-bottom: 1rem;
+  font-size: 0.9rem;
+}
+
+.plan-screen-msg--success {
+  background-color: hsl(var(--success-bg, 142 70% 95%));
+  color: hsl(var(--success, 142 70% 30%));
+}
+
+.plan-screen-msg--error {
+  background-color: hsl(var(--destructive) / 0.1);
+  color: hsl(var(--destructive));
+}
+
+.plan-screen-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 1.5rem;
+}
+
+.plan-card {
+  border: 1px solid hsl(var(--border));
+  border-radius: var(--radius-lg);
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  background: hsl(var(--card));
+}
+
+.plan-card--current {
+  border-color: hsl(var(--primary));
+  box-shadow: 0 0 0 2px hsl(var(--primary) / 0.15);
+}
+
+.plan-card-name {
+  font-size: 1.2rem;
+  font-weight: 700;
+}
+
+.plan-card-desc {
+  color: hsl(var(--muted-foreground));
+  font-size: 0.85rem;
+}
+
+.plan-card-price {
+  font-size: 1.5rem;
+  font-weight: 800;
+}
+
+.plan-card-cycle {
+  font-size: 0.85rem;
+  font-weight: 400;
+  color: hsl(var(--muted-foreground));
+}
+
+.plan-card-features {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  font-size: 0.85rem;
+  color: hsl(var(--muted-foreground));
+}
+
+.plan-card-features li::before {
+  content: '✓ ';
+  color: hsl(var(--primary));
+  font-weight: 700;
+}
+
+.plan-card-cta {
+  margin-top: auto;
+  padding: 0.65rem 1rem;
+  border-radius: 999px;
+  border: none;
+  background-color: hsl(var(--primary));
+  color: hsl(var(--primary-foreground));
+  font-weight: 600;
+  cursor: pointer;
+  font-size: 0.9rem;
+}
+
+.plan-card-cta:hover {
+  opacity: 0.9;
+}
+
+.plan-card-badge {
+  margin-top: auto;
+  text-align: center;
+  padding: 0.5rem;
+  border-radius: 999px;
+  background: hsl(var(--primary) / 0.1);
+  color: hsl(var(--primary));
+  font-weight: 600;
+  font-size: 0.85rem;
+}
+
+.plan-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.plan-modal {
+  background: hsl(var(--card));
+  border-radius: var(--radius-lg);
+  padding: 2rem;
+  max-width: 420px;
+  width: 90%;
+}
+
+.plan-modal-title {
+  font-size: 1.1rem;
+  font-weight: 700;
+  margin-bottom: 0.75rem;
+}
+
+.plan-modal-text {
+  color: hsl(var(--muted-foreground));
+  font-size: 0.9rem;
+  margin-bottom: 1.5rem;
+  line-height: 1.5;
+}
+
+.plan-modal-actions {
+  display: flex;
+  gap: 0.75rem;
+  justify-content: flex-end;
+}
+
+.plan-modal-cancel {
+  padding: 0.5rem 1rem;
+  border-radius: 999px;
+  border: 1px solid hsl(var(--border));
+  background: transparent;
+  cursor: pointer;
+  font-size: 0.85rem;
+}
+
+.plan-modal-confirm {
+  padding: 0.5rem 1.5rem;
+  border-radius: 999px;
+  border: none;
+  background-color: hsl(var(--primary));
+  color: hsl(var(--primary-foreground));
+  font-weight: 600;
+  cursor: pointer;
+  font-size: 0.85rem;
+}

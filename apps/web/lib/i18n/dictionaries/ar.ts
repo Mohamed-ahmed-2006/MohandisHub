@@ -1,4 +1,4 @@
-﻿import type { Dictionary } from '../types';
+import type { Dictionary } from '../types';
 
 export const arDictionary: Dictionary = {
   common: {
@@ -263,6 +263,7 @@ export const arDictionary: Dictionary = {
     upgradePlan: 'ترقية الخطة',
     logout: 'تسجيل الخروج',
     settings: 'الإعدادات',
+    history: 'السجل',
     helpSupport: 'المساعدة والدعم',
     menuOpen: 'فتح القائمة',
     menuClose: 'إغلاق القائمة',
@@ -513,6 +514,45 @@ export const arDictionary: Dictionary = {
     depositSuccess: 'تم الإيداع بنجاح. تم تحديث رصيدك.',
     depositCancelled: 'تم إلغاء الإيداع.',
   },
+  plan: {
+    currentPlan: 'الخطة الحالية',
+    noPlans: 'لا توجد خطط متاحة بعد.',
+    choosePlan: 'اختر الخطة',
+    activePlan: 'فعّالة',
+    monthly: 'شهرياً',
+    confirmTitle: 'تأكيد الاشتراك',
+    confirmText: 'الاشتراك في {name} مقابل {price} {currency}؟ سيتم خصم المبلغ من رصيد محفظتك.',
+    confirm: 'تأكيد',
+    subscribeSuccess: 'تم الاشتراك بنجاح!',
+  },
+  needs: {
+    myNeeds: 'احتياجاتي',
+    postNeed: 'أنشر حاجة',
+    titlePlaceholder: 'ماذا تحتاج؟',
+    descPlaceholder: 'اوصف ما تحتاجه بالتفصيل...',
+    anyCategory: 'الفئة (اختياري)',
+    fixed: 'ثابت',
+    hourly: 'بالساعة',
+    budgetPlaceholder: 'مبلغ الميزانية',
+    timelinePlaceholder: 'المدة (أيام)',
+    submitNeed: 'إرسال',
+    noNeeds: 'لم تنشر أي احتياجات بعد. انشر أول حاجة!',
+    bidsCount: 'العروض',
+    viewBids: 'عرض العروض',
+    awarded: 'تم التكليف',
+    bidsFor: 'عروض لـ',
+    noBids: 'لا توجد عروض بعد.',
+    award: 'تكليف',
+    availableNeeds: 'الاحتياجات المتاحة',
+    myBids: 'عروضي',
+    noOpenNeeds: 'لا توجد احتياجات مفتوحة حالياً.',
+    postedBy: 'بواسطة',
+    placeBid: 'تقديم عرض',
+    bidAmountPlaceholder: 'مبلغ عرضك',
+    bidMessagePlaceholder: 'لماذا أنت المناسب؟',
+    bidDeliveryPlaceholder: 'أيام التسليم (اختياري)',
+    submitBid: 'إرسال العرض',
+  },
   homeSearch: {
     welcomeBack: 'مرحباً بعودتك',
     serviceType: 'نوع الخدمة',
@@ -539,6 +579,7 @@ export const arDictionary: Dictionary = {
     expertTab: '\u0645\u0644\u0641 \u0627\u0644\u062e\u0628\u064a\u0631',
     businessTab: '\u0645\u0644\u0641 \u0627\u0644\u0634\u0631\u0643\u0629',
     documentsTab: '\u0627\u0644\u0645\u0633\u062a\u0646\u062f\u0627\u062a',
+    preferencesTab: 'التفضيلات',
     backToApp:
       '\u0627\u0644\u0639\u0648\u062f\u0629 \u0644\u0644\u0648\u062d\u0629 \u0627\u0644\u062a\u062d\u0643\u0645',
     saveSuccess:

@@ -76,12 +76,12 @@ export const AppAvatarMenu = ({
           <div className="app-avatar-dropdown-divider" />
 
           <Link
-            href={buildLocalePath(locale, '/app/profile')}
+            href={buildLocalePath(locale, '/app/settings')}
             className="app-avatar-dropdown-item"
             role="menuitem"
             onClick={() => setOpen(false)}
           >
-            {dictionary.nav.profile}
+            {dictionary.nav.settings}
           </Link>
           <Link
             href={buildLocalePath(locale, '/app/plan')}

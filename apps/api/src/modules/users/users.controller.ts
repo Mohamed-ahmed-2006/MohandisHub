@@ -1,5 +1,6 @@
 import type { ApiSuccessBody, AuthUser } from '@mohandishub/shared';
 
+import { getPool } from '../../db/pool.js';
 import { asyncHandler } from '../../utils/async-handler.js';
 import { HttpError } from '../../utils/http-error.js';
 
@@ -112,10 +113,60 @@ const confirmEmailChange = asyncHandler(async (req, res) => {
   res.status(200).json(response);
 });
 
+const getMyActivity = asyncHandler(async (req, res) => {
+  const user = req.user;
+  if (!user) {
+    throw new HttpError({
+      statusCode: 401,
+      code: 'UNAUTHORIZED',
+      message: 'Authentication required.',
+    });
+  }
+
+  const page = parseInt(req.query.page as string, 10) || 1;
+  const limit = Math.min(parseInt(req.query.limit as string, 10) || 20, 50);
+  const offset = (page - 1) * limit;
+
+  const pool = getPool();
+  const { rows } = await pool.query(
+    `SELECT id, type, amount, balance_after, status, description, reference_type, created_at
+     FROM transactions
+     WHERE user_id = $1
+     ORDER BY created_at DESC
+     LIMIT $2 OFFSET $3`,
+    [user.id, limit, offset],
+  );
+
+  const { rows: countRows } = await pool.query(
+    `SELECT count(*)::int AS total FROM transactions WHERE user_id = $1`,
+    [user.id],
+  );
+  const total = (countRows[0] as { total: number }).total;
+
+  const response: ApiSuccessBody<{
+    items: typeof rows;
+    total: number;
+    page: number;
+    limit: number;
+    totalPages: number;
+  }> = {
+    ok: true,
+    data: {
+      items: rows,
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit),
+    },
+  };
+  res.json(response);
+});
+
 export const usersController = {
   listUsers,
   getUserById,
   updateMe,
   requestEmailChange,
   confirmEmailChange,
+  getMyActivity,
 };

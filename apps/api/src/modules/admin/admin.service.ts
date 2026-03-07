@@ -156,8 +156,20 @@ export class AdminService {
     if (input.features !== undefined) dbFields.features = JSON.stringify(input.features);
     if (input.sortOrder !== undefined) dbFields.sort_order = input.sortOrder;
 
-    const row = await this.repo.createPlan(dbFields);
-    return this.toPlan(row);
+    try {
+      const row = await this.repo.createPlan(dbFields);
+      return this.toPlan(row);
+    } catch (err: unknown) {
+      const pgError = err as { code?: string };
+      if (pgError.code === '23505') {
+        throw new HttpError({
+          statusCode: 409,
+          code: 'PLAN_SLUG_EXISTS',
+          message: `A plan with slug "${input.slug}" already exists.`,
+        });
+      }
+      throw err;
+    }
   }
 
   async updatePlan(planId: string, input: UpdatePlanInput): Promise<Plan> {

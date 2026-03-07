@@ -263,8 +263,7 @@ export const AdminUserDetailModal = ({
                         <span className="admin-badge">{user.primaryRole}</span>
                         <button
                           type="button"
-                          className="admin-btn admin-btn--small"
-                          style={{ marginLeft: '0.5rem' }}
+                          className="admin-btn admin-btn--small admin-inline-action-btn"
                           onClick={() => setEditRole(user.primaryRole)}
                         >
                           {ud.changeRole}
@@ -309,8 +308,7 @@ export const AdminUserDetailModal = ({
                         {user.planName ?? '—'}
                         <button
                           type="button"
-                          className="admin-btn admin-btn--small"
-                          style={{ marginLeft: '0.5rem' }}
+                          className="admin-btn admin-btn--small admin-inline-action-btn"
                           onClick={() =>
                             setEditPlanId(plans.find((p) => p.slug === user.planSlug)?.id ?? '')
                           }

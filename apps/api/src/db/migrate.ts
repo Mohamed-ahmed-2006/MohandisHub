@@ -26,6 +26,8 @@ const MIGRATION_FILES = [
   '009_services.sql',
   '010_deposit_requests.sql',
   '011_password_reset_tokens.sql',
+  '012_chat.sql',
+  '013_needs_bids.sql',
 ];
 
 function parseArgs(): { from?: string } {

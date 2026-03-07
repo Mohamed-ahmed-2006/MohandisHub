@@ -357,3 +357,18 @@
 .profile-screen-cancel-btn:hover {
   background-color: hsl(var(--muted));
 }
+
+.profile-screen-pref-row {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  margin-top: 1rem;
+}
+
+.profile-screen-pref-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 0;
+  border-bottom: 1px solid hsl(var(--border));
+}

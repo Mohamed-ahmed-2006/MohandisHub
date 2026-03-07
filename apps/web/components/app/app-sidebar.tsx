@@ -26,13 +26,11 @@ export const AppSidebar = ({ locale, dictionary, userRole, open, onClose }: AppS
 
   const navItems: NavItem[] = [
     { href: '/app', label: dictionary.nav.home },
-    { href: '/app/profile', label: dictionary.nav.profile },
-    { href: '/app/browse', label: dictionary.nav.browse },
-    { href: '/app/bookings', label: dictionary.nav.bookings },
-    { href: '/app/projects', label: dictionary.nav.projects },
+    { href: '/app/settings', label: dictionary.nav.settings },
     { href: '/app/chat', label: dictionary.nav.chat },
-    { href: '/app/admin', label: dictionary.nav.admin, roles: ['admin'] },
+    { href: '/app/history', label: dictionary.nav.history },
     { href: '/app/plan', label: dictionary.nav.plan },
+    { href: '/app/admin', label: dictionary.nav.admin, roles: ['admin'] },
   ];
 
   const visibleItems = navItems.filter((item) => !item.roles || item.roles.includes(userRole));
