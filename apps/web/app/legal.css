@@ -11,6 +11,18 @@
   padding-inline: 1rem;
 }
 
+.legal-page-back {
+  display: inline-block;
+  margin-bottom: 1rem;
+  color: hsl(var(--text-soft));
+  text-decoration: none;
+  font-size: 0.9rem;
+}
+
+.legal-page-back:hover {
+  color: hsl(var(--foreground));
+}
+
 .legal-page-title {
   margin: 0 0 1rem;
   font-family: var(--font-sora), sans-serif;

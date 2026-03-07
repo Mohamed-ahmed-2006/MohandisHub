@@ -151,9 +151,7 @@ export class AuthRepository {
   }
 
   /** Get pending email info for a user. */
-  async getPendingEmail(
-    userId: string,
-  ): Promise<{
+  async getPendingEmail(userId: string): Promise<{
     pending_email: string;
     pending_email_token: string;
     pending_email_expires: Date;
@@ -190,6 +188,54 @@ export class AuthRepository {
   async clearPendingEmail(userId: string): Promise<void> {
     await this.db.query(
       `UPDATE users SET pending_email = NULL, pending_email_token = NULL, pending_email_expires = NULL WHERE id = $1`,
+      [userId],
+    );
+  }
+
+  /** Set password reset token hash + expiry for a user. */
+  async setPasswordResetToken(userId: string, tokenHash: string, expiresAt: Date): Promise<void> {
+    await this.db.query(
+      `UPDATE users
+       SET password_reset_token = $1,
+           password_reset_expires = $2
+       WHERE id = $3`,
+      [tokenHash, expiresAt, userId],
+    );
+  }
+
+  /** Find a user by active password reset token hash. */
+  async findUserByPasswordResetToken(tokenHash: string): Promise<UserRow | null> {
+    const { rows } = await this.db.query<UserRow>(
+      `SELECT u.id, u.email, u.password_hash, u.phone, u.phone_code, u.nationality,
+              u.display_name, u.avatar_url, u.date_of_birth, u.primary_role,
+              u.plan_id, COALESCE(p.slug, 'free') AS plan_slug,
+              u.email_verified_at, u.phone_verified_at, u.is_active, u.created_at, u.updated_at
+       FROM users u
+       LEFT JOIN plans p ON u.plan_id = p.id
+       WHERE u.password_reset_token = $1
+         AND u.password_reset_expires > now()
+         AND u.deleted_at IS NULL
+       LIMIT 1`,
+      [tokenHash],
+    );
+    return rows[0] ?? null;
+  }
+
+  /** Replace user's password hash. */
+  async updatePasswordHash(userId: string, passwordHash: string): Promise<void> {
+    await this.db.query('UPDATE users SET password_hash = $1, updated_at = now() WHERE id = $2', [
+      passwordHash,
+      userId,
+    ]);
+  }
+
+  /** Clear password reset fields after successful reset. */
+  async clearPasswordResetToken(userId: string): Promise<void> {
+    await this.db.query(
+      `UPDATE users
+       SET password_reset_token = NULL,
+           password_reset_expires = NULL
+       WHERE id = $1`,
       [userId],
     );
   }

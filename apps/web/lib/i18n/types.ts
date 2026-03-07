@@ -474,6 +474,7 @@ export type Dictionary = {
     depositRedirecting: string;
     depositError: string;
     depositMinAmount?: string;
+    depositCardUnavailable?: string;
     depositSuccess?: string;
     depositCancelled?: string;
   };
@@ -544,6 +545,8 @@ export type Dictionary = {
       register: string;
       submit: string;
       loading: string;
+      showPassword: string;
+      hidePassword: string;
       noAccount: string;
       haveAccount: string;
       switchToLogin: string;
@@ -561,6 +564,26 @@ export type Dictionary = {
       subtitle: string;
       emailLabel: string;
       passwordLabel: string;
+      forgotPasswordLink: string;
+    };
+    forgotPassword: {
+      title: string;
+      subtitle: string;
+      emailLabel: string;
+      submitButton: string;
+      successMessage: string;
+      backToLogin: string;
+    };
+    resetPassword: {
+      title: string;
+      subtitle: string;
+      passwordLabel: string;
+      confirmPasswordLabel: string;
+      submitButton: string;
+      successMessage: string;
+      invalidToken: string;
+      passwordMismatch: string;
+      backToLogin: string;
     };
     register: {
       title: string;

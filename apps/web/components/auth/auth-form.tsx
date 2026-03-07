@@ -9,6 +9,7 @@ import { AuthModeSwitch, type AuthMode } from '@/components/auth/auth-mode-switc
 import { isApiClientError, useAuth } from '@/components/auth/auth-provider';
 import { AuthStatusBanner } from '@/components/auth/auth-status-banner';
 import { OnboardingStepper } from '@/components/onboarding/onboarding-stepper';
+import { isValidEmail, isValidPassword } from '@/lib/auth/validation';
 import { COUNTRIES, DEFAULT_COUNTRY_CODE, getDialCodeForCountry } from '@/lib/data/countries';
 import { detectCountryByIp } from '@/lib/geo/detect-country';
 import { buildLocalePath } from '@/lib/i18n/path';
@@ -56,13 +57,6 @@ type LoginFormValues = {
   password: string;
 };
 
-const isValidEmail = (value: string): boolean => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
-
-const isValidPassword = (value: string): boolean => {
-  if (value.length < 8 || value.length > 128) return false;
-  return /[A-Z]/.test(value) && /[a-z]/.test(value) && /[0-9]/.test(value);
-};
-
 const isValidDateFormat = (value: string): boolean => /^\d{4}-\d{2}-\d{2}$/.test(value);
 
 const hasMinimumAge = (dateOfBirth: string, minimumAge: number): boolean => {
@@ -108,6 +102,46 @@ const extractFieldErrors = (details: unknown): Partial<Record<FieldName, string>
 const getPostAuthPath = (locale: Locale, emailVerified: boolean): string =>
   buildLocalePath(locale, emailVerified ? '/app' : '/verify-email');
 
+const PasswordVisibilityIcon = ({ visible }: { visible: boolean }) => {
+  if (visible) {
+    return (
+      <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+        <path
+          d="M3 3l18 18M10.6 10.6a2 2 0 102.8 2.8M9.9 5.1A10.5 10.5 0 0112 5c5.5 0 9.5 5.5 9.5 7s-1.4 3.4-3.5 4.8M6.6 6.6C4.5 8 2.5 10.7 2.5 12 2.5 13.5 6.5 19 12 19a9.8 9.8 0 003.3-.6"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.8"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </svg>
+    );
+  }
+
+  return (
+    <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+      <path
+        d="M2.5 12C2.5 10.5 6.5 5 12 5s9.5 5.5 9.5 7-4 7-9.5 7-9.5-5.5-9.5-7z"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <circle
+        cx="12"
+        cy="12"
+        r="2.6"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+};
+
 export const AuthForm = ({
   locale,
   mode,
@@ -146,6 +180,7 @@ export const AuthForm = ({
   const [statusVariant, setStatusVariant] = useState<'error' | 'success' | 'info'>('info');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [termsAccepted, setTermsAccepted] = useState(false);
+  const [isPasswordVisible, setIsPasswordVisible] = useState(false);
 
   useEffect(() => {
     if (geoDetectedRef.current) return;
@@ -162,6 +197,10 @@ export const AuthForm = ({
       }));
     });
   }, []);
+
+  useEffect(() => {
+    setIsPasswordVisible(false);
+  }, [mode]);
 
   const submitLabel = useMemo(() => {
     if (isSubmitting) return dictionary.common.loading;
@@ -255,6 +294,7 @@ export const AuthForm = ({
     onModeChange(nextMode);
     setFieldErrors({});
     setStatusMessage(null);
+    setIsPasswordVisible(false);
   };
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>): Promise<void> => {
@@ -494,21 +534,41 @@ export const AuthForm = ({
           <span className="auth-form-field-label">
             {mode === 'login' ? dictionary.login.passwordLabel : dictionary.register.passwordLabel}
           </span>
-          <input
-            type="password"
-            className="auth-form-field-input"
-            value={mode === 'login' ? loginValues.password : registerValues.password}
-            suppressHydrationWarning
-            onChange={(e) => {
-              const val = e.target.value;
-              if (mode === 'login') {
-                setLoginValues((prev) => ({ ...prev, password: val }));
-              } else {
-                setRegisterValues((prev) => ({ ...prev, password: val }));
+          <div className="auth-password-input-wrap">
+            <input
+              type={isPasswordVisible ? 'text' : 'password'}
+              className="auth-form-field-input auth-password-input"
+              value={mode === 'login' ? loginValues.password : registerValues.password}
+              suppressHydrationWarning
+              onChange={(e) => {
+                const val = e.target.value;
+                if (mode === 'login') {
+                  setLoginValues((prev) => ({ ...prev, password: val }));
+                } else {
+                  setRegisterValues((prev) => ({ ...prev, password: val }));
+                }
+              }}
+              autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
+            />
+            <button
+              type="button"
+              className="auth-password-toggle"
+              onClick={() => setIsPasswordVisible((prev) => !prev)}
+              aria-label={
+                isPasswordVisible ? dictionary.common.hidePassword : dictionary.common.showPassword
               }
-            }}
-            autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
-          />
+            >
+              <PasswordVisibilityIcon visible={isPasswordVisible} />
+            </button>
+          </div>
+          {mode === 'login' ? (
+            <Link
+              href={buildLocalePath(locale, '/auth/forgot-password')}
+              className="auth-form-inline-link"
+            >
+              {dictionary.login.forgotPasswordLink}
+            </Link>
+          ) : null}
           {fieldErrors.password ? (
             <span className="auth-form-field-error">{fieldErrors.password}</span>
           ) : null}

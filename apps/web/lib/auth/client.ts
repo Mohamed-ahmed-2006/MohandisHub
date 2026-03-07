@@ -2,9 +2,12 @@ import type {
   ApiErrorBody,
   ApiSuccessBody,
   AuthUser,
+  AuthMessageResult,
+  ForgotPasswordBody,
   LoginBody,
   OtpChannel,
   RegisterBody,
+  ResetPasswordBody,
   SendOtpResult,
   VerifyOtpResult,
 } from '@mohandishub/shared';
@@ -130,6 +133,20 @@ export const authApiClient = {
     return apiRequest<AuthEnvelope>({
       method: 'POST',
       path: '/api/auth/login',
+      body: payload,
+    });
+  },
+  forgotPassword: async (payload: ForgotPasswordBody): Promise<AuthMessageResult> => {
+    return apiRequest<AuthMessageResult>({
+      method: 'POST',
+      path: '/api/auth/forgot-password',
+      body: payload,
+    });
+  },
+  resetPassword: async (payload: ResetPasswordBody): Promise<AuthMessageResult> => {
+    return apiRequest<AuthMessageResult>({
+      method: 'POST',
+      path: '/api/auth/reset-password',
       body: payload,
     });
   },

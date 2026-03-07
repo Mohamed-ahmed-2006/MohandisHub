@@ -171,6 +171,52 @@ html[data-theme='dark'] .auth-status-banner-error {
   border-color: hsl(var(--accent));
 }
 
+.auth-password-input-wrap {
+  position: relative;
+}
+
+.auth-password-input {
+  padding-inline-end: 2.9rem;
+}
+
+.auth-password-toggle {
+  position: absolute;
+  inset-inline-end: 0.55rem;
+  top: 50%;
+  transform: translateY(-50%);
+  border: none;
+  background: transparent;
+  color: hsl(var(--text-soft));
+  width: 2rem;
+  height: 2rem;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.auth-password-toggle:hover {
+  color: hsl(var(--foreground));
+  background-color: color-mix(in srgb, hsl(var(--muted)) 85%, transparent);
+}
+
+.auth-password-toggle:focus-visible {
+  outline: 1px solid hsl(var(--accent));
+}
+
+.auth-form-inline-link {
+  color: hsl(var(--accent));
+  font-size: 0.82rem;
+  font-weight: 700;
+  text-decoration: none;
+  width: fit-content;
+}
+
+.auth-form-inline-link:hover {
+  text-decoration: underline;
+}
+
 .auth-form-field-hint {
   color: hsl(var(--text-soft));
   font-size: 0.78rem;

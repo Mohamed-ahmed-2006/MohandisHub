@@ -2,8 +2,11 @@
 // Auth service — business logic for registration, login, token refresh
 // ---------------------------------------------------------------------------
 
+import { randomBytes } from 'node:crypto';
+
 import type {
   AccessTokenPayload,
+  AuthMessageResult,
   AuthTokens,
   AuthUser,
   VerificationStatus,
@@ -18,13 +21,22 @@ import {
   hashToken,
   signAccessToken,
 } from '../../config/jwt.js';
+import { logger } from '../../config/logger.js';
 import { HttpError } from '../../utils/http-error.js';
 
 import { AuthRepository } from './auth.repository.js';
 import type { UserRow } from './auth.types.js';
-import type { LoginInput, RegisterInput } from './auth.validation.js';
+import type {
+  ForgotPasswordInput,
+  LoginInput,
+  RegisterInput,
+  ResetPasswordInput,
+} from './auth.validation.js';
 
 const SALT_ROUNDS = 12;
+const PASSWORD_RESET_TTL_MINUTES = 30;
+const PASSWORD_RESET_GENERIC_MESSAGE =
+  'If an account with that email exists, a password reset link has been sent.';
 
 export class AuthService {
   public constructor(private readonly authRepository: AuthRepository = new AuthRepository()) {}
@@ -84,6 +96,63 @@ export class AuthService {
     const authUser = this.toAuthUser(userRow, verificationStatus);
 
     return { user: authUser, tokens, refreshToken: rawRefreshToken };
+  }
+
+  async forgotPassword(input: ForgotPasswordInput): Promise<AuthMessageResult> {
+    const normalizedEmail = input.email.trim().toLowerCase();
+    const user = await this.authRepository.findUserByEmail(normalizedEmail);
+
+    // Prevent account enumeration by returning the same response for all cases.
+    if (!user || !user.is_active) {
+      return { message: PASSWORD_RESET_GENERIC_MESSAGE };
+    }
+
+    const rawToken = randomBytes(48).toString('base64url');
+    const tokenHash = hashToken(rawToken);
+    const expiresAt = new Date(Date.now() + PASSWORD_RESET_TTL_MINUTES * 60 * 1000);
+
+    await this.authRepository.setPasswordResetToken(user.id, tokenHash, expiresAt);
+
+    const resetLink = this.buildPasswordResetLink(rawToken);
+
+    try {
+      await this.sendPasswordResetEmail({
+        to: user.email,
+        displayName: user.display_name,
+        resetLink,
+      });
+    } catch (error) {
+      logger.error('Failed to send password reset email', {
+        userId: user.id,
+        email: user.email,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+
+    return { message: PASSWORD_RESET_GENERIC_MESSAGE };
+  }
+
+  async resetPassword(input: ResetPasswordInput): Promise<AuthMessageResult> {
+    const tokenHash = hashToken(input.token);
+    const user = await this.authRepository.findUserByPasswordResetToken(tokenHash);
+
+    if (!user || !user.is_active) {
+      throw new HttpError({
+        statusCode: 400,
+        code: 'INVALID_RESET_TOKEN',
+        message: 'Reset token is invalid or expired.',
+      });
+    }
+
+    const passwordHash = await bcrypt.hash(input.password, SALT_ROUNDS);
+
+    await this.authRepository.updatePasswordHash(user.id, passwordHash);
+    await this.authRepository.clearPasswordResetToken(user.id);
+    await this.authRepository.revokeAllUserTokens(user.id);
+
+    return {
+      message: 'Password has been reset successfully. Please log in with your new password.',
+    };
   }
 
   // ── Login ─────────────────────────────────────────────────────────────
@@ -268,6 +337,67 @@ export class AuthService {
       tokens: { accessToken, expiresIn: env.JWT_ACCESS_EXPIRES_IN },
       rawRefreshToken,
     };
+  }
+
+  private buildPasswordResetLink(rawToken: string): string {
+    return new URL(`/auth/reset-password?token=${encodeURIComponent(rawToken)}`, env.WEB_PUBLIC_URL)
+      .toString()
+      .trim();
+  }
+
+  private async sendPasswordResetEmail(params: {
+    to: string;
+    displayName: string;
+    resetLink: string;
+  }): Promise<void> {
+    if (env.OTP_EMAIL_PROVIDER === 'console') {
+      logger.info('Password reset link generated', {
+        to: params.to,
+        resetLink: params.resetLink,
+      });
+      console.log('\n----------------------------------------');
+      console.log('  Password reset email (dev)');
+      console.log(`  To:   ${params.to}`);
+      console.log(`  Link: ${params.resetLink}`);
+      console.log('----------------------------------------\n');
+      return;
+    }
+
+    if (env.OTP_EMAIL_PROVIDER === 'brevo') {
+      if (!env.BREVO_API_KEY) {
+        throw new Error('Brevo email sender not configured. Set BREVO_API_KEY in .env');
+      }
+
+      const response = await fetch('https://api.brevo.com/v3/smtp/email', {
+        method: 'POST',
+        headers: {
+          accept: 'application/json',
+          'content-type': 'application/json',
+          'api-key': env.BREVO_API_KEY,
+        },
+        body: JSON.stringify({
+          sender: { name: 'MohandisHub', email: env.EMAIL_FROM },
+          to: [{ email: params.to, name: params.displayName }],
+          subject: 'MohandisHub — Reset your password',
+          htmlContent: [
+            `<h2>Hello ${params.displayName},</h2>`,
+            '<p>We received a request to reset your password.</p>',
+            `<p><a href="${params.resetLink}">Reset your password</a></p>`,
+            `<p>This link expires in ${PASSWORD_RESET_TTL_MINUTES} minutes.</p>`,
+            '<p style="color:#888;">If you did not request this, you can safely ignore this email.</p>',
+          ].join(''),
+        }),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Brevo email send failed: ${response.status} ${errorText}`);
+      }
+
+      return;
+    }
+
+    throw new Error('SendGrid email sender not configured. Set SENDGRID_API_KEY in .env');
   }
 
   private toAuthUser(user: UserRow, verificationStatus: VerificationStatus | null): AuthUser {

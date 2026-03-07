@@ -9,7 +9,12 @@ import { asyncHandler } from '../../utils/async-handler.js';
 import { HttpError } from '../../utils/http-error.js';
 
 import { AuthService } from './auth.service.js';
-import { loginSchema, registerSchema } from './auth.validation.js';
+import {
+  forgotPasswordSchema,
+  loginSchema,
+  registerSchema,
+  resetPasswordSchema,
+} from './auth.validation.js';
 
 const authService = new AuthService();
 
@@ -66,6 +71,48 @@ const login = asyncHandler(async (req, res) => {
   const response: ApiSuccessBody<{ user: AuthUser; tokens: AuthTokens }> = {
     ok: true,
     data: { user: result.user, tokens: result.tokens },
+  };
+
+  res.status(200).json(response);
+});
+
+const forgotPassword = asyncHandler(async (req, res) => {
+  const parsed = forgotPasswordSchema.safeParse(req.body);
+
+  if (!parsed.success) {
+    throw new HttpError({
+      statusCode: 400,
+      code: 'VALIDATION_ERROR',
+      message: 'Invalid forgot-password data.',
+      details: parsed.error.flatten().fieldErrors,
+    });
+  }
+
+  const result = await authService.forgotPassword(parsed.data);
+  const response: ApiSuccessBody<typeof result> = {
+    ok: true,
+    data: result,
+  };
+
+  res.status(200).json(response);
+});
+
+const resetPassword = asyncHandler(async (req, res) => {
+  const parsed = resetPasswordSchema.safeParse(req.body);
+
+  if (!parsed.success) {
+    throw new HttpError({
+      statusCode: 400,
+      code: 'VALIDATION_ERROR',
+      message: 'Invalid reset-password data.',
+      details: parsed.error.flatten().fieldErrors,
+    });
+  }
+
+  const result = await authService.resetPassword(parsed.data);
+  const response: ApiSuccessBody<typeof result> = {
+    ok: true,
+    data: result,
   };
 
   res.status(200).json(response);
@@ -143,4 +190,12 @@ const me = asyncHandler(async (req, res) => {
   res.status(200).json(response);
 });
 
-export const authController = { register, login, refresh, logout, me };
+export const authController = {
+  register,
+  login,
+  forgotPassword,
+  resetPassword,
+  refresh,
+  logout,
+  me,
+};

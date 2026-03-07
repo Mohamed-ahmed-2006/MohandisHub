@@ -90,7 +90,11 @@ export const WalletDepositModal = ({
       window.location.href = checkoutUrl;
     } catch (err) {
       const msg =
-        isApiClientError(err) && err.code === 'AMOUNT_TOO_LOW' ? err.message : d.depositError;
+        isApiClientError(err) && err.code === 'AMOUNT_TOO_LOW'
+          ? err.message
+          : isApiClientError(err) && err.code === 'STRIPE_UNAVAILABLE'
+            ? (d.depositCardUnavailable ?? 'Card payments are not available. Try again later.')
+            : d.depositError;
       setError(msg);
     } finally {
       setLoading(false);
