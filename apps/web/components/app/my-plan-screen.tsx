@@ -90,47 +90,150 @@ export const MyPlanScreen = ({ locale, dictionary }: Props) => {
 
   const currentPlan = authUser.plan ?? 'free';
 
+  const getPlanIcon = (slug: string) => {
+    const icons: Record<string, React.ReactNode> = {
+      free: (
+        <svg
+          width="40"
+          height="40"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.5"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden
+        >
+          <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
+        </svg>
+      ),
+      basic: (
+        <svg
+          width="40"
+          height="40"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.5"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden
+        >
+          <path d="M12 2L2 7l10 5 10-5-10-5z" />
+          <path d="M2 17l10 5 10-5" />
+        </svg>
+      ),
+      pro: (
+        <svg
+          width="40"
+          height="40"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.5"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden
+        >
+          <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+        </svg>
+      ),
+      premium: (
+        <svg
+          width="40"
+          height="40"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.5"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden
+        >
+          <circle cx="12" cy="12" r="10" />
+          <path d="M12 6v6l4 2" />
+        </svg>
+      ),
+    };
+    return icons[slug] ?? icons.free;
+  };
+
   return (
     <main className="plan-screen-main">
       <Container className="plan-screen-container">
-        <h1 className="plan-screen-title">{dictionary.nav.plan}</h1>
+        <header className="plan-screen-header">
+          <h1 className="plan-screen-title">{dictionary.nav.plan}</h1>
+          <p className="plan-screen-subtitle">
+            {d.subtitle ?? 'Choose the plan that fits your needs'}
+          </p>
+        </header>
 
-        <p className="plan-screen-current">
-          {d.currentPlan ?? 'Current plan'}: <strong>{currentPlan}</strong>
+        <div className="plan-screen-status">
+          <span className="plan-screen-current">
+            {d.currentPlan ?? 'Current plan'}: <strong>{currentPlan}</strong>
+          </span>
           {wallet && (
             <span className="plan-screen-balance">
-              {' '}
-              — {dictionary.wallet.balance}: {wallet.balance.toFixed(2)} {wallet.currency}
+              {dictionary.wallet.balance}: {wallet.balance.toFixed(2)} {wallet.currency}
             </span>
           )}
-        </p>
+        </div>
 
         {message && (
-          <div className={`plan-screen-msg plan-screen-msg--${message.type}`}>{message.text}</div>
+          <div className={`plan-screen-msg plan-screen-msg--${message.type}`} role="alert">
+            {message.text}
+          </div>
         )}
 
         {loading ? (
-          <p>{dictionary.admin?.loading ?? 'Loading...'}</p>
+          <div className="plan-screen-grid plan-screen-grid--loading">
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="plan-card plan-card--skeleton">
+                <div className="plan-card-icon-skeleton" />
+                <div className="plan-card-name-skeleton" />
+                <div className="plan-card-price-skeleton" />
+                <div className="plan-card-features-skeleton" />
+              </div>
+            ))}
+          </div>
         ) : plans.length === 0 ? (
-          <p>{d.noPlans ?? 'No plans available yet.'}</p>
+          <div className="plan-screen-empty">
+            <div className="plan-screen-empty-icon" aria-hidden>
+              📋
+            </div>
+            <p>{d.noPlans ?? 'No plans available yet.'}</p>
+          </div>
         ) : (
           <div className="plan-screen-grid">
             {plans.map((plan) => {
               const isCurrent = currentPlan === plan.slug;
               return (
-                <div key={plan.id} className={`plan-card ${isCurrent ? 'plan-card--current' : ''}`}>
+                <article
+                  key={plan.id}
+                  className={`plan-card ${isCurrent ? 'plan-card--current' : ''}`}
+                >
+                  <div className="plan-card-icon" aria-hidden>
+                    {getPlanIcon(plan.slug)}
+                  </div>
                   <h2 className="plan-card-name">{plan.name}</h2>
                   {plan.description && <p className="plan-card-desc">{plan.description}</p>}
-                  <p className="plan-card-price">
-                    {plan.price} {plan.currency}
+                  <div className="plan-card-price-wrap">
+                    <span className="plan-card-price">
+                      {plan.price} {plan.currency}
+                    </span>
                     <span className="plan-card-cycle">
                       /{plan.billingCycle === 'monthly' ? (d.monthly ?? 'mo') : plan.billingCycle}
                     </span>
-                  </p>
+                  </div>
                   {plan.features.length > 0 && (
                     <ul className="plan-card-features">
                       {plan.features.map((f, i) => (
-                        <li key={i}>{f}</li>
+                        <li key={i}>
+                          <span className="plan-card-feature-check" aria-hidden>
+                            ✓
+                          </span>
+                          {f}
+                        </li>
                       ))}
                     </ul>
                   )}
@@ -148,7 +251,7 @@ export const MyPlanScreen = ({ locale, dictionary }: Props) => {
                       {d.choosePlan ?? 'Choose Plan'}
                     </button>
                   )}
-                </div>
+                </article>
               );
             })}
           </div>

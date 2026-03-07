@@ -48,7 +48,7 @@ export const AdminPanel = ({ locale, dictionary }: AdminPanelProps) => {
       router.replace(buildLocalePath(locale, '/verify-email'));
       return;
     }
-    if (authUser.role !== 'admin') {
+    if (!authUser.isAdmin) {
       router.replace(buildLocalePath(locale, '/app'));
     }
   }, [isReady, isAuthenticated, authUser, authGuard.emailVerified, locale, router]);

@@ -377,6 +377,8 @@ export type Dictionary = {
         adjustBalance: string;
         changePlan: string;
         changeRole: string;
+        adminFlag: string;
+        changeAdmin: string;
         sendVerificationEmail: string;
         verifyEmail: string;
         lastLogin: string;

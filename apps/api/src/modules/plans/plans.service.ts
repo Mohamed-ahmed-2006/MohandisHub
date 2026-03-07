@@ -6,7 +6,7 @@ import { HttpError } from '../../utils/http-error.js';
 export class PlansService {
   async listActivePlans(): Promise<Plan[]> {
     const { rows } = await getPool().query(
-      `SELECT * FROM plans WHERE is_active = true AND deleted_at IS NULL ORDER BY sort_order ASC, price ASC`,
+      `SELECT * FROM plans WHERE COALESCE(is_active, true) = true ORDER BY COALESCE(sort_order, 0) ASC, COALESCE(price, 0) ASC`,
     );
     return rows.map((r: Record<string, unknown>) => this.toPlan(r));
   }
@@ -17,7 +17,7 @@ export class PlansService {
   ): Promise<{ plan: Plan; walletBalance: number }> {
     const pool = getPool();
     const { rows: planRows } = await pool.query(
-      `SELECT * FROM plans WHERE id = $1 AND is_active = true AND deleted_at IS NULL LIMIT 1`,
+      `SELECT * FROM plans WHERE id = $1 AND is_active = true LIMIT 1`,
       [planId],
     );
     if (planRows.length === 0) {
@@ -94,23 +94,40 @@ export class PlansService {
   }
 
   private toPlan(row: Record<string, unknown>): Plan {
+    const price = Number(row.price);
+    const createdAt = row.created_at;
+    const updatedAt = row.updated_at;
+    const id = row.id;
+    const slug = row.slug;
+    const name = row.name;
+    const currency = row.currency;
     return {
-      id: row.id as string,
-      slug: row.slug as string,
-      name: row.name as string,
+      id: typeof id === 'string' ? id : typeof id === 'number' ? String(id) : '',
+      slug: typeof slug === 'string' ? slug : 'free',
+      name: typeof name === 'string' ? name : 'Free',
       description: (row.description as string) ?? null,
-      price: parseFloat(row.price as string),
-      currency: row.currency as string,
-      billingCycle: row.billing_cycle as Plan['billingCycle'],
+      price: Number.isFinite(price) ? price : 0,
+      currency: typeof currency === 'string' ? currency : 'EGP',
+      billingCycle: (row.billing_cycle as Plan['billingCycle']) ?? 'monthly',
       durationDays: (row.duration_days as number) ?? null,
       trialDays: (row.trial_days as number) ?? 0,
       maxServices: (row.max_services as number) ?? null,
       maxProjects: (row.max_projects as number) ?? null,
       features: Array.isArray(row.features) ? (row.features as string[]) : [],
-      isActive: row.is_active as boolean,
+      isActive: row.is_active !== false,
       sortOrder: (row.sort_order as number) ?? 0,
-      createdAt: row.created_at as string,
-      updatedAt: row.updated_at as string,
+      createdAt:
+        createdAt != null && typeof createdAt === 'string'
+          ? createdAt
+          : createdAt != null && typeof (createdAt as Date).toISOString === 'function'
+            ? (createdAt as Date).toISOString()
+            : new Date().toISOString(),
+      updatedAt:
+        updatedAt != null && typeof updatedAt === 'string'
+          ? updatedAt
+          : updatedAt != null && typeof (updatedAt as Date).toISOString === 'function'
+            ? (updatedAt as Date).toISOString()
+            : new Date().toISOString(),
     };
   }
 }

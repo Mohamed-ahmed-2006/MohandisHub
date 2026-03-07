@@ -413,6 +413,8 @@ export const arDictionary: Dictionary = {
         adjustBalance: 'تعديل الرصيد',
         changePlan: 'تغيير الخطة',
         changeRole: 'تغيير الدور',
+        adminFlag: 'مدير',
+        changeAdmin: 'تغيير',
         sendVerificationEmail: 'إرسال بريد التحقق',
         verifyEmail: 'توثيق البريد',
         lastLogin: 'آخر دخول',
@@ -515,6 +517,7 @@ export const arDictionary: Dictionary = {
     depositCancelled: 'تم إلغاء الإيداع.',
   },
   plan: {
+    subtitle: 'اختر الخطة التي تناسب احتياجاتك',
     currentPlan: 'الخطة الحالية',
     noPlans: 'لا توجد خطط متاحة بعد.',
     choosePlan: 'اختر الخطة',

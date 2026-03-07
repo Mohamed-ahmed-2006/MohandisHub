@@ -28,6 +28,7 @@ const MIGRATION_FILES = [
   '011_password_reset_tokens.sql',
   '012_chat.sql',
   '013_needs_bids.sql',
+  '014_is_admin_and_plans_backfill.sql',
 ];
 
 function parseArgs(): { from?: string } {

@@ -17,15 +17,28 @@ type AppSidebarProps = {
   locale: Locale;
   dictionary: Dictionary;
   userRole: string;
+  isAdmin: boolean;
   open: boolean;
   onClose: () => void;
 };
 
-export const AppSidebar = ({ locale, dictionary, userRole, open, onClose }: AppSidebarProps) => {
+export const AppSidebar = ({
+  locale,
+  dictionary,
+  userRole,
+  isAdmin,
+  open,
+  onClose,
+}: AppSidebarProps) => {
   const pathname = usePathname();
 
   const navItems: NavItem[] = [
     { href: '/app', label: dictionary.nav.home },
+    {
+      href: '/app?post=1',
+      label: dictionary.needs?.postNeed ?? 'Post a Need',
+      roles: ['customer'],
+    },
     { href: '/app/settings', label: dictionary.nav.settings },
     { href: '/app/chat', label: dictionary.nav.chat },
     { href: '/app/history', label: dictionary.nav.history },
@@ -33,7 +46,11 @@ export const AppSidebar = ({ locale, dictionary, userRole, open, onClose }: AppS
     { href: '/app/admin', label: dictionary.nav.admin, roles: ['admin'] },
   ];
 
-  const visibleItems = navItems.filter((item) => !item.roles || item.roles.includes(userRole));
+  const visibleItems = navItems.filter((item) => {
+    if (!item.roles) return true;
+    if (item.roles.includes('admin')) return isAdmin;
+    return item.roles.includes(userRole);
+  });
 
   const isActive = (href: string) => {
     const full = buildLocalePath(locale, href);
@@ -64,7 +81,7 @@ export const AppSidebar = ({ locale, dictionary, userRole, open, onClose }: AppS
         <nav className="app-sidebar-nav">
           {visibleItems.map((item) => (
             <Link
-              key={item.href}
+              key={`${item.href}-${item.label}`}
               href={buildLocalePath(locale, item.href)}
               className={`app-sidebar-link ${isActive(item.href) ? 'app-sidebar-link--active' : ''}`}
               onClick={onClose}

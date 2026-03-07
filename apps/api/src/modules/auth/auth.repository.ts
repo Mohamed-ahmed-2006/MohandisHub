@@ -27,6 +27,7 @@ export class AuthRepository {
     const { rows } = await this.db.query<UserRow>(
       `SELECT u.id, u.email, u.password_hash, u.phone, u.phone_code, u.nationality,
               u.display_name, u.avatar_url, u.date_of_birth, u.primary_role,
+              COALESCE(u.is_admin, false) AS is_admin,
               u.plan_id, COALESCE(p.slug, 'free') AS plan_slug,
               u.email_verified_at, u.phone_verified_at, u.is_active, u.created_at, u.updated_at
        FROM users u
@@ -42,6 +43,7 @@ export class AuthRepository {
     const { rows } = await this.db.query<UserRow>(
       `SELECT u.id, u.email, u.password_hash, u.phone, u.phone_code, u.nationality,
               u.display_name, u.avatar_url, u.date_of_birth, u.primary_role,
+              COALESCE(u.is_admin, false) AS is_admin,
               u.plan_id, COALESCE(p.slug, 'free') AS plan_slug,
               u.email_verified_at, u.phone_verified_at, u.is_active, u.created_at, u.updated_at
        FROM users u
@@ -208,6 +210,7 @@ export class AuthRepository {
     const { rows } = await this.db.query<UserRow>(
       `SELECT u.id, u.email, u.password_hash, u.phone, u.phone_code, u.nationality,
               u.display_name, u.avatar_url, u.date_of_birth, u.primary_role,
+              COALESCE(u.is_admin, false) AS is_admin,
               u.plan_id, COALESCE(p.slug, 'free') AS plan_slug,
               u.email_verified_at, u.phone_verified_at, u.is_active, u.created_at, u.updated_at
        FROM users u

@@ -37,6 +37,7 @@ export const AdminUserDetailModal = ({
   });
   const [editRole, setEditRole] = useState<string | null>(null);
   const [editPlanId, setEditPlanId] = useState<string | null>(null);
+  const [editAdmin, setEditAdmin] = useState<boolean | null>(null);
 
   const d = dictionary.admin.users;
   const ud = d.userDetail;
@@ -96,10 +97,30 @@ export const AdminUserDetailModal = ({
       await adminApiClient.updateUser(
         accessToken,
         user.id,
-        { primaryRole: editRole as 'customer' | 'expert' | 'business' | 'admin' },
+        { primaryRole: editRole as 'customer' | 'expert' | 'business' },
         opts(refreshSession),
       );
       setEditRole(null);
+      void load();
+      onSuccess();
+    } catch {
+      /* empty */
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handleUpdateAdmin = async () => {
+    if (!user || editAdmin === null) return;
+    setActionLoading('admin');
+    try {
+      await adminApiClient.updateUser(
+        accessToken,
+        user.id,
+        { isAdmin: editAdmin },
+        opts(refreshSession),
+      );
+      setEditAdmin(null);
       void load();
       onSuccess();
     } catch {
@@ -240,7 +261,6 @@ export const AdminUserDetailModal = ({
                           <option value="customer">Customer</option>
                           <option value="expert">Expert</option>
                           <option value="business">Business</option>
-                          <option value="admin">Admin</option>
                         </select>
                         <button
                           type="button"
@@ -261,12 +281,58 @@ export const AdminUserDetailModal = ({
                     ) : (
                       <span>
                         <span className="admin-badge">{user.primaryRole}</span>
+                        {user.isAdmin && (
+                          <span className="admin-badge admin-badge--admin">+ Admin</span>
+                        )}
                         <button
                           type="button"
                           className="admin-btn admin-btn--small admin-inline-action-btn"
                           onClick={() => setEditRole(user.primaryRole)}
                         >
                           {ud.changeRole}
+                        </button>
+                      </span>
+                    )}
+                  </dd>
+                  <dt>{ud.adminFlag}</dt>
+                  <dd>
+                    {editAdmin !== null ? (
+                      <span className="admin-inline-edit">
+                        <label className="admin-inline-checkbox">
+                          <input
+                            type="checkbox"
+                            checked={editAdmin}
+                            onChange={(e) => setEditAdmin(e.target.checked)}
+                          />
+                          {editAdmin ? 'Yes' : 'No'}
+                        </label>
+                        <button
+                          type="button"
+                          className="admin-btn admin-btn--small admin-btn--primary"
+                          onClick={() => void handleUpdateAdmin()}
+                          disabled={actionLoading === 'admin'}
+                        >
+                          {dictionary.common.save}
+                        </button>
+                        <button
+                          type="button"
+                          className="admin-btn admin-btn--small"
+                          onClick={() => setEditAdmin(null)}
+                        >
+                          Cancel
+                        </button>
+                      </span>
+                    ) : (
+                      <span>
+                        <span className={`admin-badge ${user.isAdmin ? 'admin-badge--admin' : ''}`}>
+                          {user.isAdmin ? 'Yes' : 'No'}
+                        </span>
+                        <button
+                          type="button"
+                          className="admin-btn admin-btn--small admin-inline-action-btn"
+                          onClick={() => setEditAdmin(Boolean(user.isAdmin))}
+                        >
+                          {ud.changeAdmin}
                         </button>
                       </span>
                     )}

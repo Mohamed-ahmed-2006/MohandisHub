@@ -28,12 +28,14 @@ export type AdminDashboardStats = {
   totalPlans: number;
 };
 
+/** Primary role is customer | expert | business. Admin is a separate isAdmin flag. */
 export type AdminUserListItem = {
   id: string;
   email: string;
   displayName: string;
   phone: string | null;
   primaryRole: UserRole;
+  isAdmin: boolean;
   isActive: boolean;
   emailVerifiedAt: string | null;
   planSlug: string | null;
@@ -57,6 +59,7 @@ export type AdminUpdateUserBody = {
   displayName?: string;
   isActive?: boolean;
   primaryRole?: UserRole;
+  isAdmin?: boolean;
   planId?: string | null;
 };
 

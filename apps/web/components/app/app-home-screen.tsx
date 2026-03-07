@@ -194,6 +194,16 @@ export const AppHomeScreen = ({ locale, dictionary }: AppHomeScreenProps) => {
   }, [searchParams, accessToken]);
 
   useEffect(() => {
+    const post = searchParams.get('post');
+    if (post === '1' && authUser?.role === 'customer') {
+      window.dispatchEvent(new CustomEvent('customer-dashboard-post-need'));
+      const url = new URL(window.location.href);
+      url.searchParams.delete('post');
+      window.history.replaceState({}, '', url.pathname + (url.search || ''));
+    }
+  }, [searchParams, authUser?.role]);
+
+  useEffect(() => {
     if (!isReady) return;
     if (!isAuthenticated || !authUser) {
       router.replace(`${buildLocalePath(locale, '/auth')}?mode=login`);

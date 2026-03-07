@@ -29,11 +29,23 @@ export const requireRole =
       });
     }
 
+    // Admin is a flag: check isAdmin for 'admin' role
+    const isAdminRequired = roles.includes('admin');
+    if (isAdminRequired && user.isAdmin) {
+      return next();
+    }
+    if (isAdminRequired && !user.isAdmin) {
+      throw new HttpError({
+        statusCode: 403,
+        code: 'FORBIDDEN',
+        message: 'This action requires admin privileges.',
+      });
+    }
     if (!roles.includes(user.role)) {
       throw new HttpError({
         statusCode: 403,
         code: 'FORBIDDEN',
-        message: `This action requires one of the following roles: ${roles.join(', ')}.`,
+        message: `This action requires one of the following roles: ${roles.filter((r) => r !== 'admin').join(', ')}.`,
       });
     }
 

@@ -144,3 +144,40 @@ Use the webhook signing secret printed by the CLI (starts with `whsec_`) in your
 - [ ] Configure webhook endpoint in Stripe Dashboard
 - [ ] Enable 3D Secure (SCA) for EU compliance
 - [ ] Add idempotency for webhook processing
+
+## 11. Troubleshooting: Balance Not Updating After Deposit
+
+If Stripe shows the payment as successful but the wallet balance does not update:
+
+### 1. Webhook URL (Production)
+
+In **Stripe Dashboard → Developers → Webhooks**, ensure the endpoint URL is correct:
+
+- **Production:** `https://api.mohandishub.app/api/wallet/stripe-webhook`
+- **Local:** Use `stripe listen --forward-to localhost:4000/api/wallet/stripe-webhook` (Stripe cannot reach localhost directly)
+
+### 2. Webhook Signing Secret
+
+`STRIPE_WEBHOOK_SECRET` in `apps/api/.env` must match the webhook's signing secret:
+
+- **Production:** Copy from Stripe Dashboard → Webhooks → your endpoint → "Signing secret"
+- **Local:** Use the secret printed when you run `stripe listen` (starts with `whsec_`)
+
+If the secret is wrong, the webhook returns 400 and the wallet is never credited.
+
+### 3. API Reachability
+
+The API must be reachable at the webhook URL. For production, ensure `api.mohandishub.app` resolves and the API is running.
+
+### 4. Frontend API URL
+
+The frontend fetches balance from the API. Ensure:
+
+- **Production:** `NEXT_PUBLIC_API_URL` (or `API_INTERNAL_URL` for Next.js rewrites) points to `https://api.mohandishub.app`
+- **Local:** `NEXT_PUBLIC_API_URL=http://localhost:4000` if the frontend runs on a different port
+
+If the frontend calls the wrong URL, it will not receive the updated balance.
+
+### 5. Manual Refresh
+
+After a successful deposit, use the **↻** (refresh) button next to the balance to refetch. The webhook can take a few seconds; polling runs for ~60s, but manual refresh helps if it was slow.

@@ -72,7 +72,7 @@ export const VerifyEmailScreen = ({ locale, dictionary }: VerifyEmailScreenProps
 
     if (authGuard.emailVerified) {
       const role = authUser.role;
-      const onboardingPath = role === 'admin' ? '/app' : `/onboarding/${role}`;
+      const onboardingPath = authUser.isAdmin ? '/app' : `/onboarding/${role}`;
       router.replace(buildLocalePath(locale, onboardingPath));
     }
   }, [isReady, isAuthenticated, authUser, authGuard.emailVerified, locale, router]);

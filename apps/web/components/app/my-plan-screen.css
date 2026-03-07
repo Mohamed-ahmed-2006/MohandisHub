@@ -3,23 +3,44 @@
 }
 
 .plan-screen-container {
-  max-width: 900px;
+  max-width: 960px;
+}
+
+.plan-screen-header {
+  margin-bottom: 1.5rem;
 }
 
 .plan-screen-title {
-  font-size: 1.5rem;
-  font-weight: 700;
-  margin-bottom: 0.5rem;
+  font-size: 1.75rem;
+  font-weight: 800;
+  margin-bottom: 0.25rem;
+  letter-spacing: -0.02em;
+}
+
+.plan-screen-subtitle {
+  color: hsl(var(--muted-foreground));
+  font-size: 1rem;
+}
+
+.plan-screen-status {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  align-items: center;
+  margin-bottom: 1.5rem;
+  padding: 0.75rem 1rem;
+  background: hsl(var(--muted) / 0.3);
+  border-radius: var(--radius);
 }
 
 .plan-screen-current {
   color: hsl(var(--muted-foreground));
-  margin-bottom: 1.5rem;
 }
 
 .plan-screen-balance {
   color: hsl(var(--primary));
   font-weight: 600;
+  margin-left: auto;
 }
 
 .plan-screen-msg {

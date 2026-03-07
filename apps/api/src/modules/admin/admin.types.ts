@@ -12,6 +12,7 @@ export type UserRow = {
   avatar_url: string | null;
   date_of_birth: string | null;
   primary_role: string;
+  is_admin: boolean;
   is_active: boolean;
   email_verified_at: string | null;
   plan_id: string | null;

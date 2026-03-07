@@ -32,7 +32,7 @@ export class AdminRepository {
         (SELECT COUNT(*) FROM users WHERE primary_role = 'customer' AND deleted_at IS NULL)::text AS role_customer,
         (SELECT COUNT(*) FROM users WHERE primary_role = 'expert' AND deleted_at IS NULL)::text AS role_expert,
         (SELECT COUNT(*) FROM users WHERE primary_role = 'business' AND deleted_at IS NULL)::text AS role_business,
-        (SELECT COUNT(*) FROM users WHERE primary_role = 'admin' AND deleted_at IS NULL)::text AS role_admin,
+        (SELECT COUNT(*) FROM users WHERE is_admin = true AND deleted_at IS NULL)::text AS role_admin,
         (SELECT COUNT(*) FROM transactions)::text AS total_transactions,
         (SELECT COALESCE(SUM(amount), 0) FROM transactions WHERE type = 'deposit' AND status = 'completed')::text AS total_revenue,
         (SELECT COUNT(*) FROM identity_documents WHERE status IN ('pending', 'under_review'))::text AS pending_verifications,
@@ -54,8 +54,12 @@ export class AdminRepository {
     let idx = 1;
 
     if (filters.role) {
-      conditions.push(`u.primary_role = $${idx++}`);
-      params.push(filters.role);
+      if (filters.role === 'admin') {
+        conditions.push('u.is_admin = true');
+      } else {
+        conditions.push(`u.primary_role = $${idx++}`);
+        params.push(filters.role);
+      }
     }
     if (filters.isActive !== undefined) {
       conditions.push(`u.is_active = $${idx++}`);
@@ -84,8 +88,12 @@ export class AdminRepository {
     let idx = 1;
 
     if (filters.role) {
-      conditions.push(`u.primary_role = $${idx++}`);
-      params.push(filters.role);
+      if (filters.role === 'admin') {
+        conditions.push('u.is_admin = true');
+      } else {
+        conditions.push(`u.primary_role = $${idx++}`);
+        params.push(filters.role);
+      }
     }
     if (filters.isActive !== undefined) {
       conditions.push(`u.is_active = $${idx++}`);

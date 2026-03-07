@@ -50,7 +50,7 @@ export const AdminVerificationScreen = ({ locale, dictionary }: AdminVerificatio
       router.replace(buildLocalePath(locale, '/verify-email'));
       return;
     }
-    if (authUser.role !== 'admin') {
+    if (!authUser.isAdmin) {
       router.replace(buildLocalePath(locale, '/app'));
       return;
     }

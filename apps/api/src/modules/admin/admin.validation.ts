@@ -7,7 +7,8 @@ import { z } from 'zod';
 export const updateUserSchema = z.object({
   displayName: z.string().min(2).max(100).optional(),
   isActive: z.boolean().optional(),
-  primaryRole: z.enum(['customer', 'expert', 'business', 'admin']).optional(),
+  primaryRole: z.enum(['customer', 'expert', 'business']).optional(),
+  isAdmin: z.boolean().optional(),
   planId: z.string().uuid().nullable().optional(),
 });
 

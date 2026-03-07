@@ -15,6 +15,7 @@ import { HttpError } from '../utils/http-error.js';
 export type RequestUser = {
   id: string;
   role: UserRole;
+  isAdmin: boolean;
   verified: boolean;
   emailVerified: boolean;
 };
@@ -63,6 +64,7 @@ export const authenticate: RequestHandler = (req, _res, next) => {
   req.user = {
     id: payload.sub,
     role: payload.role,
+    isAdmin: payload.isAdmin === true,
     verified: payload.verified,
     emailVerified: payload.emailVerified,
   };

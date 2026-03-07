@@ -48,6 +48,7 @@ export type AuthMessageResult = {
 export type AccessTokenPayload = {
   sub: string; // user id
   role: UserRole;
+  isAdmin: boolean;
   verified: boolean;
   emailVerified: boolean;
 };
@@ -69,6 +70,7 @@ export type AuthUser = {
   avatarUrl: string | null;
   dateOfBirth: string | null;
   role: UserRole;
+  isAdmin: boolean;
   plan: string;
   emailVerified: boolean;
   verificationStatus: VerificationStatus | null;

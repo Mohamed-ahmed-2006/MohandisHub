@@ -419,6 +419,8 @@ export const enDictionary: Dictionary = {
         adjustBalance: 'Adjust balance',
         changePlan: 'Change plan',
         changeRole: 'Change role',
+        adminFlag: 'Admin',
+        changeAdmin: 'Change',
         sendVerificationEmail: 'Send verification email',
         verifyEmail: 'Verify email',
         lastLogin: 'Last login',
@@ -523,6 +525,7 @@ export const enDictionary: Dictionary = {
     depositCancelled: 'Deposit was cancelled.',
   },
   plan: {
+    subtitle: 'Choose the plan that fits your needs',
     currentPlan: 'Current plan',
     noPlans: 'No plans available yet.',
     choosePlan: 'Choose Plan',

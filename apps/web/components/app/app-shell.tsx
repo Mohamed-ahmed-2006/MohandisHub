@@ -29,7 +29,8 @@ export const AppShell = ({ locale, dictionary, children }: AppShellProps) => {
     router.replace(buildLocalePath(locale, '/'));
   };
 
-  const role = authUser?.role ?? 'customer';
+  const role: string = authUser?.role ?? 'customer';
+  const isAdmin: boolean = authUser?.isAdmin === true;
 
   return (
     <div className="app-shell">
@@ -37,6 +38,7 @@ export const AppShell = ({ locale, dictionary, children }: AppShellProps) => {
         locale={locale}
         dictionary={dictionary}
         userRole={role}
+        isAdmin={isAdmin}
         open={sidebarOpen}
         onClose={() => setSidebarOpen(false)}
       />
