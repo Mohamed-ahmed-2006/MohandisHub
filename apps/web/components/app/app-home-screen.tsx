@@ -242,7 +242,7 @@ export const AppHomeScreen = ({ locale, dictionary }: AppHomeScreenProps) => {
   const [searching, setSearching] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
   const [selectedResult, setSelectedResult] = useState<ServiceSearchResult | null>(null);
-  const [customerNeedsCount, setCustomerNeedsCount] = useState<number | null>(null);
+  const [_customerNeedsCount, setCustomerNeedsCount] = useState<number | null>(null);
   const [customerTab, setCustomerTab] = useState<'browse' | 'posted'>('browse');
   const [topSlideIndex, setTopSlideIndex] = useState(0);
 
@@ -270,7 +270,7 @@ export const AppHomeScreen = ({ locale, dictionary }: AppHomeScreenProps) => {
             }
           }
           try {
-            const updated = await walletApiClient.getMyWallet(accessToken);
+            await walletApiClient.getMyWallet(accessToken);
             window.dispatchEvent(new CustomEvent('wallet-updated'));
           } catch {
             // ignore

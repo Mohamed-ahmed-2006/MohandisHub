@@ -3,10 +3,10 @@
 import type { ServiceCategory } from '@mohandishub/shared';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
+import { getApiBaseUrl } from '@/lib/env';
 import type { Dictionary, Locale } from '@/lib/i18n/types';
 import type { Bid, Need } from '@/lib/needs/client';
 import { needsApiClient } from '@/lib/needs/client';
-import { getApiBaseUrl } from '@/lib/env';
 import { uploadFile } from '@/lib/upload/client';
 
 type Props = {
@@ -236,7 +236,7 @@ export const CustomerDashboard = ({
         const entries: Record<string, string[]> = {};
         for (const [key, value] of Object.entries(record)) {
           if (Array.isArray(value) && value.every((s) => typeof s === 'string'))
-            entries[key] = value as string[];
+            entries[key] = [...value];
           else if (typeof value === 'string') entries[key] = [value];
         }
         setFieldErrors(Object.keys(entries).length ? entries : null);
@@ -436,7 +436,8 @@ export const CustomerDashboard = ({
                             type="file"
                             accept="image/jpeg,image/png,image/webp,application/pdf,video/mp4,video/webm"
                             className="dashboard-input dashboard-input--file"
-                            onChange={async (e) => {
+                            onChange={(e) => {
+                              void (async () => {
                               const file = e.target.files?.[0];
                               if (!file) return;
                               const fileIsVideo = isVideoFile(file);
@@ -486,6 +487,7 @@ export const CustomerDashboard = ({
                                 setUploading(false);
                                 e.target.value = '';
                               }
+                              })();
                             }}
                             disabled={uploading}
                           />
