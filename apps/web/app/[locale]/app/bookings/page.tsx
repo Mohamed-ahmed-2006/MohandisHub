@@ -1,6 +1,6 @@
 import { notFound } from 'next/navigation';
 
-import { ComingSoonPage } from '@/components/app/coming-soon-page';
+import { BookingsScreen } from '@/components/app/bookings-screen';
 import { isSupportedLocale } from '@/lib/i18n/config';
 import { getDictionary } from '@/lib/i18n/get-dictionary';
 
@@ -12,7 +12,7 @@ const BookingsPage = async ({ params }: BookingsPageProps) => {
   const { locale } = await params;
   if (!isSupportedLocale(locale)) notFound();
   const dictionary = getDictionary(locale);
-  return <ComingSoonPage locale={locale} dictionary={dictionary} title={dictionary.nav.bookings} />;
+  return <BookingsScreen locale={locale} dictionary={dictionary} />;
 };
 
 export default BookingsPage;

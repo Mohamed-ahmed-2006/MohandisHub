@@ -32,6 +32,8 @@ export type AppSettingsRow = {
   feature_plans_enabled: boolean;
   feature_wallet_enabled: boolean;
   global_announcement: string | null;
+  commission_percent?: string;
+  commission_min_egp?: string;
 };
 
 export type AppSettingsUpdate = Partial<{
@@ -58,6 +60,8 @@ export type AppSettingsUpdate = Partial<{
   feature_plans_enabled: boolean;
   feature_wallet_enabled: boolean;
   global_announcement: string | null;
+  commission_percent: number;
+  commission_min_egp: number;
 }>;
 
 export class SettingsRepository {
@@ -94,6 +98,8 @@ export class SettingsRepository {
     featurePlansEnabled: 'feature_plans_enabled',
     featureWalletEnabled: 'feature_wallet_enabled',
     globalAnnouncement: 'global_announcement',
+    commissionPercent: 'commission_percent',
+    commissionMinEgp: 'commission_min_egp',
   };
 
   async update(partial: AppSettingsUpdate): Promise<AppSettingsRow | null> {

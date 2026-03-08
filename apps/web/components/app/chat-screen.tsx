@@ -7,6 +7,7 @@ import { useAuth } from '@/components/auth/auth-provider';
 import { Container } from '@/components/ui/container';
 import type { Conversation, Message } from '@/lib/chat/client';
 import { chatApiClient } from '@/lib/chat/client';
+import { getChatSocket } from '@/lib/chat/socket';
 import { buildLocalePath } from '@/lib/i18n/path';
 import type { Dictionary, Locale } from '@/lib/i18n/types';
 
@@ -78,6 +79,23 @@ export const ChatScreen = ({ locale, dictionary }: Props) => {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
+
+  useEffect(() => {
+    if (!activeConvId) return;
+    const sock = getChatSocket();
+    if (!sock) return;
+    sock.emit('join_conversation', { conversationId: activeConvId });
+    const onNewMessage = (msg: Message) => {
+      if (msg.conversation_id === activeConvId) {
+        setMessages((prev) => (prev.some((m) => m.id === msg.id) ? prev : [...prev, msg]));
+      }
+    };
+    sock.on('new_message', onNewMessage);
+    return () => {
+      sock.emit('leave_conversation', { conversationId: activeConvId });
+      sock.off('new_message', onNewMessage);
+    };
+  }, [activeConvId]);
 
   const handleSend = async () => {
     if (!accessToken || !activeConvId || !msgText.trim() || sending) return;

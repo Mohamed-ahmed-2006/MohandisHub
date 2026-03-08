@@ -2,6 +2,8 @@
 // Auth service — business logic for registration, login, token refresh
 // ---------------------------------------------------------------------------
 
+import path from 'node:path';
+import { appendFileSync } from 'node:fs';
 import { randomBytes } from 'node:crypto';
 
 import type {
@@ -122,9 +124,9 @@ export class AuthService {
     // #region agent log
     fetch('http://127.0.0.1:7325/ingest/ebd08bf8-7d73-450c-ad4d-4436a6c2225b', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '9365d5' },
+      headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '8fd58e' },
       body: JSON.stringify({
-        sessionId: '9365d5',
+        sessionId: '8fd58e',
         location: 'auth.service.ts:forgotPassword:entry',
         message: 'forgotPassword called',
         data: { emailReceived: !!input?.email?.trim(), provider: env.OTP_EMAIL_PROVIDER },
@@ -141,9 +143,9 @@ export class AuthService {
       // #region agent log
       fetch('http://127.0.0.1:7325/ingest/ebd08bf8-7d73-450c-ad4d-4436a6c2225b', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '9365d5' },
+        headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '8fd58e' },
         body: JSON.stringify({
-          sessionId: '9365d5',
+          sessionId: '8fd58e',
           location: 'auth.service.ts:forgotPassword:afterFindUser',
           message: 'user lookup result',
           data: { userFound: !!user, userActive: !!user?.is_active },
@@ -177,9 +179,9 @@ export class AuthService {
         // #region agent log
         fetch('http://127.0.0.1:7325/ingest/ebd08bf8-7d73-450c-ad4d-4436a6c2225b', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '9365d5' },
+          headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '8fd58e' },
           body: JSON.stringify({
-            sessionId: '9365d5',
+            sessionId: '8fd58e',
             location: 'auth.service.ts:forgotPassword:afterSend',
             message: 'password reset email send completed',
             data: { sent: true, provider: env.OTP_EMAIL_PROVIDER },
@@ -197,9 +199,9 @@ export class AuthService {
         // #region agent log
         fetch('http://127.0.0.1:7325/ingest/ebd08bf8-7d73-450c-ad4d-4436a6c2225b', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '9365d5' },
+          headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '8fd58e' },
           body: JSON.stringify({
-            sessionId: '9365d5',
+            sessionId: '8fd58e',
             location: 'auth.service.ts:forgotPassword:sendError',
             message: 'password reset email send failed',
             data: {
@@ -211,6 +213,23 @@ export class AuthService {
           }),
         }).catch(() => {});
         // #endregion
+        try {
+          const logPath = path.resolve(process.cwd(), 'debug-8fd58e.log');
+          appendFileSync(
+            logPath,
+            JSON.stringify({
+              sessionId: '8fd58e',
+              location: 'auth.service.ts:forgotPassword:sendError',
+              message: 'Brevo send failed - error details',
+              data: {
+                errorMsg: error instanceof Error ? error.message : String(error),
+                emailFrom: env.EMAIL_FROM,
+                provider: env.OTP_EMAIL_PROVIDER,
+              },
+              timestamp: Date.now(),
+            }) + '\n',
+          );
+        } catch {}
         logger.error('Failed to send password reset email', {
           userId: user.id,
           email: user.email,
@@ -224,6 +243,23 @@ export class AuthService {
         return result;
       }
     } catch (error) {
+      // #region agent log
+      fetch('http://127.0.0.1:7325/ingest/ebd08bf8-7d73-450c-ad4d-4436a6c2225b', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '8fd58e' },
+        body: JSON.stringify({
+          sessionId: '8fd58e',
+          location: 'auth.service.ts:forgotPassword:outerCatch',
+          message: 'outer catch - returning MESSAGE_SEND_FAILED (should be 200)',
+          data: {
+            errorMsg: error instanceof Error ? error.message : String(error),
+            email: input.email?.trim?.()?.toLowerCase?.() ?? '(unknown)',
+          },
+          timestamp: Date.now(),
+          hypothesisId: 'H3,H4',
+        }),
+      }).catch(() => {});
+      // #endregion
       logger.error('Forgot password flow failed', {
         email: input.email?.trim?.()?.toLowerCase?.() ?? '(unknown)',
         error: error instanceof Error ? error.message : String(error),
@@ -517,7 +553,22 @@ export class AuthService {
 
       if (!response.ok) {
         const errorText = await response.text();
-        throw new Error(`Brevo email send failed: ${response.status} ${errorText}`);
+        const errMsg = `Brevo email send failed: ${response.status} ${errorText}`;
+        // #region agent log
+        fetch('http://127.0.0.1:7325/ingest/ebd08bf8-7d73-450c-ad4d-4436a6c2225b', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '8fd58e' },
+          body: JSON.stringify({
+            sessionId: '8fd58e',
+            location: 'auth.service.ts:sendPasswordResetEmail:brevoError',
+            message: 'Brevo API returned non-OK',
+            data: { status: response.status, errorText: errorText.slice(0, 500), emailFrom: env.EMAIL_FROM },
+            timestamp: Date.now(),
+            hypothesisId: 'H4',
+          }),
+        }).catch(() => {});
+        // #endregion
+        throw new Error(errMsg);
       }
 
       return;

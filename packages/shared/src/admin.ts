@@ -26,6 +26,7 @@ export type AdminDashboardStats = {
   pendingVerifications: number;
   activeServices: number;
   totalPlans: number;
+  platformWalletBalance: number;
 };
 
 /** Primary role is customer | expert | business. Admin is a separate isAdmin flag. */

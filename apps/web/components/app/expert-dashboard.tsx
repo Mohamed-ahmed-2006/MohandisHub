@@ -1,8 +1,10 @@
 'use client';
 
 import type { ServiceCategory } from '@mohandishub/shared';
+import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
 
+import { buildLocalePath } from '@/lib/i18n/path';
 import type { Dictionary, Locale } from '@/lib/i18n/types';
 import type { Bid, Need } from '@/lib/needs/client';
 import { needsApiClient } from '@/lib/needs/client';
@@ -91,8 +93,32 @@ export const ExpertDashboard = ({
     }
   };
 
+  const suggestions = dictionary.appHome?.suggestions?.expert;
+  const suggestTitle = suggestions?.title ?? 'Suggested actions for experts';
+  const suggestItems = suggestions?.items ?? [];
+  const suggestCta = suggestions?.ctaLabel ?? 'Manage Services';
+
   return (
     <section className="dashboard-section">
+      {suggestItems.length > 0 && (
+        <div className="dashboard-suggestions">
+          <h3 className="dashboard-section-title" style={{ fontSize: '1rem', marginBottom: '0.5rem' }}>
+            {suggestTitle}
+          </h3>
+          <ul className="dashboard-suggestions-list">
+            {suggestItems.map((item, i) => (
+              <li key={i}>{item}</li>
+            ))}
+          </ul>
+          <Link
+            href={buildLocalePath(locale, '/app/services')}
+            className="dashboard-link-btn"
+            style={{ marginTop: '0.5rem', display: 'inline-block' }}
+          >
+            {suggestCta}
+          </Link>
+        </div>
+      )}
       <div className="dashboard-tabs">
         <button
           type="button"

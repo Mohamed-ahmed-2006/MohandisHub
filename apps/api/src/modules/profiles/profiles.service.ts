@@ -54,6 +54,7 @@ export class ProfilesService {
       hourlyRate?: number | undefined;
       city?: string | undefined;
       country?: string | undefined;
+      availabilityStatus?: string | undefined;
       employer?: string | undefined;
       jobTitle?: string | undefined;
       linkedinUrl?: string | undefined;
@@ -73,6 +74,8 @@ export class ProfilesService {
     if (input.hourlyRate !== undefined) dbFields.hourly_rate = input.hourlyRate;
     if (input.city !== undefined) dbFields.city = input.city;
     if (input.country !== undefined) dbFields.country = input.country;
+    if (input.availabilityStatus !== undefined)
+      dbFields.availability_status = input.availabilityStatus;
     if (input.employer !== undefined) dbFields.employer = input.employer;
     if (input.jobTitle !== undefined) dbFields.job_title = input.jobTitle;
     if (input.linkedinUrl !== undefined) dbFields.linkedin_url = input.linkedinUrl;
@@ -445,6 +448,35 @@ export class ProfilesService {
     }
 
     return items;
+  }
+
+  // ── Top providers (public) ───────────────────────────────────────────────
+
+  async getTopExperts(limit: number = 6): Promise<
+    Array<{
+      userId: string;
+      displayName: string;
+      avatarUrl: string | null;
+      title: string | null;
+      headline: string | null;
+      specializations: string[];
+      city: string | null;
+    }>
+  > {
+    return this.repo.findTopExperts(limit);
+  }
+
+  async getTopBusinesses(limit: number = 6): Promise<
+    Array<{
+      userId: string;
+      displayName: string;
+      avatarUrl: string | null;
+      companyName: string;
+      industry: string | null;
+      city: string | null;
+    }>
+  > {
+    return this.repo.findTopBusinesses(limit);
   }
 
   // ── Mappers ────────────────────────────────────────────────────────────

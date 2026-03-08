@@ -8,7 +8,7 @@ import { SettingsRepository } from '../modules/settings/settings.repository.js';
 
 const settingsRepo = new SettingsRepository();
 
-const ALLOWED_PATHS = ['/app/status', '/auth/login', '/auth/refresh', '/admin'];
+const ALLOWED_PATHS = ['/app/status', '/auth/login', '/auth/refresh', '/auth/forgot-password', '/admin'];
 
 export async function maintenanceMode(
   req: Request,

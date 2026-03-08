@@ -114,6 +114,7 @@ export type UpdateExpertProfileBody = {
   hourlyRate?: number;
   city?: string;
   country?: string;
+  availabilityStatus?: AvailabilityStatus;
   employer?: string;
   jobTitle?: string;
   linkedinUrl?: string;

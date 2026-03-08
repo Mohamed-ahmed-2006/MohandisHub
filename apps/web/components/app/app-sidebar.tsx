@@ -34,6 +34,9 @@ export const AppSidebar = ({
 
   const navItems: NavItem[] = [
     { href: '/app', label: dictionary.nav.home },
+    { href: '/app/bookings', label: dictionary.nav.bookings ?? 'My Bookings' },
+    { href: '/app/services', label: dictionary.nav.myServices ?? 'My Services', roles: ['expert', 'business'] },
+    { href: '/app/calendar', label: dictionary.nav.calendar ?? 'Calendar', roles: ['expert', 'business'] },
     { href: '/app/settings', label: dictionary.nav.settings },
     { href: '/app/chat', label: dictionary.nav.chat },
     { href: '/app/history', label: dictionary.nav.history },
@@ -44,7 +47,7 @@ export const AppSidebar = ({
   const visibleItems = navItems.filter((item) => {
     if (!item.roles) return true;
     if (item.roles.includes('admin')) return isAdmin;
-    return item.roles.includes(userRole);
+    return item.roles.some((r) => r === userRole);
   });
 
   const isActive = (href: string) => {

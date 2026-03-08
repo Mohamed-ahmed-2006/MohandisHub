@@ -1,7 +1,8 @@
 'use client';
 
 import Link from 'next/link';
-import { useMemo, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { useEffect, useMemo, useState } from 'react';
 
 import { AuthStatusBanner } from '@/components/auth/auth-status-banner';
 import { authApiClient, isApiClientError } from '@/lib/auth/client';
@@ -56,6 +57,7 @@ const PasswordVisibilityIcon = ({ visible }: { visible: boolean }) => {
 };
 
 export const ResetPasswordForm = ({ locale, dictionary, token }: ResetPasswordFormProps) => {
+  const router = useRouter();
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [passwordError, setPasswordError] = useState<string | null>(null);
@@ -65,8 +67,19 @@ export const ResetPasswordForm = ({ locale, dictionary, token }: ResetPasswordFo
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isPasswordVisible, setIsPasswordVisible] = useState(false);
   const [isConfirmPasswordVisible, setIsConfirmPasswordVisible] = useState(false);
+  const [redirecting, setRedirecting] = useState(false);
 
   const hasToken = useMemo(() => Boolean(token && token.trim().length > 0), [token]);
+
+  const loginPath = useMemo(() => buildLocalePath(locale, '/auth?mode=login'), [locale]);
+
+  useEffect(() => {
+    if (!redirecting || statusVariant !== 'success') return;
+    const timer = setTimeout(() => {
+      router.replace(loginPath);
+    }, 1500);
+    return () => clearTimeout(timer);
+  }, [redirecting, statusVariant, router, loginPath]);
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -108,6 +121,7 @@ export const ResetPasswordForm = ({ locale, dictionary, token }: ResetPasswordFo
       setStatusMessage(response.message || dictionary.resetPassword.successMessage);
       setPassword('');
       setConfirmPassword('');
+      setRedirecting(true);
     } catch (error) {
       setStatusVariant('error');
       if (isApiClientError(error)) {
@@ -197,7 +211,7 @@ export const ResetPasswordForm = ({ locale, dictionary, token }: ResetPasswordFo
       </form>
 
       <footer className="auth-form-footer">
-        <Link href={buildLocalePath(locale, '/auth?mode=login')} className="auth-form-inline-link">
+        <Link href={loginPath} className="auth-form-inline-link">
           {dictionary.resetPassword.backToLogin}
         </Link>
       </footer>

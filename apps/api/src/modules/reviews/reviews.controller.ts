@@ -1,0 +1,63 @@
+import { asyncHandler } from '../../utils/async-handler.js';
+import { HttpError } from '../../utils/http-error.js';
+
+import { ReviewsService } from './reviews.service.js';
+import { createReviewSchema } from './reviews.validation.js';
+
+const svc = new ReviewsService();
+
+function requireUser(req: { user?: { id: string } }) {
+  if (!req.user)
+    throw new HttpError({ statusCode: 401, code: 'UNAUTHORIZED', message: 'Auth required.' });
+  return req.user;
+}
+
+function parseBody<T>(
+  schema: {
+    safeParse: (data: unknown) => {
+      success: boolean;
+      data?: T;
+      error?: { flatten: () => { fieldErrors: unknown } };
+    };
+  },
+  body: unknown,
+): T {
+  const result = schema.safeParse(body);
+  if (!result.success) {
+    throw new HttpError({
+      statusCode: 400,
+      code: 'VALIDATION_ERROR',
+      message: 'Invalid input.',
+      details: result.error!.flatten().fieldErrors,
+    });
+  }
+  return result.data as T;
+}
+
+const create = asyncHandler(async (req, res) => {
+  const user = requireUser(req);
+  const input = parseBody(createReviewSchema, req.body);
+  const review = await svc.create(user.id, input);
+  res.status(201).json({ ok: true, data: review });
+});
+
+const list = asyncHandler(async (req, res) => {
+  const targetUserId = req.query.targetUserId as string;
+  const targetType = (req.query.targetType as 'expert' | 'business') || 'expert';
+  if (!targetUserId) {
+    throw new HttpError({
+      statusCode: 400,
+      code: 'MISSING_PARAMS',
+      message: 'targetUserId is required.',
+    });
+  }
+  const page = parseInt(req.query.page as string, 10) || 1;
+  const limit = Math.min(parseInt(req.query.limit as string, 10) || 20, 50);
+  const data = await svc.listByTarget(targetUserId, targetType, page, limit);
+  res.json({ ok: true, data });
+});
+
+export const reviewsController = {
+  create,
+  list,
+};

@@ -1,6 +1,30 @@
-import type { ApiSuccessBody, ServiceCategory, ServiceSearchResult } from '@mohandishub/shared';
+import type {
+  ApiSuccessBody,
+  CreateServiceBody,
+  Service,
+  ServiceCategory,
+  ServiceSearchResult,
+  UpdateServiceBody,
+} from '@mohandishub/shared';
 
 import { getApiBaseUrl } from '@/lib/env';
+
+async function apiReq<T>(path: string, token: string, opts?: RequestInit): Promise<T> {
+  const res = await fetch(`${getApiBaseUrl()}${path}`, {
+    ...opts,
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+      ...(opts?.headers ?? {}),
+    },
+  });
+  if (!res.ok) {
+    const body = (await res.json().catch(() => ({}))) as { error?: { message?: string } };
+    throw new Error(body?.error?.message ?? 'Request failed');
+  }
+  const json = (await res.json()) as { data: T };
+  return json.data;
+}
 
 export const servicesApiClient = {
   getCategories: async (): Promise<ServiceCategory[]> => {
@@ -46,4 +70,34 @@ export const servicesApiClient = {
     }>;
     return body.data;
   },
+
+  listMyServices: (token: string, page = 1, limit = 20) =>
+    apiReq<{ items: Service[]; total: number; page: number; limit: number; totalPages: number }>(
+      `/api/services/my?page=${page}&limit=${limit}`,
+      token,
+    ),
+
+  createService: (
+    token: string,
+    body: CreateServiceBody & { submitForReview?: boolean },
+  ) =>
+    apiReq<Service>('/api/services', token, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+
+  updateService: (token: string, id: string, body: UpdateServiceBody) =>
+    apiReq<Service>(`/api/services/${id}`, token, {
+      method: 'PATCH',
+      body: JSON.stringify(body),
+    }),
+
+  submitService: (token: string, id: string) =>
+    apiReq<Service>(`/api/services/${id}/submit`, token, { method: 'POST' }),
+
+  pauseService: (token: string, id: string) =>
+    apiReq<Service>(`/api/services/${id}/pause`, token, { method: 'POST' }),
+
+  activateService: (token: string, id: string) =>
+    apiReq<Service>(`/api/services/${id}/activate`, token, { method: 'POST' }),
 };

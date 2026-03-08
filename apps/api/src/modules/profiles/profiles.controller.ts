@@ -234,7 +234,19 @@ const getAnyUserProfile = asyncHandler(async (req, res) => {
   res.json(response);
 });
 
+const getTopExperts = asyncHandler(async (_req, res) => {
+  const items = await profilesService.getTopExperts(6);
+  res.json({ ok: true, data: items });
+});
+
+const getTopBusinesses = asyncHandler(async (_req, res) => {
+  const items = await profilesService.getTopBusinesses(6);
+  res.json({ ok: true, data: items });
+});
+
 export const profilesController = {
+  getTopExperts,
+  getTopBusinesses,
   getExpertProfile,
   updateExpertProfile,
   getBusinessProfile,

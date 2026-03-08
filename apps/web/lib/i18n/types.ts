@@ -18,6 +18,8 @@ export type Dictionary = {
     optional: string;
     step: string;
     of: string;
+    completeVerification?: string;
+    addFirstService?: string;
   };
   theme: {
     switchToLight: string;
@@ -247,6 +249,10 @@ export type Dictionary = {
     helpSupport: string;
     menuOpen: string;
     menuClose: string;
+    myServices?: string;
+    calendar?: string;
+    orders?: string;
+    analytics?: string;
   };
   appHome: {
     loading: string;
@@ -337,6 +343,7 @@ export type Dictionary = {
       activeServices: string;
       totalPlans: string;
       usersByRole: string;
+      platformWallet?: string;
     };
     users: {
       title: string;
@@ -456,6 +463,7 @@ export type Dictionary = {
         availability: string;
         signups: string;
         wallet: string;
+        commission: string;
         plans: string;
         needs: string;
         content: string;
@@ -494,6 +502,10 @@ export type Dictionary = {
       globalAnnouncementPlaceholder: string;
       minDepositAmount: string;
       maxDepositAmount: string;
+      commissionPercent: string;
+      commissionPercentDesc: string;
+      commissionMinEgp: string;
+      commissionMinEgpDesc: string;
     };
     categoriesMgmt: {
       title: string;
@@ -529,6 +541,36 @@ export type Dictionary = {
     depositSuccess?: string;
     depositCancelled?: string;
   };
+  servicesPage?: {
+    title?: string;
+    noServices?: string;
+    addFirstService?: string;
+    addService?: string;
+    createService?: string;
+    titleLabel?: string;
+    titlePlaceholder?: string;
+    descriptionLabel?: string;
+    descriptionPlaceholder?: string;
+    categoryLabel?: string;
+    priceLabel?: string;
+    pricePlaceholder?: string;
+    priceTypeFixed?: string;
+    priceTypeHourly?: string;
+    priceTypeNegotiable?: string;
+    cityLabel?: string;
+    countryLabel?: string;
+    submitForReview?: string;
+    saveDraft?: string;
+    statusDraft?: string;
+    statusPending?: string;
+    statusActive?: string;
+    statusPaused?: string;
+    statusRejected?: string;
+    submit?: string;
+    pause?: string;
+    activate?: string;
+    edit?: string;
+  };
   plan: {
     subtitle?: string;
     currentPlan: string;
@@ -556,6 +598,8 @@ export type Dictionary = {
     bidsCount: string;
     viewBids: string;
     awarded: string;
+    completed: string;
+    markCompleted: string;
     bidsFor: string;
     noBids: string;
     award: string;
@@ -738,5 +782,28 @@ export type Dictionary = {
       generic: string;
       networkError: string;
     };
+  };
+  bookingsPage?: {
+    title?: string;
+    noBookings?: string;
+    confirmComplete?: string;
+    start?: string;
+    complete?: string;
+  };
+  calendarPage?: {
+    title?: string;
+    addSlot?: string;
+    noSlots?: string;
+    booked?: string;
+    available?: string;
+    blocked?: string;
+    block?: string;
+    unblock?: string;
+    remove?: string;
+    prevWeek?: string;
+    nextWeek?: string;
+    upcomingBookings?: string;
+    start?: string;
+    complete?: string;
   };
 };

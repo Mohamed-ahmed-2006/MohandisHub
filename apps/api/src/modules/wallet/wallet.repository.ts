@@ -2,9 +2,11 @@
 // Wallet repository — database access layer
 // ---------------------------------------------------------------------------
 
-import type { Pool } from 'pg';
+import type { Pool, PoolClient } from 'pg';
 
 import { getPool } from '../../db/pool.js';
+
+const PLATFORM_USER_ID = '00000000-0000-0000-0000-000000000001';
 
 type WalletRow = {
   id: string;
@@ -138,6 +140,19 @@ export class WalletRepository {
     referenceType: string,
     referenceId: string | null,
   ): Promise<void> {
+    return this.creditWithType(walletId, userId, amount, 'deposit', description, referenceType, referenceId);
+  }
+
+  /** Credit wallet with a specific transaction type (e.g. deposit, payment, commission) */
+  async creditWithType(
+    walletId: string,
+    userId: string,
+    amount: number,
+    txType: 'deposit' | 'payment' | 'commission' | 'adjustment' | 'bonus' | 'refund',
+    description: string,
+    referenceType: string,
+    referenceId: string | null,
+  ): Promise<void> {
     const client = await this.db.connect();
     try {
       await client.query('BEGIN');
@@ -152,8 +167,8 @@ export class WalletRepository {
       const balanceAfter = parseFloat(walletRows[0]!.balance);
       await client.query(
         `INSERT INTO transactions (wallet_id, user_id, type, amount, balance_after, status, description, reference_type, reference_id)
-         VALUES ($1, $2, 'deposit', $3, $4, 'completed', $5, $6, $7)`,
-        [walletId, userId, amount, balanceAfter, description, referenceType, referenceId],
+         VALUES ($1, $2, $3, $4, $5, 'completed', $6, $7, $8)`,
+        [walletId, userId, txType, amount, balanceAfter, description, referenceType, referenceId],
       );
       await client.query('COMMIT');
     } catch (e) {
@@ -162,6 +177,127 @@ export class WalletRepository {
     } finally {
       client.release();
     }
+  }
+
+  /** Debit wallet (for customer payment). Throws if insufficient balance. */
+  async debitWallet(
+    walletId: string,
+    userId: string,
+    amount: number,
+    description: string,
+    referenceType: string,
+    referenceId: string | null,
+  ): Promise<string> {
+    const client = await this.db.connect();
+    try {
+      await client.query('BEGIN');
+      const { rows: walletRows } = await client.query<{ balance: string; id: string }>(
+        `SELECT id, balance::text FROM wallets WHERE id = $1 FOR UPDATE`,
+        [walletId],
+      );
+      if (walletRows.length === 0) {
+        await client.query('ROLLBACK');
+        throw new Error('Wallet not found');
+      }
+      const currentBalance = parseFloat(walletRows[0]!.balance);
+      if (currentBalance < amount) {
+        await client.query('ROLLBACK');
+        throw new Error('INSUFFICIENT_BALANCE');
+      }
+      const balanceAfter = currentBalance - amount;
+      await client.query(
+        `UPDATE wallets SET balance = balance - $1 WHERE id = $2`,
+        [amount, walletId],
+      );
+      const { rows: txRows } = await client.query<{ id: string }>(
+        `INSERT INTO transactions (wallet_id, user_id, type, amount, balance_after, status, description, reference_type, reference_id)
+         VALUES ($1, $2, 'payment', $3, $4, 'completed', $5, $6, $7)
+         RETURNING id`,
+        [walletId, userId, amount, balanceAfter, description, referenceType, referenceId],
+      );
+      await client.query('COMMIT');
+      return txRows[0]!.id;
+    } catch (e) {
+      await client.query('ROLLBACK');
+      throw e;
+    } finally {
+      client.release();
+    }
+  }
+
+  async findWalletByUserId(userId: string): Promise<{ id: string; balance: string } | null> {
+    const { rows } = await this.db.query<{ id: string; balance: string }>(
+      `SELECT id, balance::text FROM wallets WHERE user_id = $1`,
+      [userId],
+    );
+    return rows[0] ?? null;
+  }
+
+  /** Get or create platform wallet (for commission). Must be called within transaction. */
+  async getOrCreatePlatformWallet(client: PoolClient): Promise<string> {
+    let { rows } = await client.query<{ id: string }>(
+      `SELECT id FROM wallets WHERE user_id = $1`,
+      [PLATFORM_USER_ID],
+    );
+    if (rows.length === 0) {
+      const ins = await client.query<{ id: string }>(
+        `INSERT INTO wallets (user_id) VALUES ($1) RETURNING id`,
+        [PLATFORM_USER_ID],
+      );
+      return ins.rows[0]!.id;
+    }
+    return rows[0]!.id;
+  }
+
+  /** Debit wallet within existing transaction. Returns payment transaction id. */
+  async debitWalletInTransaction(
+    client: PoolClient,
+    walletId: string,
+    userId: string,
+    amount: number,
+    description: string,
+    referenceType: string,
+    referenceId: string | null,
+  ): Promise<string> {
+    const { rows: lockRows } = await client.query<{ balance: string }>(
+      `SELECT balance::text FROM wallets WHERE id = $1 FOR UPDATE`,
+      [walletId],
+    );
+    if (lockRows.length === 0) throw new Error('Wallet not found');
+    const currentBalance = parseFloat(lockRows[0]!.balance);
+    if (currentBalance < amount) throw new Error('INSUFFICIENT_BALANCE');
+    const balanceAfter = currentBalance - amount;
+    await client.query(`UPDATE wallets SET balance = $1 WHERE id = $2`, [balanceAfter, walletId]);
+    const { rows: txRows } = await client.query<{ id: string }>(
+      `INSERT INTO transactions (wallet_id, user_id, type, amount, balance_after, status, description, reference_type, reference_id)
+       VALUES ($1, $2, 'payment', $3, $4, 'completed', $5, $6, $7) RETURNING id`,
+      [walletId, userId, amount, balanceAfter, description, referenceType, referenceId],
+    );
+    return txRows[0]!.id;
+  }
+
+  /** Credit wallet within existing transaction (payment or commission). */
+  async creditWithTypeInTransaction(
+    client: PoolClient,
+    walletId: string,
+    userId: string,
+    amount: number,
+    txType: 'payment' | 'commission',
+    description: string,
+    referenceType: string,
+    referenceId: string | null,
+  ): Promise<void> {
+    const { rows: walletRows } = await client.query<{ balance: string }>(
+      `UPDATE wallets SET balance = balance + $1 WHERE id = $2 RETURNING balance::text`,
+      [amount, walletId],
+    );
+    if (walletRows.length === 0) throw new Error('Wallet not found');
+    const balanceAfter = parseFloat(walletRows[0]!.balance);
+    await client.query(
+      `INSERT INTO transactions (wallet_id, user_id, type, amount, balance_after, status, description, reference_type, reference_id)
+       VALUES ($1, $2, $3, $4, $5, 'completed', $6, $7, $8)`,
+      [walletId, userId, txType, amount, balanceAfter, description, referenceType, referenceId],
+    );
   }
 }
 

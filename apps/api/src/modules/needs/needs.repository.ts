@@ -1,3 +1,5 @@
+import type { PoolClient } from 'pg';
+
 import { getPool } from '../../db/pool.js';
 
 import type { CreateNeedInput, CreateBidInput } from './needs.validation.js';
@@ -186,22 +188,12 @@ export class NeedsRepository {
     return (rows[0] as BidRow) ?? null;
   }
 
-  async awardBid(needId: string, bidId: string): Promise<void> {
+  async awardBid(needId: string, bidId: string, paymentTransactionId?: string): Promise<void> {
     const pool = getPool();
     const client = await pool.connect();
     try {
       await client.query('BEGIN');
-      await client.query(
-        `UPDATE needs SET status = 'awarded', awarded_bid_id = $1, updated_at = now() WHERE id = $2`,
-        [bidId, needId],
-      );
-      await client.query(`UPDATE bids SET status = 'accepted', updated_at = now() WHERE id = $1`, [
-        bidId,
-      ]);
-      await client.query(
-        `UPDATE bids SET status = 'rejected', updated_at = now() WHERE need_id = $1 AND id != $2 AND status = 'pending'`,
-        [needId, bidId],
-      );
+      await this.awardBidInTransaction(client, needId, bidId, paymentTransactionId);
       await client.query('COMMIT');
     } catch (err) {
       await client.query('ROLLBACK');
@@ -209,5 +201,32 @@ export class NeedsRepository {
     } finally {
       client.release();
     }
+  }
+
+  /** Award bid within existing transaction. Optionally set paid_at and payment_transaction_id. */
+  async awardBidInTransaction(
+    client: PoolClient,
+    needId: string,
+    bidId: string,
+    paymentTransactionId?: string,
+  ): Promise<void> {
+    await client.query(
+      `UPDATE needs SET status = 'awarded', awarded_bid_id = $1, updated_at = now() WHERE id = $2`,
+      [bidId, needId],
+    );
+    if (paymentTransactionId) {
+      await client.query(
+        `UPDATE bids SET status = 'accepted', updated_at = now(), paid_at = now(), payment_transaction_id = $2 WHERE id = $1`,
+        [bidId, paymentTransactionId],
+      );
+    } else {
+      await client.query(`UPDATE bids SET status = 'accepted', updated_at = now() WHERE id = $1`, [
+        bidId,
+      ]);
+    }
+    await client.query(
+      `UPDATE bids SET status = 'rejected', updated_at = now() WHERE need_id = $1 AND id != $2 AND status = 'pending'`,
+      [needId, bidId],
+    );
   }
 }

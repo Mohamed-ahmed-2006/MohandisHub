@@ -411,6 +411,9 @@ export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
       hourlyRate: numVal('hourlyRate'),
       city: val('city'),
       country: val('country'),
+      availabilityStatus: nonEmpty(
+        (form.elements.namedItem('availabilityStatus') as HTMLSelectElement)?.value,
+      ) as 'available' | 'busy' | 'offline' | undefined,
       employer: val('employer'),
       jobTitle: val('jobTitle'),
       linkedinUrl: val('linkedinUrl'),
@@ -627,6 +630,21 @@ export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
                     step="0.01"
                   />
                 </div>
+              </div>
+              <div className="profile-screen-field">
+                <label className="profile-screen-label">
+                  {(dictionary.admin?.settingsMgmt?.sections as Record<string, string>)?.availability ??
+                    'Availability'}
+                </label>
+                <select
+                  name="availabilityStatus"
+                  className="profile-screen-select"
+                  defaultValue={expertProfile.availabilityStatus ?? 'available'}
+                >
+                  <option value="available">Available</option>
+                  <option value="busy">Busy</option>
+                  <option value="offline">Offline</option>
+                </select>
               </div>
               <div className="profile-screen-row">
                 <div className="profile-screen-field">

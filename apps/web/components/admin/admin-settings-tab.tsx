@@ -235,6 +235,49 @@ export const AdminSettingsTab = ({ dictionary, accessToken, refreshSession }: Pr
       </section>
 
       <section className="admin-settings-section">
+        <h3 className="admin-settings-section-title">{d.sections.commission}</h3>
+        <div className="admin-settings-row">
+          <div className="admin-settings-label-wrap">
+            <label className="admin-settings-label">{d.commissionPercent}</label>
+            <span className="admin-settings-desc">{d.commissionPercentDesc}</span>
+          </div>
+          <input
+            type="number"
+            min={0}
+            max={100}
+            step={0.01}
+            className="admin-settings-input admin-settings-input--number"
+            defaultValue={settings.commissionPercent}
+            onBlur={(e) =>
+              handleNumberChange(
+                'commissionPercent',
+                e.target.value === '' ? 0 : parseFloat(e.target.value) ?? 0,
+              )
+            }
+          />
+        </div>
+        <div className="admin-settings-row">
+          <div className="admin-settings-label-wrap">
+            <label className="admin-settings-label">{d.commissionMinEgp}</label>
+            <span className="admin-settings-desc">{d.commissionMinEgpDesc}</span>
+          </div>
+          <input
+            type="number"
+            min={0}
+            step={0.01}
+            className="admin-settings-input admin-settings-input--number"
+            defaultValue={settings.commissionMinEgp}
+            onBlur={(e) =>
+              handleNumberChange(
+                'commissionMinEgp',
+                e.target.value === '' ? 0 : parseFloat(e.target.value) ?? 0,
+              )
+            }
+          />
+        </div>
+      </section>
+
+      <section className="admin-settings-section">
         <h3 className="admin-settings-section-title">{d.sections.plans}</h3>
         <Toggle
           label={d.pausePlanSubscriptions}

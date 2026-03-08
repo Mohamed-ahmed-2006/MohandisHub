@@ -40,6 +40,7 @@ export class ProfilesRepository {
       hourly_rate: number;
       city: string;
       country: string;
+      availability_status: string;
       employer: string;
       job_title: string;
       linkedin_url: string;
@@ -351,5 +352,80 @@ export class ProfilesRepository {
       primary_role: string;
     }>('SELECT id, display_name, email, primary_role FROM users WHERE id = $1 LIMIT 1', [userId]);
     return rows[0] ?? null;
+  }
+
+  async findTopExperts(limit: number = 6): Promise<
+    Array<{
+      userId: string;
+      displayName: string;
+      avatarUrl: string | null;
+      title: string | null;
+      headline: string | null;
+      specializations: string[];
+      city: string | null;
+    }>
+  > {
+    const { rows } = await this.db.query<{
+      user_id: string;
+      display_name: string;
+      avatar_url: string | null;
+      title: string | null;
+      headline: string | null;
+      specializations: string[];
+      city: string | null;
+    }>(
+      `SELECT u.id AS user_id, u.display_name, u.avatar_url, e.title, e.headline, e.specializations, e.city
+       FROM expert_profiles e
+       JOIN users u ON u.id = e.user_id
+       WHERE e.verification_status = 'verified' AND u.is_active = true
+       ORDER BY e.verified_at DESC NULLS LAST, e.created_at DESC
+       LIMIT $1`,
+      [limit],
+    );
+    return rows.map((r) => ({
+      userId: r.user_id,
+      displayName: r.display_name,
+      avatarUrl: r.avatar_url,
+      title: r.title,
+      headline: r.headline,
+      specializations: r.specializations ?? [],
+      city: r.city,
+    }));
+  }
+
+  async findTopBusinesses(limit: number = 6): Promise<
+    Array<{
+      userId: string;
+      displayName: string;
+      avatarUrl: string | null;
+      companyName: string;
+      industry: string | null;
+      city: string | null;
+    }>
+  > {
+    const { rows } = await this.db.query<{
+      user_id: string;
+      display_name: string;
+      avatar_url: string | null;
+      company_name: string;
+      industry: string | null;
+      city: string | null;
+    }>(
+      `SELECT u.id AS user_id, u.display_name, u.avatar_url, b.company_name, b.industry, b.city
+       FROM business_profiles b
+       JOIN users u ON u.id = b.user_id
+       WHERE b.verification_status = 'verified' AND u.is_active = true
+       ORDER BY b.verified_at DESC NULLS LAST, b.created_at DESC
+       LIMIT $1`,
+      [limit],
+    );
+    return rows.map((r) => ({
+      userId: r.user_id,
+      displayName: r.display_name,
+      avatarUrl: r.avatar_url,
+      companyName: r.company_name,
+      industry: r.industry,
+      city: r.city,
+    }));
   }
 }

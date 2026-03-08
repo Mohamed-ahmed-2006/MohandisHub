@@ -13,6 +13,10 @@ import { profilesController } from './profiles.controller.js';
 
 const profilesRouter = Router();
 
+// Public — top providers (must be before /expert, /business)
+profilesRouter.get('/top-experts', profilesController.getTopExperts);
+profilesRouter.get('/top-businesses', profilesController.getTopBusinesses);
+
 // Expert profile
 profilesRouter.get(
   '/expert',

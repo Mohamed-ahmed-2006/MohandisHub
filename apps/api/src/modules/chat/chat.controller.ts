@@ -1,5 +1,6 @@
 import type { ApiSuccessBody } from '@mohandishub/shared';
 
+import { getSocketServer } from '../../lib/socket-instance.js';
 import { asyncHandler } from '../../utils/async-handler.js';
 import { HttpError } from '../../utils/http-error.js';
 
@@ -55,6 +56,10 @@ const sendMessage = asyncHandler(async (req, res) => {
       message: 'Message body required.',
     });
   const message = await chatService.sendMessage(user.id, conversationId, body.trim());
+  const io = getSocketServer();
+  if (io) {
+    io.to(`conversation:${conversationId}`).emit('new_message', message);
+  }
   res.status(201).json({ ok: true, data: message });
 });
 

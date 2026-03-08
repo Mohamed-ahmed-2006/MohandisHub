@@ -41,5 +41,7 @@ function getDefaultAppStatus(): AppStatus {
     featurePlansEnabled: true,
     featureWalletEnabled: true,
     globalAnnouncement: null,
+    commissionPercent: 10,
+    commissionMinEgp: 0,
   };
 }

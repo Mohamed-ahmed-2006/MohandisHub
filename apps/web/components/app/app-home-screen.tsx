@@ -5,14 +5,19 @@ import Image from 'next/image';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 
+import { BusinessDashboard } from './business-dashboard';
 import { CustomerDashboard } from './customer-dashboard';
 import { ExpertDashboard } from './expert-dashboard';
+import { ServiceBookingModal } from './service-booking-modal';
 
 import { useAuth } from '@/components/auth/auth-provider';
 import { Container } from '@/components/ui/container';
 import { Skeleton, SkeletonCard, SkeletonText } from '@/components/ui/skeleton';
+import { chatApiClient } from '@/lib/chat/client';
 import { buildLocalePath } from '@/lib/i18n/path';
 import type { Dictionary, Locale } from '@/lib/i18n/types';
+import type { TopBusiness, TopExpert } from '@/lib/profiles/client';
+import { profilesApiClient } from '@/lib/profiles/client';
 import { servicesApiClient } from '@/lib/services/client';
 import { walletApiClient } from '@/lib/wallet/client';
 
@@ -245,6 +250,9 @@ export const AppHomeScreen = ({ locale, dictionary }: AppHomeScreenProps) => {
   const [_customerNeedsCount, setCustomerNeedsCount] = useState<number | null>(null);
   const [customerTab, setCustomerTab] = useState<'browse' | 'posted'>('browse');
   const [topSlideIndex, setTopSlideIndex] = useState(0);
+  const [topExperts, setTopExperts] = useState<TopExpert[]>([]);
+  const [topBusinesses, setTopBusinesses] = useState<TopBusiness[]>([]);
+  const [showBookingModal, setShowBookingModal] = useState(false);
 
   const areaOptions = city ? (CITY_AREAS[city] ?? []) : [];
   const handleCityChange = (newCity: string) => {
@@ -333,6 +341,16 @@ export const AppHomeScreen = ({ locale, dictionary }: AppHomeScreenProps) => {
 
   useEffect(() => {
     void servicesApiClient.getCategories().then(setCategories);
+  }, []);
+
+  useEffect(() => {
+    void Promise.all([
+      profilesApiClient.getTopExperts(),
+      profilesApiClient.getTopBusinesses(),
+    ]).then(([experts, businesses]) => {
+      setTopExperts(experts);
+      setTopBusinesses(businesses);
+    });
   }, []);
 
   // Top experts/business slideshow auto-rotate
@@ -441,13 +459,44 @@ export const AppHomeScreen = ({ locale, dictionary }: AppHomeScreenProps) => {
             >
               <h2 className="home-section-title">{d.topExperts}</h2>
               <div className="home-top-cards-grid home-top-cards-grid--scroll">
-                {[1, 2, 3].map((i) => (
-                  <div key={i} className="home-top-card home-top-card--large home-top-placeholder">
-                    <div className="home-top-avatar home-top-avatar--large" />
-                    <p className="home-top-name">Coming Soon</p>
-                    <p className="home-top-meta">★ —</p>
-                  </div>
-                ))}
+                {topExperts.length > 0
+                  ? topExperts.map((expert) => (
+                      <div key={expert.userId} className="home-top-card home-top-card--large">
+                        <div className="home-top-avatar home-top-avatar--large">
+                          {expert.avatarUrl ? (
+                            <Image
+                              src={expert.avatarUrl}
+                              alt=""
+                              width={64}
+                              height={64}
+                              className="home-top-avatar-img"
+                            />
+                          ) : (
+                            <span className="home-top-avatar-fallback">
+                              {expert.displayName.charAt(0)}
+                            </span>
+                          )}
+                        </div>
+                        <p className="home-top-name">{expert.displayName}</p>
+                        <p className="home-top-meta">
+                          {expert.title ?? expert.headline ?? '—'}
+                          {expert.specializations?.length
+                            ? ` · ${expert.specializations.slice(0, 2).join(', ')}`
+                            : ''}
+                          {expert.city ? ` · ${expert.city}` : ''}
+                        </p>
+                      </div>
+                    ))
+                  : [1, 2, 3].map((i) => (
+                      <div
+                        key={i}
+                        className="home-top-card home-top-card--large home-top-placeholder"
+                      >
+                        <div className="home-top-avatar home-top-avatar--large" />
+                        <p className="home-top-name">{dictionary.common.comingSoon}</p>
+                        <p className="home-top-meta">—</p>
+                      </div>
+                    ))}
               </div>
             </div>
             <div
@@ -457,13 +506,41 @@ export const AppHomeScreen = ({ locale, dictionary }: AppHomeScreenProps) => {
             >
               <h2 className="home-section-title">{d.topBusinesses}</h2>
               <div className="home-top-cards-grid home-top-cards-grid--scroll">
-                {[1, 2, 3].map((i) => (
-                  <div key={i} className="home-top-card home-top-card--large home-top-placeholder">
-                    <div className="home-top-avatar home-top-avatar--large" />
-                    <p className="home-top-name">Coming Soon</p>
-                    <p className="home-top-meta">Field — ★ —</p>
-                  </div>
-                ))}
+                {topBusinesses.length > 0
+                  ? topBusinesses.map((biz) => (
+                      <div key={biz.userId} className="home-top-card home-top-card--large">
+                        <div className="home-top-avatar home-top-avatar--large">
+                          {biz.avatarUrl ? (
+                            <Image
+                              src={biz.avatarUrl}
+                              alt=""
+                              width={64}
+                              height={64}
+                              className="home-top-avatar-img"
+                            />
+                          ) : (
+                            <span className="home-top-avatar-fallback">
+                              {biz.companyName.charAt(0)}
+                            </span>
+                          )}
+                        </div>
+                        <p className="home-top-name">{biz.companyName}</p>
+                        <p className="home-top-meta">
+                          {biz.industry ?? '—'}
+                          {biz.city ? ` · ${biz.city}` : ''}
+                        </p>
+                      </div>
+                    ))
+                  : [1, 2, 3].map((i) => (
+                      <div
+                        key={i}
+                        className="home-top-card home-top-card--large home-top-placeholder"
+                      >
+                        <div className="home-top-avatar home-top-avatar--large" />
+                        <p className="home-top-name">{dictionary.common.comingSoon}</p>
+                        <p className="home-top-meta">—</p>
+                      </div>
+                    ))}
               </div>
             </div>
           </div>
@@ -684,12 +761,21 @@ export const AppHomeScreen = ({ locale, dictionary }: AppHomeScreenProps) => {
             )}
           </>
         )}
-        {(authUser.role === 'expert' || authUser.role === 'business') && accessToken && (
+        {authUser.role === 'expert' && accessToken && (
           <ExpertDashboard
             locale={locale}
             dictionary={dictionary}
             accessToken={accessToken}
             categories={categories}
+          />
+        )}
+        {authUser.role === 'business' && accessToken && (
+          <BusinessDashboard
+            locale={locale}
+            dictionary={dictionary}
+            accessToken={accessToken}
+            categories={categories}
+            verificationStatus={authUser.verificationStatus ?? 'unverified'}
           />
         )}
 
@@ -880,9 +966,56 @@ export const AppHomeScreen = ({ locale, dictionary }: AppHomeScreenProps) => {
               {selectedResult.avgRating != null && (
                 <p className="home-drawer-rating">★ {selectedResult.avgRating.toFixed(1)}</p>
               )}
-              <p className="home-drawer-placeholder">{dictionary.common.comingSoon}</p>
+              <div className="home-drawer-actions">
+                <button
+                  type="button"
+                  className="dashboard-btn dashboard-btn--secondary"
+                  onClick={() => {
+                    if (!accessToken || !selectedResult) return;
+                    void (async () => {
+                      try {
+                        const { conversationId } = await chatApiClient.startConversation(
+                          accessToken,
+                          selectedResult.providerId,
+                        );
+                        router.push(
+                          `${buildLocalePath(locale, '/app/chat')}?c=${conversationId}`,
+                        );
+                        setSelectedResult(null);
+                      } catch {
+                        // show error
+                      }
+                    })();
+                  }}
+                >
+                  {(dictionary as { appHome?: { contactProvider?: string } }).appHome?.contactProvider ?? 'Contact'}
+                </button>
+                <button
+                  type="button"
+                  className="dashboard-btn dashboard-btn--primary"
+                  onClick={() => {
+                    setShowBookingModal(true);
+                  }}
+                >
+                  {dictionary.appHome?.requestService ?? 'Book'}
+                </button>
+              </div>
             </div>
           </div>
+        )}
+
+        {selectedResult && (
+          <ServiceBookingModal
+            open={showBookingModal}
+            onClose={() => setShowBookingModal(false)}
+            service={selectedResult}
+            accessToken={accessToken ?? ''}
+            dictionary={dictionary}
+            onSuccess={() => {
+              setShowBookingModal(false);
+              setSelectedResult(null);
+            }}
+          />
         )}
       </Container>
     </main>

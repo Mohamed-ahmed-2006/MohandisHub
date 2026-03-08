@@ -46,6 +46,7 @@ export const AdminDashboardTab = ({ dictionary, accessToken, refreshSession }: P
     { label: d.pendingVerifications, value: stats.pendingVerifications },
     { label: d.activeServices, value: stats.activeServices },
     { label: d.totalPlans, value: stats.totalPlans },
+    { label: d.platformWallet ?? 'Platform commission balance', value: `${stats.platformWalletBalance.toFixed(2)} EGP` },
   ];
 
   return (

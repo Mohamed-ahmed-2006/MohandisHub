@@ -18,7 +18,8 @@ export type TransactionType =
   | 'payment'
   | 'refund'
   | 'adjustment'
-  | 'bonus';
+  | 'bonus'
+  | 'commission';
 
 export type TransactionStatus = 'pending' | 'completed' | 'failed' | 'reversed';
 

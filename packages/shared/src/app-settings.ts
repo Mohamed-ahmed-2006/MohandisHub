@@ -29,6 +29,8 @@ export type AppSettings = {
   featurePlansEnabled: boolean;
   featureWalletEnabled: boolean;
   globalAnnouncement: string | null;
+  commissionPercent: number;
+  commissionMinEgp: number;
 };
 
 /** Public app status returned by GET /api/app/status — subset needed by frontend */
@@ -55,6 +57,8 @@ export type AppStatus = {
   featurePlansEnabled: boolean;
   featureWalletEnabled: boolean;
   globalAnnouncement: string | null;
+  commissionPercent: number;
+  commissionMinEgp: number;
 };
 
 export type UpdateAppSettingsBody = Partial<{
@@ -80,4 +84,6 @@ export type UpdateAppSettingsBody = Partial<{
   featurePlansEnabled: boolean;
   featureWalletEnabled: boolean;
   globalAnnouncement: string | null;
+  commissionPercent: number;
+  commissionMinEgp: number;
 }>;

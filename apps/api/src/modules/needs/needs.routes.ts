@@ -2,6 +2,7 @@ import { Router } from 'express';
 
 import { authenticate } from '../../middleware/authenticate.js';
 import { requireEmailVerified } from '../../middleware/require-email-verified.js';
+import { requireVerified } from '../../middleware/require-verified.js';
 
 import { needsController } from './needs.controller.js';
 
@@ -14,7 +15,13 @@ needsRouter.get('/:id', authenticate, requireEmailVerified, needsController.getN
 needsRouter.patch('/:id', authenticate, requireEmailVerified, needsController.updateNeed);
 needsRouter.post('/:id/award', authenticate, requireEmailVerified, needsController.awardBid);
 
-needsRouter.post('/:needId/bids', authenticate, requireEmailVerified, needsController.createBid);
+needsRouter.post(
+  '/:needId/bids',
+  authenticate,
+  requireEmailVerified,
+  requireVerified,
+  needsController.createBid,
+);
 needsRouter.get(
   '/:needId/bids',
   authenticate,

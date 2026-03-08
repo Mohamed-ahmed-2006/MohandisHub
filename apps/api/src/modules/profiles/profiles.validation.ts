@@ -44,6 +44,7 @@ export const updateExpertProfileSchema = z.object({
   hourlyRate: z.number().min(0).max(100000).optional(),
   city: z.string().max(100).optional(),
   country: z.string().max(100).optional(),
+  availabilityStatus: z.enum(['available', 'busy', 'offline']).optional(),
   employer: z.string().max(200).optional(),
   jobTitle: z.string().max(200).optional(),
   linkedinUrl: z.string().url().max(500).optional(),

@@ -63,6 +63,7 @@ export class AdminService {
       pendingVerifications: parseInt(row.pending_verifications, 10),
       activeServices: parseInt(row.active_services, 10),
       totalPlans: parseInt(row.total_plans, 10),
+      platformWalletBalance: parseFloat(row.platform_wallet_balance ?? '0'),
     };
   }
 

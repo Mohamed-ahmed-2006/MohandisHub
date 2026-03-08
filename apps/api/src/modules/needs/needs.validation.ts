@@ -30,7 +30,7 @@ export const createNeedSchema = z.object({
 export type CreateNeedInput = z.infer<typeof createNeedSchema>;
 
 export const updateNeedSchema = z.object({
-  status: z.enum(['open', 'closed']).optional(),
+  status: z.enum(['open', 'closed', 'awarded', 'in_progress', 'completed']).optional(),
   title: z.string().min(3).max(300).optional(),
   description: z.string().min(10).max(5000).optional(),
 });

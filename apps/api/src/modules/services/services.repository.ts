@@ -50,6 +50,9 @@ type ServiceDetailRow = {
   currency: string;
   delivery_time_days: number | null;
   status: string;
+  rejection_reason: string | null;
+  reviewed_by: string | null;
+  reviewed_at: string | null;
   tags: string[];
   images: string[];
   is_featured: boolean;
@@ -152,6 +155,190 @@ export class ServicesRepository {
     await this.db.query(`UPDATE services SET view_count = view_count + 1 WHERE id = $1`, [
       serviceId,
     ]);
+  }
+
+  async createService(
+    providerId: string,
+    input: {
+      title: string;
+      description?: string;
+      categoryId?: string;
+      price?: number;
+      priceType?: string;
+      currency?: string;
+      deliveryTimeDays?: number;
+      tags?: string[];
+      images?: string[];
+      city?: string;
+      area?: string;
+      country?: string;
+      status?: string;
+    },
+  ): Promise<ServiceDetailRow> {
+    const fields = ['provider_id', 'title'];
+    const values: unknown[] = [providerId, input.title];
+    let idx = 3;
+    if (input.description !== undefined) {
+      fields.push('description');
+      values.push(input.description);
+      idx++;
+    }
+    if (input.categoryId !== undefined) {
+      fields.push('category_id');
+      values.push(input.categoryId);
+      idx++;
+    }
+    if (input.price !== undefined) {
+      fields.push('price');
+      values.push(input.price);
+      idx++;
+    }
+    if (input.priceType !== undefined) {
+      fields.push('price_type');
+      values.push(input.priceType);
+      idx++;
+    }
+    if (input.currency !== undefined) {
+      fields.push('currency');
+      values.push(input.currency);
+      idx++;
+    }
+    if (input.deliveryTimeDays !== undefined) {
+      fields.push('delivery_time_days');
+      values.push(input.deliveryTimeDays);
+      idx++;
+    }
+    if (input.tags !== undefined) {
+      fields.push('tags');
+      values.push(input.tags);
+      idx++;
+    }
+    if (input.images !== undefined) {
+      fields.push('images');
+      values.push(input.images);
+      idx++;
+    }
+    if (input.city !== undefined) {
+      fields.push('city');
+      values.push(input.city);
+      idx++;
+    }
+    if (input.area !== undefined) {
+      fields.push('area');
+      values.push(input.area);
+      idx++;
+    }
+    if (input.country !== undefined) {
+      fields.push('country');
+      values.push(input.country);
+      idx++;
+    }
+    if (input.status !== undefined) {
+      fields.push('status');
+      values.push(input.status);
+      idx++;
+    }
+    const placeholders = values.map((_, i) => `$${i + 1}`).join(', ');
+    const { rows } = await this.db.query<ServiceDetailRow>(
+      `INSERT INTO services (${fields.join(', ')}) VALUES (${placeholders}) RETURNING *`,
+      values,
+    );
+    return rows[0]!;
+  }
+
+  async listServicesByProvider(
+    providerId: string,
+    page: number,
+    limit: number,
+  ): Promise<{ rows: ServiceDetailRow[]; total: number }> {
+    const countResult = await this.db.query<{ count: string }>(
+      `SELECT COUNT(*)::text AS count FROM services WHERE provider_id = $1`,
+      [providerId],
+    );
+    const total = parseInt(countResult.rows[0]!.count, 10);
+    const offset = (page - 1) * limit;
+    const { rows } = await this.db.query<ServiceDetailRow>(
+      `SELECT * FROM services WHERE provider_id = $1 ORDER BY created_at DESC LIMIT $2 OFFSET $3`,
+      [providerId, limit, offset],
+    );
+    return { rows, total };
+  }
+
+  async getServiceByIdAndProvider(
+    serviceId: string,
+    providerId: string,
+  ): Promise<ServiceDetailRow | null> {
+    const { rows } = await this.db.query<ServiceDetailRow>(
+      `SELECT * FROM services WHERE id = $1 AND provider_id = $2`,
+      [serviceId, providerId],
+    );
+    return rows[0] ?? null;
+  }
+
+  async updateService(
+    serviceId: string,
+    providerId: string,
+    input: {
+      title?: string;
+      description?: string;
+      categoryId?: string;
+      price?: number;
+      priceType?: string;
+      currency?: string;
+      deliveryTimeDays?: number;
+      tags?: string[];
+      images?: string[];
+      city?: string;
+      area?: string;
+      country?: string;
+    },
+  ): Promise<ServiceDetailRow | null> {
+    const entries = Object.entries(input).filter(([, v]) => v !== undefined);
+    if (entries.length === 0) {
+      return this.getServiceByIdAndProvider(serviceId, providerId);
+    }
+    const setClauses: string[] = [];
+    const values: unknown[] = [];
+    let idx = 1;
+    const colMap: Record<string, string> = {
+      title: 'title',
+      description: 'description',
+      categoryId: 'category_id',
+      price: 'price',
+      priceType: 'price_type',
+      currency: 'currency',
+      deliveryTimeDays: 'delivery_time_days',
+      tags: 'tags',
+      images: 'images',
+      city: 'city',
+      area: 'area',
+      country: 'country',
+    };
+    for (const [key, value] of entries) {
+      const col = colMap[key];
+      if (col) {
+        setClauses.push(`${col} = $${idx++}`);
+        values.push(value);
+      }
+    }
+    values.push(serviceId, providerId);
+    const { rows } = await this.db.query<ServiceDetailRow>(
+      `UPDATE services SET ${setClauses.join(', ')} WHERE id = $${idx++} AND provider_id = $${idx} RETURNING *`,
+      values,
+    );
+    return rows[0] ?? null;
+  }
+
+  async updateServiceStatus(
+    serviceId: string,
+    providerId: string,
+    newStatus: string,
+  ): Promise<ServiceDetailRow | null> {
+    const { rows } = await this.db.query<ServiceDetailRow>(
+      `UPDATE services SET status = $1 WHERE id = $2 AND provider_id = $3 RETURNING *`,
+      [newStatus, serviceId, providerId],
+    );
+    return rows[0] ?? null;
   }
 }
 

@@ -33,6 +33,12 @@ const MIGRATION_FILES = [
   '016_needs_reference_url_text.sql',
   '017_plans_schema_repair.sql',
   '018_app_settings.sql',
+  '019_commission_settings.sql',
+  '020_bid_payment.sql',
+  '021_bookings.sql',
+  '022_availability_slots.sql',
+  '023_reviews.sql',
+  '024_need_status_completed.sql',
 ];
 
 function parseArgs(): { from?: string } {

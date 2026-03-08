@@ -43,6 +43,8 @@ export class SettingsService {
       featurePlansEnabled: row.feature_plans_enabled,
       featureWalletEnabled: row.feature_wallet_enabled,
       globalAnnouncement: row.global_announcement,
+      commissionPercent: parseFloat(row.commission_percent ?? '10'),
+      commissionMinEgp: parseFloat(row.commission_min_egp ?? '0'),
     };
   }
 
@@ -71,6 +73,8 @@ export class SettingsService {
     if (partial.featurePlansEnabled !== undefined) dbPartial.feature_plans_enabled = partial.featurePlansEnabled;
     if (partial.featureWalletEnabled !== undefined) dbPartial.feature_wallet_enabled = partial.featureWalletEnabled;
     if (partial.globalAnnouncement !== undefined) dbPartial.global_announcement = partial.globalAnnouncement;
+    if (partial.commissionPercent !== undefined) dbPartial.commission_percent = partial.commissionPercent;
+    if (partial.commissionMinEgp !== undefined) dbPartial.commission_min_egp = partial.commissionMinEgp;
 
     const row = await this.repo.update(dbPartial);
     return row ? this.toAppSettings(row) : null;
@@ -103,6 +107,8 @@ export class SettingsService {
       featurePlansEnabled: row.feature_plans_enabled,
       featureWalletEnabled: row.feature_wallet_enabled,
       globalAnnouncement: row.global_announcement,
+      commissionPercent: parseFloat(row.commission_percent ?? '10'),
+      commissionMinEgp: parseFloat(row.commission_min_egp ?? '0'),
     };
   }
 
@@ -130,6 +136,8 @@ export class SettingsService {
       featurePlansEnabled: true,
       featureWalletEnabled: true,
       globalAnnouncement: null,
+      commissionPercent: 10,
+      commissionMinEgp: 0,
     };
   }
 }

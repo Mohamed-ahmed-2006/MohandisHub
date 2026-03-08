@@ -68,7 +68,35 @@ const apiRequest = async <T>({
   return rawBody.data;
 };
 
+async function publicFetch<T>(path: string): Promise<T> {
+  const response = await fetch(`${getApiBaseUrl()}${path}`, { credentials: 'include' });
+  if (!response.ok) return [] as unknown as T;
+  const rawBody = (await response.json()) as ApiSuccessBody<T>;
+  return rawBody.data;
+}
+
+export type TopExpert = {
+  userId: string;
+  displayName: string;
+  avatarUrl: string | null;
+  title: string | null;
+  headline: string | null;
+  specializations: string[];
+  city: string | null;
+};
+
+export type TopBusiness = {
+  userId: string;
+  displayName: string;
+  avatarUrl: string | null;
+  companyName: string;
+  industry: string | null;
+  city: string | null;
+};
+
 export const profilesApiClient = {
+  getTopExperts: () => publicFetch<TopExpert[]>('/api/profiles/top-experts'),
+  getTopBusinesses: () => publicFetch<TopBusiness[]>('/api/profiles/top-businesses'),
   getExpertProfile: (accessToken: string) =>
     apiRequest<ExpertProfile>({ method: 'GET', path: '/api/profiles/expert', accessToken }),
 

@@ -1,6 +1,8 @@
+import { getPool } from '../../db/pool.js';
 import { HttpError } from '../../utils/http-error.js';
 
 import { SettingsService } from '../settings/settings.service.js';
+import { WalletRepository } from '../wallet/wallet.repository.js';
 
 import { NeedsRepository } from './needs.repository.js';
 import type { CreateBidInput, CreateNeedInput, UpdateNeedInput } from './needs.validation.js';
@@ -9,6 +11,7 @@ export class NeedsService {
   constructor(
     private readonly repo: NeedsRepository = new NeedsRepository(),
     private readonly settingsService: SettingsService = new SettingsService(),
+    private readonly walletRepo: WalletRepository = new WalletRepository(),
   ) {}
 
   async createNeed(customerId: string, input: CreateNeedInput) {
@@ -128,6 +131,13 @@ export class NeedsService {
         message: 'Awarding bids is temporarily disabled.',
       });
     }
+    if (status.moneyMovementsPaused) {
+      throw new HttpError({
+        statusCode: 503,
+        code: 'MONEY_MOVEMENTS_PAUSED',
+        message: 'Payments are temporarily disabled.',
+      });
+    }
 
     const need = await this.getNeed(needId);
     if (need.customer_id !== userId) {
@@ -144,7 +154,88 @@ export class NeedsService {
         message: 'Bid not found for this need.',
       });
     }
-    await this.repo.awardBid(needId, bidId);
+
+    const amount = parseFloat(bid.amount);
+    const commissionPercent = status.commissionPercent ?? 10;
+    const commissionMinEgp = status.commissionMinEgp ?? 0;
+    const commission = Math.max(amount * (commissionPercent / 100), commissionMinEgp);
+    const expertAmount = amount - commission;
+
+    const customerWallet = await this.walletRepo.findByUserId(need.customer_id);
+    if (!customerWallet) {
+      throw new HttpError({
+        statusCode: 402,
+        code: 'INSUFFICIENT_BALANCE',
+        message: 'You need a wallet with sufficient balance. Please deposit first.',
+      });
+    }
+    const customerBalance = parseFloat(customerWallet.balance);
+    if (customerBalance < amount) {
+      throw new HttpError({
+        statusCode: 402,
+        code: 'INSUFFICIENT_BALANCE',
+        message: `Insufficient balance. Required: ${amount} ${bid.currency}, available: ${customerBalance}.`,
+      });
+    }
+
+    let expertWallet = await this.walletRepo.findByUserId(bid.expert_id);
+    if (!expertWallet) {
+      expertWallet = await this.walletRepo.createForUser(bid.expert_id);
+    }
+
+    const pool = getPool();
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      const platformWalletId = await this.walletRepo.getOrCreatePlatformWallet(client);
+      const paymentTxId = await this.walletRepo.debitWalletInTransaction(
+        client,
+        customerWallet.id,
+        need.customer_id,
+        amount,
+        `Payment for need: ${need.title}`,
+        'bid',
+        bidId,
+      );
+      await this.walletRepo.creditWithTypeInTransaction(
+        client,
+        expertWallet.id,
+        bid.expert_id,
+        expertAmount,
+        'payment',
+        `Earned from need: ${need.title}`,
+        'bid',
+        bidId,
+      );
+      if (commission > 0) {
+        await this.walletRepo.creditWithTypeInTransaction(
+          client,
+          platformWalletId,
+          '00000000-0000-0000-0000-000000000001',
+          commission,
+          'commission',
+          `Commission from bid`,
+          'bid',
+          bidId,
+        );
+      }
+      await this.repo.awardBidInTransaction(client, needId, bidId, paymentTxId);
+      await client.query('COMMIT');
+    } catch (err: unknown) {
+      await client.query('ROLLBACK');
+      const msg = err instanceof Error ? err.message : String(err);
+      if (msg === 'INSUFFICIENT_BALANCE') {
+        throw new HttpError({
+          statusCode: 402,
+          code: 'INSUFFICIENT_BALANCE',
+          message: 'Insufficient wallet balance. Please deposit first.',
+        });
+      }
+      throw err;
+    } finally {
+      client.release();
+    }
+
     return { needId, bidId, status: 'awarded' };
   }
 }

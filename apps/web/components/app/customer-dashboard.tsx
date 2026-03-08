@@ -69,6 +69,7 @@ export const CustomerDashboard = ({
   >([]);
   const [uploading, setUploading] = useState(false);
   const [previewImage, setPreviewImage] = useState<{ url: string; urls: string[] } | null>(null);
+  const [markingCompleted, setMarkingCompleted] = useState<string | null>(null);
 
   const isVideoFile = (file: File) => file.type.startsWith('video/');
   const maxImages = 5;
@@ -116,6 +117,22 @@ export const CustomerDashboard = ({
       setLoading(false);
     }
   }, [accessToken, authReady, onNeedsCountChange]);
+
+  const markNeedCompleted = useCallback(
+    async (needId: string) => {
+      if (!accessToken) return;
+      setMarkingCompleted(needId);
+      try {
+        await needsApiClient.updateNeed(accessToken, needId, { status: 'completed' });
+        await loadNeeds();
+      } catch {
+        /* ignore */
+      } finally {
+        setMarkingCompleted(null);
+      }
+    },
+    [accessToken, loadNeeds],
+  );
 
   useEffect(() => {
     if (!authReady) return;
@@ -615,6 +632,11 @@ export const CustomerDashboard = ({
                         {d.awarded ?? 'Awarded'}
                       </span>
                     )}
+                    {need.status === 'completed' && (
+                      <span className="dashboard-badge dashboard-badge--completed">
+                        {d.completed ?? 'Completed'}
+                      </span>
+                    )}
                   </div>
                 </div>
                 {need.description && (
@@ -690,6 +712,18 @@ export const CustomerDashboard = ({
                       onClick={() => void viewBids(need)}
                     >
                       {d.viewBids ?? 'View Bids'}
+                    </button>
+                  )}
+                  {need.status === 'awarded' && (
+                    <button
+                      type="button"
+                      className="dashboard-primary-btn dashboard-primary-btn--sm"
+                      onClick={() => void markNeedCompleted(need.id)}
+                      disabled={markingCompleted === need.id}
+                    >
+                      {markingCompleted === need.id
+                        ? '...'
+                        : (d.markCompleted ?? 'Mark as completed')}
                     </button>
                   )}
                 </div>

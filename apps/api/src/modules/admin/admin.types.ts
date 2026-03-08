@@ -128,4 +128,5 @@ export type DashboardStatsRow = {
   pending_verifications: string;
   active_services: string;
   total_plans: string;
+  platform_wallet_balance: string;
 };

@@ -79,6 +79,36 @@ export type ServiceSearchParams = {
   limit?: number;
 };
 
+export type CreateServiceBody = {
+  title: string;
+  description?: string;
+  categoryId?: string;
+  price?: number;
+  priceType?: PriceType;
+  currency?: string;
+  deliveryTimeDays?: number;
+  tags?: string[];
+  images?: string[];
+  city?: string;
+  area?: string;
+  country?: string;
+};
+
+export type UpdateServiceBody = {
+  title?: string;
+  description?: string;
+  categoryId?: string;
+  price?: number;
+  priceType?: PriceType;
+  currency?: string;
+  deliveryTimeDays?: number;
+  tags?: string[];
+  images?: string[];
+  city?: string;
+  area?: string;
+  country?: string;
+};
+
 export type ServiceSearchResult = {
   id: string;
   title: string;

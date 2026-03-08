@@ -37,7 +37,8 @@ export class AdminRepository {
         (SELECT COALESCE(SUM(amount), 0) FROM transactions WHERE type = 'deposit' AND status = 'completed')::text AS total_revenue,
         (SELECT COUNT(*) FROM identity_documents WHERE status IN ('pending', 'under_review'))::text AS pending_verifications,
         (SELECT COUNT(*) FROM services WHERE status = 'active')::text AS active_services,
-        (SELECT COUNT(*) FROM plans WHERE is_active = true)::text AS total_plans
+        (SELECT COUNT(*) FROM plans WHERE is_active = true)::text AS total_plans,
+        COALESCE((SELECT w.balance::text FROM wallets w WHERE w.user_id = '00000000-0000-0000-0000-000000000001' LIMIT 1), '0') AS platform_wallet_balance
     `);
     return rows[0]!;
   }
