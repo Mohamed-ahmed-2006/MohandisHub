@@ -99,38 +99,50 @@ export class AuthService {
   }
 
   async forgotPassword(input: ForgotPasswordInput): Promise<AuthMessageResult> {
-    const normalizedEmail = input.email.trim().toLowerCase();
-    const user = await this.authRepository.findUserByEmail(normalizedEmail);
-
-    // Prevent account enumeration by returning the same response for all cases.
-    if (!user || !user.is_active) {
-      return { message: PASSWORD_RESET_GENERIC_MESSAGE };
-    }
-
-    const rawToken = randomBytes(48).toString('base64url');
-    const tokenHash = hashToken(rawToken);
-    const expiresAt = new Date(Date.now() + PASSWORD_RESET_TTL_MINUTES * 60 * 1000);
-
-    await this.authRepository.setPasswordResetToken(user.id, tokenHash, expiresAt);
-
-    const resetLink = this.buildPasswordResetLink(rawToken);
+    const genericMessage = PASSWORD_RESET_GENERIC_MESSAGE;
 
     try {
-      await this.sendPasswordResetEmail({
-        to: user.email,
-        displayName: user.display_name,
-        resetLink,
-      });
-    } catch (error) {
-      logger.error('Failed to send password reset email', {
-        userId: user.id,
-        email: user.email,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      // Do not throw: return generic success so we don't leak info or break the flow.
-    }
+      const normalizedEmail = input.email.trim().toLowerCase();
+      const user = await this.authRepository.findUserByEmail(normalizedEmail);
 
-    return { message: PASSWORD_RESET_GENERIC_MESSAGE };
+      // Prevent account enumeration by returning the same response for all cases.
+      if (!user || !user.is_active) {
+        return { message: genericMessage };
+      }
+
+      const rawToken = randomBytes(48).toString('base64url');
+      const tokenHash = hashToken(rawToken);
+      const expiresAt = new Date(Date.now() + PASSWORD_RESET_TTL_MINUTES * 60 * 1000);
+
+      await this.authRepository.setPasswordResetToken(user.id, tokenHash, expiresAt);
+
+      const resetLink = this.buildPasswordResetLink(rawToken);
+
+      try {
+        await this.sendPasswordResetEmail({
+          to: user.email,
+          displayName: user.display_name,
+          resetLink,
+        });
+      } catch (error) {
+        logger.error('Failed to send password reset email', {
+          userId: user.id,
+          email: user.email,
+          error: error instanceof Error ? error.message : String(error),
+        });
+        // Do not throw: return generic success so we don't leak info or break the flow.
+      }
+
+      return { message: genericMessage };
+    } catch (error) {
+      logger.error('Forgot password flow failed', {
+        email: input.email?.trim?.()?.toLowerCase?.() ?? '(unknown)',
+        error: error instanceof Error ? error.message : String(error),
+        ...(error instanceof Error && error.stack ? { stack: error.stack } : {}),
+      });
+      // Always return same generic message (no account enumeration, no 500).
+      return { message: genericMessage };
+    }
   }
 
   async resetPassword(input: ResetPasswordInput): Promise<AuthMessageResult> {
@@ -346,10 +358,20 @@ export class AuthService {
       env.WEB_PUBLIC_URL ?? env.CORS_ORIGIN ?? env.API_PUBLIC_URL ?? 'https://mohandishub.app';
     const baseStr =
       typeof base === 'string' ? base.trim().replace(/\/$/, '') : 'https://mohandishub.app';
-    const baseUrl = baseStr.startsWith('http') ? baseStr : `https://${baseStr}`;
-    return new URL(`/auth/reset-password?token=${encodeURIComponent(rawToken)}`, baseUrl)
-      .toString()
-      .trim();
+    const baseUrl =
+      !baseStr || baseStr === '' || baseStr.startsWith('http')
+        ? baseStr || 'https://mohandishub.app'
+        : `https://${baseStr}`;
+    try {
+      return new URL(
+        `/auth/reset-password?token=${encodeURIComponent(rawToken)}`,
+        baseUrl,
+      )
+        .toString()
+        .trim();
+    } catch {
+      return `https://mohandishub.app/auth/reset-password?token=${encodeURIComponent(rawToken)}`;
+    }
   }
 
   private async sendPasswordResetEmail(params: {

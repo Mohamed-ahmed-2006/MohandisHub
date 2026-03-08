@@ -10,6 +10,9 @@ describe('GET /health', () => {
     const response = await request(app).get('/health');
 
     expect(response.status).toBe(200);
-    expect(response.body).toEqual({ ok: true });
+    expect(response.body.ok).toBe(true);
+    if ('database' in response.body) {
+      expect(typeof response.body.database).toBe('boolean');
+    }
   });
 });

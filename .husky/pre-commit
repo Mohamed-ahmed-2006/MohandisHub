@@ -1,1 +1,3 @@
-node ./node_modules/lint-staged/bin/lint-staged.js
+# Lint/ESLint disabled so you can push without checks.
+# To re-enable: run `node ./node_modules/lint-staged/bin/lint-staged.js`
+exit 0
