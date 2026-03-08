@@ -1,4 +1,5 @@
 export * from './admin.js';
+export * from './app-settings.js';
 export * from './api.js';
 export * from './auth.js';
 export * from './ids.js';

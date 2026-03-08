@@ -3,7 +3,7 @@ import { getApiBaseUrl } from '@/lib/env';
 export async function uploadFile(
   accessToken: string,
   file: File,
-): Promise<{ url: string; filename: string }> {
+): Promise<{ url: string; filename: string; originalName: string }> {
   const formData = new FormData();
   formData.append('file', file);
 
@@ -19,6 +19,8 @@ export async function uploadFile(
     throw new Error((body as { error?: { message?: string } })?.error?.message ?? 'Upload failed');
   }
 
-  const json = (await res.json()) as unknown as { data: { url: string; filename: string } };
+  const json = (await res.json()) as unknown as {
+    data: { url: string; filename: string; originalName: string };
+  };
   return json.data;
 }

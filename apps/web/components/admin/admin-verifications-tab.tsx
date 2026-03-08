@@ -4,29 +4,42 @@ import type { PendingVerificationItem } from '@mohandishub/shared';
 import { useCallback, useEffect, useState } from 'react';
 
 import { adminApiClient } from '@/lib/admin/client';
-import type { Dictionary, Locale } from '@/lib/i18n/types';
+import { isApiClientError } from '@/lib/auth/client';
+import type { Dictionary } from '@/lib/i18n/types';
 
-type Props = { locale: Locale; dictionary: Dictionary; accessToken: string };
+type Props = {
+  dictionary: Dictionary;
+  accessToken: string;
+  refreshSession: () => Promise<string | null>;
+};
 
-export const AdminVerificationsTab = ({ dictionary, accessToken }: Props) => {
+const getErrorMessage = (error: unknown, dictionary: Dictionary): string => {
+  if (isApiClientError(error)) return error.message;
+  return dictionary.auth.errors.generic;
+};
+
+export const AdminVerificationsTab = ({ dictionary, accessToken, refreshSession }: Props) => {
   const [items, setItems] = useState<PendingVerificationItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [reviewing, setReviewing] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const [activeSubTab, setActiveSubTab] = useState<'identity' | 'academic' | 'business'>(
     'identity',
   );
 
   const load = useCallback(async () => {
     setLoading(true);
+    setError(null);
     try {
-      const data = await adminApiClient.getPendingVerifications(accessToken);
+      const data = await adminApiClient.getPendingVerifications(accessToken, { refreshSession });
       setItems(data);
-    } catch {
+    } catch (err: unknown) {
       setItems([]);
+      setError(getErrorMessage(err, dictionary));
     } finally {
       setLoading(false);
     }
-  }, [accessToken]);
+  }, [accessToken, dictionary, refreshSession]);
 
   useEffect(() => {
     void load();
@@ -34,9 +47,12 @@ export const AdminVerificationsTab = ({ dictionary, accessToken }: Props) => {
 
   const handleReviewIdentity = async (docId: string, decision: 'approved' | 'rejected') => {
     setReviewing(docId);
+    setError(null);
     try {
-      await adminApiClient.reviewIdentityDocument(accessToken, docId, { decision });
+      await adminApiClient.reviewIdentityDocument(accessToken, docId, { decision }, { refreshSession });
       await load();
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, dictionary));
     } finally {
       setReviewing(null);
     }
@@ -44,9 +60,12 @@ export const AdminVerificationsTab = ({ dictionary, accessToken }: Props) => {
 
   const handleReviewAcademic = async (recordId: string, decision: 'approved' | 'rejected') => {
     setReviewing(recordId);
+    setError(null);
     try {
-      await adminApiClient.reviewAcademicRecord(accessToken, recordId, { decision });
+      await adminApiClient.reviewAcademicRecord(accessToken, recordId, { decision }, { refreshSession });
       await load();
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, dictionary));
     } finally {
       setReviewing(null);
     }
@@ -54,9 +73,12 @@ export const AdminVerificationsTab = ({ dictionary, accessToken }: Props) => {
 
   const handleReviewBusiness = async (userId: string, decision: 'approved' | 'rejected') => {
     setReviewing(userId);
+    setError(null);
     try {
-      await adminApiClient.reviewBusinessDocs(accessToken, userId, { decision });
+      await adminApiClient.reviewBusinessDocs(accessToken, userId, { decision }, { refreshSession });
       await load();
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, dictionary));
     } finally {
       setReviewing(null);
     }
@@ -85,6 +107,7 @@ export const AdminVerificationsTab = ({ dictionary, accessToken }: Props) => {
 
   return (
     <>
+      {error && <p className="admin-error-banner">{error}</p>}
       <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem' }}>
         <button
           type="button"

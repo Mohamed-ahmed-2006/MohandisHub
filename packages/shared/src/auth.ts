@@ -42,6 +42,8 @@ export type ResetPasswordBody = {
 /** Generic response for auth actions that only return a message. */
 export type AuthMessageResult = {
   message: string;
+  /** Set only in development when OTP_EMAIL_PROVIDER=console; use this link to reset password. */
+  devResetLink?: string;
 };
 
 /** JWT access-token payload (decoded). */

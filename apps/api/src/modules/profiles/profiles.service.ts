@@ -13,6 +13,8 @@ import type {
 
 import { HttpError } from '../../utils/http-error.js';
 
+import { SettingsService } from '../settings/settings.service.js';
+
 import { ProfilesRepository } from './profiles.repository.js';
 import type {
   AcademicRecordRow,
@@ -22,7 +24,10 @@ import type {
 } from './profiles.types.js';
 
 export class ProfilesService {
-  constructor(private readonly repo: ProfilesRepository = new ProfilesRepository()) {}
+  constructor(
+    private readonly repo: ProfilesRepository = new ProfilesRepository(),
+    private readonly settingsService: SettingsService = new SettingsService(),
+  ) {}
 
   // ── Expert profile ─────────────────────────────────────────────────────
 
@@ -181,6 +186,15 @@ export class ProfilesService {
       selfieImageUrl?: string | undefined;
     },
   ): Promise<IdentityDocument> {
+    const status = await this.settingsService.getAppStatus();
+    if (status.pauseVerificationSubmissions) {
+      throw new HttpError({
+        statusCode: 503,
+        code: 'VERIFICATION_SUBMISSIONS_PAUSED',
+        message: 'Verification submissions are temporarily disabled.',
+      });
+    }
+
     const row = await this.repo.createIdentityDocument({
       userId,
       ...input,
@@ -208,6 +222,15 @@ export class ProfilesService {
       transcriptImageUrl?: string | undefined;
     },
   ): Promise<AcademicRecord> {
+    const status = await this.settingsService.getAppStatus();
+    if (status.pauseVerificationSubmissions) {
+      throw new HttpError({
+        statusCode: 503,
+        code: 'VERIFICATION_SUBMISSIONS_PAUSED',
+        message: 'Verification submissions are temporarily disabled.',
+      });
+    }
+
     const row = await this.repo.createAcademicRecord({
       userId,
       ...input,

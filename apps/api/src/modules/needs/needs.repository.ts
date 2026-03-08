@@ -14,6 +14,7 @@ export type NeedRow = {
   timeline_days: number | null;
   city: string | null;
   country: string | null;
+  reference_url?: string | null;
   status: string;
   awarded_bid_id: string | null;
   created_at: string;
@@ -42,9 +43,12 @@ export type BidRow = {
 
 export class NeedsRepository {
   async createNeed(customerId: string, input: CreateNeedInput): Promise<NeedRow> {
+    const referenceValue = input.referenceUrls?.length
+      ? JSON.stringify(input.referenceUrls)
+      : (input.referenceUrl ?? null);
     const { rows } = await getPool().query(
-      `INSERT INTO needs (customer_id, title, description, category_id, budget_type, budget_amount, currency, timeline_days, city, country)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *`,
+      `INSERT INTO needs (customer_id, title, description, category_id, budget_type, budget_amount, currency, timeline_days, city, country, reference_url)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING *`,
       [
         customerId,
         input.title,
@@ -56,6 +60,7 @@ export class NeedsRepository {
         input.timelineDays ?? null,
         input.city ?? null,
         input.country ?? null,
+        referenceValue,
       ],
     );
     return rows[0] as NeedRow;
@@ -87,7 +92,8 @@ export class NeedsRepository {
   ): Promise<{ rows: NeedRow[]; total: number }> {
     const pool = getPool();
     const offset = (page - 1) * limit;
-    const catFilter = categoryId ? `AND n.category_id = '${categoryId}'` : '';
+    const catFilter = categoryId ? 'AND n.category_id = $3' : '';
+    const queryParams = categoryId ? [limit, offset, categoryId] : [limit, offset];
     const { rows } = await pool.query(
       `SELECT n.*,
         COALESCE(u.display_name, u.email) AS customer_name,
@@ -99,10 +105,12 @@ export class NeedsRepository {
        LEFT JOIN service_categories sc ON sc.id = n.category_id
        WHERE n.status = 'open' ${catFilter}
        ORDER BY n.created_at DESC LIMIT $1 OFFSET $2`,
-      [limit, offset],
+      queryParams,
     );
+    const countParams = categoryId ? [categoryId] : [];
     const { rows: countRows } = await pool.query(
-      `SELECT count(*)::int AS total FROM needs WHERE status = 'open' ${catFilter}`,
+      `SELECT count(*)::int AS total FROM needs n WHERE n.status = 'open' ${catFilter}`,
+      countParams,
     );
     return { rows: rows as NeedRow[], total: (countRows[0] as { total: number }).total };
   }

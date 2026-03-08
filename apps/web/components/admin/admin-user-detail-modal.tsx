@@ -1,7 +1,7 @@
 'use client';
 
 import type { AdminUserDetail, Plan } from '@mohandishub/shared';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { adminApiClient } from '@/lib/admin/client';
 import type { Dictionary } from '@/lib/i18n/types';
@@ -16,6 +16,16 @@ type Props = {
 };
 
 const opts = (refreshSession: () => Promise<string | null>) => ({ refreshSession });
+
+const formatDate = (value: string | null): string => {
+  if (!value) return '-';
+  return new Date(value).toLocaleDateString();
+};
+
+const formatDateTime = (value: string | null): string => {
+  if (!value) return '-';
+  return new Date(value).toLocaleString();
+};
 
 export const AdminUserDetailModal = ({
   dictionary,
@@ -57,7 +67,7 @@ export const AdminUserDetailModal = ({
     } finally {
       setLoading(false);
     }
-  }, [accessToken, userId]);
+  }, [accessToken, refreshSession, userId]);
 
   useEffect(() => {
     void load();
@@ -131,7 +141,7 @@ export const AdminUserDetailModal = ({
   };
 
   const handleUpdatePlan = async () => {
-    if (!user || editPlanId === undefined) return;
+    if (!user || editPlanId === null) return;
     setActionLoading('plan');
     try {
       await adminApiClient.updateUser(
@@ -210,49 +220,99 @@ export const AdminUserDetailModal = ({
     }
   };
 
+  const userInitials = useMemo(() => {
+    if (!user) return 'U';
+    const parts = user.displayName.split(' ').filter(Boolean);
+    if (parts.length === 0) return 'U';
+    return parts
+      .slice(0, 2)
+      .map((part) => part[0]?.toUpperCase() ?? '')
+      .join('');
+  }, [user]);
+
   if (!userId) return null;
 
   return (
     <div className="admin-modal-overlay" onClick={onClose} role="presentation">
       <div
-        className="admin-modal admin-modal--wide"
+        className="admin-modal admin-modal--profile"
         onClick={(e) => e.stopPropagation()}
         role="dialog"
       >
-        <h2 className="admin-modal-title">{ud.title}</h2>
-
         {loading ? (
           <p className="admin-empty">{dictionary.admin.loading}</p>
         ) : !user ? (
           <p className="admin-empty">{d.noUsers}</p>
         ) : (
           <>
-            <div className="admin-user-detail-grid">
-              <section className="admin-user-detail-section">
-                <h3 className="admin-user-detail-section-title">{ud.basicInfo}</h3>
-                <dl className="admin-user-detail-dl">
-                  <dt>{d.name}</dt>
-                  <dd>{user.displayName}</dd>
-                  <dt>{d.email}</dt>
-                  <dd>{user.email}</dd>
-                  <dt>{ud.phone}</dt>
-                  <dd>{user.phone ?? '—'}</dd>
-                  <dt>{ud.nationality}</dt>
-                  <dd>{user.nationality ?? '—'}</dd>
-                  <dt>{ud.dateOfBirth}</dt>
-                  <dd>
-                    {user.dateOfBirth ? new Date(user.dateOfBirth).toLocaleDateString() : '—'}
-                  </dd>
-                  <dt>{ud.emailVerified}</dt>
-                  <dd>{user.emailVerifiedAt ? ud.yes : ud.no}</dd>
-                  <dt>{ud.lastLogin}</dt>
-                  <dd>{user.lastLoginAt ? new Date(user.lastLoginAt).toLocaleString() : '—'}</dd>
-                  <dt>{ud.createdAt}</dt>
-                  <dd>{new Date(user.createdAt).toLocaleDateString()}</dd>
-                  <dt>{d.role}</dt>
-                  <dd>
+            <header className="admin-user-modal-header">
+              <div className="admin-user-modal-identity">
+                <span className="admin-user-modal-avatar" aria-hidden>
+                  {userInitials}
+                </span>
+                <div>
+                  <h2 className="admin-modal-title">{user.displayName}</h2>
+                  <p className="admin-user-modal-subtitle">{user.email}</p>
+                  <div className="admin-user-modal-chips">
+                    <span className="admin-badge">{user.primaryRole}</span>
+                    {user.isAdmin && <span className="admin-badge admin-badge--admin">Admin</span>}
+                    <span
+                      className={`admin-badge ${user.isActive ? 'admin-badge--active' : 'admin-badge--inactive'}`}
+                    >
+                      {user.isActive ? d.active : d.inactive}
+                    </span>
+                    <span className="admin-badge">
+                      {ud.emailVerified}: {user.emailVerifiedAt ? ud.yes : ud.no}
+                    </span>
+                  </div>
+                </div>
+              </div>
+              <button type="button" className="admin-btn admin-btn--small" onClick={onClose}>
+                {dictionary.common.back}
+              </button>
+            </header>
+
+            <div className="admin-user-modal-layout">
+              <div className="admin-user-modal-main">
+                <section className="admin-user-card">
+                  <h3 className="admin-user-card-title">{ud.basicInfo}</h3>
+                  <div className="admin-user-field-grid">
+                    <div className="admin-user-field">
+                      <span className="admin-user-field-label">{ud.phone}</span>
+                      <span className="admin-user-field-value">{user.phone ?? '-'}</span>
+                    </div>
+                    <div className="admin-user-field">
+                      <span className="admin-user-field-label">{ud.nationality}</span>
+                      <span className="admin-user-field-value">{user.nationality ?? '-'}</span>
+                    </div>
+                    <div className="admin-user-field">
+                      <span className="admin-user-field-label">{ud.dateOfBirth}</span>
+                      <span className="admin-user-field-value">{formatDate(user.dateOfBirth)}</span>
+                    </div>
+                    <div className="admin-user-field">
+                      <span className="admin-user-field-label">{ud.createdAt}</span>
+                      <span className="admin-user-field-value">{formatDate(user.createdAt)}</span>
+                    </div>
+                    <div className="admin-user-field">
+                      <span className="admin-user-field-label">{ud.lastLogin}</span>
+                      <span className="admin-user-field-value">{formatDateTime(user.lastLoginAt)}</span>
+                    </div>
+                    <div className="admin-user-field">
+                      <span className="admin-user-field-label">{d.plan}</span>
+                      <span className="admin-user-field-value">{user.planName ?? '-'}</span>
+                    </div>
+                  </div>
+                </section>
+
+                <section className="admin-user-card">
+                  <h3 className="admin-user-card-title">
+                    {d.role} / {d.plan}
+                  </h3>
+
+                  <div className="admin-user-control-row">
+                    <span className="admin-user-field-label">{d.role}</span>
                     {editRole !== null ? (
-                      <span className="admin-inline-edit">
+                      <div className="admin-inline-edit">
                         <select
                           className="admin-form-select admin-form-select--inline"
                           value={editRole}
@@ -277,34 +337,32 @@ export const AdminUserDetailModal = ({
                         >
                           Cancel
                         </button>
-                      </span>
+                      </div>
                     ) : (
-                      <span>
+                      <div className="admin-inline-edit">
                         <span className="admin-badge">{user.primaryRole}</span>
-                        {user.isAdmin && (
-                          <span className="admin-badge admin-badge--admin">+ Admin</span>
-                        )}
                         <button
                           type="button"
-                          className="admin-btn admin-btn--small admin-inline-action-btn"
+                          className="admin-btn admin-btn--small"
                           onClick={() => setEditRole(user.primaryRole)}
                         >
                           {ud.changeRole}
                         </button>
-                      </span>
+                      </div>
                     )}
-                  </dd>
-                  <dt>{ud.adminFlag}</dt>
-                  <dd>
+                  </div>
+
+                  <div className="admin-user-control-row">
+                    <span className="admin-user-field-label">{ud.adminFlag}</span>
                     {editAdmin !== null ? (
-                      <span className="admin-inline-edit">
+                      <div className="admin-inline-edit">
                         <label className="admin-inline-checkbox">
                           <input
                             type="checkbox"
                             checked={editAdmin}
                             onChange={(e) => setEditAdmin(e.target.checked)}
                           />
-                          {editAdmin ? 'Yes' : 'No'}
+                          {editAdmin ? ud.yes : ud.no}
                         </label>
                         <button
                           type="button"
@@ -321,35 +379,36 @@ export const AdminUserDetailModal = ({
                         >
                           Cancel
                         </button>
-                      </span>
+                      </div>
                     ) : (
-                      <span>
+                      <div className="admin-inline-edit">
                         <span className={`admin-badge ${user.isAdmin ? 'admin-badge--admin' : ''}`}>
-                          {user.isAdmin ? 'Yes' : 'No'}
+                          {user.isAdmin ? ud.yes : ud.no}
                         </span>
                         <button
                           type="button"
-                          className="admin-btn admin-btn--small admin-inline-action-btn"
+                          className="admin-btn admin-btn--small"
                           onClick={() => setEditAdmin(Boolean(user.isAdmin))}
                         >
                           {ud.changeAdmin}
                         </button>
-                      </span>
+                      </div>
                     )}
-                  </dd>
-                  <dt>{d.plan}</dt>
-                  <dd>
+                  </div>
+
+                  <div className="admin-user-control-row">
+                    <span className="admin-user-field-label">{d.plan}</span>
                     {editPlanId !== null ? (
-                      <span className="admin-inline-edit">
+                      <div className="admin-inline-edit">
                         <select
                           className="admin-form-select admin-form-select--inline"
                           value={editPlanId}
                           onChange={(e) => setEditPlanId(e.target.value)}
                         >
-                          <option value="">— None —</option>
-                          {plans.map((p) => (
-                            <option key={p.id} value={p.id}>
-                              {p.name}
+                          <option value="">- None -</option>
+                          {plans.map((plan) => (
+                            <option key={plan.id} value={plan.id}>
+                              {plan.name}
                             </option>
                           ))}
                         </select>
@@ -368,134 +427,129 @@ export const AdminUserDetailModal = ({
                         >
                           Cancel
                         </button>
-                      </span>
+                      </div>
                     ) : (
-                      <span>
-                        {user.planName ?? '—'}
+                      <div className="admin-inline-edit">
+                        <span className="admin-user-field-value">{user.planName ?? '-'}</span>
                         <button
                           type="button"
-                          className="admin-btn admin-btn--small admin-inline-action-btn"
+                          className="admin-btn admin-btn--small"
                           onClick={() =>
-                            setEditPlanId(plans.find((p) => p.slug === user.planSlug)?.id ?? '')
+                            setEditPlanId(plans.find((plan) => plan.slug === user.planSlug)?.id ?? '')
                           }
                         >
                           {ud.changePlan}
                         </button>
-                      </span>
+                      </div>
                     )}
-                  </dd>
-                  <dt>{d.status}</dt>
-                  <dd>
-                    <span
-                      className={`admin-badge ${user.isActive ? 'admin-badge--active' : 'admin-badge--inactive'}`}
-                    >
-                      {user.isActive ? d.active : d.inactive}
-                    </span>
-                  </dd>
-                </dl>
-              </section>
+                  </div>
+                </section>
 
-              <section className="admin-user-detail-section">
-                <h3 className="admin-user-detail-section-title">{ud.wallet}</h3>
-                <dl className="admin-user-detail-dl">
-                  <dt>{ud.balance}</dt>
-                  <dd>
+                <section className="admin-user-card">
+                  <h3 className="admin-user-card-title">{ud.wallet}</h3>
+                  <div className="admin-user-wallet-balance">
                     {user.walletBalance != null
                       ? `${user.walletBalance.toFixed(2)} ${user.walletCurrency ?? 'EGP'}`
-                      : '—'}
-                  </dd>
-                </dl>
-                {showAdjust ? (
-                  <div className="admin-form-group">
-                    <label className="admin-form-label">{ud.adjustBalance}</label>
-                    <select
-                      className="admin-form-select"
-                      value={adjustForm.type}
-                      onChange={(e) => setAdjustForm((f) => ({ ...f, type: e.target.value }))}
-                    >
-                      <option value="deposit">Deposit</option>
-                      <option value="withdrawal">Withdrawal</option>
-                      <option value="adjustment">Adjustment</option>
-                      <option value="bonus">Bonus</option>
-                    </select>
-                    <input
-                      type="number"
-                      className="admin-form-input"
-                      placeholder="Amount"
-                      value={adjustForm.amount || ''}
-                      onChange={(e) =>
-                        setAdjustForm((f) => ({ ...f, amount: parseFloat(e.target.value) || 0 }))
-                      }
-                    />
-                    <input
-                      type="text"
-                      className="admin-form-input"
-                      placeholder="Description"
-                      value={adjustForm.description}
-                      onChange={(e) =>
-                        setAdjustForm((f) => ({ ...f, description: e.target.value }))
-                      }
-                    />
-                    <div className="admin-modal-actions">
-                      <button
-                        type="button"
-                        className="admin-btn admin-btn--primary"
-                        onClick={() => void handleAdjust()}
-                        disabled={actionLoading === 'adjust' || adjustForm.amount <= 0}
-                      >
-                        {dictionary.common.save}
-                      </button>
-                      <button
-                        type="button"
-                        className="admin-btn"
-                        onClick={() => setShowAdjust(false)}
-                      >
-                        Cancel
-                      </button>
-                    </div>
+                      : '-'}
                   </div>
-                ) : (
-                  <button
-                    type="button"
-                    className="admin-btn admin-btn--small"
-                    onClick={() => setShowAdjust(true)}
-                  >
-                    {ud.adjustBalance}
-                  </button>
-                )}
-              </section>
 
-              <section className="admin-user-detail-section admin-user-detail-actions">
-                <h3 className="admin-user-detail-section-title">{ud.actions}</h3>
-                <div className="admin-actions-row admin-actions-row--column">
-                  {!user.emailVerifiedAt && (
-                    <>
-                      <button
-                        type="button"
-                        className="admin-btn admin-btn--small"
-                        onClick={() => void handleSendVerification()}
-                        disabled={!!actionLoading}
+                  {showAdjust ? (
+                    <div className="admin-user-wallet-form">
+                      <select
+                        className="admin-form-select"
+                        value={adjustForm.type}
+                        onChange={(e) => setAdjustForm((f) => ({ ...f, type: e.target.value }))}
                       >
-                        {ud.sendVerificationEmail}
-                      </button>
-                      <button
-                        type="button"
-                        className="admin-btn admin-btn--small admin-btn--success"
-                        onClick={() => void handleVerifyEmail()}
-                        disabled={!!actionLoading}
-                      >
-                        {ud.verifyEmail}
-                      </button>
-                    </>
+                        <option value="deposit">Deposit</option>
+                        <option value="withdrawal">Withdrawal</option>
+                        <option value="adjustment">Adjustment</option>
+                        <option value="bonus">Bonus</option>
+                      </select>
+                      <input
+                        type="number"
+                        className="admin-form-input"
+                        placeholder="Amount"
+                        value={adjustForm.amount || ''}
+                        onChange={(e) =>
+                          setAdjustForm((f) => ({ ...f, amount: parseFloat(e.target.value) || 0 }))
+                        }
+                      />
+                      <input
+                        type="text"
+                        className="admin-form-input"
+                        placeholder="Description"
+                        value={adjustForm.description}
+                        onChange={(e) =>
+                          setAdjustForm((f) => ({ ...f, description: e.target.value }))
+                        }
+                      />
+                      <div className="admin-inline-edit">
+                        <button
+                          type="button"
+                          className="admin-btn admin-btn--small admin-btn--primary"
+                          onClick={() => void handleAdjust()}
+                          disabled={actionLoading === 'adjust' || adjustForm.amount <= 0}
+                        >
+                          {dictionary.common.save}
+                        </button>
+                        <button
+                          type="button"
+                          className="admin-btn admin-btn--small"
+                          onClick={() => setShowAdjust(false)}
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      className="admin-btn admin-btn--small"
+                      onClick={() => setShowAdjust(true)}
+                    >
+                      {ud.adjustBalance}
+                    </button>
                   )}
-                  <button
-                    type="button"
-                    className={`admin-btn admin-btn--small ${user.isActive ? '' : 'admin-btn--success'}`}
-                    onClick={() => void handleActivateDeactivate()}
-                    disabled={!!actionLoading}
-                  >
-                    {user.isActive ? d.deactivate : d.activate}
-                  </button>
+                </section>
+              </div>
+
+              <aside className="admin-user-modal-side">
+                <section className="admin-user-card">
+                  <h3 className="admin-user-card-title">{ud.actions}</h3>
+                  <div className="admin-actions-row admin-actions-row--column">
+                    {!user.emailVerifiedAt && (
+                      <>
+                        <button
+                          type="button"
+                          className="admin-btn admin-btn--small"
+                          onClick={() => void handleSendVerification()}
+                          disabled={!!actionLoading}
+                        >
+                          {ud.sendVerificationEmail}
+                        </button>
+                        <button
+                          type="button"
+                          className="admin-btn admin-btn--small admin-btn--success"
+                          onClick={() => void handleVerifyEmail()}
+                          disabled={!!actionLoading}
+                        >
+                          {ud.verifyEmail}
+                        </button>
+                      </>
+                    )}
+                    <button
+                      type="button"
+                      className={`admin-btn admin-btn--small ${user.isActive ? '' : 'admin-btn--success'}`}
+                      onClick={() => void handleActivateDeactivate()}
+                      disabled={!!actionLoading}
+                    >
+                      {user.isActive ? d.deactivate : d.activate}
+                    </button>
+                  </div>
+                </section>
+
+                <section className="admin-user-card admin-user-card--danger">
+                  <h3 className="admin-user-card-title">{d.delete}</h3>
                   <button
                     type="button"
                     className="admin-btn admin-btn--small admin-btn--danger"
@@ -504,13 +558,13 @@ export const AdminUserDetailModal = ({
                   >
                     {d.delete}
                   </button>
-                </div>
-              </section>
+                </section>
+              </aside>
             </div>
           </>
         )}
 
-        <div className="admin-modal-actions" style={{ marginTop: '1rem' }}>
+        <div className="admin-user-modal-footer">
           <button type="button" className="admin-btn" onClick={onClose}>
             {dictionary.common.back}
           </button>

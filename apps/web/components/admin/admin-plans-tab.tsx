@@ -4,15 +4,27 @@ import type { Plan } from '@mohandishub/shared';
 import { useCallback, useEffect, useState } from 'react';
 
 import { adminApiClient } from '@/lib/admin/client';
+import { isApiClientError } from '@/lib/auth/client';
 import type { Dictionary } from '@/lib/i18n/types';
 
-type Props = { dictionary: Dictionary; accessToken: string };
+type Props = {
+  dictionary: Dictionary;
+  accessToken: string;
+  refreshSession: () => Promise<string | null>;
+};
 
-export const AdminPlansTab = ({ dictionary, accessToken }: Props) => {
+const getErrorMessage = (error: unknown, dictionary: Dictionary): string => {
+  if (isApiClientError(error)) return error.message;
+  return dictionary.auth.errors.generic;
+};
+
+export const AdminPlansTab = ({ dictionary, accessToken, refreshSession }: Props) => {
   const [plans, setPlans] = useState<Plan[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editingPlan, setEditingPlan] = useState<Plan | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [formData, setFormData] = useState<{
     slug: string;
     name: string;
@@ -26,15 +38,17 @@ export const AdminPlansTab = ({ dictionary, accessToken }: Props) => {
 
   const load = useCallback(async () => {
     setLoading(true);
+    setError(null);
     try {
-      const data = await adminApiClient.getPlans(accessToken);
+      const data = await adminApiClient.getPlans(accessToken, { refreshSession });
       setPlans(data);
-    } catch {
-      /* empty */
+    } catch (err: unknown) {
+      setPlans([]);
+      setError(getErrorMessage(err, dictionary));
     } finally {
       setLoading(false);
     }
-  }, [accessToken]);
+  }, [accessToken, dictionary, refreshSession]);
 
   useEffect(() => {
     void load();
@@ -50,6 +64,7 @@ export const AdminPlansTab = ({ dictionary, accessToken }: Props) => {
       billingCycle: 'monthly',
       features: '',
     });
+    setError(null);
     setShowForm(true);
   };
 
@@ -63,10 +78,13 @@ export const AdminPlansTab = ({ dictionary, accessToken }: Props) => {
       billingCycle: plan.billingCycle,
       features: plan.features.join(', '),
     });
+    setError(null);
     setShowForm(true);
   };
 
   const handleSubmit = async () => {
+    setSaving(true);
+    setError(null);
     const featuresArr = formData.features
       .split(',')
       .map((f) => f.trim())
@@ -83,24 +101,27 @@ export const AdminPlansTab = ({ dictionary, accessToken }: Props) => {
       : baseBody;
     try {
       if (editingPlan) {
-        await adminApiClient.updatePlan(accessToken, editingPlan.id, bodyWithDesc);
+        await adminApiClient.updatePlan(accessToken, editingPlan.id, bodyWithDesc, { refreshSession });
       } else {
-        await adminApiClient.createPlan(accessToken, bodyWithDesc);
+        await adminApiClient.createPlan(accessToken, bodyWithDesc, { refreshSession });
       }
       setShowForm(false);
       void load();
-    } catch {
-      /* empty */
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, dictionary));
+    } finally {
+      setSaving(false);
     }
   };
 
   const handleDelete = async (planId: string) => {
     if (!confirm(d.confirmDelete)) return;
+    setError(null);
     try {
-      await adminApiClient.deletePlan(accessToken, planId);
+      await adminApiClient.deletePlan(accessToken, planId, { refreshSession });
       void load();
-    } catch {
-      /* empty */
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, dictionary));
     }
   };
 
@@ -111,6 +132,7 @@ export const AdminPlansTab = ({ dictionary, accessToken }: Props) => {
           {d.createPlan}
         </button>
       </div>
+      {error && <p className="admin-error-banner">{error}</p>}
 
       {loading ? (
         <p className="admin-empty">{dictionary.admin.loading}</p>
@@ -243,6 +265,7 @@ export const AdminPlansTab = ({ dictionary, accessToken }: Props) => {
                 type="button"
                 className="admin-btn admin-btn--primary"
                 onClick={() => void handleSubmit()}
+                disabled={saving}
               >
                 {editingPlan ? dictionary.common.save : dictionary.common.submit}
               </button>

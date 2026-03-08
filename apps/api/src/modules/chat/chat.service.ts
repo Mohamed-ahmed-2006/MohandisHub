@@ -1,9 +1,14 @@
 import { HttpError } from '../../utils/http-error.js';
 
+import { SettingsService } from '../settings/settings.service.js';
+
 import { ChatRepository } from './chat.repository.js';
 
 export class ChatService {
-  constructor(private readonly repo: ChatRepository = new ChatRepository()) {}
+  constructor(
+    private readonly repo: ChatRepository = new ChatRepository(),
+    private readonly settingsService: SettingsService = new SettingsService(),
+  ) {}
 
   async listConversations(userId: string) {
     return this.repo.listConversations(userId);
@@ -25,6 +30,15 @@ export class ChatService {
   }
 
   async sendMessage(userId: string, conversationId: string, body: string) {
+    const status = await this.settingsService.getAppStatus();
+    if (status.pauseChat) {
+      throw new HttpError({
+        statusCode: 503,
+        code: 'CHAT_PAUSED',
+        message: 'Chat is temporarily disabled.',
+      });
+    }
+
     const conv = await this.repo.getConversation(conversationId);
     if (!conv) {
       throw new HttpError({
@@ -47,6 +61,15 @@ export class ChatService {
   }
 
   async startConversation(userId: string, otherUserId: string) {
+    const status = await this.settingsService.getAppStatus();
+    if (status.pauseChat) {
+      throw new HttpError({
+        statusCode: 503,
+        code: 'CHAT_PAUSED',
+        message: 'Chat is temporarily disabled.',
+      });
+    }
+
     const convId = await this.repo.findOrCreateConversation(userId, otherUserId);
     return { conversationId: convId };
   }

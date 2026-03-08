@@ -24,6 +24,8 @@ import {
 import { logger } from '../../config/logger.js';
 import { HttpError } from '../../utils/http-error.js';
 
+import { SettingsService } from '../settings/settings.service.js';
+
 import { AuthRepository } from './auth.repository.js';
 import type { UserRow } from './auth.types.js';
 import type {
@@ -35,11 +37,20 @@ import type {
 
 const SALT_ROUNDS = 12;
 const PASSWORD_RESET_TTL_MINUTES = 30;
-const PASSWORD_RESET_GENERIC_MESSAGE =
-  'If an account with that email exists, a password reset link has been sent.';
+const MESSAGE_NO_ACCOUNT = 'No account found with this email address.';
+const MESSAGE_ACCOUNT_DISABLED = 'This account is disabled. Please contact support.';
+const MESSAGE_LINK_SENT =
+  'A password reset link has been sent to your email. Check your inbox and spam folder.';
+const MESSAGE_SEND_FAILED =
+  'We could not send the reset email. Please try again later.';
+const MESSAGE_SEND_FAILED_DEV =
+  'Email was not sent (email service not configured or failed). Use the link below to reset your password.';
 
 export class AuthService {
-  public constructor(private readonly authRepository: AuthRepository = new AuthRepository()) {}
+  public constructor(
+    private readonly authRepository: AuthRepository = new AuthRepository(),
+    private readonly settingsService: SettingsService = new SettingsService(),
+  ) {}
 
   // ── Register ──────────────────────────────────────────────────────────
 
@@ -47,6 +58,15 @@ export class AuthService {
     input: RegisterInput,
     meta?: { deviceInfo?: string | undefined; ipAddress?: string | undefined },
   ): Promise<{ user: AuthUser; tokens: AuthTokens; refreshToken: string }> {
+    const status = await this.settingsService.getAppStatus();
+    if (status.signupsLocked) {
+      throw new HttpError({
+        statusCode: 403,
+        code: 'SIGNUPS_LOCKED',
+        message: 'New sign-ups are currently disabled.',
+      });
+    }
+
     // Check duplicate email
     const existing = await this.authRepository.findUserByEmail(input.email);
     if (existing) {
@@ -99,15 +119,45 @@ export class AuthService {
   }
 
   async forgotPassword(input: ForgotPasswordInput): Promise<AuthMessageResult> {
-    const genericMessage = PASSWORD_RESET_GENERIC_MESSAGE;
+    // #region agent log
+    fetch('http://127.0.0.1:7325/ingest/ebd08bf8-7d73-450c-ad4d-4436a6c2225b', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '9365d5' },
+      body: JSON.stringify({
+        sessionId: '9365d5',
+        location: 'auth.service.ts:forgotPassword:entry',
+        message: 'forgotPassword called',
+        data: { emailReceived: !!input?.email?.trim(), provider: env.OTP_EMAIL_PROVIDER },
+        timestamp: Date.now(),
+        hypothesisId: 'H3,H4',
+      }),
+    }).catch(() => {});
+    // #endregion
 
     try {
       const normalizedEmail = input.email.trim().toLowerCase();
       const user = await this.authRepository.findUserByEmail(normalizedEmail);
 
-      // Prevent account enumeration by returning the same response for all cases.
-      if (!user || !user.is_active) {
-        return { message: genericMessage };
+      // #region agent log
+      fetch('http://127.0.0.1:7325/ingest/ebd08bf8-7d73-450c-ad4d-4436a6c2225b', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '9365d5' },
+        body: JSON.stringify({
+          sessionId: '9365d5',
+          location: 'auth.service.ts:forgotPassword:afterFindUser',
+          message: 'user lookup result',
+          data: { userFound: !!user, userActive: !!user?.is_active },
+          timestamp: Date.now(),
+          hypothesisId: 'H1,H2',
+        }),
+      }).catch(() => {});
+      // #endregion
+
+      if (!user) {
+        return { message: MESSAGE_NO_ACCOUNT };
+      }
+      if (!user.is_active) {
+        return { message: MESSAGE_ACCOUNT_DISABLED };
       }
 
       const rawToken = randomBytes(48).toString('base64url');
@@ -124,24 +174,62 @@ export class AuthService {
           displayName: user.display_name,
           resetLink,
         });
+        // #region agent log
+        fetch('http://127.0.0.1:7325/ingest/ebd08bf8-7d73-450c-ad4d-4436a6c2225b', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '9365d5' },
+          body: JSON.stringify({
+            sessionId: '9365d5',
+            location: 'auth.service.ts:forgotPassword:afterSend',
+            message: 'password reset email send completed',
+            data: { sent: true, provider: env.OTP_EMAIL_PROVIDER },
+            timestamp: Date.now(),
+            hypothesisId: 'H3,H4,H5',
+          }),
+        }).catch(() => {});
+        // #endregion
+        const result: AuthMessageResult = { message: MESSAGE_LINK_SENT };
+        if (env.OTP_EMAIL_PROVIDER === 'console') {
+          result.devResetLink = resetLink;
+        }
+        return result;
       } catch (error) {
+        // #region agent log
+        fetch('http://127.0.0.1:7325/ingest/ebd08bf8-7d73-450c-ad4d-4436a6c2225b', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '9365d5' },
+          body: JSON.stringify({
+            sessionId: '9365d5',
+            location: 'auth.service.ts:forgotPassword:sendError',
+            message: 'password reset email send failed',
+            data: {
+              error: error instanceof Error ? error.message : String(error),
+              provider: env.OTP_EMAIL_PROVIDER,
+            },
+            timestamp: Date.now(),
+            hypothesisId: 'H4,H5',
+          }),
+        }).catch(() => {});
+        // #endregion
         logger.error('Failed to send password reset email', {
           userId: user.id,
           email: user.email,
           error: error instanceof Error ? error.message : String(error),
         });
-        // Do not throw: return generic success so we don't leak info or break the flow.
+        const result: AuthMessageResult = { message: MESSAGE_SEND_FAILED };
+        if (env.NODE_ENV === 'development') {
+          result.message = MESSAGE_SEND_FAILED_DEV;
+          result.devResetLink = resetLink;
+        }
+        return result;
       }
-
-      return { message: genericMessage };
     } catch (error) {
       logger.error('Forgot password flow failed', {
         email: input.email?.trim?.()?.toLowerCase?.() ?? '(unknown)',
         error: error instanceof Error ? error.message : String(error),
         ...(error instanceof Error && error.stack ? { stack: error.stack } : {}),
       });
-      // Always return same generic message (no account enumeration, no 500).
-      return { message: genericMessage };
+      return { message: MESSAGE_SEND_FAILED };
     }
   }
 
@@ -198,6 +286,15 @@ export class AuthService {
         statusCode: 401,
         code: 'INVALID_CREDENTIALS',
         message: 'Invalid email or password.',
+      });
+    }
+
+    const status = await this.settingsService.getAppStatus();
+    if (status.lockLogins && !userRow.is_admin) {
+      throw new HttpError({
+        statusCode: 503,
+        code: 'LOGINS_LOCKED',
+        message: 'Logins are temporarily disabled. Please try again later.',
       });
     }
 

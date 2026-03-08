@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 
+import { useAppStatus } from '@/components/app-status-provider';
 import { isApiClientError } from '@/lib/auth/client';
 import type { Dictionary } from '@/lib/i18n/types';
 import { walletApiClient } from '@/lib/wallet/client';
@@ -19,7 +20,13 @@ export const WalletDepositModal = ({
   onClose,
   onDepositCreated,
 }: WalletDepositModalProps) => {
+  const { status } = useAppStatus();
   const d = dictionary.wallet;
+
+  const depositsPaused = status?.depositsPaused === true;
+  const cryptoDisabled = status?.disableCryptoDeposits === true;
+  const cardDisabled = status?.disableCardDeposits === true;
+  const canDeposit = !depositsPaused && (cryptoDisabled === false || cardDisabled === false);
   const [step, setStep] = useState<'choose' | 'amount'>('choose');
   const [method, setMethod] = useState<'crypto' | 'card'>('crypto');
   const [amount, setAmount] = useState('');
@@ -53,8 +60,12 @@ export const WalletDepositModal = ({
       onDepositCreated?.();
       onClose();
       window.open(paymentUrl, '_blank', 'noopener,noreferrer');
-    } catch {
-      setError(d.depositError);
+    } catch (err) {
+      setError(
+        isApiClientError(err) && err.code === 'DEPOSITS_PAUSED'
+          ? 'Deposits are temporarily paused.'
+          : d.depositError,
+      );
     } finally {
       setLoading(false);
     }
@@ -90,7 +101,9 @@ export const WalletDepositModal = ({
       window.location.href = checkoutUrl;
     } catch (err) {
       const msg =
-        isApiClientError(err) && err.code === 'AMOUNT_TOO_LOW'
+        isApiClientError(err) && err.code === 'DEPOSITS_PAUSED'
+          ? 'Deposits are temporarily paused.'
+          : isApiClientError(err) && err.code === 'AMOUNT_TOO_LOW'
           ? err.message
           : isApiClientError(err) && err.code === 'STRIPE_UNAVAILABLE'
             ? (d.depositCardUnavailable ?? 'Card payments are not available. Try again later.')
@@ -115,20 +128,30 @@ export const WalletDepositModal = ({
         </button>
         <h2 className="deposit-modal-title">{d.depositTitle}</h2>
 
-        {step === 'choose' ? (
+        {!canDeposit ? (
+          <p className="deposit-modal-subtitle">
+            {depositsPaused
+              ? 'Deposits are temporarily paused. Please try again later.'
+              : 'No deposit methods are currently available.'}
+          </p>
+        ) : step === 'choose' ? (
           <>
             <p className="deposit-modal-subtitle">{d.chooseMethod}</p>
             <div className="deposit-options">
-              <button type="button" className="deposit-option-card" onClick={handleCryptoClick}>
-                <span className="deposit-option-icon">₿</span>
-                <span className="deposit-option-label">{d.crypto}</span>
-                <span className="deposit-option-action">{d.depositPayWithCrypto}</span>
-              </button>
-              <button type="button" className="deposit-option-card" onClick={handleCardClick}>
-                <span className="deposit-option-icon">💳</span>
-                <span className="deposit-option-label">{d.creditCard}</span>
-                <span className="deposit-option-action">{d.depositPayWithCard}</span>
-              </button>
+              {!cryptoDisabled && (
+                <button type="button" className="deposit-option-card" onClick={handleCryptoClick}>
+                  <span className="deposit-option-icon">₿</span>
+                  <span className="deposit-option-label">{d.crypto}</span>
+                  <span className="deposit-option-action">{d.depositPayWithCrypto}</span>
+                </button>
+              )}
+              {!cardDisabled && (
+                <button type="button" className="deposit-option-card" onClick={handleCardClick}>
+                  <span className="deposit-option-icon">💳</span>
+                  <span className="deposit-option-label">{d.creditCard}</span>
+                  <span className="deposit-option-action">{d.depositPayWithCard}</span>
+                </button>
+              )}
             </div>
           </>
         ) : (

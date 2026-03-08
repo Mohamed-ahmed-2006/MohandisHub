@@ -12,11 +12,16 @@ import {
 import { stripe } from '../../lib/stripe.client.js';
 import { HttpError } from '../../utils/http-error.js';
 
+import { SettingsService } from '../settings/settings.service.js';
+
 import { WalletRepository } from './wallet.repository.js';
 import type { TransactionRow, WalletRow } from './wallet.repository.js';
 
 export class WalletService {
-  constructor(private readonly repo: WalletRepository = new WalletRepository()) {}
+  constructor(
+    private readonly repo: WalletRepository = new WalletRepository(),
+    private readonly settingsService: SettingsService = new SettingsService(),
+  ) {}
 
   async getOrCreateWallet(userId: string): Promise<Wallet> {
     let row = await this.repo.findByUserId(userId);
@@ -53,6 +58,35 @@ export class WalletService {
     currency: string,
     baseUrlFromEnvOrReq?: string,
   ): Promise<{ paymentUrl: string; orderId: string }> {
+    const status = await this.settingsService.getAppStatus();
+    if (status.depositsPaused) {
+      throw new HttpError({
+        statusCode: 503,
+        code: 'DEPOSITS_PAUSED',
+        message: 'Deposits are temporarily disabled.',
+      });
+    }
+    if (status.disableCryptoDeposits) {
+      throw new HttpError({
+        statusCode: 503,
+        code: 'CRYPTO_DEPOSITS_DISABLED',
+        message: 'Crypto deposits are not available.',
+      });
+    }
+    if (status.minDepositAmount != null && amount < status.minDepositAmount) {
+      throw new HttpError({
+        statusCode: 400,
+        code: 'AMOUNT_TOO_LOW',
+        message: `Minimum deposit is ${status.minDepositAmount}.`,
+      });
+    }
+    if (status.maxDepositAmount != null && amount > status.maxDepositAmount) {
+      throw new HttpError({
+        statusCode: 400,
+        code: 'AMOUNT_TOO_HIGH',
+        message: `Maximum deposit is ${status.maxDepositAmount}.`,
+      });
+    }
     if (!env.CRYPTOMUS_MERCHANT_ID || !env.CRYPTOMUS_API_KEY) {
       throw new HttpError({
         statusCode: 503,
@@ -98,6 +132,35 @@ export class WalletService {
     successUrl: string,
     cancelUrl: string,
   ): Promise<{ checkoutUrl: string; sessionId: string }> {
+    const status = await this.settingsService.getAppStatus();
+    if (status.depositsPaused) {
+      throw new HttpError({
+        statusCode: 503,
+        code: 'DEPOSITS_PAUSED',
+        message: 'Deposits are temporarily disabled.',
+      });
+    }
+    if (status.disableCardDeposits) {
+      throw new HttpError({
+        statusCode: 503,
+        code: 'CARD_DEPOSITS_DISABLED',
+        message: 'Card deposits are not available.',
+      });
+    }
+    if (status.minDepositAmount != null && amount < status.minDepositAmount) {
+      throw new HttpError({
+        statusCode: 400,
+        code: 'AMOUNT_TOO_LOW',
+        message: `Minimum deposit is ${status.minDepositAmount}.`,
+      });
+    }
+    if (status.maxDepositAmount != null && amount > status.maxDepositAmount) {
+      throw new HttpError({
+        statusCode: 400,
+        code: 'AMOUNT_TOO_HIGH',
+        message: `Maximum deposit is ${status.maxDepositAmount}.`,
+      });
+    }
     if (!stripe || !env.STRIPE_SECRET_KEY) {
       throw new HttpError({
         statusCode: 503,
@@ -154,6 +217,14 @@ export class WalletService {
    * Safe to call when returning from success URL (idempotent if webhook already ran).
    */
   async confirmStripeSession(userId: string, sessionId: string): Promise<{ credited: boolean }> {
+    const status = await this.settingsService.getAppStatus();
+    if (status.depositsPaused) {
+      throw new HttpError({
+        statusCode: 503,
+        code: 'DEPOSITS_PAUSED',
+        message: 'Deposits are temporarily disabled.',
+      });
+    }
     if (!stripe || !env.STRIPE_SECRET_KEY) {
       throw new HttpError({
         statusCode: 503,
@@ -161,9 +232,17 @@ export class WalletService {
         message: 'Card payments are not configured.',
       });
     }
-    const session = await stripe.checkout.sessions.retrieve(sessionId, {
-      expand: [],
-    });
+    let session: { metadata?: { order_id?: string; user_id?: string }; payment_status?: string; amount_total?: number; id: string };
+    try {
+      session = await stripe.checkout.sessions.retrieve(sessionId, { expand: [] }) as typeof session;
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Stripe session could not be retrieved.';
+      throw new HttpError({
+        statusCode: 400,
+        code: 'INVALID_SESSION',
+        message: msg,
+      });
+    }
     const orderId = session.metadata?.order_id;
     const metaUserId = session.metadata?.user_id;
     if (!orderId || metaUserId !== userId) {
@@ -181,13 +260,17 @@ export class WalletService {
       return { credited: deposit?.status === 'paid' };
     }
     const amount = (session.amount_total ?? 0) / 100;
+    const referenceIdForDb =
+      session.id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(session.id)
+        ? session.id
+        : null;
     await this.repo.creditWallet(
       deposit.wallet_id,
       deposit.user_id,
       amount,
       `Card deposit (Stripe)`,
       'stripe',
-      session.id,
+      referenceIdForDb,
     );
     await this.repo.updateDepositRequestStatus(orderId, 'paid', session.id);
     return { credited: true };
@@ -234,13 +317,17 @@ export class WalletService {
       const deposit = await this.repo.findDepositRequestByOrderId(orderId);
       if (!deposit || deposit.status !== 'pending') return;
       const amount = (session?.amount_total ?? 0) / 100;
+      const refId =
+        session?.id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(session.id)
+          ? session.id
+          : null;
       await this.repo.creditWallet(
         deposit.wallet_id,
         deposit.user_id,
         amount,
         `Card deposit (Stripe)`,
         'stripe',
-        session?.id ?? null,
+        refId,
       );
       await this.repo.updateDepositRequestStatus(orderId, 'paid', session?.id);
     }

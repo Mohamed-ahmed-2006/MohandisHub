@@ -16,6 +16,7 @@ import type {
 
 import { HttpError } from '../../utils/http-error.js';
 import { OtpService } from '../otp/otp.service.js';
+import { SettingsService } from '../settings/settings.service.js';
 
 import { AdminRepository } from './admin.repository.js';
 import type {
@@ -41,6 +42,7 @@ export class AdminService {
   constructor(
     private readonly repo: AdminRepository = new AdminRepository(),
     private readonly otpService: OtpService = new OtpService(),
+    private readonly settingsService: SettingsService = new SettingsService(),
   ) {}
 
   // ── Dashboard ───────────────────────────────────────────────────────────
@@ -137,8 +139,12 @@ export class AdminService {
   // ── Plans ───────────────────────────────────────────────────────────────
 
   async listPlans(): Promise<Plan[]> {
-    const rows = await this.repo.listPlans();
-    return rows.map((r) => this.toPlan(r));
+    try {
+      const rows = await this.repo.listPlans();
+      return rows.map((r) => this.toPlan(r));
+    } catch (err: unknown) {
+      this.throwPlanDbError(err);
+    }
   }
 
   async createPlan(input: CreatePlanInput): Promise<Plan> {
@@ -162,15 +168,7 @@ export class AdminService {
       const row = await this.repo.createPlan(dbFields);
       return this.toPlan(row);
     } catch (err: unknown) {
-      const pgError = err as { code?: string };
-      if (pgError.code === '23505') {
-        throw new HttpError({
-          statusCode: 409,
-          code: 'PLAN_SLUG_EXISTS',
-          message: `A plan with slug "${input.slug}" already exists.`,
-        });
-      }
-      throw err;
+      this.throwPlanDbError(err, input.slug);
     }
   }
 
@@ -191,17 +189,25 @@ export class AdminService {
     if (input.sortOrder !== undefined) dbFields.sort_order = input.sortOrder;
     if (input.isActive !== undefined) dbFields.is_active = input.isActive;
 
-    const row = await this.repo.updatePlan(planId, dbFields);
-    if (!row) {
-      throw new HttpError({ statusCode: 404, code: 'PLAN_NOT_FOUND', message: 'Plan not found.' });
+    try {
+      const row = await this.repo.updatePlan(planId, dbFields);
+      if (!row) {
+        throw new HttpError({ statusCode: 404, code: 'PLAN_NOT_FOUND', message: 'Plan not found.' });
+      }
+      return this.toPlan(row);
+    } catch (err: unknown) {
+      this.throwPlanDbError(err, input.slug);
     }
-    return this.toPlan(row);
   }
 
   async deletePlan(planId: string): Promise<void> {
-    const deleted = await this.repo.softDeletePlan(planId);
-    if (!deleted) {
-      throw new HttpError({ statusCode: 404, code: 'PLAN_NOT_FOUND', message: 'Plan not found.' });
+    try {
+      const deleted = await this.repo.softDeletePlan(planId);
+      if (!deleted) {
+        throw new HttpError({ statusCode: 404, code: 'PLAN_NOT_FOUND', message: 'Plan not found.' });
+      }
+    } catch (err: unknown) {
+      this.throwPlanDbError(err);
     }
   }
 
@@ -242,6 +248,15 @@ export class AdminService {
   }
 
   async adjustBalance(input: AdjustBalanceInput, adminId: string): Promise<Transaction> {
+    const status = await this.settingsService.getAppStatus();
+    if (status.moneyMovementsPaused) {
+      throw new HttpError({
+        statusCode: 503,
+        code: 'MONEY_MOVEMENTS_PAUSED',
+        message: 'Money movements are temporarily disabled.',
+      });
+    }
+
     const wallet = await this.repo.createWalletIfNotExists(input.userId);
     const row = await this.repo.adjustWalletBalance(
       wallet.id,
@@ -255,6 +270,15 @@ export class AdminService {
   }
 
   async reverseTransaction(txnId: string, adminId: string): Promise<Transaction> {
+    const status = await this.settingsService.getAppStatus();
+    if (status.moneyMovementsPaused) {
+      throw new HttpError({
+        statusCode: 503,
+        code: 'MONEY_MOVEMENTS_PAUSED',
+        message: 'Money movements are temporarily disabled.',
+      });
+    }
+
     try {
       const row = await this.repo.reverseTransaction(txnId, adminId);
       return this.toTransaction(row);
@@ -400,6 +424,58 @@ export class AdminService {
   }
 
   // ── Mappers ─────────────────────────────────────────────────────────────
+
+  private throwPlanDbError(error: unknown, slug?: string): never {
+    if (error instanceof HttpError) {
+      throw error;
+    }
+
+    const pgError = error as {
+      code?: string;
+      constraint?: string;
+      detail?: string;
+      column?: string;
+    };
+
+    if (pgError.code === '23505') {
+      throw new HttpError({
+        statusCode: 409,
+        code: 'PLAN_SLUG_EXISTS',
+        message: slug
+          ? `A plan with slug "${slug}" already exists.`
+          : 'A plan with the same slug already exists.',
+      });
+    }
+
+    if (pgError.code === '42703' || pgError.code === '42P01') {
+      throw new HttpError({
+        statusCode: 500,
+        code: 'PLAN_SCHEMA_MISMATCH',
+        message:
+          'Plans table schema is outdated or incomplete. Run database migrations and try again.',
+      });
+    }
+
+    if (
+      pgError.code === '23502' ||
+      pgError.code === '23514' ||
+      pgError.code === '22P02' ||
+      pgError.code === '42804'
+    ) {
+      throw new HttpError({
+        statusCode: 400,
+        code: 'PLAN_INVALID_INPUT',
+        message: 'Invalid plan data for database constraints.',
+        details: {
+          ...(pgError.constraint ? { constraint: pgError.constraint } : {}),
+          ...(pgError.column ? { column: pgError.column } : {}),
+          ...(pgError.detail ? { detail: pgError.detail } : {}),
+        },
+      });
+    }
+
+    throw error;
+  }
 
   private toUserListItem(row: UserListRow): AdminUserListItem {
     return {

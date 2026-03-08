@@ -20,6 +20,7 @@ const nextConfig: NextConfig = {
         source: '/health',
         destination: `${apiTarget}/health`,
       },
+      { source: '/favicon.ico', destination: '/icon' },
     ]);
   },
 };

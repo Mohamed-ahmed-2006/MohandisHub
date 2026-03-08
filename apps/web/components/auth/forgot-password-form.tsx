@@ -19,6 +19,7 @@ export const ForgotPasswordForm = ({ locale, dictionary }: ForgotPasswordFormPro
   const [fieldError, setFieldError] = useState<string | null>(null);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [statusVariant, setStatusVariant] = useState<'error' | 'success' | 'info'>('info');
+  const [devResetLink, setDevResetLink] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
@@ -41,10 +42,21 @@ export const ForgotPasswordForm = ({ locale, dictionary }: ForgotPasswordFormPro
 
     try {
       const response = await authApiClient.forgotPassword({ email: trimmedEmail });
-      setStatusVariant('success');
       setStatusMessage(response.message || dictionary.forgotPassword.successMessage);
+      if (response.devResetLink) {
+        setDevResetLink(response.devResetLink);
+        setStatusVariant(
+          response.message?.includes('not sent') || response.message?.includes('not configured')
+            ? 'info'
+            : 'success',
+        );
+      } else {
+        setDevResetLink(null);
+        setStatusVariant('success');
+      }
     } catch (error) {
       setStatusVariant('error');
+      setDevResetLink(null);
       if (isApiClientError(error)) {
         setStatusMessage(error.message);
       } else {
@@ -63,6 +75,14 @@ export const ForgotPasswordForm = ({ locale, dictionary }: ForgotPasswordFormPro
       </header>
 
       {statusMessage ? <AuthStatusBanner variant={statusVariant} message={statusMessage} /> : null}
+      {devResetLink ? (
+        <p className="auth-form-dev-link">
+          <strong>Development:</strong> No email was sent. Use this link to reset your password:{' '}
+          <a href={devResetLink} target="_blank" rel="noopener noreferrer">
+            Reset password
+          </a>
+        </p>
+      ) : null}
 
       <form className="auth-form" onSubmit={(event) => void handleSubmit(event)} noValidate>
         <label className="auth-form-field-group">

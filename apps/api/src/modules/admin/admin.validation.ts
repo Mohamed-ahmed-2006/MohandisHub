@@ -64,6 +64,31 @@ export const updateServiceSchema = z.object({
   isFeatured: z.boolean().optional(),
 });
 
+export const updateSettingsSchema = z.object({
+  maintenanceMode: z.boolean().optional(),
+  maintenanceMessage: z.string().max(2000).nullable().optional(),
+  signupsLocked: z.boolean().optional(),
+  depositsPaused: z.boolean().optional(),
+  moneyMovementsPaused: z.boolean().optional(),
+  lockLogins: z.boolean().optional(),
+  disableCryptoDeposits: z.boolean().optional(),
+  disableCardDeposits: z.boolean().optional(),
+  minDepositAmount: z.number().min(0).nullable().optional(),
+  maxDepositAmount: z.number().min(0).nullable().optional(),
+  pausePlanSubscriptions: z.boolean().optional(),
+  pauseNeeds: z.boolean().optional(),
+  pauseBids: z.boolean().optional(),
+  pauseAwardBids: z.boolean().optional(),
+  pauseUploads: z.boolean().optional(),
+  pauseVerificationSubmissions: z.boolean().optional(),
+  pauseChat: z.boolean().optional(),
+  pauseOtpEmails: z.boolean().optional(),
+  featureNeedsEnabled: z.boolean().optional(),
+  featurePlansEnabled: z.boolean().optional(),
+  featureWalletEnabled: z.boolean().optional(),
+  globalAnnouncement: z.string().max(1000).nullable().optional(),
+});
+
 export type UpdateUserInput = z.infer<typeof updateUserSchema>;
 export type CreatePlanInput = z.infer<typeof createPlanSchema>;
 export type UpdatePlanInput = z.infer<typeof updatePlanSchema>;
@@ -72,3 +97,4 @@ export type CreateCategoryInput = z.infer<typeof createCategorySchema>;
 export type UpdateCategoryInput = z.infer<typeof updateCategorySchema>;
 export type UpdateServiceInput = z.infer<typeof updateServiceSchema>;
 export type RejectServiceInput = z.infer<typeof rejectServiceSchema>;
+export type UpdateSettingsInput = z.infer<typeof updateSettingsSchema>;

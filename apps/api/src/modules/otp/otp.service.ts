@@ -10,6 +10,8 @@ import { env } from '../../config/env.js';
 import { logger } from '../../config/logger.js';
 import { HttpError } from '../../utils/http-error.js';
 
+import { SettingsService } from '../settings/settings.service.js';
+
 import { createOtpSender } from './otp.provider.js';
 import { OtpRepository } from './otp.repository.js';
 
@@ -20,11 +22,23 @@ const CODE_TTL_MINUTES = 10;
 const MAX_SENDS_PER_HOUR = 5;
 
 export class OtpService {
-  constructor(private readonly otpRepo: OtpRepository = new OtpRepository()) {}
+  constructor(
+    private readonly otpRepo: OtpRepository = new OtpRepository(),
+    private readonly settingsService: SettingsService = new SettingsService(),
+  ) {}
 
   // ── Send OTP ──────────────────────────────────────────────────────────
 
   async sendCode(userId: string, channel: OtpChannel): Promise<SendOtpResult> {
+    const status = await this.settingsService.getAppStatus();
+    if (status.pauseOtpEmails) {
+      throw new HttpError({
+        statusCode: 503,
+        code: 'OTP_PAUSED',
+        message: 'Verification emails and OTP are temporarily disabled.',
+      });
+    }
+
     // 1. Get user's email / phone
     const user = await this.otpRepo.getUserEmailAndPhone(userId);
     if (!user) {

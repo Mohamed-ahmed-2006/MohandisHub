@@ -57,12 +57,30 @@ export const ExpertDashboard = ({
     setBidError(null);
     const form = e.currentTarget;
     try {
+      const amountRaw = (form.elements.namedItem('amount') as HTMLInputElement).value;
+      const amount = Number.parseFloat(amountRaw);
+      const message = (form.elements.namedItem('message') as HTMLTextAreaElement).value.trim();
+      if (!Number.isFinite(amount) || amount < 1) {
+        setBidError('Please enter a valid bid amount (at least 1).');
+        setBidding(false);
+        return;
+      }
+      if (message.length < 5) {
+        setBidError('Please enter at least 5 characters in your proposal.');
+        setBidding(false);
+        return;
+      }
       const bidData: { amount: number; message: string; deliveryDays?: number } = {
-        amount: parseFloat((form.elements.namedItem('amount') as HTMLInputElement).value),
-        message: (form.elements.namedItem('message') as HTMLTextAreaElement).value,
+        amount,
+        message,
       };
       const dd = parseInt((form.elements.namedItem('deliveryDays') as HTMLInputElement).value, 10);
-      if (dd) bidData.deliveryDays = dd;
+      if (Number.isInteger(dd) && dd > 0 && dd <= 365) bidData.deliveryDays = dd;
+      if (!Number.isNaN(dd) && (dd < 1 || dd > 365)) {
+        setBidError('Delivery days must be between 1 and 365.');
+        setBidding(false);
+        return;
+      }
       await needsApiClient.createBid(accessToken, bidNeed.id, bidData);
       setBidNeed(null);
       void loadData();
@@ -175,12 +193,14 @@ export const ExpertDashboard = ({
                 name="message"
                 className="dashboard-textarea"
                 placeholder={d.bidMessagePlaceholder ?? 'Why are you the right fit?'}
+                minLength={5}
                 required
               />
               <input
                 name="deliveryDays"
                 type="number"
                 min="1"
+                max="365"
                 className="dashboard-input"
                 placeholder={d.bidDeliveryPlaceholder ?? 'Delivery days (optional)'}
               />

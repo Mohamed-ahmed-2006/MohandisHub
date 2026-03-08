@@ -1,5 +1,7 @@
 import { Router } from 'express';
 
+import { maintenanceMode } from '../middleware/maintenance-mode.js';
+import { appRouter } from '../modules/app/app.routes.js';
 import { adminRouter } from '../modules/admin/admin.routes.js';
 import { authRouter } from '../modules/auth/auth.routes.js';
 import { chatRouter } from '../modules/chat/chat.routes.js';
@@ -15,6 +17,8 @@ import { walletRouter } from '../modules/wallet/wallet.routes.js';
 
 const apiRouter = Router();
 
+apiRouter.use(maintenanceMode);
+apiRouter.use('/app', appRouter);
 apiRouter.use('/auth', authRouter);
 apiRouter.use('/otp', otpRouter);
 apiRouter.use('/users', usersRouter);

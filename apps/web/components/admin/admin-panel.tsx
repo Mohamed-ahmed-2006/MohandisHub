@@ -7,6 +7,7 @@ import { AdminCategoriesTab } from './admin-categories-tab';
 import { AdminDashboardTab } from './admin-dashboard-tab';
 import { AdminPlansTab } from './admin-plans-tab';
 import { AdminServicesTab } from './admin-services-tab';
+import { AdminSettingsTab } from './admin-settings-tab';
 import { AdminTransactionsTab } from './admin-transactions-tab';
 import { AdminUsersTab } from './admin-users-tab';
 import { AdminVerificationsTab } from './admin-verifications-tab';
@@ -31,7 +32,8 @@ type TabId =
   | 'transactions'
   | 'services'
   | 'categories'
-  | 'verifications';
+  | 'verifications'
+  | 'settings';
 
 export const AdminPanel = ({ locale, dictionary }: AdminPanelProps) => {
   const router = useRouter();
@@ -75,6 +77,7 @@ export const AdminPanel = ({ locale, dictionary }: AdminPanelProps) => {
     { id: 'services', label: dictionary.admin.tabs.services },
     { id: 'categories', label: dictionary.admin.tabs.categories },
     { id: 'verifications', label: dictionary.admin.tabs.verifications },
+    { id: 'settings', label: dictionary.admin.tabs.settings },
   ];
 
   return (
@@ -112,7 +115,11 @@ export const AdminPanel = ({ locale, dictionary }: AdminPanelProps) => {
           />
         )}
         {activeTab === 'plans' && (
-          <AdminPlansTab dictionary={dictionary} accessToken={accessToken} />
+          <AdminPlansTab
+            dictionary={dictionary}
+            accessToken={accessToken}
+            refreshSession={refreshSession}
+          />
         )}
         {activeTab === 'transactions' && (
           <AdminTransactionsTab dictionary={dictionary} accessToken={accessToken} />
@@ -125,9 +132,16 @@ export const AdminPanel = ({ locale, dictionary }: AdminPanelProps) => {
         )}
         {activeTab === 'verifications' && (
           <AdminVerificationsTab
-            locale={locale}
             dictionary={dictionary}
             accessToken={accessToken}
+            refreshSession={refreshSession}
+          />
+        )}
+        {activeTab === 'settings' && (
+          <AdminSettingsTab
+            dictionary={dictionary}
+            accessToken={accessToken}
+            refreshSession={refreshSession}
           />
         )}
       </Container>

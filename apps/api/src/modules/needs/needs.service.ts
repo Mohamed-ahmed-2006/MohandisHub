@@ -1,13 +1,39 @@
 import { HttpError } from '../../utils/http-error.js';
 
+import { SettingsService } from '../settings/settings.service.js';
+
 import { NeedsRepository } from './needs.repository.js';
 import type { CreateBidInput, CreateNeedInput, UpdateNeedInput } from './needs.validation.js';
 
 export class NeedsService {
-  constructor(private readonly repo: NeedsRepository = new NeedsRepository()) {}
+  constructor(
+    private readonly repo: NeedsRepository = new NeedsRepository(),
+    private readonly settingsService: SettingsService = new SettingsService(),
+  ) {}
 
   async createNeed(customerId: string, input: CreateNeedInput) {
-    return this.repo.createNeed(customerId, input);
+    const status = await this.settingsService.getAppStatus();
+    if (status.pauseNeeds) {
+      throw new HttpError({
+        statusCode: 503,
+        code: 'NEEDS_PAUSED',
+        message: 'Posting new needs is temporarily disabled.',
+      });
+    }
+    try {
+      return await this.repo.createNeed(customerId, input);
+    } catch (err: unknown) {
+      const pgErr = err as { code?: string; message?: string };
+      if (pgErr.code === '42703' || (pgErr.message?.includes('does not exist') ?? false)) {
+        throw new HttpError({
+          statusCode: 503,
+          code: 'SCHEMA_OUTDATED',
+          message:
+            'Database schema is out of date. Please run migrations in the API folder: npm run migrate',
+        });
+      }
+      throw err;
+    }
   }
 
   async listMyNeeds(customerId: string, page: number, limit: number) {
@@ -38,6 +64,15 @@ export class NeedsService {
   }
 
   async createBid(needId: string, expertId: string, input: CreateBidInput) {
+    const status = await this.settingsService.getAppStatus();
+    if (status.pauseBids) {
+      throw new HttpError({
+        statusCode: 503,
+        code: 'BIDS_PAUSED',
+        message: 'Placing bids is temporarily disabled.',
+      });
+    }
+
     const need = await this.getNeed(needId);
     if (need.status !== 'open') {
       throw new HttpError({
@@ -85,6 +120,15 @@ export class NeedsService {
   }
 
   async awardBid(needId: string, bidId: string, userId: string) {
+    const status = await this.settingsService.getAppStatus();
+    if (status.pauseAwardBids) {
+      throw new HttpError({
+        statusCode: 503,
+        code: 'AWARD_BIDS_PAUSED',
+        message: 'Awarding bids is temporarily disabled.',
+      });
+    }
+
     const need = await this.getNeed(needId);
     if (need.customer_id !== userId) {
       throw new HttpError({ statusCode: 403, code: 'FORBIDDEN', message: 'Not your need.' });

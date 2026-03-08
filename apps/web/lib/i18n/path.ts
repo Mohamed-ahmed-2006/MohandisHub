@@ -5,6 +5,12 @@ export const normalizeLocale = (value: string): Locale => {
   return isSupportedLocale(value) ? value : DEFAULT_LOCALE;
 };
 
+export const getLocaleFromPath = (pathname: string): Locale | null => {
+  const segments = pathname.split('/').filter(Boolean);
+  const first = segments[0];
+  return first && isSupportedLocale(first) ? first : null;
+};
+
 export const stripLocaleFromPath = (pathname: string): string => {
   const segments = pathname.split('/').filter(Boolean);
 

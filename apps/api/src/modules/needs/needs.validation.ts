@@ -8,11 +8,24 @@ export const createNeedSchema = z.object({
     .optional()
     .transform((v) => (v === '' || v == null ? undefined : v)),
   budgetType: z.enum(['fixed', 'hourly']),
-  budgetAmount: z.number().min(1).max(1000000),
+  budgetAmount: z.coerce.number().min(1).max(1000000),
   currency: z.string().max(10).default('EGP'),
-  timelineDays: z.number().int().min(1).max(365).optional(),
+  timelineDays: z
+    .union([z.literal(''), z.undefined(), z.coerce.number().int().min(1).max(365)])
+    .optional()
+    .transform((v) =>
+      v === '' || v == null || (typeof v === 'number' && Number.isNaN(v)) ? undefined : v,
+    ),
   city: z.string().max(100).optional(),
   country: z.string().max(100).optional(),
+  referenceUrl: z
+    .union([z.string().url().max(500), z.literal('')])
+    .optional()
+    .transform((v) => (v === '' || v == null ? undefined : v)),
+  referenceUrls: z
+    .array(z.string().url().max(500))
+    .max(5)
+    .optional(),
 });
 export type CreateNeedInput = z.infer<typeof createNeedSchema>;
 

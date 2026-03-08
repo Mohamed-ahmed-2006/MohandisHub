@@ -29,6 +29,10 @@ const MIGRATION_FILES = [
   '012_chat.sql',
   '013_needs_bids.sql',
   '014_is_admin_and_plans_backfill.sql',
+  '015_needs_reference_url.sql',
+  '016_needs_reference_url_text.sql',
+  '017_plans_schema_repair.sql',
+  '018_app_settings.sql',
 ];
 
 function parseArgs(): { from?: string } {

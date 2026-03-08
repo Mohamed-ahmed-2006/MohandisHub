@@ -19,6 +19,10 @@ adminRouter.use(authenticate, requireEmailVerified, loadAdminFromDb, requireRole
 // Dashboard
 adminRouter.get('/dashboard/stats', adminController.getDashboardStats);
 
+// Settings
+adminRouter.get('/settings', adminController.getSettings);
+adminRouter.patch('/settings', adminController.updateSettings);
+
 // Users
 adminRouter.get('/users', adminController.listUsers);
 adminRouter.get('/users/:id', adminController.getUserDetail);

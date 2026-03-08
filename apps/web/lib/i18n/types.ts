@@ -326,6 +326,7 @@ export type Dictionary = {
       services: string;
       categories: string;
       verifications: string;
+      settings: string;
     };
     dashboard: {
       totalUsers: string;
@@ -447,6 +448,53 @@ export type Dictionary = {
       rejectReason: string;
       noServices: string;
     };
+    settingsMgmt: {
+      title: string;
+      saveSuccess: string;
+      saveError: string;
+      sections: {
+        availability: string;
+        signups: string;
+        wallet: string;
+        plans: string;
+        needs: string;
+        content: string;
+        communication: string;
+        features: string;
+      };
+      maintenanceMode: string;
+      maintenanceModeDesc: string;
+      maintenanceMessage: string;
+      maintenanceMessagePlaceholder: string;
+      signupsLocked: string;
+      signupsLockedDesc: string;
+      lockLogins: string;
+      lockLoginsDesc: string;
+      depositsPaused: string;
+      depositsPausedDesc: string;
+      moneyMovementsPaused: string;
+      moneyMovementsPausedDesc: string;
+      disableCryptoDeposits: string;
+      disableCryptoDepositsDesc: string;
+      disableCardDeposits: string;
+      disableCardDepositsDesc: string;
+      pausePlanSubscriptions: string;
+      pausePlanSubscriptionsDesc: string;
+      pauseNeeds: string;
+      pauseBids: string;
+      pauseAwardBids: string;
+      pauseUploads: string;
+      pauseVerificationSubmissions: string;
+      pauseChat: string;
+      pauseOtpEmails: string;
+      featureNeedsEnabled: string;
+      featurePlansEnabled: string;
+      featureWalletEnabled: string;
+      globalAnnouncement: string;
+      globalAnnouncementPlaceholder: string;
+      minDepositAmount: string;
+      maxDepositAmount: string;
+    };
     categoriesMgmt: {
       title: string;
       create: string;
@@ -523,6 +571,8 @@ export type Dictionary = {
   };
   homeSearch: {
     welcomeBack: string;
+    browseTab: string;
+    postedTab: string;
     serviceType: string;
     chooseServiceType: string;
     city: string;
@@ -535,6 +585,7 @@ export type Dictionary = {
     businessProvider: string;
     anyProvider: string;
     search: string;
+    searchPlaceholder: string;
     noResults: string;
     topExperts: string;
     topBusinesses: string;

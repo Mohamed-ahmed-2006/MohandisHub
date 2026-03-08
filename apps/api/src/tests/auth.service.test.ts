@@ -59,14 +59,25 @@ describe('AuthService password reset flow', () => {
     vi.restoreAllMocks();
   });
 
-  it('forgotPassword returns generic success for unknown email', async () => {
+  it('forgotPassword returns no-account message for unknown email', async () => {
     const repo = createRepositoryMock();
     repo.findUserByEmail.mockResolvedValue(null);
 
     const service = new AuthService(repo as never);
     const result = await service.forgotPassword({ email: 'missing@example.com' });
 
-    expect(result.message).toContain('If an account with that email exists');
+    expect(result.message).toContain('No account found');
+    expect(repo.setPasswordResetToken).not.toHaveBeenCalled();
+  });
+
+  it('forgotPassword returns disabled message for inactive user', async () => {
+    const repo = createRepositoryMock();
+    repo.findUserByEmail.mockResolvedValue({ ...makeUserRow(), is_active: false });
+
+    const service = new AuthService(repo as never);
+    const result = await service.forgotPassword({ email: 'user@example.com' });
+
+    expect(result.message).toContain('disabled');
     expect(repo.setPasswordResetToken).not.toHaveBeenCalled();
   });
 
@@ -79,7 +90,7 @@ describe('AuthService password reset flow', () => {
     const service = new AuthService(repo as never);
     const result = await service.forgotPassword({ email: 'user@example.com' });
 
-    expect(result.message).toContain('If an account with that email exists');
+    expect(result.message).toContain('password reset link has been sent');
     expect(repo.setPasswordResetToken).toHaveBeenCalledTimes(1);
 
     const callArgs = repo.setPasswordResetToken.mock.calls[0] as [string, string, Date];
@@ -88,9 +99,10 @@ describe('AuthService password reset flow', () => {
     expect(callArgs[2]).toBeInstanceOf(Date);
     expect(callArgs[2].getTime()).toBeGreaterThan(Date.now());
     expect(logSpy).toHaveBeenCalled();
+    expect(result.devResetLink).toBeDefined();
   });
 
-  it('forgotPassword keeps generic response even if email sending fails', async () => {
+  it('forgotPassword returns send-failed message when email sending fails', async () => {
     const repo = createRepositoryMock();
     repo.findUserByEmail.mockResolvedValue(makeUserRow());
     repo.setPasswordResetToken.mockResolvedValue(undefined);
@@ -100,7 +112,7 @@ describe('AuthService password reset flow', () => {
     const service = new AuthService(repo as never);
     const result = await service.forgotPassword({ email: 'user@example.com' });
 
-    expect(result.message).toContain('If an account with that email exists');
+    expect(result.message).toContain('could not send');
     expect(repo.setPasswordResetToken).toHaveBeenCalledTimes(1);
   });
 

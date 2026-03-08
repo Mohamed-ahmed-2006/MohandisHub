@@ -48,6 +48,19 @@
   backdrop-filter: blur(14px);
 }
 
+.auth-form-dev-link {
+  margin-top: 0.75rem;
+  padding: 0.6rem 0.75rem;
+  font-size: 0.85rem;
+  background: hsl(var(--muted));
+  border-radius: var(--radius-md);
+}
+
+.auth-form-dev-link a {
+  color: hsl(var(--primary));
+  font-weight: 600;
+}
+
 .auth-mode-switch,
 .auth-role-switch {
   display: grid;

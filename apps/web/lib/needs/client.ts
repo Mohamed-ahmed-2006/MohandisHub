@@ -12,6 +12,7 @@ export type Need = {
   timeline_days: number | null;
   city: string | null;
   country: string | null;
+  reference_url?: string | null;
   status: string;
   awarded_bid_id: string | null;
   created_at: string;
@@ -48,7 +49,12 @@ async function apiReq<T>(path: string, token: string, opts?: RequestInit): Promi
   if (!res.ok) {
     // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- res.json() returns any
     const body = await res.json().catch(() => ({}));
-    throw new Error((body as { error?: { message?: string } })?.error?.message ?? 'Request failed');
+    const err = body as { error?: { message?: string; details?: unknown } };
+    const msg = err?.error?.message ?? 'Request failed';
+    const details = err?.error?.details;
+    const e = new Error(msg) as Error & { details?: unknown };
+    e.details = details;
+    throw e;
   }
   const json = (await res.json()) as { data: T };
   return json.data;
@@ -67,6 +73,8 @@ export const needsApiClient = {
       timelineDays?: number;
       city?: string;
       country?: string;
+      referenceUrl?: string;
+      referenceUrls?: string[];
     },
   ) => apiReq<Need>('/api/needs', token, { method: 'POST', body: JSON.stringify(body) }),
 

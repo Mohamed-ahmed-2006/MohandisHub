@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
 
+import { useAppStatus } from '@/components/app-status-provider';
 import { AuthForm } from '@/components/auth/auth-form';
 import type { AuthMode } from '@/components/auth/auth-mode-switch';
 import { AuthModeSwitch } from '@/components/auth/auth-mode-switch';
@@ -51,11 +52,14 @@ export const AuthFormScreen = ({
   const pathname = usePathname();
   const searchParams = useSearchParams();
 
+  const { status } = useAppStatus();
   const [mode, setMode] = useState<AuthMode>(initialMode);
   const [role, setRole] = useState<RegisterRole>(initialRole);
   const [registerStep, setRegisterStep] = useState<RegisterStep>(
     initialMode === 'register' ? 'role' : 'form',
   );
+
+  const signupsLocked = status?.signupsLocked === true;
 
   useEffect(() => {
     const nextMode = resolveMode(searchParams.get('mode'));
@@ -139,7 +143,31 @@ export const AuthFormScreen = ({
           </Link>
         </header>
 
-        {mode === 'register' && registerStep === 'role' ? (
+        {mode === 'register' && signupsLocked ? (
+          <section className="auth-form-shell" aria-live="polite">
+            <AuthModeSwitch
+              mode={mode}
+              loginLabel={dictionary.auth.common.login}
+              registerLabel={dictionary.auth.common.register}
+              onModeChange={handleModeChange}
+            />
+            <div className="auth-form-header" style={{ textAlign: 'center', padding: '2rem 0' }}>
+              <h1 className="auth-form-title">Sign-ups Closed</h1>
+              <p className="auth-form-subtitle">
+                New registrations are currently disabled. Please check back later or try logging in
+                if you already have an account.
+              </p>
+              <button
+                type="button"
+                className="auth-form-footer-link-button"
+                onClick={() => handleModeChange('login')}
+                style={{ marginTop: '1rem' }}
+              >
+                {dictionary.auth.common.switchToLogin}
+              </button>
+            </div>
+          </section>
+        ) : mode === 'register' && registerStep === 'role' ? (
           <section className="auth-form-shell" aria-live="polite">
             <AuthModeSwitch
               mode={mode}

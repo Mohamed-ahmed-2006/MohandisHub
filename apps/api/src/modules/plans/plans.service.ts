@@ -3,7 +3,10 @@ import type { Plan } from '@mohandishub/shared';
 import { getPool } from '../../db/pool.js';
 import { HttpError } from '../../utils/http-error.js';
 
+import { SettingsService } from '../settings/settings.service.js';
+
 export class PlansService {
+  constructor(private readonly settingsService: SettingsService = new SettingsService()) {}
   async listActivePlans(): Promise<Plan[]> {
     const { rows } = await getPool().query(
       `SELECT * FROM plans WHERE COALESCE(is_active, true) = true ORDER BY COALESCE(sort_order, 0) ASC, COALESCE(price, 0) ASC`,
@@ -15,6 +18,15 @@ export class PlansService {
     userId: string,
     planId: string,
   ): Promise<{ plan: Plan; walletBalance: number }> {
+    const status = await this.settingsService.getAppStatus();
+    if (status.moneyMovementsPaused || status.pausePlanSubscriptions) {
+      throw new HttpError({
+        statusCode: 503,
+        code: 'MONEY_MOVEMENTS_PAUSED',
+        message: 'Plan subscriptions are temporarily disabled.',
+      });
+    }
+
     const pool = getPool();
     const { rows: planRows } = await pool.query(
       `SELECT * FROM plans WHERE id = $1 AND is_active = true LIMIT 1`,

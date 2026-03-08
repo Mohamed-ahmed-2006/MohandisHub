@@ -10,6 +10,7 @@ import type {
   AdjustBalanceBody,
   ApiErrorBody,
   ApiSuccessBody,
+  AppSettings,
   BusinessProfile,
   CreateCategoryBody,
   CreatePlanBody,
@@ -20,6 +21,7 @@ import type {
   Plan,
   ServiceCategory,
   Transaction,
+  UpdateAppSettingsBody,
   UpdateCategoryBody,
   UpdatePlanBody,
 } from '@mohandishub/shared';
@@ -111,6 +113,27 @@ export type AdminUserProfile = {
 
 export const adminApiClient = {
   // Dashboard
+  getSettings: (accessToken: string, options?: AdminClientOptions) =>
+    apiRequest<AppSettings>({
+      method: 'GET',
+      path: '/api/admin/settings',
+      accessToken,
+      ...(options?.refreshSession ? { refreshSession: options.refreshSession } : {}),
+    }),
+
+  updateSettings: (
+    accessToken: string,
+    body: UpdateAppSettingsBody,
+    options?: AdminClientOptions,
+  ) =>
+    apiRequest<AppSettings>({
+      method: 'PATCH',
+      path: '/api/admin/settings',
+      body,
+      accessToken,
+      ...(options?.refreshSession ? { refreshSession: options.refreshSession } : {}),
+    }),
+
   getDashboardStats: (accessToken: string, options?: AdminClientOptions) =>
     apiRequest<AdminDashboardStats>({
       method: 'GET',
@@ -211,17 +234,35 @@ export const adminApiClient = {
       ...(options?.refreshSession ? { refreshSession: options.refreshSession } : {}),
     }),
 
-  createPlan: (accessToken: string, body: CreatePlanBody) =>
-    apiRequest<Plan>({ method: 'POST', path: '/api/admin/plans', body, accessToken }),
+  createPlan: (accessToken: string, body: CreatePlanBody, options?: AdminClientOptions) =>
+    apiRequest<Plan>({
+      method: 'POST',
+      path: '/api/admin/plans',
+      body,
+      accessToken,
+      ...(options?.refreshSession ? { refreshSession: options.refreshSession } : {}),
+    }),
 
-  updatePlan: (accessToken: string, planId: string, body: UpdatePlanBody) =>
-    apiRequest<Plan>({ method: 'PATCH', path: `/api/admin/plans/${planId}`, body, accessToken }),
+  updatePlan: (
+    accessToken: string,
+    planId: string,
+    body: UpdatePlanBody,
+    options?: AdminClientOptions,
+  ) =>
+    apiRequest<Plan>({
+      method: 'PATCH',
+      path: `/api/admin/plans/${planId}`,
+      body,
+      accessToken,
+      ...(options?.refreshSession ? { refreshSession: options.refreshSession } : {}),
+    }),
 
-  deletePlan: (accessToken: string, planId: string) =>
+  deletePlan: (accessToken: string, planId: string, options?: AdminClientOptions) =>
     apiRequest<{ deleted: true }>({
       method: 'DELETE',
       path: `/api/admin/plans/${planId}`,
       accessToken,
+      ...(options?.refreshSession ? { refreshSession: options.refreshSession } : {}),
     }),
 
   // Transactions
@@ -356,47 +397,54 @@ export const adminApiClient = {
     }),
 
   // Verifications (existing)
-  getPendingVerifications: (accessToken: string) =>
+  getPendingVerifications: (accessToken: string, options?: AdminClientOptions) =>
     apiRequest<PendingVerificationItem[]>({
       method: 'GET',
       path: '/api/admin/verification/pending',
       accessToken,
+      ...(options?.refreshSession ? { refreshSession: options.refreshSession } : {}),
     }),
 
   reviewIdentityDocument: (
     accessToken: string,
     docId: string,
     body: { decision: 'approved' | 'rejected'; notes?: string },
+    options?: AdminClientOptions,
   ) =>
     apiRequest<AdminReview>({
       method: 'POST',
       path: `/api/admin/identity/${docId}/review`,
       body,
       accessToken,
+      ...(options?.refreshSession ? { refreshSession: options.refreshSession } : {}),
     }),
 
   reviewAcademicRecord: (
     accessToken: string,
     recordId: string,
     body: { decision: 'approved' | 'rejected'; notes?: string },
+    options?: AdminClientOptions,
   ) =>
     apiRequest<AdminReview>({
       method: 'POST',
       path: `/api/admin/academic/${recordId}/review`,
       body,
       accessToken,
+      ...(options?.refreshSession ? { refreshSession: options.refreshSession } : {}),
     }),
 
   reviewBusinessDocs: (
     accessToken: string,
     userId: string,
     body: { decision: 'approved' | 'rejected'; notes?: string },
+    options?: AdminClientOptions,
   ) =>
     apiRequest<AdminReview>({
       method: 'POST',
       path: `/api/admin/business/${userId}/review`,
       body,
       accessToken,
+      ...(options?.refreshSession ? { refreshSession: options.refreshSession } : {}),
     }),
 
   getUserProfile: (accessToken: string, userId: string) =>

@@ -9,14 +9,18 @@ import type {
   AdminUserDetail,
   AdminUserListItem,
   ApiSuccessBody,
+  AppSettings,
   PaginatedResponse,
   Plan,
   ServiceCategory,
   Transaction,
+  UpdateAppSettingsBody,
 } from '@mohandishub/shared';
 
 import { asyncHandler } from '../../utils/async-handler.js';
 import { HttpError } from '../../utils/http-error.js';
+
+import { SettingsService } from '../settings/settings.service.js';
 
 import { AdminService } from './admin.service.js';
 import type {
@@ -27,6 +31,7 @@ import type {
   UpdateCategoryInput,
   UpdatePlanInput,
   UpdateServiceInput,
+  UpdateSettingsInput,
   UpdateUserInput,
 } from './admin.validation.js';
 import {
@@ -37,10 +42,12 @@ import {
   updateCategorySchema,
   updatePlanSchema,
   updateServiceSchema,
+  updateSettingsSchema,
   updateUserSchema,
 } from './admin.validation.js';
 
 const adminService = new AdminService();
+const settingsService = new SettingsService();
 
 function getAdminId(req: { user?: { id: string } }): string {
   if (!req.user) {
@@ -285,6 +292,39 @@ const deleteCategory = asyncHandler(async (req, res) => {
   res.json(response);
 });
 
+// ── Settings ───────────────────────────────────────────────────────────────
+
+const getSettings = asyncHandler(async (_req, res) => {
+  const settings = await settingsService.getSettings();
+  if (!settings) {
+    throw new HttpError({
+      statusCode: 500,
+      code: 'SETTINGS_NOT_FOUND',
+      message: 'App settings could not be loaded.',
+    });
+  }
+  const response: ApiSuccessBody<AppSettings> = { ok: true, data: settings };
+  res.json(response);
+});
+
+const updateSettings = asyncHandler(async (req, res) => {
+  const adminId = getAdminId(req);
+  const input = parseValidation<UpdateSettingsInput>(updateSettingsSchema, req.body);
+  const filtered = Object.fromEntries(
+    Object.entries(input).filter(([, v]) => v !== undefined),
+  ) as UpdateAppSettingsBody;
+  const settings = await settingsService.updateSettings(filtered, adminId);
+  if (!settings) {
+    throw new HttpError({
+      statusCode: 500,
+      code: 'SETTINGS_UPDATE_FAILED',
+      message: 'Failed to update app settings.',
+    });
+  }
+  const response: ApiSuccessBody<AppSettings> = { ok: true, data: settings };
+  res.json(response);
+});
+
 export const adminController = {
   getDashboardStats,
   listUsers,
@@ -311,4 +351,6 @@ export const adminController = {
   createCategory,
   updateCategory,
   deleteCategory,
+  getSettings,
+  updateSettings,
 };
