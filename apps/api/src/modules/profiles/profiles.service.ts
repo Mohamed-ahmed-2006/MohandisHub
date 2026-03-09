@@ -466,6 +466,10 @@ export class ProfilesService {
     return this.repo.findTopExperts(limit);
   }
 
+  async syncVerifiedAtForManuallyVerified(): Promise<{ experts: number; businesses: number }> {
+    return this.repo.syncVerifiedAtForManuallyVerified();
+  }
+
   async getTopBusinesses(limit: number = 6): Promise<
     Array<{
       userId: string;

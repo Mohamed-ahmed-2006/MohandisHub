@@ -56,8 +56,8 @@ const AppShellInner = ({ locale, dictionary, children }: AppShellProps) => {
   }, [isReady, accessToken]);
 
   useEffect(() => {
-    if (!isReady || !authUser) return;
-    const sock = getChatSocket();
+    if (!isReady || !authUser || !accessToken) return;
+    const sock = getChatSocket(accessToken);
     if (!sock) return;
 
     sock.emit('join_user', { userId: authUser.id });
@@ -70,7 +70,7 @@ const AppShellInner = ({ locale, dictionary, children }: AppShellProps) => {
     return () => {
       sock.off('notification', onNotification);
     };
-  }, [isReady, authUser, addToast]);
+  }, [isReady, authUser, accessToken, addToast]);
 
   useEffect(() => {
     if (!isReady || !accessToken) return;
@@ -173,6 +173,7 @@ const AppShellInner = ({ locale, dictionary, children }: AppShellProps) => {
         dictionary={dictionary}
         userRole={role}
         isAdmin={isAdmin}
+        accessToken={accessToken ?? undefined}
         open={sidebarOpen}
         onClose={() => setSidebarOpen(false)}
       />

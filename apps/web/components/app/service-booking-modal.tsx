@@ -1,7 +1,8 @@
 'use client';
 
 import type { ReservationProfile, ReservationSlot, ServiceSearchResult } from '@mohandishub/shared';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 
 import type { Dictionary, Locale } from '@/lib/i18n/types';
 import { reservationsApiClient } from '@/lib/reservations/client';
@@ -14,6 +15,15 @@ type Props = {
   locale?: Locale;
   dictionary: Dictionary;
   onSuccess?: () => void;
+};
+
+const dedupeSlotsById = (items: ReservationSlot[]): ReservationSlot[] => {
+  const seen = new Set<string>();
+  return items.filter((item) => {
+    if (seen.has(item.id)) return false;
+    seen.add(item.id);
+    return true;
+  });
 };
 
 function formatSlot(slot: ReservationSlot): string {
@@ -43,6 +53,7 @@ export const ServiceBookingModal = ({
   const [selectedSlot, setSelectedSlot] = useState<ReservationSlot | null>(null);
   const [mode, setMode] = useState<'online' | 'offline'>('online');
   const [onlineType, setOnlineType] = useState<'voice' | 'video'>('voice');
+  const [modeReady, setModeReady] = useState(false);
   const [weekStart, setWeekStart] = useState(() => {
     const d = new Date();
     d.setDate(d.getDate() - d.getDay());
@@ -66,28 +77,43 @@ export const ServiceBookingModal = ({
         }),
         reservationsApiClient.getProviderProfile(accessToken, service.providerId),
       ]);
-      setSlots(slotsRes.items);
+      setSlots(dedupeSlotsById(slotsRes.items));
       setProfile(profileRes);
-      const modeSupported = mode === 'online' ? slotsRes.items.some((s) => s.supportsOnline) : slotsRes.items.some((s) => s.supportsOffline);
+      const onlineSupported = slotsRes.items.some((s) => s.supportsOnline);
+      const offlineSupported = slotsRes.items.some((s) => s.supportsOffline);
+      const modeSupported = mode === 'online' ? onlineSupported : offlineSupported;
       if (!modeSupported) {
-        setMode(mode === 'online' ? 'offline' : 'online');
+        const otherSupported = mode === 'online' ? offlineSupported : onlineSupported;
+        if (otherSupported) {
+          setMode(mode === 'online' ? 'offline' : 'online');
+        }
       }
+      setModeReady(true);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load slots');
       setSlots([]);
       setProfile(null);
+      setModeReady(true);
     } finally {
       setLoading(false);
     }
   }, [accessToken, mode, service.providerId, weekStart]);
 
+  const prevOpenRef = useRef(false);
   useEffect(() => {
     if (open) {
-      setSelectedSlot(null);
-      setError(null);
-      setMode('online');
-      setOnlineType('voice');
+      const justOpened = !prevOpenRef.current;
+      prevOpenRef.current = true;
+      if (justOpened) {
+        setSelectedSlot(null);
+        setError(null);
+        setMode('online');
+        setOnlineType('voice');
+        setModeReady(false);
+      }
       void loadSlots();
+    } else {
+      prevOpenRef.current = false;
     }
   }, [open, loadSlots]);
 
@@ -124,8 +150,17 @@ export const ServiceBookingModal = ({
 
   if (!open) return null;
 
-  return (
-    <div className="home-drawer-overlay" onClick={onClose}>
+  const modalContent = (
+    <div
+      className="home-drawer-overlay"
+      style={{ zIndex: 1100 }}
+      onClick={() => {
+        // #region agent log
+        fetch('http://127.0.0.1:7325/ingest/ebd08bf8-7d73-450c-ad4d-4436a6c2225b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'40e02a'},body:JSON.stringify({sessionId:'40e02a',location:'service-booking-modal.tsx:modal-overlay-click',message:'Modal overlay clicked',data:{hypothesisId:'H2'},timestamp:Date.now()})}).catch(()=>{});
+        // #endregion
+        onClose();
+      }}
+    >
       <div className="service-booking-modal" onClick={(e) => e.stopPropagation()}>
         <h2 className="service-booking-title">{service.title}</h2>
         <p className="service-booking-provider">{service.providerName}</p>
@@ -134,37 +169,43 @@ export const ServiceBookingModal = ({
         )}
 
         <div style={{ marginBottom: '0.75rem', display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-          <button
-            type="button"
-            className={`dashboard-btn ${mode === 'online' ? 'dashboard-btn--primary' : 'dashboard-btn--secondary'}`}
-            onClick={() => setMode('online')}
-          >
-            Online
-          </button>
-          <button
-            type="button"
-            className={`dashboard-btn ${mode === 'offline' ? 'dashboard-btn--primary' : 'dashboard-btn--secondary'}`}
-            onClick={() => setMode('offline')}
-          >
-            Offline
-          </button>
-          {mode === 'online' && (
+          {modeReady ? (
             <>
               <button
                 type="button"
-                className={`dashboard-btn ${onlineType === 'voice' ? 'dashboard-btn--primary' : 'dashboard-btn--secondary'}`}
-                onClick={() => setOnlineType('voice')}
+                className={`dashboard-btn ${mode === 'online' ? 'dashboard-btn--primary' : 'dashboard-btn--secondary'}`}
+                onClick={() => setMode('online')}
               >
-                Voice
+                Online
               </button>
               <button
                 type="button"
-                className={`dashboard-btn ${onlineType === 'video' ? 'dashboard-btn--primary' : 'dashboard-btn--secondary'}`}
-                onClick={() => setOnlineType('video')}
+                className={`dashboard-btn ${mode === 'offline' ? 'dashboard-btn--primary' : 'dashboard-btn--secondary'}`}
+                onClick={() => setMode('offline')}
               >
-                Video
+                Offline
               </button>
+              {mode === 'online' && (
+                <>
+                  <button
+                    type="button"
+                    className={`dashboard-btn ${onlineType === 'voice' ? 'dashboard-btn--primary' : 'dashboard-btn--secondary'}`}
+                    onClick={() => setOnlineType('voice')}
+                  >
+                    Voice
+                  </button>
+                  <button
+                    type="button"
+                    className={`dashboard-btn ${onlineType === 'video' ? 'dashboard-btn--primary' : 'dashboard-btn--secondary'}`}
+                    onClick={() => setOnlineType('video')}
+                  >
+                    Video
+                  </button>
+                </>
+              )}
             </>
+          ) : (
+            <span style={{ color: 'hsl(var(--muted-foreground))', fontSize: '0.9rem' }}>{common.continue ?? 'Loading...'}</span>
           )}
         </div>
         {modePrice != null && (
@@ -224,4 +265,6 @@ export const ServiceBookingModal = ({
       </div>
     </div>
   );
+
+  return typeof document !== 'undefined' ? createPortal(modalContent, document.body) : modalContent;
 };

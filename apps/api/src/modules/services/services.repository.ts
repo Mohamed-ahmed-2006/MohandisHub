@@ -266,7 +266,7 @@ export class ServicesRepository {
     const total = parseInt(countResult.rows[0]!.count, 10);
     const offset = (page - 1) * limit;
     const { rows } = await this.db.query<ServiceDetailRow>(
-      `SELECT * FROM services WHERE provider_id = $1 ORDER BY created_at DESC LIMIT $2 OFFSET $3`,
+      `SELECT * FROM services WHERE provider_id = $1 ORDER BY created_at DESC LIMIT $2::int OFFSET $3::int`,
       [providerId, limit, offset],
     );
     return { rows, total };

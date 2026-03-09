@@ -81,13 +81,23 @@ export const ChatScreen = ({ locale, dictionary }: Props) => {
   }, [messages]);
 
   useEffect(() => {
-    if (!activeConvId) return;
-    const sock = getChatSocket();
+    if (!activeConvId || !accessToken) return;
+    const sock = getChatSocket(accessToken);
     if (!sock) return;
     sock.emit('join_conversation', { conversationId: activeConvId });
     const onNewMessage = (msg: Message) => {
       if (msg.conversation_id === activeConvId) {
-        setMessages((prev) => (prev.some((m) => m.id === msg.id) ? prev : [...prev, msg]));
+        // #region agent log
+        fetch('http://127.0.0.1:7325/ingest/ebd08bf8-7d73-450c-ad4d-4436a6c2225b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'40e02a'},body:JSON.stringify({sessionId:'40e02a',location:'chat-screen.tsx:socket-new_message',message:'Socket new_message received',data:{msgId:msg.id,hypothesisId:'H6'},timestamp:Date.now()})}).catch(()=>{});
+        // #endregion
+        setMessages((prev) => {
+          const hasDup = prev.some((m) => m.id === msg.id);
+          const willAdd = !hasDup;
+          // #region agent log
+          fetch('http://127.0.0.1:7325/ingest/ebd08bf8-7d73-450c-ad4d-4436a6c2225b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'40e02a'},body:JSON.stringify({sessionId:'40e02a',location:'chat-screen.tsx:socket-setMessages',message:'Socket adding message',data:{msgId:msg.id,prevCount:prev.length,hasDup,willAdd,hypothesisId:'H6'},timestamp:Date.now()})}).catch(()=>{});
+          // #endregion
+          return hasDup ? prev : [...prev, msg];
+        });
       }
     };
     sock.on('new_message', onNewMessage);
@@ -95,14 +105,23 @@ export const ChatScreen = ({ locale, dictionary }: Props) => {
       sock.emit('leave_conversation', { conversationId: activeConvId });
       sock.off('new_message', onNewMessage);
     };
-  }, [activeConvId]);
+  }, [activeConvId, accessToken]);
 
   const handleSend = async () => {
     if (!accessToken || !activeConvId || !msgText.trim() || sending) return;
     setSending(true);
     try {
       const msg = await chatApiClient.sendMessage(accessToken, activeConvId, msgText.trim());
-      setMessages((prev) => [...prev, msg]);
+      // #region agent log
+      fetch('http://127.0.0.1:7325/ingest/ebd08bf8-7d73-450c-ad4d-4436a6c2225b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'40e02a'},body:JSON.stringify({sessionId:'40e02a',location:'chat-screen.tsx:handleSend',message:'API returned message, adding to state',data:{msgId:msg.id,hypothesisId:'H6'},timestamp:Date.now()})}).catch(()=>{});
+      // #endregion
+      setMessages((prev) => {
+        const hasDup = prev.some((m) => m.id === msg.id);
+        // #region agent log
+        fetch('http://127.0.0.1:7325/ingest/ebd08bf8-7d73-450c-ad4d-4436a6c2225b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'40e02a'},body:JSON.stringify({sessionId:'40e02a',location:'chat-screen.tsx:handleSend-setMessages',message:'API adding message',data:{msgId:msg.id,prevCount:prev.length,hasDup,hypothesisId:'H6'},timestamp:Date.now()})}).catch(()=>{});
+        // #endregion
+        return hasDup ? prev : [...prev, msg];
+      });
       setMsgText('');
     } catch {
       // ignore
@@ -173,6 +192,14 @@ export const ChatScreen = ({ locale, dictionary }: Props) => {
                   </div>
                 )}
                 <div className="chat-messages-list">
+                  {(() => {
+                    const ids = messages.map((m) => m.id);
+                    const dupIds = ids.filter((id, i) => ids.indexOf(id) !== i);
+                    if (dupIds.length > 0) {
+                      fetch('http://127.0.0.1:7325/ingest/ebd08bf8-7d73-450c-ad4d-4436a6c2225b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'40e02a'},body:JSON.stringify({sessionId:'40e02a',location:'chat-screen.tsx:render-messages',message:'Duplicate message ids in render',data:{dupIds,msgCount:messages.length,hypothesisId:'H6'},timestamp:Date.now()})}).catch(()=>{});
+                    }
+                    return null;
+                  })()}
                   {messages.map((m) => {
                     const isMine = m.sender_id === authUser.id;
                     return (

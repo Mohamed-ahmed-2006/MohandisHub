@@ -92,7 +92,7 @@ export class BookingsRepository {
        JOIN users uc ON uc.id = b.customer_id
        WHERE b.${column} = $1
        ORDER BY b.created_at DESC
-       LIMIT $2 OFFSET $3`;
+       LIMIT $2::int OFFSET $3::int`;
 
     const { rows } = await getPool().query<BookingRow>(baseQuery, [
       userId,

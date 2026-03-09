@@ -212,6 +212,13 @@ const reviewBusinessDocs = asyncHandler(async (req, res) => {
   res.json(response);
 });
 
+/** POST /api/admin/verification/sync-verified-at — fix verified_at for manually verified profiles */
+const syncVerifiedAt = asyncHandler(async (_req, res) => {
+  const result = await profilesService.syncVerifiedAtForManuallyVerified();
+  const response: ApiSuccessBody<{ experts: number; businesses: number }> = { ok: true, data: result };
+  res.json(response);
+});
+
 /** GET /api/admin/user/:userId/profile — view full profile for any user */
 const getAnyUserProfile = asyncHandler(async (req, res) => {
   requireAdmin(req);
@@ -256,6 +263,7 @@ export const profilesController = {
   submitAcademicRecord,
   getAcademicRecords,
   getPendingVerifications,
+  syncVerifiedAt,
   reviewIdentityDocument,
   reviewAcademicRecord,
   reviewBusinessDocs,

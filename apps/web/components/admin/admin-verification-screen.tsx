@@ -27,6 +27,7 @@ export const AdminVerificationScreen = ({ locale, dictionary }: AdminVerificatio
   const [items, setItems] = useState<PendingVerificationItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [reviewing, setReviewing] = useState<string | null>(null);
+  const [syncing, setSyncing] = useState(false);
 
   const loadPending = useCallback(async () => {
     if (!accessToken) return;
@@ -90,6 +91,23 @@ export const AdminVerificationScreen = ({ locale, dictionary }: AdminVerificatio
     }
   };
 
+  const handleSyncVerifiedAt = async () => {
+    if (!accessToken) return;
+    setSyncing(true);
+    try {
+      const result = await adminApiClient.syncVerifiedAt(accessToken);
+      if (result.experts > 0 || result.businesses > 0) {
+        alert(`Synced: ${result.experts} expert(s), ${result.businesses} business(es).`);
+      } else {
+        alert('No profiles needed syncing.');
+      }
+    } catch {
+      alert('Sync failed.');
+    } finally {
+      setSyncing(false);
+    }
+  };
+
   const identityDocs = items.flatMap((i) =>
     i.identityDocuments
       .filter((d) => d.status === 'pending' || d.status === 'under_review')
@@ -136,7 +154,17 @@ export const AdminVerificationScreen = ({ locale, dictionary }: AdminVerificatio
   return (
     <main className="admin-verification-main">
       <Container className="admin-verification-container">
-        <h1 className="admin-verification-title">{dictionary.admin.title}</h1>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
+          <h1 className="admin-verification-title">{dictionary.admin.title}</h1>
+          <button
+            type="button"
+            className="admin-verification-btn admin-verification-btn-approve"
+            disabled={syncing}
+            onClick={() => void handleSyncVerifiedAt()}
+          >
+            {syncing ? (dictionary.admin?.loading ?? 'Loading...') : 'Sync verified_at'}
+          </button>
+        </div>
 
         <div className="admin-verification-tabs">
           <button

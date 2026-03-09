@@ -397,6 +397,14 @@ export const adminApiClient = {
     }),
 
   // Verifications (existing)
+  syncVerifiedAt: (accessToken: string, options?: AdminClientOptions) =>
+    apiRequest<{ experts: number; businesses: number }>({
+      method: 'POST',
+      path: '/api/admin/verification/sync-verified-at',
+      accessToken,
+      ...(options?.refreshSession ? { refreshSession: options.refreshSession } : {}),
+    }),
+
   getPendingVerifications: (accessToken: string, options?: AdminClientOptions) =>
     apiRequest<PendingVerificationItem[]>({
       method: 'GET',

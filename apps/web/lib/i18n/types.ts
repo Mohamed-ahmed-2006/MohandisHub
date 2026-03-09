@@ -793,7 +793,13 @@ export type Dictionary = {
   calendarPage?: {
     title?: string;
     addSlot?: string;
+    addSlotTitle?: string;
+    addSlotForDay?: string;
     noSlots?: string;
+    noSlotsForDay?: string;
+    noReservationsInMonth?: string;
+    noReservationsForDay?: string;
+    noItemsForDay?: string;
     booked?: string;
     available?: string;
     blocked?: string;
@@ -802,7 +808,18 @@ export type Dictionary = {
     remove?: string;
     prevWeek?: string;
     nextWeek?: string;
+    prevMonth?: string;
+    nextMonth?: string;
     upcomingBookings?: string;
+    reservationSettingsTitle?: string;
+    reservationSettingsDescription?: string;
+    saveReservationSettings?: string;
+    dayDetailsTitle?: string;
+    selectedDay?: string;
+    slotsTitle?: string;
+    reservationsTitle?: string;
+    online?: string;
+    offline?: string;
     start?: string;
     complete?: string;
   };

@@ -20,6 +20,7 @@ type AppSidebarProps = {
   dictionary: Dictionary;
   userRole: string;
   isAdmin: boolean;
+  accessToken: string | undefined;
   open: boolean;
   onClose: () => void;
 };
@@ -29,6 +30,7 @@ export const AppSidebar = ({
   dictionary,
   userRole,
   isAdmin,
+  accessToken,
   open,
   onClose,
 }: AppSidebarProps) => {
@@ -37,7 +39,8 @@ export const AppSidebar = ({
   const [hasUnreadJobs, setHasUnreadJobs] = useState(false);
 
   useEffect(() => {
-    const sock = getChatSocket();
+    if (!accessToken) return;
+    const sock = getChatSocket(accessToken);
     if (!sock) return;
 
     const onNotification = (data: { type?: string }) => {
@@ -52,7 +55,7 @@ export const AppSidebar = ({
     return () => {
       sock.off('notification', onNotification);
     };
-  }, []);
+  }, [accessToken]);
 
   // Clear unread when visiting the pages
   useEffect(() => {

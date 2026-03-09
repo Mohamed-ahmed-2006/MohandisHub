@@ -37,6 +37,10 @@ export type BidRow = {
   delivery_days: number | null;
   estimated_hours: number | null;
   status: string;
+  paid_at: string | null;
+  payment_transaction_id: string | null;
+  customer_last_read_at: string | null;
+  expert_last_read_at: string | null;
   created_at: string;
   updated_at: string;
   expert_name?: string;
@@ -87,7 +91,7 @@ export class NeedsRepository {
     const offset = (page - 1) * limit;
     const { rows } = await pool.query(
       `SELECT n.*, (SELECT count(*) FROM bids b WHERE b.need_id = n.id)::text AS bid_count
-       FROM needs n WHERE n.customer_id = $1 ORDER BY n.created_at DESC LIMIT $2 OFFSET $3`,
+       FROM needs n WHERE n.customer_id = $1 ORDER BY n.created_at DESC LIMIT $2::int OFFSET $3::int`,
       [customerId, limit, offset],
     );
     const { rows: countRows } = await pool.query(
@@ -105,7 +109,9 @@ export class NeedsRepository {
     const pool = getPool();
     const offset = (page - 1) * limit;
     const catFilter = categoryId ? 'AND n.category_id = $3' : '';
+    const countCatFilter = categoryId ? 'AND n.category_id = $1' : '';
     const queryParams = categoryId ? [limit, offset, categoryId] : [limit, offset];
+    const countParams = categoryId ? [categoryId] : [];
     const { rows } = await pool.query(
       `SELECT n.*,
         COALESCE(u.display_name, u.email) AS customer_name,
@@ -116,12 +122,11 @@ export class NeedsRepository {
        JOIN users u ON u.id = n.customer_id
        LEFT JOIN service_categories sc ON sc.id = n.category_id
        WHERE n.status = 'open' ${catFilter}
-       ORDER BY n.created_at DESC LIMIT $1 OFFSET $2`,
+       ORDER BY n.created_at DESC LIMIT $1::int OFFSET $2::int`,
       queryParams,
     );
-    const countParams = categoryId ? [categoryId] : [];
     const { rows: countRows } = await pool.query(
-      `SELECT count(*)::int AS total FROM needs n WHERE n.status = 'open' ${catFilter}`,
+      `SELECT count(*)::int AS total FROM needs n WHERE n.status = 'open' ${countCatFilter}`,
       countParams,
     );
     return { rows: rows as NeedRow[], total: (countRows[0] as { total: number }).total };
@@ -185,7 +190,7 @@ export class NeedsRepository {
         ((SELECT m.created_at FROM bid_messages m WHERE m.bid_id = b.id ORDER BY m.created_at DESC LIMIT 1) > b.expert_last_read_at) AS has_unread
        FROM bids b
        JOIN needs n ON n.id = b.need_id
-       WHERE b.expert_id = $1 ORDER BY b.created_at DESC LIMIT $2 OFFSET $3`,
+       WHERE b.expert_id = $1 ORDER BY b.created_at DESC LIMIT $2::int OFFSET $3::int`,
       [expertId, limit, offset],
     );
     const { rows: countRows } = await pool.query(

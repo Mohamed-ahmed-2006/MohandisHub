@@ -66,7 +66,7 @@ export class ReviewsRepository {
        JOIN users u ON u.id = r.reviewer_id
        WHERE r.target_user_id = $1 AND r.target_type = $2
        ORDER BY r.created_at DESC
-       LIMIT $3 OFFSET $4`,
+       LIMIT $3::int OFFSET $4::int`,
       [targetUserId, targetType, limit, offset],
     );
     const { rows: countRows } = await getPool().query<{ count: string }>(

@@ -33,7 +33,8 @@ export const ApplicationChat = ({ applicationId }: Props) => {
 
   useEffect(() => {
     void loadMessages();
-    const sock = getChatSocket();
+    if (!accessToken) return;
+    const sock = getChatSocket(accessToken);
     if (!sock) return;
 
     sock.emit('join_application', { applicationId });
@@ -50,7 +51,7 @@ export const ApplicationChat = ({ applicationId }: Props) => {
       sock.emit('leave_application', { applicationId });
       sock.off('new_application_message', onNewMessage);
     };
-  }, [loadMessages, applicationId]);
+  }, [loadMessages, applicationId, accessToken]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });

@@ -108,9 +108,13 @@ export const needsApiClient = {
     }),
 
   payBid: (token: string, needId: string, bidId: string) =>
-    apiReq<{ needId: string; bidId: string; paid: boolean }>(`/api/needs/${needId}/bids/${bidId}/pay`, token, {
+    apiReq<{ needId: string; bidId: string; paid: boolean; alreadyPaid?: boolean }>(
+      `/api/needs/${needId}/bids/${bidId}/pay`,
+      token,
+      {
       method: 'POST',
-    }),
+      },
+    ),
 
   createBid: (
     token: string,

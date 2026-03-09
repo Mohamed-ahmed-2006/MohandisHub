@@ -173,9 +173,9 @@ export class ProfilesRepository {
        SET status = $1,
            rejection_reason = COALESCE($2, rejection_reason),
            reviewed_by = COALESCE($3, reviewed_by),
-           reviewed_at = CASE WHEN $1 IN ('approved', 'rejected') THEN now() ELSE reviewed_at END
+           reviewed_at = CASE WHEN $5 IN ('approved', 'rejected') THEN now() ELSE reviewed_at END
        WHERE id = $4`,
-      [status, extra?.rejectionReason ?? null, extra?.reviewedBy ?? null, docId],
+      [status, extra?.rejectionReason ?? null, extra?.reviewedBy ?? null, docId, status],
     );
   }
 
@@ -239,9 +239,9 @@ export class ProfilesRepository {
        SET status = $1,
            rejection_reason = COALESCE($2, rejection_reason),
            reviewed_by = COALESCE($3, reviewed_by),
-           reviewed_at = CASE WHEN $1 IN ('approved', 'rejected') THEN now() ELSE reviewed_at END
+           reviewed_at = CASE WHEN $5 IN ('approved', 'rejected') THEN now() ELSE reviewed_at END
        WHERE id = $4`,
-      [status, extra?.rejectionReason ?? null, extra?.reviewedBy ?? null, recordId],
+      [status, extra?.rejectionReason ?? null, extra?.reviewedBy ?? null, recordId, status],
     );
   }
 
@@ -293,6 +293,22 @@ export class ProfilesRepository {
       `UPDATE business_profiles SET verification_status = $1, verified_at = ${verifiedAt} WHERE user_id = $2`,
       [status, userId],
     );
+  }
+
+  /**
+   * Sync verified_at for profiles that were manually set to verified in the DB.
+   * Sets verified_at = now() where verification_status = 'verified' AND verified_at IS NULL.
+   */
+  async syncVerifiedAtForManuallyVerified(): Promise<{ experts: number; businesses: number }> {
+    const [expertRes, businessRes] = await Promise.all([
+      this.db.query(
+        `UPDATE expert_profiles SET verified_at = now() WHERE verification_status = 'verified' AND verified_at IS NULL RETURNING user_id`,
+      ),
+      this.db.query(
+        `UPDATE business_profiles SET verified_at = now() WHERE verification_status = 'verified' AND verified_at IS NULL RETURNING user_id`,
+      ),
+    ]);
+    return { experts: expertRes.rowCount ?? 0, businesses: businessRes.rowCount ?? 0 };
   }
 
   // ── Admin reviews ──────────────────────────────────────────────────────
@@ -379,7 +395,7 @@ export class ProfilesRepository {
        JOIN users u ON u.id = e.user_id
        WHERE e.verification_status = 'verified' AND u.is_active = true
        ORDER BY e.verified_at DESC NULLS LAST, e.created_at DESC
-       LIMIT $1`,
+       LIMIT $1::int`,
       [limit],
     );
     return rows.map((r) => ({
@@ -416,7 +432,7 @@ export class ProfilesRepository {
        JOIN users u ON u.id = b.user_id
        WHERE b.verification_status = 'verified' AND u.is_active = true
        ORDER BY b.verified_at DESC NULLS LAST, b.created_at DESC
-       LIMIT $1`,
+       LIMIT $1::int`,
       [limit],
     );
     return rows.map((r) => ({

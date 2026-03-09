@@ -77,7 +77,7 @@ export class JobsRepository {
        JOIN users u ON j.business_id = u.id
        WHERE j.status = 'open'
        ORDER BY j.created_at DESC
-       LIMIT $1 OFFSET $2`,
+       LIMIT $1::int OFFSET $2::int`,
       [limit, offset]
     );
 
@@ -90,7 +90,7 @@ export class JobsRepository {
     const total = parseInt(countResult.rows[0]!.count, 10);
 
     const { rows } = await this.db.query<JobRow>(
-      `SELECT * FROM jobs WHERE business_id = $1 ORDER BY created_at DESC LIMIT $2 OFFSET $3`,
+      `SELECT * FROM jobs WHERE business_id = $1 ORDER BY created_at DESC LIMIT $2::int OFFSET $3::int`,
       [businessId, limit, offset]
     );
 

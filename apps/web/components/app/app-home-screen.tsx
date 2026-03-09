@@ -28,6 +28,15 @@ type AppHomeScreenProps = {
   dictionary: Dictionary;
 };
 
+const dedupeById = <T extends { id: string }>(items: T[]): T[] => {
+  const seen = new Set<string>();
+  return items.filter((item) => {
+    if (seen.has(item.id)) return false;
+    seen.add(item.id);
+    return true;
+  });
+};
+
 /** Areas per city (districts). When city has no list, we show a generic option. */
 const CITY_AREAS: Record<string, string[]> = {
   Cairo: [
@@ -256,6 +265,15 @@ export const AppHomeScreen = ({ locale, dictionary }: AppHomeScreenProps) => {
     });
   }, []);
 
+  useEffect(() => {
+    if (!selectedResult) {
+      // #region agent log
+      fetch('http://127.0.0.1:7325/ingest/ebd08bf8-7d73-450c-ad4d-4436a6c2225b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'40e02a'},body:JSON.stringify({sessionId:'40e02a',location:'app-home-screen.tsx:useEffect-selectedResult',message:'selectedResult is null, closing modal',data:{hypothesisId:'H3'},timestamp:Date.now()})}).catch(()=>{});
+      // #endregion
+      setShowBookingModal(false);
+    }
+  }, [selectedResult]);
+
   // Top experts/business slideshow auto-rotate
   useEffect(() => {
     const t = setInterval(() => setTopSlideIndex((i) => (i + 1) % 2), 5000);
@@ -279,7 +297,7 @@ export const AppHomeScreen = ({ locale, dictionary }: AppHomeScreenProps) => {
       if (providerType) params.providerType = providerType;
       if (searchQuery.trim()) params.q = searchQuery.trim();
       const data = await servicesApiClient.searchServices(params);
-      setResults(data.items);
+      setResults(dedupeById(data.items));
     } catch {
       setResults([]);
     } finally {
@@ -835,9 +853,17 @@ export const AppHomeScreen = ({ locale, dictionary }: AppHomeScreenProps) => {
       </>
     )}
 
-        {/* Provider Detail Drawer */}
-        {selectedResult && (
-          <div className="home-drawer-overlay" onClick={() => setSelectedResult(null)}>
+        {/* Provider Detail Drawer - hidden when booking modal is open to avoid stacked overlays */}
+        {selectedResult && !showBookingModal && (
+          <div
+            className="home-drawer-overlay"
+            onClick={() => {
+              // #region agent log
+              fetch('http://127.0.0.1:7325/ingest/ebd08bf8-7d73-450c-ad4d-4436a6c2225b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'40e02a'},body:JSON.stringify({sessionId:'40e02a',location:'app-home-screen.tsx:drawer-overlay-click',message:'Drawer overlay clicked',data:{hypothesisId:'H1'},timestamp:Date.now()})}).catch(()=>{});
+              // #endregion
+              setSelectedResult(null);
+            }}
+          >
             <div className="home-drawer" onClick={(e) => e.stopPropagation()}>
               <button
                 type="button"
@@ -909,7 +935,12 @@ export const AppHomeScreen = ({ locale, dictionary }: AppHomeScreenProps) => {
                 <button
                   type="button"
                   className="dashboard-btn dashboard-btn--primary"
-                  onClick={() => {
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    // #region agent log
+                    fetch('http://127.0.0.1:7325/ingest/ebd08bf8-7d73-450c-ad4d-4436a6c2225b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'40e02a'},body:JSON.stringify({sessionId:'40e02a',location:'app-home-screen.tsx:request-btn-click',message:'Request service button clicked',data:{hypothesisId:'H2'},timestamp:Date.now()})}).catch(()=>{});
+                    // #endregion
                     setShowBookingModal(true);
                   }}
                 >

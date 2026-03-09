@@ -105,7 +105,7 @@ export class WalletRepository {
               description, reference_type, reference_id, metadata, created_by, created_at
        FROM transactions WHERE user_id = $1
        ORDER BY created_at DESC
-       LIMIT $2 OFFSET $3`,
+       LIMIT $2::int OFFSET $3::int`,
       [userId, limit, offset],
     );
 

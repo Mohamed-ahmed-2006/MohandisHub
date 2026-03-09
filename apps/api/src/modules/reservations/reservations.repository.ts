@@ -347,7 +347,7 @@ export class ReservationsRepository {
        LEFT JOIN services s ON s.id = r.service_id
        WHERE r.${column} = $1
        ORDER BY r.created_at DESC
-       LIMIT $2 OFFSET $3`,
+       LIMIT $2::int OFFSET $3::int`,
       [userId, limit, offset],
     );
 
@@ -728,7 +728,7 @@ export class ReservationsRepository {
       `SELECT * FROM reservation_disputes
        ${where}
        ORDER BY created_at DESC
-       LIMIT $${limitIdx} OFFSET $${offsetIdx}`,
+       LIMIT $${limitIdx}::int OFFSET $${offsetIdx}::int`,
       params,
     );
     const { rows: countRows } = await getPool().query<{ count: string }>(

@@ -65,7 +65,7 @@ export class ChatRepository {
        JOIN users u ON u.id = m.sender_id
        WHERE m.conversation_id = $1
        ORDER BY m.created_at ASC
-       LIMIT $2 OFFSET $3`,
+       LIMIT $2::int OFFSET $3::int`,
       [conversationId, limit, offset],
     );
     return rows as MessageRow[];

@@ -1,4 +1,7 @@
 import type { Job, JobApplication, CreateJobDto, ApplyJobDto, JobMilestone, JobSubmission, CreateMilestoneDto, SubmitMilestoneDto, JobApplicationMessage } from '@mohandishub/shared';
+import type { PoolClient } from 'pg';
+
+import { getPool } from '../../db/pool.js';
 import { HttpError } from '../../utils/http-error.js';
 import { JobsRepository } from './jobs.repository.js';
 import type { JobRow, JobApplicationRow, JobMilestoneRow, JobSubmissionRow, JobApplicationMessageRow } from './jobs.repository.js';
@@ -46,8 +49,20 @@ export class JobsService {
     if (!job || job.status !== 'open') {
       throw new HttpError({ statusCode: 400, code: 'JOB_NOT_OPEN', message: 'Job is not open or does not exist.' });
     }
-    const app = await this.repo.applyForJob(jobId, expertId, input.coverLetter);
-    return this.toApplication(app);
+    try {
+      const app = await this.repo.applyForJob(jobId, expertId, input.coverLetter);
+      return this.toApplication(app);
+    } catch (err: unknown) {
+      const pgErr = err as { code?: string };
+      if (pgErr.code === '23505') {
+        throw new HttpError({
+          statusCode: 409,
+          code: 'DUPLICATE_APPLICATION',
+          message: 'You already applied for this job.',
+        });
+      }
+      throw err;
+    }
   }
 
   async getJobApplications(jobId: string, businessId: string): Promise<JobApplication[]> {
@@ -65,36 +80,111 @@ export class JobsService {
   }
 
   async updateApplicationStatus(applicationId: string, businessId: string, status: string): Promise<JobApplication> {
-    const app = await this.repo.getApplicationById(applicationId);
-    if (!app) {
-      throw new HttpError({ statusCode: 404, code: 'NOT_FOUND', message: 'Application not found' });
-    }
-    const job = await this.repo.getJobById(app.job_id);
-    if (!job || job.business_id !== businessId) {
-      throw new HttpError({ statusCode: 403, code: 'FORBIDDEN', message: 'You do not own this job' });
+    const allowedStatus = new Set(['pending', 'reviewed', 'accepted', 'rejected']);
+    if (!allowedStatus.has(status)) {
+      throw new HttpError({
+        statusCode: 400,
+        code: 'INVALID_APPLICATION_STATUS',
+        message: 'Invalid application status.',
+      });
     }
 
-    const updated = await this.repo.updateApplicationStatus(applicationId, status);
-    
-    // Notify the expert
+    const pool = getPool();
+    const client = await pool.connect();
+    let updated: JobApplicationRow | null = null;
+    let job: JobRow | null = null;
+    try {
+      await client.query('BEGIN');
+
+      const app = await this.findApplicationForUpdate(client, applicationId);
+      if (!app) {
+        throw new HttpError({ statusCode: 404, code: 'NOT_FOUND', message: 'Application not found' });
+      }
+      job = await this.findJobForUpdate(client, app.job_id);
+      if (!job || job.business_id !== businessId) {
+        throw new HttpError({ statusCode: 403, code: 'FORBIDDEN', message: 'You do not own this job' });
+      }
+
+      if (status === 'accepted') {
+        const jobApplications = await this.listApplicationsByJobForUpdate(client, app.job_id);
+        const currentAccepted = jobApplications.find((row) => row.status === 'accepted' && row.id !== app.id);
+
+        if (currentAccepted) {
+          const started = await this.hasApplicationWorkStarted(client, currentAccepted.id);
+          if (started) {
+            throw new HttpError({
+              statusCode: 409,
+              code: 'APPLICATION_REPLACEMENT_BLOCKED',
+              message: 'Cannot replace accepted application after work has started.',
+            });
+          }
+        }
+
+        await client.query(
+          `UPDATE job_applications
+           SET status = 'accepted', updated_at = now()
+           WHERE id = $1`,
+          [applicationId],
+        );
+        await client.query(
+          `UPDATE job_applications
+           SET status = 'rejected', updated_at = now()
+           WHERE job_id = $1
+             AND id != $2
+             AND status IN ('pending', 'reviewed', 'accepted')`,
+          [app.job_id, applicationId],
+        );
+      } else {
+        if (app.status === 'accepted' && status !== 'accepted') {
+          const started = await this.hasApplicationWorkStarted(client, app.id);
+          if (started) {
+            throw new HttpError({
+              statusCode: 409,
+              code: 'APPLICATION_REPLACEMENT_BLOCKED',
+              message: 'Cannot change accepted application after work has started.',
+            });
+          }
+        }
+        await client.query(
+          `UPDATE job_applications
+           SET status = $2, updated_at = now()
+           WHERE id = $1`,
+          [applicationId, status],
+        );
+      }
+
+      updated = await this.findApplicationForUpdate(client, applicationId);
+      await client.query('COMMIT');
+    } catch (err: unknown) {
+      await client.query('ROLLBACK');
+      const pgErr = err as { code?: string; constraint?: string };
+      if (
+        pgErr.code === '23505' &&
+        pgErr.constraint === 'uniq_job_applications_one_accepted_per_job'
+      ) {
+        throw new HttpError({
+          statusCode: 409,
+          code: 'APPLICATION_ACCEPT_CONFLICT',
+          message: 'Another application was accepted for this job.',
+        });
+      }
+      throw err;
+    } finally {
+      client.release();
+    }
+
+    if (!updated || !job) {
+      throw new HttpError({ statusCode: 500, code: 'INTERNAL_ERROR', message: 'Application update failed.' });
+    }
+
     const io = getSocketServer();
     if (io) {
       io.to(`user:${updated.expert_id}`).emit('notification', {
         type: 'application_status',
         title: 'Application Update',
-        message: `Your application has been ${status}`,
+        message: `Your application has been ${updated.status}`,
         jobId: job.id,
       });
-    }
-
-    // Auto close other applications if one is accepted (assuming single-freelancer logic per job, though this could be configurable)
-    if (status === 'accepted') {
-      const allApps = await this.repo.listJobApplications(app.job_id);
-      for (const otherApp of allApps) {
-        if (otherApp.id !== applicationId && otherApp.status === 'pending') {
-          await this.repo.updateApplicationStatus(otherApp.id, 'rejected');
-        }
-      }
     }
 
     return this.toApplication(updated);
@@ -112,6 +202,13 @@ export class JobsService {
     
     if (job.status === 'closed') {
       throw new HttpError({ statusCode: 400, code: 'JOB_CLOSED', message: 'Job is closed' });
+    }
+    if (app.status !== 'accepted') {
+      throw new HttpError({
+        statusCode: 400,
+        code: 'APPLICATION_NOT_ACCEPTED',
+        message: 'Milestones can only be created for accepted applications.',
+      });
     }
     
     const milestone = await this.repo.createMilestone(applicationId, input.title, input.amount);
@@ -227,6 +324,13 @@ export class JobsService {
     if (job.business_id !== userId && app.expert_id !== userId) {
       throw new HttpError({ statusCode: 403, code: 'FORBIDDEN', message: 'You are not authorized' });
     }
+    if (!['pending', 'accepted'].includes(app.status)) {
+      throw new HttpError({
+        statusCode: 400,
+        code: 'APPLICATION_CHAT_NOT_ALLOWED',
+        message: 'Application chat is available only for pending or accepted applications.',
+      });
+    }
 
     const messages = await this.repo.listApplicationMessages(applicationId);
     return messages.map(m => this.toApplicationMessage(m));
@@ -243,6 +347,13 @@ export class JobsService {
     }
     if (job.business_id !== userId && app.expert_id !== userId) {
       throw new HttpError({ statusCode: 403, code: 'FORBIDDEN', message: 'You are not authorized' });
+    }
+    if (!['pending', 'accepted'].includes(app.status)) {
+      throw new HttpError({
+        statusCode: 400,
+        code: 'APPLICATION_CHAT_NOT_ALLOWED',
+        message: 'Application chat is available only for pending or accepted applications.',
+      });
     }
 
     const msg = await this.repo.createApplicationMessage(applicationId, userId, content);
@@ -272,6 +383,48 @@ export class JobsService {
       throw new HttpError({ statusCode: 404, code: 'NOT_FOUND', message: 'Job not found or unauthorized' });
     }
     return this.toJob(updated);
+  }
+
+  private async findApplicationForUpdate(
+    client: PoolClient,
+    applicationId: string,
+  ): Promise<JobApplicationRow | null> {
+    const { rows } = await client.query<JobApplicationRow>(
+      `SELECT * FROM job_applications WHERE id = $1 FOR UPDATE`,
+      [applicationId],
+    );
+    return rows[0] ?? null;
+  }
+
+  private async findJobForUpdate(client: PoolClient, jobId: string): Promise<JobRow | null> {
+    const { rows } = await client.query<JobRow>(
+      `SELECT * FROM jobs WHERE id = $1 FOR UPDATE`,
+      [jobId],
+    );
+    return rows[0] ?? null;
+  }
+
+  private async listApplicationsByJobForUpdate(
+    client: PoolClient,
+    jobId: string,
+  ): Promise<JobApplicationRow[]> {
+    const { rows } = await client.query<JobApplicationRow>(
+      `SELECT * FROM job_applications WHERE job_id = $1 FOR UPDATE`,
+      [jobId],
+    );
+    return rows;
+  }
+
+  private async hasApplicationWorkStarted(client: PoolClient, applicationId: string): Promise<boolean> {
+    const { rows } = await client.query<{ started: boolean }>(
+      `SELECT EXISTS (
+          SELECT 1
+          FROM job_milestones
+          WHERE job_application_id = $1
+        ) AS started`,
+      [applicationId],
+    );
+    return rows[0]?.started === true;
   }
 
   private toJob(row: JobRow): Job {

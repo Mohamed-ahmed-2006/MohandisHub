@@ -3,9 +3,6 @@ import type { CreateJobDto, Job, JobApplication, ApplyJobDto, JobMilestone, Crea
 import { getApiBaseUrl } from '../env';
 
 async function apiReq<T>(path: string, options?: RequestInit): Promise<T> {
-  // #region agent log
-  fetch('http://127.0.0.1:7325/ingest/ebd08bf8-7d73-450c-ad4d-4436a6c2225b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'9dfbfc'},body:JSON.stringify({sessionId:'9dfbfc',location:'apps/web/lib/jobs/client.ts:4',message:'apiReq called',data:{path},timestamp:Date.now(),runId:'run1',hypothesisId:'H1'})}).catch(()=>{});
-  // #endregion
   const res = await fetch(`${getApiBaseUrl()}${path}`, options);
   // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
   const data = await res.json().catch(() => ({}));

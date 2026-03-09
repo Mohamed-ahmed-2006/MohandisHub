@@ -22,6 +22,7 @@ export const AdminVerificationsTab = ({ dictionary, accessToken, refreshSession 
   const [items, setItems] = useState<PendingVerificationItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [reviewing, setReviewing] = useState<string | null>(null);
+  const [syncing, setSyncing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [activeSubTab, setActiveSubTab] = useState<'identity' | 'academic' | 'business'>(
     'identity',
@@ -84,6 +85,21 @@ export const AdminVerificationsTab = ({ dictionary, accessToken, refreshSession 
     }
   };
 
+  const handleSyncVerifiedAt = async () => {
+    setSyncing(true);
+    setError(null);
+    try {
+      const result = await adminApiClient.syncVerifiedAt(accessToken, { refreshSession });
+      if (result.experts > 0 || result.businesses > 0) {
+        setError(null);
+      }
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, dictionary));
+    } finally {
+      setSyncing(false);
+    }
+  };
+
   const identityDocs = items.flatMap((i) =>
     i.identityDocuments
       .filter((d) => d.status === 'pending' || d.status === 'under_review')
@@ -108,7 +124,16 @@ export const AdminVerificationsTab = ({ dictionary, accessToken, refreshSession 
   return (
     <>
       {error && <p className="admin-error-banner">{error}</p>}
-      <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem' }}>
+      <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem', flexWrap: 'wrap', alignItems: 'center' }}>
+        <button
+          type="button"
+          className="admin-btn"
+          disabled={syncing}
+          onClick={() => void handleSyncVerifiedAt()}
+          title="Fix verified_at for profiles manually set to verified in the database"
+        >
+          {syncing ? dictionary.admin.loading : 'Sync verified_at'}
+        </button>
         <button
           type="button"
           className={`admin-btn ${activeSubTab === 'identity' ? 'admin-btn--primary' : ''}`}
