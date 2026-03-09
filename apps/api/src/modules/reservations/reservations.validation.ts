@@ -102,6 +102,8 @@ export const endCallSchema = z.object({
   action: z.enum(['end', 'refresh']),
 });
 
+export const renewCallTokenSchema = z.object({}).strict();
+
 export const resolveDisputeSchema = z.object({
   status: z.enum([
     'resolved_customer',
@@ -125,4 +127,5 @@ export type CallJoinInput = z.infer<typeof callJoinSchema>;
 export type CallHeartbeatInput = z.infer<typeof callHeartbeatSchema>;
 export type CallExtensionInput = z.infer<typeof callExtensionSchema>;
 export type EndCallInput = z.infer<typeof endCallSchema>;
+export type RenewCallTokenInput = z.infer<typeof renewCallTokenSchema>;
 export type ResolveDisputeInput = z.infer<typeof resolveDisputeSchema>;

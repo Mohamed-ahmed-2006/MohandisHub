@@ -51,6 +51,12 @@ const PLATFORM_USER_ID = '00000000-0000-0000-0000-000000000001';
 const DISCONNECT_AUTO_RELEASE_HOURS = 3;
 const OFFLINE_DONE_TIMEOUT_HOURS = 6;
 const MINUTE_MS = 60_000;
+const SECOND_MS = 1_000;
+const PIASTER_PER_EGP = 100;
+const MILLI_PIASTER_PER_PIASTER = 1_000;
+const MILLI_PIASTER_PER_EGP = PIASTER_PER_EGP * MILLI_PIASTER_PER_PIASTER;
+const AGORA_TOKEN_EXPIRY_SECONDS = 7_200;
+const LIFECYCLE_SWEEP_LOCK_KEY = 6_310_019;
 
 const toNumber = (value: string | number | null | undefined): number => {
   if (value == null) return 0;
@@ -125,6 +131,7 @@ const mapReservation = (row: ReservationRow): Reservation => {
     endedAt: row.ended_at,
     completedAt: row.completed_at,
     customerDoneDueAt: row.customer_done_due_at,
+    donePromptedAt: row.done_prompted_at,
     disconnectAutoReleaseAt: row.disconnect_auto_release_at,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -160,6 +167,7 @@ const mapCallSession = (row: ReservationCallSessionRow): ReservationCallSession 
   billingPausedAt: row.billing_paused_at,
   lastBilledAt: row.last_billed_at,
   billedMinutes: row.billed_minutes,
+  billedSeconds: row.billed_seconds ?? row.billed_minutes * 60,
   extensionStatus: row.extension_status as ReservationCallSession['extensionStatus'],
   extensionRequestedBy: row.extension_requested_by,
   extensionUntil: row.extension_until,
@@ -263,13 +271,24 @@ export class ReservationsService {
     input: CreateReservationSlotInput,
   ): Promise<ReservationSlot> {
     this.ensureProviderRole(role);
-    const slot = await this.repo.createSlot(userId, {
-      startAt: new Date(input.startAt),
-      endAt: new Date(input.endAt),
-      supportsOnline: input.supportsOnline ?? true,
-      supportsOffline: input.supportsOffline ?? true,
-    });
-    return mapSlot(slot);
+    try {
+      const slot = await this.repo.createSlot(userId, {
+        startAt: new Date(input.startAt),
+        endAt: new Date(input.endAt),
+        supportsOnline: input.supportsOnline ?? true,
+        supportsOffline: input.supportsOffline ?? true,
+      });
+      return mapSlot(slot);
+    } catch (error) {
+      if (this.isSlotOverlapError(error)) {
+        throw new HttpError({
+          statusCode: 409,
+          code: 'SLOT_OVERLAP',
+          message: 'This slot overlaps with another active slot for the same provider.',
+        });
+      }
+      throw error;
+    }
   }
 
   async updateSlot(
@@ -293,15 +312,26 @@ export class ReservationsService {
     if (input.status !== undefined) slotUpdates.status = input.status;
     if (input.supportsOnline !== undefined) slotUpdates.supportsOnline = input.supportsOnline;
     if (input.supportsOffline !== undefined) slotUpdates.supportsOffline = input.supportsOffline;
-    const updated = await this.repo.updateSlot(slotId, slotUpdates);
-    if (!updated) {
-      throw new HttpError({
-        statusCode: 400,
-        code: 'SLOT_UPDATE_FAILED',
-        message: 'Slot could not be updated.',
-      });
+    try {
+      const updated = await this.repo.updateSlot(slotId, slotUpdates);
+      if (!updated) {
+        throw new HttpError({
+          statusCode: 400,
+          code: 'SLOT_UPDATE_FAILED',
+          message: 'Slot could not be updated.',
+        });
+      }
+      return mapSlot(updated);
+    } catch (error) {
+      if (this.isSlotOverlapError(error)) {
+        throw new HttpError({
+          statusCode: 409,
+          code: 'SLOT_OVERLAP',
+          message: 'This slot overlaps with another active slot for the same provider.',
+        });
+      }
+      throw error;
     }
-    return mapSlot(updated);
   }
 
   async deleteSlot(userId: string, role: string, slotId: string): Promise<{ deleted: boolean }> {
@@ -440,6 +470,7 @@ export class ReservationsService {
     this.ensureReservationParticipant(reservation, userId);
 
     await this.handleDisconnectAutoReleaseIfDue(reservation.id);
+    await this.handleOfflineDonePromptIfDue(reservation.id);
     const refreshed = await this.repo.findReservationById(reservationId);
     return mapReservation(refreshed ?? reservation);
   }
@@ -531,31 +562,58 @@ export class ReservationsService {
         message: 'You cannot respond to your own proposal.',
       });
     }
-    if (proposal.status !== 'pending') {
-      throw new HttpError({
-        statusCode: 409,
-        code: 'PROPOSAL_ALREADY_DECIDED',
-        message: 'This proposal has already been decided.',
-      });
-    }
-
-    const decided = await this.repo.respondLocationProposal(input.proposalId, input.decision, userId);
-    if (!decided) {
-      throw new HttpError({
-        statusCode: 404,
-        code: 'PROPOSAL_NOT_FOUND',
-        message: 'Location proposal not found.',
-      });
-    }
-
+    const pool = getPool();
+    const client = await pool.connect();
+    let decided: ReservationLocationProposalRow | null = null;
     let updatedReservation: ReservationRow = reservation;
-    if (input.decision === 'accept') {
-      const updated = await this.repo.updateReservation(reservationId, {
-        finalLocationText: decided.location_text,
-        finalLocationLat: decided.lat != null ? toNumber(decided.lat) : null,
-        finalLocationLng: decided.lng != null ? toNumber(decided.lng) : null,
-      });
-      if (updated) updatedReservation = updated;
+    try {
+      await client.query('BEGIN');
+      const reservationForUpdate = await this.findReservationForUpdate(client, reservationId);
+      if (!reservationForUpdate) {
+        throw new HttpError({
+          statusCode: 404,
+          code: 'RESERVATION_NOT_FOUND',
+          message: 'Reservation not found.',
+        });
+      }
+
+      decided = await this.repo.respondLocationProposal(input.proposalId, input.decision, userId, client);
+      if (!decided) {
+        const stillExists = await this.repo.getLocationProposalById(input.proposalId);
+        throw new HttpError({
+          statusCode: stillExists ? 409 : 404,
+          code: stillExists ? 'PROPOSAL_ALREADY_DECIDED' : 'PROPOSAL_NOT_FOUND',
+          message: stillExists
+            ? 'This proposal has already been decided.'
+            : 'Location proposal not found.',
+        });
+      }
+
+      if (input.decision === 'accept') {
+        const updated = await this.repo.updateReservation(
+          reservationId,
+          {
+            finalLocationText: decided.location_text,
+            finalLocationLat: decided.lat != null ? toNumber(decided.lat) : null,
+            finalLocationLng: decided.lng != null ? toNumber(decided.lng) : null,
+          },
+          client,
+        );
+        if (updated) updatedReservation = updated;
+      }
+      await client.query('COMMIT');
+    } catch (error) {
+      await client.query('ROLLBACK');
+      if (this.isSlotOverlapError(error)) {
+        throw new HttpError({
+          statusCode: 409,
+          code: 'SLOT_OVERLAP',
+          message: 'This slot overlaps with another active slot for the same provider.',
+        });
+      }
+      throw error;
+    } finally {
+      client.release();
     }
 
     await this.sendReservationMessage(
@@ -567,7 +625,7 @@ export class ReservationsService {
     );
 
     return {
-      proposal: mapLocationProposal(decided),
+      proposal: mapLocationProposal(decided!),
       reservation: mapReservation(updatedReservation),
     };
   }
@@ -678,6 +736,7 @@ export class ReservationsService {
             status: 'waiting_customer_done',
             startedAt: now,
             customerDoneDueAt: dueAt,
+            donePromptedAt: null,
           },
           client,
         );
@@ -721,6 +780,7 @@ export class ReservationsService {
   }> {
     const reservation = await this.requireReservationForParticipant(reservationId, userId);
     await this.handleDisconnectAutoReleaseIfDue(reservation.id);
+    await this.handleOfflineDonePromptIfDue(reservation.id);
 
     if (input.action === 'report') {
       const existing = await this.repo.getOpenDisputeByReservation(reservationId);
@@ -734,6 +794,8 @@ export class ReservationsService {
       const dispute = existing ?? (await this.repo.createDispute(disputeInput));
       const updatedReservation = await this.repo.updateReservation(reservationId, {
         status: 'disputed',
+        customerDoneDueAt: null,
+        donePromptedAt: null,
       });
       if (!updatedReservation) {
         throw new HttpError({
@@ -783,6 +845,9 @@ export class ReservationsService {
           status: 'completed',
           completedAt: new Date(),
           endedAt: new Date(),
+          customerDoneDueAt: null,
+          donePromptedAt: null,
+          disconnectAutoReleaseAt: null,
         },
         client,
       );
@@ -815,6 +880,7 @@ export class ReservationsService {
     appId: string;
     channel: string;
     uid: number;
+    tokenExpiresAt: number;
     snapshot: CallSnapshot;
   }> {
     if (!env.AGORA_APP_ID || !env.AGORA_APP_CERTIFICATE) {
@@ -914,14 +980,16 @@ export class ReservationsService {
         appCertificate: env.AGORA_APP_CERTIFICATE,
         channelName: channel,
         uid,
-        expiresInSeconds: 7200,
+        expiresInSeconds: AGORA_TOKEN_EXPIRY_SECONDS,
       });
+      const tokenExpiresAt = Math.floor(Date.now() / 1000) + AGORA_TOKEN_EXPIRY_SECONDS;
 
       return {
         token,
         appId: env.AGORA_APP_ID,
         channel,
         uid,
+        tokenExpiresAt,
         snapshot,
       };
     } catch (error) {
@@ -930,6 +998,71 @@ export class ReservationsService {
     } finally {
       client.release();
     }
+  }
+
+  async renewCallToken(
+    userId: string,
+    reservationId: string,
+  ): Promise<{
+    token: string;
+    appId: string;
+    channel: string;
+    uid: number;
+    tokenExpiresAt: number;
+  }> {
+    if (!env.AGORA_APP_ID || !env.AGORA_APP_CERTIFICATE) {
+      throw new HttpError({
+        statusCode: 503,
+        code: 'AGORA_NOT_CONFIGURED',
+        message: 'Online call provider is not configured.',
+      });
+    }
+
+    const reservation = await this.requireReservationForParticipant(reservationId, userId);
+    if (reservation.mode !== 'online') {
+      throw new HttpError({
+        statusCode: 400,
+        code: 'ONLINE_ONLY',
+        message: 'This endpoint is only available for online reservations.',
+      });
+    }
+
+    const session = await this.repo.getCallSessionByReservation(reservationId);
+    if (!session || session.status === 'ended') {
+      throw new HttpError({
+        statusCode: 404,
+        code: 'CALL_SESSION_NOT_FOUND',
+        message: 'Call session not found.',
+      });
+    }
+
+    const participant = (await this.repo.listCallParticipants(session.id)).find(
+      (row) => row.user_id === userId,
+    );
+    if (!participant) {
+      throw new HttpError({
+        statusCode: 409,
+        code: 'CALL_NOT_JOINED',
+        message: 'Join the call first before renewing token.',
+      });
+    }
+
+    const token = buildAgoraRtcToken({
+      appId: env.AGORA_APP_ID,
+      appCertificate: env.AGORA_APP_CERTIFICATE,
+      channelName: session.agora_channel,
+      uid: participant.agora_uid,
+      expiresInSeconds: AGORA_TOKEN_EXPIRY_SECONDS,
+    });
+    const tokenExpiresAt = Math.floor(Date.now() / 1000) + AGORA_TOKEN_EXPIRY_SECONDS;
+
+    return {
+      token,
+      appId: env.AGORA_APP_ID,
+      channel: session.agora_channel,
+      uid: participant.agora_uid,
+      tokenExpiresAt,
+    };
   }
 
   async callHeartbeat(
@@ -1245,6 +1378,8 @@ export class ReservationsService {
           status: 'completed',
           endedAt: now,
           completedAt: now,
+          customerDoneDueAt: null,
+          donePromptedAt: null,
           disconnectAutoReleaseAt: null,
         },
         client,
@@ -1283,6 +1418,28 @@ export class ReservationsService {
       customerRemainingMinutes: walletState.customerRemainingMinutes,
       providerRemainingMinutes: walletState.providerRemainingMinutes,
     };
+  }
+
+  async runLifecycleSweep(): Promise<{
+    disconnectReleased: number;
+    donePrompted: number;
+  }> {
+    const pool = getPool();
+    const lock = await pool.query<{ locked: boolean }>(
+      `SELECT pg_try_advisory_lock($1) AS locked`,
+      [LIFECYCLE_SWEEP_LOCK_KEY],
+    );
+    if (!lock.rows[0]?.locked) {
+      return { disconnectReleased: 0, donePrompted: 0 };
+    }
+
+    try {
+      const disconnectReleased = await this.processDueDisconnectAutoRelease(100);
+      const donePrompted = await this.processDueOfflineDonePrompts(100);
+      return { disconnectReleased, donePrompted };
+    } finally {
+      await pool.query(`SELECT pg_advisory_unlock($1)`, [LIFECYCLE_SWEEP_LOCK_KEY]);
+    }
   }
 
   async listDisputes(
@@ -1815,8 +1972,8 @@ export class ReservationsService {
     if (session.status !== 'active') {
       return { session, lowBalanceAutoEnded: false };
     }
-    const sideRate = toNumber(reservation.admin_minute_rate) / 2;
-    if (sideRate <= 0) {
+    const sideRatePerMinute = toNumber(reservation.admin_minute_rate) / 2;
+    if (sideRatePerMinute <= 0) {
       const noChargeSession = await this.repo.updateCallSession(
         session.id,
         { lastBilledAt: new Date() },
@@ -1833,65 +1990,98 @@ export class ReservationsService {
       return { session, lowBalanceAutoEnded: false };
     }
     const now = new Date();
-    const elapsedMinutes = Math.floor((now.getTime() - lastBilledAt.getTime()) / MINUTE_MS);
-    if (elapsedMinutes <= 0) {
+    const elapsedSeconds = Math.floor((now.getTime() - lastBilledAt.getTime()) / SECOND_MS);
+    if (elapsedSeconds <= 0) {
       return { session, lowBalanceAutoEnded: false };
     }
 
     const wallets = await this.findWalletsForBilling(client, reservation.customer_id, reservation.provider_id);
-    const customerBalance = toNumber(wallets.customer.balance);
-    const providerBalance = toNumber(wallets.provider.balance);
-    const customerMax = Math.floor(customerBalance / sideRate);
-    const providerMax = Math.floor(providerBalance / sideRate);
-    const minutesToBill = Math.max(0, Math.min(elapsedMinutes, customerMax, providerMax));
+    const customerBalanceCents = this.egpToCents(toNumber(wallets.customer.balance));
+    const providerBalanceCents = this.egpToCents(toNumber(wallets.provider.balance));
+    const sideRateMilliPerMinute = Math.round(sideRatePerMinute * MILLI_PIASTER_PER_EGP);
+    const customerCarryMilli = this.parseCarryMilliPiaster(session.customer_carry_milli_piaster);
+    const providerCarryMilli = this.parseCarryMilliPiaster(session.provider_carry_milli_piaster);
 
-    if (minutesToBill > 0) {
-      const customerCost = Number((sideRate * minutesToBill).toFixed(2));
-      const providerCost = Number((sideRate * minutesToBill).toFixed(2));
+    const customerMaxSeconds = this.maxBillableSecondsForBalance(
+      sideRateMilliPerMinute,
+      customerCarryMilli,
+      customerBalanceCents,
+      elapsedSeconds,
+    );
+    const providerMaxSeconds = this.maxBillableSecondsForBalance(
+      sideRateMilliPerMinute,
+      providerCarryMilli,
+      providerBalanceCents,
+      elapsedSeconds,
+    );
+    const secondsToBill = Math.max(0, Math.min(elapsedSeconds, customerMaxSeconds, providerMaxSeconds));
+
+    const customerCharge = this.computeSideChargeForSeconds(
+      sideRateMilliPerMinute,
+      customerCarryMilli,
+      secondsToBill,
+    );
+    const providerCharge = this.computeSideChargeForSeconds(
+      sideRateMilliPerMinute,
+      providerCarryMilli,
+      secondsToBill,
+    );
+
+    if (customerCharge.chargeCents > 0 || providerCharge.chargeCents > 0) {
+      const customerCost = this.centsToEgp(customerCharge.chargeCents);
+      const providerCost = this.centsToEgp(providerCharge.chargeCents);
       const receiverId = await this.getCommissionReceiverId();
       const platformWalletId = await this.walletRepo.getOrCreateCommissionWallet(client, receiverId);
 
-      await this.walletRepo.debitWalletInTransaction(
-        client,
-        wallets.customer.id,
-        reservation.customer_id,
-        customerCost,
-        `Online reservation minute fee (${minutesToBill}m)`,
-        'reservation',
-        reservation.id,
-      );
-      await this.walletRepo.debitWalletInTransaction(
-        client,
-        wallets.provider.id,
-        reservation.provider_id,
-        providerCost,
-        `Online reservation minute fee (${minutesToBill}m)`,
-        'reservation',
-        reservation.id,
-      );
+      if (customerCharge.chargeCents > 0) {
+        await this.walletRepo.debitWalletInTransaction(
+          client,
+          wallets.customer.id,
+          reservation.customer_id,
+          customerCost,
+          `Online reservation usage fee (${secondsToBill}s)`,
+          'reservation',
+          reservation.id,
+        );
+      }
+      if (providerCharge.chargeCents > 0) {
+        await this.walletRepo.debitWalletInTransaction(
+          client,
+          wallets.provider.id,
+          reservation.provider_id,
+          providerCost,
+          `Online reservation usage fee (${secondsToBill}s)`,
+          'reservation',
+          reservation.id,
+        );
+      }
       await this.walletRepo.creditWithTypeInTransaction(
         client,
         platformWalletId,
         receiverId,
-        Number((customerCost + providerCost).toFixed(2)),
+        this.centsToEgp(customerCharge.chargeCents + providerCharge.chargeCents),
         'commission',
-        `Online reservation minute fee (${minutesToBill}m)`,
+        `Online reservation usage fee (${secondsToBill}s)`,
         'reservation',
         reservation.id,
       );
     }
 
-    const nextLastBilledAt = new Date(lastBilledAt.getTime() + minutesToBill * MINUTE_MS);
+    const billedSecondsTotal = (session.billed_seconds ?? session.billed_minutes * 60) + secondsToBill;
+    const nextLastBilledAt = new Date(lastBilledAt.getTime() + secondsToBill * SECOND_MS);
     const updatedSession = await this.repo.updateCallSession(
       session.id,
       {
         lastBilledAt: nextLastBilledAt,
-        billedMinutes: session.billed_minutes + minutesToBill,
+        billedSeconds: billedSecondsTotal,
+        billedMinutes: Math.floor(billedSecondsTotal / 60),
+        customerCarryMilliPiaster: customerCharge.carryMilli,
+        providerCarryMilliPiaster: providerCharge.carryMilli,
       },
       client,
     );
 
-    const lowBalanceAutoEnded = minutesToBill < elapsedMinutes;
+    const lowBalanceAutoEnded = secondsToBill < elapsedSeconds;
     if (lowBalanceAutoEnded) {
       await this.repo.updateCallSession(
         session.id,
@@ -1913,6 +2103,8 @@ export class ReservationsService {
           status: 'completed',
           endedAt: new Date(),
           completedAt: new Date(),
+          customerDoneDueAt: null,
+          donePromptedAt: null,
           disconnectAutoReleaseAt: null,
         },
         client,
@@ -1923,6 +2115,116 @@ export class ReservationsService {
       session: updatedSession ?? session,
       lowBalanceAutoEnded,
     };
+  }
+
+  private async processDueDisconnectAutoRelease(limit: number): Promise<number> {
+    const pool = getPool();
+    let processed = 0;
+    for (let i = 0; i < limit; i += 1) {
+      const client = await pool.connect();
+      let notifyReservation: ReservationRow | null = null;
+      let notifyMessage: string | null = null;
+      try {
+        await client.query('BEGIN');
+        const reservation = await this.findDueDisconnectReservationForUpdate(client);
+        if (!reservation) {
+          await client.query('COMMIT');
+          break;
+        }
+
+        const session = await this.findCallSessionByReservationForUpdate(client, reservation.id);
+        if (session?.status === 'active') {
+          const billed = await this.billMinutesInTransaction(client, reservation, session);
+          if (billed.lowBalanceAutoEnded) {
+            await client.query('COMMIT');
+            processed += 1;
+            notifyReservation = reservation;
+            notifyMessage = 'Call ended automatically because one participant had low balance.';
+            continue;
+          }
+        }
+
+        await this.releaseExpertFixedPayout(client, reservation, 'Disconnect timeout auto release');
+        await this.repo.updateReservation(
+          reservation.id,
+          {
+            status: 'completed',
+            endedAt: new Date(),
+            completedAt: new Date(),
+            customerDoneDueAt: null,
+            donePromptedAt: null,
+            disconnectAutoReleaseAt: null,
+          },
+          client,
+        );
+        if (session && session.status !== 'ended') {
+          await this.repo.updateCallSession(
+            session.id,
+            {
+              status: 'ended',
+              endedAt: new Date(),
+            },
+            client,
+          );
+        }
+        await client.query('COMMIT');
+        processed += 1;
+        notifyReservation = reservation;
+        notifyMessage =
+          'Session stayed disconnected for over 3 hours. Reservation auto-completed and fixed payout was released.';
+      } catch (error) {
+        await client.query('ROLLBACK');
+        throw error;
+      } finally {
+        client.release();
+      }
+
+      if (notifyReservation && notifyMessage) {
+        await this.sendReservationMessage(notifyReservation, notifyMessage, notifyReservation.provider_id);
+      }
+    }
+    return processed;
+  }
+
+  private async processDueOfflineDonePrompts(limit: number): Promise<number> {
+    const pool = getPool();
+    let processed = 0;
+    for (let i = 0; i < limit; i += 1) {
+      const client = await pool.connect();
+      let notifyReservation: ReservationRow | null = null;
+      try {
+        await client.query('BEGIN');
+        const reservation = await this.findDueDonePromptReservationForUpdate(client);
+        if (!reservation) {
+          await client.query('COMMIT');
+          break;
+        }
+        await this.repo.updateReservation(
+          reservation.id,
+          {
+            donePromptedAt: new Date(),
+          },
+          client,
+        );
+        await client.query('COMMIT');
+        processed += 1;
+        notifyReservation = reservation;
+      } catch (error) {
+        await client.query('ROLLBACK');
+        throw error;
+      } finally {
+        client.release();
+      }
+
+      if (notifyReservation) {
+        await this.sendReservationMessage(
+          notifyReservation,
+          'Customer confirmation is overdue. Please choose Done or Report now.',
+          notifyReservation.provider_id,
+        );
+      }
+    }
+    return processed;
   }
 
   private async handleDisconnectAutoReleaseIfDue(reservationId: string): Promise<void> {
@@ -1941,6 +2243,9 @@ export class ReservationsService {
         await client.query('ROLLBACK');
         return;
       }
+      if (session?.status === 'active') {
+        await this.billMinutesInTransaction(client, reservationForUpdate, session);
+      }
       await this.releaseExpertFixedPayout(client, reservationForUpdate, 'Disconnect timeout auto release');
       await this.repo.updateReservation(
         reservationId,
@@ -1948,6 +2253,8 @@ export class ReservationsService {
           status: 'completed',
           completedAt: new Date(),
           endedAt: new Date(),
+          customerDoneDueAt: null,
+          donePromptedAt: null,
           disconnectAutoReleaseAt: null,
         },
         client,
@@ -1971,6 +2278,66 @@ export class ReservationsService {
     }
   }
 
+  private async handleOfflineDonePromptIfDue(reservationId: string): Promise<void> {
+    const reservation = await this.repo.findReservationById(reservationId);
+    if (!reservation) return;
+    const dueAt = reservation.customer_done_due_at ? new Date(reservation.customer_done_due_at) : null;
+    if (!dueAt || Number.isNaN(dueAt.getTime()) || dueAt.getTime() > Date.now()) return;
+    if (reservation.status !== 'waiting_customer_done' || reservation.done_prompted_at) return;
+
+    const pool = getPool();
+    const client = await pool.connect();
+    let promptSent = false;
+    try {
+      await client.query('BEGIN');
+      const reservationForUpdate = await this.findReservationForUpdate(client, reservationId);
+      if (!reservationForUpdate) {
+        await client.query('COMMIT');
+        return;
+      }
+      const upToDateDueAt = reservationForUpdate.customer_done_due_at
+        ? new Date(reservationForUpdate.customer_done_due_at)
+        : null;
+      const isDue =
+        upToDateDueAt != null &&
+        !Number.isNaN(upToDateDueAt.getTime()) &&
+        upToDateDueAt.getTime() <= Date.now();
+      if (
+        reservationForUpdate.status !== 'waiting_customer_done' ||
+        reservationForUpdate.done_prompted_at ||
+        !isDue
+      ) {
+        await client.query('COMMIT');
+        return;
+      }
+      await this.repo.updateReservation(
+        reservationId,
+        {
+          donePromptedAt: new Date(),
+        },
+        client,
+      );
+      await client.query('COMMIT');
+      promptSent = true;
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+
+    if (promptSent) {
+      const refreshed = await this.repo.findReservationById(reservationId);
+      if (refreshed) {
+        await this.sendReservationMessage(
+          refreshed,
+          'Customer confirmation is overdue. Please choose Done or Report now.',
+          refreshed.provider_id,
+        );
+      }
+    }
+  }
+
   private async findReservationForUpdate(
     client: PoolClient,
     reservationId: string,
@@ -1982,10 +2349,57 @@ export class ReservationsService {
     return rows[0] ?? null;
   }
 
+  private async findDueDisconnectReservationForUpdate(
+    client: PoolClient,
+  ): Promise<ReservationRow | null> {
+    const { rows } = await client.query<ReservationRow>(
+      `SELECT *
+       FROM reservations
+       WHERE disconnect_auto_release_at IS NOT NULL
+         AND disconnect_auto_release_at <= now()
+         AND status IN ('in_session', 'waiting_customer_done')
+       ORDER BY disconnect_auto_release_at ASC
+       LIMIT 1
+       FOR UPDATE SKIP LOCKED`,
+    );
+    return rows[0] ?? null;
+  }
+
+  private async findDueDonePromptReservationForUpdate(
+    client: PoolClient,
+  ): Promise<ReservationRow | null> {
+    const { rows } = await client.query<ReservationRow>(
+      `SELECT *
+       FROM reservations
+       WHERE status = 'waiting_customer_done'
+         AND customer_done_due_at IS NOT NULL
+         AND customer_done_due_at <= now()
+         AND done_prompted_at IS NULL
+       ORDER BY customer_done_due_at ASC
+       LIMIT 1
+       FOR UPDATE SKIP LOCKED`,
+    );
+    return rows[0] ?? null;
+  }
+
   private async findSlotForUpdate(client: PoolClient, slotId: string): Promise<ReservationSlotRow | null> {
     const { rows } = await client.query<ReservationSlotRow>(
       `SELECT * FROM reservation_slots WHERE id = $1 FOR UPDATE`,
       [slotId],
+    );
+    return rows[0] ?? null;
+  }
+
+  private async findCallSessionByReservationForUpdate(
+    client: PoolClient,
+    reservationId: string,
+  ): Promise<ReservationCallSessionRow | null> {
+    const { rows } = await client.query<ReservationCallSessionRow>(
+      `SELECT *
+       FROM reservation_call_sessions
+       WHERE reservation_id = $1
+       FOR UPDATE`,
+      [reservationId],
     );
     return rows[0] ?? null;
   }
@@ -2049,6 +2463,73 @@ export class ReservationsService {
       });
     }
     return { customer, provider };
+  }
+
+  private parseCarryMilliPiaster(value: string | number | null | undefined): number {
+    if (typeof value === 'number') {
+      return Number.isFinite(value) ? Math.max(0, Math.trunc(value)) : 0;
+    }
+    if (!value) return 0;
+    const parsed = Number.parseInt(value, 10);
+    if (!Number.isFinite(parsed)) return 0;
+    return Math.max(0, parsed);
+  }
+
+  private egpToCents(amount: number): number {
+    return Math.max(0, Math.floor(amount * 100 + 1e-6));
+  }
+
+  private centsToEgp(cents: number): number {
+    return Number((Math.max(0, cents) / 100).toFixed(2));
+  }
+
+  private computeSideChargeForSeconds(
+    rateMilliPerMinute: number,
+    carryMilli: number,
+    seconds: number,
+  ): { chargeCents: number; carryMilli: number } {
+    if (seconds <= 0 || rateMilliPerMinute <= 0) {
+      return { chargeCents: 0, carryMilli: Math.max(0, carryMilli) };
+    }
+    const incrementMilli = Math.round((rateMilliPerMinute * seconds) / 60);
+    const totalMilli = Math.max(0, carryMilli + incrementMilli);
+    const chargeCents = Math.floor(totalMilli / MILLI_PIASTER_PER_PIASTER);
+    const nextCarryMilli = totalMilli - chargeCents * MILLI_PIASTER_PER_PIASTER;
+    return { chargeCents, carryMilli: nextCarryMilli };
+  }
+
+  private maxBillableSecondsForBalance(
+    rateMilliPerMinute: number,
+    carryMilli: number,
+    balanceCents: number,
+    elapsedSeconds: number,
+  ): number {
+    if (elapsedSeconds <= 0) return 0;
+    if (rateMilliPerMinute <= 0) return elapsedSeconds;
+    if (balanceCents <= 0) return 0;
+
+    let low = 0;
+    let high = elapsedSeconds;
+    let best = 0;
+    while (low <= high) {
+      const mid = Math.floor((low + high) / 2);
+      const projected = this.computeSideChargeForSeconds(rateMilliPerMinute, carryMilli, mid);
+      if (projected.chargeCents <= balanceCents) {
+        best = mid;
+        low = mid + 1;
+      } else {
+        high = mid - 1;
+      }
+    }
+    return best;
+  }
+
+  private isSlotOverlapError(error: unknown): boolean {
+    const pgError = error as { code?: string; constraint?: string };
+    return (
+      pgError?.code === '23P01' ||
+      pgError?.constraint === 'reservation_slots_no_overlap_active'
+    );
   }
 
   private async sendReservationMessage(

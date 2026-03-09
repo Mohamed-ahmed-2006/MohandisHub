@@ -184,6 +184,7 @@ export const reservationsApiClient = {
     appId: string;
     channel: string;
     uid: number;
+    tokenExpiresAt: number;
     snapshot: ReservationCallSnapshot;
   }> =>
     apiReq(`/api/reservations/${reservationId}/call/join`, token, {
@@ -223,4 +224,19 @@ export const reservationsApiClient = {
 
   callSnapshot: (token: string, reservationId: string): Promise<ReservationCallSnapshot> =>
     apiReq(`/api/reservations/${reservationId}/call/snapshot`, token),
+
+  renewCallToken: (
+    token: string,
+    reservationId: string,
+  ): Promise<{
+    token: string;
+    appId: string;
+    channel: string;
+    uid: number;
+    tokenExpiresAt: number;
+  }> =>
+    apiReq(`/api/reservations/${reservationId}/call/renew-token`, token, {
+      method: 'POST',
+      body: JSON.stringify({}),
+    }),
 };

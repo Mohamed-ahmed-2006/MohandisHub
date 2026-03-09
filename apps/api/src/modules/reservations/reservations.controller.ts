@@ -13,6 +13,7 @@ import {
   endCallSchema,
   finishReservationSchema,
   proposeLocationSchema,
+  renewCallTokenSchema,
   resolveDisputeSchema,
   respondLocationSchema,
   updateReservationSlotSchema,
@@ -339,6 +340,21 @@ const endCall = asyncHandler(async (req, res) => {
   res.json({ ok: true, data });
 });
 
+const renewCallToken = asyncHandler(async (req, res) => {
+  const user = requireUser(req);
+  const reservationId = req.params.reservationId;
+  if (!reservationId) {
+    throw new HttpError({
+      statusCode: 400,
+      code: 'VALIDATION_ERROR',
+      message: 'reservationId is required.',
+    });
+  }
+  parseBody(renewCallTokenSchema, req.body ?? {});
+  const data = await svc.renewCallToken(user.id, reservationId);
+  res.json({ ok: true, data });
+});
+
 const getCallSnapshot = asyncHandler(async (req, res) => {
   const user = requireUser(req);
   const reservationId = req.params.reservationId;
@@ -402,6 +418,7 @@ export const reservationsController = {
   callHeartbeat,
   decideCallExtension,
   endCall,
+  renewCallToken,
   getCallSnapshot,
   listDisputes,
   resolveDispute,

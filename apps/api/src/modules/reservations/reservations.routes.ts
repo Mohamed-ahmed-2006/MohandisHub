@@ -71,6 +71,7 @@ reservationsRouter.post('/:reservationId/call/join', reservationsController.join
 reservationsRouter.post('/:reservationId/call/heartbeat', reservationsController.callHeartbeat);
 reservationsRouter.post('/:reservationId/call/extension', reservationsController.decideCallExtension);
 reservationsRouter.post('/:reservationId/call/end', reservationsController.endCall);
+reservationsRouter.post('/:reservationId/call/renew-token', reservationsController.renewCallToken);
 reservationsRouter.get('/:reservationId/call/snapshot', reservationsController.getCallSnapshot);
 
 export { reservationsRouter };
