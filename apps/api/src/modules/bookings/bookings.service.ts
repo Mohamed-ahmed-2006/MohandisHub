@@ -113,7 +113,8 @@ export class BookingsService {
     const client = await pool.connect();
     try {
       await client.query('BEGIN');
-      const platformWalletId = await this.walletRepo.getOrCreatePlatformWallet(client);
+      const receiverId = '00000000-0000-0000-0000-000000000001';
+      const platformWalletId = await this.walletRepo.getOrCreateCommissionWallet(client, receiverId);
 
       const { rows: insRows } = await client.query<{ id: string }>(
         `INSERT INTO bookings (customer_id, provider_id, service_id, amount, currency, commission_amount, provider_amount, status, slot_start_at, slot_end_at)
@@ -156,7 +157,7 @@ export class BookingsService {
         await this.walletRepo.creditWithTypeInTransaction(
           client,
           platformWalletId,
-          '00000000-0000-0000-0000-000000000001',
+          receiverId,
           commission,
           'commission',
           'Commission from booking',

@@ -67,6 +67,7 @@ export const MyPlanScreen = ({ locale, dictionary }: Props) => {
       const result = await plansApiClient.subscribe(accessToken, confirmPlan.id);
       setWallet((prev) => (prev ? { ...prev, balance: result.walletBalance } : prev));
       await updateAuthUser();
+      window.dispatchEvent(new CustomEvent('wallet-updated'));
       setMessage({ type: 'success', text: d.subscribeSuccess ?? 'Subscribed successfully!' });
       setConfirmPlan(null);
     } catch (err) {

@@ -35,6 +35,8 @@ export class AdminRepository {
         (SELECT COUNT(*) FROM users WHERE is_admin = true AND deleted_at IS NULL)::text AS role_admin,
         (SELECT COUNT(*) FROM transactions)::text AS total_transactions,
         (SELECT COALESCE(SUM(amount), 0) FROM transactions WHERE type = 'deposit' AND status = 'completed')::text AS total_revenue,
+        (SELECT COALESCE(SUM(amount), 0) FROM transactions WHERE status = 'completed')::text AS transaction_volume,
+        (SELECT COALESCE(SUM(amount), 0) FROM transactions WHERE type = 'commission' AND status = 'completed')::text AS platform_commission_volume,
         (SELECT COUNT(*) FROM identity_documents WHERE status IN ('pending', 'under_review'))::text AS pending_verifications,
         (SELECT COUNT(*) FROM services WHERE status = 'active')::text AS active_services,
         (SELECT COUNT(*) FROM plans WHERE is_active = true)::text AS total_plans,
@@ -110,7 +112,7 @@ export class AdminRepository {
     params.push(limit, offset);
 
     const { rows } = await this.db.query<UserListRow>(
-      `SELECT u.*, p.slug AS plan_slug, p.name AS plan_name
+      `SELECT u.*, p.slug AS plan_slug, p.name AS plan_name, u.admin_permissions
        FROM users u
        LEFT JOIN plans p ON u.plan_id = p.id
        WHERE ${conditions.join(' AND ')}
@@ -123,7 +125,7 @@ export class AdminRepository {
 
   async getUserDetail(userId: string): Promise<UserDetailRow | null> {
     const { rows } = await this.db.query<UserDetailRow>(
-      `SELECT u.*, p.slug AS plan_slug, p.name AS plan_name,
+      `SELECT u.*, p.slug AS plan_slug, p.name AS plan_name, u.admin_permissions,
               w.balance::text AS wallet_balance, w.currency AS wallet_currency, w.is_frozen AS wallet_frozen
        FROM users u
        LEFT JOIN plans p ON u.plan_id = p.id
@@ -138,8 +140,16 @@ export class AdminRepository {
     const entries = Object.entries(fields).filter(([, v]) => v !== undefined);
     if (entries.length === 0) return null;
 
-    const setClauses = entries.map(([key], i) => `${key} = $${i + 2}`);
-    const values = entries.map(([, v]) => v);
+    const setClauses = entries.map(([key], i) => {
+      // Allow admin_permissions array to be properly stored in JSONB
+      return `${key} = $${i + 2}`;
+    });
+    const values = entries.map(([k, v]) => {
+      if (k === 'admin_permissions' && Array.isArray(v)) {
+        return JSON.stringify(v);
+      }
+      return v;
+    });
 
     const { rows } = await this.db.query<UserListRow>(
       `UPDATE users SET ${setClauses.join(', ')} WHERE id = $1

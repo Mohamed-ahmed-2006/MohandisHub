@@ -7,7 +7,7 @@ import { Router } from 'express';
 import { authenticate } from '../../middleware/authenticate.js';
 import { loadAdminFromDb } from '../../middleware/load-admin-from-db.js';
 import { requireEmailVerified } from '../../middleware/require-email-verified.js';
-import { requireRole } from '../../middleware/require-role.js';
+import { requireAdminPermission, requireRole } from '../../middleware/require-role.js';
 import { profilesController } from '../profiles/profiles.controller.js';
 
 import { adminController } from './admin.controller.js';
@@ -21,47 +21,47 @@ adminRouter.get('/dashboard/stats', adminController.getDashboardStats);
 
 // Settings
 adminRouter.get('/settings', adminController.getSettings);
-adminRouter.patch('/settings', adminController.updateSettings);
+adminRouter.patch('/settings', requireAdminPermission('manage_settings'), adminController.updateSettings);
 
 // Users
-adminRouter.get('/users', adminController.listUsers);
-adminRouter.get('/users/:id', adminController.getUserDetail);
-adminRouter.patch('/users/:id', adminController.updateUser);
-adminRouter.delete('/users/:id', adminController.deleteUser);
-adminRouter.post('/users/:id/activate', adminController.activateUser);
-adminRouter.post('/users/:id/deactivate', adminController.deactivateUser);
-adminRouter.post('/users/:id/send-verification-email', adminController.sendVerificationEmail);
-adminRouter.post('/users/:id/verify-email', adminController.verifyEmail);
+adminRouter.get('/users', requireAdminPermission('manage_users'), adminController.listUsers);
+adminRouter.get('/users/:id', requireAdminPermission('manage_users'), adminController.getUserDetail);
+adminRouter.patch('/users/:id', requireAdminPermission('manage_users'), adminController.updateUser);
+adminRouter.delete('/users/:id', requireAdminPermission('manage_users'), adminController.deleteUser);
+adminRouter.post('/users/:id/activate', requireAdminPermission('manage_users'), adminController.activateUser);
+adminRouter.post('/users/:id/deactivate', requireAdminPermission('manage_users'), adminController.deactivateUser);
+adminRouter.post('/users/:id/send-verification-email', requireAdminPermission('manage_users'), adminController.sendVerificationEmail);
+adminRouter.post('/users/:id/verify-email', requireAdminPermission('manage_users'), adminController.verifyEmail);
 
 // Plans
-adminRouter.get('/plans', adminController.listPlans);
-adminRouter.post('/plans', adminController.createPlan);
-adminRouter.patch('/plans/:id', adminController.updatePlan);
-adminRouter.delete('/plans/:id', adminController.deletePlan);
+adminRouter.get('/plans', requireAdminPermission('manage_plans'), adminController.listPlans);
+adminRouter.post('/plans', requireAdminPermission('manage_plans'), adminController.createPlan);
+adminRouter.patch('/plans/:id', requireAdminPermission('manage_plans'), adminController.updatePlan);
+adminRouter.delete('/plans/:id', requireAdminPermission('manage_plans'), adminController.deletePlan);
 
 // Transactions
-adminRouter.get('/transactions', adminController.listTransactions);
-adminRouter.get('/transactions/:id', adminController.getTransactionDetail);
-adminRouter.post('/transactions/adjust', adminController.adjustBalance);
-adminRouter.post('/transactions/:id/reverse', adminController.reverseTransaction);
+adminRouter.get('/transactions', requireAdminPermission('manage_transactions'), adminController.listTransactions);
+adminRouter.get('/transactions/:id', requireAdminPermission('manage_transactions'), adminController.getTransactionDetail);
+adminRouter.post('/transactions/adjust', requireAdminPermission('manage_transactions'), adminController.adjustBalance);
+adminRouter.post('/transactions/:id/reverse', requireAdminPermission('manage_transactions'), adminController.reverseTransaction);
 
 // Services
-adminRouter.get('/services', adminController.listServices);
-adminRouter.patch('/services/:id', adminController.updateService);
-adminRouter.post('/services/:id/approve', adminController.approveService);
-adminRouter.post('/services/:id/reject', adminController.rejectService);
+adminRouter.get('/services', requireAdminPermission('manage_services'), adminController.listServices);
+adminRouter.patch('/services/:id', requireAdminPermission('manage_services'), adminController.updateService);
+adminRouter.post('/services/:id/approve', requireAdminPermission('manage_services'), adminController.approveService);
+adminRouter.post('/services/:id/reject', requireAdminPermission('manage_services'), adminController.rejectService);
 
 // Categories
-adminRouter.get('/categories', adminController.listCategories);
-adminRouter.post('/categories', adminController.createCategory);
-adminRouter.patch('/categories/:id', adminController.updateCategory);
-adminRouter.delete('/categories/:id', adminController.deleteCategory);
+adminRouter.get('/categories', requireAdminPermission('manage_services'), adminController.listCategories);
+adminRouter.post('/categories', requireAdminPermission('manage_services'), adminController.createCategory);
+adminRouter.patch('/categories/:id', requireAdminPermission('manage_services'), adminController.updateCategory);
+adminRouter.delete('/categories/:id', requireAdminPermission('manage_services'), adminController.deleteCategory);
 
 // Verifications (existing — delegated to profiles controller)
-adminRouter.get('/verification/pending', profilesController.getPendingVerifications);
-adminRouter.post('/identity/:docId/review', profilesController.reviewIdentityDocument);
-adminRouter.post('/academic/:recordId/review', profilesController.reviewAcademicRecord);
-adminRouter.post('/business/:userId/review', profilesController.reviewBusinessDocs);
-adminRouter.get('/user/:userId/profile', profilesController.getAnyUserProfile);
+adminRouter.get('/verification/pending', requireAdminPermission('manage_verifications'), profilesController.getPendingVerifications);
+adminRouter.post('/identity/:docId/review', requireAdminPermission('manage_verifications'), profilesController.reviewIdentityDocument);
+adminRouter.post('/academic/:recordId/review', requireAdminPermission('manage_verifications'), profilesController.reviewAcademicRecord);
+adminRouter.post('/business/:userId/review', requireAdminPermission('manage_verifications'), profilesController.reviewBusinessDocs);
+adminRouter.get('/user/:userId/profile', requireAdminPermission('manage_users'), profilesController.getAnyUserProfile);
 
 export { adminRouter };

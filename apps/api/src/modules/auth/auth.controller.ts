@@ -77,21 +77,6 @@ const login = asyncHandler(async (req, res) => {
 });
 
 const forgotPassword = asyncHandler(async (req, res) => {
-  // #region agent log
-  fetch('http://127.0.0.1:7325/ingest/ebd08bf8-7d73-450c-ad4d-4436a6c2225b', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '8fd58e' },
-    body: JSON.stringify({
-      sessionId: '8fd58e',
-      location: 'auth.controller.ts:forgotPassword:entry',
-      message: 'forgotPassword controller reached',
-      data: { hasBody: !!req.body, bodyKeys: req.body ? Object.keys(req.body) : [] },
-      timestamp: Date.now(),
-      hypothesisId: 'H1',
-    }),
-  }).catch(() => {});
-  // #endregion
-
   const parsed = forgotPasswordSchema.safeParse(req.body);
 
   if (!parsed.success) {
@@ -103,37 +88,7 @@ const forgotPassword = asyncHandler(async (req, res) => {
     });
   }
 
-  // #region agent log
-  fetch('http://127.0.0.1:7325/ingest/ebd08bf8-7d73-450c-ad4d-4436a6c2225b', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '8fd58e' },
-    body: JSON.stringify({
-      sessionId: '8fd58e',
-      location: 'auth.controller.ts:forgotPassword:beforeService',
-      message: 'validation passed, calling authService.forgotPassword',
-      data: { email: parsed.data.email?.slice?.(0, 3) + '***' },
-      timestamp: Date.now(),
-      hypothesisId: 'H2',
-    }),
-  }).catch(() => {});
-  // #endregion
-
   const result = await authService.forgotPassword(parsed.data);
-
-  // #region agent log
-  fetch('http://127.0.0.1:7325/ingest/ebd08bf8-7d73-450c-ad4d-4436a6c2225b', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '8fd58e' },
-    body: JSON.stringify({
-      sessionId: '8fd58e',
-      location: 'auth.controller.ts:forgotPassword:afterService',
-      message: 'authService.forgotPassword returned',
-      data: { hasMessage: !!result?.message },
-      timestamp: Date.now(),
-      hypothesisId: 'H2,H3',
-    }),
-  }).catch(() => {});
-  // #endregion
 
   const response: ApiSuccessBody<typeof result> = {
     ok: true,

@@ -24,15 +24,16 @@ export const loadAdminFromDb: RequestHandler = (req, _res, next) => {
         });
       }
 
-      const { rows } = await getPool().query<{ is_admin: boolean }>(
-        `SELECT COALESCE(is_admin, false) AS is_admin FROM users WHERE id = $1 AND deleted_at IS NULL LIMIT 1`,
+      const { rows } = await getPool().query<{ is_admin: boolean; admin_permissions?: string[] }>(
+        `SELECT COALESCE(is_admin, false) AS is_admin, admin_permissions FROM users WHERE id = $1 AND deleted_at IS NULL LIMIT 1`,
         [user.id],
       );
 
       if (rows[0]) {
-        (req as { user: { isAdmin: boolean } }).user = {
+        (req as { user: { isAdmin: boolean; adminPermissions?: string[] } }).user = {
           ...req.user!,
           isAdmin: rows[0].is_admin === true,
+          adminPermissions: Array.isArray(rows[0].admin_permissions) ? rows[0].admin_permissions : [],
         };
       }
 

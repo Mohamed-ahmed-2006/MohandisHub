@@ -40,8 +40,17 @@ export const createBidSchema = z.object({
   amount: z.number().min(1).max(1000000),
   message: z.string().min(5).max(3000),
   deliveryDays: z.number().int().min(1).max(365).optional(),
+  estimatedHours: z.number().int().min(1).max(168).optional(),
 });
 export type CreateBidInput = z.infer<typeof createBidSchema>;
+
+export const updateBidSchema = z.object({
+  amount: z.number().min(1).max(1000000).optional(),
+  message: z.string().min(5).max(3000).optional(),
+  deliveryDays: z.number().int().min(1).max(365).optional(),
+  estimatedHours: z.number().int().min(1).max(168).optional(),
+});
+export type UpdateBidInput = z.infer<typeof updateBidSchema>;
 
 export const awardBidSchema = z.object({
   bidId: z.string().uuid(),

@@ -69,16 +69,31 @@ export const AdminPanel = ({ locale, dictionary }: AdminPanelProps) => {
     );
   }
 
-  const tabs: { id: TabId; label: string }[] = [
-    { id: 'dashboard', label: dictionary.admin.tabs.dashboard },
-    { id: 'users', label: dictionary.admin.tabs.users },
-    { id: 'plans', label: dictionary.admin.tabs.plans },
-    { id: 'transactions', label: dictionary.admin.tabs.transactions },
-    { id: 'services', label: dictionary.admin.tabs.services },
-    { id: 'categories', label: dictionary.admin.tabs.categories },
-    { id: 'verifications', label: dictionary.admin.tabs.verifications },
-    { id: 'settings', label: dictionary.admin.tabs.settings },
+  const tabs: { id: TabId; label: string; permission?: string }[] = [
+    { id: 'dashboard', label: dictionary.admin.tabs.dashboard }, // Dashboard is accessible to all admins
+    { id: 'users', label: dictionary.admin.tabs.users, permission: 'manage_users' },
+    { id: 'plans', label: dictionary.admin.tabs.plans, permission: 'manage_plans' },
+    { id: 'transactions', label: dictionary.admin.tabs.transactions, permission: 'manage_transactions' },
+    { id: 'services', label: dictionary.admin.tabs.services, permission: 'manage_services' },
+    { id: 'categories', label: dictionary.admin.tabs.categories, permission: 'manage_services' },
+    { id: 'verifications', label: dictionary.admin.tabs.verifications, permission: 'manage_verifications' },
+    { id: 'settings', label: dictionary.admin.tabs.settings, permission: 'manage_settings' },
   ];
+
+  const filteredTabs = tabs.filter(
+    (tab) =>
+      !tab.permission ||
+      !authUser.adminPermissions ||
+      authUser.adminPermissions.length === 0 ||
+      authUser.adminPermissions.includes(tab.permission),
+  );
+
+  // If the active tab is not in the filtered tabs, reset to dashboard
+  useEffect(() => {
+    if (!filteredTabs.some((t) => t.id === activeTab)) {
+      setActiveTab('dashboard');
+    }
+  }, [activeTab, filteredTabs]);
 
   return (
     <main className="admin-panel-main">
@@ -88,7 +103,7 @@ export const AdminPanel = ({ locale, dictionary }: AdminPanelProps) => {
         </div>
 
         <div className="admin-panel-tabs">
-          {tabs.map((tab) => (
+          {filteredTabs.map((tab) => (
             <button
               key={tab.id}
               type="button"

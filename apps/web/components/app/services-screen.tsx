@@ -6,11 +6,13 @@ import { useCallback, useEffect, useState } from 'react';
 
 import { useAuth } from '@/components/auth/auth-provider';
 import { Container } from '@/components/ui/container';
+import { EGYPTIAN_CITIES } from '@/lib/data/egyptian-cities';
 import { buildLocalePath } from '@/lib/i18n/path';
 import type { Dictionary, Locale } from '@/lib/i18n/types';
 import { servicesApiClient } from '@/lib/services/client';
 
 import '@/app/dashboard.css';
+import './services-screen.css';
 
 type Props = {
   locale: Locale;
@@ -98,11 +100,13 @@ export const ServicesScreen = ({ locale, dictionary }: Props) => {
       const priceRaw = (form.elements.namedItem('price') as HTMLInputElement)?.value;
       const price = priceRaw ? parseFloat(priceRaw) : undefined;
       const priceType = (form.elements.namedItem('priceType') as HTMLSelectElement)
-        ?.value as 'fixed' | 'hourly' | 'negotiable';
+        ?.value as 'fixed' | 'hourly';
+      const isNegotiable = (form.elements.namedItem('isNegotiable') as HTMLInputElement)?.checked;
       const description = (form.elements.namedItem('description') as HTMLTextAreaElement)?.value?.trim();
-      const city = (form.elements.namedItem('city') as HTMLInputElement)?.value?.trim();
+      const city = (form.elements.namedItem('city') as HTMLSelectElement)?.value?.trim();
       const country = (form.elements.namedItem('country') as HTMLInputElement)?.value?.trim();
-      const submitForReview = (form.elements.namedItem('submitForReview') as HTMLInputElement)?.checked;
+      const submitForReview = (form.elements.namedItem('submitForReview') as HTMLInputElement)
+        ?.checked;
 
       const body: Parameters<typeof servicesApiClient.createService>[1] = {
         title,
@@ -112,6 +116,7 @@ export const ServicesScreen = ({ locale, dictionary }: Props) => {
       if (categoryId) body.categoryId = categoryId;
       if (price != null && Number.isFinite(price)) body.price = price;
       if (priceType) body.priceType = priceType;
+      body.isNegotiable = !!isNegotiable;
       if (city?.trim()) body.city = city.trim();
       if (country?.trim()) body.country = country.trim();
       await servicesApiClient.createService(accessToken, body);
@@ -124,10 +129,7 @@ export const ServicesScreen = ({ locale, dictionary }: Props) => {
     }
   };
 
-  const handleAction = async (
-    service: Service,
-    action: 'submit' | 'pause' | 'activate',
-  ) => {
+  const handleAction = async (service: Service, action: 'submit' | 'pause' | 'activate') => {
     if (!accessToken) return;
     try {
       if (action === 'submit') {
@@ -143,8 +145,7 @@ export const ServicesScreen = ({ locale, dictionary }: Props) => {
     }
   };
 
-  const categoryName = (cat: ServiceCategory) =>
-    locale === 'ar' ? cat.nameAr : cat.nameEn;
+  const categoryName = (cat: ServiceCategory) => (locale === 'ar' ? cat.nameAr : cat.nameEn);
 
   if (!isReady || !authUser) {
     return (
@@ -163,11 +164,7 @@ export const ServicesScreen = ({ locale, dictionary }: Props) => {
           <h1 className="dashboard-section-title">
             {sp.title ?? dictionary.nav?.myServices ?? 'My Services'}
           </h1>
-          <button
-            type="button"
-            className="dashboard-primary-btn"
-            onClick={() => setShowCreate(true)}
-          >
+          <button type="button" className="dashboard-primary-btn" onClick={() => setShowCreate(true)}>
             {sp.addService ?? 'Add Service'}
           </button>
         </div>
@@ -177,11 +174,7 @@ export const ServicesScreen = ({ locale, dictionary }: Props) => {
         ) : services.length === 0 ? (
           <div className="dashboard-empty-state">
             <p className="dashboard-empty">{sp.noServices ?? sp.addFirstService}</p>
-            <button
-              type="button"
-              className="dashboard-primary-btn"
-              onClick={() => setShowCreate(true)}
-            >
+            <button type="button" className="dashboard-primary-btn" onClick={() => setShowCreate(true)}>
               {sp.addService ?? 'Add Service'}
             </button>
           </div>
@@ -198,15 +191,13 @@ export const ServicesScreen = ({ locale, dictionary }: Props) => {
                 )}
                 <p className="dashboard-card-meta">
                   {s.price != null
-                    ? `${s.price} ${s.currency} ${s.priceType === 'hourly' ? '/hr' : ''}`
-                    : s.priceType === 'negotiable'
+                    ? `${s.price} ${s.currency}${s.priceType === 'hourly' ? '/hr' : ''}`
+                    : s.isNegotiable
                       ? 'Negotiable'
-                      : '—'}
-                  {s.city && ` · ${s.city}`}
+                      : '-'}
+                  {s.city && ` . ${s.city}`}
                 </p>
-                <span
-                  className={`dashboard-badge dashboard-badge--${s.status.replace('_', '-')}`}
-                >
+                <span className={`dashboard-badge dashboard-badge--${s.status.replace('_', '-')}`}>
                   {getStatusLabel(s.status, sp as Record<string, string>)}
                 </span>
                 <div className="dashboard-card-actions" style={{ marginTop: '0.5rem' }}>
@@ -245,91 +236,109 @@ export const ServicesScreen = ({ locale, dictionary }: Props) => {
 
         {showCreate && (
           <div className="plan-modal-overlay" onClick={() => setShowCreate(false)}>
-            <div
-              className="plan-modal"
-              onClick={(e) => e.stopPropagation()}
-              style={{ maxWidth: 480 }}
-            >
-              <h3 className="plan-modal-title">
-                {sp.createService ?? 'Create Service'}
-              </h3>
+            <div className="plan-modal service-create-modal" onClick={(e) => e.stopPropagation()}>
+              <h3 className="plan-modal-title">{sp.createService ?? 'Create Service'}</h3>
               {error && <p className="dashboard-error">{error}</p>}
-              <form className="dashboard-form" onSubmit={(e) => void handleCreate(e)}>
-                <div className="dashboard-form-label-inline">
-                  <label>{sp.titleLabel ?? 'Title'}</label>
-                  <input
-                    name="title"
-                    type="text"
-                    className="dashboard-input"
-                    placeholder={sp.titlePlaceholder}
-                    minLength={3}
-                    maxLength={300}
-                    required
-                  />
-                </div>
-                <div className="dashboard-form-label-inline">
-                  <label>{sp.descriptionLabel ?? 'Description'}</label>
-                  <textarea
-                    name="description"
-                    className="dashboard-textarea"
-                    placeholder={sp.descriptionPlaceholder}
-                    rows={3}
-                  />
-                </div>
-                <div className="dashboard-form-label-inline">
-                  <label>{sp.categoryLabel ?? 'Category'}</label>
-                  <select name="categoryId" className="dashboard-select">
-                    <option value="">—</option>
-                    {categories.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {categoryName(c)}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="dashboard-form-row">
-                  <div className="dashboard-form-label-inline">
-                    <label>{sp.priceLabel ?? 'Price'}</label>
+              <form className="dashboard-form service-create-form" onSubmit={(e) => void handleCreate(e)}>
+                <div className="service-create-grid">
+                  <div className="service-create-field service-create-field--full">
+                    <label className="service-create-label">{sp.titleLabel ?? 'Title'}</label>
+                    <p className="service-create-hint">
+                      {sp.titlePlaceholder ?? 'Use clear words customers can search for.'}
+                    </p>
+                    <input
+                      name="title"
+                      type="text"
+                      className="dashboard-input service-create-input"
+                      placeholder={sp.titlePlaceholder}
+                      minLength={3}
+                      maxLength={300}
+                      required
+                    />
+                  </div>
+
+                  <div className="service-create-field service-create-field--full">
+                    <label className="service-create-label">{sp.descriptionLabel ?? 'Description'}</label>
+                    <p className="service-create-hint">
+                      {sp.descriptionPlaceholder ??
+                        'Describe deliverables, workflow, and expected response time.'}
+                    </p>
+                    <textarea
+                      name="description"
+                      className="dashboard-textarea service-create-input"
+                      placeholder={sp.descriptionPlaceholder}
+                      rows={4}
+                    />
+                  </div>
+
+                  <div className="service-create-field">
+                    <label className="service-create-label">{sp.categoryLabel ?? 'Category'}</label>
+                    <select name="categoryId" className="dashboard-select service-create-input">
+                      <option value="">-</option>
+                      {categories.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {categoryName(c)}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="service-create-field">
+                    <label className="service-create-label">{sp.priceLabel ?? 'Price'}</label>
                     <input
                       name="price"
                       type="number"
                       min="0"
                       step="0.01"
-                      className="dashboard-input"
+                      className="dashboard-input service-create-input"
                       placeholder={sp.pricePlaceholder}
                     />
                   </div>
-                  <div className="dashboard-form-label-inline">
-                    <label>Type</label>
-                    <select name="priceType" className="dashboard-select">
+
+                  <div className="service-create-field">
+                    <label className="service-create-label">Type</label>
+                    <select name="priceType" className="dashboard-select service-create-input">
                       <option value="fixed">{sp.priceTypeFixed ?? 'Fixed'}</option>
                       <option value="hourly">{sp.priceTypeHourly ?? 'Hourly'}</option>
-                      <option value="negotiable">{sp.priceTypeNegotiable ?? 'Negotiable'}</option>
                     </select>
                   </div>
-                </div>
-                <div className="dashboard-form-row">
-                  <div className="dashboard-form-label-inline">
-                    <label>{sp.cityLabel ?? 'City'}</label>
-                    <input name="city" type="text" className="dashboard-input" />
+
+                  <label className="service-create-checkbox service-create-field service-create-field--full" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <input name="isNegotiable" type="checkbox" />
+                    <span>Price is negotiable</span>
+                  </label>
+
+                  <div className="service-create-field">
+                    <label className="service-create-label">{sp.cityLabel ?? 'City'}</label>
+                    <select name="city" className="home-search-select service-create-city-select">
+                      <option value="">
+                        {dictionary.homeSearch?.chooseCity ?? 'Choose city'}
+                      </option>
+                      {EGYPTIAN_CITIES.map((cityOption) => (
+                        <option key={cityOption} value={cityOption}>
+                          {cityOption}
+                        </option>
+                      ))}
+                    </select>
                   </div>
-                  <div className="dashboard-form-label-inline">
-                    <label>{sp.countryLabel ?? 'Country'}</label>
+
+                  <div className="service-create-field">
+                    <label className="service-create-label">{sp.countryLabel ?? 'Country'}</label>
                     <input
                       name="country"
                       type="text"
-                      className="dashboard-input"
+                      className="dashboard-input service-create-input"
                       defaultValue="Egypt"
                     />
                   </div>
-                </div>
-                <div className="dashboard-form-label-inline">
-                  <label>
-                    <input name="submitForReview" type="checkbox" />
-                    {sp.submitForReview ?? 'Submit for review immediately'}
+
+                  <label className="service-create-checkbox service-create-field service-create-field--full" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <input name="submitForReview" type="checkbox" defaultChecked />
+                    <span>Publish immediately</span>
                   </label>
                 </div>
-                <div className="dashboard-form-row">
+
+                <div className="service-create-actions">
                   <button
                     type="button"
                     className="plan-modal-cancel"
@@ -337,11 +346,7 @@ export const ServicesScreen = ({ locale, dictionary }: Props) => {
                   >
                     {dictionary.common?.back ?? 'Back'}
                   </button>
-                  <button
-                    type="submit"
-                    className="dashboard-primary-btn"
-                    disabled={creating}
-                  >
+                  <button type="submit" className="dashboard-primary-btn" disabled={creating}>
                     {creating ? '...' : (sp.saveDraft ?? 'Save')}
                   </button>
                 </div>

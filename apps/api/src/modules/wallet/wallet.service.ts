@@ -260,10 +260,8 @@ export class WalletService {
       return { credited: deposit?.status === 'paid' };
     }
     const amount = (session.amount_total ?? 0) / 100;
-    const referenceIdForDb =
-      session.id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(session.id)
-        ? session.id
-        : null;
+    const referenceIdForDb = session.id ? session.id : null;
+
     await this.repo.creditWallet(
       deposit.wallet_id,
       deposit.user_id,
@@ -317,10 +315,7 @@ export class WalletService {
       const deposit = await this.repo.findDepositRequestByOrderId(orderId);
       if (!deposit || deposit.status !== 'pending') return;
       const amount = (session?.amount_total ?? 0) / 100;
-      const refId =
-        session?.id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(session.id)
-          ? session.id
-          : null;
+      const refId = session?.id ? session.id : null;
       await this.repo.creditWallet(
         deposit.wallet_id,
         deposit.user_id,

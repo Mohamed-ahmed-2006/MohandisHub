@@ -5,7 +5,9 @@ import { SettingsService } from '../settings/settings.service.js';
 import { WalletRepository } from '../wallet/wallet.repository.js';
 
 import { NeedsRepository } from './needs.repository.js';
-import type { CreateBidInput, CreateNeedInput, UpdateNeedInput } from './needs.validation.js';
+import type { CreateBidInput, CreateNeedInput, UpdateNeedInput, UpdateBidInput } from './needs.validation.js';
+
+const PLATFORM_USER_ID = '00000000-0000-0000-0000-000000000001';
 
 export class NeedsService {
   constructor(
@@ -52,6 +54,40 @@ export class NeedsService {
     if (!need)
       throw new HttpError({ statusCode: 404, code: 'NEED_NOT_FOUND', message: 'Need not found.' });
     return need;
+  }
+
+  async updateBid(needId: string, bidId: string, expertId: string, input: UpdateBidInput) {
+    const bid = await this.repo.getBidById(bidId);
+    if (!bid || bid.need_id !== needId) {
+      throw new HttpError({ statusCode: 404, code: 'BID_NOT_FOUND', message: 'Bid not found.' });
+    }
+    if (bid.expert_id !== expertId) {
+      throw new HttpError({ statusCode: 403, code: 'FORBIDDEN', message: 'Not your bid.' });
+    }
+    if (bid.status !== 'pending') {
+      throw new HttpError({ statusCode: 400, code: 'BID_NOT_PENDING', message: 'Can only edit pending bids.' });
+    }
+
+    const fields: Record<string, unknown> = {};
+    if (input.amount !== undefined) fields.amount = input.amount;
+    if (input.message !== undefined) fields.message = input.message;
+    if (input.deliveryDays !== undefined) fields.delivery_days = input.deliveryDays;
+    if (input.estimatedHours !== undefined) fields.estimated_hours = input.estimatedHours;
+    return this.repo.updateBid(bidId, fields);
+  }
+
+  async deleteBid(needId: string, bidId: string, expertId: string) {
+    const bid = await this.repo.getBidById(bidId);
+    if (!bid || bid.need_id !== needId) {
+      throw new HttpError({ statusCode: 404, code: 'BID_NOT_FOUND', message: 'Bid not found.' });
+    }
+    if (bid.expert_id !== expertId) {
+      throw new HttpError({ statusCode: 403, code: 'FORBIDDEN', message: 'Not your bid.' });
+    }
+    if (bid.status !== 'pending') {
+      throw new HttpError({ statusCode: 400, code: 'BID_NOT_PENDING', message: 'Can only delete pending bids.' });
+    }
+    return this.repo.deleteBid(bidId);
   }
 
   async updateNeed(needId: string, userId: string, input: UpdateNeedInput) {
@@ -115,11 +151,35 @@ export class NeedsService {
         message: 'Only the need owner can view bids.',
       });
     }
-    return this.repo.listBidsForNeed(needId);
+    try {
+      return await this.repo.listBidsForNeed(needId);
+    } catch (err: unknown) {
+      const pgErr = err as { code?: string; message?: string };
+      if (pgErr.code === '42703' || (pgErr.message?.includes('does not exist') ?? false)) {
+        throw new HttpError({
+          statusCode: 503,
+          code: 'SCHEMA_OUTDATED',
+          message: 'Database schema is out of date. Please run migrations in the API folder: npm run migrate',
+        });
+      }
+      throw err;
+    }
   }
 
   async listMyBids(expertId: string, page: number, limit: number) {
-    return this.repo.listBidsByExpert(expertId, page, limit);
+    try {
+      return await this.repo.listBidsByExpert(expertId, page, limit);
+    } catch (err: unknown) {
+      const pgErr = err as { code?: string; message?: string };
+      if (pgErr.code === '42703' || (pgErr.message?.includes('does not exist') ?? false)) {
+        throw new HttpError({
+          statusCode: 503,
+          code: 'SCHEMA_OUTDATED',
+          message: 'Database schema is out of date. Please run migrations in the API folder: npm run migrate',
+        });
+      }
+      throw err;
+    }
   }
 
   async awardBid(needId: string, bidId: string, userId: string) {
@@ -129,13 +189,6 @@ export class NeedsService {
         statusCode: 503,
         code: 'AWARD_BIDS_PAUSED',
         message: 'Awarding bids is temporarily disabled.',
-      });
-    }
-    if (status.moneyMovementsPaused) {
-      throw new HttpError({
-        statusCode: 503,
-        code: 'MONEY_MOVEMENTS_PAUSED',
-        message: 'Payments are temporarily disabled.',
       });
     }
 
@@ -153,6 +206,40 @@ export class NeedsService {
         code: 'BID_NOT_FOUND',
         message: 'Bid not found for this need.',
       });
+    }
+
+    await this.repo.awardBid(needId, bidId);
+    return { needId, bidId, status: 'awarded' };
+  }
+
+  async payBid(needId: string, bidId: string, userId: string) {
+    const status = await this.settingsService.getAppStatus();
+    if (status.moneyMovementsPaused) {
+      throw new HttpError({
+        statusCode: 503,
+        code: 'MONEY_MOVEMENTS_PAUSED',
+        message: 'Payments are temporarily disabled.',
+      });
+    }
+
+    const need = await this.getNeed(needId);
+    if (need.customer_id !== userId) {
+      throw new HttpError({ statusCode: 403, code: 'FORBIDDEN', message: 'Not your need.' });
+    }
+    // Changed: allow paying if it is awarded
+    if (need.status !== 'awarded' && need.status !== 'completed') {
+      throw new HttpError({ statusCode: 400, code: 'NEED_NOT_AWARDED', message: 'Need is not awarded yet.' });
+    }
+    const bid = await this.repo.getBidById(bidId);
+    if (!bid || bid.need_id !== needId) {
+      throw new HttpError({
+        statusCode: 404,
+        code: 'BID_NOT_FOUND',
+        message: 'Bid not found for this need.',
+      });
+    }
+    if (bid.status !== 'accepted') {
+      throw new HttpError({ statusCode: 400, code: 'BID_NOT_ACCEPTED', message: 'Bid is not accepted.' });
     }
 
     const amount = parseFloat(bid.amount);
@@ -187,7 +274,10 @@ export class NeedsService {
     const client = await pool.connect();
     try {
       await client.query('BEGIN');
-      const platformWalletId = await this.walletRepo.getOrCreatePlatformWallet(client);
+      const platformWalletId = await this.walletRepo.getOrCreateCommissionWallet(
+        client,
+        PLATFORM_USER_ID,
+      );
       const paymentTxId = await this.walletRepo.debitWalletInTransaction(
         client,
         customerWallet.id,
@@ -211,7 +301,7 @@ export class NeedsService {
         await this.walletRepo.creditWithTypeInTransaction(
           client,
           platformWalletId,
-          '00000000-0000-0000-0000-000000000001',
+          PLATFORM_USER_ID,
           commission,
           'commission',
           `Commission from bid`,
@@ -219,7 +309,13 @@ export class NeedsService {
           bidId,
         );
       }
-      await this.repo.awardBidInTransaction(client, needId, bidId, paymentTxId);
+      
+      // Update bid as paid
+      await client.query(
+        `UPDATE bids SET paid_at = now(), payment_transaction_id = $2 WHERE id = $1`,
+        [bidId, paymentTxId],
+      );
+
       await client.query('COMMIT');
     } catch (err: unknown) {
       await client.query('ROLLBACK');
@@ -236,6 +332,31 @@ export class NeedsService {
       client.release();
     }
 
-    return { needId, bidId, status: 'awarded' };
+    return { needId, bidId, paid: true };
+  }
+
+  async listBidMessages(needId: string, bidId: string, userId: string) {
+    const need = await this.getNeed(needId);
+    const bid = await this.repo.getBidById(bidId);
+    if (!bid || bid.need_id !== needId) {
+      throw new HttpError({ statusCode: 404, code: 'BID_NOT_FOUND', message: 'Bid not found' });
+    }
+    const isCustomer = need.customer_id === userId;
+    if (!isCustomer && bid.expert_id !== userId) {
+      throw new HttpError({ statusCode: 403, code: 'FORBIDDEN', message: 'Not allowed to view messages' });
+    }
+    return this.repo.listBidMessages(bidId, userId, isCustomer);
+  }
+
+  async createBidMessage(needId: string, bidId: string, userId: string, content: string) {
+    const need = await this.getNeed(needId);
+    const bid = await this.repo.getBidById(bidId);
+    if (!bid || bid.need_id !== needId) {
+      throw new HttpError({ statusCode: 404, code: 'BID_NOT_FOUND', message: 'Bid not found' });
+    }
+    if (need.customer_id !== userId && bid.expert_id !== userId) {
+      throw new HttpError({ statusCode: 403, code: 'FORBIDDEN', message: 'Not allowed to post messages' });
+    }
+    return this.repo.createBidMessage(bidId, userId, content);
   }
 }

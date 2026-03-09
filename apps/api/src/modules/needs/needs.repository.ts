@@ -35,12 +35,22 @@ export type BidRow = {
   currency: string;
   message: string;
   delivery_days: number | null;
+  estimated_hours: number | null;
   status: string;
   created_at: string;
   updated_at: string;
   expert_name?: string;
   expert_email?: string;
   need_title?: string;
+};
+
+export type BidMessageRow = {
+  id: string;
+  bid_id: string;
+  sender_id: string;
+  content: string;
+  created_at: string;
+  sender_name?: string;
 };
 
 export class NeedsRepository {
@@ -144,16 +154,17 @@ export class NeedsRepository {
 
   async createBid(needId: string, expertId: string, input: CreateBidInput): Promise<BidRow> {
     const { rows } = await getPool().query(
-      `INSERT INTO bids (need_id, expert_id, amount, message, delivery_days)
-       VALUES ($1, $2, $3, $4, $5) RETURNING *`,
-      [needId, expertId, input.amount, input.message, input.deliveryDays ?? null],
+      `INSERT INTO bids (need_id, expert_id, amount, message, delivery_days, estimated_hours)
+       VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
+      [needId, expertId, input.amount, input.message, input.deliveryDays ?? null, input.estimatedHours ?? null],
     );
     return rows[0] as BidRow;
   }
 
   async listBidsForNeed(needId: string): Promise<BidRow[]> {
     const { rows } = await getPool().query(
-      `SELECT b.*, COALESCE(u.display_name, u.email) AS expert_name, u.email AS expert_email
+      `SELECT b.*, COALESCE(u.display_name, u.email) AS expert_name, u.email AS expert_email,
+        ((SELECT m.created_at FROM bid_messages m WHERE m.bid_id = b.id ORDER BY m.created_at DESC LIMIT 1) > b.customer_last_read_at) AS has_unread
        FROM bids b
        JOIN users u ON u.id = b.expert_id
        WHERE b.need_id = $1 ORDER BY b.created_at ASC`,
@@ -170,7 +181,8 @@ export class NeedsRepository {
     const pool = getPool();
     const offset = (page - 1) * limit;
     const { rows } = await pool.query(
-      `SELECT b.*, n.title AS need_title
+      `SELECT b.*, n.title AS need_title,
+        ((SELECT m.created_at FROM bid_messages m WHERE m.bid_id = b.id ORDER BY m.created_at DESC LIMIT 1) > b.expert_last_read_at) AS has_unread
        FROM bids b
        JOIN needs n ON n.id = b.need_id
        WHERE b.expert_id = $1 ORDER BY b.created_at DESC LIMIT $2 OFFSET $3`,
@@ -186,6 +198,22 @@ export class NeedsRepository {
   async getBidById(bidId: string): Promise<BidRow | null> {
     const { rows } = await getPool().query(`SELECT * FROM bids WHERE id = $1 LIMIT 1`, [bidId]);
     return (rows[0] as BidRow) ?? null;
+  }
+
+  async updateBid(bidId: string, fields: Record<string, unknown>): Promise<BidRow | null> {
+    const keys = Object.keys(fields);
+    if (keys.length === 0) return this.getBidById(bidId);
+    const setClauses = keys.map((k, i) => `${k} = $${i + 2}`).join(', ');
+    const vals = keys.map((k) => fields[k]);
+    const { rows } = await getPool().query(
+      `UPDATE bids SET ${setClauses}, updated_at = now() WHERE id = $1 RETURNING *`,
+      [bidId, ...vals],
+    );
+    return (rows[0] as BidRow) ?? null;
+  }
+
+  async deleteBid(bidId: string): Promise<void> {
+    await getPool().query(`DELETE FROM bids WHERE id = $1`, [bidId]);
   }
 
   async awardBid(needId: string, bidId: string, paymentTransactionId?: string): Promise<void> {
@@ -228,5 +256,32 @@ export class NeedsRepository {
       `UPDATE bids SET status = 'rejected', updated_at = now() WHERE need_id = $1 AND id != $2 AND status = 'pending'`,
       [needId, bidId],
     );
+  }
+
+  async createBidMessage(bidId: string, senderId: string, content: string): Promise<BidMessageRow> {
+    const { rows } = await getPool().query(
+      `INSERT INTO bid_messages (bid_id, sender_id, content) VALUES ($1, $2, $3) RETURNING *`,
+      [bidId, senderId, content]
+    );
+    return rows[0] as BidMessageRow;
+  }
+
+  async listBidMessages(bidId: string, userId?: string, isCustomer?: boolean): Promise<BidMessageRow[]> {
+    if (userId) {
+      if (isCustomer) {
+        await getPool().query(`UPDATE bids SET customer_last_read_at = now() WHERE id = $1`, [bidId]);
+      } else {
+        await getPool().query(`UPDATE bids SET expert_last_read_at = now() WHERE id = $1`, [bidId]);
+      }
+    }
+    const { rows } = await getPool().query(
+      `SELECT m.*, u.display_name AS sender_name 
+       FROM bid_messages m 
+       JOIN users u ON u.id = m.sender_id 
+       WHERE m.bid_id = $1 
+       ORDER BY m.created_at ASC`,
+      [bidId]
+    );
+    return rows as BidMessageRow[];
   }
 }

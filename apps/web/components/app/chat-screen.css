@@ -132,6 +132,7 @@
 .chat-msg--other {
   align-self: flex-start;
   background: hsl(var(--muted));
+  color: hsl(var(--foreground));
 }
 
 .chat-msg-body {

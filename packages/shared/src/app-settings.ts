@@ -31,6 +31,11 @@ export type AppSettings = {
   globalAnnouncement: string | null;
   commissionPercent: number;
   commissionMinEgp: number;
+  commissionReceiverId: string;
+  reservationAcceptanceFee: number;
+  reservationVoiceMinuteRate: number;
+  reservationVideoMinuteRate: number;
+  reservationMinPrejoinMinutes: number;
 };
 
 /** Public app status returned by GET /api/app/status — subset needed by frontend */
@@ -59,6 +64,11 @@ export type AppStatus = {
   globalAnnouncement: string | null;
   commissionPercent: number;
   commissionMinEgp: number;
+  commissionReceiverId: string;
+  reservationAcceptanceFee: number;
+  reservationVoiceMinuteRate: number;
+  reservationVideoMinuteRate: number;
+  reservationMinPrejoinMinutes: number;
 };
 
 export type UpdateAppSettingsBody = Partial<{
@@ -86,4 +96,9 @@ export type UpdateAppSettingsBody = Partial<{
   globalAnnouncement: string | null;
   commissionPercent: number;
   commissionMinEgp: number;
+  commissionReceiverId: string;
+  reservationAcceptanceFee: number;
+  reservationVoiceMinuteRate: number;
+  reservationVideoMinuteRate: number;
+  reservationMinPrejoinMinutes: number;
 }>;

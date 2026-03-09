@@ -9,6 +9,7 @@ export const updateUserSchema = z.object({
   isActive: z.boolean().optional(),
   primaryRole: z.enum(['customer', 'expert', 'business']).optional(),
   isAdmin: z.boolean().optional(),
+  adminPermissions: z.array(z.string()).optional(),
   planId: z.string().uuid().nullable().optional(),
 });
 
@@ -33,7 +34,7 @@ export const updatePlanSchema = createPlanSchema.partial().extend({
 
 export const adjustBalanceSchema = z.object({
   userId: z.string().uuid(),
-  type: z.enum(['deposit', 'withdrawal', 'adjustment', 'bonus']),
+  type: z.enum(['deposit', 'withdrawal', 'adjustment', 'bonus', 'commission']),
   amount: z.number().positive(),
   description: z.string().max(500).optional(),
 });
@@ -89,6 +90,11 @@ export const updateSettingsSchema = z.object({
   globalAnnouncement: z.string().max(1000).nullable().optional(),
   commissionPercent: z.number().min(0).max(100).optional(),
   commissionMinEgp: z.number().min(0).optional(),
+  commissionReceiverId: z.string().uuid().optional(),
+  reservationAcceptanceFee: z.number().min(0).optional(),
+  reservationVoiceMinuteRate: z.number().min(0).optional(),
+  reservationVideoMinuteRate: z.number().min(0).optional(),
+  reservationMinPrejoinMinutes: z.number().int().min(1).max(180).optional(),
 });
 
 export type UpdateUserInput = z.infer<typeof updateUserSchema>;

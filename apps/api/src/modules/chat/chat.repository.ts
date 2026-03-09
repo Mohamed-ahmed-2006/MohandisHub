@@ -29,7 +29,8 @@ export class ChatRepository {
         CASE WHEN c.participant_a = $1 THEN c.participant_b ELSE c.participant_a END AS other_user_id,
         COALESCE(u.display_name, u.email) AS other_display_name,
         u.email AS other_email,
-        (SELECT m.body FROM messages m WHERE m.conversation_id = c.id ORDER BY m.created_at DESC LIMIT 1) AS last_message_body
+        (SELECT m.body FROM messages m WHERE m.conversation_id = c.id ORDER BY m.created_at DESC LIMIT 1) AS last_message_body,
+        CASE WHEN c.participant_a = $1 THEN (c.last_message_at > c.participant_a_last_read_at) ELSE (c.last_message_at > c.participant_b_last_read_at) END AS has_unread
       FROM conversations c
       JOIN users u ON u.id = CASE WHEN c.participant_a = $1 THEN c.participant_b ELSE c.participant_a END
       WHERE c.participant_a = $1 OR c.participant_b = $1
@@ -48,7 +49,16 @@ export class ChatRepository {
     return (rows[0] as ConversationRow) ?? null;
   }
 
-  async getMessages(conversationId: string, limit = 50, offset = 0): Promise<MessageRow[]> {
+  async getMessages(conversationId: string, limit = 50, offset = 0, userId?: string): Promise<MessageRow[]> {
+    if (userId) {
+      await getPool().query(
+        `UPDATE conversations 
+         SET participant_a_last_read_at = CASE WHEN participant_a = $1 THEN now() ELSE participant_a_last_read_at END,
+             participant_b_last_read_at = CASE WHEN participant_b = $1 THEN now() ELSE participant_b_last_read_at END
+         WHERE id = $2`,
+        [userId, conversationId]
+      );
+    }
     const { rows } = await getPool().query(
       `SELECT m.*, COALESCE(u.display_name, u.email) AS sender_name
        FROM messages m

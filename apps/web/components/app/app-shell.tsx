@@ -1,11 +1,13 @@
 'use client';
 
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
 
 import { AppAvatarMenu } from './app-avatar-menu';
 import { AppSidebar } from './app-sidebar';
 import { WalletDepositModal } from './wallet-deposit-modal';
+import { ToastProvider, useToast } from './toast';
+import { getChatSocket } from '@/lib/chat/socket';
 
 import { useAuth } from '@/components/auth/auth-provider';
 import { SkeletonAvatar } from '@/components/ui/skeleton';
@@ -21,12 +23,22 @@ type AppShellProps = {
   children: React.ReactNode;
 };
 
-export const AppShell = ({ locale, dictionary, children }: AppShellProps) => {
+export const AppShell = (props: AppShellProps) => {
+  return (
+    <ToastProvider>
+      <AppShellInner {...props} />
+    </ToastProvider>
+  );
+};
+
+const AppShellInner = ({ locale, dictionary, children }: AppShellProps) => {
   const router = useRouter();
+
   const { authUser, accessToken, logout, isReady } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [wallet, setWallet] = useState<{ balance: number; currency: string } | null>(null);
   const [showDeposit, setShowDeposit] = useState(false);
+  const { addToast } = useToast();
 
   useEffect(() => {
     if (!isReady || !accessToken) return;
@@ -35,6 +47,23 @@ export const AppShell = ({ locale, dictionary, children }: AppShellProps) => {
       .then((w) => setWallet(w))
       .catch(() => setWallet(null));
   }, [isReady, accessToken]);
+
+  useEffect(() => {
+    if (!isReady || !authUser) return;
+    const sock = getChatSocket();
+    if (!sock) return;
+
+    sock.emit('join_user', { userId: authUser.id });
+
+    const onNotification = (data: { type: string; title: string; message: string; [key: string]: any }) => {
+      addToast(data.title, data.message);
+    };
+
+    sock.on('notification', onNotification);
+    return () => {
+      sock.off('notification', onNotification);
+    };
+  }, [isReady, authUser, addToast]);
 
   useEffect(() => {
     if (!isReady || !accessToken) return;
@@ -49,6 +78,63 @@ export const AppShell = ({ locale, dictionary, children }: AppShellProps) => {
     });
     return () => document.removeEventListener('visibilitychange', onVisible);
   }, [isReady, accessToken]);
+
+  const searchParams = useSearchParams();
+  const [stripeMessage, setStripeMessage] = useState<'success' | 'cancelled' | null>(null);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      const urlParams = new URLSearchParams(window.location.search);
+      const stripe = searchParams.get('stripe') || urlParams.get('stripe');
+      const sessionId = searchParams.get('session_id') || urlParams.get('session_id');
+      
+      if (stripe === 'success' || stripe === 'cancelled') {
+        setStripeMessage(stripe);
+        const intervalRef: { current: ReturnType<typeof setInterval> | null } = { current: null };
+        if (stripe === 'success' && accessToken) {
+          void (async () => {
+            if (sessionId) {
+              try {
+                await walletApiClient.confirmStripeSession(accessToken, sessionId);
+              } catch (err: any) {
+              }
+            }
+            try {
+              await walletApiClient.getMyWallet(accessToken);
+              window.dispatchEvent(new CustomEvent('wallet-updated'));
+            } catch {
+            }
+            const maxAttempts = 30;
+            let attempts = 0;
+            intervalRef.current = setInterval(() => {
+              attempts += 1;
+              if (attempts > maxAttempts && intervalRef.current) {
+                clearInterval(intervalRef.current);
+                intervalRef.current = null;
+                return;
+              }
+              window.dispatchEvent(new CustomEvent('wallet-updated'));
+            }, 2000);
+            
+            const url = new URL(window.location.href);
+            if (url.searchParams.get('stripe') === 'success' || url.searchParams.has('session_id')) {
+              url.searchParams.delete('stripe');
+              url.searchParams.delete('session_id');
+              window.history.replaceState({}, '', url.pathname + url.search);
+            }
+          })();
+        } else if (stripe === 'cancelled') {
+          const t = setTimeout(() => {
+            const url = new URL(window.location.href);
+            url.searchParams.delete('stripe');
+            url.searchParams.delete('session_id');
+            window.history.replaceState({}, '', url.pathname + url.search);
+          }, 500);
+        }
+      }
+    }, 100);
+    return () => clearTimeout(timer);
+  }, [searchParams, accessToken]);
 
   useEffect(() => {
     if (!isReady || !accessToken) return;
@@ -146,6 +232,22 @@ export const AppShell = ({ locale, dictionary, children }: AppShellProps) => {
         </header>
 
         {children}
+
+        {stripeMessage && (
+          <div style={{ position: 'fixed', bottom: '20px', right: '20px', zIndex: 9999, background: stripeMessage === 'success' ? '#10b981' : '#ef4444', color: 'white', padding: '16px', borderRadius: '8px', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)' }} role="alert">
+            {stripeMessage === 'success'
+              ? (dictionary.wallet?.depositSuccess ?? 'Deposit successful. Your balance has been updated.')
+              : (dictionary.wallet?.depositCancelled ?? 'Deposit was cancelled.')}
+            <button
+              type="button"
+              style={{ marginLeft: '12px', background: 'transparent', border: 'none', color: 'white', cursor: 'pointer', fontWeight: 'bold' }}
+              onClick={() => setStripeMessage(null)}
+              aria-label="Dismiss"
+            >
+              ×
+            </button>
+          </div>
+        )}
 
         {showDeposit && accessToken && (
           <WalletDepositModal

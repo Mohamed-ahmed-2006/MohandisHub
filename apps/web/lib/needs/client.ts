@@ -30,11 +30,13 @@ export type Bid = {
   currency: string;
   message: string;
   delivery_days: number | null;
+  estimated_hours: number | null;
   status: string;
   created_at: string;
   expert_name?: string;
   expert_email?: string;
   need_title?: string;
+  has_unread?: boolean;
 };
 
 async function apiReq<T>(path: string, token: string, opts?: RequestInit): Promise<T> {
@@ -98,16 +100,44 @@ export const needsApiClient = {
       body: JSON.stringify({ bidId }),
     }),
 
+  payBid: (token: string, needId: string, bidId: string) =>
+    apiReq<{ needId: string; bidId: string; paid: boolean }>(`/api/needs/${needId}/bids/${bidId}/pay`, token, {
+      method: 'POST',
+    }),
+
   createBid: (
     token: string,
     needId: string,
-    body: { amount: number; message: string; deliveryDays?: number },
+    body: { amount: number; message: string; deliveryDays?: number; estimatedHours?: number },
   ) =>
     apiReq<Bid>(`/api/needs/${needId}/bids`, token, { method: 'POST', body: JSON.stringify(body) }),
+
+  updateBid: (
+    token: string,
+    needId: string,
+    bidId: string,
+    body: { amount?: number; message?: string; deliveryDays?: number; estimatedHours?: number },
+  ) =>
+    apiReq<Bid>(`/api/needs/${needId}/bids/${bidId}`, token, {
+      method: 'PATCH',
+      body: JSON.stringify(body),
+    }),
+
+  deleteBid: (token: string, needId: string, bidId: string) =>
+    apiReq<void>(`/api/needs/${needId}/bids/${bidId}`, token, { method: 'DELETE' }),
 
   listBidsForNeed: (token: string, needId: string) =>
     apiReq<Bid[]>(`/api/needs/${needId}/bids`, token),
 
   listMyBids: (token: string, page = 1) =>
     apiReq<{ rows: Bid[]; total: number }>(`/api/bids/my?page=${page}`, token),
+
+  listBidMessages: (token: string, needId: string, bidId: string) =>
+    apiReq<any[]>(`/api/needs/${needId}/bids/${bidId}/messages`, token),
+
+  createBidMessage: (token: string, needId: string, bidId: string, content: string) =>
+    apiReq<any>(`/api/needs/${needId}/bids/${bidId}/messages`, token, {
+      method: 'POST',
+      body: JSON.stringify({ content }),
+    }),
 };

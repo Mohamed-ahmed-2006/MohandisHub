@@ -1,7 +1,9 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { getChatSocket } from '@/lib/chat/socket';
 
 import { SiteLogo } from '@/components/site-logo';
 import { buildLocalePath } from '@/lib/i18n/path';
@@ -31,6 +33,32 @@ export const AppSidebar = ({
   onClose,
 }: AppSidebarProps) => {
   const pathname = usePathname();
+  const [hasUnreadChat, setHasUnreadChat] = useState(false);
+  const [hasUnreadJobs, setHasUnreadJobs] = useState(false);
+
+  useEffect(() => {
+    const sock = getChatSocket();
+    if (!sock) return;
+
+    const onNotification = (data: any) => {
+      if (data.type === 'new_message' || data.type === 'new_application_message') {
+        setHasUnreadChat(true);
+      } else {
+        setHasUnreadJobs(true);
+      }
+    };
+
+    sock.on('notification', onNotification);
+    return () => {
+      sock.off('notification', onNotification);
+    };
+  }, []);
+
+  // Clear unread when visiting the pages
+  useEffect(() => {
+    if (pathname.includes('/app/chat')) setHasUnreadChat(false);
+    if (pathname === '/app') setHasUnreadJobs(false);
+  }, [pathname]);
 
   const navItems: NavItem[] = [
     { href: '/app', label: dictionary.nav.home },
@@ -83,8 +111,15 @@ export const AppSidebar = ({
               href={buildLocalePath(locale, item.href)}
               className={`app-sidebar-link ${isActive(item.href) ? 'app-sidebar-link--active' : ''}`}
               onClick={onClose}
+              style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
             >
               {item.label}
+              {item.href === '/app/chat' && hasUnreadChat && (
+                <span style={{ width: '8px', height: '8px', background: '#ef4444', borderRadius: '50%' }} />
+              )}
+              {item.href === '/app' && hasUnreadJobs && (
+                <span style={{ width: '8px', height: '8px', background: '#3b82f6', borderRadius: '50%' }} />
+              )}
             </Link>
           ))}
         </nav>

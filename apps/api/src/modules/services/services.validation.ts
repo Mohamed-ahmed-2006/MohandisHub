@@ -8,7 +8,8 @@ export const createServiceSchema = z.object({
     .optional()
     .transform((v) => (v === '' || v == null ? undefined : v)),
   price: z.coerce.number().min(0).max(1000000).optional(),
-  priceType: z.enum(['fixed', 'hourly', 'negotiable']).optional(),
+  priceType: z.enum(['fixed', 'hourly']).optional(),
+  isNegotiable: z.boolean().optional(),
   currency: z.string().max(3).default('EGP').optional(),
   deliveryTimeDays: z
     .union([z.literal(''), z.undefined(), z.coerce.number().int().min(1).max(365)])
@@ -33,7 +34,8 @@ export const updateServiceSchema = z.object({
     .optional()
     .transform((v) => (v === '' || v == null ? undefined : v)),
   price: z.coerce.number().min(0).max(1000000).optional(),
-  priceType: z.enum(['fixed', 'hourly', 'negotiable']).optional(),
+  priceType: z.enum(['fixed', 'hourly']).optional(),
+  isNegotiable: z.boolean().optional(),
   currency: z.string().max(3).optional(),
   deliveryTimeDays: z
     .union([z.literal(''), z.undefined(), z.coerce.number().int().min(1).max(365)])

@@ -1,6 +1,3 @@
-import path from 'node:path';
-import { appendFileSync } from 'node:fs';
-
 import type { ApiErrorBody } from '@mohandishub/shared';
 import type { ErrorRequestHandler } from 'express';
 
@@ -10,6 +7,7 @@ import { HttpError } from '../utils/http-error.js';
 
 export const errorHandler: ErrorRequestHandler = (error, req, res, next) => {
   void next;
+  void req;
   const requestId = typeof res.locals.requestId === 'string' ? res.locals.requestId : undefined;
 
   if (error instanceof HttpError) {
@@ -33,34 +31,26 @@ export const errorHandler: ErrorRequestHandler = (error, req, res, next) => {
     ...(error instanceof Error && error.stack ? { stack: error.stack } : {}),
   });
 
-  // #region agent log
-  const errData = {
-    sessionId: '8fd58e',
-    location: 'error-handler.ts:500',
-    message: 'Unhandled error leading to 500',
-    data: {
-      errorMessage: error instanceof Error ? error.message : String(error),
-      errorName: error instanceof Error ? error.name : undefined,
-      path: req?.path ?? req?.url,
-      isForgotPassword: req?.path?.includes('forgot-password') ?? false,
-    },
-    timestamp: Date.now(),
-    hypothesisId: 'H1,H2,H3,H4,H5',
-  };
-  fetch('http://127.0.0.1:7325/ingest/ebd08bf8-7d73-450c-ad4d-4436a6c2225b', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '8fd58e' },
-    body: JSON.stringify(errData),
-  }).catch(() => {});
-  try {
-    const logPath = path.resolve(process.cwd(), 'debug-8fd58e.log');
-    appendFileSync(logPath, JSON.stringify(errData) + '\n');
-  } catch {
-    try {
-      appendFileSync(path.resolve(process.cwd(), '..', '..', 'debug-8fd58e.log'), JSON.stringify(errData) + '\n');
-    } catch {}
+  const pgLikeError = error as { code?: string; message?: string };
+  const isReservationSchemaError =
+    pgLikeError.code === '42P01' &&
+    typeof pgLikeError.message === 'string' &&
+    (pgLikeError.message.includes('reservations') ||
+      pgLikeError.message.includes('reservation_slots') ||
+      pgLikeError.message.includes('reservation_'));
+  if (isReservationSchemaError) {
+    const body: ApiErrorBody = {
+      ok: false,
+      error: {
+        code: 'SCHEMA_OUTDATED',
+        message:
+          'Reservation schema is missing in database. Run migrations (`npx supabase db push`) and restart API.',
+        ...(requestId ? { requestId } : {}),
+      },
+    };
+    res.status(503).json(body);
+    return;
   }
-  // #endregion
 
   const body: ApiErrorBody = {
     ok: false,

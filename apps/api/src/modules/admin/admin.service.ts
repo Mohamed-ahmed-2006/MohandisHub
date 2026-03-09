@@ -60,6 +60,8 @@ export class AdminService {
       },
       totalTransactions: parseInt(row.total_transactions, 10),
       totalRevenue: parseFloat(row.total_revenue),
+      transactionVolume: parseFloat(row.transaction_volume),
+      platformCommissionVolume: parseFloat(row.platform_commission_volume),
       pendingVerifications: parseInt(row.pending_verifications, 10),
       activeServices: parseInt(row.active_services, 10),
       totalPlans: parseInt(row.total_plans, 10),
@@ -99,6 +101,8 @@ export class AdminService {
     if (input.isActive !== undefined) dbFields.is_active = input.isActive;
     if (input.primaryRole !== undefined) dbFields.primary_role = input.primaryRole;
     if (input.isAdmin !== undefined) dbFields.is_admin = input.isAdmin;
+    if (input.adminPermissions !== undefined)
+      dbFields.admin_permissions = Array.isArray(input.adminPermissions) ? input.adminPermissions : [];
     if (input.planId !== undefined) dbFields.plan_id = input.planId;
 
     const row = await this.repo.updateUser(userId, dbFields);
@@ -486,6 +490,7 @@ export class AdminService {
       phone: row.phone,
       primaryRole: row.primary_role as AdminUserListItem['primaryRole'],
       isAdmin: row.is_admin === true,
+      adminPermissions: Array.isArray(row.admin_permissions) ? row.admin_permissions : [],
       isActive: row.is_active,
       emailVerifiedAt: row.email_verified_at,
       planSlug: row.plan_slug,

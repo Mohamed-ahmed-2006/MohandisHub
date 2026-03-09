@@ -3,8 +3,6 @@ import { Router } from 'express';
 import { maintenanceMode } from '../middleware/maintenance-mode.js';
 import { appRouter } from '../modules/app/app.routes.js';
 import { adminRouter } from '../modules/admin/admin.routes.js';
-import { availabilityRouter } from '../modules/availability/availability.routes.js';
-import { bookingsRouter } from '../modules/bookings/bookings.routes.js';
 import { authRouter } from '../modules/auth/auth.routes.js';
 import { chatRouter } from '../modules/chat/chat.routes.js';
 import { needsRouter, bidsRouter } from '../modules/needs/needs.routes.js';
@@ -17,6 +15,8 @@ import { uploadRouter } from '../modules/upload/upload.routes.js';
 import { usersRouter } from '../modules/users/users.routes.js';
 import { verificationRouter } from '../modules/verification/verification.routes.js';
 import { walletRouter } from '../modules/wallet/wallet.routes.js';
+import { jobsRouter } from '../modules/jobs/jobs.routes.js';
+import { reservationsRouter } from '../modules/reservations/reservations.routes.js';
 
 const apiRouter = Router();
 
@@ -35,8 +35,8 @@ apiRouter.use('/upload', uploadRouter);
 apiRouter.use('/plans', plansRouter);
 apiRouter.use('/needs', needsRouter);
 apiRouter.use('/bids', bidsRouter);
-apiRouter.use('/bookings', bookingsRouter);
-apiRouter.use('/availability', availabilityRouter);
+apiRouter.use('/reservations', reservationsRouter);
 apiRouter.use('/reviews', reviewsRouter);
+apiRouter.use('/jobs', jobsRouter);
 
 export { apiRouter };

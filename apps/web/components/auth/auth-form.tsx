@@ -463,7 +463,7 @@ export const AuthForm = ({
 
       {statusMessage ? <AuthStatusBanner variant={statusVariant} message={statusMessage} /> : null}
 
-      <form className="auth-form" onSubmit={handleFormSubmit} noValidate>
+      <form className="auth-form" onSubmit={handleFormSubmit} noValidate suppressHydrationWarning>
         {mode === 'register' && role === 'business' ? (
           <label className="auth-form-field-group">
             <span className="auth-form-field-label">{dictionary.register.companyNameLabel}</span>
@@ -557,6 +557,7 @@ export const AuthForm = ({
               aria-label={
                 isPasswordVisible ? dictionary.common.hidePassword : dictionary.common.showPassword
               }
+              suppressHydrationWarning
             >
               <PasswordVisibilityIcon visible={isPasswordVisible} />
             </button>

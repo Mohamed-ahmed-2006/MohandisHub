@@ -278,6 +278,94 @@ export const AdminSettingsTab = ({ dictionary, accessToken, refreshSession }: Pr
       </section>
 
       <section className="admin-settings-section">
+        <h3 className="admin-settings-section-title">Reservations</h3>
+        <div className="admin-settings-row">
+          <div className="admin-settings-label-wrap">
+            <label className="admin-settings-label">Acceptance fee (EGP)</label>
+            <span className="admin-settings-desc">
+              Charged to customer when provider accepts a reservation.
+            </span>
+          </div>
+          <input
+            type="number"
+            min={0}
+            step={0.01}
+            className="admin-settings-input admin-settings-input--number"
+            defaultValue={settings.reservationAcceptanceFee}
+            onBlur={(e) =>
+              handleNumberChange(
+                'reservationAcceptanceFee',
+                e.target.value === '' ? 0 : parseFloat(e.target.value) ?? 0,
+              )
+            }
+          />
+        </div>
+        <div className="admin-settings-row">
+          <div className="admin-settings-label-wrap">
+            <label className="admin-settings-label">Voice minute fee (EGP)</label>
+            <span className="admin-settings-desc">
+              Global online voice minute fee (split equally customer/provider).
+            </span>
+          </div>
+          <input
+            type="number"
+            min={0}
+            step={0.01}
+            className="admin-settings-input admin-settings-input--number"
+            defaultValue={settings.reservationVoiceMinuteRate}
+            onBlur={(e) =>
+              handleNumberChange(
+                'reservationVoiceMinuteRate',
+                e.target.value === '' ? 0 : parseFloat(e.target.value) ?? 0,
+              )
+            }
+          />
+        </div>
+        <div className="admin-settings-row">
+          <div className="admin-settings-label-wrap">
+            <label className="admin-settings-label">Video minute fee (EGP)</label>
+            <span className="admin-settings-desc">
+              Global online video minute fee (split equally customer/provider).
+            </span>
+          </div>
+          <input
+            type="number"
+            min={0}
+            step={0.01}
+            className="admin-settings-input admin-settings-input--number"
+            defaultValue={settings.reservationVideoMinuteRate}
+            onBlur={(e) =>
+              handleNumberChange(
+                'reservationVideoMinuteRate',
+                e.target.value === '' ? 0 : parseFloat(e.target.value) ?? 0,
+              )
+            }
+          />
+        </div>
+        <div className="admin-settings-row">
+          <div className="admin-settings-label-wrap">
+            <label className="admin-settings-label">Minimum prejoin minutes</label>
+            <span className="admin-settings-desc">
+              Required wallet coverage before users can join online sessions.
+            </span>
+          </div>
+          <input
+            type="number"
+            min={0}
+            step={1}
+            className="admin-settings-input admin-settings-input--number"
+            defaultValue={settings.reservationMinPrejoinMinutes}
+            onBlur={(e) =>
+              handleNumberChange(
+                'reservationMinPrejoinMinutes',
+                e.target.value === '' ? 0 : parseInt(e.target.value, 10) || 0,
+              )
+            }
+          />
+        </div>
+      </section>
+
+      <section className="admin-settings-section">
         <h3 className="admin-settings-section-title">{d.sections.plans}</h3>
         <Toggle
           label={d.pausePlanSubscriptions}

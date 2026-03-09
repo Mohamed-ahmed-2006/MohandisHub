@@ -183,6 +183,7 @@ export class UsersService {
       dateOfBirth: user.date_of_birth ? user.date_of_birth.toISOString().slice(0, 10) : null,
       role: user.primary_role,
       isAdmin: user.is_admin === true,
+      adminPermissions: Array.isArray(user.admin_permissions) ? user.admin_permissions : [],
       plan: user.plan_slug,
       emailVerified: user.email_verified_at !== null,
       verificationStatus,

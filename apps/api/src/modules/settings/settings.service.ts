@@ -45,6 +45,12 @@ export class SettingsService {
       globalAnnouncement: row.global_announcement,
       commissionPercent: parseFloat(row.commission_percent ?? '10'),
       commissionMinEgp: parseFloat(row.commission_min_egp ?? '0'),
+      commissionReceiverId:
+        row.commission_receiver_id ?? '00000000-0000-0000-0000-000000000001',
+      reservationAcceptanceFee: parseFloat(row.reservation_acceptance_fee ?? '0'),
+      reservationVoiceMinuteRate: parseFloat(row.reservation_voice_minute_rate ?? '1'),
+      reservationVideoMinuteRate: parseFloat(row.reservation_video_minute_rate ?? '2'),
+      reservationMinPrejoinMinutes: row.reservation_min_prejoin_minutes ?? 5,
     };
   }
 
@@ -75,6 +81,16 @@ export class SettingsService {
     if (partial.globalAnnouncement !== undefined) dbPartial.global_announcement = partial.globalAnnouncement;
     if (partial.commissionPercent !== undefined) dbPartial.commission_percent = partial.commissionPercent;
     if (partial.commissionMinEgp !== undefined) dbPartial.commission_min_egp = partial.commissionMinEgp;
+    if (partial.commissionReceiverId !== undefined)
+      dbPartial.commission_receiver_id = partial.commissionReceiverId;
+    if (partial.reservationAcceptanceFee !== undefined)
+      dbPartial.reservation_acceptance_fee = partial.reservationAcceptanceFee;
+    if (partial.reservationVoiceMinuteRate !== undefined)
+      dbPartial.reservation_voice_minute_rate = partial.reservationVoiceMinuteRate;
+    if (partial.reservationVideoMinuteRate !== undefined)
+      dbPartial.reservation_video_minute_rate = partial.reservationVideoMinuteRate;
+    if (partial.reservationMinPrejoinMinutes !== undefined)
+      dbPartial.reservation_min_prejoin_minutes = partial.reservationMinPrejoinMinutes;
 
     const row = await this.repo.update(dbPartial);
     return row ? this.toAppSettings(row) : null;
@@ -109,6 +125,12 @@ export class SettingsService {
       globalAnnouncement: row.global_announcement,
       commissionPercent: parseFloat(row.commission_percent ?? '10'),
       commissionMinEgp: parseFloat(row.commission_min_egp ?? '0'),
+      commissionReceiverId:
+        row.commission_receiver_id ?? '00000000-0000-0000-0000-000000000001',
+      reservationAcceptanceFee: parseFloat(row.reservation_acceptance_fee ?? '0'),
+      reservationVoiceMinuteRate: parseFloat(row.reservation_voice_minute_rate ?? '1'),
+      reservationVideoMinuteRate: parseFloat(row.reservation_video_minute_rate ?? '2'),
+      reservationMinPrejoinMinutes: row.reservation_min_prejoin_minutes ?? 5,
     };
   }
 
@@ -138,6 +160,11 @@ export class SettingsService {
       globalAnnouncement: null,
       commissionPercent: 10,
       commissionMinEgp: 0,
+      commissionReceiverId: '00000000-0000-0000-0000-000000000001',
+      reservationAcceptanceFee: 0,
+      reservationVoiceMinuteRate: 1,
+      reservationVideoMinuteRate: 2,
+      reservationMinPrejoinMinutes: 5,
     };
   }
 }

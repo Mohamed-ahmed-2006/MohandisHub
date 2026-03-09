@@ -9,6 +9,8 @@ import type { Dictionary, Locale } from '@/lib/i18n/types';
 import type { Bid, Need } from '@/lib/needs/client';
 import { needsApiClient } from '@/lib/needs/client';
 
+import { ExpertJobsTab } from './expert-jobs-tab';
+
 type Props = {
   locale: Locale;
   dictionary: Dictionary;
@@ -26,9 +28,48 @@ export const ExpertDashboard = ({
   const [myBids, setMyBids] = useState<Bid[]>([]);
   const [loading, setLoading] = useState(true);
   const [bidNeed, setBidNeed] = useState<Need | null>(null);
+  const [editingBid, setEditingBid] = useState<Bid | null>(null);
   const [bidError, setBidError] = useState<string | null>(null);
   const [bidding, setBidding] = useState(false);
-  const [tab, setTab] = useState<'needs' | 'bids'>('needs');
+  const [tab, setTab] = useState<'needs' | 'bids' | 'jobs'>('needs');
+  const [bidAmountInput, setBidAmountInput] = useState<string>('');
+  
+  const [chatBid, setChatBid] = useState<Bid | null>(null);
+  const [messages, setMessages] = useState<any[]>([]);
+  const [msgContent, setMsgContent] = useState('');
+
+  const openChat = async (bid: Bid) => {
+    setChatBid(bid);
+    setMessages([]);
+    try {
+      const msgs = await needsApiClient.listBidMessages(accessToken, bid.need_id, bid.id);
+      setMessages(msgs);
+    } catch {
+      // ignore
+    }
+  };
+
+  const sendMsg = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!msgContent.trim() || !chatBid) return;
+    try {
+      await needsApiClient.createBidMessage(accessToken, chatBid.need_id, chatBid.id, msgContent);
+      setMsgContent('');
+      void openChat(chatBid);
+    } catch {
+      // ignore
+    }
+  };
+
+  const handleDeleteBid = async (needId: string, bidId: string) => {
+    if (!confirm('Are you sure you want to delete this bid?')) return;
+    try {
+      await needsApiClient.deleteBid(accessToken, needId, bidId);
+      void loadData();
+    } catch (err: any) {
+      alert(err.message || 'Failed to delete bid');
+    }
+  };
 
   const d = dictionary.needs ?? ({} as Record<string, string>);
 
@@ -54,7 +95,7 @@ export const ExpertDashboard = ({
 
   const handleBid = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    if (!bidNeed) return;
+    if (!bidNeed && !editingBid) return;
     setBidding(true);
     setBidError(null);
     const form = e.currentTarget;
@@ -72,19 +113,35 @@ export const ExpertDashboard = ({
         setBidding(false);
         return;
       }
-      const bidData: { amount: number; message: string; deliveryDays?: number } = {
+      const bidData: { amount: number; message: string; deliveryDays?: number; estimatedHours?: number } = {
         amount,
         message,
       };
-      const dd = parseInt((form.elements.namedItem('deliveryDays') as HTMLInputElement).value, 10);
-      if (Number.isInteger(dd) && dd > 0 && dd <= 365) bidData.deliveryDays = dd;
-      if (!Number.isNaN(dd) && (dd < 1 || dd > 365)) {
-        setBidError('Delivery days must be between 1 and 365.');
-        setBidding(false);
-        return;
+      
+      const ddRaw = form.elements.namedItem('deliveryDays') as HTMLInputElement | null;
+      if (ddRaw) {
+        const dd = parseInt(ddRaw.value, 10);
+        if (Number.isInteger(dd) && dd > 0 && dd <= 365) bidData.deliveryDays = dd;
+        if (!Number.isNaN(dd) && (dd < 1 || dd > 365)) {
+          setBidError('Delivery days must be between 1 and 365.');
+          setBidding(false);
+          return;
+        }
       }
-      await needsApiClient.createBid(accessToken, bidNeed.id, bidData);
-      setBidNeed(null);
+      
+      const ehRaw = form.elements.namedItem('estimatedHours') as HTMLInputElement | null;
+      if (ehRaw) {
+        const eh = parseInt(ehRaw.value, 10);
+        if (Number.isInteger(eh) && eh > 0) bidData.estimatedHours = eh;
+      }
+
+      if (editingBid) {
+        await needsApiClient.updateBid(accessToken, editingBid.need_id, editingBid.id, bidData);
+        setEditingBid(null);
+      } else if (bidNeed) {
+        await needsApiClient.createBid(accessToken, bidNeed.id, bidData);
+        setBidNeed(null);
+      }
       void loadData();
     } catch (err) {
       setBidError(err instanceof Error ? err.message : 'Failed');
@@ -134,6 +191,13 @@ export const ExpertDashboard = ({
         >
           {d.myBids ?? 'My Bids'}
         </button>
+        <button
+          type="button"
+          className={`dashboard-tab ${tab === 'jobs' ? 'dashboard-tab--active' : ''}`}
+          onClick={() => setTab('jobs')}
+        >
+          Jobs
+        </button>
       </div>
 
       {loading ? (
@@ -143,55 +207,123 @@ export const ExpertDashboard = ({
           <p className="dashboard-empty">{d.noOpenNeeds ?? 'No open needs at the moment.'}</p>
         ) : (
           <div className="dashboard-cards">
-            {openNeeds.map((need) => (
-              <div key={need.id} className="dashboard-card">
-                <h3 className="dashboard-card-title">{need.title}</h3>
-                <p className="dashboard-card-desc">
-                  {need.description.slice(0, 120)}
-                  {need.description.length > 120 ? '...' : ''}
-                </p>
-                <p className="dashboard-card-meta">
-                  {need.budget_type === 'fixed' ? (d.fixed ?? 'Fixed') : (d.hourly ?? 'Hourly')}:{' '}
-                  {parseFloat(need.budget_amount).toFixed(2)} {need.currency}
-                  {need.timeline_days && ` — ${need.timeline_days} days`}
-                </p>
-                {need.category_name_en && (
-                  <p className="dashboard-card-meta">
-                    {locale === 'ar' ? need.category_name_ar : need.category_name_en}
+            {openNeeds.map((need) => {
+              const existingBid = myBids.find((b) => b.need_id === need.id);
+              return (
+                <div key={need.id} className="dashboard-card">
+                  <h3 className="dashboard-card-title">{need.title}</h3>
+                  <p className="dashboard-card-desc">
+                    {need.description.slice(0, 120)}
+                    {need.description.length > 120 ? '...' : ''}
                   </p>
-                )}
+                  <p className="dashboard-card-meta">
+                    {need.budget_type === 'fixed' ? (d.fixed ?? 'Fixed') : (d.hourly ?? 'Hourly')}:{' '}
+                    {parseFloat(need.budget_amount).toFixed(2)} {need.currency}
+                    {need.timeline_days && ` — ${need.timeline_days} days`}
+                  </p>
+                  {need.category_name_en && (
+                    <p className="dashboard-card-meta">
+                      {locale === 'ar' ? need.category_name_ar : need.category_name_en}
+                    </p>
+                  )}
+                  <p className="dashboard-card-meta">
+                    {d.postedBy ?? 'By'}: {need.customer_name}
+                  </p>
+                  {existingBid ? (
+                    <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem' }}>
+                      <button
+                        type="button"
+                        className="dashboard-btn dashboard-btn--secondary"
+                        onClick={() => {
+                          setEditingBid(existingBid);
+                          setBidNeed(need);
+                          setBidAmountInput(existingBid.amount);
+                          setBidError(null);
+                        }}
+                        disabled={existingBid.status !== 'pending'}
+                      >
+                        Edit Bid
+                      </button>
+                      <button
+                        type="button"
+                        className="dashboard-btn dashboard-btn--danger"
+                        onClick={() => void handleDeleteBid(need.id, existingBid.id)}
+                        disabled={existingBid.status !== 'pending'}
+                      >
+                        Delete Bid
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      className="dashboard-primary-btn"
+                      style={{ marginTop: '0.5rem' }}
+                      onClick={() => {
+                        setBidNeed(need);
+                        setEditingBid(null);
+                        setBidError(null);
+                        setBidAmountInput('');
+                      }}
+                    >
+                      {d.placeBid ?? 'Place Bid'}
+                    </button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )
+      ) : tab === 'bids' ? (
+        myBids.length === 0 ? (
+          <p className="dashboard-empty">{d.noBids ?? "You haven't placed any bids yet."}</p>
+        ) : (
+          <div className="dashboard-cards">
+            {myBids.map((bid) => (
+              <div key={bid.id} className="dashboard-card">
+                <h3 className="dashboard-card-title">{bid.need_title}</h3>
                 <p className="dashboard-card-meta">
-                  {d.postedBy ?? 'By'}: {need.customer_name}
+                  {parseFloat(bid.amount).toFixed(2)} {bid.currency}
+                  {bid.delivery_days && ` — ${bid.delivery_days} days`}
                 </p>
-                <button
-                  type="button"
-                  className="dashboard-primary-btn"
-                  onClick={() => {
-                    setBidNeed(need);
-                    setBidError(null);
-                  }}
-                >
-                  {d.placeBid ?? 'Place Bid'}
-                </button>
+                <span className={`dashboard-badge dashboard-badge--${bid.status}`}>{bid.status}</span>
+                {bid.has_unread && <span className="dashboard-badge" style={{ background: 'hsl(var(--destructive))', color: '#fff', marginLeft: '0.5rem' }}>New Message</span>}
+                {bid.status === 'pending' && (
+                  <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem' }}>
+                    <button
+                      type="button"
+                      className="dashboard-btn dashboard-btn--secondary dashboard-btn--small"
+                      onClick={() => {
+                        const relatedNeed = openNeeds.find((n) => n.id === bid.need_id);
+                        setEditingBid(bid);
+                        setBidNeed(relatedNeed || { id: bid.need_id, title: bid.need_title || 'Need', budget_type: bid.estimated_hours ? 'hourly' : 'fixed' } as any);
+                        setBidAmountInput(bid.amount);
+                        setBidError(null);
+                      }}
+                    >
+                      Edit
+                    </button>
+                    <button
+                      type="button"
+                      className="dashboard-btn dashboard-btn--danger dashboard-btn--small"
+                      onClick={() => void handleDeleteBid(bid.need_id, bid.id)}
+                    >
+                      Delete
+                    </button>
+                    <button
+                      type="button"
+                      className="dashboard-btn dashboard-btn--secondary dashboard-btn--small"
+                      onClick={() => void openChat(bid)}
+                    >
+                      Chat
+                    </button>
+                  </div>
+                )}
               </div>
             ))}
           </div>
         )
-      ) : myBids.length === 0 ? (
-        <p className="dashboard-empty">{d.noBids ?? "You haven't placed any bids yet."}</p>
       ) : (
-        <div className="dashboard-cards">
-          {myBids.map((bid) => (
-            <div key={bid.id} className="dashboard-card">
-              <h3 className="dashboard-card-title">{bid.need_title}</h3>
-              <p className="dashboard-card-meta">
-                {parseFloat(bid.amount).toFixed(2)} {bid.currency}
-                {bid.delivery_days && ` — ${bid.delivery_days} days`}
-              </p>
-              <span className={`dashboard-badge dashboard-badge--${bid.status}`}>{bid.status}</span>
-            </div>
-          ))}
-        </div>
+        <ExpertJobsTab accessToken={accessToken} />
       )}
 
       {bidNeed && (
@@ -212,24 +344,49 @@ export const ExpertDashboard = ({
                 min="1"
                 step="0.01"
                 className="dashboard-input"
-                placeholder={d.bidAmountPlaceholder ?? 'Your bid amount'}
+                placeholder={d.bidAmountPlaceholder ?? 'Your total bid amount (EGP)'}
+                value={bidAmountInput}
+                onChange={(e) => setBidAmountInput(e.target.value)}
                 required
               />
+              <p className="dashboard-form-hint" style={{ marginTop: '-0.5rem', marginBottom: '0.5rem' }}>
+                {bidAmountInput && !isNaN(Number(bidAmountInput)) ? (
+                  <>You will receive approximately <strong>{(Number(bidAmountInput) * 0.9).toFixed(2)} EGP</strong> after the 10% platform commission.</>
+                ) : (
+                  <>Note: A platform commission (typically ~10%) will be deducted from this total upon payout.</>
+                )}
+              </p>
+              {bidNeed.budget_type === 'hourly' && (
+                <input
+                  name="estimatedHours"
+                  type="number"
+                  min="1"
+                  max="168"
+                  className="dashboard-input"
+                  defaultValue={editingBid?.estimated_hours ?? ''}
+                  placeholder="Estimated hours per week"
+                  required
+                />
+              )}
               <textarea
                 name="message"
                 className="dashboard-textarea"
                 placeholder={d.bidMessagePlaceholder ?? 'Why are you the right fit?'}
+                defaultValue={editingBid?.message ?? ''}
                 minLength={5}
                 required
               />
-              <input
-                name="deliveryDays"
-                type="number"
-                min="1"
-                max="365"
-                className="dashboard-input"
-                placeholder={d.bidDeliveryPlaceholder ?? 'Delivery days (optional)'}
-              />
+              {bidNeed.budget_type !== 'hourly' && (
+                <input
+                  name="deliveryDays"
+                  type="number"
+                  min="1"
+                  max="365"
+                  className="dashboard-input"
+                  defaultValue={editingBid?.delivery_days ?? ''}
+                  placeholder={d.bidDeliveryPlaceholder ?? 'Delivery days (optional)'}
+                />
+              )}
               <div className="dashboard-form-row">
                 <button
                   type="button"
@@ -243,6 +400,37 @@ export const ExpertDashboard = ({
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+      {chatBid && (
+        <div className="plan-modal-overlay" onClick={() => setChatBid(null)}>
+          <div
+            className="plan-modal"
+            onClick={(e) => e.stopPropagation()}
+            style={{ maxWidth: 480 }}
+          >
+            <h3 className="plan-modal-title">Pre-Award Chat: {chatBid.need_title}</h3>
+            <div style={{ maxHeight: '300px', overflowY: 'auto', marginBottom: '1rem', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+              {messages.map(m => (
+                <div key={m.id} style={{ padding: '0.5rem', background: 'hsl(var(--muted))', color: 'hsl(var(--foreground))', borderRadius: '4px' }}>
+                  <strong>{m.sender_name}</strong>: <span>{m.content}</span>
+                </div>
+              ))}
+              {messages.length === 0 && <p className="dashboard-empty">No messages yet.</p>}
+            </div>
+            <form onSubmit={sendMsg} style={{ display: 'flex', gap: '0.5rem' }}>
+              <input className="dashboard-input" value={msgContent} onChange={e => setMsgContent(e.target.value)} placeholder="Type a message..." required />
+              <button type="submit" className="dashboard-primary-btn">Send</button>
+            </form>
+            <button
+              type="button"
+              className="plan-modal-cancel"
+              style={{ marginTop: '1rem' }}
+              onClick={() => setChatBid(null)}
+            >
+              {dictionary.common.back}
+            </button>
           </div>
         </div>
       )}

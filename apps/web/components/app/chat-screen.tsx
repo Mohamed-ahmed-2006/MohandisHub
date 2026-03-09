@@ -150,8 +150,11 @@ export const ChatScreen = ({ locale, dictionary }: Props) => {
                 >
                   <span className="chat-conv-name">{conv.other_display_name}</span>
                   {conv.last_message_body && (
-                    <span className="chat-conv-preview">{conv.last_message_body}</span>
+                    <span className="chat-conv-preview" style={{ fontWeight: conv.has_unread ? 700 : 400 }}>
+                      {conv.last_message_body}
+                    </span>
                   )}
+                  {conv.has_unread && <span className="chat-conv-badge" style={{ background: 'hsl(var(--destructive))', color: '#fff' }}>New</span>}
                   {conv.status === 'closed' && <span className="chat-conv-badge">Closed</span>}
                 </button>
               ))

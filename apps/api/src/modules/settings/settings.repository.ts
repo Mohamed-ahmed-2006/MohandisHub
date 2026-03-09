@@ -34,6 +34,11 @@ export type AppSettingsRow = {
   global_announcement: string | null;
   commission_percent?: string;
   commission_min_egp?: string;
+  commission_receiver_id?: string;
+  reservation_acceptance_fee?: string;
+  reservation_voice_minute_rate?: string;
+  reservation_video_minute_rate?: string;
+  reservation_min_prejoin_minutes?: number;
 };
 
 export type AppSettingsUpdate = Partial<{
@@ -62,6 +67,11 @@ export type AppSettingsUpdate = Partial<{
   global_announcement: string | null;
   commission_percent: number;
   commission_min_egp: number;
+  commission_receiver_id: string;
+  reservation_acceptance_fee: number;
+  reservation_voice_minute_rate: number;
+  reservation_video_minute_rate: number;
+  reservation_min_prejoin_minutes: number;
 }>;
 
 export class SettingsRepository {
@@ -100,6 +110,11 @@ export class SettingsRepository {
     globalAnnouncement: 'global_announcement',
     commissionPercent: 'commission_percent',
     commissionMinEgp: 'commission_min_egp',
+    commissionReceiverId: 'commission_receiver_id',
+    reservationAcceptanceFee: 'reservation_acceptance_fee',
+    reservationVoiceMinuteRate: 'reservation_voice_minute_rate',
+    reservationVideoMinuteRate: 'reservation_video_minute_rate',
+    reservationMinPrejoinMinutes: 'reservation_min_prejoin_minutes',
   };
 
   async update(partial: AppSettingsUpdate): Promise<AppSettingsRow | null> {

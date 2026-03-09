@@ -7,6 +7,7 @@ export type Review = {
   reviewerId: string;
   targetUserId: string;
   targetType: 'expert' | 'business';
+  reservationId: string | null;
   bookingId: string | null;
   needId: string | null;
   rating: number;
@@ -16,6 +17,7 @@ export type Review = {
 };
 
 export type CreateReviewBody = {
+  reservationId?: string;
   bookingId?: string;
   needId?: string;
   rating: number;

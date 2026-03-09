@@ -96,6 +96,7 @@ export const AdminTransactionsTab = ({ dictionary, accessToken }: Props) => {
           <option value="refund">Refund</option>
           <option value="adjustment">Adjustment</option>
           <option value="bonus">Bonus</option>
+          <option value="commission">Commission</option>
         </select>
         <select
           className="admin-toolbar-select"
@@ -221,6 +222,7 @@ export const AdminTransactionsTab = ({ dictionary, accessToken }: Props) => {
                 <option value="withdrawal">Withdrawal</option>
                 <option value="adjustment">Adjustment</option>
                 <option value="bonus">Bonus</option>
+                <option value="commission">Commission</option>
               </select>
             </div>
             <div className="admin-form-group">

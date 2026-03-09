@@ -1,14 +1,15 @@
 'use client';
 
-import type { Booking } from '@mohandishub/shared';
+import type { Reservation } from '@mohandishub/shared';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 
 import { useAuth } from '@/components/auth/auth-provider';
 import { Container } from '@/components/ui/container';
-import { bookingsApiClient } from '@/lib/bookings/client';
 import { buildLocalePath } from '@/lib/i18n/path';
 import type { Dictionary, Locale } from '@/lib/i18n/types';
+import { reservationsApiClient } from '@/lib/reservations/client';
+import { OnlineCallModal } from './online-call-modal';
 
 import '@/app/dashboard.css';
 
@@ -17,17 +18,11 @@ type Props = {
   dictionary: Dictionary;
 };
 
-function formatDate(d: string): string {
-  return new Date(d).toLocaleDateString(undefined, {
+function formatDateTime(d: string): string {
+  return new Date(d).toLocaleString(undefined, {
     weekday: 'short',
     month: 'short',
     day: 'numeric',
-    year: 'numeric',
-  });
-}
-
-function formatTime(d: string): string {
-  return new Date(d).toLocaleTimeString(undefined, {
     hour: '2-digit',
     minute: '2-digit',
   });
@@ -36,9 +31,11 @@ function formatTime(d: string): string {
 export const BookingsScreen = ({ locale, dictionary }: Props) => {
   const router = useRouter();
   const { authUser, accessToken, isAuthenticated, isReady, authGuard } = useAuth();
-  const [bookings, setBookings] = useState<Booking[]>([]);
+  const [reservations, setReservations] = useState<Reservation[]>([]);
   const [loading, setLoading] = useState(true);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [callReservation, setCallReservation] = useState<Reservation | null>(null);
 
   useEffect(() => {
     if (!isReady) return;
@@ -57,15 +54,17 @@ export const BookingsScreen = ({ locale, dictionary }: Props) => {
   const load = useCallback(async () => {
     if (!accessToken) return;
     setLoading(true);
+    setError(null);
     try {
-      const res = await bookingsApiClient.listMy(accessToken, {
+      const res = await reservationsApiClient.listMyReservations(accessToken, {
         role,
         page: 1,
         limit: 50,
       });
-      setBookings(res.items);
-    } catch {
-      setBookings([]);
+      setReservations(res.items);
+    } catch (e) {
+      setReservations([]);
+      setError(e instanceof Error ? e.message : 'Failed to load reservations');
     } finally {
       setLoading(false);
     }
@@ -75,15 +74,19 @@ export const BookingsScreen = ({ locale, dictionary }: Props) => {
     void load();
   }, [load]);
 
-  const updateStatus = useCallback(
-    async (id: string, status: string) => {
+  const decide = useCallback(
+    async (id: string, decision: 'accept' | 'reject') => {
       if (!accessToken) return;
       setUpdatingId(id);
+      setError(null);
       try {
-        await bookingsApiClient.update(accessToken, id, { status });
-        void load();
-      } catch {
-        /* ignore */
+        await reservationsApiClient.decideReservation(accessToken, id, {
+          decision,
+          ...(decision === 'reject' ? { rejectionReason: 'Rejected by provider' } : {}),
+        });
+        await load();
+      } catch (e) {
+        setError(e instanceof Error ? e.message : 'Action failed');
       } finally {
         setUpdatingId(null);
       }
@@ -91,12 +94,45 @@ export const BookingsScreen = ({ locale, dictionary }: Props) => {
     [accessToken, load],
   );
 
+  const finish = useCallback(
+    async (id: string, action: 'done' | 'report') => {
+      if (!accessToken) return;
+      setUpdatingId(id);
+      setError(null);
+      try {
+        await reservationsApiClient.finishReservation(accessToken, id, {
+          action,
+          ...(action === 'report' ? { reportReason: 'Reported by customer' } : {}),
+        });
+        await load();
+      } catch (e) {
+        setError(e instanceof Error ? e.message : 'Action failed');
+      } finally {
+        setUpdatingId(null);
+      }
+    },
+    [accessToken, load],
+  );
+
+  const getCheckinCode = useCallback(
+    async (id: string) => {
+      if (!accessToken) return;
+      setUpdatingId(id);
+      try {
+        const data = await reservationsApiClient.getOfflineCheckinCodes(accessToken, id);
+        window.alert(`Your check-in code: ${data.myCode}`);
+      } catch (e) {
+        setError(e instanceof Error ? e.message : 'Could not load code');
+      } finally {
+        setUpdatingId(null);
+      }
+    },
+    [accessToken],
+  );
+
   const bp = dictionary.bookingsPage ?? {};
-  const title = bp.title ?? 'My Bookings';
-  const noBookings = bp.noBookings ?? 'No bookings yet.';
-  const confirmComplete = bp.confirmComplete ?? 'Confirm completion';
-  const start = bp.start ?? 'Start';
-  const complete = bp.complete ?? 'Complete';
+  const title = bp.title ?? 'My Reservations';
+  const noBookings = bp.noBookings ?? 'No reservations yet.';
 
   if (!isReady || !authUser) {
     return (
@@ -112,69 +148,108 @@ export const BookingsScreen = ({ locale, dictionary }: Props) => {
     <main className="profile-screen-main">
       <Container className="profile-screen-container">
         <h1 className="dashboard-title">{title}</h1>
+        {error && <p className="dashboard-error">{error}</p>}
 
         {loading ? (
           <p className="dashboard-loading">{dictionary.admin?.loading ?? 'Loading...'}</p>
-        ) : bookings.length === 0 ? (
+        ) : reservations.length === 0 ? (
           <p className="dashboard-empty">{noBookings}</p>
         ) : (
           <ul className="calendar-booking-list">
-            {bookings.map((b) => (
-              <li key={b.id} className="calendar-booking-item">
+            {reservations.map((r) => (
+              <li key={r.id} className="calendar-booking-item">
                 <div className="calendar-booking-info">
-                  <span>{b.serviceTitle ?? 'Booking'}</span>
-                  {role === 'customer' && b.providerName && (
-                    <>
-                      {' — '}
-                      <span>{b.providerName}</span>
-                    </>
-                  )}
-                  {role === 'provider' && b.customerName && (
-                    <>
-                      {' — '}
-                      <span>{b.customerName}</span>
-                    </>
-                  )}
-                  {' — '}
-                  {formatDate(b.slotStartAt ?? b.createdAt)}{' '}
-                  {b.slotStartAt ? formatTime(b.slotStartAt) : ''}
-                  <span
-                    className={`calendar-booking-status calendar-booking-status--${b.status}`}
-                  >
-                    {b.status}
+                  <span>{r.serviceTitle ?? 'Reservation'}</span>
+                  {' - '}
+                  <span>{r.mode === 'online' ? `Online (${r.onlineType ?? 'voice'})` : 'Offline'}</span>
+                  {' - '}
+                  <span>{formatDateTime(r.requestedStartAt)}</span>
+                  <span className={`calendar-booking-status calendar-booking-status--${r.status}`}>
+                    {r.status}
                   </span>
+                  {r.rejectionReason && <p className="dashboard-card-meta">{r.rejectionReason}</p>}
                 </div>
+
                 <div className="calendar-booking-actions">
-                  {(b.status === 'paid' || b.status === 'scheduled') && role === 'provider' && (
+                  {role === 'provider' && r.status === 'pending' && (
+                    <>
+                      <button
+                        type="button"
+                        className="dashboard-btn dashboard-btn--small dashboard-btn--primary"
+                        onClick={() => void decide(r.id, 'accept')}
+                        disabled={updatingId === r.id}
+                      >
+                        Accept
+                      </button>
+                      <button
+                        type="button"
+                        className="dashboard-btn dashboard-btn--small dashboard-btn--danger"
+                        onClick={() => void decide(r.id, 'reject')}
+                        disabled={updatingId === r.id}
+                      >
+                        Reject
+                      </button>
+                    </>
+                  )}
+
+                  {role === 'customer' && r.status === 'waiting_customer_done' && (
+                    <>
+                      <button
+                        type="button"
+                        className="dashboard-btn dashboard-btn--small dashboard-btn--primary"
+                        onClick={() => void finish(r.id, 'done')}
+                        disabled={updatingId === r.id}
+                      >
+                        Done
+                      </button>
+                      <button
+                        type="button"
+                        className="dashboard-btn dashboard-btn--small dashboard-btn--danger"
+                        onClick={() => void finish(r.id, 'report')}
+                        disabled={updatingId === r.id}
+                      >
+                        Report
+                      </button>
+                    </>
+                  )}
+
+                  {r.mode === 'offline' && r.status === 'accepted' && (
                     <button
                       type="button"
-                      className="dashboard-btn dashboard-btn--small dashboard-btn--primary"
-                      onClick={() => void updateStatus(b.id, 'in_progress')}
-                      disabled={updatingId === b.id}
+                      className="dashboard-btn dashboard-btn--small dashboard-btn--secondary"
+                      onClick={() => void getCheckinCode(r.id)}
+                      disabled={updatingId === r.id}
                     >
-                      {updatingId === b.id ? '...' : start}
+                      My Check-in Code
                     </button>
                   )}
-                  {b.status === 'in_progress' && (
-                    <button
-                      type="button"
-                      className="dashboard-btn dashboard-btn--small dashboard-btn--primary"
-                      onClick={() => void updateStatus(b.id, 'completed')}
-                      disabled={updatingId === b.id}
-                    >
-                      {updatingId === b.id
-                        ? '...'
-                        : role === 'customer'
-                          ? confirmComplete
-                          : complete}
-                    </button>
-                  )}
+
+                  {r.mode === 'online' &&
+                    (r.status === 'accepted' || r.status === 'in_session' || r.status === 'awaiting_start') && (
+                      <button
+                        type="button"
+                        className="dashboard-btn dashboard-btn--small dashboard-btn--primary"
+                        onClick={() => setCallReservation(r)}
+                      >
+                        Join Call
+                      </button>
+                    )}
                 </div>
               </li>
             ))}
           </ul>
         )}
       </Container>
+
+      <OnlineCallModal
+        open={callReservation != null}
+        reservation={callReservation}
+        accessToken={accessToken ?? ''}
+        onClose={() => setCallReservation(null)}
+        onEnded={() => {
+          void load();
+        }}
+      />
     </main>
   );
 };

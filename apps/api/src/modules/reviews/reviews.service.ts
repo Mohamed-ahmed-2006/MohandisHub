@@ -5,12 +5,19 @@
 import { getPool } from '../../db/pool.js';
 import { HttpError } from '../../utils/http-error.js';
 
-import { BookingsRepository } from '../bookings/bookings.repository.js';
 import { NeedsRepository } from '../needs/needs.repository.js';
 
 import { ReviewsRepository } from './reviews.repository.js';
 import type { ReviewRow } from './reviews.repository.js';
 import type { CreateReviewInput } from './reviews.validation.js';
+
+type ReservationReviewRef = {
+  id: string;
+  customer_id: string;
+  provider_id: string;
+  status: string;
+  legacy_booking_id: string | null;
+};
 
 function toReview(row: ReviewRow) {
   return {
@@ -18,6 +25,7 @@ function toReview(row: ReviewRow) {
     reviewerId: row.reviewer_id,
     targetUserId: row.target_user_id,
     targetType: row.target_type as 'expert' | 'business',
+    reservationId: row.reservation_id,
     bookingId: row.booking_id,
     needId: row.need_id,
     rating: row.rating,
@@ -39,47 +47,50 @@ export class ReviewsService {
 
   constructor(
     private readonly repo: ReviewsRepository = new ReviewsRepository(),
-    private readonly bookingsRepo: BookingsRepository = new BookingsRepository(),
     private readonly needsRepo: NeedsRepository = new NeedsRepository(),
   ) {}
 
   async create(reviewerId: string, input: CreateReviewInput) {
     let targetUserId: string;
     let targetType: string;
+    let reservationId: string | undefined;
+    let bookingId: string | undefined;
 
-    if (input.bookingId) {
-      const booking = await this.bookingsRepo.findById(input.bookingId);
-      if (!booking) {
+    if (input.reservationId || input.bookingId) {
+      const reservation = await this.findReservationForReview(input);
+      if (!reservation) {
         throw new HttpError({
           statusCode: 404,
-          code: 'BOOKING_NOT_FOUND',
-          message: 'Booking not found.',
+          code: 'RESERVATION_NOT_FOUND',
+          message: 'Reservation not found.',
         });
       }
-      if (booking.customer_id !== reviewerId) {
+      if (reservation.customer_id !== reviewerId) {
         throw new HttpError({
           statusCode: 403,
           code: 'FORBIDDEN',
-          message: 'Only the customer can review this booking.',
+          message: 'Only the customer can review this reservation.',
         });
       }
-      if (booking.status !== 'completed') {
+      if (reservation.status !== 'completed') {
         throw new HttpError({
           statusCode: 400,
-          code: 'BOOKING_NOT_COMPLETED',
-          message: 'Can only review completed bookings.',
+          code: 'RESERVATION_NOT_COMPLETED',
+          message: 'Can only review completed reservations.',
         });
       }
-      targetUserId = booking.provider_id;
+      targetUserId = reservation.provider_id;
       targetType = await this.getProviderRole(targetUserId);
-      const existing = await this.repo.findByBooking(input.bookingId);
+      const existing = await this.repo.findByReservation(reservation.id);
       if (existing) {
         throw new HttpError({
           statusCode: 409,
           code: 'ALREADY_REVIEWED',
-          message: 'You already reviewed this booking.',
+          message: 'You already reviewed this reservation.',
         });
       }
+      reservationId = reservation.id;
+      bookingId = reservation.legacy_booking_id ?? input.bookingId;
     } else if (input.needId) {
       const need = await this.needsRepo.getNeedById(input.needId);
       if (!need) {
@@ -133,7 +144,7 @@ export class ReviewsService {
       throw new HttpError({
         statusCode: 400,
         code: 'MISSING_REFERENCE',
-        message: 'Either bookingId or needId is required.',
+        message: 'Either reservationId, bookingId, or needId is required.',
       });
     }
 
@@ -143,7 +154,8 @@ export class ReviewsService {
       targetType,
       rating: input.rating,
     };
-    if (input.bookingId != null) createData.bookingId = input.bookingId;
+    if (reservationId != null) createData.reservationId = reservationId;
+    if (bookingId != null) createData.bookingId = bookingId;
     if (input.needId != null) createData.needId = input.needId;
     if (input.comment != null) createData.comment = input.comment;
     const row = await this.repo.create(createData);
@@ -169,5 +181,33 @@ export class ReviewsService {
       limit,
       totalPages: Math.ceil(total / limit),
     };
+  }
+
+  private async findReservationForReview(
+    input: CreateReviewInput,
+  ): Promise<ReservationReviewRef | null> {
+    if (input.reservationId) {
+      const { rows } = await getPool().query<ReservationReviewRef>(
+        `SELECT id, customer_id, provider_id, status, legacy_booking_id::text
+         FROM reservations
+         WHERE id = $1`,
+        [input.reservationId],
+      );
+      return rows[0] ?? null;
+    }
+
+    if (input.bookingId) {
+      const { rows } = await getPool().query<ReservationReviewRef>(
+        `SELECT id, customer_id, provider_id, status, legacy_booking_id::text
+         FROM reservations
+         WHERE legacy_booking_id = $1
+         ORDER BY created_at DESC
+         LIMIT 1`,
+        [input.bookingId],
+      );
+      return rows[0] ?? null;
+    }
+
+    return null;
   }
 }

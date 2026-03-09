@@ -23,6 +23,8 @@ export type AdminDashboardStats = {
   activeUsers: number;
   totalRevenue: number;
   totalTransactions: number;
+  transactionVolume: number;
+  platformCommissionVolume: number;
   pendingVerifications: number;
   activeServices: number;
   totalPlans: number;
@@ -37,6 +39,7 @@ export type AdminUserListItem = {
   phone: string | null;
   primaryRole: UserRole;
   isAdmin: boolean;
+  adminPermissions?: string[];
   isActive: boolean;
   emailVerifiedAt: string | null;
   planSlug: string | null;
@@ -61,6 +64,7 @@ export type AdminUpdateUserBody = {
   isActive?: boolean;
   primaryRole?: UserRole;
   isAdmin?: boolean;
+  adminPermissions?: string[];
   planId?: string | null;
 };
 

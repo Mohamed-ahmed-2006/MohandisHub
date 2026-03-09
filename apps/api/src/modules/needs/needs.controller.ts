@@ -7,6 +7,7 @@ import {
   createBidSchema,
   createNeedSchema,
   updateNeedSchema,
+  updateBidSchema,
 } from './needs.validation.js';
 
 const svc = new NeedsService();
@@ -81,6 +82,12 @@ const awardBid = asyncHandler(async (req, res) => {
   res.json({ ok: true, data: result });
 });
 
+const payBid = asyncHandler(async (req, res) => {
+  const user = requireUser(req);
+  const result = await svc.payBid(req.params.id!, req.params.bidId!, user.id);
+  res.json({ ok: true, data: result });
+});
+
 const createBid = asyncHandler(async (req, res) => {
   const user = requireUser(req);
   const input = parseBody(createBidSchema, req.body);
@@ -102,6 +109,35 @@ const listMyBids = asyncHandler(async (req, res) => {
   res.json({ ok: true, data });
 });
 
+const updateBid = asyncHandler(async (req, res) => {
+  const user = requireUser(req);
+  const input = parseBody(updateBidSchema, req.body);
+  const bid = await svc.updateBid(req.params.needId!, req.params.bidId!, user.id, input);
+  res.json({ ok: true, data: bid });
+});
+
+const deleteBid = asyncHandler(async (req, res) => {
+  const user = requireUser(req);
+  await svc.deleteBid(req.params.needId!, req.params.bidId!, user.id);
+  res.json({ ok: true });
+});
+
+const listBidMessages = asyncHandler(async (req, res) => {
+  const user = requireUser(req);
+  const messages = await svc.listBidMessages(req.params.needId!, req.params.bidId!, user.id);
+  res.json({ ok: true, data: messages });
+});
+
+const createBidMessage = asyncHandler(async (req, res) => {
+  const user = requireUser(req);
+  const content = req.body.content;
+  if (!content || typeof content !== 'string') {
+    throw new HttpError({ statusCode: 400, code: 'INVALID_INPUT', message: 'Content is required' });
+  }
+  const msg = await svc.createBidMessage(req.params.needId!, req.params.bidId!, user.id, content);
+  res.status(201).json({ ok: true, data: msg });
+});
+
 export const needsController = {
   createNeed,
   listMyNeeds,
@@ -109,7 +145,12 @@ export const needsController = {
   getNeed,
   updateNeed,
   awardBid,
+  payBid,
   createBid,
   listBidsForNeed,
   listMyBids,
+  updateBid,
+  deleteBid,
+  listBidMessages,
+  createBidMessage,
 };

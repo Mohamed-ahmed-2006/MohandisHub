@@ -59,13 +59,14 @@ export class ServicesService {
   }
 
   async createService(providerId: string, input: CreateServiceInput): Promise<Service> {
-    const status = input.submitForReview ? 'pending_review' : 'draft';
+    const status = input.submitForReview ? 'active' : 'draft';
     const dbInput: {
       title: string;
       description?: string;
       categoryId?: string;
       price?: number;
       priceType?: string;
+      isNegotiable?: boolean;
       currency?: string;
       deliveryTimeDays?: number;
       tags?: string[];
@@ -79,6 +80,7 @@ export class ServicesService {
     if (input.categoryId !== undefined) dbInput.categoryId = input.categoryId;
     if (input.price !== undefined) dbInput.price = input.price;
     if (input.priceType !== undefined) dbInput.priceType = input.priceType;
+    if (input.isNegotiable !== undefined) dbInput.isNegotiable = input.isNegotiable;
     if (input.currency !== undefined) dbInput.currency = input.currency;
     if (input.deliveryTimeDays !== undefined) dbInput.deliveryTimeDays = input.deliveryTimeDays;
     if (input.tags !== undefined) dbInput.tags = input.tags;
@@ -131,6 +133,7 @@ export class ServicesService {
       categoryId?: string;
       price?: number;
       priceType?: string;
+      isNegotiable?: boolean;
       currency?: string;
       deliveryTimeDays?: number;
       tags?: string[];
@@ -144,6 +147,7 @@ export class ServicesService {
     if (input.categoryId !== undefined) dbInput.categoryId = input.categoryId;
     if (input.price !== undefined) dbInput.price = input.price;
     if (input.priceType !== undefined) dbInput.priceType = input.priceType;
+    if (input.isNegotiable !== undefined) dbInput.isNegotiable = input.isNegotiable;
     if (input.currency !== undefined) dbInput.currency = input.currency;
     if (input.deliveryTimeDays !== undefined) dbInput.deliveryTimeDays = input.deliveryTimeDays;
     if (input.tags !== undefined) dbInput.tags = input.tags;
@@ -245,6 +249,7 @@ export class ServicesService {
       categoryNameAr: row.category_name_ar,
       price: row.price ? parseFloat(row.price) : null,
       priceType: row.price_type as ServiceSearchResult['priceType'],
+      isNegotiable: row.is_negotiable,
       city: row.city,
       area: row.area,
       avgRating: row.avg_rating ? parseFloat(row.avg_rating) : null,
@@ -261,6 +266,7 @@ export class ServicesService {
       description: row.description,
       price: row.price ? parseFloat(row.price) : null,
       priceType: row.price_type as Service['priceType'],
+      isNegotiable: row.is_negotiable,
       currency: row.currency,
       deliveryTimeDays: row.delivery_time_days,
       status: row.status as Service['status'],

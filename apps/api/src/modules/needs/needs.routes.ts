@@ -14,6 +14,7 @@ needsRouter.get('/', authenticate, requireEmailVerified, needsController.listOpe
 needsRouter.get('/:id', authenticate, requireEmailVerified, needsController.getNeed);
 needsRouter.patch('/:id', authenticate, requireEmailVerified, needsController.updateNeed);
 needsRouter.post('/:id/award', authenticate, requireEmailVerified, needsController.awardBid);
+needsRouter.post('/:id/bids/:bidId/pay', authenticate, requireEmailVerified, needsController.payBid);
 
 needsRouter.post(
   '/:needId/bids',
@@ -27,6 +28,34 @@ needsRouter.get(
   authenticate,
   requireEmailVerified,
   needsController.listBidsForNeed,
+);
+
+needsRouter.patch(
+  '/:needId/bids/:bidId',
+  authenticate,
+  requireEmailVerified,
+  requireVerified,
+  needsController.updateBid,
+);
+
+needsRouter.delete(
+  '/:needId/bids/:bidId',
+  authenticate,
+  requireEmailVerified,
+  needsController.deleteBid,
+);
+
+needsRouter.get(
+  '/:needId/bids/:bidId/messages',
+  authenticate,
+  requireEmailVerified,
+  needsController.listBidMessages,
+);
+needsRouter.post(
+  '/:needId/bids/:bidId/messages',
+  authenticate,
+  requireEmailVerified,
+  needsController.createBidMessage,
 );
 
 const bidsRouter = Router();

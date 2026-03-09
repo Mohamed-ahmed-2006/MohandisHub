@@ -13,6 +13,7 @@ export type UserRow = {
   date_of_birth: string | null;
   primary_role: string;
   is_admin: boolean;
+  admin_permissions?: string[];
   is_active: boolean;
   email_verified_at: string | null;
   plan_id: string | null;
@@ -125,6 +126,8 @@ export type DashboardStatsRow = {
   role_admin: string;
   total_transactions: string;
   total_revenue: string;
+  transaction_volume: string;
+  platform_commission_volume: string;
   pending_verifications: string;
   active_services: string;
   total_plans: string;

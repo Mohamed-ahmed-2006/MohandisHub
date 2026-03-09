@@ -18,6 +18,7 @@ export type UserRow = {
   date_of_birth: Date | null;
   primary_role: UserRole;
   is_admin: boolean;
+  admin_permissions?: string[];
   plan_id: string | null;
   plan_slug: string;
   email_verified_at: Date | null;

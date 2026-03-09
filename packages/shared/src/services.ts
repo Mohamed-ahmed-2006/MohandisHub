@@ -40,7 +40,7 @@ export type ServiceStatus =
   | 'rejected'
   | 'archived';
 
-export type PriceType = 'fixed' | 'hourly' | 'negotiable';
+export type PriceType = 'fixed' | 'hourly';
 
 export type Service = {
   id: string;
@@ -50,6 +50,7 @@ export type Service = {
   description: string | null;
   price: number | null;
   priceType: PriceType;
+  isNegotiable: boolean;
   currency: string;
   deliveryTimeDays: number | null;
   status: ServiceStatus;
@@ -85,6 +86,7 @@ export type CreateServiceBody = {
   categoryId?: string;
   price?: number;
   priceType?: PriceType;
+  isNegotiable?: boolean;
   currency?: string;
   deliveryTimeDays?: number;
   tags?: string[];
@@ -100,6 +102,7 @@ export type UpdateServiceBody = {
   categoryId?: string;
   price?: number;
   priceType?: PriceType;
+  isNegotiable?: boolean;
   currency?: string;
   deliveryTimeDays?: number;
   tags?: string[];
@@ -121,6 +124,7 @@ export type ServiceSearchResult = {
   categoryNameAr: string | null;
   price: number | null;
   priceType: PriceType;
+  isNegotiable: boolean;
   city: string | null;
   area: string | null;
   avgRating: number | null;

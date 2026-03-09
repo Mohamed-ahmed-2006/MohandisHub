@@ -33,6 +33,7 @@ type ServiceSearchRow = {
   category_name_ar: string | null;
   price: string | null;
   price_type: string;
+  is_negotiable: boolean;
   city: string | null;
   area: string | null;
   avg_rating: string | null;
@@ -47,6 +48,7 @@ type ServiceDetailRow = {
   description: string | null;
   price: string | null;
   price_type: string;
+  is_negotiable: boolean;
   currency: string;
   delivery_time_days: number | null;
   status: string;
@@ -131,7 +133,7 @@ export class ServicesRepository {
       `SELECT s.id, s.title, s.provider_id, u.display_name AS provider_name,
               u.primary_role AS provider_role, u.avatar_url AS provider_avatar,
               c.slug AS category_slug, c.name_en AS category_name_en, c.name_ar AS category_name_ar,
-              s.price::text, s.price_type, s.city, s.area, s.avg_rating::text, s.is_featured
+              s.price::text, s.price_type, s.is_negotiable, s.city, s.area, s.avg_rating::text, s.is_featured
        FROM services s
        JOIN users u ON u.id = s.provider_id
        LEFT JOIN service_categories c ON c.id = s.category_id
@@ -165,6 +167,7 @@ export class ServicesRepository {
       categoryId?: string;
       price?: number;
       priceType?: string;
+      isNegotiable?: boolean;
       currency?: string;
       deliveryTimeDays?: number;
       tags?: string[];
@@ -196,6 +199,11 @@ export class ServicesRepository {
     if (input.priceType !== undefined) {
       fields.push('price_type');
       values.push(input.priceType);
+      idx++;
+    }
+    if (input.isNegotiable !== undefined) {
+      fields.push('is_negotiable');
+      values.push(input.isNegotiable);
       idx++;
     }
     if (input.currency !== undefined) {
@@ -284,6 +292,7 @@ export class ServicesRepository {
       categoryId?: string;
       price?: number;
       priceType?: string;
+      isNegotiable?: boolean;
       currency?: string;
       deliveryTimeDays?: number;
       tags?: string[];
@@ -306,6 +315,7 @@ export class ServicesRepository {
       categoryId: 'category_id',
       price: 'price',
       priceType: 'price_type',
+      isNegotiable: 'is_negotiable',
       currency: 'currency',
       deliveryTimeDays: 'delivery_time_days',
       tags: 'tags',

@@ -51,3 +51,50 @@ export const requireRole =
 
     next();
   };
+
+export const requireAdminPermission =
+  (permission: string): RequestHandler =>
+  (req, _res, next) => {
+    const user = req.user as {
+      id: string;
+      email: string;
+      role: UserRole;
+      isAdmin: boolean;
+      adminPermissions?: string[];
+      plan: string;
+      emailVerified: boolean;
+      verified: boolean;
+    };
+
+    if (!user) {
+      throw new HttpError({
+        statusCode: 401,
+        code: 'UNAUTHORIZED',
+        message: 'Authentication required.',
+      });
+    }
+
+    if (!user.isAdmin) {
+      throw new HttpError({
+        statusCode: 403,
+        code: 'FORBIDDEN',
+        message: 'This action requires admin privileges.',
+      });
+    }
+
+    // If adminPermissions is undefined or empty, it means full access
+    if (!user.adminPermissions || user.adminPermissions.length === 0) {
+      return next();
+    }
+
+    // Check if they have the specific permission
+    if (!user.adminPermissions.includes(permission)) {
+      throw new HttpError({
+        statusCode: 403,
+        code: 'FORBIDDEN',
+        message: 'You do not have permission to perform this action.',
+      });
+    }
+
+    next();
+  };

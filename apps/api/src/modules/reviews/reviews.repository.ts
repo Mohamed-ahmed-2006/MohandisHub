@@ -9,6 +9,7 @@ export type ReviewRow = {
   reviewer_id: string;
   target_user_id: string;
   target_type: string;
+  reservation_id: string | null;
   booking_id: string | null;
   need_id: string | null;
   rating: number;
@@ -22,19 +23,21 @@ export class ReviewsRepository {
     reviewerId: string;
     targetUserId: string;
     targetType: string;
+    reservationId?: string;
     bookingId?: string;
     needId?: string;
     rating: number;
     comment?: string;
   }): Promise<ReviewRow> {
     const { rows } = await getPool().query<ReviewRow>(
-      `INSERT INTO reviews (reviewer_id, target_user_id, target_type, booking_id, need_id, rating, comment)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)
+      `INSERT INTO reviews (reviewer_id, target_user_id, target_type, reservation_id, booking_id, need_id, rating, comment)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
        RETURNING *`,
       [
         data.reviewerId,
         data.targetUserId,
         data.targetType,
+        data.reservationId ?? null,
         data.bookingId ?? null,
         data.needId ?? null,
         data.rating,
@@ -78,6 +81,14 @@ export class ReviewsRepository {
     const { rows } = await getPool().query<ReviewRow>(
       `SELECT * FROM reviews WHERE booking_id = $1`,
       [bookingId],
+    );
+    return rows[0] ?? null;
+  }
+
+  async findByReservation(reservationId: string): Promise<ReviewRow | null> {
+    const { rows } = await getPool().query<ReviewRow>(
+      `SELECT * FROM reviews WHERE reservation_id = $1`,
+      [reservationId],
     );
     return rows[0] ?? null;
   }

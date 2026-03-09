@@ -14,6 +14,7 @@ import { useAuth } from '@/components/auth/auth-provider';
 import { Container } from '@/components/ui/container';
 import { Skeleton, SkeletonCard, SkeletonText } from '@/components/ui/skeleton';
 import { chatApiClient } from '@/lib/chat/client';
+import { EGYPTIAN_CITIES } from '@/lib/data/egyptian-cities';
 import { buildLocalePath } from '@/lib/i18n/path';
 import type { Dictionary, Locale } from '@/lib/i18n/types';
 import type { TopBusiness, TopExpert } from '@/lib/profiles/client';
@@ -27,48 +28,6 @@ type AppHomeScreenProps = {
   locale: Locale;
   dictionary: Dictionary;
 };
-
-const EGYPTIAN_CITIES = [
-  'Cairo',
-  'Alexandria',
-  'Giza',
-  'Shubra El Kheima',
-  'Port Said',
-  'Suez',
-  'Luxor',
-  'Mansoura',
-  'Tanta',
-  'El Mahalla El Kubra',
-  'Shibin El Kom',
-  'Asyut',
-  'Ismailia',
-  'Fayyum',
-  'Zagazig',
-  'Aswan',
-  'Damietta',
-  'Damanhur',
-  'Kafr El Sheikh',
-  'Banha',
-  'Bilbeis',
-  '10th of Ramadan',
-  'Qalyub',
-  'Kafr El Dawwar',
-  'Marsa Matrouh',
-  'Arish',
-  'Rosetta',
-  'Mallawi',
-  'Edfu',
-  'Safaga',
-  'Minya',
-  'Beni Suef',
-  'Qena',
-  'Sohag',
-  'Hurghada',
-  'Sharm El Sheikh',
-  '6th of October',
-  'New Cairo',
-  'Obour',
-];
 
 /** Areas per city (districts). When city has no list, we show a generic option. */
 const CITY_AREAS: Record<string, string[]> = {
@@ -236,7 +195,6 @@ export const AppHomeScreen = ({ locale, dictionary }: AppHomeScreenProps) => {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { authUser, accessToken, isAuthenticated, isReady, authGuard } = useAuth();
-
   const [categories, setCategories] = useState<ServiceCategory[]>([]);
   const [categoryId, setCategoryId] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
@@ -249,6 +207,7 @@ export const AppHomeScreen = ({ locale, dictionary }: AppHomeScreenProps) => {
   const [selectedResult, setSelectedResult] = useState<ServiceSearchResult | null>(null);
   const [_customerNeedsCount, setCustomerNeedsCount] = useState<number | null>(null);
   const [customerTab, setCustomerTab] = useState<'browse' | 'posted'>('browse');
+  const [providerTab, setProviderTab] = useState<'overview' | 'search'>('overview');
   const [topSlideIndex, setTopSlideIndex] = useState(0);
   const [topExperts, setTopExperts] = useState<TopExpert[]>([]);
   const [topBusinesses, setTopBusinesses] = useState<TopBusiness[]>([]);
@@ -260,63 +219,8 @@ export const AppHomeScreen = ({ locale, dictionary }: AppHomeScreenProps) => {
     setArea('');
   };
 
-  const [stripeMessage, setStripeMessage] = useState<'success' | 'cancelled' | null>(null);
-
-  useEffect(() => {
-    const stripe = searchParams.get('stripe');
-    const sessionId = searchParams.get('session_id');
-    if (stripe === 'success' || stripe === 'cancelled') {
-      setStripeMessage(stripe);
-      const intervalRef: { current: ReturnType<typeof setInterval> | null } = { current: null };
-      if (stripe === 'success' && accessToken) {
-        void (async () => {
-          if (sessionId) {
-            try {
-              await walletApiClient.confirmStripeSession(accessToken, sessionId);
-            } catch {
-              // e.g. invalid session or already credited; still refetch
-            }
-          }
-          try {
-            await walletApiClient.getMyWallet(accessToken);
-            window.dispatchEvent(new CustomEvent('wallet-updated'));
-          } catch {
-            // ignore
-          }
-          const maxAttempts = 30;
-          let attempts = 0;
-          intervalRef.current = setInterval(() => {
-            attempts += 1;
-            if (attempts > maxAttempts && intervalRef.current) {
-              clearInterval(intervalRef.current);
-              intervalRef.current = null;
-              return;
-            }
-            window.dispatchEvent(new CustomEvent('wallet-updated'));
-          }, 2000);
-          // Clear URL only after we've confirmed and refetched, so balance is updated. This allows
-          // the effect to run again with accessToken when it was initially null (params preserved).
-          const url = new URL(window.location.href);
-          if (url.searchParams.get('stripe') === 'success' || url.searchParams.has('session_id')) {
-            url.searchParams.delete('stripe');
-            url.searchParams.delete('session_id');
-            window.history.replaceState({}, '', url.pathname + url.search);
-          }
-        })();
-      } else if (stripe === 'cancelled') {
-        const t = setTimeout(() => {
-          const url = new URL(window.location.href);
-          url.searchParams.delete('stripe');
-          url.searchParams.delete('session_id');
-          window.history.replaceState({}, '', url.pathname + url.search);
-        }, 500);
-        return () => clearTimeout(t);
-      }
-      return () => {
-        if (intervalRef.current) clearInterval(intervalRef.current);
-      };
-    }
-  }, [searchParams, accessToken]);
+  // Remove the redundant Stripe checking from AppHomeScreen as it's now handled globally in AppShell
+  // ...
 
   useEffect(() => {
     const post = searchParams.get('post');
@@ -421,23 +325,6 @@ export const AppHomeScreen = ({ locale, dictionary }: AppHomeScreenProps) => {
   return (
     <main className="home-main">
       <Container className="home-container">
-        {stripeMessage && (
-          <div className={`home-stripe-message home-stripe-message--${stripeMessage}`} role="alert">
-            {stripeMessage === 'success'
-              ? (dictionary.wallet.depositSuccess ??
-                'Deposit successful. Your balance has been updated.')
-              : (dictionary.wallet.depositCancelled ?? 'Deposit was cancelled.')}
-            <button
-              type="button"
-              className="home-stripe-message-dismiss"
-              onClick={() => setStripeMessage(null)}
-              aria-label="Dismiss"
-            >
-              ×
-            </button>
-          </div>
-        )}
-
         {/* Welcome — no balance or post button here; those are in header and Posted section */}
         <section className="home-welcome-section">
           <div className="home-welcome-row">
@@ -761,28 +648,55 @@ export const AppHomeScreen = ({ locale, dictionary }: AppHomeScreenProps) => {
             )}
           </>
         )}
-        {authUser.role === 'expert' && accessToken && (
-          <ExpertDashboard
-            locale={locale}
-            dictionary={dictionary}
-            accessToken={accessToken}
-            categories={categories}
-          />
-        )}
-        {authUser.role === 'business' && accessToken && (
-          <BusinessDashboard
-            locale={locale}
-            dictionary={dictionary}
-            accessToken={accessToken}
-            categories={categories}
-            verificationStatus={authUser.verificationStatus ?? 'unverified'}
-          />
-        )}
-
-        {/* Search Bar + Results — for experts/business only (customers have Browse tab) */}
-        {(authUser.role === 'expert' || authUser.role === 'business') && (
+        {/* Expert / Business Dashboard Tabs */}
+        {(authUser.role === 'expert' || authUser.role === 'business') && accessToken && (
           <>
-            <section className="home-search-card">
+            <div className="dashboard-tabs" role="tablist">
+              <button
+                type="button"
+                role="tab"
+                aria-selected={providerTab === 'overview'}
+                className={`dashboard-tab ${providerTab === 'overview' ? 'dashboard-tab--active' : ''}`}
+                onClick={() => setProviderTab('overview')}
+              >
+                {(dictionary.common as any)?.overview ?? 'Overview'}
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={providerTab === 'search'}
+                className={`dashboard-tab ${providerTab === 'search' ? 'dashboard-tab--active' : ''}`}
+                onClick={() => setProviderTab('search')}
+              >
+                {d.search ?? 'Search Services'}
+              </button>
+            </div>
+
+            {providerTab === 'overview' && (
+              <>
+                {authUser.role === 'expert' && (
+                  <ExpertDashboard
+                    locale={locale}
+                    dictionary={dictionary}
+                    accessToken={accessToken}
+                    categories={categories}
+                  />
+                )}
+                {authUser.role === 'business' && (
+                  <BusinessDashboard
+                    locale={locale}
+                    dictionary={dictionary}
+                    accessToken={accessToken}
+                    categories={categories}
+                    verificationStatus={authUser.verificationStatus ?? 'unverified'}
+                  />
+                )}
+              </>
+            )}
+
+            {providerTab === 'search' && (
+              <>
+                <section className="home-search-card">
               <div className="home-search-grid home-search-grid--4-cols">
                 <div className="home-search-field home-search-field--full">
                   <label className="home-search-label">{d.search}</label>
@@ -918,6 +832,8 @@ export const AppHomeScreen = ({ locale, dictionary }: AppHomeScreenProps) => {
             )}
           </>
         )}
+      </>
+    )}
 
         {/* Provider Detail Drawer */}
         {selectedResult && (
@@ -953,7 +869,7 @@ export const AppHomeScreen = ({ locale, dictionary }: AppHomeScreenProps) => {
                   {selectedResult.price} EGP{' '}
                   {selectedResult.priceType === 'hourly'
                     ? '/ hour'
-                    : selectedResult.priceType === 'negotiable'
+                    : selectedResult.isNegotiable
                       ? '(negotiable)'
                       : ''}
                 </p>

@@ -48,6 +48,16 @@ export const AdminUserDetailModal = ({
   const [editRole, setEditRole] = useState<string | null>(null);
   const [editPlanId, setEditPlanId] = useState<string | null>(null);
   const [editAdmin, setEditAdmin] = useState<boolean | null>(null);
+  const [editAdminPermissions, setEditAdminPermissions] = useState<string[] | null>(null);
+
+  const availablePermissions = [
+    { id: 'manage_users', label: 'Manage Users' },
+    { id: 'manage_plans', label: 'Manage Plans' },
+    { id: 'manage_transactions', label: 'Manage Transactions' },
+    { id: 'manage_services', label: 'Manage Services' },
+    { id: 'manage_verifications', label: 'Manage Verifications' },
+    { id: 'manage_settings', label: 'Manage App Settings' },
+  ];
 
   const d = dictionary.admin.users;
   const ud = d.userDetail;
@@ -124,13 +134,18 @@ export const AdminUserDetailModal = ({
     if (!user || editAdmin === null) return;
     setActionLoading('admin');
     try {
+      const body: { isAdmin: boolean; adminPermissions?: string[] } = { isAdmin: editAdmin };
+      if (editAdminPermissions) {
+        body.adminPermissions = editAdminPermissions;
+      }
       await adminApiClient.updateUser(
         accessToken,
         user.id,
-        { isAdmin: editAdmin },
+        body,
         opts(refreshSession),
       );
       setEditAdmin(null);
+      setEditAdminPermissions(null);
       void load();
       onSuccess();
     } catch {
@@ -355,43 +370,87 @@ export const AdminUserDetailModal = ({
                   <div className="admin-user-control-row">
                     <span className="admin-user-field-label">{ud.adminFlag}</span>
                     {editAdmin !== null ? (
-                      <div className="admin-inline-edit">
-                        <label className="admin-inline-checkbox">
-                          <input
-                            type="checkbox"
-                            checked={editAdmin}
-                            onChange={(e) => setEditAdmin(e.target.checked)}
-                          />
-                          {editAdmin ? ud.yes : ud.no}
-                        </label>
-                        <button
-                          type="button"
-                          className="admin-btn admin-btn--small admin-btn--primary"
-                          onClick={() => void handleUpdateAdmin()}
-                          disabled={actionLoading === 'admin'}
-                        >
-                          {dictionary.common.save}
-                        </button>
-                        <button
-                          type="button"
-                          className="admin-btn admin-btn--small"
-                          onClick={() => setEditAdmin(null)}
-                        >
-                          Cancel
-                        </button>
+                      <div className="admin-inline-edit" style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', width: '100%' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                          <label className="admin-inline-checkbox">
+                            <input
+                              type="checkbox"
+                              checked={editAdmin}
+                              onChange={(e) => setEditAdmin(e.target.checked)}
+                            />
+                            {editAdmin ? ud.yes : ud.no}
+                          </label>
+                          <button
+                            type="button"
+                            className="admin-btn admin-btn--small admin-btn--primary"
+                            onClick={() => void handleUpdateAdmin()}
+                            disabled={actionLoading === 'admin'}
+                          >
+                            {dictionary.common.save}
+                          </button>
+                          <button
+                            type="button"
+                            className="admin-btn admin-btn--small"
+                            onClick={() => {
+                              setEditAdmin(null);
+                              setEditAdminPermissions(null);
+                            }}
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                        {editAdmin && (
+                          <div style={{ marginTop: '0.5rem', padding: '0.5rem', background: '#f5f5f5', borderRadius: '4px' }}>
+                            <p style={{ fontWeight: 600, marginBottom: '0.5rem', fontSize: '0.9rem' }}>Permissions</p>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>
+                              {availablePermissions.map(p => (
+                                <label key={p.id} style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', fontSize: '0.85rem' }}>
+                                  <input
+                                    type="checkbox"
+                                    checked={editAdminPermissions?.includes(p.id) || false}
+                                    onChange={(e) => {
+                                      if (e.target.checked) {
+                                        setEditAdminPermissions([...(editAdminPermissions || []), p.id]);
+                                      } else {
+                                        setEditAdminPermissions((editAdminPermissions || []).filter(id => id !== p.id));
+                                      }
+                                    }}
+                                  />
+                                  {p.label}
+                                </label>
+                              ))}
+                            </div>
+                            <p style={{ fontSize: '0.8rem', color: '#666', marginTop: '0.5rem' }}>If none selected, full access is granted.</p>
+                          </div>
+                        )}
                       </div>
                     ) : (
-                      <div className="admin-inline-edit">
-                        <span className={`admin-badge ${user.isAdmin ? 'admin-badge--admin' : ''}`}>
-                          {user.isAdmin ? ud.yes : ud.no}
-                        </span>
-                        <button
-                          type="button"
-                          className="admin-btn admin-btn--small"
-                          onClick={() => setEditAdmin(Boolean(user.isAdmin))}
-                        >
-                          {ud.changeAdmin}
-                        </button>
+                      <div className="admin-inline-edit" style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '0.5rem' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                          <span className={`admin-badge ${user.isAdmin ? 'admin-badge--admin' : ''}`}>
+                            {user.isAdmin ? ud.yes : ud.no}
+                          </span>
+                          <button
+                            type="button"
+                            className="admin-btn admin-btn--small"
+                            onClick={() => {
+                              setEditAdmin(Boolean(user.isAdmin));
+                              setEditAdminPermissions(user.adminPermissions || []);
+                            }}
+                          >
+                            {ud.changeAdmin}
+                          </button>
+                        </div>
+                        {user.isAdmin && user.adminPermissions && user.adminPermissions.length > 0 && (
+                          <div style={{ fontSize: '0.85rem', color: '#555' }}>
+                            Permissions: {user.adminPermissions.map(p => availablePermissions.find(ap => ap.id === p)?.label || p).join(', ')}
+                          </div>
+                        )}
+                        {user.isAdmin && (!user.adminPermissions || user.adminPermissions.length === 0) && (
+                          <div style={{ fontSize: '0.85rem', color: '#555' }}>
+                            Permissions: Full Access
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>

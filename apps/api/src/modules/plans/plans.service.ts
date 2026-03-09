@@ -78,7 +78,7 @@ export class PlansService {
 
       await client.query(
         `INSERT INTO transactions (wallet_id, user_id, type, amount, balance_after, status, description, reference_type, reference_id)
-         VALUES ($1, $2, 'debit', $3, $4, 'completed', $5, 'plan_subscription', $6)`,
+         VALUES ($1, $2, 'payment', $3, $4, 'completed', $5, 'plan_subscription', $6)`,
         [
           wallet.id,
           userId,

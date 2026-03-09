@@ -1,15 +1,14 @@
 'use client';
 
-import type { AvailabilitySlot, Booking } from '@mohandishub/shared';
+import type { Reservation, ReservationProfile, ReservationSlot } from '@mohandishub/shared';
 import { useRouter } from 'next/navigation';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { useAuth } from '@/components/auth/auth-provider';
 import { Container } from '@/components/ui/container';
-import { availabilityApiClient } from '@/lib/availability/client';
-import { bookingsApiClient } from '@/lib/bookings/client';
 import { buildLocalePath } from '@/lib/i18n/path';
 import type { Dictionary, Locale } from '@/lib/i18n/types';
+import { reservationsApiClient } from '@/lib/reservations/client';
 
 import '@/app/dashboard.css';
 
@@ -18,8 +17,8 @@ type Props = {
   dictionary: Dictionary;
 };
 
-function formatDate(d: string): string {
-  return new Date(d).toLocaleDateString(undefined, {
+function formatDateLabel(date: Date): string {
+  return date.toLocaleDateString(undefined, {
     weekday: 'short',
     month: 'short',
     day: 'numeric',
@@ -27,31 +26,48 @@ function formatDate(d: string): string {
   });
 }
 
-function formatTime(d: string): string {
-  return new Date(d).toLocaleTimeString(undefined, {
+function formatTimeLabel(date: Date): string {
+  return date.toLocaleTimeString(undefined, {
     hour: '2-digit',
     minute: '2-digit',
   });
 }
 
+const parseMoneyInput = (value: string): number => {
+  const parsed = Number.parseFloat(value);
+  if (!Number.isFinite(parsed) || parsed < 0) return 0;
+  return Math.round(parsed * 100) / 100;
+};
+
 export const CalendarScreen = ({ locale, dictionary }: Props) => {
   const router = useRouter();
   const { authUser, accessToken, isAuthenticated, isReady, authGuard } = useAuth();
-  const [slots, setSlots] = useState<AvailabilitySlot[]>([]);
-  const [bookings, setBookings] = useState<Booking[]>([]);
+
+  const [slots, setSlots] = useState<ReservationSlot[]>([]);
+  const [reservations, setReservations] = useState<Reservation[]>([]);
+  const [profile, setProfile] = useState<ReservationProfile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [profileSaving, setProfileSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [weekStart, setWeekStart] = useState(() => {
+  const [profileError, setProfileError] = useState<string | null>(null);
+
+  const [currentMonth, setCurrentMonth] = useState(() => {
     const d = new Date();
-    d.setDate(d.getDate() - d.getDay());
+    d.setDate(1);
     d.setHours(0, 0, 0, 0);
     return d;
   });
-  const [showAddSlot, setShowAddSlot] = useState(false);
-  const [addStart, setAddStart] = useState('');
-  const [addEnd, setAddEnd] = useState('');
-  const [saving, setSaving] = useState(false);
-  const [updatingBookingId, setUpdatingBookingId] = useState<string | null>(null);
+
+  const [startAt, setStartAt] = useState('');
+  const [endAt, setEndAt] = useState('');
+  const [supportsOnline, setSupportsOnline] = useState(true);
+  const [supportsOffline, setSupportsOffline] = useState(true);
+
+  const [autoAccept, setAutoAccept] = useState(false);
+  const [onlineVoicePrice, setOnlineVoicePrice] = useState('0');
+  const [onlineVideoPrice, setOnlineVideoPrice] = useState('0');
+  const [offlinePrice, setOfflinePrice] = useState('0');
 
   useEffect(() => {
     if (!isReady) return;
@@ -64,272 +80,372 @@ export const CalendarScreen = ({ locale, dictionary }: Props) => {
       return;
     }
     if (authUser.role !== 'expert' && authUser.role !== 'business') {
-      router.replace(buildLocalePath(locale, '/app'));
-      return;
+      router.replace(buildLocalePath(locale, '/app/bookings'));
     }
   }, [isReady, isAuthenticated, authUser, authGuard.emailVerified, locale, router]);
+
+  const range = useMemo(() => {
+    const from = new Date(currentMonth);
+    const to = new Date(currentMonth);
+    to.setMonth(to.getMonth() + 1);
+    return { from, to };
+  }, [currentMonth]);
 
   const load = useCallback(async () => {
     if (!accessToken) return;
     setLoading(true);
     setError(null);
+    setProfileError(null);
     try {
-      const start = new Date(weekStart);
-      const end = new Date(weekStart);
-      end.setDate(end.getDate() + 7);
-      const [slotsRes, bookingsRes] = await Promise.all([
-        availabilityApiClient.listSlots(accessToken, {
-          from: start.toISOString(),
-          to: end.toISOString(),
+      const [slotsRes, reservationsRes, profileRes] = await Promise.all([
+        reservationsApiClient.listSlots(accessToken, {
+          from: range.from.toISOString(),
+          to: range.to.toISOString(),
           availableOnly: false,
         }),
-        bookingsApiClient.listMy(accessToken, { role: 'provider', page: 1, limit: 50 }),
+        reservationsApiClient.listMyReservations(accessToken, {
+          role: 'provider',
+          page: 1,
+          limit: 100,
+        }),
+        reservationsApiClient.getMyProfile(accessToken),
       ]);
       setSlots(slotsRes.items);
-      setBookings(bookingsRes.items);
+      setReservations(reservationsRes.items);
+      setProfile(profileRes);
+      setAutoAccept(profileRes.autoAccept);
+      setOnlineVoicePrice(profileRes.onlineVoicePrice.toString());
+      setOnlineVideoPrice(profileRes.onlineVideoPrice.toString());
+      setOfflinePrice(profileRes.offlinePrice.toString());
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to load');
+      const message = e instanceof Error ? e.message : 'Failed to load calendar data';
+      setError(message);
+      setProfileError(message);
+      setSlots([]);
+      setReservations([]);
+      setProfile(null);
     } finally {
       setLoading(false);
     }
-  }, [accessToken, weekStart]);
+  }, [accessToken, range.from, range.to]);
 
   useEffect(() => {
     void load();
   }, [load]);
 
-  const handleUpdateBookingStatus = useCallback(
-    async (bookingId: string, status: string) => {
-      if (!accessToken) return;
-      setUpdatingBookingId(bookingId);
+  const saveProfile = useCallback(async () => {
+    if (!accessToken) return;
+    setProfileSaving(true);
+    setProfileError(null);
+    try {
+      const updated = await reservationsApiClient.updateMyProfile(accessToken, {
+        autoAccept,
+        onlineVoicePrice: parseMoneyInput(onlineVoicePrice),
+        onlineVideoPrice: parseMoneyInput(onlineVideoPrice),
+        offlinePrice: parseMoneyInput(offlinePrice),
+      });
+      setProfile(updated);
+      setAutoAccept(updated.autoAccept);
+      setOnlineVoicePrice(updated.onlineVoicePrice.toString());
+      setOnlineVideoPrice(updated.onlineVideoPrice.toString());
+      setOfflinePrice(updated.offlinePrice.toString());
+    } catch (e) {
+      setProfileError(e instanceof Error ? e.message : 'Could not update reservation settings');
+    } finally {
+      setProfileSaving(false);
+    }
+  }, [accessToken, autoAccept, offlinePrice, onlineVideoPrice, onlineVoicePrice]);
+
+  const createSlot = useCallback(
+    async (event: React.FormEvent) => {
+      event.preventDefault();
+      if (!accessToken || !startAt || !endAt) return;
+      setSaving(true);
+      setError(null);
       try {
-        await bookingsApiClient.update(accessToken, bookingId, { status });
-        void load();
-      } catch {
-        /* ignore */
+        await reservationsApiClient.createSlot(accessToken, {
+          startAt: new Date(startAt).toISOString(),
+          endAt: new Date(endAt).toISOString(),
+          supportsOnline,
+          supportsOffline,
+        });
+        setStartAt('');
+        setEndAt('');
+        await load();
+      } catch (e) {
+        setError(e instanceof Error ? e.message : 'Could not create slot');
       } finally {
-        setUpdatingBookingId(null);
+        setSaving(false);
+      }
+    },
+    [accessToken, endAt, load, startAt, supportsOffline, supportsOnline],
+  );
+
+  const updateSlotStatus = useCallback(
+    async (slotId: string, status: 'available' | 'blocked') => {
+      if (!accessToken) return;
+      try {
+        await reservationsApiClient.updateSlot(accessToken, slotId, { status });
+        await load();
+      } catch (e) {
+        setError(e instanceof Error ? e.message : 'Could not update slot');
       }
     },
     [accessToken, load],
   );
 
-  const handlePrevWeek = () => {
-    const d = new Date(weekStart);
-    d.setDate(d.getDate() - 7);
-    setWeekStart(d);
-  };
+  const removeSlot = useCallback(
+    async (slotId: string) => {
+      if (!accessToken) return;
+      try {
+        await reservationsApiClient.deleteSlot(accessToken, slotId);
+        await load();
+      } catch (e) {
+        setError(e instanceof Error ? e.message : 'Could not remove slot');
+      }
+    },
+    [accessToken, load],
+  );
 
-  const handleNextWeek = () => {
-    const d = new Date(weekStart);
-    d.setDate(d.getDate() + 7);
-    setWeekStart(d);
-  };
-
-  const handleAddSlot = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!accessToken || !addStart || !addEnd) return;
-    setSaving(true);
-    try {
-      await availabilityApiClient.createSlot(accessToken, {
-        startAt: new Date(addStart).toISOString(),
-        endAt: new Date(addEnd).toISOString(),
-      });
-      setShowAddSlot(false);
-      setAddStart('');
-      setAddEnd('');
-      void load();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to add slot');
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleBlockSlot = async (id: string) => {
-    if (!accessToken) return;
-    try {
-      await availabilityApiClient.updateSlot(accessToken, id, { status: 'blocked' });
-      void load();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to update');
-    }
-  };
-
-  const handleUnblockSlot = async (id: string) => {
-    if (!accessToken) return;
-    try {
-      await availabilityApiClient.updateSlot(accessToken, id, { status: 'available' });
-      void load();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to update');
-    }
-  };
-
-  const handleDeleteSlot = async (id: string) => {
-    if (!accessToken) return;
-    try {
-      await availabilityApiClient.deleteSlot(accessToken, id);
-      void load();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to delete');
-    }
-  };
-
-  const weekEnd = new Date(weekStart);
-  weekEnd.setDate(weekEnd.getDate() + 6);
-  const cp = dictionary.calendarPage ?? {};
-  const title = cp.title ?? 'Calendar';
-  const addSlot = cp.addSlot ?? 'Add slot';
-  const noSlots = cp.noSlots ?? 'No slots this week. Add one to get started.';
-  const booked = cp.booked ?? 'Booked';
-  const available = cp.available ?? 'Available';
-  const blocked = cp.blocked ?? 'Blocked';
-  const block = cp.block ?? 'Block';
-  const unblock = cp.unblock ?? 'Unblock';
-  const remove = cp.remove ?? 'Remove';
-  const prevWeek = cp.prevWeek ?? 'Previous week';
-  const nextWeek = cp.nextWeek ?? 'Next week';
+  if (!isReady || !authUser) {
+    return (
+      <main className="profile-screen-main">
+        <Container>
+          <p>{dictionary.appHome.loading}</p>
+        </Container>
+      </main>
+    );
+  }
 
   return (
     <main className="profile-screen-main">
       <Container className="profile-screen-container">
-        <h1 className="dashboard-title">{title}</h1>
+        <h1 className="dashboard-title">{dictionary.calendarPage?.title ?? 'Reservation Calendar'}</h1>
         {error && <p className="dashboard-error">{error}</p>}
 
         <div className="calendar-toolbar motion-reveal">
-          <button type="button" className="dashboard-btn dashboard-btn--secondary" onClick={handlePrevWeek}>
-            ← {prevWeek}
-          </button>
-          <span className="calendar-week-label">
-            {formatDate(weekStart.toISOString())} – {formatDate(weekEnd.toISOString())}
-          </span>
-          <button type="button" className="dashboard-btn dashboard-btn--secondary" onClick={handleNextWeek}>
-            {nextWeek} →
-          </button>
           <button
             type="button"
-            className="dashboard-btn dashboard-btn--primary"
-            onClick={() => setShowAddSlot(true)}
+            className="dashboard-btn dashboard-btn--secondary"
+            onClick={() =>
+              setCurrentMonth((prev) => {
+                const next = new Date(prev);
+                next.setMonth(next.getMonth() - 1);
+                return next;
+              })
+            }
           >
-            + {addSlot}
+            Prev Month
+          </button>
+          <span className="calendar-week-label">
+            {currentMonth.toLocaleDateString(undefined, { month: 'long', year: 'numeric' })}
+          </span>
+          <button
+            type="button"
+            className="dashboard-btn dashboard-btn--secondary"
+            onClick={() =>
+              setCurrentMonth((prev) => {
+                const next = new Date(prev);
+                next.setMonth(next.getMonth() + 1);
+                return next;
+              })
+            }
+          >
+            Next Month
           </button>
         </div>
 
-        {showAddSlot && (
-          <form onSubmit={(e) => { e.preventDefault(); void handleAddSlot(e); }} className="calendar-add-form motion-reveal">
-            <label>
-              Start: <input type="datetime-local" value={addStart} onChange={(e) => setAddStart(e.target.value)} required />
+        <section className="dashboard-card" style={{ marginBottom: '1rem' }}>
+          <h2 className="dashboard-section-title" style={{ fontSize: '1rem' }}>
+            Reservation Settings
+          </h2>
+          <p className="dashboard-card-meta" style={{ marginBottom: '0.75rem' }}>
+            Set fixed reservation prices and auto-accept behavior for your incoming reservation requests.
+          </p>
+          {profileError && <p className="dashboard-error">{profileError}</p>}
+          <div className="reservation-settings-grid">
+            <label className="dashboard-card-meta">
+              <input
+                type="checkbox"
+                checked={autoAccept}
+                onChange={(e) => setAutoAccept(e.target.checked)}
+              />
+              {' '}Auto-accept requests when slot is still free
             </label>
-            <label>
-              End: <input type="datetime-local" value={addEnd} onChange={(e) => setAddEnd(e.target.value)} required />
+            <label className="dashboard-card-meta">
+              Voice session fixed price (EGP)
+              <input
+                type="number"
+                min={0}
+                step={0.01}
+                className="dashboard-input"
+                value={onlineVoicePrice}
+                onChange={(e) => setOnlineVoicePrice(e.target.value)}
+              />
             </label>
-            <div>
-              <button type="submit" className="dashboard-btn dashboard-btn--primary" disabled={saving}>
-                {saving ? '...' : dictionary.common.save}
-              </button>
-              <button type="button" className="dashboard-btn dashboard-btn--secondary" onClick={() => setShowAddSlot(false)}>
-                {dictionary.common.back}
-              </button>
-            </div>
+            <label className="dashboard-card-meta">
+              Video session fixed price (EGP)
+              <input
+                type="number"
+                min={0}
+                step={0.01}
+                className="dashboard-input"
+                value={onlineVideoPrice}
+                onChange={(e) => setOnlineVideoPrice(e.target.value)}
+              />
+            </label>
+            <label className="dashboard-card-meta">
+              Offline session fixed price (EGP)
+              <input
+                type="number"
+                min={0}
+                step={0.01}
+                className="dashboard-input"
+                value={offlinePrice}
+                onChange={(e) => setOfflinePrice(e.target.value)}
+              />
+            </label>
+          </div>
+          <div className="dashboard-card-actions">
+            <button
+              type="button"
+              className="dashboard-btn dashboard-btn--primary"
+              onClick={() => void saveProfile()}
+              disabled={profileSaving || loading || profile == null}
+            >
+              {profileSaving ? 'Saving...' : 'Save Reservation Settings'}
+            </button>
+          </div>
+        </section>
+
+        <section className="dashboard-card" style={{ marginBottom: '1rem' }}>
+          <h2 className="dashboard-section-title" style={{ fontSize: '1rem' }}>
+            Add Slot
+          </h2>
+          <form onSubmit={(e) => void createSlot(e)} className="dashboard-form">
+            <input
+              type="datetime-local"
+              value={startAt}
+              onChange={(e) => setStartAt(e.target.value)}
+              className="dashboard-input"
+              required
+            />
+            <input
+              type="datetime-local"
+              value={endAt}
+              onChange={(e) => setEndAt(e.target.value)}
+              className="dashboard-input"
+              required
+            />
+            <label className="dashboard-card-meta">
+              <input
+                type="checkbox"
+                checked={supportsOnline}
+                onChange={(e) => setSupportsOnline(e.target.checked)}
+              />
+              {' '}Online
+            </label>
+            <label className="dashboard-card-meta">
+              <input
+                type="checkbox"
+                checked={supportsOffline}
+                onChange={(e) => setSupportsOffline(e.target.checked)}
+              />
+              {' '}Offline
+            </label>
+            <button type="submit" className="dashboard-primary-btn" disabled={saving}>
+              {saving ? '...' : dictionary.calendarPage?.addSlot ?? 'Add Slot'}
+            </button>
           </form>
-        )}
+        </section>
 
         {loading ? (
-          <p className="dashboard-loading">{dictionary.common.continue}</p>
+          <p className="dashboard-loading">{dictionary.admin?.loading ?? 'Loading...'}</p>
         ) : (
-          <div className="calendar-slots motion-reveal">
-            {slots.length === 0 ? (
-              <p className="dashboard-empty">{noSlots}</p>
-            ) : (
-              <ul className="calendar-slot-list">
-                {slots.map((slot) => (
-                  <li
-                    key={slot.id}
-                    className={`calendar-slot-item calendar-slot-item--${slot.status}`}
-                  >
-                    <div className="calendar-slot-info">
-                      <span className="calendar-slot-time">
-                        {formatDate(slot.startAt)} {formatTime(slot.startAt)} – {formatTime(slot.endAt)}
-                      </span>
-                      <span className="calendar-slot-status">
-                        {slot.status === 'booked' ? booked : slot.status === 'blocked' ? blocked : available}
-                      </span>
-                    </div>
-                    <div className="calendar-slot-actions">
-                      {slot.status === 'available' && (
-                        <button
-                          type="button"
-                          className="dashboard-btn dashboard-btn--small"
-                          onClick={() => void handleBlockSlot(slot.id)}
-                        >
-                          {block}
-                        </button>
-                      )}
-                      {slot.status === 'blocked' && (
-                        <button
-                          type="button"
-                          className="dashboard-btn dashboard-btn--small"
-                          onClick={() => void handleUnblockSlot(slot.id)}
-                        >
-                          {unblock}
-                        </button>
-                      )}
-                      {(slot.status === 'available' || slot.status === 'blocked') && (
-                        <button
-                          type="button"
-                          className="dashboard-btn dashboard-btn--small dashboard-btn--danger"
-                          onClick={() => void handleDeleteSlot(slot.id)}
-                        >
-                          {remove}
-                        </button>
-                      )}
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-        )}
+          <>
+            <section style={{ marginBottom: '1rem' }}>
+              <h2 className="dashboard-section-title" style={{ fontSize: '1rem' }}>
+                Slots
+              </h2>
+              {slots.length === 0 ? (
+                <p className="dashboard-empty">{dictionary.calendarPage?.noSlots ?? 'No slots in this month.'}</p>
+              ) : (
+                <ul className="calendar-slot-list">
+                  {slots.map((slot) => {
+                    const start = new Date(slot.startAt);
+                    const end = new Date(slot.endAt);
+                    return (
+                      <li key={slot.id} className={`calendar-slot-item calendar-slot-item--${slot.status}`}>
+                        <div className="calendar-slot-info">
+                          <span className="calendar-slot-time">
+                            {formatDateLabel(start)} {formatTimeLabel(start)} - {formatTimeLabel(end)}
+                          </span>
+                          <span className="calendar-slot-status">
+                            {slot.status} | {slot.supportsOnline ? 'Online' : ''}{slot.supportsOnline && slot.supportsOffline ? ' + ' : ''}{slot.supportsOffline ? 'Offline' : ''}
+                          </span>
+                        </div>
+                        <div className="calendar-slot-actions">
+                          {slot.status === 'available' && (
+                            <button
+                              type="button"
+                              className="dashboard-btn dashboard-btn--small"
+                              onClick={() => void updateSlotStatus(slot.id, 'blocked')}
+                            >
+                              Block
+                            </button>
+                          )}
+                          {slot.status === 'blocked' && (
+                            <button
+                              type="button"
+                              className="dashboard-btn dashboard-btn--small"
+                              onClick={() => void updateSlotStatus(slot.id, 'available')}
+                            >
+                              Unblock
+                            </button>
+                          )}
+                          {(slot.status === 'available' || slot.status === 'blocked') && (
+                            <button
+                              type="button"
+                              className="dashboard-btn dashboard-btn--small dashboard-btn--danger"
+                              onClick={() => void removeSlot(slot.id)}
+                            >
+                              Remove
+                            </button>
+                          )}
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </section>
 
-        {bookings.length > 0 && (
-          <section className="calendar-bookings motion-reveal">
-            <h2>{cp.upcomingBookings ?? 'Upcoming bookings'}</h2>
-            <ul className="calendar-booking-list">
-              {bookings.slice(0, 10).map((b) => (
-                <li key={b.id} className="calendar-booking-item">
-                  <div className="calendar-booking-info">
-                    <span>{b.serviceTitle ?? 'Booking'}</span> — <span>{b.customerName ?? 'Customer'}</span> — {formatDate(b.slotStartAt ?? b.createdAt)} {b.slotStartAt ? formatTime(b.slotStartAt) : ''}
-                    <span className={`calendar-booking-status calendar-booking-status--${b.status}`}>
-                      {b.status}
-                    </span>
-                  </div>
-                  <div className="calendar-booking-actions">
-                    {(b.status === 'paid' || b.status === 'scheduled') && (
-                      <button
-                        type="button"
-                        className="dashboard-btn dashboard-btn--small dashboard-btn--primary"
-                        onClick={() => void handleUpdateBookingStatus(b.id, 'in_progress')}
-                        disabled={updatingBookingId === b.id}
-                      >
-                        {updatingBookingId === b.id ? '...' : (cp.start ?? 'Start')}
-                      </button>
-                    )}
-                    {b.status === 'in_progress' && (
-                      <button
-                        type="button"
-                        className="dashboard-btn dashboard-btn--small dashboard-btn--primary"
-                        onClick={() => void handleUpdateBookingStatus(b.id, 'completed')}
-                        disabled={updatingBookingId === b.id}
-                      >
-                        {updatingBookingId === b.id ? '...' : (cp.complete ?? 'Complete')}
-                      </button>
-                    )}
-                  </div>
-                </li>
-              ))}
-            </ul>
-          </section>
+            <section>
+              <h2 className="dashboard-section-title" style={{ fontSize: '1rem' }}>
+                Reservations
+              </h2>
+              {reservations.length === 0 ? (
+                <p className="dashboard-empty">No reservations in this period.</p>
+              ) : (
+                <ul className="calendar-booking-list">
+                  {reservations.map((r) => (
+                    <li key={r.id} className="calendar-booking-item">
+                      <div className="calendar-booking-info">
+                        <span>{r.serviceTitle ?? 'Reservation'}</span>
+                        {' - '}
+                        <span>{r.mode === 'online' ? `Online (${r.onlineType ?? 'voice'})` : 'Offline'}</span>
+                        {' - '}
+                        <span>{formatDateLabel(new Date(r.requestedStartAt))}</span>
+                        <span className={`calendar-booking-status calendar-booking-status--${r.status}`}>
+                          {r.status}
+                        </span>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
+          </>
         )}
       </Container>
     </main>

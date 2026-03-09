@@ -47,6 +47,22 @@ type DepositRequestRow = {
   updated_at: string;
 };
 
+type WalletHoldRow = {
+  id: string;
+  wallet_id: string;
+  user_id: string;
+  amount: string;
+  currency: string;
+  status: string;
+  reference_type: string;
+  reference_id: string | null;
+  metadata: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+  released_at: string | null;
+  captured_at: string | null;
+};
+
 export class WalletRepository {
   private get db(): Pool {
     return getPool();
@@ -148,7 +164,15 @@ export class WalletRepository {
     walletId: string,
     userId: string,
     amount: number,
-    txType: 'deposit' | 'payment' | 'commission' | 'adjustment' | 'bonus' | 'refund',
+    txType:
+      | 'deposit'
+      | 'payment'
+      | 'commission'
+      | 'adjustment'
+      | 'bonus'
+      | 'refund'
+      | 'hold'
+      | 'release',
     description: string,
     referenceType: string,
     referenceId: string | null,
@@ -165,10 +189,26 @@ export class WalletRepository {
         throw new Error('Wallet not found');
       }
       const balanceAfter = parseFloat(walletRows[0]!.balance);
+      
+      // Check schema if reference_id is UUID or text. It's usually text, but if it was defined as UUID, we need to pass NULL if it's not a valid UUID.
+      // In MohandisHub schema it is defined as: reference_id UUID
+      // So if referenceId is a Stripe string like 'cs_test_...', we cannot store it here without a cast error.
+      // We will store it in metadata if it's not a valid UUID.
+      let validReferenceId: string | null = null;
+      let extraMetadata = {};
+      if (referenceId) {
+        const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+        if (uuidRegex.test(referenceId)) {
+          validReferenceId = referenceId;
+        } else {
+          extraMetadata = { original_reference_id: referenceId };
+        }
+      }
+
       await client.query(
-        `INSERT INTO transactions (wallet_id, user_id, type, amount, balance_after, status, description, reference_type, reference_id)
-         VALUES ($1, $2, $3, $4, $5, 'completed', $6, $7, $8)`,
-        [walletId, userId, txType, amount, balanceAfter, description, referenceType, referenceId],
+        `INSERT INTO transactions (wallet_id, user_id, type, amount, balance_after, status, description, reference_type, reference_id, metadata)
+         VALUES ($1, $2, $3, $4, $5, 'completed', $6, $7, $8, $9)`,
+        [walletId, userId, txType, amount, balanceAfter, description, referenceType, validReferenceId, extraMetadata],
       );
       await client.query('COMMIT');
     } catch (e) {
@@ -209,11 +249,23 @@ export class WalletRepository {
         `UPDATE wallets SET balance = balance - $1 WHERE id = $2`,
         [amount, walletId],
       );
+
+      let validReferenceId: string | null = null;
+      let extraMetadata = {};
+      if (referenceId) {
+        const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+        if (uuidRegex.test(referenceId)) {
+          validReferenceId = referenceId;
+        } else {
+          extraMetadata = { original_reference_id: referenceId };
+        }
+      }
+
       const { rows: txRows } = await client.query<{ id: string }>(
-        `INSERT INTO transactions (wallet_id, user_id, type, amount, balance_after, status, description, reference_type, reference_id)
-         VALUES ($1, $2, 'payment', $3, $4, 'completed', $5, $6, $7)
+        `INSERT INTO transactions (wallet_id, user_id, type, amount, balance_after, status, description, reference_type, reference_id, metadata)
+         VALUES ($1, $2, 'payment', $3, $4, 'completed', $5, $6, $7, $8)
          RETURNING id`,
-        [walletId, userId, amount, balanceAfter, description, referenceType, referenceId],
+        [walletId, userId, amount, balanceAfter, description, referenceType, validReferenceId, extraMetadata],
       );
       await client.query('COMMIT');
       return txRows[0]!.id;
@@ -233,20 +285,25 @@ export class WalletRepository {
     return rows[0] ?? null;
   }
 
-  /** Get or create platform wallet (for commission). Must be called within transaction. */
-  async getOrCreatePlatformWallet(client: PoolClient): Promise<string> {
+  /** Get or create wallet for commission receiver. Must be called within transaction. */
+  async getOrCreateCommissionWallet(client: PoolClient, receiverId: string): Promise<string> {
     let { rows } = await client.query<{ id: string }>(
       `SELECT id FROM wallets WHERE user_id = $1`,
-      [PLATFORM_USER_ID],
+      [receiverId],
     );
     if (rows.length === 0) {
       const ins = await client.query<{ id: string }>(
         `INSERT INTO wallets (user_id) VALUES ($1) RETURNING id`,
-        [PLATFORM_USER_ID],
+        [receiverId],
       );
       return ins.rows[0]!.id;
     }
     return rows[0]!.id;
+  }
+
+  /** Backward-compatible alias for platform commission wallet. */
+  async getOrCreatePlatformWallet(client: PoolClient): Promise<string> {
+    return this.getOrCreateCommissionWallet(client, PLATFORM_USER_ID);
   }
 
   /** Debit wallet within existing transaction. Returns payment transaction id. */
@@ -268,10 +325,22 @@ export class WalletRepository {
     if (currentBalance < amount) throw new Error('INSUFFICIENT_BALANCE');
     const balanceAfter = currentBalance - amount;
     await client.query(`UPDATE wallets SET balance = $1 WHERE id = $2`, [balanceAfter, walletId]);
+
+    let validReferenceId: string | null = null;
+    let extraMetadata = {};
+    if (referenceId) {
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      if (uuidRegex.test(referenceId)) {
+        validReferenceId = referenceId;
+      } else {
+        extraMetadata = { original_reference_id: referenceId };
+      }
+    }
+
     const { rows: txRows } = await client.query<{ id: string }>(
-      `INSERT INTO transactions (wallet_id, user_id, type, amount, balance_after, status, description, reference_type, reference_id)
-       VALUES ($1, $2, 'payment', $3, $4, 'completed', $5, $6, $7) RETURNING id`,
-      [walletId, userId, amount, balanceAfter, description, referenceType, referenceId],
+      `INSERT INTO transactions (wallet_id, user_id, type, amount, balance_after, status, description, reference_type, reference_id, metadata)
+       VALUES ($1, $2, 'payment', $3, $4, 'completed', $5, $6, $7, $8) RETURNING id`,
+      [walletId, userId, amount, balanceAfter, description, referenceType, validReferenceId, extraMetadata],
     );
     return txRows[0]!.id;
   }
@@ -282,7 +351,7 @@ export class WalletRepository {
     walletId: string,
     userId: string,
     amount: number,
-    txType: 'payment' | 'commission',
+    txType: 'payment' | 'commission' | 'refund' | 'release' | 'hold',
     description: string,
     referenceType: string,
     referenceId: string | null,
@@ -293,12 +362,160 @@ export class WalletRepository {
     );
     if (walletRows.length === 0) throw new Error('Wallet not found');
     const balanceAfter = parseFloat(walletRows[0]!.balance);
+
+    let validReferenceId: string | null = null;
+    let extraMetadata = {};
+    if (referenceId) {
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      if (uuidRegex.test(referenceId)) {
+        validReferenceId = referenceId;
+      } else {
+        extraMetadata = { original_reference_id: referenceId };
+      }
+    }
+
     await client.query(
-      `INSERT INTO transactions (wallet_id, user_id, type, amount, balance_after, status, description, reference_type, reference_id)
-       VALUES ($1, $2, $3, $4, $5, 'completed', $6, $7, $8)`,
-      [walletId, userId, txType, amount, balanceAfter, description, referenceType, referenceId],
+      `INSERT INTO transactions (wallet_id, user_id, type, amount, balance_after, status, description, reference_type, reference_id, metadata)
+       VALUES ($1, $2, $3, $4, $5, 'completed', $6, $7, $8, $9)`,
+      [walletId, userId, txType, amount, balanceAfter, description, referenceType, validReferenceId, extraMetadata],
     );
+  }
+
+  async findWalletHoldById(id: string): Promise<WalletHoldRow | null> {
+    const { rows } = await this.db.query<WalletHoldRow>(
+      `SELECT id, wallet_id, user_id, amount::text, currency, status, reference_type, reference_id, metadata,
+              created_at, updated_at, released_at, captured_at
+       FROM wallet_holds
+       WHERE id = $1`,
+      [id],
+    );
+    return rows[0] ?? null;
+  }
+
+  async createHoldInTransaction(
+    client: PoolClient,
+    walletId: string,
+    userId: string,
+    amount: number,
+    currency: string,
+    referenceType: string,
+    referenceId: string | null,
+    metadata: Record<string, unknown> = {},
+  ): Promise<WalletHoldRow> {
+    const { rows: lockRows } = await client.query<{ balance: string }>(
+      `SELECT balance::text FROM wallets WHERE id = $1 FOR UPDATE`,
+      [walletId],
+    );
+    if (lockRows.length === 0) throw new Error('Wallet not found');
+    const currentBalance = parseFloat(lockRows[0]!.balance);
+    if (currentBalance < amount) throw new Error('INSUFFICIENT_BALANCE');
+    const balanceAfter = currentBalance - amount;
+
+    await client.query(`UPDATE wallets SET balance = $1 WHERE id = $2`, [balanceAfter, walletId]);
+
+    await client.query(
+      `INSERT INTO transactions (wallet_id, user_id, type, amount, balance_after, status, description, reference_type, reference_id, metadata)
+       VALUES ($1, $2, 'hold', $3, $4, 'completed', $5, $6, $7, $8)`,
+      [
+        walletId,
+        userId,
+        amount,
+        balanceAfter,
+        `Hold created for ${referenceType}`,
+        referenceType,
+        referenceId,
+        metadata,
+      ],
+    );
+
+    const { rows } = await client.query<WalletHoldRow>(
+      `INSERT INTO wallet_holds (wallet_id, user_id, amount, currency, status, reference_type, reference_id, metadata)
+       VALUES ($1, $2, $3, $4, 'held', $5, $6, $7)
+       RETURNING id, wallet_id, user_id, amount::text, currency, status, reference_type, reference_id, metadata,
+                 created_at, updated_at, released_at, captured_at`,
+      [walletId, userId, amount, currency, referenceType, referenceId, metadata],
+    );
+    return rows[0]!;
+  }
+
+  async releaseHoldInTransaction(
+    client: PoolClient,
+    holdId: string,
+    reason: string,
+    metadata: Record<string, unknown> = {},
+  ): Promise<WalletHoldRow> {
+    const { rows: holdRows } = await client.query<WalletHoldRow>(
+      `SELECT id, wallet_id, user_id, amount::text, currency, status, reference_type, reference_id, metadata,
+              created_at, updated_at, released_at, captured_at
+       FROM wallet_holds
+       WHERE id = $1
+       FOR UPDATE`,
+      [holdId],
+    );
+    if (holdRows.length === 0) throw new Error('HOLD_NOT_FOUND');
+    const hold = holdRows[0]!;
+    if (hold.status !== 'held') return hold;
+
+    const { rows: walletRows } = await client.query<{ balance: string }>(
+      `UPDATE wallets SET balance = balance + $1 WHERE id = $2 RETURNING balance::text`,
+      [hold.amount, hold.wallet_id],
+    );
+    const balanceAfter = parseFloat(walletRows[0]!.balance);
+
+    await client.query(
+      `INSERT INTO transactions (wallet_id, user_id, type, amount, balance_after, status, description, reference_type, reference_id, metadata)
+       VALUES ($1, $2, 'release', $3, $4, 'completed', $5, $6, $7, $8)`,
+      [
+        hold.wallet_id,
+        hold.user_id,
+        parseFloat(hold.amount),
+        balanceAfter,
+        reason,
+        hold.reference_type,
+        hold.reference_id,
+        metadata,
+      ],
+    );
+
+    const { rows } = await client.query<WalletHoldRow>(
+      `UPDATE wallet_holds
+       SET status = 'released', released_at = now(), updated_at = now(), metadata = metadata || $2::jsonb
+       WHERE id = $1
+       RETURNING id, wallet_id, user_id, amount::text, currency, status, reference_type, reference_id, metadata,
+                 created_at, updated_at, released_at, captured_at`,
+      [holdId, JSON.stringify(metadata)],
+    );
+    return rows[0]!;
+  }
+
+  async captureHoldInTransaction(
+    client: PoolClient,
+    holdId: string,
+    reason: string,
+    metadata: Record<string, unknown> = {},
+  ): Promise<WalletHoldRow> {
+    const { rows: holdRows } = await client.query<WalletHoldRow>(
+      `SELECT id, wallet_id, user_id, amount::text, currency, status, reference_type, reference_id, metadata,
+              created_at, updated_at, released_at, captured_at
+       FROM wallet_holds
+       WHERE id = $1
+       FOR UPDATE`,
+      [holdId],
+    );
+    if (holdRows.length === 0) throw new Error('HOLD_NOT_FOUND');
+    const hold = holdRows[0]!;
+    if (hold.status !== 'held') return hold;
+
+    const { rows } = await client.query<WalletHoldRow>(
+      `UPDATE wallet_holds
+       SET status = 'captured', captured_at = now(), updated_at = now(), metadata = metadata || $2::jsonb
+       WHERE id = $1
+       RETURNING id, wallet_id, user_id, amount::text, currency, status, reference_type, reference_id, metadata,
+                 created_at, updated_at, released_at, captured_at`,
+      [holdId, JSON.stringify({ ...metadata, capture_reason: reason })],
+    );
+    return rows[0]!;
   }
 }
 
-export type { WalletRow, TransactionRow, DepositRequestRow };
+export type { WalletRow, TransactionRow, DepositRequestRow, WalletHoldRow };

@@ -7,6 +7,7 @@ import { getApiBaseUrl } from '@/lib/env';
 import type { Dictionary, Locale } from '@/lib/i18n/types';
 import type { Bid, Need } from '@/lib/needs/client';
 import { needsApiClient } from '@/lib/needs/client';
+import { walletApiClient } from '@/lib/wallet/client';
 import { uploadFile } from '@/lib/upload/client';
 
 type Props = {
@@ -64,6 +65,9 @@ export const CustomerDashboard = ({
   const [selectedNeed, setSelectedNeed] = useState<Need | null>(null);
   const [bids, setBids] = useState<Bid[]>([]);
   const [loadingBids, setLoadingBids] = useState(false);
+  const [chatBidId, setChatBidId] = useState<string | null>(null);
+  const [messages, setMessages] = useState<any[]>([]);
+  const [msgContent, setMsgContent] = useState('');
   const [uploadedFiles, setUploadedFiles] = useState<
     Array<{ url: string; displayName: string; isVideo: boolean }>
   >([]);
@@ -267,6 +271,7 @@ export const CustomerDashboard = ({
 
   const viewBids = async (need: Need) => {
     setSelectedNeed(need);
+    setChatBidId(null);
     setLoadingBids(true);
     try {
       const b = await needsApiClient.listBidsForNeed(accessToken, need.id);
@@ -278,14 +283,54 @@ export const CustomerDashboard = ({
     }
   };
 
-  const handleAward = async (bidId: string) => {
+  const openChat = async (bidId: string) => {
+    setChatBidId(bidId);
+    try {
+      if (!selectedNeed) return;
+      const msgs = await needsApiClient.listBidMessages(accessToken, selectedNeed.id, bidId);
+      setMessages(msgs);
+    } catch {
+      setMessages([]);
+    }
+  };
+
+  const sendMsg = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!msgContent.trim() || !selectedNeed || !chatBidId) return;
+    try {
+      await needsApiClient.createBidMessage(accessToken, selectedNeed.id, chatBidId, msgContent);
+      setMsgContent('');
+      void openChat(chatBidId);
+    } catch {
+      // ignore
+    }
+  };
+
+  const handleAward = async (bidId: string, amountRaw: string) => {
     if (!selectedNeed) return;
     try {
       await needsApiClient.awardBid(accessToken, selectedNeed.id, bidId);
       setSelectedNeed(null);
       void loadNeeds();
-    } catch {
-      /* ignore */
+    } catch (err: any) {
+      alert(err.message || 'Failed to award bid');
+    }
+  };
+
+  const handlePay = async (bidId: string, amountRaw: string) => {
+    if (!selectedNeed) return;
+    try {
+      const amount = parseFloat(amountRaw);
+      const wallet = await walletApiClient.getMyWallet(accessToken);
+      if (wallet.balance < amount) {
+        alert('Insufficient balance. Please deposit funds first.');
+        return;
+      }
+      await needsApiClient.payBid(accessToken, selectedNeed.id, bidId);
+      setSelectedNeed(null);
+      void loadNeeds();
+    } catch (err: any) {
+      alert(err.message || 'Failed to pay bid');
     }
   };
 
@@ -807,22 +852,61 @@ export const CustomerDashboard = ({
                       <p className="dashboard-card-meta">
                         {parseFloat(bid.amount).toFixed(2)} {bid.currency}
                         {bid.delivery_days && ` - ${bid.delivery_days} days`}
+                        {bid.estimated_hours && ` - ${bid.estimated_hours} hrs/week`}
                       </p>
                     </div>
                     {bid.status === 'pending' && (
-                      <button
-                        type="button"
-                        className="dashboard-primary-btn"
-                        onClick={() => void handleAward(bid.id)}
-                      >
-                        {d.award ?? 'Award'}
-                      </button>
+                      <div style={{ display: 'flex', gap: '0.5rem', flexDirection: 'column' }}>
+                        {bid.has_unread && <span className="dashboard-badge" style={{ background: 'hsl(var(--destructive))', color: '#fff', alignSelf: 'flex-start' }}>New Message</span>}
+                        <button
+                          type="button"
+                          className="dashboard-primary-btn dashboard-primary-btn--sm"
+                          onClick={() => void handleAward(bid.id, bid.amount)}
+                        >
+                          {d.award ?? 'Award'}
+                        </button>
+                        <button
+                          type="button"
+                          className="dashboard-btn dashboard-btn--secondary dashboard-btn--small"
+                          onClick={() => void openChat(bid.id)}
+                        >
+                          Chat
+                        </button>
+                      </div>
                     )}
                     {bid.status === 'accepted' && (
-                      <span className="dashboard-badge dashboard-badge--awarded">Accepted</span>
+                      <div style={{ display: 'flex', gap: '0.5rem', flexDirection: 'column', alignItems: 'flex-start' }}>
+                        <span className="dashboard-badge dashboard-badge--awarded">Accepted</span>
+                        <button
+                          type="button"
+                          className="dashboard-primary-btn dashboard-primary-btn--sm"
+                          style={{ marginTop: '0.5rem' }}
+                          onClick={() => void handlePay(bid.id, bid.amount)}
+                        >
+                          Pay Expert
+                        </button>
+                      </div>
                     )}
                   </div>
                 ))}
+              </div>
+            )}
+            
+            {chatBidId && (
+              <div style={{ marginTop: '1.5rem', borderTop: '1px solid #ccc', paddingTop: '1rem' }}>
+                <h4 style={{ marginBottom: '1rem' }}>Pre-Award Chat</h4>
+                <div style={{ maxHeight: '200px', overflowY: 'auto', marginBottom: '1rem', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                  {messages.map(m => (
+                    <div key={m.id} style={{ padding: '0.5rem', background: 'hsl(var(--muted))', color: 'hsl(var(--foreground))', borderRadius: '4px' }}>
+                      <strong>{m.sender_name}</strong>: {m.content}
+                    </div>
+                  ))}
+                  {messages.length === 0 && <p className="dashboard-empty">No messages yet.</p>}
+                </div>
+                <form onSubmit={sendMsg} style={{ display: 'flex', gap: '0.5rem' }}>
+                  <input className="dashboard-input" value={msgContent} onChange={e => setMsgContent(e.target.value)} placeholder="Type a message..." required />
+                  <button type="submit" className="dashboard-primary-btn">Send</button>
+                </form>
               </div>
             )}
             <button

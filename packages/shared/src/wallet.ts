@@ -19,7 +19,9 @@ export type TransactionType =
   | 'refund'
   | 'adjustment'
   | 'bonus'
-  | 'commission';
+  | 'commission'
+  | 'hold'
+  | 'release';
 
 export type TransactionStatus = 'pending' | 'completed' | 'failed' | 'reversed';
 
@@ -44,4 +46,22 @@ export type AdjustBalanceBody = {
   type: 'deposit' | 'withdrawal' | 'adjustment' | 'bonus';
   amount: number;
   description?: string;
+};
+
+export type WalletHoldStatus = 'held' | 'released' | 'captured' | 'cancelled';
+
+export type WalletHold = {
+  id: string;
+  walletId: string;
+  userId: string;
+  amount: number;
+  currency: string;
+  status: WalletHoldStatus;
+  referenceType: string;
+  referenceId: string | null;
+  metadata: Record<string, unknown>;
+  createdAt: string;
+  updatedAt: string;
+  releasedAt: string | null;
+  capturedAt: string | null;
 };

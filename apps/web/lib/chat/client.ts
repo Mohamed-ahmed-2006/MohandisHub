@@ -11,6 +11,7 @@ export type Conversation = {
   other_display_name: string;
   other_email: string;
   last_message_body: string | null;
+  has_unread?: boolean;
 };
 
 export type Message = {

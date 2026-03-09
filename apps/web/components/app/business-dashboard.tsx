@@ -7,6 +7,8 @@ import { useState } from 'react';
 import { buildLocalePath } from '@/lib/i18n/path';
 import type { Dictionary, Locale } from '@/lib/i18n/types';
 
+import { BusinessJobsTab } from './business-jobs-tab';
+
 type Props = {
   locale: Locale;
   dictionary: Dictionary;
@@ -15,11 +17,13 @@ type Props = {
   verificationStatus?: string;
 };
 
-type BusinessTab = 'services' | 'orders' | 'analytics';
+type BusinessTab = 'services' | 'orders' | 'analytics' | 'jobs';
 
 export const BusinessDashboard = ({
   locale,
   dictionary,
+  accessToken,
+  categories,
   verificationStatus = 'unverified',
 }: Props) => {
   const [tab, setTab] = useState<BusinessTab>('services');
@@ -92,6 +96,15 @@ export const BusinessDashboard = ({
         >
           {navLabel('analytics', 'Analytics')}
         </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={tab === 'jobs'}
+          className={`dashboard-tab ${tab === 'jobs' ? 'dashboard-tab--active' : ''}`}
+          onClick={() => setTab('jobs')}
+        >
+          Jobs
+        </button>
       </div>
 
       {tab === 'services' && (
@@ -119,6 +132,8 @@ export const BusinessDashboard = ({
           <p className="dashboard-empty">{common.comingSoon ?? 'Coming soon.'}</p>
         </div>
       )}
+
+      {tab === 'jobs' && <BusinessJobsTab accessToken={accessToken} />}
     </section>
   );
 };
