@@ -29,17 +29,8 @@ const shutdown = async (signal: string): Promise<void> => {
   logger.info('Graceful shutdown started', { signal });
 
   await new Promise<void>((resolve) => {
+    httpServer.closeAllConnections();
     void io.close(() => {
-      resolve();
-    });
-  });
-
-  await new Promise<void>((resolve, reject) => {
-    httpServer.close((error) => {
-      if (error) {
-        reject(error);
-        return;
-      }
       resolve();
     });
   });

@@ -1,3 +1,4 @@
+import 'express-async-errors';
 import path from 'node:path';
 
 import cookieParser from 'cookie-parser';

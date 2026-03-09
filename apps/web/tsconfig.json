@@ -13,7 +13,8 @@
     ],
     "baseUrl": ".",
     "paths": {
-      "@/*": ["./*"]
+      "@/*": ["./*"],
+      "@mohandishub/shared": ["../../packages/shared/src/index.ts"]
     },
     "noEmit": true
   },
