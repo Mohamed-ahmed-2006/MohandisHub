@@ -1,4 +1,5 @@
 import { execSync } from 'child_process';
+import fs from 'fs';
 import process from 'process';
 
 function run(command) {
@@ -9,6 +10,17 @@ function run(command) {
     console.error(`\n❌ Command failed: ${command}`);
     process.exit(1);
   }
+}
+
+function getApiDatabaseUrl() {
+  const envPath = 'apps/api/.env';
+  if (!fs.existsSync(envPath)) return null;
+  const content = fs.readFileSync(envPath, 'utf8');
+  const line = content
+    .split(/\r?\n/)
+    .find((l) => l.startsWith('DATABASE_URL=') && l.trim().length > 'DATABASE_URL='.length);
+  if (!line) return null;
+  return line.slice('DATABASE_URL='.length).trim();
 }
 
 console.log("🚀 Starting check, build, commit, and migrate process...");
@@ -40,7 +52,13 @@ try {
 
 // 4. Migrate database
 console.log("\n4️⃣  Pushing database migrations...");
-// Uses npx to run the locally installed supabase CLI
-run('npx supabase db push');
+// Uses local DATABASE_URL when available to avoid requiring a linked Supabase project in local dev.
+const dbUrl = getApiDatabaseUrl();
+if (dbUrl) {
+  const cmdSafeUrl = dbUrl.replace(/%/g, '%%');
+  run(`npx supabase db push --db-url "${cmdSafeUrl}"`);
+} else {
+  run('npx supabase db push');
+}
 
 console.log("\n🎉 All done successfully!");
