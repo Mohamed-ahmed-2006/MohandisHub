@@ -4,10 +4,9 @@
 
 import { getPool } from '../../db/pool.js';
 import { HttpError } from '../../utils/http-error.js';
-
+import { ServicesRepository } from '../services/services.repository.js';
 import { SettingsService } from '../settings/settings.service.js';
 import { WalletRepository } from '../wallet/wallet.repository.js';
-import { ServicesRepository } from '../services/services.repository.js';
 
 import { BookingsRepository } from './bookings.repository.js';
 import type { BookingRow } from './bookings.repository.js';
@@ -248,7 +247,7 @@ export class BookingsService {
       });
     }
 
-    const updated = await this.repo.updateStatus(id, input.status!);
+    const updated = await this.repo.updateStatus(id, input.status);
     return updated ? toBooking(updated) : null;
   }
 }

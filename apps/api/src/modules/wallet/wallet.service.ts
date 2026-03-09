@@ -11,7 +11,6 @@ import {
 } from '../../lib/cryptomus.client.js';
 import { stripe } from '../../lib/stripe.client.js';
 import { HttpError } from '../../utils/http-error.js';
-
 import { SettingsService } from '../settings/settings.service.js';
 
 import { WalletRepository } from './wallet.repository.js';

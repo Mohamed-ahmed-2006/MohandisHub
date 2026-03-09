@@ -23,7 +23,6 @@ import {
 } from '../../config/jwt.js';
 import { logger } from '../../config/logger.js';
 import { HttpError } from '../../utils/http-error.js';
-
 import { SettingsService } from '../settings/settings.service.js';
 
 import { AuthRepository } from './auth.repository.js';

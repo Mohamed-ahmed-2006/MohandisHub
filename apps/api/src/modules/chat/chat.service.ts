@@ -1,5 +1,4 @@
 import { HttpError } from '../../utils/http-error.js';
-
 import { SettingsService } from '../settings/settings.service.js';
 
 import { ChatRepository } from './chat.repository.js';

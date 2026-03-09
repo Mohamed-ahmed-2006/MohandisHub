@@ -15,7 +15,6 @@ import { env } from '../../config/env.js';
 import { getPool } from '../../db/pool.js';
 import { buildAgoraRtcToken } from '../../lib/agora-token.js';
 import { HttpError } from '../../utils/http-error.js';
-
 import { ChatRepository } from '../chat/chat.repository.js';
 import { SettingsService } from '../settings/settings.service.js';
 import { WalletRepository } from '../wallet/wallet.repository.js';
@@ -625,7 +624,7 @@ export class ReservationsService {
     );
 
     return {
-      proposal: mapLocationProposal(decided!),
+      proposal: mapLocationProposal(decided),
       reservation: mapReservation(updatedReservation),
     };
   }

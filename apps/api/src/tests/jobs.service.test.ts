@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { JobsService } from '../modules/jobs/jobs.service.js';
 import type { JobApplicationRow, JobRow } from '../modules/jobs/jobs.repository.js';
+import { JobsService } from '../modules/jobs/jobs.service.js';
 
 const queryMock = vi.fn();
 const releaseMock = vi.fn();

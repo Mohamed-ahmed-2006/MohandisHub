@@ -1,7 +1,9 @@
 import type { Request, Response, NextFunction } from 'express';
-import { JobsService } from './jobs.service.js';
 import { z } from 'zod';
+
 import { HttpError } from '../../utils/http-error.js';
+
+import { JobsService } from './jobs.service.js';
 
 const createJobSchema = z.object({
   title: z.string().min(3).max(300),

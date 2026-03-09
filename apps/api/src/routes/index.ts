@@ -1,22 +1,22 @@
 import { Router } from 'express';
 
 import { maintenanceMode } from '../middleware/maintenance-mode.js';
-import { appRouter } from '../modules/app/app.routes.js';
 import { adminRouter } from '../modules/admin/admin.routes.js';
+import { appRouter } from '../modules/app/app.routes.js';
 import { authRouter } from '../modules/auth/auth.routes.js';
 import { chatRouter } from '../modules/chat/chat.routes.js';
+import { jobsRouter } from '../modules/jobs/jobs.routes.js';
 import { needsRouter, bidsRouter } from '../modules/needs/needs.routes.js';
 import { otpRouter } from '../modules/otp/otp.routes.js';
 import { plansRouter } from '../modules/plans/plans.routes.js';
 import { profilesRouter } from '../modules/profiles/profiles.routes.js';
+import { reservationsRouter } from '../modules/reservations/reservations.routes.js';
 import { reviewsRouter } from '../modules/reviews/reviews.routes.js';
 import { servicesRouter } from '../modules/services/services.routes.js';
 import { uploadRouter } from '../modules/upload/upload.routes.js';
 import { usersRouter } from '../modules/users/users.routes.js';
 import { verificationRouter } from '../modules/verification/verification.routes.js';
 import { walletRouter } from '../modules/wallet/wallet.routes.js';
-import { jobsRouter } from '../modules/jobs/jobs.routes.js';
-import { reservationsRouter } from '../modules/reservations/reservations.routes.js';
 
 const apiRouter = Router();
 

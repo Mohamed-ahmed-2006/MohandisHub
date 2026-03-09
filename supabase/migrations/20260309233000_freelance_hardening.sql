@@ -27,23 +27,32 @@ WHERE b.id = r.id
   AND r.rn > 1;
 
 -- Realign awarded_bid_id with the accepted bid, when present.
+-- (CTE used because UPDATE...FROM LATERAL cannot reference the target table.)
+WITH ranked_accepted AS (
+  SELECT
+    n.id AS need_id,
+    (
+      SELECT b.id
+      FROM bids b
+      WHERE b.need_id = n.id
+        AND b.status = 'accepted'
+      ORDER BY
+        (b.id = n.awarded_bid_id) DESC,
+        ((b.payment_transaction_id IS NOT NULL) OR (b.paid_at IS NOT NULL)) DESC,
+        b.updated_at DESC,
+        b.created_at DESC,
+        b.id DESC
+      LIMIT 1
+    ) AS best_accepted_id
+  FROM needs n
+  WHERE n.awarded_bid_id IS NOT NULL
+)
 UPDATE needs n
-SET awarded_bid_id = accepted.id,
+SET awarded_bid_id = r.best_accepted_id,
     updated_at = now()
-FROM LATERAL (
-  SELECT b.id
-  FROM bids b
-  WHERE b.need_id = n.id
-    AND b.status = 'accepted'
-  ORDER BY
-    (b.id = n.awarded_bid_id) DESC,
-    ((b.payment_transaction_id IS NOT NULL) OR (b.paid_at IS NOT NULL)) DESC,
-    b.updated_at DESC,
-    b.created_at DESC,
-    b.id DESC
-  LIMIT 1
-) AS accepted
-WHERE n.awarded_bid_id IS DISTINCT FROM accepted.id;
+FROM ranked_accepted r
+WHERE n.id = r.need_id
+  AND n.awarded_bid_id IS DISTINCT FROM r.best_accepted_id;
 
 UPDATE needs n
 SET awarded_bid_id = NULL,

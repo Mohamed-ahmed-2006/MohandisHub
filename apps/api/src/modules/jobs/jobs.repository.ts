@@ -1,4 +1,5 @@
 import type { Pool } from 'pg';
+
 import { getPool } from '../../db/pool.js';
 
 export type JobRow = {

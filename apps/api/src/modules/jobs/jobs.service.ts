@@ -2,11 +2,12 @@ import type { Job, JobApplication, CreateJobDto, ApplyJobDto, JobMilestone, JobS
 import type { PoolClient } from 'pg';
 
 import { getPool } from '../../db/pool.js';
+import { getSocketServer } from '../../lib/socket-instance.js';
 import { HttpError } from '../../utils/http-error.js';
+
 import { JobsRepository } from './jobs.repository.js';
 import type { JobRow, JobApplicationRow, JobMilestoneRow, JobSubmissionRow, JobApplicationMessageRow } from './jobs.repository.js';
 
-import { getSocketServer } from '../../lib/socket-instance.js';
 
 export class JobsService {
   constructor(private readonly repo: JobsRepository = new JobsRepository()) {}

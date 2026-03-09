@@ -287,7 +287,7 @@ export class WalletRepository {
 
   /** Get or create wallet for commission receiver. Must be called within transaction. */
   async getOrCreateCommissionWallet(client: PoolClient, receiverId: string): Promise<string> {
-    let { rows } = await client.query<{ id: string }>(
+    const { rows } = await client.query<{ id: string }>(
       `SELECT id FROM wallets WHERE user_id = $1`,
       [receiverId],
     );

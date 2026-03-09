@@ -9,7 +9,6 @@ import type { OtpChannel, SendOtpResult, VerifyOtpResult } from '@mohandishub/sh
 import { env } from '../../config/env.js';
 import { logger } from '../../config/logger.js';
 import { HttpError } from '../../utils/http-error.js';
-
 import { SettingsService } from '../settings/settings.service.js';
 
 import { createOtpSender } from './otp.provider.js';

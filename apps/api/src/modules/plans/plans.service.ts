@@ -2,7 +2,6 @@ import type { Plan } from '@mohandishub/shared';
 
 import { getPool } from '../../db/pool.js';
 import { HttpError } from '../../utils/http-error.js';
-
 import { SettingsService } from '../settings/settings.service.js';
 
 export class PlansService {

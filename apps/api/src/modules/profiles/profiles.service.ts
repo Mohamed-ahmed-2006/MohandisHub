@@ -12,7 +12,6 @@ import type {
 } from '@mohandishub/shared';
 
 import { HttpError } from '../../utils/http-error.js';
-
 import { SettingsService } from '../settings/settings.service.js';
 
 import { ProfilesRepository } from './profiles.repository.js';

@@ -2,9 +2,9 @@ import type { Socket } from 'socket.io';
 import type { Server as SocketServer } from 'socket.io';
 
 import { verifyAccessToken } from '../../config/jwt.js';
-import { setSocketServer } from '../../lib/socket-instance.js';
 import { logger } from '../../config/logger.js';
 import { getPool } from '../../db/pool.js';
+import { setSocketServer } from '../../lib/socket-instance.js';
 
 type SocketAuthUser = {
   id: string;

@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { NeedsService } from '../modules/needs/needs.service.js';
 import type { BidRow, NeedRow } from '../modules/needs/needs.repository.js';
+import { NeedsService } from '../modules/needs/needs.service.js';
 
 const queryMock = vi.fn();
 const releaseMock = vi.fn();

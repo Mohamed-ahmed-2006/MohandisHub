@@ -6,7 +6,6 @@ import type { ApiSuccessBody } from '@mohandishub/shared';
 import { Router } from 'express';
 
 import { asyncHandler } from '../../utils/async-handler.js';
-
 import { SettingsService } from '../settings/settings.service.js';
 
 const settingsService = new SettingsService();

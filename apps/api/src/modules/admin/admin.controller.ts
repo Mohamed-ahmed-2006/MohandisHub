@@ -19,7 +19,6 @@ import type {
 
 import { asyncHandler } from '../../utils/async-handler.js';
 import { HttpError } from '../../utils/http-error.js';
-
 import { SettingsService } from '../settings/settings.service.js';
 
 import { AdminService } from './admin.service.js';
