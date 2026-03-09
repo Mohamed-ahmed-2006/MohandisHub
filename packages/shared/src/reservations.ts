@@ -70,6 +70,7 @@ export type Reservation = {
   endedAt: string | null;
   completedAt: string | null;
   customerDoneDueAt: string | null;
+  donePromptedAt: string | null;
   disconnectAutoReleaseAt: string | null;
   createdAt: string;
   updatedAt: string;
@@ -108,6 +109,7 @@ export type ReservationCallSession = {
   billingPausedAt: string | null;
   lastBilledAt: string | null;
   billedMinutes: number;
+  billedSeconds: number;
   extensionStatus: ReservationCallExtensionStatus;
   extensionRequestedBy: string | null;
   extensionUntil: string | null;
@@ -231,3 +233,5 @@ export type CallExtensionBody = {
 export type EndCallBody = {
   action: 'end' | 'refresh';
 };
+
+export type RenewCallTokenBody = Record<string, never>;

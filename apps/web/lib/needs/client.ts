@@ -133,10 +133,10 @@ export const needsApiClient = {
     apiReq<{ rows: Bid[]; total: number }>(`/api/bids/my?page=${page}`, token),
 
   listBidMessages: (token: string, needId: string, bidId: string) =>
-    apiReq<any[]>(`/api/needs/${needId}/bids/${bidId}/messages`, token),
+    apiReq<unknown[]>(`/api/needs/${needId}/bids/${bidId}/messages`, token),
 
   createBidMessage: (token: string, needId: string, bidId: string, content: string) =>
-    apiReq<any>(`/api/needs/${needId}/bids/${bidId}/messages`, token, {
+    apiReq<unknown>(`/api/needs/${needId}/bids/${bidId}/messages`, token, {
       method: 'POST',
       body: JSON.stringify({ content }),
     }),
