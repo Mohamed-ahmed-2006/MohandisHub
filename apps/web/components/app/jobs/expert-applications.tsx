@@ -1,9 +1,11 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
 import type { JobApplication, JobMilestone } from '@mohandishub/shared';
-import { jobsApiClient } from '@/lib/jobs/client';
+import { useCallback, useEffect, useState } from 'react';
+
 import { ApplicationChat } from './application-chat';
+
+import { jobsApiClient } from '@/lib/jobs/client';
 
 export const ExpertApplications = ({ accessToken }: { accessToken: string }) => {
   const [applications, setApplications] = useState<JobApplication[]>([]);
@@ -40,8 +42,8 @@ export const ExpertApplications = ({ accessToken }: { accessToken: string }) => 
       await jobsApiClient.submitMilestone(accessToken, milestoneId, { submissionNotes: notes });
       alert('Milestone submitted');
       if (selectedApp) void loadMilestones(selectedApp);
-    } catch (err: any) {
-      alert(err.message || 'Failed to submit milestone');
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : 'Failed to submit milestone');
     }
   };
 

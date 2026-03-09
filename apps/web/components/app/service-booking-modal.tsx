@@ -3,8 +3,8 @@
 import type { ReservationProfile, ReservationSlot, ServiceSearchResult } from '@mohandishub/shared';
 import { useCallback, useEffect, useState } from 'react';
 
-import { reservationsApiClient } from '@/lib/reservations/client';
 import type { Dictionary, Locale } from '@/lib/i18n/types';
+import { reservationsApiClient } from '@/lib/reservations/client';
 
 type Props = {
   open: boolean;
