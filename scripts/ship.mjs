@@ -55,8 +55,7 @@ console.log("\n4️⃣  Pushing database migrations...");
 // Uses local DATABASE_URL when available to avoid requiring a linked Supabase project in local dev.
 const dbUrl = getApiDatabaseUrl();
 if (dbUrl) {
-  const cmdSafeUrl = dbUrl.replace(/%/g, '%%');
-  run(`npx supabase db push --db-url "${cmdSafeUrl}"`);
+  run(`npx supabase db push --db-url "${dbUrl}"`);
 } else {
   run('npx supabase db push');
 }
