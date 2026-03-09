@@ -8,12 +8,13 @@ import type {
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
+import { OnlineCallModal } from './online-call-modal';
+
 import { useAuth } from '@/components/auth/auth-provider';
 import { Container } from '@/components/ui/container';
 import { buildLocalePath } from '@/lib/i18n/path';
 import type { Dictionary, Locale } from '@/lib/i18n/types';
 import { reservationsApiClient } from '@/lib/reservations/client';
-import { OnlineCallModal } from './online-call-modal';
 
 import '@/app/dashboard.css';
 
@@ -89,7 +90,7 @@ export const BookingsScreen = ({ locale, dictionary }: Props) => {
   const [checkinInfo, setCheckinInfo] = useState<CheckinCodeState | null>(null);
   const [counterpartyCode, setCounterpartyCode] = useState('');
   const [callSnapshot, setCallSnapshot] = useState<ReservationCallSnapshot | null>(null);
-  const [filterStatus, setFilterStatus] = useState<'all' | string>('all');
+  const [filterStatus, setFilterStatus] = useState<string>('all');
 
   useEffect(() => {
     if (!isReady) return;
@@ -482,7 +483,7 @@ export const BookingsScreen = ({ locale, dictionary }: Props) => {
                         <p>Provider remaining minutes: {callSnapshot.providerRemainingMinutes}</p>
                         {callSnapshot.session && (
                           <p>
-                            Call status: {callSnapshot.session.status} | billed minutes: {callSnapshot.session.billedMinutes}
+                            Call status: {callSnapshot.session.status} | billed seconds: {callSnapshot.session.billedSeconds} (minutes: {callSnapshot.session.billedMinutes})
                           </p>
                         )}
                       </>

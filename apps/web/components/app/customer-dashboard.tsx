@@ -1,14 +1,15 @@
 'use client';
 
 import type { ServiceCategory } from '@mohandishub/shared';
+import Image from 'next/image';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { getApiBaseUrl } from '@/lib/env';
 import type { Dictionary, Locale } from '@/lib/i18n/types';
-import type { Bid, Need } from '@/lib/needs/client';
+import type { Bid, BidMessage, Need } from '@/lib/needs/client';
 import { needsApiClient } from '@/lib/needs/client';
-import { walletApiClient } from '@/lib/wallet/client';
 import { uploadFile } from '@/lib/upload/client';
+import { walletApiClient } from '@/lib/wallet/client';
 
 type Props = {
   locale: Locale;
@@ -66,7 +67,7 @@ export const CustomerDashboard = ({
   const [bids, setBids] = useState<Bid[]>([]);
   const [loadingBids, setLoadingBids] = useState(false);
   const [chatBidId, setChatBidId] = useState<string | null>(null);
-  const [messages, setMessages] = useState<any[]>([]);
+  const [messages, setMessages] = useState<BidMessage[]>([]);
   const [msgContent, setMsgContent] = useState('');
   const [uploadedFiles, setUploadedFiles] = useState<
     Array<{ url: string; displayName: string; isVideo: boolean }>
@@ -306,14 +307,14 @@ export const CustomerDashboard = ({
     }
   };
 
-  const handleAward = async (bidId: string, amountRaw: string) => {
+  const handleAward = async (bidId: string) => {
     if (!selectedNeed) return;
     try {
       await needsApiClient.awardBid(accessToken, selectedNeed.id, bidId);
       setSelectedNeed(null);
       void loadNeeds();
-    } catch (err: any) {
-      alert(err.message || 'Failed to award bid');
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : 'Failed to award bid');
     }
   };
 
@@ -329,8 +330,8 @@ export const CustomerDashboard = ({
       await needsApiClient.payBid(accessToken, selectedNeed.id, bidId);
       setSelectedNeed(null);
       void loadNeeds();
-    } catch (err: any) {
-      alert(err.message || 'Failed to pay bid');
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : 'Failed to pay bid');
     }
   };
 
@@ -627,7 +628,7 @@ export const CustomerDashboard = ({
         showEmptyState ? (
           <div className="dashboard-empty-wrapper">
             <div className="dashboard-empty-icon" aria-hidden>
-              <img src="/favicon.ico" alt="" width={48} height={48} />
+              <Image src="/favicon.ico" alt="" width={48} height={48} />
             </div>
             <p className="dashboard-empty">
               {d.noNeeds ?? 'No needs posted yet. Post your first need!'}
@@ -729,6 +730,7 @@ export const CustomerDashboard = ({
                               }
                               title="View image"
                             >
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
                               <img src={full} alt="" />
                             </button>
                           );
@@ -795,6 +797,7 @@ export const CustomerDashboard = ({
             x
           </button>
           <div className="media-preview-content" onClick={(e) => e.stopPropagation()}>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={previewImage.url} alt="" className="media-preview-img" />
             {previewImage.urls.length > 1 && (
               <>
@@ -861,7 +864,7 @@ export const CustomerDashboard = ({
                         <button
                           type="button"
                           className="dashboard-primary-btn dashboard-primary-btn--sm"
-                          onClick={() => void handleAward(bid.id, bid.amount)}
+                            onClick={() => void handleAward(bid.id)}
                         >
                           {d.award ?? 'Award'}
                         </button>
@@ -903,7 +906,7 @@ export const CustomerDashboard = ({
                   ))}
                   {messages.length === 0 && <p className="dashboard-empty">No messages yet.</p>}
                 </div>
-                <form onSubmit={sendMsg} style={{ display: 'flex', gap: '0.5rem' }}>
+                  <form onSubmit={(e) => { void sendMsg(e); }} style={{ display: 'flex', gap: '0.5rem' }}>
                   <input className="dashboard-input" value={msgContent} onChange={e => setMsgContent(e.target.value)} placeholder="Type a message..." required />
                   <button type="submit" className="dashboard-primary-btn">Send</button>
                 </form>

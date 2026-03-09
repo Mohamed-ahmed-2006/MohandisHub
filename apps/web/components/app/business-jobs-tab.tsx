@@ -2,11 +2,13 @@
 
 import type { Job, JobApplication } from '@mohandishub/shared';
 import { useCallback, useEffect, useState } from 'react';
-import { jobsApiClient } from '@/lib/jobs/client';
-import { JobCard } from './jobs/job-card';
+
+import { ApplicationChat } from './jobs/application-chat';
 import { ApplicationItem } from './jobs/application-item';
 import { BusinessMilestoneManager } from './jobs/business-milestone-manager';
-import { ApplicationChat } from './jobs/application-chat';
+import { JobCard } from './jobs/job-card';
+
+import { jobsApiClient } from '@/lib/jobs/client';
 
 export const BusinessJobsTab = ({ accessToken }: { accessToken: string }) => {
   const [jobs, setJobs] = useState<Job[]>([]);
@@ -100,8 +102,8 @@ export const BusinessJobsTab = ({ accessToken }: { accessToken: string }) => {
                       <ApplicationItem 
                         key={app.id} 
                         app={app} 
-                        onAccept={(id) => handleUpdateApp(id, 'accepted')}
-                        onReject={(id) => handleUpdateApp(id, 'rejected')}
+                        onAccept={(id) => { void handleUpdateApp(id, 'accepted'); }}
+                        onReject={(id) => { void handleUpdateApp(id, 'rejected'); }}
                       >
                         {app.status === 'accepted' && (
                           <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>

@@ -1,11 +1,11 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
 import type { JobApplicationMessage } from '@mohandishub/shared';
-import { jobsApiClient } from '@/lib/jobs/client';
-import { useAuth } from '@/components/auth/auth-provider';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
+import { useAuth } from '@/components/auth/auth-provider';
 import { getChatSocket } from '@/lib/chat/socket';
+import { jobsApiClient } from '@/lib/jobs/client';
 
 type Props = {
   applicationId: string;

@@ -4,12 +4,13 @@ import type { ServiceCategory } from '@mohandishub/shared';
 import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
 
+import { ExpertJobsTab } from './expert-jobs-tab';
+
 import { buildLocalePath } from '@/lib/i18n/path';
 import type { Dictionary, Locale } from '@/lib/i18n/types';
-import type { Bid, Need } from '@/lib/needs/client';
+import type { Bid, BidMessage, Need } from '@/lib/needs/client';
 import { needsApiClient } from '@/lib/needs/client';
 
-import { ExpertJobsTab } from './expert-jobs-tab';
 
 type Props = {
   locale: Locale;
@@ -27,7 +28,7 @@ export const ExpertDashboard = ({
   const [openNeeds, setOpenNeeds] = useState<Need[]>([]);
   const [myBids, setMyBids] = useState<Bid[]>([]);
   const [loading, setLoading] = useState(true);
-  const [bidNeed, setBidNeed] = useState<Need | null>(null);
+  const [bidNeed, setBidNeed] = useState<Pick<Need, 'id' | 'title' | 'budget_type'> | null>(null);
   const [editingBid, setEditingBid] = useState<Bid | null>(null);
   const [bidError, setBidError] = useState<string | null>(null);
   const [bidding, setBidding] = useState(false);
@@ -35,7 +36,7 @@ export const ExpertDashboard = ({
   const [bidAmountInput, setBidAmountInput] = useState<string>('');
   
   const [chatBid, setChatBid] = useState<Bid | null>(null);
-  const [messages, setMessages] = useState<any[]>([]);
+  const [messages, setMessages] = useState<BidMessage[]>([]);
   const [msgContent, setMsgContent] = useState('');
 
   const openChat = async (bid: Bid) => {
@@ -66,8 +67,8 @@ export const ExpertDashboard = ({
     try {
       await needsApiClient.deleteBid(accessToken, needId, bidId);
       void loadData();
-    } catch (err: any) {
-      alert(err.message || 'Failed to delete bid');
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : 'Failed to delete bid');
     }
   };
 
@@ -295,7 +296,7 @@ export const ExpertDashboard = ({
                       onClick={() => {
                         const relatedNeed = openNeeds.find((n) => n.id === bid.need_id);
                         setEditingBid(bid);
-                        setBidNeed(relatedNeed || { id: bid.need_id, title: bid.need_title || 'Need', budget_type: bid.estimated_hours ? 'hourly' : 'fixed' } as any);
+                        setBidNeed(relatedNeed || { id: bid.need_id, title: bid.need_title || 'Need', budget_type: bid.estimated_hours ? 'hourly' : 'fixed' });
                         setBidAmountInput(bid.amount);
                         setBidError(null);
                       }}
@@ -419,7 +420,7 @@ export const ExpertDashboard = ({
               ))}
               {messages.length === 0 && <p className="dashboard-empty">No messages yet.</p>}
             </div>
-            <form onSubmit={sendMsg} style={{ display: 'flex', gap: '0.5rem' }}>
+            <form onSubmit={(e) => { void sendMsg(e); }} style={{ display: 'flex', gap: '0.5rem' }}>
               <input className="dashboard-input" value={msgContent} onChange={e => setMsgContent(e.target.value)} placeholder="Type a message..." required />
               <button type="submit" className="dashboard-primary-btn">Send</button>
             </form>

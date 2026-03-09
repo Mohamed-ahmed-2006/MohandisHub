@@ -2,9 +2,11 @@
 
 import type { Job } from '@mohandishub/shared';
 import { useCallback, useEffect, useState } from 'react';
-import { jobsApiClient } from '@/lib/jobs/client';
-import { JobCard } from './jobs/job-card';
+
 import { ExpertApplications } from './jobs/expert-applications';
+import { JobCard } from './jobs/job-card';
+
+import { jobsApiClient } from '@/lib/jobs/client';
 
 export const ExpertJobsTab = ({ accessToken }: { accessToken: string }) => {
   const [jobs, setJobs] = useState<Job[]>([]);
@@ -38,8 +40,8 @@ export const ExpertJobsTab = ({ accessToken }: { accessToken: string }) => {
       });
       setApplyJobId(null);
       alert('Applied successfully!');
-    } catch (err: any) {
-      alert(err.message || 'Failed to apply');
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : 'Failed to apply');
     } finally {
       setApplying(false);
     }

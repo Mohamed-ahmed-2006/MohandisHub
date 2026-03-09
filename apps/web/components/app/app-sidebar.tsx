@@ -1,11 +1,11 @@
 'use client';
 
-import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { getChatSocket } from '@/lib/chat/socket';
+import { useEffect, useState } from 'react';
 
 import { SiteLogo } from '@/components/site-logo';
+import { getChatSocket } from '@/lib/chat/socket';
 import { buildLocalePath } from '@/lib/i18n/path';
 import type { Dictionary, Locale } from '@/lib/i18n/types';
 
@@ -40,7 +40,7 @@ export const AppSidebar = ({
     const sock = getChatSocket();
     if (!sock) return;
 
-    const onNotification = (data: any) => {
+    const onNotification = (data: { type?: string }) => {
       if (data.type === 'new_message' || data.type === 'new_application_message') {
         setHasUnreadChat(true);
       } else {

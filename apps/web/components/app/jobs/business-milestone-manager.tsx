@@ -1,7 +1,8 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
 import type { JobMilestone } from '@mohandishub/shared';
+import { useCallback, useEffect, useState } from 'react';
+
 import { jobsApiClient } from '@/lib/jobs/client';
 
 type Props = {
@@ -40,8 +41,8 @@ export const BusinessMilestoneManager = ({ accessToken, applicationId }: Props) 
       });
       form.reset();
       void loadMilestones();
-    } catch (err: any) {
-      alert(err.message || 'Failed to create milestone');
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : 'Failed to create milestone');
     } finally {
       setCreating(false);
     }
@@ -51,8 +52,8 @@ export const BusinessMilestoneManager = ({ accessToken, applicationId }: Props) 
     try {
       await jobsApiClient.reviewMilestone(accessToken, milestoneId, status);
       void loadMilestones();
-    } catch (err: any) {
-      alert(err.message || 'Failed to review milestone');
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : 'Failed to review milestone');
     }
   };
 
@@ -75,8 +76,8 @@ export const BusinessMilestoneManager = ({ accessToken, applicationId }: Props) 
               
               {m.status === 'submitted' && (
                 <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem' }}>
-                  <button className="dashboard-primary-btn dashboard-primary-btn--small" onClick={() => handleReview(m.id, 'approved')}>Approve</button>
-                  <button className="dashboard-btn dashboard-btn--secondary dashboard-btn--small" onClick={() => handleReview(m.id, 'rejected')}>Reject</button>
+                  <button className="dashboard-primary-btn dashboard-primary-btn--small" onClick={() => { void handleReview(m.id, 'approved'); }}>Approve</button>
+                  <button className="dashboard-btn dashboard-btn--secondary dashboard-btn--small" onClick={() => { void handleReview(m.id, 'rejected'); }}>Reject</button>
                 </div>
               )}
             </li>

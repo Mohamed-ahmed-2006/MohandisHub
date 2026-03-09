@@ -5,12 +5,12 @@ import { useEffect, useState } from 'react';
 
 import { AppAvatarMenu } from './app-avatar-menu';
 import { AppSidebar } from './app-sidebar';
-import { WalletDepositModal } from './wallet-deposit-modal';
 import { ToastProvider, useToast } from './toast';
-import { getChatSocket } from '@/lib/chat/socket';
+import { WalletDepositModal } from './wallet-deposit-modal';
 
 import { useAuth } from '@/components/auth/auth-provider';
 import { SkeletonAvatar } from '@/components/ui/skeleton';
+import { getChatSocket } from '@/lib/chat/socket';
 import { buildLocalePath } from '@/lib/i18n/path';
 import type { Dictionary, Locale } from '@/lib/i18n/types';
 import { walletApiClient } from '@/lib/wallet/client';
@@ -21,6 +21,13 @@ type AppShellProps = {
   locale: Locale;
   dictionary: Dictionary;
   children: React.ReactNode;
+};
+
+type AppNotification = {
+  type: string;
+  title: string;
+  message: string;
+  [key: string]: unknown;
 };
 
 export const AppShell = (props: AppShellProps) => {
@@ -55,7 +62,7 @@ const AppShellInner = ({ locale, dictionary, children }: AppShellProps) => {
 
     sock.emit('join_user', { userId: authUser.id });
 
-    const onNotification = (data: { type: string; title: string; message: string; [key: string]: any }) => {
+    const onNotification = (data: AppNotification) => {
       addToast(data.title, data.message);
     };
 
@@ -73,10 +80,11 @@ const AppShellInner = ({ locale, dictionary, children }: AppShellProps) => {
         .then((w) => setWallet(w))
         .catch(() => setWallet(null));
     };
-    document.addEventListener('visibilitychange', () => {
+    const onVisibilityChange = () => {
       if (document.visibilityState === 'visible') onVisible();
-    });
-    return () => document.removeEventListener('visibilitychange', onVisible);
+    };
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', onVisibilityChange);
   }, [isReady, accessToken]);
 
   const searchParams = useSearchParams();
@@ -96,13 +104,15 @@ const AppShellInner = ({ locale, dictionary, children }: AppShellProps) => {
             if (sessionId) {
               try {
                 await walletApiClient.confirmStripeSession(accessToken, sessionId);
-              } catch (err: any) {
+              } catch {
+                void 0;
               }
             }
             try {
               await walletApiClient.getMyWallet(accessToken);
               window.dispatchEvent(new CustomEvent('wallet-updated'));
             } catch {
+              void 0;
             }
             const maxAttempts = 30;
             let attempts = 0;
@@ -124,7 +134,7 @@ const AppShellInner = ({ locale, dictionary, children }: AppShellProps) => {
             }
           })();
         } else if (stripe === 'cancelled') {
-          const t = setTimeout(() => {
+          setTimeout(() => {
             const url = new URL(window.location.href);
             url.searchParams.delete('stripe');
             url.searchParams.delete('session_id');

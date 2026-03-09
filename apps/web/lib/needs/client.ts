@@ -39,6 +39,13 @@ export type Bid = {
   has_unread?: boolean;
 };
 
+export type BidMessage = {
+  id: string;
+  sender_name: string;
+  content: string;
+  created_at?: string;
+};
+
 async function apiReq<T>(path: string, token: string, opts?: RequestInit): Promise<T> {
   const res = await fetch(`${getApiBaseUrl()}${path}`, {
     ...opts,
@@ -133,10 +140,10 @@ export const needsApiClient = {
     apiReq<{ rows: Bid[]; total: number }>(`/api/bids/my?page=${page}`, token),
 
   listBidMessages: (token: string, needId: string, bidId: string) =>
-    apiReq<unknown[]>(`/api/needs/${needId}/bids/${bidId}/messages`, token),
+    apiReq<BidMessage[]>(`/api/needs/${needId}/bids/${bidId}/messages`, token),
 
   createBidMessage: (token: string, needId: string, bidId: string, content: string) =>
-    apiReq<unknown>(`/api/needs/${needId}/bids/${bidId}/messages`, token, {
+    apiReq<BidMessage>(`/api/needs/${needId}/bids/${bidId}/messages`, token, {
       method: 'POST',
       body: JSON.stringify({ content }),
     }),

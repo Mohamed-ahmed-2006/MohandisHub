@@ -20,7 +20,6 @@ import type { Dictionary, Locale } from '@/lib/i18n/types';
 import type { TopBusiness, TopExpert } from '@/lib/profiles/client';
 import { profilesApiClient } from '@/lib/profiles/client';
 import { servicesApiClient } from '@/lib/services/client';
-import { walletApiClient } from '@/lib/wallet/client';
 
 import '@/app/dashboard.css';
 
@@ -289,6 +288,7 @@ export const AppHomeScreen = ({ locale, dictionary }: AppHomeScreenProps) => {
   }, [categoryId, city, area, providerType, searchQuery]);
 
   const d = dictionary.homeSearch;
+  const commonDict = dictionary.common as Record<string, string | undefined>;
   const categoryName = (cat: ServiceCategory) => (locale === 'ar' ? cat.nameAr : cat.nameEn);
 
   if (!authUser) {
@@ -659,7 +659,7 @@ export const AppHomeScreen = ({ locale, dictionary }: AppHomeScreenProps) => {
                 className={`dashboard-tab ${providerTab === 'overview' ? 'dashboard-tab--active' : ''}`}
                 onClick={() => setProviderTab('overview')}
               >
-                {(dictionary.common as any)?.overview ?? 'Overview'}
+                {commonDict.overview ?? 'Overview'}
               </button>
               <button
                 type="button"

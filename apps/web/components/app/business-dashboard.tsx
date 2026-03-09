@@ -4,10 +4,11 @@ import type { ServiceCategory } from '@mohandishub/shared';
 import Link from 'next/link';
 import { useState } from 'react';
 
+import { BusinessJobsTab } from './business-jobs-tab';
+
 import { buildLocalePath } from '@/lib/i18n/path';
 import type { Dictionary, Locale } from '@/lib/i18n/types';
 
-import { BusinessJobsTab } from './business-jobs-tab';
 
 type Props = {
   locale: Locale;
@@ -23,7 +24,7 @@ export const BusinessDashboard = ({
   locale,
   dictionary,
   accessToken,
-  categories,
+  categories: _categories,
   verificationStatus = 'unverified',
 }: Props) => {
   const [tab, setTab] = useState<BusinessTab>('services');

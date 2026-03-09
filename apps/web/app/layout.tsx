@@ -1,3 +1,4 @@
+import { SpeedInsights } from '@vercel/speed-insights/next';
 import type { Metadata } from 'next';
 import { Manrope, Sora } from 'next/font/google';
 import Script from 'next/script';
@@ -52,6 +53,7 @@ const RootLayout = ({ children }: RootLayoutProps) => {
             </AppStatusProvider>
           </AuthProvider>
         </ThemeProvider>
+        <SpeedInsights />
       </body>
     </html>
   );
