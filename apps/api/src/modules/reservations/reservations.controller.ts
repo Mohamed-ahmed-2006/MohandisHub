@@ -95,7 +95,9 @@ const listSlots = asyncHandler(async (req, res) => {
     });
   }
   const providerId = req.query.providerId as string | undefined;
-  const availableOnly = String(req.query.availableOnly ?? '').toLowerCase() === 'true';
+  const availableOnlyRaw = req.query.availableOnly;
+  const availableOnly =
+    typeof availableOnlyRaw === 'string' && availableOnlyRaw.toLowerCase() === 'true';
   const query: Parameters<ReservationsService['listSlots']>[0] = {
     userId: user.id,
     role: user.role ?? 'customer',

@@ -15,7 +15,8 @@ const emitSocketError = (socket: Socket, code: string, message: string): void =>
 };
 
 const extractAccessToken = (socket: Socket): string | null => {
-  const authToken = socket.handshake.auth?.token;
+  const authPayload = socket.handshake.auth as Record<string, unknown> | undefined;
+  const authToken = authPayload?.token;
   if (typeof authToken === 'string' && authToken.trim()) {
     return authToken.trim();
   }
@@ -53,7 +54,8 @@ export const registerChatSocket = (io: SocketServer): void => {
     }
     try {
       const payload = verifyAccessToken(token);
-      socket.data.authUser = { id: payload.sub } as SocketAuthUser;
+      const socketData = socket.data as { authUser?: SocketAuthUser };
+      socketData.authUser = { id: payload.sub };
       next();
     } catch {
       next(new Error('UNAUTHORIZED'));
@@ -61,7 +63,8 @@ export const registerChatSocket = (io: SocketServer): void => {
   });
 
   io.on('connection', (socket) => {
-    const authUser = socket.data.authUser as SocketAuthUser | undefined;
+    const socketData = socket.data as { authUser?: SocketAuthUser };
+    const authUser = socketData.authUser;
     if (!authUser) {
       socket.disconnect(true);
       return;
@@ -84,7 +87,7 @@ export const registerChatSocket = (io: SocketServer): void => {
         emitSocketError(socket, 'FORBIDDEN_ROOM_JOIN', 'Cannot join another user room.');
         return;
       }
-      socket.join(`user:${uid}`);
+      void socket.join(`user:${uid}`);
     });
 
     socket.on('join_application', async (payload: { applicationId?: string }) => {
@@ -99,7 +102,7 @@ export const registerChatSocket = (io: SocketServer): void => {
           emitSocketError(socket, 'FORBIDDEN_ROOM_JOIN', 'Not authorized for this application room.');
           return;
         }
-        socket.join(`application:${appId}`);
+        void socket.join(`application:${appId}`);
       } catch {
         emitSocketError(socket, 'ROOM_JOIN_FAILED', 'Could not join application room.');
       }
@@ -108,20 +111,20 @@ export const registerChatSocket = (io: SocketServer): void => {
     socket.on('leave_application', (payload: { applicationId?: string }) => {
       const appId = payload?.applicationId;
       if (appId && typeof appId === 'string') {
-        socket.leave(`application:${appId}`);
+        void socket.leave(`application:${appId}`);
       }
     });
     socket.on('join_conversation', (payload: { conversationId?: string }) => {
       const convId = payload?.conversationId;
       if (convId && typeof convId === 'string') {
-        socket.join(`conversation:${convId}`);
+        void socket.join(`conversation:${convId}`);
       }
     });
 
     socket.on('leave_conversation', (payload: { conversationId?: string }) => {
       const convId = payload?.conversationId;
       if (convId && typeof convId === 'string') {
-        socket.leave(`conversation:${convId}`);
+        void socket.leave(`conversation:${convId}`);
       }
     });
 

@@ -180,71 +180,57 @@ export class ServicesRepository {
   ): Promise<ServiceDetailRow> {
     const fields = ['provider_id', 'title'];
     const values: unknown[] = [providerId, input.title];
-    let idx = 3;
     if (input.description !== undefined) {
       fields.push('description');
       values.push(input.description);
-      idx++;
     }
     if (input.categoryId !== undefined) {
       fields.push('category_id');
       values.push(input.categoryId);
-      idx++;
     }
     if (input.price !== undefined) {
       fields.push('price');
       values.push(input.price);
-      idx++;
     }
     if (input.priceType !== undefined) {
       fields.push('price_type');
       values.push(input.priceType);
-      idx++;
     }
     if (input.isNegotiable !== undefined) {
       fields.push('is_negotiable');
       values.push(input.isNegotiable);
-      idx++;
     }
     if (input.currency !== undefined) {
       fields.push('currency');
       values.push(input.currency);
-      idx++;
     }
     if (input.deliveryTimeDays !== undefined) {
       fields.push('delivery_time_days');
       values.push(input.deliveryTimeDays);
-      idx++;
     }
     if (input.tags !== undefined) {
       fields.push('tags');
       values.push(input.tags);
-      idx++;
     }
     if (input.images !== undefined) {
       fields.push('images');
       values.push(input.images);
-      idx++;
     }
     if (input.city !== undefined) {
       fields.push('city');
       values.push(input.city);
-      idx++;
     }
     if (input.area !== undefined) {
       fields.push('area');
       values.push(input.area);
-      idx++;
     }
     if (input.country !== undefined) {
       fields.push('country');
       values.push(input.country);
-      idx++;
     }
     if (input.status !== undefined) {
       fields.push('status');
       values.push(input.status);
-      idx++;
     }
     const placeholders = values.map((_, i) => `$${i + 1}`).join(', ');
     const { rows } = await this.db.query<ServiceDetailRow>(

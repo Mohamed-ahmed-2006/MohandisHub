@@ -48,7 +48,7 @@ export type JobSubmissionRow = {
   id: string;
   milestone_id: string;
   submission_notes: string | null;
-  attachments: any;
+  attachments: unknown;
   created_at: string;
 };
 
@@ -185,7 +185,11 @@ export class JobsRepository {
     return rows[0]!;
   }
 
-  async createSubmission(milestoneId: string, notes?: string, attachments?: any): Promise<JobSubmissionRow> {
+  async createSubmission(
+    milestoneId: string,
+    notes?: string,
+    attachments?: unknown,
+  ): Promise<JobSubmissionRow> {
     const { rows } = await this.db.query<JobSubmissionRow>(
       `INSERT INTO job_submissions (milestone_id, submission_notes, attachments)
        VALUES ($1, $2, $3)
@@ -225,4 +229,3 @@ export class JobsRepository {
     return rows;
   }
 }
-

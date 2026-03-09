@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import type { NextFunction, Request, Response } from 'express';
 
 import { authenticate } from '../../middleware/authenticate.js';
 import { requireEmailVerified } from '../../middleware/require-email-verified.js';
@@ -8,31 +9,52 @@ import { requireVerified } from '../../middleware/require-verified.js';
 import { jobsController } from './jobs.controller.js';
 
 const jobsRouter = Router();
+const asHandler = (
+  handler: (req: Request, res: Response, next: NextFunction) => Promise<void>,
+) => {
+  return (req: Request, res: Response, next: NextFunction): void => {
+    void handler(req, res, next);
+  };
+};
 
-jobsRouter.get('/', jobsController.listOpenJobs);
+jobsRouter.get('/', asHandler(jobsController.listOpenJobs));
 
 const businessMw = [authenticate, requireEmailVerified, requireRole('business'), requireVerified];
 const expertMw = [authenticate, requireEmailVerified, requireRole('expert'), requireVerified];
 
 // Business endpoints
-jobsRouter.post('/', ...businessMw, jobsController.createJob);
-jobsRouter.get('/my', ...businessMw, jobsController.listBusinessJobs);
-jobsRouter.get('/:id/applications', ...businessMw, jobsController.getJobApplications);
-jobsRouter.post('/:id/close', ...businessMw, jobsController.closeJob);
-jobsRouter.patch('/applications/:appId/status', ...businessMw, jobsController.updateApplicationStatus);
+jobsRouter.post('/', ...businessMw, asHandler(jobsController.createJob));
+jobsRouter.get('/my', ...businessMw, asHandler(jobsController.listBusinessJobs));
+jobsRouter.get('/:id/applications', ...businessMw, asHandler(jobsController.getJobApplications));
+jobsRouter.post('/:id/close', ...businessMw, asHandler(jobsController.closeJob));
+jobsRouter.patch(
+  '/applications/:appId/status',
+  ...businessMw,
+  asHandler(jobsController.updateApplicationStatus),
+);
 
-jobsRouter.post('/applications/:appId/milestones', ...businessMw, jobsController.createMilestone);
-jobsRouter.get('/applications/:appId/milestones', authenticate, requireEmailVerified, requireVerified, jobsController.getMilestones);
-jobsRouter.post('/milestones/:milestoneId/review', ...businessMw, jobsController.reviewMilestone);
+jobsRouter.post('/applications/:appId/milestones', ...businessMw, asHandler(jobsController.createMilestone));
+jobsRouter.get(
+  '/applications/:appId/milestones',
+  authenticate,
+  requireEmailVerified,
+  requireVerified,
+  asHandler(jobsController.getMilestones),
+);
+jobsRouter.post('/milestones/:milestoneId/review', ...businessMw, asHandler(jobsController.reviewMilestone));
 
 // Shared application messages endpoints
 const sharedMw = [authenticate, requireEmailVerified, requireVerified];
-jobsRouter.get('/applications/:appId/messages', ...sharedMw, jobsController.getApplicationMessages);
-jobsRouter.post('/applications/:appId/messages', ...sharedMw, jobsController.sendApplicationMessage);
+jobsRouter.get('/applications/:appId/messages', ...sharedMw, asHandler(jobsController.getApplicationMessages));
+jobsRouter.post(
+  '/applications/:appId/messages',
+  ...sharedMw,
+  asHandler(jobsController.sendApplicationMessage),
+);
 
 // Expert endpoints
-jobsRouter.get('/my-applications', ...expertMw, jobsController.listExpertApplications);
-jobsRouter.post('/:id/apply', ...expertMw, jobsController.applyForJob);
-jobsRouter.post('/milestones/:milestoneId/submit', ...expertMw, jobsController.submitMilestone);
+jobsRouter.get('/my-applications', ...expertMw, asHandler(jobsController.listExpertApplications));
+jobsRouter.post('/:id/apply', ...expertMw, asHandler(jobsController.applyForJob));
+jobsRouter.post('/milestones/:milestoneId/submit', ...expertMw, asHandler(jobsController.submitMilestone));
 
 export { jobsRouter };

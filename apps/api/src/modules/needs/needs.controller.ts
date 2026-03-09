@@ -11,6 +11,28 @@ import {
 } from './needs.validation.js';
 
 const svc = new NeedsService();
+const createBidMessageSchema = {
+  safeParse(data: unknown): {
+    success: boolean;
+    data?: { content: string };
+    error?: { flatten: () => { fieldErrors: unknown } };
+  } {
+    if (typeof data !== 'object' || data == null) {
+      return {
+        success: false,
+        error: { flatten: () => ({ fieldErrors: { content: ['Content is required'] } }) },
+      };
+    }
+    const content = (data as { content?: unknown }).content;
+    if (typeof content !== 'string' || content.trim().length === 0) {
+      return {
+        success: false,
+        error: { flatten: () => ({ fieldErrors: { content: ['Content is required'] } }) },
+      };
+    }
+    return { success: true, data: { content } };
+  },
+};
 
 function requireUser(req: { user?: { id: string; role?: string } }) {
   if (!req.user)
@@ -130,10 +152,7 @@ const listBidMessages = asyncHandler(async (req, res) => {
 
 const createBidMessage = asyncHandler(async (req, res) => {
   const user = requireUser(req);
-  const content = req.body.content;
-  if (!content || typeof content !== 'string') {
-    throw new HttpError({ statusCode: 400, code: 'INVALID_INPUT', message: 'Content is required' });
-  }
+  const { content } = parseBody(createBidMessageSchema, req.body);
   const msg = await svc.createBidMessage(req.params.needId!, req.params.bidId!, user.id, content);
   res.status(201).json({ ok: true, data: msg });
 });

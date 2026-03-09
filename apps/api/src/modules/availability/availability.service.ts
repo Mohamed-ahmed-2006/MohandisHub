@@ -2,6 +2,8 @@
 // Availability service — business logic
 // ---------------------------------------------------------------------------
 
+import type { SlotStatus } from '@mohandishub/shared';
+
 import { HttpError } from '../../utils/http-error.js';
 
 import { AvailabilityRepository } from './availability.repository.js';
@@ -14,7 +16,7 @@ function toSlot(row: SlotRow) {
     providerId: row.provider_id,
     startAt: row.start_at,
     endAt: row.end_at,
-    status: row.status as import('@mohandishub/shared').SlotStatus,
+    status: row.status as SlotStatus,
     bookingId: row.booking_id,
     createdAt: row.created_at,
   };

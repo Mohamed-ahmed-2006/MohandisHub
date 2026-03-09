@@ -2,6 +2,8 @@
 // Bookings service — business logic
 // ---------------------------------------------------------------------------
 
+import type { BookingStatus } from '@mohandishub/shared';
+
 import { getPool } from '../../db/pool.js';
 import { HttpError } from '../../utils/http-error.js';
 import { ServicesRepository } from '../services/services.repository.js';
@@ -23,7 +25,7 @@ function toBooking(row: BookingRow) {
     currency: row.currency,
     commissionAmount: parseFloat(row.commission_amount),
     providerAmount: parseFloat(row.provider_amount),
-    status: row.status as import('@mohandishub/shared').BookingStatus,
+    status: row.status as BookingStatus,
     slotStartAt: row.slot_start_at,
     slotEndAt: row.slot_end_at,
     paymentTransactionId: row.payment_transaction_id,

@@ -17,10 +17,11 @@ import { uploadRouter } from '../modules/upload/upload.routes.js';
 import { usersRouter } from '../modules/users/users.routes.js';
 import { verificationRouter } from '../modules/verification/verification.routes.js';
 import { walletRouter } from '../modules/wallet/wallet.routes.js';
+import { asyncHandler } from '../utils/async-handler.js';
 
 const apiRouter = Router();
 
-apiRouter.use(maintenanceMode);
+apiRouter.use(asyncHandler(maintenanceMode));
 apiRouter.use('/app', appRouter);
 apiRouter.use('/auth', authRouter);
 apiRouter.use('/otp', otpRouter);

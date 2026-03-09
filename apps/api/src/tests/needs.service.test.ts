@@ -5,7 +5,7 @@ import { NeedsService } from '../modules/needs/needs.service.js';
 
 const queryMock = vi.fn();
 const releaseMock = vi.fn();
-const connectMock = vi.fn(async () => ({
+const connectMock = vi.fn(() => ({
   query: queryMock,
   release: releaseMock,
 }));
