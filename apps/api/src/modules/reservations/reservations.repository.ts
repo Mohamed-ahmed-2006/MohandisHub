@@ -53,6 +53,7 @@ export type ReservationRow = {
   ended_at: string | null;
   completed_at: string | null;
   customer_done_due_at: string | null;
+  done_prompted_at: string | null;
   disconnect_auto_release_at: string | null;
   created_at: string;
   updated_at: string;
@@ -96,6 +97,9 @@ export type ReservationCallSessionRow = {
   billing_paused_at: string | null;
   last_billed_at: string | null;
   billed_minutes: number;
+  billed_seconds: number;
+  customer_carry_milli_piaster: string;
+  provider_carry_milli_piaster: string;
   extension_status: string;
   extension_requested_by: string | null;
   extension_until: string | null;
@@ -369,6 +373,7 @@ export class ReservationsRepository {
       completedAt: Date | null;
       fixedPriceHoldId: string | null;
       customerDoneDueAt: Date | null;
+      donePromptedAt: Date | null;
       disconnectAutoReleaseAt: Date | null;
       finalLocationText: string | null;
       finalLocationLat: number | null;
@@ -390,6 +395,7 @@ export class ReservationsRepository {
       completedAt: 'completed_at',
       fixedPriceHoldId: 'fixed_price_hold_id',
       customerDoneDueAt: 'customer_done_due_at',
+      donePromptedAt: 'done_prompted_at',
       disconnectAutoReleaseAt: 'disconnect_auto_release_at',
       finalLocationText: 'final_location_text',
       finalLocationLat: 'final_location_lat',
@@ -477,12 +483,15 @@ export class ReservationsRepository {
     id: string,
     decision: 'accept' | 'reject',
     responderId: string,
+    client?: PoolClient,
   ): Promise<ReservationLocationProposalRow | null> {
+    const db = client ?? getPool();
     const mapped = decision === 'accept' ? 'accepted' : 'rejected';
-    const { rows } = await getPool().query<ReservationLocationProposalRow>(
+    const { rows } = await db.query<ReservationLocationProposalRow>(
       `UPDATE reservation_location_proposals
        SET status = $2, responded_by = $3, responded_at = now()
        WHERE id = $1
+         AND status = 'pending'
        RETURNING *`,
       [id, mapped, responderId],
     );
@@ -587,6 +596,9 @@ export class ReservationsRepository {
       billingPausedAt: Date | null;
       lastBilledAt: Date | null;
       billedMinutes: number;
+      billedSeconds: number;
+      customerCarryMilliPiaster: number;
+      providerCarryMilliPiaster: number;
       extensionStatus: string;
       extensionRequestedBy: string | null;
       extensionUntil: Date | null;
@@ -603,6 +615,9 @@ export class ReservationsRepository {
       billingPausedAt: 'billing_paused_at',
       lastBilledAt: 'last_billed_at',
       billedMinutes: 'billed_minutes',
+      billedSeconds: 'billed_seconds',
+      customerCarryMilliPiaster: 'customer_carry_milli_piaster',
+      providerCarryMilliPiaster: 'provider_carry_milli_piaster',
       extensionStatus: 'extension_status',
       extensionRequestedBy: 'extension_requested_by',
       extensionUntil: 'extension_until',
