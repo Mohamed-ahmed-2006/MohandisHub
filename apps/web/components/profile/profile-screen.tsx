@@ -16,11 +16,15 @@ import { ThemeToggle } from '@/components/theme-toggle';
 import { Container } from '@/components/ui/container';
 import { SkeletonForm } from '@/components/ui/skeleton';
 import { COUNTRIES } from '@/lib/data/countries';
-import { LANGUAGES } from '@/lib/data/languages';
+import { INDUSTRIES } from '@/lib/data/industries';
+import { IndustrySelect } from '@/components/ui/industry-select';
+import { CityCountrySelect } from '@/components/ui/city-country-select';
+import { LanguagesCheckboxes } from '@/components/ui/languages-checkboxes';
 import { buildLocalePath } from '@/lib/i18n/path';
 import type { Dictionary, Locale } from '@/lib/i18n/types';
 import { profilesApiClient } from '@/lib/profiles/client';
 import { usersApiClient } from '@/lib/users/client';
+import { formatApiError } from '@/lib/utils/format-api-error';
 
 import './profile-screen.css';
 
@@ -103,8 +107,8 @@ const AccountForm = ({
       );
       await onUserUpdated();
       setSaveMessage({ type: 'success', text: dictionary.profile.saveSuccess });
-    } catch {
-      setSaveMessage({ type: 'error', text: dictionary.profile.saveError });
+    } catch (err) {
+      setSaveMessage({ type: 'error', text: formatApiError(err, dictionary.profile.saveError) });
     } finally {
       setSaving(false);
     }
@@ -286,6 +290,7 @@ const AccountForm = ({
               name="phone"
               className="profile-screen-input"
               defaultValue={authUser.phone ?? ''}
+              maxLength={15}
             />
           </div>
         </div>
@@ -397,9 +402,10 @@ export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
       const n = parseFloat((form.elements.namedItem(name) as HTMLInputElement)?.value || '');
       return Number.isFinite(n) && n > 0 ? n : undefined;
     };
+    const titleVal = val('title');
     const body = pickDefined({
-      title: val('title'),
-      headline: val('headline'),
+      title: titleVal,
+      headline: titleVal,
       bio: val('bio'),
       specializations: (
         (form.elements.namedItem('specializations') as HTMLInputElement)?.value || ''
@@ -419,8 +425,8 @@ export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
       linkedinUrl: val('linkedinUrl'),
       portfolioUrl: val('portfolioUrl'),
       languages: Array.from(
-        (form.elements.namedItem('languages') as HTMLSelectElement)?.selectedOptions ?? [],
-      ).map((o) => o.value),
+        (form.querySelectorAll('input[name="languages"]:checked') as NodeListOf<HTMLInputElement>),
+      ).map((el) => el.value),
       educationSummary: val('educationSummary'),
     });
     setSaving(true);
@@ -432,8 +438,8 @@ export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
       );
       setExpertProfile(updated);
       setSaveMessage({ type: 'success', text: dictionary.profile.saveSuccess });
-    } catch {
-      setSaveMessage({ type: 'error', text: dictionary.profile.saveError });
+    } catch (err) {
+      setSaveMessage({ type: 'error', text: formatApiError(err, dictionary.profile.saveError) });
     } finally {
       setSaving(false);
     }
@@ -450,12 +456,16 @@ export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
       return Number.isFinite(n) && n > 0 ? n : undefined;
     };
     const sizeVal = nonEmpty((form.elements.namedItem('companySize') as HTMLSelectElement)?.value);
+    const industryVal = nonEmpty((form.elements.namedItem('industry') as HTMLSelectElement)?.value);
+    const subIndustryVal = nonEmpty((form.elements.namedItem('subIndustry') as HTMLSelectElement)?.value);
+    const industryDisplay =
+      industryVal && subIndustryVal ? `${industryVal} — ${subIndustryVal}` : industryVal;
     const body = pickDefined({
       companyName: val('companyName'),
       tradeLicenseNumber: val('tradeLicenseNumber'),
       taxId: val('taxId'),
       commercialRegister: val('commercialRegister'),
-      industry: val('industry'),
+      industry: industryDisplay,
       companySize: sizeVal as UpdateBusinessProfileBody['companySize'],
       website: val('website'),
       companyEmail: val('companyEmail'),
@@ -468,7 +478,6 @@ export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
       ownerTitle: val('ownerTitle'),
       ownerEmail: val('ownerEmail'),
       ownerPhone: val('ownerPhone'),
-      employeesCount: numVal('employeesCount'),
       foundedYear: numVal('foundedYear'),
     });
     setSaving(true);
@@ -480,8 +489,8 @@ export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
       );
       setBusinessProfile(updated);
       setSaveMessage({ type: 'success', text: dictionary.profile.saveSuccess });
-    } catch {
-      setSaveMessage({ type: 'error', text: dictionary.profile.saveError });
+    } catch (err) {
+      setSaveMessage({ type: 'error', text: formatApiError(err, dictionary.profile.saveError) });
     } finally {
       setSaving(false);
     }
@@ -583,14 +592,6 @@ export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
                 />
               </div>
               <div className="profile-screen-field">
-                <label className="profile-screen-label">{pf.headlineLabel}</label>
-                <input
-                  name="headline"
-                  className="profile-screen-input"
-                  defaultValue={expertProfile.headline ?? ''}
-                />
-              </div>
-              <div className="profile-screen-field">
                 <label className="profile-screen-label">{pf.bioLabel}</label>
                 <textarea
                   name="bio"
@@ -646,31 +647,17 @@ export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
                   <option value="offline">Offline</option>
                 </select>
               </div>
-              <div className="profile-screen-row">
-                <div className="profile-screen-field">
-                  <label className="profile-screen-label">{pf.cityLabel}</label>
-                  <input
-                    name="city"
-                    className="profile-screen-input"
-                    defaultValue={expertProfile.city ?? ''}
-                  />
-                </div>
-                <div className="profile-screen-field">
-                  <label className="profile-screen-label">{pf.countryLabel}</label>
-                  <select
-                    name="country"
-                    className="profile-screen-select"
-                    defaultValue={expertProfile.country ?? ''}
-                  >
-                    <option value="">—</option>
-                    {COUNTRIES.map((c) => (
-                      <option key={c.code} value={locale === 'ar' ? c.nameAr : c.nameEn}>
-                        {locale === 'ar' ? c.nameAr : c.nameEn}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
+              <CityCountrySelect
+                name="city"
+                countryName="country"
+                locale={locale}
+                cityLabel={pf.cityLabel}
+                countryLabel={pf.countryLabel}
+                className="profile-screen-field"
+                selectClassName="profile-screen-select"
+                defaultValue={expertProfile.city ?? ''}
+                defaultCountry={expertProfile.country ?? ''}
+              />
               <div className="profile-screen-row">
                 <div className="profile-screen-field">
                   <label className="profile-screen-label">{pf.employerLabel}</label>
@@ -694,7 +681,7 @@ export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
                   <label className="profile-screen-label">{pf.linkedinLabel}</label>
                   <input
                     name="linkedinUrl"
-                    type="url"
+                    type="text"
                     className="profile-screen-input"
                     defaultValue={expertProfile.linkedinUrl ?? ''}
                   />
@@ -703,7 +690,7 @@ export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
                   <label className="profile-screen-label">{pf.portfolioLabel}</label>
                   <input
                     name="portfolioUrl"
-                    type="url"
+                    type="text"
                     className="profile-screen-input"
                     defaultValue={expertProfile.portfolioUrl ?? ''}
                   />
@@ -711,18 +698,12 @@ export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
               </div>
               <div className="profile-screen-field">
                 <label className="profile-screen-label">{pf.languagesLabel}</label>
-                <select
+                <LanguagesCheckboxes
                   name="languages"
-                  className="profile-screen-select"
-                  multiple
+                  locale={locale}
                   defaultValue={expertProfile.languages ?? []}
-                >
-                  {LANGUAGES.map((l) => (
-                    <option key={l.code} value={locale === 'ar' ? l.nameAr : l.nameEn}>
-                      {locale === 'ar' ? l.nameAr : l.nameEn}
-                    </option>
-                  ))}
-                </select>
+                  className="profile-screen-languages"
+                />
               </div>
               <div className="profile-screen-field">
                 <label className="profile-screen-label">{pf.educationSummaryLabel}</label>
@@ -806,9 +787,11 @@ export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
               <div className="profile-screen-row">
                 <div className="profile-screen-field">
                   <label className="profile-screen-label">{cf.industryLabel}</label>
-                  <input
+                  <IndustrySelect
+                    locale={locale}
                     name="industry"
-                    className="profile-screen-input"
+                    subName="subIndustry"
+                    selectClassName="profile-screen-select"
                     defaultValue={businessProfile.industry ?? ''}
                   />
                 </div>
@@ -833,9 +816,10 @@ export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
                   <label className="profile-screen-label">{cf.websiteLabel}</label>
                   <input
                     name="website"
-                    type="url"
+                    type="text"
                     className="profile-screen-input"
                     defaultValue={businessProfile.website ?? ''}
+                    placeholder="example.com or full URL"
                   />
                 </div>
                 <div className="profile-screen-field">
@@ -854,6 +838,7 @@ export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
                   name="companyPhone"
                   className="profile-screen-input"
                   defaultValue={businessProfile.companyPhone ?? ''}
+                  maxLength={15}
                 />
               </div>
               <div className="profile-screen-field">
@@ -863,26 +848,20 @@ export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
                   className="profile-screen-textarea"
                   rows={2}
                   defaultValue={businessProfile.address ?? ''}
+                  placeholder="Paste a Google Maps link or enter address"
                 />
               </div>
-              <div className="profile-screen-row">
-                <div className="profile-screen-field">
-                  <label className="profile-screen-label">{cf.cityLabel}</label>
-                  <input
-                    name="city"
-                    className="profile-screen-input"
-                    defaultValue={businessProfile.city ?? ''}
-                  />
-                </div>
-                <div className="profile-screen-field">
-                  <label className="profile-screen-label">{cf.countryLabel}</label>
-                  <input
-                    name="country"
-                    className="profile-screen-input"
-                    defaultValue={businessProfile.country ?? ''}
-                  />
-                </div>
-              </div>
+              <CityCountrySelect
+                name="city"
+                countryName="country"
+                locale={locale}
+                cityLabel={cf.cityLabel}
+                countryLabel={cf.countryLabel}
+                className="profile-screen-field"
+                selectClassName="profile-screen-select"
+                defaultValue={businessProfile.city ?? ''}
+                defaultCountry={businessProfile.country ?? ''}
+              />
               <div className="profile-screen-field">
                 <label className="profile-screen-label">{cf.descriptionLabel}</label>
                 <textarea
@@ -927,30 +906,19 @@ export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
                     name="ownerPhone"
                     className="profile-screen-input"
                     defaultValue={businessProfile.ownerPhone ?? ''}
+                    maxLength={15}
                   />
                 </div>
               </div>
-              <div className="profile-screen-row">
-                <div className="profile-screen-field">
-                  <label className="profile-screen-label">{cf.foundedYearLabel}</label>
-                  <input
-                    name="foundedYear"
-                    type="number"
-                    className="profile-screen-input"
-                    defaultValue={businessProfile.foundedYear ?? ''}
-                    min={1900}
-                  />
-                </div>
-                <div className="profile-screen-field">
-                  <label className="profile-screen-label">{cf.employeesCountLabel}</label>
-                  <input
-                    name="employeesCount"
-                    type="number"
-                    className="profile-screen-input"
-                    defaultValue={businessProfile.employeesCount ?? ''}
-                    min={0}
-                  />
-                </div>
+              <div className="profile-screen-field">
+                <label className="profile-screen-label">{cf.foundedYearLabel}</label>
+                <input
+                  name="foundedYear"
+                  type="number"
+                  className="profile-screen-input"
+                  defaultValue={businessProfile.foundedYear ?? ''}
+                  min={1900}
+                />
               </div>
               {saveMessage && (
                 <p

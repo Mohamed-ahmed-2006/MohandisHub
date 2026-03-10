@@ -60,9 +60,20 @@ export const AdminVerificationScreen = ({ locale, dictionary }: AdminVerificatio
 
   const handleReviewIdentity = async (docId: string, decision: 'approved' | 'rejected') => {
     if (!accessToken) return;
+    let notes: string | undefined;
+    if (decision === 'rejected') {
+      const reason = window.prompt(
+        'Rejection reason (required for identity — user receives this and account is deleted):',
+      );
+      if (reason === null) return;
+      notes = reason.trim() || undefined;
+    }
     setReviewing(docId);
     try {
-      await adminApiClient.reviewIdentityDocument(accessToken, docId, { decision });
+      await adminApiClient.reviewIdentityDocument(accessToken, docId, {
+        decision,
+        ...(notes !== undefined && notes !== '' && { notes }),
+      });
       await loadPending();
     } finally {
       setReviewing(null);

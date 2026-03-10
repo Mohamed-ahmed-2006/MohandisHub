@@ -80,6 +80,7 @@ export type ExpertProfileRow = {
   verification_status: VerificationStatus;
   identity_verified: boolean;
   academic_verified: boolean;
+  identity_verification_method?: 'didit' | 'manual' | null;
   verified_at: Date | null;
   created_at: Date;
   updated_at: Date;

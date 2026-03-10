@@ -9,9 +9,17 @@ import { useAuth } from '@/components/auth/auth-provider';
 import { OnboardingStepper } from '@/components/onboarding/onboarding-stepper';
 import { SiteLogo } from '@/components/site-logo';
 import { Container } from '@/components/ui/container';
+import { CityCountrySelect } from '@/components/ui/city-country-select';
+import { ImageUploadOrCapture } from '@/components/ui/image-upload-or-capture';
+import { IndustrySelect } from '@/components/ui/industry-select';
+import { LiveCapture } from '@/components/ui/live-capture';
+import { getApiBaseUrl } from '@/lib/env';
+import { INDUSTRIES } from '@/lib/data/industries';
 import { buildLocalePath } from '@/lib/i18n/path';
 import type { Dictionary, Locale } from '@/lib/i18n/types';
 import { profilesApiClient } from '@/lib/profiles/client';
+import { formatApiError } from '@/lib/utils/format-api-error';
+import { uploadFile } from '@/lib/upload/client';
 import { verificationApiClient } from '@/lib/verification/client';
 
 type Props = { locale: Locale; dictionary: Dictionary };
@@ -35,10 +43,17 @@ export const BusinessOnboardingScreen = ({ locale, dictionary }: Props) => {
   const router = useRouter();
   const { authUser, accessToken, isAuthenticated, isReady, authGuard, updateAuthUser } = useAuth();
   const [step, setStep] = useState<Step>('company');
+  const [stepResolved, setStepResolved] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [kycStatus, setKycStatus] = useState<string>('unverified');
   const [kycMode, setKycMode] = useState<'didit' | 'manual' | null>(null);
+  const [manualFrontFile, setManualFrontFile] = useState<File | null>(null);
+  const [manualBackFile, setManualBackFile] = useState<File | null>(null);
+  const [manualSelfieFile, setManualSelfieFile] = useState<File | null>(null);
+  const [businessDocsFrontFile, setBusinessDocsFrontFile] = useState<File | null>(null);
+  const [businessDocsBackFile, setBusinessDocsBackFile] = useState<File | null>(null);
+  const [businessDocsSelfieFile, setBusinessDocsSelfieFile] = useState<File | null>(null);
 
   const dict = dictionary.onboarding.business;
   const stepLabels = [dict.steps.companyDetails, dict.steps.kyc, dict.steps.documents];
@@ -68,6 +83,42 @@ export const BusinessOnboardingScreen = ({ locale, dictionary }: Props) => {
     void loadKycStatus();
   }, [loadKycStatus]);
 
+  useEffect(() => {
+    if (!accessToken) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const [profile, verification, identityDocs] = await Promise.all([
+          profilesApiClient.getBusinessProfile(accessToken),
+          verificationApiClient.getStatus(accessToken).catch(() => ({ verificationStatus: 'unverified' as const })),
+          profilesApiClient.getIdentityDocuments(accessToken).catch(() => []),
+        ]);
+        if (cancelled) return;
+        setKycStatus(verification.verificationStatus);
+        const companyComplete = Boolean(profile?.companyName?.trim());
+        const identityDone = verification.verificationStatus === 'verified' || verification.verificationStatus === 'pending';
+        const hasSubmittedDocs = Array.isArray(identityDocs) && identityDocs.length > 0;
+        const fullyVerified = verification.verificationStatus === 'verified';
+        if (!companyComplete) {
+          setStep('company');
+        } else if (!identityDone) {
+          setStep('kyc');
+        } else if (!fullyVerified && !hasSubmittedDocs) {
+          setStep('documents');
+        } else {
+          setStep('complete');
+        }
+      } catch {
+        if (!cancelled) setStep('company');
+      } finally {
+        if (!cancelled) setStepResolved(true);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [accessToken]);
+
   const handleSaveCompany = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!accessToken) return;
@@ -82,12 +133,18 @@ export const BusinessOnboardingScreen = ({ locale, dictionary }: Props) => {
     };
 
     const sizeVal = nonEmpty((form.elements.namedItem('companySize') as HTMLSelectElement)?.value);
+    const industryVal = nonEmpty((form.elements.namedItem('industry') as HTMLSelectElement)?.value);
+    const subIndustryVal = nonEmpty((form.elements.namedItem('subIndustry') as HTMLSelectElement)?.value);
+    const industryDisplay =
+      industryVal && subIndustryVal
+        ? `${industryVal} — ${subIndustryVal}`
+        : industryVal;
     const body = pickDefined({
       companyName: val('companyName'),
       tradeLicenseNumber: val('tradeLicenseNumber'),
       taxId: val('taxId'),
       commercialRegister: val('commercialRegister'),
-      industry: val('industry'),
+      industry: industryDisplay,
       companySize: sizeVal as UpdateBusinessProfileBody['companySize'],
       website: val('website'),
       companyEmail: val('companyEmail'),
@@ -100,15 +157,14 @@ export const BusinessOnboardingScreen = ({ locale, dictionary }: Props) => {
       ownerTitle: val('ownerTitle'),
       ownerEmail: val('ownerEmail'),
       ownerPhone: val('ownerPhone'),
-      employeesCount: numVal('employeesCount'),
       foundedYear: numVal('foundedYear'),
     });
 
     try {
       await profilesApiClient.updateBusinessProfile(accessToken, body as UpdateBusinessProfileBody);
       setStep('kyc');
-    } catch {
-      setError(dictionary.profile.saveError);
+    } catch (err) {
+      setError(formatApiError(err, dictionary.profile.saveError));
     } finally {
       setSaving(false);
     }
@@ -129,7 +185,7 @@ export const BusinessOnboardingScreen = ({ locale, dictionary }: Props) => {
         setKycStatus('pending');
       }
     } catch {
-      setKycMode('manual');
+      setError(dict.kycRejected);
     } finally {
       setSaving(false);
     }
@@ -138,23 +194,47 @@ export const BusinessOnboardingScreen = ({ locale, dictionary }: Props) => {
   const handleManualKyc = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!accessToken) return;
-    setSaving(true);
-    setError(null);
     const form = e.currentTarget;
     const docType = (form.elements.namedItem('documentType') as HTMLSelectElement)
       ?.value as IdentityDocumentType;
     const fullNameOnDoc =
-      (form.elements.namedItem('fullNameOnDoc') as HTMLInputElement)?.value || '';
+      (form.elements.namedItem('fullNameOnDoc') as HTMLInputElement)?.value?.trim() || '';
 
+    const needsBack = docType === 'national_id' || docType === 'driving_license';
+    if (!manualFrontFile || !manualSelfieFile || (needsBack && !manualBackFile)) {
+      setError(
+        'Please capture/upload all required images: document front, document back (if applicable), and a live selfie.',
+      );
+      return;
+    }
+
+    setSaving(true);
+    setError(null);
     try {
+      const base = (getApiBaseUrl() || '').replace(/\/$/, '');
+      const toFullUrl = (url: string) =>
+        url.startsWith('http') ? url : base ? `${base}${url.startsWith('/') ? '' : '/'}${url}` : url;
+
+      const [frontRes, backRes, selfieRes] = await Promise.all([
+        uploadFile(accessToken, manualFrontFile),
+        manualBackFile ? uploadFile(accessToken, manualBackFile) : Promise.resolve(null),
+        uploadFile(accessToken, manualSelfieFile),
+      ]);
+
       await profilesApiClient.submitIdentityDocument(accessToken, {
         documentType: docType,
         fullNameOnDoc,
+        frontImageUrl: toFullUrl(frontRes.url),
+        selfieImageUrl: toFullUrl(selfieRes.url),
+        ...(backRes && { backImageUrl: toFullUrl(backRes.url) }),
       });
       setKycStatus('pending');
       setKycMode(null);
-    } catch {
-      setError(dict.kycRejected);
+      setManualFrontFile(null);
+      setManualBackFile(null);
+      setManualSelfieFile(null);
+    } catch (err) {
+      setError(formatApiError(err, dict.kycRejected));
     } finally {
       setSaving(false);
     }
@@ -163,29 +243,57 @@ export const BusinessOnboardingScreen = ({ locale, dictionary }: Props) => {
   const handleSubmitBusinessDocs = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!accessToken) return;
-    setSaving(true);
-    setError(null);
     const form = e.currentTarget;
     const docType = (form.elements.namedItem('documentType') as HTMLSelectElement)
       ?.value as IdentityDocumentType;
     const fullNameOnDoc =
-      (form.elements.namedItem('fullNameOnDoc') as HTMLInputElement)?.value || '';
+      (form.elements.namedItem('fullNameOnDoc') as HTMLInputElement)?.value?.trim() || '';
 
+    const needsBack = docType === 'national_id' || docType === 'driving_license';
+    if (
+      !businessDocsFrontFile ||
+      !businessDocsSelfieFile ||
+      (needsBack && !businessDocsBackFile)
+    ) {
+      setError(
+        'Please capture/upload all required images: document front, document back (if applicable), and a live selfie.',
+      );
+      return;
+    }
+
+    setSaving(true);
+    setError(null);
     try {
+      const base = (getApiBaseUrl() || '').replace(/\/$/, '');
+      const toFullUrl = (url: string) =>
+        url.startsWith('http') ? url : base ? `${base}${url.startsWith('/') ? '' : '/'}${url}` : url;
+
+      const [frontRes, backRes, selfieRes] = await Promise.all([
+        uploadFile(accessToken, businessDocsFrontFile),
+        businessDocsBackFile ? uploadFile(accessToken, businessDocsBackFile) : Promise.resolve(null),
+        uploadFile(accessToken, businessDocsSelfieFile),
+      ]);
+
       await profilesApiClient.submitIdentityDocument(accessToken, {
         documentType: docType,
         fullNameOnDoc,
+        frontImageUrl: toFullUrl(frontRes.url),
+        selfieImageUrl: toFullUrl(selfieRes.url),
+        ...(backRes && { backImageUrl: toFullUrl(backRes.url) }),
       });
       await updateAuthUser();
       setStep('complete');
-    } catch {
-      setError(dictionary.profile.saveError);
+      setBusinessDocsFrontFile(null);
+      setBusinessDocsBackFile(null);
+      setBusinessDocsSelfieFile(null);
+    } catch (err) {
+      setError(formatApiError(err, dictionary.profile.saveError));
     } finally {
       setSaving(false);
     }
   };
 
-  if (!isReady || !authUser) {
+  if (!isReady || !authUser || !stepResolved) {
     return (
       <main className="business-onboarding-page-main">
         <Container>
@@ -228,7 +336,7 @@ export const BusinessOnboardingScreen = ({ locale, dictionary }: Props) => {
               <div className="onboarding-row">
                 <div className="onboarding-field">
                   <label className="onboarding-label">{dict.companyForm.industryLabel}</label>
-                  <input type="text" name="industry" className="onboarding-input" />
+                  <IndustrySelect locale={locale} name="industry" subName="subIndustry" />
                 </div>
                 <div className="onboarding-field">
                   <label className="onboarding-label">{dict.companyForm.companySizeLabel}</label>
@@ -245,28 +353,27 @@ export const BusinessOnboardingScreen = ({ locale, dictionary }: Props) => {
               <div className="onboarding-row">
                 <div className="onboarding-field">
                   <label className="onboarding-label">{dict.companyForm.websiteLabel}</label>
-                  <input type="url" name="website" className="onboarding-input" />
+                  <input type="text" name="website" className="onboarding-input" placeholder="example.com or full URL" />
                 </div>
                 <div className="onboarding-field">
                   <label className="onboarding-label">{dict.companyForm.companyEmailLabel}</label>
                   <input type="email" name="companyEmail" className="onboarding-input" />
                 </div>
               </div>
-              <div className="onboarding-row">
-                <div className="onboarding-field">
-                  <label className="onboarding-label">{dict.companyForm.companyPhoneLabel}</label>
-                  <input type="tel" name="companyPhone" className="onboarding-input" />
-                </div>
-                <div className="onboarding-field">
-                  <label className="onboarding-label">{dict.companyForm.cityLabel}</label>
-                  <input type="text" name="city" className="onboarding-input" />
-                </div>
+              <div className="onboarding-field">
+                <label className="onboarding-label">{dict.companyForm.companyPhoneLabel}</label>
+                <input type="tel" name="companyPhone" className="onboarding-input" maxLength={15} />
               </div>
+              <CityCountrySelect
+                name="city"
+                countryName="country"
+                locale={locale}
+                cityLabel={dict.companyForm.cityLabel}
+                countryLabel={dict.companyForm.countryLabel}
+                className="onboarding-field"
+                selectClassName="onboarding-input"
+              />
               <div className="onboarding-row">
-                <div className="onboarding-field">
-                  <label className="onboarding-label">{dict.companyForm.countryLabel}</label>
-                  <input type="text" name="country" className="onboarding-input" />
-                </div>
                 <div className="onboarding-field">
                   <label className="onboarding-label">{dict.companyForm.foundedYearLabel}</label>
                   <input
@@ -284,6 +391,7 @@ export const BusinessOnboardingScreen = ({ locale, dictionary }: Props) => {
                   name="address"
                   className="onboarding-input onboarding-textarea"
                   rows={2}
+                  placeholder="Paste a Google Maps link or enter address"
                 />
               </div>
               <div className="onboarding-field">
@@ -333,11 +441,6 @@ export const BusinessOnboardingScreen = ({ locale, dictionary }: Props) => {
                 </label>
                 <input type="text" name="commercialRegister" className="onboarding-input" />
               </div>
-              <div className="onboarding-field">
-                <label className="onboarding-label">{dict.companyForm.employeesCountLabel}</label>
-                <input type="number" name="employeesCount" className="onboarding-input" min="1" />
-              </div>
-
               <button type="submit" className="onboarding-cta-button" disabled={saving}>
                 {saving ? dictionary.auth.common.loading : dictionary.common.next}
               </button>
@@ -357,20 +460,33 @@ export const BusinessOnboardingScreen = ({ locale, dictionary }: Props) => {
                 <div className="onboarding-error">{dict.kycRejected}</div>
               )}
 
-              {(kycStatus === 'unverified' || kycStatus === 'rejected') && !kycMode && (
-                <button
-                  type="button"
-                  className="onboarding-cta-button"
-                  onClick={() => void handleInitiateKyc()}
-                  disabled={saving}
-                >
-                  {saving ? dictionary.auth.common.loading : dict.kycButton}
-                </button>
-              )}
-
-              {kycMode === 'manual' && (
+              {(kycStatus === 'unverified' || kycStatus === 'rejected') && (
+                <div className="onboarding-kyc-options">
+                  {!kycMode ? (
+                    <>
+                      <button
+                        type="button"
+                        className="onboarding-cta-button"
+                        onClick={() => void handleInitiateKyc()}
+                        disabled={saving}
+                      >
+                        {saving ? dictionary.auth.common.loading : dict.kycButton}
+                      </button>
+                      <p className="onboarding-kyc-divider">— or —</p>
+                      <button
+                        type="button"
+                        className="onboarding-secondary-button"
+                        onClick={() => setKycMode('manual')}
+                        disabled={saving}
+                      >
+                        {dict.kycManualButton}
+                      </button>
+                    </>
+                  ) : (
                 <form className="onboarding-form" onSubmit={(e) => void handleManualKyc(e)}>
-                  <p className="onboarding-description">{dict.documentsForm.identityDescription}</p>
+                  <p className="onboarding-description">
+                    {dict.documentsForm.identityDescription} You must take a live photo of yourself and a photo of your ID. Upload or take live pictures.
+                  </p>
                   <div className="onboarding-field">
                     <label className="onboarding-label">
                       {dict.documentsForm.documentTypeLabel}
@@ -393,10 +509,56 @@ export const BusinessOnboardingScreen = ({ locale, dictionary }: Props) => {
                     </label>
                     <input type="text" name="fullNameOnDoc" className="onboarding-input" required />
                   </div>
+                  <div className="onboarding-field">
+                    <ImageUploadOrCapture
+                      label={dict.documentsForm.frontImageLabel}
+                      onImage={(f) => setManualFrontFile(f)}
+                      onClear={() => setManualFrontFile(null)}
+                      onError={setError}
+                      required
+                      disabled={saving}
+                    />
+                  </div>
+                  <div className="onboarding-field">
+                    <ImageUploadOrCapture
+                      label={dict.documentsForm.backImageLabel}
+                      onImage={(f) => setManualBackFile(f)}
+                      onClear={() => setManualBackFile(null)}
+                      onError={setError}
+                      required={false}
+                      disabled={saving}
+                    />
+                    <p className="onboarding-description" style={{ marginTop: '0.25rem', fontSize: '0.8rem' }}>
+                      Required for National ID and Driving License. Skip for passport.
+                    </p>
+                  </div>
+                  <div className="onboarding-field">
+                    <LiveCapture
+                      facingMode="user"
+                      label={dict.documentsForm.selfieImageLabel}
+                      onCapture={(f) => setManualSelfieFile(f)}
+                      onClear={() => setManualSelfieFile(null)}
+                      onError={setError}
+                      required
+                      disabled={saving}
+                    />
+                    <p className="onboarding-description" style={{ marginTop: '0.25rem', fontSize: '0.8rem' }}>
+                      You must take a live photo of yourself now. No uploads allowed for selfie.
+                    </p>
+                  </div>
                   <button type="submit" className="onboarding-cta-button" disabled={saving}>
                     {saving ? dictionary.auth.common.loading : dictionary.common.submit}
                   </button>
+                  <button
+                    type="button"
+                    className="onboarding-back-button"
+                    onClick={() => setKycMode(null)}
+                  >
+                    {dictionary.common.back}
+                  </button>
                 </form>
+                  )}
+                </div>
               )}
 
               <div className="onboarding-nav-row">
@@ -427,7 +589,9 @@ export const BusinessOnboardingScreen = ({ locale, dictionary }: Props) => {
           {step === 'documents' && (
             <div className="onboarding-docs-section">
               <h2 className="onboarding-subtitle">{dict.documentsForm.businessDocsTitle}</h2>
-              <p className="onboarding-description">{dict.documentsForm.businessDocsDescription}</p>
+              <p className="onboarding-description">
+                {dict.documentsForm.businessDocsDescription} You must take a live photo of yourself and a photo of your ID. Upload or take live pictures.
+              </p>
 
               <form className="onboarding-form" onSubmit={(e) => void handleSubmitBusinessDocs(e)}>
                 <div className="onboarding-field">
@@ -449,6 +613,43 @@ export const BusinessOnboardingScreen = ({ locale, dictionary }: Props) => {
                     {dict.documentsForm.fullNameOnDocLabel}
                   </label>
                   <input type="text" name="fullNameOnDoc" className="onboarding-input" required />
+                </div>
+                <div className="onboarding-field">
+                  <ImageUploadOrCapture
+                    label={dict.documentsForm.frontImageLabel}
+                    onImage={(f) => setBusinessDocsFrontFile(f)}
+                    onClear={() => setBusinessDocsFrontFile(null)}
+                    onError={setError}
+                    required
+                    disabled={saving}
+                  />
+                </div>
+                <div className="onboarding-field">
+                  <ImageUploadOrCapture
+                    label={dict.documentsForm.backImageLabel}
+                    onImage={(f) => setBusinessDocsBackFile(f)}
+                    onClear={() => setBusinessDocsBackFile(null)}
+                    onError={setError}
+                    required={false}
+                    disabled={saving}
+                  />
+                  <p className="onboarding-description" style={{ marginTop: '0.25rem', fontSize: '0.8rem' }}>
+                    Required for National ID and Driving License. Skip for passport.
+                  </p>
+                </div>
+                <div className="onboarding-field">
+                  <LiveCapture
+                    facingMode="user"
+                    label={dict.documentsForm.selfieImageLabel}
+                    onCapture={(f) => setBusinessDocsSelfieFile(f)}
+                    onClear={() => setBusinessDocsSelfieFile(null)}
+                    onError={setError}
+                    required
+                    disabled={saving}
+                  />
+                  <p className="onboarding-description" style={{ marginTop: '0.25rem', fontSize: '0.8rem' }}>
+                    You must take a live photo of yourself now. No uploads allowed for selfie.
+                  </p>
                 </div>
                 <div className="onboarding-nav-row">
                   <button

@@ -118,10 +118,10 @@ export class VerificationService {
   async handleWebhook(payload: unknown, headers?: WebhookHeaders): Promise<void> {
     const result = await this.provider.handleWebhook(payload, headers);
 
-    // For non-terminal statuses (e.g. "In Progress"), Didit sends webhooks
-    // but we don't change verification status. Only act on terminal results.
-    const isTerminal = result.approved || this.isDeclined(payload);
-    if (!isTerminal) {
+    const isTerminal = result.approved === true || result.approved === false;
+    const isUnderReview = result.status === 'under_review';
+
+    if (!isTerminal && !isUnderReview) {
       logger.info('Webhook: non-terminal status, acknowledged without DB update', {
         sessionId: result.sessionId,
       });
@@ -130,34 +130,45 @@ export class VerificationService {
 
     const request = await this.verificationRepo.findByProviderSessionId(result.sessionId);
     if (!request) {
-      // Unknown session — log and ignore
       logger.warn('Webhook: unknown session ID', { sessionId: result.sessionId });
       return;
     }
 
-    const newStatus = result.approved ? 'approved' : 'rejected';
+    if (isTerminal) {
+      const newStatus = result.approved ? 'approved' : 'rejected';
+      await this.verificationRepo.updateStatus(request.id, newStatus, {
+        providerResponse: result.rawPayload,
+      });
 
-    await this.verificationRepo.updateStatus(request.id, newStatus, {
+      const profileStatus = result.approved ? 'verified' : 'rejected';
+      const role = request.request_type === 'identity' ? 'expert' : 'business';
+      const identityMethod =
+        result.approved && role === 'expert'
+          ? request.provider === 'manual'
+            ? 'manual'
+            : 'didit'
+          : undefined;
+
+      await this.verificationRepo.updateProfileVerificationStatus(
+        request.user_id,
+        role,
+        profileStatus,
+        identityMethod,
+      );
+      return;
+    }
+
+    // Under review: provider sent "In Progress" / "In Review" etc.
+    await this.verificationRepo.updateStatus(request.id, 'submitted', {
       providerResponse: result.rawPayload,
     });
 
-    // Update the profile verification status
-    const profileStatus = result.approved ? 'verified' : 'rejected';
     const role = request.request_type === 'identity' ? 'expert' : 'business';
-
     await this.verificationRepo.updateProfileVerificationStatus(
       request.user_id,
       role,
-      profileStatus,
+      'under_review',
     );
-  }
-
-  /** Check if a Didit payload is a "Declined" status. */
-  private isDeclined(payload: unknown): boolean {
-    if (payload && typeof payload === 'object' && 'status' in payload) {
-      return (payload as { status: string }).status === 'Declined';
-    }
-    return false;
   }
 
   // ── Admin: manually approve/reject (for 'manual' provider) ────────────
@@ -187,11 +198,13 @@ export class VerificationService {
 
     const profileStatus = params.approved ? 'verified' : 'rejected';
     const role = request.request_type === 'identity' ? 'expert' : 'business';
+    const identityMethod = params.approved && role === 'expert' ? 'manual' : undefined;
 
     await this.verificationRepo.updateProfileVerificationStatus(
       request.user_id,
       role,
       profileStatus,
+      identityMethod,
     );
   }
 }

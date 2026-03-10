@@ -9,11 +9,18 @@ import { useAuth } from '@/components/auth/auth-provider';
 import { OnboardingStepper } from '@/components/onboarding/onboarding-stepper';
 import { SiteLogo } from '@/components/site-logo';
 import { Container } from '@/components/ui/container';
-import { COUNTRIES } from '@/lib/data/countries';
-import { LANGUAGES } from '@/lib/data/languages';
+import { CityCountrySelect } from '@/components/ui/city-country-select';
+import { DegreeInstitutionSelect } from '@/components/ui/degree-institution-select';
+import { ImageUploadOrCapture } from '@/components/ui/image-upload-or-capture';
+import { LanguagesCheckboxes } from '@/components/ui/languages-checkboxes';
+import { LiveCapture } from '@/components/ui/live-capture';
+import { findCountryByName } from '@/lib/data/countries';
+import { getApiBaseUrl } from '@/lib/env';
 import { buildLocalePath } from '@/lib/i18n/path';
 import type { Dictionary, Locale } from '@/lib/i18n/types';
 import { profilesApiClient } from '@/lib/profiles/client';
+import { formatApiError } from '@/lib/utils/format-api-error';
+import { uploadFile } from '@/lib/upload/client';
 import { verificationApiClient } from '@/lib/verification/client';
 
 type Props = { locale: Locale; dictionary: Dictionary };
@@ -37,10 +44,18 @@ export const ExpertOnboardingScreen = ({ locale, dictionary }: Props) => {
   const router = useRouter();
   const { authUser, accessToken, isAuthenticated, isReady, authGuard, updateAuthUser } = useAuth();
   const [step, setStep] = useState<Step>('profile');
+  const [stepResolved, setStepResolved] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [kycStatus, setKycStatus] = useState<string>('unverified');
   const [kycMode, setKycMode] = useState<'didit' | 'manual' | null>(null);
+  const [manualFrontFile, setManualFrontFile] = useState<File | null>(null);
+  const [manualBackFile, setManualBackFile] = useState<File | null>(null);
+  const [manualSelfieFile, setManualSelfieFile] = useState<File | null>(null);
+  const [certificateFile, setCertificateFile] = useState<File | null>(null);
+  const [transcriptFile, setTranscriptFile] = useState<File | null>(null);
+  const [profileCountry, setProfileCountry] = useState<string>('');
+  const [documentRejectedResubmit, setDocumentRejectedResubmit] = useState(false);
 
   const dict = dictionary.onboarding.expert;
   const stepLabels = [dict.steps.profileDetails, dict.steps.kyc, dict.steps.documents];
@@ -66,9 +81,63 @@ export const ExpertOnboardingScreen = ({ locale, dictionary }: Props) => {
     }
   }, [accessToken]);
 
+  // When on complete step, refresh auth user so verificationStatus updates after admin approval
+  useEffect(() => {
+    if (step !== 'complete' || !accessToken) return;
+    void updateAuthUser();
+    const interval = setInterval(() => {
+      void updateAuthUser();
+    }, 15000);
+    return () => clearInterval(interval);
+  }, [step, accessToken, updateAuthUser]);
+
   useEffect(() => {
     void loadKycStatus();
   }, [loadKycStatus]);
+
+  useEffect(() => {
+    if (!accessToken) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const [profile, verification, academicRecords] = await Promise.all([
+          profilesApiClient.getExpertProfile(accessToken),
+          verificationApiClient.getStatus(accessToken).catch(() => ({ verificationStatus: 'unverified' as const })),
+          profilesApiClient.getAcademicRecords(accessToken).catch(() => []),
+        ]);
+        if (cancelled) return;
+        setKycStatus(verification.verificationStatus);
+        if (profile?.country) {
+          const c = findCountryByName(profile.country);
+          setProfileCountry(c?.code ?? '');
+        }
+        const profileComplete = Boolean(profile?.title?.trim() && profile?.languages?.length);
+        const identityDone = verification.verificationStatus === 'verified' || verification.verificationStatus === 'pending';
+        const hasApprovedAcademicRecord = Array.isArray(academicRecords) && academicRecords.some((r) => r.status === 'approved');
+        const hasRejectedAcademic = Array.isArray(academicRecords) && academicRecords.some((r) => r.status === 'rejected');
+        setDocumentRejectedResubmit(Boolean(hasRejectedAcademic && !hasApprovedAcademicRecord));
+        // Rejected identity (from admin review): show KYC step to resubmit
+        if (authUser?.verificationStatus === 'rejected') {
+          setStep('kyc');
+        } else if (!profileComplete) {
+          setStep('profile');
+        } else if (!identityDone) {
+          setStep('kyc');
+        } else if (!hasApprovedAcademicRecord) {
+          setStep('documents');
+        } else {
+          setStep('complete');
+        }
+      } catch {
+        if (!cancelled) setStep('profile');
+      } finally {
+        if (!cancelled) setStepResolved(true);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [accessToken, authUser?.verificationStatus]);
 
   const handleSaveProfile = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -83,9 +152,18 @@ export const ExpertOnboardingScreen = ({ locale, dictionary }: Props) => {
       return Number.isFinite(n) && n > 0 ? n : undefined;
     };
 
+    const titleVal = val('title');
+    const languages = Array.from(
+      (form.querySelectorAll('input[name="languages"]:checked') as NodeListOf<HTMLInputElement>),
+    ).map((el) => el.value);
+    if (languages.length === 0) {
+      setError(dict.profileForm.languagesHint || 'Please select at least one language.');
+      setSaving(false);
+      return;
+    }
     const body = pickDefined({
-      title: val('title'),
-      headline: val('headline'),
+      title: titleVal,
+      headline: titleVal,
       bio: val('bio'),
       specializations: (
         (form.elements.namedItem('specializations') as HTMLInputElement)?.value || ''
@@ -101,17 +179,15 @@ export const ExpertOnboardingScreen = ({ locale, dictionary }: Props) => {
       jobTitle: val('jobTitle'),
       linkedinUrl: val('linkedinUrl'),
       portfolioUrl: val('portfolioUrl'),
-      languages: Array.from(
-        (form.elements.namedItem('languages') as HTMLSelectElement)?.selectedOptions ?? [],
-      ).map((o) => o.value),
+      languages,
       educationSummary: val('educationSummary'),
     });
 
     try {
       await profilesApiClient.updateExpertProfile(accessToken, body as UpdateExpertProfileBody);
       setStep('kyc');
-    } catch {
-      setError(dictionary.profile.saveError);
+    } catch (err) {
+      setError(formatApiError(err, dictionary.profile.saveError));
     } finally {
       setSaving(false);
     }
@@ -132,7 +208,7 @@ export const ExpertOnboardingScreen = ({ locale, dictionary }: Props) => {
         setKycStatus('pending');
       }
     } catch {
-      setKycMode('manual');
+      setError(dict.kycRejected);
     } finally {
       setSaving(false);
     }
@@ -141,23 +217,45 @@ export const ExpertOnboardingScreen = ({ locale, dictionary }: Props) => {
   const handleManualKyc = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!accessToken) return;
-    setSaving(true);
-    setError(null);
     const form = e.currentTarget;
     const docType = (form.elements.namedItem('documentType') as HTMLSelectElement)
       ?.value as IdentityDocumentType;
     const fullNameOnDoc =
-      (form.elements.namedItem('fullNameOnDoc') as HTMLInputElement)?.value || '';
+      (form.elements.namedItem('fullNameOnDoc') as HTMLInputElement)?.value?.trim() || '';
 
+    const needsBack = docType === 'national_id' || docType === 'driving_license';
+    if (!manualFrontFile || !manualSelfieFile || (needsBack && !manualBackFile)) {
+      setError('Please capture/upload all required images: document front, document back (if applicable), and a live selfie.');
+      return;
+    }
+
+    setSaving(true);
+    setError(null);
     try {
+      const base = (getApiBaseUrl() || '').replace(/\/$/, '');
+      const toFullUrl = (url: string) =>
+        url.startsWith('http') ? url : base ? `${base}${url.startsWith('/') ? '' : '/'}${url}` : url;
+
+      const [frontRes, backRes, selfieRes] = await Promise.all([
+        uploadFile(accessToken, manualFrontFile),
+        manualBackFile ? uploadFile(accessToken, manualBackFile) : Promise.resolve(null),
+        uploadFile(accessToken, manualSelfieFile),
+      ]);
+
       await profilesApiClient.submitIdentityDocument(accessToken, {
         documentType: docType,
         fullNameOnDoc,
+        frontImageUrl: toFullUrl(frontRes.url),
+        selfieImageUrl: toFullUrl(selfieRes.url),
+        ...(backRes && { backImageUrl: toFullUrl(backRes.url) }),
       });
       setKycStatus('pending');
       setKycMode(null);
-    } catch {
-      setError(dict.kycRejected);
+      setManualFrontFile(null);
+      setManualBackFile(null);
+      setManualSelfieFile(null);
+    } catch (err) {
+      setError(formatApiError(err, dict.kycRejected));
     } finally {
       setSaving(false);
     }
@@ -166,30 +264,55 @@ export const ExpertOnboardingScreen = ({ locale, dictionary }: Props) => {
   const handleSubmitDocs = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!accessToken) return;
+    if (!certificateFile) {
+      setError(dict.documentsForm.certificateImageLabel
+        ? `${dict.documentsForm.certificateImageLabel} is required.`
+        : 'Please upload your certificate or degree document.');
+      return;
+    }
     setSaving(true);
     setError(null);
     const form = e.currentTarget;
     const recordType =
       (form.elements.namedItem('recordType') as HTMLSelectElement)?.value || 'degree';
     const title = (form.elements.namedItem('recordTitle') as HTMLInputElement)?.value || '';
-    const institution = (form.elements.namedItem('institution') as HTMLInputElement)?.value || '';
+    const institution = (form.elements.namedItem('institution') as HTMLInputElement)?.value?.trim() || '';
+
+    if (!title || !institution) {
+      setError(dictionary.profile.saveError || 'Please select degree and institution.');
+      setSaving(false);
+      return;
+    }
 
     try {
+      const base = (getApiBaseUrl() || '').replace(/\/$/, '');
+      const toFullUrl = (url: string) =>
+        url.startsWith('http') ? url : base ? `${base}${url.startsWith('/') ? '' : '/'}${url}` : url;
+
+      const [certRes, transcriptRes] = await Promise.all([
+        uploadFile(accessToken, certificateFile),
+        transcriptFile ? uploadFile(accessToken, transcriptFile) : Promise.resolve(null),
+      ]);
+
       await profilesApiClient.submitAcademicRecord(accessToken, {
         recordType: recordType as 'degree' | 'diploma' | 'certificate' | 'license',
         title,
         institution,
+        certificateImageUrl: toFullUrl(certRes.url),
+        ...(transcriptRes && { transcriptImageUrl: toFullUrl(transcriptRes.url) }),
       });
+      setCertificateFile(null);
+      setTranscriptFile(null);
       await updateAuthUser();
       setStep('complete');
-    } catch {
-      setError(dictionary.profile.saveError);
+    } catch (err) {
+      setError(formatApiError(err, dictionary.profile.saveError));
     } finally {
       setSaving(false);
     }
   };
 
-  if (!isReady || !authUser) {
+  if (!isReady || !authUser || !stepResolved) {
     return (
       <main className="expert-onboarding-page-main">
         <Container>
@@ -236,10 +359,6 @@ export const ExpertOnboardingScreen = ({ locale, dictionary }: Props) => {
                 />
               </div>
               <div className="onboarding-field">
-                <label className="onboarding-label">{dict.profileForm.headlineLabel}</label>
-                <input type="text" name="headline" className="onboarding-input" required />
-              </div>
-              <div className="onboarding-field">
                 <label className="onboarding-label">{dict.profileForm.bioLabel}</label>
                 <textarea name="bio" className="onboarding-input onboarding-textarea" rows={3} />
               </div>
@@ -279,27 +398,20 @@ export const ExpertOnboardingScreen = ({ locale, dictionary }: Props) => {
                   />
                 </div>
                 <div className="onboarding-field">
-                  <label className="onboarding-label">{dict.profileForm.cityLabel}</label>
-                  <input type="text" name="city" className="onboarding-input" />
-                </div>
-              </div>
-              <div className="onboarding-row">
-                <div className="onboarding-field">
-                  <label className="onboarding-label">{dict.profileForm.countryLabel}</label>
-                  <select name="country" className="onboarding-input" required>
-                    <option value="">—</option>
-                    {COUNTRIES.map((c) => (
-                      <option key={c.code} value={locale === 'ar' ? c.nameAr : c.nameEn}>
-                        {locale === 'ar' ? c.nameAr : c.nameEn}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="onboarding-field">
                   <label className="onboarding-label">{dict.profileForm.employerLabel}</label>
                   <input type="text" name="employer" className="onboarding-input" />
                 </div>
               </div>
+              <CityCountrySelect
+                name="city"
+                countryName="country"
+                locale={locale}
+                cityLabel={dict.profileForm.cityLabel}
+                countryLabel={dict.profileForm.countryLabel}
+                className="onboarding-field"
+                selectClassName="onboarding-input"
+                required
+              />
               <div className="onboarding-row">
                 <div className="onboarding-field">
                   <label className="onboarding-label">{dict.profileForm.jobTitleLabel}</label>
@@ -307,24 +419,22 @@ export const ExpertOnboardingScreen = ({ locale, dictionary }: Props) => {
                 </div>
                 <div className="onboarding-field">
                   <label className="onboarding-label">{dict.profileForm.linkedinLabel}</label>
-                  <input type="url" name="linkedinUrl" className="onboarding-input" />
+                  <input type="text" name="linkedinUrl" className="onboarding-input" placeholder="linkedin.com/in/username" />
                 </div>
               </div>
               <div className="onboarding-row">
                 <div className="onboarding-field">
                   <label className="onboarding-label">{dict.profileForm.portfolioLabel}</label>
-                  <input type="url" name="portfolioUrl" className="onboarding-input" />
+                  <input type="text" name="portfolioUrl" className="onboarding-input" placeholder="example.com or full URL" />
                 </div>
                 <div className="onboarding-field">
                   <label className="onboarding-label">{dict.profileForm.languagesLabel}</label>
-                  <select name="languages" className="onboarding-input" multiple required>
-                    {LANGUAGES.map((l) => (
-                      <option key={l.code} value={locale === 'ar' ? l.nameAr : l.nameEn}>
-                        {locale === 'ar' ? l.nameAr : l.nameEn}
-                      </option>
-                    ))}
-                  </select>
-                  <span className="onboarding-hint">{dict.profileForm.languagesHint}</span>
+                  <LanguagesCheckboxes
+                    name="languages"
+                    locale={locale}
+                    required
+                    className="onboarding-languages"
+                  />
                 </div>
               </div>
               <div className="onboarding-field">
@@ -346,30 +456,49 @@ export const ExpertOnboardingScreen = ({ locale, dictionary }: Props) => {
               <h2 className="onboarding-subtitle">{dict.kycTitle}</h2>
               <p className="onboarding-description">{dict.kycDescription}</p>
 
-              {kycStatus === 'verified' && (
+              {authUser?.verificationStatus === 'rejected' && (
+                <div className="onboarding-error">{dict.identityRejectedResubmit}</div>
+              )}
+
+              {kycStatus === 'verified' && authUser?.verificationStatus !== 'rejected' && (
                 <div className="onboarding-success">{dict.kycVerified}</div>
               )}
 
-              {kycStatus === 'pending' && <div className="onboarding-info">{dict.kycPending}</div>}
+              {kycStatus === 'pending' && authUser?.verificationStatus !== 'rejected' && (
+                <div className="onboarding-info">{dict.kycPending}</div>
+              )}
 
-              {kycStatus === 'rejected' && (
+              {kycStatus === 'rejected' && authUser?.verificationStatus !== 'rejected' && (
                 <div className="onboarding-error">{dict.kycRejected}</div>
               )}
 
-              {(kycStatus === 'unverified' || kycStatus === 'rejected') && !kycMode && (
-                <button
-                  type="button"
-                  className="onboarding-cta-button"
-                  onClick={() => void handleInitiateKyc()}
-                  disabled={saving}
-                >
-                  {saving ? dictionary.auth.common.loading : dict.kycButton}
-                </button>
-              )}
-
-              {kycMode === 'manual' && (
+              {(kycStatus === 'unverified' || kycStatus === 'rejected' || authUser?.verificationStatus === 'rejected') && (
+                <div className="onboarding-kyc-options">
+                  {!kycMode ? (
+                    <>
+                      <button
+                        type="button"
+                        className="onboarding-cta-button"
+                        onClick={() => void handleInitiateKyc()}
+                        disabled={saving}
+                      >
+                        {saving ? dictionary.auth.common.loading : dict.kycButton}
+                      </button>
+                      <p className="onboarding-kyc-divider">— or —</p>
+                      <button
+                        type="button"
+                        className="onboarding-secondary-button"
+                        onClick={() => setKycMode('manual')}
+                        disabled={saving}
+                      >
+                        {dict.kycManualButton}
+                      </button>
+                    </>
+                  ) : (
                 <form className="onboarding-form" onSubmit={(e) => void handleManualKyc(e)}>
-                  <p className="onboarding-description">{dict.documentsForm.identityDescription}</p>
+                  <p className="onboarding-description">
+                    {dict.documentsForm.identityDescription} You must take a live photo of yourself and a photo of your ID (National ID, passport, or driving license). Upload or take live pictures.
+                  </p>
                   <div className="onboarding-field">
                     <label className="onboarding-label">
                       {dict.documentsForm.documentTypeLabel}
@@ -392,10 +521,56 @@ export const ExpertOnboardingScreen = ({ locale, dictionary }: Props) => {
                     </label>
                     <input type="text" name="fullNameOnDoc" className="onboarding-input" required />
                   </div>
+                  <div className="onboarding-field">
+                    <ImageUploadOrCapture
+                      label={dict.documentsForm.frontImageLabel}
+                      onImage={(f) => setManualFrontFile(f)}
+                      onClear={() => setManualFrontFile(null)}
+                      onError={setError}
+                      required
+                      disabled={saving}
+                    />
+                  </div>
+                  <div className="onboarding-field">
+                    <ImageUploadOrCapture
+                      label={dict.documentsForm.backImageLabel}
+                      onImage={(f) => setManualBackFile(f)}
+                      onClear={() => setManualBackFile(null)}
+                      onError={setError}
+                      required={false}
+                      disabled={saving}
+                    />
+                    <p className="onboarding-description" style={{ marginTop: '0.25rem', fontSize: '0.8rem' }}>
+                      Required for National ID and Driving License. Skip for passport.
+                    </p>
+                  </div>
+                  <div className="onboarding-field">
+                    <LiveCapture
+                      facingMode="user"
+                      label={dict.documentsForm.selfieImageLabel}
+                      onCapture={(f) => setManualSelfieFile(f)}
+                      onClear={() => setManualSelfieFile(null)}
+                      onError={setError}
+                      required
+                      disabled={saving}
+                    />
+                    <p className="onboarding-description" style={{ marginTop: '0.25rem', fontSize: '0.8rem' }}>
+                      You must take a live photo of yourself now. No uploads allowed for selfie.
+                    </p>
+                  </div>
                   <button type="submit" className="onboarding-cta-button" disabled={saving}>
                     {saving ? dictionary.auth.common.loading : dictionary.common.submit}
                   </button>
+                  <button
+                    type="button"
+                    className="onboarding-back-button"
+                    onClick={() => setKycMode(null)}
+                  >
+                    {dictionary.common.back}
+                  </button>
                 </form>
+                  )}
+                </div>
               )}
 
               <div className="onboarding-nav-row">
@@ -415,7 +590,7 @@ export const ExpertOnboardingScreen = ({ locale, dictionary }: Props) => {
                   {dictionary.common.next}
                 </button>
               </div>
-              {kycStatus !== 'verified' && kycStatus !== 'pending' && (
+              {kycStatus !== 'verified' && kycStatus !== 'pending' && authUser?.verificationStatus !== 'rejected' && (
                 <p className="onboarding-hint">
                   Complete identity verification or submit for manual review before continuing.
                 </p>
@@ -427,6 +602,10 @@ export const ExpertOnboardingScreen = ({ locale, dictionary }: Props) => {
             <div className="onboarding-docs-section">
               <h2 className="onboarding-subtitle">{dict.documentsForm.academicTitle}</h2>
               <p className="onboarding-description">{dict.documentsForm.academicDescription}</p>
+
+              {documentRejectedResubmit && (
+                <div className="onboarding-error">{dict.documentRejectedResubmit}</div>
+              )}
 
               <form className="onboarding-form" onSubmit={(e) => void handleSubmitDocs(e)}>
                 <div className="onboarding-field">
@@ -446,13 +625,35 @@ export const ExpertOnboardingScreen = ({ locale, dictionary }: Props) => {
                     </option>
                   </select>
                 </div>
+                <DegreeInstitutionSelect
+                  locale={locale}
+                  degreeLabel={dict.documentsForm.titleLabel}
+                  institutionLabel={dict.documentsForm.institutionLabel}
+                  otherLabel={dict.documentsForm.otherInstitutionLabel}
+                  degreeName="recordTitle"
+                  institutionName="institution"
+                  selectClassName="onboarding-input"
+                  defaultCountry={profileCountry}
+                  required
+                />
                 <div className="onboarding-field">
-                  <label className="onboarding-label">{dict.documentsForm.titleLabel}</label>
-                  <input type="text" name="recordTitle" className="onboarding-input" required />
+                  <ImageUploadOrCapture
+                    label={dict.documentsForm.certificateImageLabel}
+                    onImage={setCertificateFile}
+                    onClear={() => setCertificateFile(null)}
+                    onError={setError}
+                    required
+                    disabled={saving}
+                  />
                 </div>
                 <div className="onboarding-field">
-                  <label className="onboarding-label">{dict.documentsForm.institutionLabel}</label>
-                  <input type="text" name="institution" className="onboarding-input" required />
+                  <ImageUploadOrCapture
+                    label={dict.documentsForm.transcriptImageLabel}
+                    onImage={setTranscriptFile}
+                    onClear={() => setTranscriptFile(null)}
+                    onError={setError}
+                    disabled={saving}
+                  />
                 </div>
                 <div className="onboarding-nav-row">
                   <button
@@ -473,10 +674,13 @@ export const ExpertOnboardingScreen = ({ locale, dictionary }: Props) => {
           {step === 'complete' && (
             <div className="onboarding-complete">
               <p className="onboarding-description">{dict.description}</p>
-              {kycStatus === 'pending' && <div className="onboarding-info">{dict.kycPending}</div>}
-              <Link href={buildLocalePath(locale, '/app')} className="onboarding-cta-button">
-                {dictionary.onboarding.customer.goToDashboard}
-              </Link>
+              {authUser.verificationStatus === 'verified' ? (
+                <Link href={buildLocalePath(locale, '/app')} className="onboarding-cta-button">
+                  {dictionary.onboarding.customer.goToDashboard}
+                </Link>
+              ) : (
+                <p className="onboarding-info">{dict.pendingReviewMessage}</p>
+              )}
             </div>
           )}
         </section>

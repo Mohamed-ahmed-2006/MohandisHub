@@ -101,20 +101,28 @@ export class VerificationRepository {
   /**
    * Update the verification_status on the user's role-specific profile.
    * Called when a verification is approved or rejected.
+   * For experts, when setting to 'verified' also set identity_verified = true and optional identity_verification_method.
    */
   async updateProfileVerificationStatus(
     userId: string,
     role: 'expert' | 'business',
     status: 'unverified' | 'pending' | 'under_review' | 'verified' | 'rejected',
+    identityVerificationMethod?: 'didit' | 'manual',
   ): Promise<void> {
     const table = role === 'expert' ? 'expert_profiles' : 'business_profiles';
     const verifiedAt = status === 'verified' ? 'now()' : 'NULL';
+    const identityVerified = role === 'expert' && status === 'verified' ? ', identity_verified = true' : '';
+    const methodSet =
+      role === 'expert' && status === 'verified' && identityVerificationMethod
+        ? ', identity_verification_method = $3'
+        : '';
 
+    const params = identityVerificationMethod ? [status, userId, identityVerificationMethod] : [status, userId];
     await this.db.query(
       `UPDATE ${table}
-       SET verification_status = $1, verified_at = ${verifiedAt}
+       SET verification_status = $1, verified_at = ${verifiedAt}${identityVerified}${methodSet}
        WHERE user_id = $2`,
-      [status, userId],
+      params,
     );
   }
 }

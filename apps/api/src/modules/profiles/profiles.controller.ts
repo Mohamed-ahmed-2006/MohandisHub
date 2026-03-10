@@ -212,10 +212,14 @@ const reviewBusinessDocs = asyncHandler(async (req, res) => {
   res.json(response);
 });
 
-/** POST /api/admin/verification/sync-verified-at — fix verified_at for manually verified profiles */
+/** POST /api/admin/verification/sync-verified-at — sync verification status from flags, then fix verified_at */
 const syncVerifiedAt = asyncHandler(async (_req, res) => {
   const result = await profilesService.syncVerifiedAtForManuallyVerified();
-  const response: ApiSuccessBody<{ experts: number; businesses: number }> = { ok: true, data: result };
+  const response: ApiSuccessBody<{
+    experts: number;
+    businesses: number;
+    expertsStatusSynced?: number;
+  }> = { ok: true, data: result };
   res.json(response);
 });
 

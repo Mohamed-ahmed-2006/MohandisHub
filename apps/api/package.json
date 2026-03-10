@@ -10,7 +10,8 @@
     "start": "node dist/server.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "lint": "eslint src --max-warnings=0",
-    "test": "vitest --run"
+    "test": "vitest --run",
+    "migrate:expert-verification": "tsx scripts/run-expert-verification-migration.ts"
   },
   "dependencies": {
     "@mohandishub/shared": "file:../../packages/shared",

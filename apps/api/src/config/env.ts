@@ -36,6 +36,7 @@ const envSchema = z.object({
   BREVO_API_KEY: z.string().optional(),
   SENDGRID_API_KEY: z.string().optional(),
   EMAIL_FROM: z.string().default('noreply@mohandishub.app'),
+  EMAIL_LOGO_URL: z.string().url().optional(),
   TWILIO_ACCOUNT_SID: z.string().optional(),
   TWILIO_AUTH_TOKEN: z.string().optional(),
   TWILIO_PHONE_NUMBER: z.string().optional(),

@@ -26,12 +26,20 @@ adminRouter.patch('/settings', requireAdminPermission('manage_settings'), adminC
 // Users
 adminRouter.get('/users', requireAdminPermission('manage_users'), adminController.listUsers);
 adminRouter.get('/users/:id', requireAdminPermission('manage_users'), adminController.getUserDetail);
+adminRouter.get('/users/:id/overview', requireAdminPermission('manage_users'), adminController.getUserOverview);
+adminRouter.get('/users/:id/activity/:type', requireAdminPermission('manage_users'), adminController.getUserActivity);
 adminRouter.patch('/users/:id', requireAdminPermission('manage_users'), adminController.updateUser);
+adminRouter.patch('/users/:id/expert-profile', requireAdminPermission('manage_users'), adminController.updateUserExpertProfile);
+adminRouter.patch('/users/:id/business-profile', requireAdminPermission('manage_users'), adminController.updateUserBusinessProfile);
 adminRouter.delete('/users/:id', requireAdminPermission('manage_users'), adminController.deleteUser);
 adminRouter.post('/users/:id/activate', requireAdminPermission('manage_users'), adminController.activateUser);
 adminRouter.post('/users/:id/deactivate', requireAdminPermission('manage_users'), adminController.deactivateUser);
 adminRouter.post('/users/:id/send-verification-email', requireAdminPermission('manage_users'), adminController.sendVerificationEmail);
 adminRouter.post('/users/:id/verify-email', requireAdminPermission('manage_users'), adminController.verifyEmail);
+adminRouter.post('/users/:id/force-logout', requireAdminPermission('manage_users'), adminController.forceLogoutUser);
+adminRouter.post('/users/:id/change-email', requireAdminPermission('manage_users'), adminController.changeUserEmail);
+adminRouter.post('/users/:id/wallet/freeze', requireAdminPermission('manage_transactions'), adminController.freezeUserWallet);
+adminRouter.post('/users/:id/wallet/unfreeze', requireAdminPermission('manage_transactions'), adminController.unfreezeUserWallet);
 
 // Plans
 adminRouter.get('/plans', requireAdminPermission('manage_plans'), adminController.listPlans);

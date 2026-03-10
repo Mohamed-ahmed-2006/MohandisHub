@@ -7,14 +7,21 @@ import type { Pool } from 'pg';
 import { getPool } from '../../db/pool.js';
 
 import type {
+  BidActivityRow,
+  BookingActivityRow,
   CategoryRow,
   DashboardStatsRow,
+  JobActivityRow,
+  JobApplicationActivityRow,
+  NeedActivityRow,
   PlanRow,
   ServiceListRow,
   TransactionListRow,
   TransactionRow,
   UserDetailRow,
   UserListRow,
+  UserRow,
+  UserActivityCountRow,
 } from './admin.types.js';
 
 export class AdminRepository {
@@ -136,6 +143,25 @@ export class AdminRepository {
     return rows[0] ?? null;
   }
 
+  async getUserById(userId: string): Promise<UserListRow | null> {
+    const { rows } = await this.db.query<UserListRow>(
+      `SELECT u.*, p.slug AS plan_slug, p.name AS plan_name, u.admin_permissions
+       FROM users u
+       LEFT JOIN plans p ON u.plan_id = p.id
+       WHERE u.id = $1`,
+      [userId],
+    );
+    return rows[0] ?? null;
+  }
+
+  async findUserByEmail(email: string): Promise<UserRow | null> {
+    const { rows } = await this.db.query<UserRow>(
+      `SELECT u.* FROM users u WHERE lower(u.email) = lower($1) AND u.deleted_at IS NULL LIMIT 1`,
+      [email],
+    );
+    return rows[0] ?? null;
+  }
+
   async updateUser(userId: string, fields: Record<string, unknown>): Promise<UserListRow | null> {
     const entries = Object.entries(fields).filter(([, v]) => v !== undefined);
     if (entries.length === 0) return null;
@@ -164,12 +190,169 @@ export class AdminRepository {
     await this.db.query('UPDATE users SET email_verified_at = now() WHERE id = $1', [userId]);
   }
 
+  async updateUserEmail(userId: string, newEmail: string): Promise<UserListRow | null> {
+    const { rows } = await this.db.query<UserListRow>(
+      `UPDATE users
+       SET email = $2,
+           email_verified_at = NULL,
+           pending_email = NULL,
+           pending_email_token = NULL,
+           pending_email_expires = NULL,
+           updated_at = now()
+       WHERE id = $1
+       RETURNING *, (SELECT slug FROM plans WHERE id = plan_id) AS plan_slug,
+                    (SELECT name FROM plans WHERE id = plan_id) AS plan_name`,
+      [userId, newEmail],
+    );
+    return rows[0] ?? null;
+  }
+
   async softDeleteUser(userId: string): Promise<boolean> {
     const { rowCount } = await this.db.query(
       `UPDATE users SET deleted_at = now(), is_active = false WHERE id = $1 AND deleted_at IS NULL`,
       [userId],
     );
     return (rowCount ?? 0) > 0;
+  }
+
+  async setWalletFrozen(userId: string, isFrozen: boolean): Promise<UserDetailRow | null> {
+    await this.db.query(
+      `INSERT INTO wallets (user_id) VALUES ($1)
+       ON CONFLICT (user_id) DO UPDATE SET user_id = wallets.user_id`,
+      [userId],
+    );
+
+    await this.db.query(
+      `UPDATE wallets SET is_frozen = $2, updated_at = now() WHERE user_id = $1`,
+      [userId, isFrozen],
+    );
+
+    return this.getUserDetail(userId);
+  }
+
+  async countNeedsByUser(userId: string): Promise<number> {
+    const { rows } = await this.db.query<UserActivityCountRow>(
+      `SELECT COUNT(*)::text AS count FROM needs WHERE customer_id = $1`,
+      [userId],
+    );
+    return parseInt(rows[0]!.count, 10);
+  }
+
+  async listNeedsByUser(userId: string, page: number, limit: number): Promise<NeedActivityRow[]> {
+    const offset = (page - 1) * limit;
+    const { rows } = await this.db.query<NeedActivityRow>(
+      `SELECT n.id, n.title, n.status, n.budget_amount::text, n.currency,
+              (SELECT COUNT(*)::text FROM bids b WHERE b.need_id = n.id) AS bid_count,
+              n.created_at
+       FROM needs n
+       WHERE n.customer_id = $1
+       ORDER BY n.created_at DESC
+       LIMIT $2::int OFFSET $3::int`,
+      [userId, limit, offset],
+    );
+    return rows;
+  }
+
+  async countBidsByUser(userId: string): Promise<number> {
+    const { rows } = await this.db.query<UserActivityCountRow>(
+      `SELECT COUNT(*)::text AS count FROM bids WHERE expert_id = $1`,
+      [userId],
+    );
+    return parseInt(rows[0]!.count, 10);
+  }
+
+  async listBidsByUser(userId: string, page: number, limit: number): Promise<BidActivityRow[]> {
+    const offset = (page - 1) * limit;
+    const { rows } = await this.db.query<BidActivityRow>(
+      `SELECT b.id, b.need_id, n.title AS need_title, b.amount::text, b.currency, b.status, b.paid_at, b.created_at
+       FROM bids b
+       LEFT JOIN needs n ON n.id = b.need_id
+       WHERE b.expert_id = $1
+       ORDER BY b.created_at DESC
+       LIMIT $2::int OFFSET $3::int`,
+      [userId, limit, offset],
+    );
+    return rows;
+  }
+
+  async countJobsByUser(userId: string): Promise<number> {
+    const { rows } = await this.db.query<UserActivityCountRow>(
+      `SELECT COUNT(*)::text AS count FROM jobs WHERE business_id = $1`,
+      [userId],
+    );
+    return parseInt(rows[0]!.count, 10);
+  }
+
+  async listJobsByUser(userId: string, page: number, limit: number): Promise<JobActivityRow[]> {
+    const offset = (page - 1) * limit;
+    const { rows } = await this.db.query<JobActivityRow>(
+      `SELECT j.id, j.title, j.status, j.created_at
+       FROM jobs j
+       WHERE j.business_id = $1
+       ORDER BY j.created_at DESC
+       LIMIT $2::int OFFSET $3::int`,
+      [userId, limit, offset],
+    );
+    return rows;
+  }
+
+  async countJobApplicationsByUser(userId: string): Promise<number> {
+    const { rows } = await this.db.query<UserActivityCountRow>(
+      `SELECT COUNT(*)::text AS count FROM job_applications WHERE expert_id = $1`,
+      [userId],
+    );
+    return parseInt(rows[0]!.count, 10);
+  }
+
+  async listJobApplicationsByUser(
+    userId: string,
+    page: number,
+    limit: number,
+  ): Promise<JobApplicationActivityRow[]> {
+    const offset = (page - 1) * limit;
+    const { rows } = await this.db.query<JobApplicationActivityRow>(
+      `SELECT a.id, a.job_id, j.title AS job_title, a.status, a.created_at
+       FROM job_applications a
+       LEFT JOIN jobs j ON j.id = a.job_id
+       WHERE a.expert_id = $1
+       ORDER BY a.created_at DESC
+       LIMIT $2::int OFFSET $3::int`,
+      [userId, limit, offset],
+    );
+    return rows;
+  }
+
+  async countBookingsByUser(userId: string): Promise<number> {
+    const { rows } = await this.db.query<UserActivityCountRow>(
+      `SELECT COUNT(*)::text AS count
+       FROM bookings b
+       WHERE b.customer_id = $1 OR b.provider_id = $1`,
+      [userId],
+    );
+    return parseInt(rows[0]!.count, 10);
+  }
+
+  async listBookingsByUser(
+    userId: string,
+    page: number,
+    limit: number,
+  ): Promise<BookingActivityRow[]> {
+    const offset = (page - 1) * limit;
+    const { rows } = await this.db.query<BookingActivityRow>(
+      `SELECT b.id, b.status, b.amount::text, b.currency, s.title AS service_title,
+              COALESCE(uc.display_name, uc.email) AS customer_name,
+              COALESCE(up.display_name, up.email) AS provider_name,
+              b.slot_start_at, b.slot_end_at, b.created_at
+       FROM bookings b
+       LEFT JOIN services s ON s.id = b.service_id
+       LEFT JOIN users uc ON uc.id = b.customer_id
+       LEFT JOIN users up ON up.id = b.provider_id
+       WHERE b.customer_id = $1 OR b.provider_id = $1
+       ORDER BY b.created_at DESC
+       LIMIT $2::int OFFSET $3::int`,
+      [userId, limit, offset],
+    );
+    return rows;
   }
 
   // ── Plans ───────────────────────────────────────────────────────────────

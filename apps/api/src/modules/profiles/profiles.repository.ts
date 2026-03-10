@@ -254,6 +254,17 @@ export class ProfilesRepository {
     ]);
   }
 
+  /** Set how identity was verified: 'manual' when admin approves an identity_document. */
+  async setExpertIdentityVerificationMethod(
+    userId: string,
+    method: 'didit' | 'manual',
+  ): Promise<void> {
+    await this.db.query(
+      'UPDATE expert_profiles SET identity_verification_method = $1 WHERE user_id = $2',
+      [method, userId],
+    );
+  }
+
   async setExpertAcademicVerified(userId: string, verified: boolean): Promise<void> {
     await this.db.query('UPDATE expert_profiles SET academic_verified = $1 WHERE user_id = $2', [
       verified,
@@ -309,6 +320,29 @@ export class ProfilesRepository {
       ),
     ]);
     return { experts: expertRes.rowCount ?? 0, businesses: businessRes.rowCount ?? 0 };
+  }
+
+  /**
+   * Set verification_status to 'verified' when both identity_verified and academic_verified
+   * are true but status is not yet 'verified' (e.g. after manual DB edits or edge cases).
+   * Also fixes experts who have approved academic and are pending/under_review (e.g. identity
+   * was approved via Didit but identity_verified was never set) — sets them to verified and
+   * sets identity_verified = true for consistency.
+   */
+  async syncExpertVerificationStatusFromFlags(): Promise<number> {
+    const { rows: alreadyBoth } = await this.db.query<{ user_id: string }>(
+      `UPDATE expert_profiles
+       SET verification_status = 'verified', verified_at = COALESCE(verified_at, now())
+       WHERE identity_verified = true AND academic_verified = true AND verification_status != 'verified'
+       RETURNING user_id`,
+    );
+    const { rows: academicDonePending } = await this.db.query<{ user_id: string }>(
+      `UPDATE expert_profiles
+       SET verification_status = 'verified', verified_at = COALESCE(verified_at, now()), identity_verified = true
+       WHERE academic_verified = true AND verification_status IN ('pending', 'under_review')
+       RETURNING user_id`,
+    );
+    return alreadyBoth.length + academicDonePending.length;
   }
 
   // ── Admin reviews ──────────────────────────────────────────────────────

@@ -155,9 +155,6 @@ export const ServiceBookingModal = ({
       className="home-drawer-overlay"
       style={{ zIndex: 1100 }}
       onClick={() => {
-        // #region agent log
-        fetch('http://127.0.0.1:7325/ingest/ebd08bf8-7d73-450c-ad4d-4436a6c2225b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'40e02a'},body:JSON.stringify({sessionId:'40e02a',location:'service-booking-modal.tsx:modal-overlay-click',message:'Modal overlay clicked',data:{hypothesisId:'H2'},timestamp:Date.now()})}).catch(()=>{});
-        // #endregion
         onClose();
       }}
     >

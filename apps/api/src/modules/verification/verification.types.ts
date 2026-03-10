@@ -32,10 +32,16 @@ export type VerificationSession = {
   sessionToken?: string | undefined; // Token for SDK/embedded integration
 };
 
-/** Result of a provider webhook callback. */
+/** Result of a provider webhook callback.
+ * - Terminal: approved = true | false → profile gets 'verified' | 'rejected'
+ * - Non-terminal: status = 'under_review' (e.g. "In Progress", "In Review") → profile gets 'under_review'; request gets 'submitted'
+ */
 export type VerificationWebhookResult = {
   sessionId: string;
-  approved: boolean;
+  /** Terminal result: true = verified, false = rejected. When set, we update profile to verified/rejected. */
+  approved?: boolean;
+  /** Non-terminal: when provider sends "In Progress" / "In Review" etc., set so we update profile to under_review. */
+  status?: 'under_review';
   rawPayload: unknown;
 };
 

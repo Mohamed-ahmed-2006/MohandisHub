@@ -4,21 +4,59 @@
 
 import { z } from 'zod';
 
+/** Permissive URL: accepts http/https, with or without www, any TLD (.com, .eg, .com.eg, etc.) */
+const urlOrDomain = (maxLen: number) =>
+  z
+    .string()
+    .max(maxLen)
+    .optional()
+    .refine(
+      (val) => {
+        if (!val || !val.trim()) return true;
+        const s = val.trim();
+        const withProtocol = /^https?:\/\//i.test(s) ? s : `https://${s}`;
+        try {
+          new URL(withProtocol);
+          return true;
+        } catch {
+          return false;
+        }
+      },
+      { message: 'Enter a valid URL or domain (e.g. example.com, linkedin.com/in/username)' },
+    );
+
 // ── Identity document ────────────────────────────────────────────────────
 
-export const identityDocumentSchema = z.object({
-  documentType: z.enum(['national_id', 'driving_license', 'passport']),
-  fullNameOnDoc: z.string().min(2).max(200),
-  documentNumber: z.string().max(100).optional(),
-  dateOfBirth: z
-    .string()
-    .regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be in YYYY-MM-DD format.')
-    .optional(),
-  nationality: z.string().max(100).optional(),
-  frontImageUrl: z.string().url().optional(),
-  backImageUrl: z.string().url().optional(),
-  selfieImageUrl: z.string().url().optional(),
-});
+export const identityDocumentSchema = z
+  .object({
+    documentType: z.enum(['national_id', 'driving_license', 'passport']),
+    fullNameOnDoc: z.string().min(2).max(200),
+    documentNumber: z.string().max(100).optional(),
+    dateOfBirth: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be in YYYY-MM-DD format.')
+      .optional(),
+    nationality: z.string().max(100).optional(),
+    frontImageUrl: z.string().url().optional(),
+    backImageUrl: z.string().url().optional(),
+    selfieImageUrl: z.string().url().optional(),
+  })
+  .refine(
+    (data) => {
+      if (!data.frontImageUrl || !data.selfieImageUrl) return false;
+      if (
+        (data.documentType === 'national_id' || data.documentType === 'driving_license') &&
+        !data.backImageUrl
+      ) {
+        return false;
+      }
+      return true;
+    },
+    {
+      message:
+        'Document front image, live selfie photo, and document back image (for National ID/Driving License) are required.',
+    },
+  );
 
 // ── Academic record ──────────────────────────────────────────────────────
 
@@ -47,8 +85,8 @@ export const updateExpertProfileSchema = z.object({
   availabilityStatus: z.enum(['available', 'busy', 'offline']).optional(),
   employer: z.string().max(200).optional(),
   jobTitle: z.string().max(200).optional(),
-  linkedinUrl: z.string().url().max(500).optional(),
-  portfolioUrl: z.string().url().max(500).optional(),
+  linkedinUrl: urlOrDomain(500),
+  portfolioUrl: urlOrDomain(500),
   languages: z.array(z.string().max(50)).max(10).optional(),
   educationSummary: z.string().max(2000).optional(),
 });
@@ -62,11 +100,11 @@ export const updateBusinessProfileSchema = z.object({
   commercialRegister: z.string().max(100).optional(),
   industry: z.string().max(100).optional(),
   companySize: z.enum(['1-10', '11-50', '51-200', '201-500', '500+']).optional(),
-  website: z.string().url().max(255).optional(),
+  website: urlOrDomain(255),
   companyEmail: z.string().email().max(255).optional(),
   companyPhone: z.string().max(20).optional(),
   address: z.string().max(500).optional(),
-  logoUrl: z.string().url().optional(),
+  logoUrl: urlOrDomain(500),
   city: z.string().max(100).optional(),
   country: z.string().max(100).optional(),
   description: z.string().max(2000).optional(),
@@ -74,9 +112,9 @@ export const updateBusinessProfileSchema = z.object({
   ownerTitle: z.string().max(100).optional(),
   ownerEmail: z.string().email().max(255).optional(),
   ownerPhone: z.string().max(20).optional(),
-  socialFacebook: z.string().url().max(500).optional(),
-  socialLinkedin: z.string().url().max(500).optional(),
-  socialTwitter: z.string().url().max(500).optional(),
+  socialFacebook: urlOrDomain(500),
+  socialLinkedin: urlOrDomain(500),
+  socialTwitter: urlOrDomain(500),
   employeesCount: z.number().int().min(1).max(100000).optional(),
   foundedYear: z.number().int().min(1800).max(new Date().getFullYear()).optional(),
 });

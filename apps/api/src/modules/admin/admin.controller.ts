@@ -3,13 +3,18 @@
 // ---------------------------------------------------------------------------
 
 import type {
+  AdminForceLogoutResponse,
   AdminDashboardStats,
   AdminServiceListItem,
   AdminTransactionListItem,
   AdminUserDetail,
   AdminUserListItem,
+  AdminUserOverview,
+  AdminWalletFreezeResponse,
   ApiSuccessBody,
   AppSettings,
+  BusinessProfile,
+  ExpertProfile,
   PaginatedResponse,
   Plan,
   ServiceCategory,
@@ -24,21 +29,29 @@ import { SettingsService } from '../settings/settings.service.js';
 import { AdminService } from './admin.service.js';
 import type {
   AdjustBalanceInput,
+  ChangeUserEmailInput,
   CreateCategoryInput,
   CreatePlanInput,
   RejectServiceInput,
+  UpdateBusinessProfileByAdminInput,
   UpdateCategoryInput,
+  UpdateExpertProfileByAdminInput,
   UpdatePlanInput,
   UpdateServiceInput,
   UpdateSettingsInput,
   UpdateUserInput,
+  UserActivityTypeInput,
 } from './admin.validation.js';
 import {
   adjustBalanceSchema,
+  changeUserEmailSchema,
   createCategorySchema,
   createPlanSchema,
   rejectServiceSchema,
+  userActivityTypeSchema,
+  updateBusinessProfileSchema,
   updateCategorySchema,
+  updateExpertProfileSchema,
   updatePlanSchema,
   updateServiceSchema,
   updateSettingsSchema,
@@ -57,6 +70,16 @@ function getAdminId(req: { user?: { id: string } }): string {
     });
   }
   return req.user.id;
+}
+
+function hasPermission(
+  req: { user?: { isAdmin?: boolean; adminPermissions?: string[] } },
+  permission: string,
+): boolean {
+  const user = req.user;
+  if (!user?.isAdmin) return false;
+  if (!user.adminPermissions || user.adminPermissions.length === 0) return true;
+  return user.adminPermissions.includes(permission);
 }
 
 function parseValidation<T>(
@@ -111,6 +134,46 @@ const getUserDetail = asyncHandler(async (req, res) => {
   res.json(response);
 });
 
+const getUserOverview = asyncHandler(async (req, res) => {
+  const detail = await adminService.getUserOverview(req.params.id!, {
+    includeVerification: hasPermission(req, 'manage_verifications'),
+    includeTransactions: hasPermission(req, 'manage_transactions'),
+    recentLimit: 5,
+  });
+  const response: ApiSuccessBody<AdminUserOverview> = { ok: true, data: detail };
+  res.json(response);
+});
+
+const getUserActivity = asyncHandler(async (req, res) => {
+  const parsedType = userActivityTypeSchema.safeParse(req.params.type);
+  if (!parsedType.success) {
+    throw new HttpError({
+      statusCode: 400,
+      code: 'VALIDATION_ERROR',
+      message: 'Invalid activity type.',
+    });
+  }
+
+  if (parsedType.data === 'transactions' && !hasPermission(req, 'manage_transactions')) {
+    throw new HttpError({
+      statusCode: 403,
+      code: 'FORBIDDEN',
+      message: 'You do not have permission to view transaction activity.',
+    });
+  }
+
+  const page = parseInt(req.query.page as string, 10) || 1;
+  const limit = Math.min(parseInt(req.query.limit as string, 10) || 10, 50);
+  const result = await adminService.getUserActivity(
+    req.params.id!,
+    parsedType.data as UserActivityTypeInput,
+    page,
+    limit,
+  );
+  const response: ApiSuccessBody<typeof result> = { ok: true, data: result };
+  res.json(response);
+});
+
 const updateUser = asyncHandler(async (req, res) => {
   const input = parseValidation<UpdateUserInput>(updateUserSchema, req.body);
   const user = await adminService.updateUser(req.params.id!, input);
@@ -145,6 +208,48 @@ const sendVerificationEmail = asyncHandler(async (req, res) => {
 const verifyEmail = asyncHandler(async (req, res) => {
   const user = await adminService.verifyEmail(req.params.id!);
   const response: ApiSuccessBody<AdminUserListItem> = { ok: true, data: user };
+  res.json(response);
+});
+
+const updateUserExpertProfile = asyncHandler(async (req, res) => {
+  const input = parseValidation<UpdateExpertProfileByAdminInput>(updateExpertProfileSchema, req.body);
+  const profile = await adminService.updateExpertProfileAsAdmin(req.params.id!, input);
+  const response: ApiSuccessBody<ExpertProfile> = { ok: true, data: profile };
+  res.json(response);
+});
+
+const updateUserBusinessProfile = asyncHandler(async (req, res) => {
+  const input = parseValidation<UpdateBusinessProfileByAdminInput>(
+    updateBusinessProfileSchema,
+    req.body,
+  );
+  const profile = await adminService.updateBusinessProfileAsAdmin(req.params.id!, input);
+  const response: ApiSuccessBody<BusinessProfile> = { ok: true, data: profile };
+  res.json(response);
+});
+
+const freezeUserWallet = asyncHandler(async (req, res) => {
+  const result = await adminService.freezeUserWallet(req.params.id!);
+  const response: ApiSuccessBody<AdminWalletFreezeResponse> = { ok: true, data: result };
+  res.json(response);
+});
+
+const unfreezeUserWallet = asyncHandler(async (req, res) => {
+  const result = await adminService.unfreezeUserWallet(req.params.id!);
+  const response: ApiSuccessBody<AdminWalletFreezeResponse> = { ok: true, data: result };
+  res.json(response);
+});
+
+const forceLogoutUser = asyncHandler(async (req, res) => {
+  const result = await adminService.forceLogoutUser(req.params.id!);
+  const response: ApiSuccessBody<AdminForceLogoutResponse> = { ok: true, data: result };
+  res.json(response);
+});
+
+const changeUserEmail = asyncHandler(async (req, res) => {
+  const input = parseValidation<ChangeUserEmailInput>(changeUserEmailSchema, req.body);
+  const result = await adminService.changeUserEmail(req.params.id!, input);
+  const response: ApiSuccessBody<typeof result> = { ok: true, data: result };
   res.json(response);
 });
 
@@ -328,12 +433,20 @@ export const adminController = {
   getDashboardStats,
   listUsers,
   getUserDetail,
+  getUserOverview,
+  getUserActivity,
   updateUser,
+  updateUserExpertProfile,
+  updateUserBusinessProfile,
   deleteUser,
   activateUser,
   deactivateUser,
   sendVerificationEmail,
   verifyEmail,
+  freezeUserWallet,
+  unfreezeUserWallet,
+  forceLogoutUser,
+  changeUserEmail,
   listPlans,
   createPlan,
   updatePlan,

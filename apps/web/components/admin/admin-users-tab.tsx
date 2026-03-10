@@ -12,9 +12,10 @@ type Props = {
   dictionary: Dictionary;
   accessToken: string;
   refreshSession: () => Promise<string | null>;
+  adminPermissions: string[];
 };
 
-export const AdminUsersTab = ({ dictionary, accessToken, refreshSession }: Props) => {
+export const AdminUsersTab = ({ dictionary, accessToken, refreshSession, adminPermissions }: Props) => {
   const [data, setData] = useState<PaginatedResponse<AdminUserListItem> | null>(null);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -216,6 +217,7 @@ export const AdminUsersTab = ({ dictionary, accessToken, refreshSession }: Props
           dictionary={dictionary}
           accessToken={accessToken}
           refreshSession={refreshSession}
+          adminPermissions={adminPermissions}
           userId={selectedUserId}
           onClose={() => setSelectedUserId(null)}
           onSuccess={() => void load()}

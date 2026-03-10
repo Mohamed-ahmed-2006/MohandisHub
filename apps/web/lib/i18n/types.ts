@@ -120,6 +120,8 @@ export type Dictionary = {
         recordTypeLabel: string;
         titleLabel: string;
         institutionLabel: string;
+        institutionCountryLabel: string;
+        otherInstitutionLabel: string;
         fieldOfStudyLabel: string;
         graduationYearLabel: string;
         gradeLabel: string;
@@ -129,9 +131,13 @@ export type Dictionary = {
       kycTitle: string;
       kycDescription: string;
       kycButton: string;
+      kycManualButton: string;
       kycPending: string;
       kycVerified: string;
       kycRejected: string;
+      pendingReviewMessage: string;
+      identityRejectedResubmit: string;
+      documentRejectedResubmit: string;
     };
     business: {
       title: string;
@@ -182,6 +188,7 @@ export type Dictionary = {
       kycTitle: string;
       kycDescription: string;
       kycButton: string;
+      kycManualButton: string;
       kycPending: string;
       kycVerified: string;
       kycRejected: string;
@@ -391,6 +398,60 @@ export type Dictionary = {
         verifyEmail: string;
         lastLogin: string;
         createdAt: string;
+        user360?: {
+          tabs?: {
+            overview?: string;
+            account?: string;
+            roleProfile?: string;
+            verification?: string;
+            activity?: string;
+            security?: string;
+          };
+          labels?: {
+            walletFrozen?: string;
+            phoneCode?: string;
+            activityCounts?: string;
+            permissions?: string;
+          };
+          account?: {
+            title?: string;
+          };
+          roleProfile?: {
+            title?: string;
+            customerOnly?: string;
+            jsonHint?: string;
+          };
+          verification?: {
+            identityTitle?: string;
+            academicTitle?: string;
+            businessTitle?: string;
+            businessMissing?: string;
+            status?: string;
+            empty?: string;
+          };
+          activity?: {
+            title?: string;
+            empty?: string;
+            types?: Partial<Record<'needs' | 'bids' | 'jobs' | 'jobApplications' | 'bookings' | 'transactions', string>>;
+          };
+          security?: {
+            title?: string;
+            forceLogout?: string;
+            forceLogoutBtn?: string;
+            changeEmail?: string;
+            newEmailPlaceholder?: string;
+            sendVerification?: string;
+            changeEmailBtn?: string;
+            emailVerification?: string;
+            walletFreeze?: string;
+            unfreezeBtn?: string;
+            freezeBtn?: string;
+            accountStatus?: string;
+          };
+          errors?: {
+            invalidJson?: string;
+          };
+        };
       };
     };
     plansMgmt: {

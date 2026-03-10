@@ -267,9 +267,6 @@ export const AppHomeScreen = ({ locale, dictionary }: AppHomeScreenProps) => {
 
   useEffect(() => {
     if (!selectedResult) {
-      // #region agent log
-      fetch('http://127.0.0.1:7325/ingest/ebd08bf8-7d73-450c-ad4d-4436a6c2225b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'40e02a'},body:JSON.stringify({sessionId:'40e02a',location:'app-home-screen.tsx:useEffect-selectedResult',message:'selectedResult is null, closing modal',data:{hypothesisId:'H3'},timestamp:Date.now()})}).catch(()=>{});
-      // #endregion
       setShowBookingModal(false);
     }
   }, [selectedResult]);
@@ -858,9 +855,6 @@ export const AppHomeScreen = ({ locale, dictionary }: AppHomeScreenProps) => {
           <div
             className="home-drawer-overlay"
             onClick={() => {
-              // #region agent log
-              fetch('http://127.0.0.1:7325/ingest/ebd08bf8-7d73-450c-ad4d-4436a6c2225b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'40e02a'},body:JSON.stringify({sessionId:'40e02a',location:'app-home-screen.tsx:drawer-overlay-click',message:'Drawer overlay clicked',data:{hypothesisId:'H1'},timestamp:Date.now()})}).catch(()=>{});
-              // #endregion
               setSelectedResult(null);
             }}
           >
@@ -938,9 +932,6 @@ export const AppHomeScreen = ({ locale, dictionary }: AppHomeScreenProps) => {
                   onClick={(e) => {
                     e.preventDefault();
                     e.stopPropagation();
-                    // #region agent log
-                    fetch('http://127.0.0.1:7325/ingest/ebd08bf8-7d73-450c-ad4d-4436a6c2225b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'40e02a'},body:JSON.stringify({sessionId:'40e02a',location:'app-home-screen.tsx:request-btn-click',message:'Request service button clicked',data:{hypothesisId:'H2'},timestamp:Date.now()})}).catch(()=>{});
-                    // #endregion
                     setShowBookingModal(true);
                   }}
                 >

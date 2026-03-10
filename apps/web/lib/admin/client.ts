@@ -1,11 +1,23 @@
 import type {
   AcademicRecord,
+  AdminBidActivityItem,
+  AdminBookingActivityItem,
+  AdminChangeUserEmailBody,
   AdminDashboardStats,
+  AdminForceLogoutResponse,
+  AdminJobActivityItem,
+  AdminJobApplicationActivityItem,
+  AdminNeedActivityItem,
   AdminReview,
   AdminServiceListItem,
   AdminTransactionListItem,
+  AdminUpdateBusinessProfileBody,
+  AdminUpdateExpertProfileBody,
   AdminUpdateUserBody,
   AdminUserDetail,
+  AdminUserActivityType,
+  AdminUserOverview,
+  AdminWalletFreezeResponse,
   AdminUserListItem,
   AdjustBalanceBody,
   ApiErrorBody,
@@ -111,6 +123,14 @@ export type AdminUserProfile = {
   academicRecords: AcademicRecord[];
 };
 
+export type AdminUserActivityItem =
+  | AdminNeedActivityItem
+  | AdminBidActivityItem
+  | AdminJobActivityItem
+  | AdminJobApplicationActivityItem
+  | AdminBookingActivityItem
+  | AdminTransactionListItem;
+
 export const adminApiClient = {
   // Dashboard
   getSettings: (accessToken: string, options?: AdminClientOptions) =>
@@ -171,6 +191,33 @@ export const adminApiClient = {
       ...(options?.refreshSession ? { refreshSession: options.refreshSession } : {}),
     }),
 
+  getUserOverview: (accessToken: string, userId: string, options?: AdminClientOptions) =>
+    apiRequest<AdminUserOverview>({
+      method: 'GET',
+      path: `/api/admin/users/${userId}/overview`,
+      accessToken,
+      ...(options?.refreshSession ? { refreshSession: options.refreshSession } : {}),
+    }),
+
+  getUserActivity: (
+    accessToken: string,
+    userId: string,
+    type: AdminUserActivityType,
+    params?: { page?: number; limit?: number },
+    options?: AdminClientOptions,
+  ) => {
+    const query = new URLSearchParams();
+    if (params?.page) query.set('page', String(params.page));
+    if (params?.limit) query.set('limit', String(params.limit));
+    const qs = query.toString();
+    return apiRequest<PaginatedResponse<AdminUserActivityItem>>({
+      method: 'GET',
+      path: `/api/admin/users/${userId}/activity/${type}${qs ? `?${qs}` : ''}`,
+      accessToken,
+      ...(options?.refreshSession ? { refreshSession: options.refreshSession } : {}),
+    });
+  },
+
   updateUser: (
     accessToken: string,
     userId: string,
@@ -221,6 +268,72 @@ export const adminApiClient = {
     apiRequest<AdminUserListItem>({
       method: 'POST',
       path: `/api/admin/users/${userId}/verify-email`,
+      accessToken,
+      ...(options?.refreshSession ? { refreshSession: options.refreshSession } : {}),
+    }),
+
+  updateExpertProfile: (
+    accessToken: string,
+    userId: string,
+    body: AdminUpdateExpertProfileBody,
+    options?: AdminClientOptions,
+  ) =>
+    apiRequest<ExpertProfile>({
+      method: 'PATCH',
+      path: `/api/admin/users/${userId}/expert-profile`,
+      body,
+      accessToken,
+      ...(options?.refreshSession ? { refreshSession: options.refreshSession } : {}),
+    }),
+
+  updateBusinessProfile: (
+    accessToken: string,
+    userId: string,
+    body: AdminUpdateBusinessProfileBody,
+    options?: AdminClientOptions,
+  ) =>
+    apiRequest<BusinessProfile>({
+      method: 'PATCH',
+      path: `/api/admin/users/${userId}/business-profile`,
+      body,
+      accessToken,
+      ...(options?.refreshSession ? { refreshSession: options.refreshSession } : {}),
+    }),
+
+  freezeUserWallet: (accessToken: string, userId: string, options?: AdminClientOptions) =>
+    apiRequest<AdminWalletFreezeResponse>({
+      method: 'POST',
+      path: `/api/admin/users/${userId}/wallet/freeze`,
+      accessToken,
+      ...(options?.refreshSession ? { refreshSession: options.refreshSession } : {}),
+    }),
+
+  unfreezeUserWallet: (accessToken: string, userId: string, options?: AdminClientOptions) =>
+    apiRequest<AdminWalletFreezeResponse>({
+      method: 'POST',
+      path: `/api/admin/users/${userId}/wallet/unfreeze`,
+      accessToken,
+      ...(options?.refreshSession ? { refreshSession: options.refreshSession } : {}),
+    }),
+
+  forceLogoutUser: (accessToken: string, userId: string, options?: AdminClientOptions) =>
+    apiRequest<AdminForceLogoutResponse>({
+      method: 'POST',
+      path: `/api/admin/users/${userId}/force-logout`,
+      accessToken,
+      ...(options?.refreshSession ? { refreshSession: options.refreshSession } : {}),
+    }),
+
+  changeUserEmail: (
+    accessToken: string,
+    userId: string,
+    body: AdminChangeUserEmailBody,
+    options?: AdminClientOptions,
+  ) =>
+    apiRequest<{ user: AdminUserListItem; verificationEmailSent: boolean }>({
+      method: 'POST',
+      path: `/api/admin/users/${userId}/change-email`,
+      body,
       accessToken,
       ...(options?.refreshSession ? { refreshSession: options.refreshSession } : {}),
     }),

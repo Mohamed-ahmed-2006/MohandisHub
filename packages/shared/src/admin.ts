@@ -1,7 +1,15 @@
 // ---------------------------------------------------------------------------
-// Admin-specific types — shared between API and frontend
+// Admin-specific types - shared between API and frontend
 // ---------------------------------------------------------------------------
 
+import type {
+  AcademicRecord,
+  BusinessProfile,
+  ExpertProfile,
+  IdentityDocument,
+  UpdateBusinessProfileBody,
+  UpdateExpertProfileBody,
+} from './profiles.js';
 import type { UserRole } from './roles.js';
 
 export type PaginationParams = {
@@ -61,11 +69,29 @@ export type AdminUserDetail = AdminUserListItem & {
 
 export type AdminUpdateUserBody = {
   displayName?: string;
+  phone?: string | null;
+  phoneCode?: string | null;
+  nationality?: string | null;
+  dateOfBirth?: string | null;
   isActive?: boolean;
   primaryRole?: UserRole;
   isAdmin?: boolean;
   adminPermissions?: string[];
   planId?: string | null;
+};
+
+export type AdminChangeUserEmailBody = {
+  newEmail: string;
+  sendVerificationEmail?: boolean;
+};
+
+export type AdminForceLogoutResponse = {
+  revoked: true;
+};
+
+export type AdminWalletFreezeResponse = {
+  userId: string;
+  walletFrozen: boolean;
 };
 
 export type AdminUserFilters = PaginationParams & {
@@ -120,3 +146,91 @@ export type AdminServiceListItem = {
   city: string | null;
   createdAt: string;
 };
+
+export type AdminNeedActivityItem = {
+  id: string;
+  title: string;
+  status: string;
+  budgetAmount: number;
+  currency: string;
+  bidCount: number;
+  createdAt: string;
+};
+
+export type AdminBidActivityItem = {
+  id: string;
+  needId: string;
+  needTitle: string | null;
+  amount: number;
+  currency: string;
+  status: string;
+  paidAt: string | null;
+  createdAt: string;
+};
+
+export type AdminJobActivityItem = {
+  id: string;
+  title: string;
+  status: string;
+  createdAt: string;
+};
+
+export type AdminJobApplicationActivityItem = {
+  id: string;
+  jobId: string;
+  jobTitle: string | null;
+  status: string;
+  createdAt: string;
+};
+
+export type AdminBookingActivityItem = {
+  id: string;
+  status: string;
+  amount: number;
+  currency: string;
+  serviceTitle: string | null;
+  customerName: string | null;
+  providerName: string | null;
+  slotStartAt: string | null;
+  slotEndAt: string | null;
+  createdAt: string;
+};
+
+export type AdminUserActivityType =
+  | 'needs'
+  | 'bids'
+  | 'jobs'
+  | 'jobApplications'
+  | 'bookings'
+  | 'transactions';
+
+export type AdminUserActivityCounts = {
+  needs: number;
+  bids: number;
+  jobs: number;
+  jobApplications: number;
+  bookings: number;
+  transactions: number;
+};
+
+export type AdminUserRecentActivity = {
+  needs: AdminNeedActivityItem[];
+  bids: AdminBidActivityItem[];
+  jobs: AdminJobActivityItem[];
+  jobApplications: AdminJobApplicationActivityItem[];
+  bookings: AdminBookingActivityItem[];
+  transactions: AdminTransactionListItem[];
+};
+
+export type AdminUserOverview = {
+  user: AdminUserDetail;
+  expertProfile: ExpertProfile | null;
+  businessProfile: BusinessProfile | null;
+  identityDocuments: IdentityDocument[];
+  academicRecords: AcademicRecord[];
+  activityCounts: AdminUserActivityCounts;
+  recentActivity: AdminUserRecentActivity;
+};
+
+export type AdminUpdateExpertProfileBody = UpdateExpertProfileBody;
+export type AdminUpdateBusinessProfileBody = UpdateBusinessProfileBody;

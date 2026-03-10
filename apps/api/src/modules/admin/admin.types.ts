@@ -1,5 +1,5 @@
 // ---------------------------------------------------------------------------
-// Admin module — internal DB row types
+// Admin module - internal DB row types
 // ---------------------------------------------------------------------------
 
 export type UserRow = {
@@ -32,6 +32,59 @@ export type UserDetailRow = UserListRow & {
   wallet_balance: string | null;
   wallet_currency: string | null;
   wallet_frozen: boolean | null;
+};
+
+export type UserActivityCountRow = {
+  count: string;
+};
+
+export type NeedActivityRow = {
+  id: string;
+  title: string;
+  status: string;
+  budget_amount: string;
+  currency: string;
+  bid_count: string;
+  created_at: string;
+};
+
+export type BidActivityRow = {
+  id: string;
+  need_id: string;
+  need_title: string | null;
+  amount: string;
+  currency: string;
+  status: string;
+  paid_at: string | null;
+  created_at: string;
+};
+
+export type JobActivityRow = {
+  id: string;
+  title: string;
+  status: string;
+  created_at: string;
+};
+
+export type JobApplicationActivityRow = {
+  id: string;
+  job_id: string;
+  job_title: string | null;
+  status: string;
+  created_at: string;
+};
+
+export type BookingActivityRow = {
+  id: string;
+  status: string;
+  amount: string;
+  currency: string;
+  service_title: string | null;
+  customer_name: string | null;
+  provider_name: string | null;
+  slot_start_at: string | null;
+  slot_end_at: string | null;
+  created_at: string;
 };
 
 export type PlanRow = {

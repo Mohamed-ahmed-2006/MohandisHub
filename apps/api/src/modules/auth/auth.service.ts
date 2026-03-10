@@ -22,6 +22,7 @@ import {
   signAccessToken,
 } from '../../config/jwt.js';
 import { logger } from '../../config/logger.js';
+import { buildTransactionalEmailHtml } from '../../utils/transactional-email-template.js';
 import { HttpError } from '../../utils/http-error.js';
 import { SettingsService } from '../settings/settings.service.js';
 
@@ -443,14 +444,21 @@ export class AuthService {
         body: JSON.stringify({
           sender: { name: 'MohandisHub', email: env.EMAIL_FROM },
           to: [{ email: params.to, name: params.displayName }],
-          subject: 'MohandisHub — Reset your password',
-          htmlContent: [
-            `<h2>Hello ${params.displayName},</h2>`,
-            '<p>We received a request to reset your password.</p>',
-            `<p><a href="${params.resetLink}">Reset your password</a></p>`,
-            `<p>This link expires in ${PASSWORD_RESET_TTL_MINUTES} minutes.</p>`,
-            '<p style="color:#888;">If you did not request this, you can safely ignore this email.</p>',
-          ].join(''),
+          subject: 'MohandisHub - Reset your password',
+          htmlContent: buildTransactionalEmailHtml({
+            preheader: 'Reset your MohandisHub password',
+            title: 'Reset your password',
+            greeting: `Hello ${params.displayName},`,
+            introLines: ['We received a request to reset your password.'],
+            action: {
+              kind: 'button',
+              label: 'Reset Password',
+              url: params.resetLink,
+            },
+            expiryText: `This link expires in ${PASSWORD_RESET_TTL_MINUTES} minutes.`,
+            safetyText: 'If you did not request this, you can safely ignore this email.',
+            footerText: 'If this was not you, we recommend securing your account immediately.',
+          }),
         }),
       });
 
@@ -486,3 +494,4 @@ export class AuthService {
     };
   }
 }
+

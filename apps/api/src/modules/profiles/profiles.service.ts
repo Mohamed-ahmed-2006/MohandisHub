@@ -12,8 +12,10 @@ import type {
 } from '@mohandishub/shared';
 
 import { HttpError } from '../../utils/http-error.js';
+import { sendTransactionalEmail } from '../../utils/send-transactional-email.js';
 import { SettingsService } from '../settings/settings.service.js';
 
+import { AdminRepository } from '../admin/admin.repository.js';
 import { ProfilesRepository } from './profiles.repository.js';
 import type {
   AcademicRecordRow,
@@ -26,6 +28,7 @@ export class ProfilesService {
   constructor(
     private readonly repo: ProfilesRepository = new ProfilesRepository(),
     private readonly settingsService: SettingsService = new SettingsService(),
+    private readonly adminRepo: AdminRepository = new AdminRepository(),
   ) {}
 
   // ── Expert profile ─────────────────────────────────────────────────────
@@ -201,6 +204,13 @@ export class ProfilesService {
       userId,
       ...input,
     });
+
+    // When user resubmits after rejection, move profile back to pending
+    const expertProfile = await this.repo.findExpertProfile(userId);
+    if (expertProfile?.verification_status === 'rejected') {
+      await this.repo.updateExpertOverallStatus(userId, 'pending');
+    }
+
     return this.toIdentityDocument(row);
   }
 
@@ -294,6 +304,7 @@ export class ProfilesService {
       const expertProfile = await this.repo.findExpertProfile(doc.user_id);
       if (expertProfile) {
         await this.repo.setExpertIdentityVerified(doc.user_id, true);
+        await this.repo.setExpertIdentityVerificationMethod(doc.user_id, 'manual');
         // Check if both identity + academic are verified → set overall status
         if (expertProfile.academic_verified) {
           await this.repo.updateExpertOverallStatus(doc.user_id, 'verified');
@@ -310,6 +321,53 @@ export class ProfilesService {
         } else {
           await this.repo.updateBusinessOverallStatus(doc.user_id, 'under_review');
         }
+      }
+
+      const user = await this.repo.findUserBasicById(doc.user_id);
+      if (user) {
+        await sendTransactionalEmail({
+          to: user.email,
+          displayName: user.display_name,
+          subject: 'MohandisHub - Identity verified',
+          preheader: 'Your identity has been verified',
+          title: 'Identity verified',
+          greeting: `Hello ${user.display_name},`,
+          introLines: [
+            'Your identity document has been reviewed and approved.',
+            'You can now continue with your onboarding and access the full platform.',
+          ],
+        });
+      }
+    }
+
+    if (params.decision === 'rejected') {
+      const user = await this.repo.findUserBasicById(doc.user_id);
+      if (user) {
+        const reason = params.notes?.trim() || 'No reason provided.';
+        await sendTransactionalEmail({
+          to: user.email,
+          displayName: user.display_name,
+          subject: 'MohandisHub - Identity verification rejected',
+          preheader: 'Your identity verification was rejected',
+          title: 'Identity verification rejected',
+          greeting: `Hello ${user.display_name},`,
+          introLines: [
+            'Your identity document has been reviewed and was not approved.',
+            `Reason: ${reason}`,
+            'Please log in and resubmit your identity document to continue.',
+          ],
+        });
+      }
+      // Allow user to resubmit: update profile to rejected, do not soft-delete
+      const expertProfile = await this.repo.findExpertProfile(doc.user_id);
+      if (expertProfile) {
+        await this.repo.setExpertIdentityVerified(doc.user_id, false);
+        await this.repo.updateExpertOverallStatus(doc.user_id, 'rejected');
+      }
+      const businessProfile = await this.repo.findBusinessProfile(doc.user_id);
+      if (businessProfile) {
+        await this.repo.setBusinessIdentityVerified(doc.user_id, false);
+        await this.repo.updateBusinessOverallStatus(doc.user_id, 'rejected');
       }
     }
 
@@ -358,6 +416,42 @@ export class ProfilesService {
         } else {
           await this.repo.updateExpertOverallStatus(record.user_id, 'under_review');
         }
+      }
+
+      const user = await this.repo.findUserBasicById(record.user_id);
+      if (user) {
+        await sendTransactionalEmail({
+          to: user.email,
+          displayName: user.display_name,
+          subject: 'MohandisHub - Academic document verified',
+          preheader: 'Your academic document has been approved',
+          title: 'Academic document verified',
+          greeting: `Hello ${user.display_name},`,
+          introLines: [
+            'Your academic document has been reviewed and approved.',
+            'You can now access the full platform and go to your dashboard.',
+          ],
+        });
+      }
+    }
+
+    if (params.decision === 'rejected') {
+      const user = await this.repo.findUserBasicById(record.user_id);
+      if (user) {
+        const reason = params.notes?.trim() || 'No reason provided.';
+        await sendTransactionalEmail({
+          to: user.email,
+          displayName: user.display_name,
+          subject: 'MohandisHub - Academic document not approved',
+          preheader: 'Your academic document was not approved',
+          title: 'Academic document not approved',
+          greeting: `Hello ${user.display_name},`,
+          introLines: [
+            'Your academic document has been reviewed and was not approved.',
+            `Reason: ${reason}`,
+            'You may submit a new document or contact support if you have questions.',
+          ],
+        });
       }
     }
 
@@ -465,8 +559,14 @@ export class ProfilesService {
     return this.repo.findTopExperts(limit);
   }
 
-  async syncVerifiedAtForManuallyVerified(): Promise<{ experts: number; businesses: number }> {
-    return this.repo.syncVerifiedAtForManuallyVerified();
+  async syncVerifiedAtForManuallyVerified(): Promise<{
+    experts: number;
+    businesses: number;
+    expertsStatusSynced?: number;
+  }> {
+    const expertsStatusSynced = await this.repo.syncExpertVerificationStatusFromFlags();
+    const result = await this.repo.syncVerifiedAtForManuallyVerified();
+    return { ...result, expertsStatusSynced };
   }
 
   async getTopBusinesses(limit: number = 6): Promise<
@@ -507,6 +607,7 @@ export class ProfilesService {
       verificationStatus: row.verification_status,
       identityVerified: row.identity_verified,
       academicVerified: row.academic_verified,
+      identityVerificationMethod: row.identity_verification_method ?? null,
       createdAt: row.created_at.toISOString(),
     };
   }

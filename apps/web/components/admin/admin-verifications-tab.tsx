@@ -6,6 +6,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { adminApiClient } from '@/lib/admin/client';
 import { isApiClientError } from '@/lib/auth/client';
 import type { Dictionary } from '@/lib/i18n/types';
+import { ImagePreviewModal } from '@/components/ui/image-preview-modal';
 
 type Props = {
   dictionary: Dictionary;
@@ -27,6 +28,7 @@ export const AdminVerificationsTab = ({ dictionary, accessToken, refreshSession 
   const [activeSubTab, setActiveSubTab] = useState<'identity' | 'academic' | 'business'>(
     'identity',
   );
+  const [previewImage, setPreviewImage] = useState<{ url: string; title: string } | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -47,10 +49,23 @@ export const AdminVerificationsTab = ({ dictionary, accessToken, refreshSession 
   }, [load]);
 
   const handleReviewIdentity = async (docId: string, decision: 'approved' | 'rejected') => {
+    let notes: string | undefined;
+    if (decision === 'rejected') {
+      const reason = window.prompt(
+        'Rejection reason (required for identity — user receives this and account is deleted):',
+      );
+      if (reason === null) return;
+      notes = reason.trim() || undefined;
+    }
     setReviewing(docId);
     setError(null);
     try {
-      await adminApiClient.reviewIdentityDocument(accessToken, docId, { decision }, { refreshSession });
+      await adminApiClient.reviewIdentityDocument(
+        accessToken,
+        docId,
+        { decision, ...(notes !== undefined && notes !== '' && { notes }) },
+        { refreshSession },
+      );
       await load();
     } catch (err: unknown) {
       setError(getErrorMessage(err, dictionary));
@@ -60,10 +75,23 @@ export const AdminVerificationsTab = ({ dictionary, accessToken, refreshSession 
   };
 
   const handleReviewAcademic = async (recordId: string, decision: 'approved' | 'rejected') => {
+    let notes: string | undefined;
+    if (decision === 'rejected') {
+      const reason = window.prompt(
+        'Rejection reason (sent to user by email):',
+      );
+      if (reason === null) return;
+      notes = reason.trim() || undefined;
+    }
     setReviewing(recordId);
     setError(null);
     try {
-      await adminApiClient.reviewAcademicRecord(accessToken, recordId, { decision }, { refreshSession });
+      await adminApiClient.reviewAcademicRecord(
+        accessToken,
+        recordId,
+        { decision, ...(notes !== undefined && notes !== '' && { notes }) },
+        { refreshSession },
+      );
       await load();
     } catch (err: unknown) {
       setError(getErrorMessage(err, dictionary));
@@ -123,6 +151,13 @@ export const AdminVerificationsTab = ({ dictionary, accessToken, refreshSession 
 
   return (
     <>
+      {previewImage && (
+        <ImagePreviewModal
+          imageUrl={previewImage.url}
+          title={previewImage.title}
+          onClose={() => setPreviewImage(null)}
+        />
+      )}
       {error && <p className="admin-error-banner">{error}</p>}
       <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem', flexWrap: 'wrap', alignItems: 'center' }}>
         <button
@@ -168,6 +203,7 @@ export const AdminVerificationsTab = ({ dictionary, accessToken, refreshSession 
                   <th>Document</th>
                   <th>{dictionary.admin.user}</th>
                   <th>Type</th>
+                  <th>Images</th>
                   <th>{dictionary.admin.role}</th>
                   <th>Actions</th>
                 </tr>
@@ -184,6 +220,46 @@ export const AdminVerificationsTab = ({ dictionary, accessToken, refreshSession 
                       </span>
                     </td>
                     <td>{doc.documentType}</td>
+                    <td>
+                      <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                        {doc.frontImageUrl && (
+                          <button
+                            type="button"
+                            className="admin-btn admin-btn--small"
+                            onClick={() =>
+                              setPreviewImage({ url: doc.frontImageUrl!, title: 'Document front' })
+                            }
+                          >
+                            View front
+                          </button>
+                        )}
+                        {doc.backImageUrl && (
+                          <button
+                            type="button"
+                            className="admin-btn admin-btn--small"
+                            onClick={() =>
+                              setPreviewImage({ url: doc.backImageUrl!, title: 'Document back' })
+                            }
+                          >
+                            View back
+                          </button>
+                        )}
+                        {doc.selfieImageUrl && (
+                          <button
+                            type="button"
+                            className="admin-btn admin-btn--small"
+                            onClick={() =>
+                              setPreviewImage({ url: doc.selfieImageUrl!, title: 'Selfie' })
+                            }
+                          >
+                            View selfie
+                          </button>
+                        )}
+                        {!doc.frontImageUrl && !doc.backImageUrl && !doc.selfieImageUrl && (
+                          <span style={{ color: 'hsl(var(--text-soft))' }}>—</span>
+                        )}
+                      </div>
+                    </td>
                     <td>
                       <span className="admin-badge">{doc.userRole}</span>
                     </td>
@@ -224,6 +300,7 @@ export const AdminVerificationsTab = ({ dictionary, accessToken, refreshSession 
                 <tr>
                   <th>Title</th>
                   <th>Institution</th>
+                  <th>Documents</th>
                   <th>{dictionary.admin.user}</th>
                   <th>Actions</th>
                 </tr>
@@ -233,6 +310,41 @@ export const AdminVerificationsTab = ({ dictionary, accessToken, refreshSession 
                   <tr key={rec.id}>
                     <td>{rec.title}</td>
                     <td>{rec.institution}</td>
+                    <td>
+                      <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                        {rec.certificateImageUrl && (
+                          <button
+                            type="button"
+                            className="admin-btn admin-btn--small"
+                            onClick={() =>
+                              setPreviewImage({
+                                url: rec.certificateImageUrl!,
+                                title: 'Certificate',
+                              })
+                            }
+                          >
+                            View certificate
+                          </button>
+                        )}
+                        {rec.transcriptImageUrl && (
+                          <button
+                            type="button"
+                            className="admin-btn admin-btn--small"
+                            onClick={() =>
+                              setPreviewImage({
+                                url: rec.transcriptImageUrl!,
+                                title: 'Transcript',
+                              })
+                            }
+                          >
+                            View transcript
+                          </button>
+                        )}
+                        {!rec.certificateImageUrl && !rec.transcriptImageUrl && (
+                          <span style={{ color: 'hsl(var(--text-soft))' }}>—</span>
+                        )}
+                      </div>
+                    </td>
                     <td>
                       {rec.userDisplayName}
                       <br />

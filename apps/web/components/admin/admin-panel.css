@@ -815,3 +815,228 @@
     grid-template-columns: 1fr;
   }
 }
+
+.admin-user360 {
+  gap: 0.75rem;
+}
+
+.admin-user360-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  border-bottom: 1px solid hsl(var(--border));
+  padding-bottom: 0.65rem;
+}
+
+.admin-user360-tab {
+  min-height: 2.2rem;
+  padding: 0.4rem 0.8rem;
+  border-radius: 999px;
+  border: 1px solid hsl(var(--border));
+  background: transparent;
+  color: hsl(var(--text-soft));
+  cursor: pointer;
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.admin-user360-tab--active {
+  background: hsl(var(--primary) / 0.12);
+  border-color: hsl(var(--primary) / 0.2);
+  color: hsl(var(--primary));
+}
+
+.admin-user360-content {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.admin-user360-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+.admin-user360-span-2 {
+  grid-column: span 2;
+}
+
+.admin-user360-counters {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 0.55rem;
+}
+
+.admin-user360-counter {
+  border: 1px solid hsl(var(--border));
+  border-radius: 0.7rem;
+  padding: 0.55rem 0.65rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.82rem;
+}
+
+.admin-user360-counter strong {
+  font-size: 0.9rem;
+}
+
+.admin-user360-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.65rem;
+}
+
+.admin-user360-permissions {
+  margin-top: 0.7rem;
+}
+
+.admin-user360-permissions-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.5rem;
+}
+
+.admin-user360-note {
+  margin: 0 0 0.5rem;
+  color: hsl(var(--text-soft));
+  font-size: 0.8rem;
+}
+
+.admin-user360-json {
+  width: 100%;
+  min-height: 240px;
+  border: 1px solid hsl(var(--border));
+  border-radius: 0.8rem;
+  background: hsl(var(--background));
+  color: hsl(var(--foreground));
+  padding: 0.6rem 0.75rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.78rem;
+}
+
+.admin-user360-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.admin-user360-item {
+  border: 1px solid hsl(var(--border));
+  border-radius: 0.75rem;
+  padding: 0.6rem 0.7rem;
+}
+
+.admin-user360-item-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.admin-user360-item-meta {
+  margin: 0.35rem 0;
+  color: hsl(var(--text-soft));
+  font-size: 0.8rem;
+}
+
+.admin-user360-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 0.45rem;
+  font-size: 0.8rem;
+}
+
+.admin-user360-security-block {
+  border: 1px solid hsl(var(--border));
+  border-radius: 0.75rem;
+  padding: 0.6rem;
+  margin-bottom: 0.6rem;
+}
+
+.admin-user360-activity-types {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  margin-bottom: 0.6rem;
+}
+
+@media (max-width: 760px) {
+  .admin-user360-grid,
+  .admin-user360-form-grid,
+  .admin-user360-permissions-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-user360-span-2 {
+    grid-column: auto;
+  }
+}
+
+/* Image preview modal */
+.image-preview-overlay {
+  z-index: 1100;
+}
+
+.image-preview-modal {
+  max-width: min(90vw, 800px);
+  max-height: 90vh;
+  background: hsl(var(--card));
+  border-radius: var(--radius-lg);
+  border: 1px solid hsl(var(--border));
+  overflow: hidden;
+  box-shadow: var(--shadow-soft-lg);
+  display: flex;
+  flex-direction: column;
+}
+
+.image-preview-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid hsl(var(--border));
+  flex-shrink: 0;
+}
+
+.image-preview-title {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: hsl(var(--foreground));
+}
+
+.image-preview-close {
+  width: 2rem;
+  height: 2rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  color: hsl(var(--text-soft));
+  font-size: 1.5rem;
+  line-height: 1;
+  cursor: pointer;
+  border-radius: 0.5rem;
+}
+
+.image-preview-close:hover {
+  background: hsl(var(--muted));
+  color: hsl(var(--foreground));
+}
+
+.image-preview-content {
+  overflow: auto;
+  padding: 0.5rem;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+}
+
+.image-preview-img {
+  max-width: 100%;
+  height: auto;
+  display: block;
+  border-radius: 0.5rem;
+}

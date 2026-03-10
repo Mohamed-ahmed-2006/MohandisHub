@@ -127,6 +127,7 @@ export const AdminPanel = ({ locale, dictionary }: AdminPanelProps) => {
             dictionary={dictionary}
             accessToken={accessToken}
             refreshSession={refreshSession}
+            adminPermissions={authUser.adminPermissions ?? []}
           />
         )}
         {activeTab === 'plans' && (

@@ -11,6 +11,7 @@ import { WalletDepositModal } from './wallet-deposit-modal';
 import { useAuth } from '@/components/auth/auth-provider';
 import { SkeletonAvatar } from '@/components/ui/skeleton';
 import { getChatSocket } from '@/lib/chat/socket';
+import { profilesApiClient } from '@/lib/profiles/client';
 import { buildLocalePath } from '@/lib/i18n/path';
 import type { Dictionary, Locale } from '@/lib/i18n/types';
 import { walletApiClient } from '@/lib/wallet/client';
@@ -54,6 +55,33 @@ const AppShellInner = ({ locale, dictionary, children }: AppShellProps) => {
       .then((w) => setWallet(w))
       .catch(() => setWallet(null));
   }, [isReady, accessToken]);
+
+  useEffect(() => {
+    if (!isReady || !authUser || !accessToken) return;
+    const role = authUser.role;
+    if (role !== 'expert' && role !== 'business') return;
+    const verificationStatus = authUser.verificationStatus;
+    const onboardingPath =
+      role === 'expert' ? '/onboarding/expert' : '/onboarding/business';
+    void (async () => {
+      try {
+        if (role === 'expert') {
+          await profilesApiClient.getExpertProfile(accessToken);
+        } else {
+          await profilesApiClient.getBusinessProfile(accessToken);
+        }
+        if (
+          verificationStatus &&
+          verificationStatus !== 'verified'
+        ) {
+          router.replace(buildLocalePath(locale, onboardingPath));
+          return;
+        }
+      } catch {
+        router.replace(buildLocalePath(locale, onboardingPath));
+      }
+    })();
+  }, [isReady, authUser, accessToken, locale, router]);
 
   useEffect(() => {
     if (!isReady || !authUser || !accessToken) return;

@@ -47,6 +47,9 @@ const createRepositoryMock = (): AuthRepositoryMock => ({
 describe('AuthService password reset flow', () => {
   const originalEmailProvider = env.OTP_EMAIL_PROVIDER;
   const originalWebPublicUrl = env.WEB_PUBLIC_URL;
+  const originalBrevoApiKey = env.BREVO_API_KEY;
+  const originalEmailFrom = env.EMAIL_FROM;
+  const originalEmailLogoUrl = env.EMAIL_LOGO_URL;
 
   beforeEach(() => {
     env.OTP_EMAIL_PROVIDER = 'console';
@@ -56,6 +59,9 @@ describe('AuthService password reset flow', () => {
   afterEach(() => {
     env.OTP_EMAIL_PROVIDER = originalEmailProvider;
     env.WEB_PUBLIC_URL = originalWebPublicUrl;
+    env.BREVO_API_KEY = originalBrevoApiKey;
+    env.EMAIL_FROM = originalEmailFrom;
+    env.EMAIL_LOGO_URL = originalEmailLogoUrl;
     vi.restoreAllMocks();
   });
 
@@ -114,6 +120,43 @@ describe('AuthService password reset flow', () => {
 
     expect(result.message).toContain('could not send');
     expect(repo.setPasswordResetToken).toHaveBeenCalledTimes(1);
+  });
+
+  it('forgotPassword sends branded Brevo HTML when Brevo is configured', async () => {
+    const repo = createRepositoryMock();
+    repo.findUserByEmail.mockResolvedValue(makeUserRow());
+    repo.setPasswordResetToken.mockResolvedValue(undefined);
+
+    env.OTP_EMAIL_PROVIDER = 'brevo';
+    env.BREVO_API_KEY = 'brevo_test_key';
+    env.EMAIL_FROM = 'noreply@mohandishub.app';
+    env.EMAIL_LOGO_URL = 'https://cdn.example.com/brand/logo.png';
+
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      status: 201,
+      text: async () => '',
+    } as Response);
+
+    const service = new AuthService(repo as never);
+    const result = await service.forgotPassword({ email: 'user@example.com' });
+
+    expect(result.message).toContain('password reset link has been sent');
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+
+    const [url, init] = fetchSpy.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe('https://api.brevo.com/v3/smtp/email');
+
+    const payload = JSON.parse(String(init.body)) as {
+      subject: string;
+      htmlContent: string;
+    };
+
+    expect(payload.subject).toContain('Reset your password');
+    expect(payload.htmlContent).toContain('Reset your password');
+    expect(payload.htmlContent).toContain('Reset Password');
+    expect(payload.htmlContent).toContain('If you did not request this');
+    expect(payload.htmlContent).toContain('cdn.example.com/brand/logo.png');
   });
 
   it('resetPassword rejects invalid token', async () => {

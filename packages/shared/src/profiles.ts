@@ -102,6 +102,8 @@ export type ExpertProfile = {
   verificationStatus: VerificationStatus;
   identityVerified: boolean;
   academicVerified: boolean;
+  /** How identity was verified: 'didit' = external KYC (e.g. Didit), 'manual' = admin-reviewed identity document */
+  identityVerificationMethod: 'didit' | 'manual' | null;
   createdAt: string;
 };
 

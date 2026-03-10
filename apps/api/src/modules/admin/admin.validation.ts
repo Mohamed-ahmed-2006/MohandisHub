@@ -1,17 +1,46 @@
 // ---------------------------------------------------------------------------
-// Admin module — Zod validation schemas
+// Admin module - Zod validation schemas
 // ---------------------------------------------------------------------------
 
 import { z } from 'zod';
 
+import {
+  updateBusinessProfileSchema,
+  updateExpertProfileSchema,
+} from '../profiles/profiles.validation.js';
+
+export { updateBusinessProfileSchema, updateExpertProfileSchema };
+
 export const updateUserSchema = z.object({
   displayName: z.string().min(2).max(100).optional(),
+  phone: z.string().max(30).nullable().optional(),
+  phoneCode: z.string().max(10).nullable().optional(),
+  nationality: z.string().max(100).nullable().optional(),
+  dateOfBirth: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be in YYYY-MM-DD format.')
+    .nullable()
+    .optional(),
   isActive: z.boolean().optional(),
   primaryRole: z.enum(['customer', 'expert', 'business']).optional(),
   isAdmin: z.boolean().optional(),
   adminPermissions: z.array(z.string()).optional(),
   planId: z.string().uuid().nullable().optional(),
 });
+
+export const changeUserEmailSchema = z.object({
+  newEmail: z.string().email(),
+  sendVerificationEmail: z.boolean().optional(),
+});
+
+export const userActivityTypeSchema = z.enum([
+  'needs',
+  'bids',
+  'jobs',
+  'jobApplications',
+  'bookings',
+  'transactions',
+]);
 
 export const createPlanSchema = z.object({
   slug: z.string().min(1).max(50),
@@ -98,6 +127,10 @@ export const updateSettingsSchema = z.object({
 });
 
 export type UpdateUserInput = z.infer<typeof updateUserSchema>;
+export type ChangeUserEmailInput = z.infer<typeof changeUserEmailSchema>;
+export type UserActivityTypeInput = z.infer<typeof userActivityTypeSchema>;
+export type UpdateExpertProfileByAdminInput = z.infer<typeof updateExpertProfileSchema>;
+export type UpdateBusinessProfileByAdminInput = z.infer<typeof updateBusinessProfileSchema>;
 export type CreatePlanInput = z.infer<typeof createPlanSchema>;
 export type UpdatePlanInput = z.infer<typeof updatePlanSchema>;
 export type AdjustBalanceInput = z.infer<typeof adjustBalanceSchema>;

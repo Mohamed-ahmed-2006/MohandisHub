@@ -177,23 +177,39 @@ export class DiditVerificationProvider implements IVerificationProvider {
       throw new Error('Invalid Didit webhook payload: missing session_id or status.');
     }
 
-    // Map Didit status → approved boolean
+    // Map Didit status → approved (terminal) or under_review (non-terminal)
     // Didit statuses: 'Not Started', 'In Progress', 'Approved', 'Declined', 'In Review', 'Abandoned'
-    const approved = body.status === 'Approved';
+    const approved: boolean | undefined =
+      body.status === 'Approved' ? true : body.status === 'Declined' ? false : undefined;
     const isTerminal = body.status === 'Approved' || body.status === 'Declined';
+    const underReview = body.status === 'In Progress' || body.status === 'In Review';
 
-    if (!isTerminal) {
-      // Non-terminal statuses (In Progress, In Review, etc.) — we acknowledge
-      // but don't change our verification status. Log for debugging.
+    if (!isTerminal && !underReview) {
+      // Other non-terminal (Not Started, Abandoned, etc.) — acknowledge only
       logger.info('Didit webhook: non-terminal status update', {
         sessionId: body.session_id,
         status: body.status,
       });
     }
 
+    if (isTerminal) {
+      return {
+        sessionId: body.session_id,
+        approved: approved ?? false,
+        rawPayload: body,
+      };
+    }
+
+    if (underReview) {
+      return {
+        sessionId: body.session_id,
+        status: 'under_review',
+        rawPayload: body,
+      };
+    }
+
     return {
       sessionId: body.session_id,
-      approved,
       rawPayload: body,
     };
   }

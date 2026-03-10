@@ -14,7 +14,7 @@
     "predev": "npm run build -w @mohandishub/shared",
     "dev": "concurrently -n web,api -c blue,green \"npm run dev:web\" \"npm run dev:api\"",
     "predev:api": "node scripts/kill-port.js",
-    "dev:web": "npm run dev -w @mohandishub/web",
+    "dev:web": "node scripts/dev-web-with-recovery.mjs",
     "dev:api": "npm run dev -w @mohandishub/api",
     "build": "npm run build -w @mohandishub/shared && npm run build -w @mohandishub/api && npm run build -w @mohandishub/web",
     "typecheck": "npm run build -w @mohandishub/shared && npm run typecheck -w @mohandishub/shared && npm run typecheck -w @mohandishub/api && npm run typecheck -w @mohandishub/web",

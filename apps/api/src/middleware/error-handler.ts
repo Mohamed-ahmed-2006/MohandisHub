@@ -1,5 +1,6 @@
 import type { ApiErrorBody } from '@mohandishub/shared';
 import type { ErrorRequestHandler } from 'express';
+import { ZodError } from 'zod';
 
 import { env } from '../config/env.js';
 import { logger } from '../config/logger.js';
@@ -9,6 +10,26 @@ export const errorHandler: ErrorRequestHandler = (error, req, res, next) => {
   void next;
   void req;
   const requestId = typeof res.locals.requestId === 'string' ? res.locals.requestId : undefined;
+
+  if (error instanceof ZodError) {
+    const flattened = error.flatten();
+    const fieldErrors = flattened.fieldErrors as Record<string, string[] | undefined>;
+    const message =
+      Object.values(fieldErrors)
+        .flat()
+        .filter(Boolean)[0] ?? 'Validation failed';
+    const body: ApiErrorBody = {
+      ok: false,
+      error: {
+        code: 'VALIDATION_ERROR',
+        message,
+        details: fieldErrors,
+        ...(requestId ? { requestId } : {}),
+      },
+    };
+    res.status(400).json(body);
+    return;
+  }
 
   if (error instanceof HttpError) {
     const body: ApiErrorBody = {

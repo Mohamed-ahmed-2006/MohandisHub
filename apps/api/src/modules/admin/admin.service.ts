@@ -3,24 +3,43 @@
 // ---------------------------------------------------------------------------
 
 import type {
+  AdminBidActivityItem,
+  AdminBookingActivityItem,
   AdminDashboardStats,
+  AdminForceLogoutResponse,
+  AdminJobActivityItem,
+  AdminJobApplicationActivityItem,
+  AdminNeedActivityItem,
   AdminServiceListItem,
   AdminTransactionListItem,
+  AdminUserActivityCounts,
+  AdminUserActivityType,
   AdminUserDetail,
   AdminUserListItem,
+  AdminUserOverview,
+  AdminWalletFreezeResponse,
+  BusinessProfile,
+  ExpertProfile,
   PaginatedResponse,
   Plan,
   ServiceCategory,
   Transaction,
 } from '@mohandishub/shared';
 
+import { AuthRepository } from '../auth/auth.repository.js';
 import { HttpError } from '../../utils/http-error.js';
 import { OtpService } from '../otp/otp.service.js';
+import { ProfilesService } from '../profiles/profiles.service.js';
 import { SettingsService } from '../settings/settings.service.js';
 
 import { AdminRepository } from './admin.repository.js';
 import type {
+  BidActivityRow,
+  BookingActivityRow,
   CategoryRow,
+  JobActivityRow,
+  JobApplicationActivityRow,
+  NeedActivityRow,
   PlanRow,
   ServiceListRow,
   TransactionListRow,
@@ -30,12 +49,16 @@ import type {
 } from './admin.types.js';
 import type {
   AdjustBalanceInput,
+  ChangeUserEmailInput,
   CreateCategoryInput,
   CreatePlanInput,
+  UpdateBusinessProfileByAdminInput,
   UpdateCategoryInput,
+  UpdateExpertProfileByAdminInput,
   UpdatePlanInput,
   UpdateServiceInput,
   UpdateUserInput,
+  UserActivityTypeInput,
 } from './admin.validation.js';
 
 export class AdminService {
@@ -43,6 +66,8 @@ export class AdminService {
     private readonly repo: AdminRepository = new AdminRepository(),
     private readonly otpService: OtpService = new OtpService(),
     private readonly settingsService: SettingsService = new SettingsService(),
+    private readonly authRepository: AuthRepository = new AuthRepository(),
+    private readonly profilesService: ProfilesService = new ProfilesService(),
   ) {}
 
   // ── Dashboard ───────────────────────────────────────────────────────────
@@ -98,12 +123,24 @@ export class AdminService {
   async updateUser(userId: string, input: UpdateUserInput): Promise<AdminUserListItem> {
     const dbFields: Record<string, unknown> = {};
     if (input.displayName !== undefined) dbFields.display_name = input.displayName;
+    if (input.phone !== undefined) dbFields.phone = input.phone;
+    if (input.phoneCode !== undefined) dbFields.phone_code = input.phoneCode;
+    if (input.nationality !== undefined) dbFields.nationality = input.nationality;
+    if (input.dateOfBirth !== undefined) dbFields.date_of_birth = input.dateOfBirth;
     if (input.isActive !== undefined) dbFields.is_active = input.isActive;
     if (input.primaryRole !== undefined) dbFields.primary_role = input.primaryRole;
     if (input.isAdmin !== undefined) dbFields.is_admin = input.isAdmin;
     if (input.adminPermissions !== undefined)
       dbFields.admin_permissions = Array.isArray(input.adminPermissions) ? input.adminPermissions : [];
     if (input.planId !== undefined) dbFields.plan_id = input.planId;
+
+    if (Object.keys(dbFields).length === 0) {
+      const existing = await this.repo.getUserById(userId);
+      if (!existing) {
+        throw new HttpError({ statusCode: 404, code: 'USER_NOT_FOUND', message: 'User not found.' });
+      }
+      return this.toUserListItem(existing);
+    }
 
     const row = await this.repo.updateUser(userId, dbFields);
     if (!row) {
@@ -139,6 +176,309 @@ export class AdminService {
       throw new HttpError({ statusCode: 404, code: 'USER_NOT_FOUND', message: 'User not found.' });
     }
     return this.toUserListItem(row);
+  }
+
+  async getUserOverview(
+    userId: string,
+    options?: { includeVerification?: boolean; includeTransactions?: boolean; recentLimit?: number },
+  ): Promise<AdminUserOverview> {
+    const row = await this.repo.getUserDetail(userId);
+    if (!row) {
+      throw new HttpError({ statusCode: 404, code: 'USER_NOT_FOUND', message: 'User not found.' });
+    }
+
+    const recentLimit = Math.max(1, Math.min(options?.recentLimit ?? 5, 25));
+    const includeVerification = options?.includeVerification === true;
+    const includeTransactions = options?.includeTransactions === true;
+
+    const safeCount = async (fn: () => Promise<number>): Promise<number> => {
+      try {
+        return await fn();
+      } catch (error) {
+        if (this.isMissingSchemaError(error)) return 0;
+        throw error;
+      }
+    };
+
+    const safeRows = async <T>(fn: () => Promise<T[]>): Promise<T[]> => {
+      try {
+        return await fn();
+      } catch (error) {
+        if (this.isMissingSchemaError(error)) return [];
+        throw error;
+      }
+    };
+
+    const [needsCount, bidsCount, jobsCount, jobApplicationsCount, bookingsCount, transactionsCount] =
+      await Promise.all([
+        safeCount(() => this.repo.countNeedsByUser(userId)),
+        safeCount(() => this.repo.countBidsByUser(userId)),
+        safeCount(() => this.repo.countJobsByUser(userId)),
+        safeCount(() => this.repo.countJobApplicationsByUser(userId)),
+        safeCount(() => this.repo.countBookingsByUser(userId)),
+        includeTransactions ? safeCount(() => this.repo.countTransactions({ userId })) : Promise.resolve(0),
+      ]);
+
+    const [needsRows, bidsRows, jobsRows, jobApplicationsRows, bookingsRows, transactionsRows] =
+      await Promise.all([
+        safeRows(() => this.repo.listNeedsByUser(userId, 1, recentLimit)),
+        safeRows(() => this.repo.listBidsByUser(userId, 1, recentLimit)),
+        safeRows(() => this.repo.listJobsByUser(userId, 1, recentLimit)),
+        safeRows(() => this.repo.listJobApplicationsByUser(userId, 1, recentLimit)),
+        safeRows(() => this.repo.listBookingsByUser(userId, 1, recentLimit)),
+        includeTransactions
+          ? safeRows(() => this.repo.listTransactions({ userId }, 1, recentLimit))
+          : Promise.resolve([] as TransactionListRow[]),
+      ]);
+
+    let expertProfile: AdminUserOverview['expertProfile'] = null;
+    let businessProfile: AdminUserOverview['businessProfile'] = null;
+    let identityDocuments: AdminUserOverview['identityDocuments'] = [];
+    let academicRecords: AdminUserOverview['academicRecords'] = [];
+
+    expertProfile = await this.profilesService.getExpertProfile(userId).catch(() => null);
+    businessProfile = await this.profilesService.getBusinessProfile(userId).catch(() => null);
+
+    if (includeVerification) {
+      identityDocuments = await this.profilesService.getIdentityDocuments(userId);
+      academicRecords = await this.profilesService.getAcademicRecords(userId);
+    }
+
+    const activityCounts: AdminUserActivityCounts = {
+      needs: needsCount,
+      bids: bidsCount,
+      jobs: jobsCount,
+      jobApplications: jobApplicationsCount,
+      bookings: bookingsCount,
+      transactions: transactionsCount,
+    };
+
+    return {
+      user: this.toUserDetail(row),
+      expertProfile,
+      businessProfile,
+      identityDocuments,
+      academicRecords,
+      activityCounts,
+      recentActivity: {
+        needs: needsRows.map((item) => this.toNeedActivityItem(item)),
+        bids: bidsRows.map((item) => this.toBidActivityItem(item)),
+        jobs: jobsRows.map((item) => this.toJobActivityItem(item)),
+        jobApplications: jobApplicationsRows.map((item) => this.toJobApplicationActivityItem(item)),
+        bookings: bookingsRows.map((item) => this.toBookingActivityItem(item)),
+        transactions: transactionsRows.map((item) => this.toTransactionListItem(item)),
+      },
+    };
+  }
+
+  async getUserActivity(
+    userId: string,
+    type: UserActivityTypeInput,
+    page: number = 1,
+    limit: number = 20,
+  ): Promise<
+    PaginatedResponse<
+      | AdminNeedActivityItem
+      | AdminBidActivityItem
+      | AdminJobActivityItem
+      | AdminJobApplicationActivityItem
+      | AdminBookingActivityItem
+      | AdminTransactionListItem
+    >
+  > {
+    const user = await this.repo.getUserById(userId);
+    if (!user) {
+      throw new HttpError({ statusCode: 404, code: 'USER_NOT_FOUND', message: 'User not found.' });
+    }
+
+    const safePage = Math.max(1, page);
+    const safeLimit = Math.min(Math.max(1, limit), 50);
+
+    switch (type as AdminUserActivityType) {
+      case 'needs': {
+        const total = await this.repo.countNeedsByUser(userId);
+        const rows = await this.repo.listNeedsByUser(userId, safePage, safeLimit);
+        return {
+          items: rows.map((item) => this.toNeedActivityItem(item)),
+          total,
+          page: safePage,
+          limit: safeLimit,
+          totalPages: Math.ceil(total / safeLimit),
+        };
+      }
+      case 'bids': {
+        const total = await this.repo.countBidsByUser(userId);
+        const rows = await this.repo.listBidsByUser(userId, safePage, safeLimit);
+        return {
+          items: rows.map((item) => this.toBidActivityItem(item)),
+          total,
+          page: safePage,
+          limit: safeLimit,
+          totalPages: Math.ceil(total / safeLimit),
+        };
+      }
+      case 'jobs': {
+        const total = await this.repo.countJobsByUser(userId);
+        const rows = await this.repo.listJobsByUser(userId, safePage, safeLimit);
+        return {
+          items: rows.map((item) => this.toJobActivityItem(item)),
+          total,
+          page: safePage,
+          limit: safeLimit,
+          totalPages: Math.ceil(total / safeLimit),
+        };
+      }
+      case 'jobApplications': {
+        const total = await this.repo.countJobApplicationsByUser(userId);
+        const rows = await this.repo.listJobApplicationsByUser(userId, safePage, safeLimit);
+        return {
+          items: rows.map((item) => this.toJobApplicationActivityItem(item)),
+          total,
+          page: safePage,
+          limit: safeLimit,
+          totalPages: Math.ceil(total / safeLimit),
+        };
+      }
+      case 'bookings': {
+        const total = await this.repo.countBookingsByUser(userId);
+        const rows = await this.repo.listBookingsByUser(userId, safePage, safeLimit);
+        return {
+          items: rows.map((item) => this.toBookingActivityItem(item)),
+          total,
+          page: safePage,
+          limit: safeLimit,
+          totalPages: Math.ceil(total / safeLimit),
+        };
+      }
+      case 'transactions': {
+        const total = await this.repo.countTransactions({ userId });
+        const rows = await this.repo.listTransactions({ userId }, safePage, safeLimit);
+        return {
+          items: rows.map((item) => this.toTransactionListItem(item)),
+          total,
+          page: safePage,
+          limit: safeLimit,
+          totalPages: Math.ceil(total / safeLimit),
+        };
+      }
+      default:
+        throw new HttpError({
+          statusCode: 400,
+          code: 'INVALID_ACTIVITY_TYPE',
+          message: 'Invalid user activity type.',
+        });
+    }
+  }
+
+  async updateExpertProfileAsAdmin(
+    userId: string,
+    input: UpdateExpertProfileByAdminInput,
+  ): Promise<ExpertProfile> {
+    const user = await this.repo.getUserById(userId);
+    if (!user) {
+      throw new HttpError({ statusCode: 404, code: 'USER_NOT_FOUND', message: 'User not found.' });
+    }
+    if (user.primary_role !== 'expert') {
+      throw new HttpError({
+        statusCode: 404,
+        code: 'PROFILE_NOT_FOUND',
+        message: 'Expert profile not found for this user role.',
+      });
+    }
+    return this.profilesService.updateExpertProfile(userId, input);
+  }
+
+  async updateBusinessProfileAsAdmin(
+    userId: string,
+    input: UpdateBusinessProfileByAdminInput,
+  ): Promise<BusinessProfile> {
+    const user = await this.repo.getUserById(userId);
+    if (!user) {
+      throw new HttpError({ statusCode: 404, code: 'USER_NOT_FOUND', message: 'User not found.' });
+    }
+    if (user.primary_role !== 'business') {
+      throw new HttpError({
+        statusCode: 404,
+        code: 'PROFILE_NOT_FOUND',
+        message: 'Business profile not found for this user role.',
+      });
+    }
+    return this.profilesService.updateBusinessProfile(userId, input);
+  }
+
+  async freezeUserWallet(userId: string): Promise<AdminWalletFreezeResponse> {
+    const user = await this.repo.getUserById(userId);
+    if (!user) {
+      throw new HttpError({ statusCode: 404, code: 'USER_NOT_FOUND', message: 'User not found.' });
+    }
+    const updated = await this.repo.setWalletFrozen(userId, true);
+    if (!updated) {
+      throw new HttpError({ statusCode: 404, code: 'USER_NOT_FOUND', message: 'User not found.' });
+    }
+    return { userId, walletFrozen: updated.wallet_frozen === true };
+  }
+
+  async unfreezeUserWallet(userId: string): Promise<AdminWalletFreezeResponse> {
+    const user = await this.repo.getUserById(userId);
+    if (!user) {
+      throw new HttpError({ statusCode: 404, code: 'USER_NOT_FOUND', message: 'User not found.' });
+    }
+    const updated = await this.repo.setWalletFrozen(userId, false);
+    if (!updated) {
+      throw new HttpError({ statusCode: 404, code: 'USER_NOT_FOUND', message: 'User not found.' });
+    }
+    return { userId, walletFrozen: updated.wallet_frozen === true };
+  }
+
+  async forceLogoutUser(userId: string): Promise<AdminForceLogoutResponse> {
+    const user = await this.repo.getUserById(userId);
+    if (!user) {
+      throw new HttpError({ statusCode: 404, code: 'USER_NOT_FOUND', message: 'User not found.' });
+    }
+    await this.authRepository.revokeAllUserTokens(userId);
+    return { revoked: true };
+  }
+
+  async changeUserEmail(
+    userId: string,
+    input: ChangeUserEmailInput,
+  ): Promise<{ user: AdminUserListItem; verificationEmailSent: boolean }> {
+    const newEmail = input.newEmail.trim().toLowerCase();
+    const existing = await this.repo.findUserByEmail(newEmail);
+    if (existing && existing.id !== userId) {
+      throw new HttpError({
+        statusCode: 409,
+        code: 'EMAIL_ALREADY_EXISTS',
+        message: 'An account with this email address already exists.',
+      });
+    }
+
+    let row: UserListRow | null = null;
+    try {
+      row = await this.repo.updateUserEmail(userId, newEmail);
+    } catch (error) {
+      const pgError = error as { code?: string };
+      if (pgError.code === '23505') {
+        throw new HttpError({
+          statusCode: 409,
+          code: 'EMAIL_ALREADY_EXISTS',
+          message: 'An account with this email address already exists.',
+        });
+      }
+      throw error;
+    }
+
+    if (!row) {
+      throw new HttpError({ statusCode: 404, code: 'USER_NOT_FOUND', message: 'User not found.' });
+    }
+
+    let verificationEmailSent = false;
+    if (input.sendVerificationEmail === true) {
+      await this.otpService.sendCode(userId, 'email');
+      verificationEmailSent = true;
+    }
+
+    return { user: this.toUserListItem(row), verificationEmailSent };
   }
 
   // ── Plans ───────────────────────────────────────────────────────────────
@@ -605,5 +945,76 @@ export class AdminService {
       createdAt: row.created_at,
       updatedAt: row.updated_at,
     };
+  }
+
+  private toNeedActivityItem(row: NeedActivityRow): AdminNeedActivityItem {
+    return {
+      id: row.id,
+      title: row.title,
+      status: row.status,
+      budgetAmount: parseFloat(row.budget_amount),
+      currency: row.currency,
+      bidCount: parseInt(row.bid_count, 10),
+      createdAt: row.created_at,
+    };
+  }
+
+  private toBidActivityItem(row: BidActivityRow): AdminBidActivityItem {
+    return {
+      id: row.id,
+      needId: row.need_id,
+      needTitle: row.need_title,
+      amount: parseFloat(row.amount),
+      currency: row.currency,
+      status: row.status,
+      paidAt: row.paid_at,
+      createdAt: row.created_at,
+    };
+  }
+
+  private toJobActivityItem(row: JobActivityRow): AdminJobActivityItem {
+    return {
+      id: row.id,
+      title: row.title,
+      status: row.status,
+      createdAt: row.created_at,
+    };
+  }
+
+  private toJobApplicationActivityItem(
+    row: JobApplicationActivityRow,
+  ): AdminJobApplicationActivityItem {
+    return {
+      id: row.id,
+      jobId: row.job_id,
+      jobTitle: row.job_title,
+      status: row.status,
+      createdAt: row.created_at,
+    };
+  }
+
+  private toBookingActivityItem(row: BookingActivityRow): AdminBookingActivityItem {
+    return {
+      id: row.id,
+      status: row.status,
+      amount: parseFloat(row.amount),
+      currency: row.currency,
+      serviceTitle: row.service_title,
+      customerName: row.customer_name,
+      providerName: row.provider_name,
+      slotStartAt: row.slot_start_at,
+      slotEndAt: row.slot_end_at,
+      createdAt: row.created_at,
+    };
+  }
+
+  private isMissingSchemaError(error: unknown): boolean {
+    const pgError = error as { code?: string; message?: string };
+    return (
+      pgError.code === '42P01' ||
+      pgError.code === '42703' ||
+      (typeof pgError.message === 'string' &&
+        (pgError.message.includes('does not exist') || pgError.message.includes('relation')))
+    );
   }
 }
