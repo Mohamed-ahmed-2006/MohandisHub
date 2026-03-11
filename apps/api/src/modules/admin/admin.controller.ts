@@ -40,7 +40,6 @@ import type {
   UpdateServiceInput,
   UpdateSettingsInput,
   UpdateUserInput,
-  UserActivityTypeInput,
 } from './admin.validation.js';
 import {
   adjustBalanceSchema,
@@ -166,7 +165,7 @@ const getUserActivity = asyncHandler(async (req, res) => {
   const limit = Math.min(parseInt(req.query.limit as string, 10) || 10, 50);
   const result = await adminService.getUserActivity(
     req.params.id!,
-    parsedType.data as UserActivityTypeInput,
+    parsedType.data,
     page,
     limit,
   );

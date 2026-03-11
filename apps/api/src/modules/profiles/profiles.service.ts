@@ -13,9 +13,9 @@ import type {
 
 import { HttpError } from '../../utils/http-error.js';
 import { sendTransactionalEmail } from '../../utils/send-transactional-email.js';
+import { AdminRepository } from '../admin/admin.repository.js';
 import { SettingsService } from '../settings/settings.service.js';
 
-import { AdminRepository } from '../admin/admin.repository.js';
 import { ProfilesRepository } from './profiles.repository.js';
 import type {
   AcademicRecordRow,

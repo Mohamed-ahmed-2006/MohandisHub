@@ -26,8 +26,8 @@ import type {
   Transaction,
 } from '@mohandishub/shared';
 
-import { AuthRepository } from '../auth/auth.repository.js';
 import { HttpError } from '../../utils/http-error.js';
+import { AuthRepository } from '../auth/auth.repository.js';
 import { OtpService } from '../otp/otp.service.js';
 import { ProfilesService } from '../profiles/profiles.service.js';
 import { SettingsService } from '../settings/settings.service.js';

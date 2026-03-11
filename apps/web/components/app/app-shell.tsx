@@ -6,6 +6,7 @@ import { useEffect, useState } from 'react';
 import { AppAvatarMenu } from './app-avatar-menu';
 import { AppSidebar } from './app-sidebar';
 import { ToastProvider, useToast } from './toast';
+
 import { useAuth } from '@/components/auth/auth-provider';
 import { SkeletonAvatar } from '@/components/ui/skeleton';
 import { getChatSocket } from '@/lib/chat/socket';

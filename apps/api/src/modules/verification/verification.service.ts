@@ -101,7 +101,7 @@ export class VerificationService {
     if (role === 'expert' || role === 'business') {
       const profileStatus = await this.verificationRepo.getProfileVerificationStatus(
         userId,
-        role as 'expert' | 'business',
+        role,
       );
       if (profileStatus === 'verified') {
         const latestRequest = await this.verificationRepo.findLatestByUserId(userId);

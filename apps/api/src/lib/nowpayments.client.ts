@@ -103,7 +103,7 @@ function toErrorMessage(status: number, payload: unknown): string {
 
 async function parseJsonSafe(res: Response): Promise<unknown> {
   try {
-    return (await res.json()) as unknown;
+    return (await res.json());
   } catch {
     return null;
   }

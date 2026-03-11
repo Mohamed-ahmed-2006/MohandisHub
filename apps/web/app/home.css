@@ -20,7 +20,7 @@
 }
 
 .home-page-container {
-  padding-top: 1.5rem;
+  padding-top: 3.5rem;
   padding-bottom: 3.5rem;
 }
 
@@ -30,7 +30,7 @@
   justify-content: space-between;
   gap: 1rem;
   position: sticky;
-  top: 1rem;
+  top: 3.5rem;
   z-index: 20;
   border-radius: 999px;
   border: 1px solid hsl(var(--border));
@@ -157,7 +157,7 @@
   }
 
   .home-page-container {
-    padding-top: 2rem;
+    padding-top: 4rem;
   }
 
   .home-page-navbar {
@@ -182,7 +182,7 @@
 
 @media (max-width: 639px) {
   .home-page-navbar {
-    top: 0.6rem;
+    top: 3.25rem;
     border-radius: 1.1rem;
     padding-inline: 0.85rem;
   }

@@ -175,7 +175,7 @@ const createLegacyCardDeposit = asyncHandler(async (req, res) => {
   res.json({ ok: true, data: { checkoutUrl: result.checkoutUrl, sessionId: result.orderId } });
 });
 
-const confirmLegacyStripeSession = asyncHandler(async (_req, res) => {
+const confirmLegacyStripeSession = asyncHandler((_req, res) => {
   res.json({ ok: true, data: { credited: false } });
 });
 

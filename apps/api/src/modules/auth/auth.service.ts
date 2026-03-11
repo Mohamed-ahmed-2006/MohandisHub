@@ -22,8 +22,8 @@ import {
   signAccessToken,
 } from '../../config/jwt.js';
 import { logger } from '../../config/logger.js';
-import { buildTransactionalEmailHtml } from '../../utils/transactional-email-template.js';
 import { HttpError } from '../../utils/http-error.js';
+import { buildTransactionalEmailHtml } from '../../utils/transactional-email-template.js';
 import { SettingsService } from '../settings/settings.service.js';
 
 import { AuthRepository } from './auth.repository.js';

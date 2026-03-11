@@ -25,7 +25,7 @@ describe('BrevoEmailSender', () => {
     const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
       ok: true,
       status: 201,
-      text: async () => '',
+      text: () => Promise.resolve(''),
     } as Response);
 
     const sender = new BrevoEmailSender();
@@ -41,7 +41,8 @@ describe('BrevoEmailSender', () => {
     const [url, init] = fetchSpy.mock.calls[0] as [string, RequestInit];
     expect(url).toBe('https://api.brevo.com/v3/smtp/email');
 
-    const payload = JSON.parse(String(init.body)) as {
+    expect(typeof init.body).toBe('string');
+    const payload = JSON.parse(init.body as string) as {
       subject: string;
       htmlContent: string;
     };

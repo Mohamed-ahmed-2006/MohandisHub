@@ -4,6 +4,7 @@
 
 import { env } from '../config/env.js';
 import { logger } from '../config/logger.js';
+
 import { buildTransactionalEmailHtml } from './transactional-email-template.js';
 
 export type SendTransactionalEmailParams = {

@@ -52,7 +52,7 @@ export interface JobSubmission {
   id: string;
   milestoneId: string;
   submissionNotes?: string | null;
-  attachments?: any; // JSONB
+  attachments?: unknown; // JSONB
   createdAt: string;
 }
 
@@ -63,7 +63,7 @@ export interface CreateMilestoneDto {
 
 export interface SubmitMilestoneDto {
   submissionNotes?: string;
-  attachments?: any;
+  attachments?: unknown;
 }
 
 export interface JobApplicationMessage {
@@ -74,4 +74,3 @@ export interface JobApplicationMessage {
   content: string;
   createdAt: string;
 }
-

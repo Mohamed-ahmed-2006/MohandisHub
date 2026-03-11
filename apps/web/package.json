@@ -6,9 +6,9 @@
   "scripts": {
     "prebuild": "npm run build -w @mohandishub/shared",
     "dev": "next dev -p 3000",
-    "build": "next build --no-lint",
+    "build": "node -e \"require('fs').rmSync('.next', { recursive: true, force: true })\" && next build --no-lint",
     "start": "next start -p 3000",
-    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "typecheck": "next typegen && tsc -p tsconfig.json --noEmit",
     "lint": "eslint app components lib tests next.config.ts tailwind.config.ts vitest.config.ts --max-warnings=0",
     "test": "vitest --run"
   },
