@@ -23,7 +23,7 @@ function toReview(row: ReviewRow) {
     id: row.id,
     reviewerId: row.reviewer_id,
     targetUserId: row.target_user_id,
-    targetType: row.target_type as 'expert' | 'business',
+    targetType: row.target_type as 'expert' | 'business' | 'customer',
     reservationId: row.reservation_id,
     bookingId: row.booking_id,
     needId: row.need_id,
@@ -64,13 +64,6 @@ export class ReviewsService {
           message: 'Reservation not found.',
         });
       }
-      if (reservation.customer_id !== reviewerId) {
-        throw new HttpError({
-          statusCode: 403,
-          code: 'FORBIDDEN',
-          message: 'Only the customer can review this reservation.',
-        });
-      }
       if (reservation.status !== 'completed') {
         throw new HttpError({
           statusCode: 400,
@@ -78,14 +71,34 @@ export class ReviewsService {
           message: 'Can only review completed reservations.',
         });
       }
-      targetUserId = reservation.provider_id;
-      targetType = await this.getProviderRole(targetUserId);
-      const existing = await this.repo.findByReservation(reservation.id);
-      if (existing) {
+      const isCustomerReviewing = reservation.customer_id === reviewerId;
+      if (isCustomerReviewing) {
+        targetUserId = reservation.provider_id;
+        targetType = await this.getProviderRole(targetUserId);
+        const existing = await this.repo.findByReservation(reservation.id);
+        if (existing) {
+          throw new HttpError({
+            statusCode: 409,
+            code: 'ALREADY_REVIEWED',
+            message: 'You already reviewed this reservation.',
+          });
+        }
+      } else if (reservation.provider_id === reviewerId) {
+        targetUserId = reservation.customer_id;
+        targetType = 'customer';
+        const existing = await this.repo.findByReservationAndReviewer(reservation.id, reviewerId);
+        if (existing) {
+          throw new HttpError({
+            statusCode: 409,
+            code: 'ALREADY_REVIEWED',
+            message: 'You already reviewed this reservation.',
+          });
+        }
+      } else {
         throw new HttpError({
-          statusCode: 409,
-          code: 'ALREADY_REVIEWED',
-          message: 'You already reviewed this reservation.',
+          statusCode: 403,
+          code: 'FORBIDDEN',
+          message: 'Only the customer or provider of this reservation can review.',
         });
       }
       reservationId = reservation.id;
@@ -163,7 +176,7 @@ export class ReviewsService {
 
   async listByTarget(
     targetUserId: string,
-    targetType: 'expert' | 'business',
+    targetType: 'expert' | 'business' | 'customer',
     page: number,
     limit: number,
   ) {
@@ -180,6 +193,96 @@ export class ReviewsService {
       limit,
       totalPages: Math.ceil(total / limit),
     };
+  }
+
+  async createReport(
+    reporterId: string,
+    reviewId: string,
+    reason: 'inappropriate' | 'fake' | 'spam' | 'other',
+    comment?: string,
+  ) {
+    const review = await this.repo.findById(reviewId);
+    if (!review) {
+      throw new HttpError({
+        statusCode: 404,
+        code: 'REVIEW_NOT_FOUND',
+        message: 'Review not found.',
+      });
+    }
+    if (review.reviewer_id === reporterId) {
+      throw new HttpError({
+        statusCode: 400,
+        code: 'CANNOT_REPORT_OWN_REVIEW',
+        message: 'You cannot report your own review.',
+      });
+    }
+    return this.repo.createReport({
+      reviewId,
+      reporterId,
+      reason,
+      ...(comment !== undefined && comment !== '' && { comment }),
+    });
+  }
+
+  async createDispute(disputerId: string, reviewId: string, reason: string) {
+    const review = await this.repo.findById(reviewId);
+    if (!review) {
+      throw new HttpError({
+        statusCode: 404,
+        code: 'REVIEW_NOT_FOUND',
+        message: 'Review not found.',
+      });
+    }
+    if (review.target_user_id !== disputerId) {
+      throw new HttpError({
+        statusCode: 403,
+        code: 'FORBIDDEN',
+        message: 'Only the reviewed user can dispute this review.',
+      });
+    }
+    return this.repo.createDispute({ reviewId, disputerId, reason });
+  }
+
+  async listReports(page: number, limit: number, statusFilter?: 'pending' | 'all') {
+    return this.repo.listReports(page, limit, statusFilter ?? 'pending');
+  }
+
+  async listDisputes(page: number, limit: number, statusFilter?: 'pending' | 'all') {
+    return this.repo.listDisputes(page, limit, statusFilter ?? 'pending');
+  }
+
+  async resolveReport(
+    reportId: string,
+    adminId: string,
+    decision: 'dismissed' | 'upheld',
+    hideReview?: boolean,
+  ) {
+    const { rows } = await this.repo.listReports(1, 1000, 'all');
+    const report = rows.find((r) => r.id === reportId);
+    if (!report) {
+      throw new HttpError({ statusCode: 404, code: 'REPORT_NOT_FOUND', message: 'Report not found.' });
+    }
+    await this.repo.updateReportStatus(reportId, decision, adminId);
+    if (decision === 'upheld' && hideReview) {
+      await this.repo.setReviewHidden(report.review_id, true);
+    }
+  }
+
+  async resolveDispute(
+    disputeId: string,
+    adminId: string,
+    decision: 'dismissed' | 'upheld',
+    hideReview?: boolean,
+  ) {
+    const { rows } = await this.repo.listDisputes(1, 1000, 'all');
+    const dispute = rows.find((d) => d.id === disputeId);
+    if (!dispute) {
+      throw new HttpError({ statusCode: 404, code: 'DISPUTE_NOT_FOUND', message: 'Dispute not found.' });
+    }
+    await this.repo.updateDisputeStatus(disputeId, decision, adminId);
+    if (decision === 'upheld' && hideReview) {
+      await this.repo.setReviewHidden(dispute.review_id, true);
+    }
   }
 
   private async findReservationForReview(

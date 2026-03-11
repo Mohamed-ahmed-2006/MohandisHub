@@ -537,7 +537,7 @@ export const AdminUserDetailModal = ({
                       <div className="admin-user-field"><span className="admin-user-field-label">{ud.lastLogin}</span><span className="admin-user-field-value">{formatDateTime(user.lastLoginAt)}</span></div>
                       <div className="admin-user-field"><span className="admin-user-field-label">{ud.createdAt}</span><span className="admin-user-field-value">{formatDate(user.createdAt)}</span></div>
                       <div className="admin-user-field"><span className="admin-user-field-label">{d.plan}</span><span className="admin-user-field-value">{user.planName ?? '-'}</span></div>
-                      <div className="admin-user-field"><span className="admin-user-field-label">{ud.wallet}</span><span className="admin-user-field-value">{user.walletBalance != null ? `${user.walletBalance.toFixed(2)} ${user.walletCurrency ?? 'EGP'}` : '-'}</span></div>
+            <div className="admin-user-field"><span className="admin-user-field-label">{ud.wallet}</span><span className="admin-user-field-value">{user.walletBalance != null ? `${user.walletBalance.toFixed(2)} ${user.walletCurrency ?? 'USD'}` : '-'}</span></div>
                     </div>
                   </section>
 

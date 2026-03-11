@@ -19,6 +19,12 @@ import { WalletService } from './wallet.service.js';
 
 const walletService = new WalletService();
 
+function extractRawBody(body: unknown): string {
+  if (Buffer.isBuffer(body)) return body.toString('utf8');
+  if (typeof body === 'string') return body;
+  return JSON.stringify(body ?? '');
+}
+
 function getUser(req: { user?: { id: string; role: string } }): { id: string; role: string } {
   if (!req.user) {
     throw new HttpError({
@@ -102,6 +108,33 @@ const getDepositCurrencies = asyncHandler(async (_req, res) => {
   res.json(response);
 });
 
+const getDepositEstimate = asyncHandler(async (req, res) => {
+  const amountRaw = req.query.amount;
+  const amount =
+    typeof amountRaw === 'number'
+      ? amountRaw
+      : typeof amountRaw === 'string'
+        ? parseFloat(amountRaw)
+        : NaN;
+  if (!Number.isFinite(amount) || amount <= 0) {
+    throw new HttpError({
+      statusCode: 400,
+      code: 'INVALID_AMOUNT',
+      message: 'Valid amount is required.',
+    });
+  }
+
+  const currencyFrom = typeof req.query.currencyFrom === 'string' ? req.query.currencyFrom : undefined;
+  const currencyTo = typeof req.query.currencyTo === 'string' ? req.query.currencyTo : undefined;
+  const estimate = await walletService.estimateDeposit({
+    amount,
+    ...(currencyFrom !== undefined && { currencyFrom }),
+    ...(currencyTo !== undefined && { currencyTo }),
+  });
+  const response: ApiSuccessBody<typeof estimate> = { ok: true, data: estimate };
+  res.json(response);
+});
+
 const createDepositCheckout = asyncHandler(async (req, res) => {
   const user = getUser(req);
   const payload = parseDepositBody(req.body);
@@ -140,7 +173,7 @@ const createLegacyCryptoDeposit = asyncHandler(async (req, res) => {
   const result = await walletService.createDepositCheckout(user.id, {
     amount,
     method: 'crypto',
-    currency: 'EGP',
+    currency: 'USD',
     payCurrency,
     ...(returnUrl ? { returnUrl } : {}),
   });
@@ -157,7 +190,7 @@ const createLegacyCardDeposit = asyncHandler(async (req, res) => {
       : typeof amountRaw === 'string'
         ? parseFloat(amountRaw)
         : NaN;
-  const currency = typeof source.currency === 'string' ? source.currency : 'EGP';
+  const currency = typeof source.currency === 'string' ? source.currency : 'USD';
   const returnUrl = typeof source.returnUrl === 'string' ? source.returnUrl : undefined;
   if (!Number.isFinite(amount) || amount <= 0) {
     throw new HttpError({
@@ -247,11 +280,7 @@ const listWithdrawals = asyncHandler(async (req, res) => {
 
 async function nowPaymentsDepositIpn(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
-    const rawBody = Buffer.isBuffer(req.body)
-      ? req.body.toString('utf8')
-      : typeof req.body === 'string'
-        ? req.body
-        : JSON.stringify(req.body ?? '');
+    const rawBody = extractRawBody(req.body);
     const signature = (req.headers['x-nowpayments-sig'] as string) ?? '';
     await walletService.handleNowPaymentsDepositIpn(rawBody, signature);
     res.status(200).json({ ok: true });
@@ -262,13 +291,31 @@ async function nowPaymentsDepositIpn(req: Request, res: Response, next: NextFunc
 
 async function nowPaymentsPayoutIpn(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
-    const rawBody = Buffer.isBuffer(req.body)
-      ? req.body.toString('utf8')
-      : typeof req.body === 'string'
-        ? req.body
-        : JSON.stringify(req.body ?? '');
+    const rawBody = extractRawBody(req.body);
     const signature = (req.headers['x-nowpayments-sig'] as string) ?? '';
     await walletService.handleNowPaymentsPayoutIpn(rawBody, signature);
+    res.status(200).json({ ok: true });
+  } catch (error) {
+    next(error);
+  }
+}
+
+async function nowPaymentsIpn(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const rawBody = extractRawBody(req.body);
+    const signature = (req.headers['x-nowpayments-sig'] as string) ?? '';
+    const payload = JSON.parse(rawBody) as Record<string, unknown>;
+    const isPayoutEvent =
+      Array.isArray(payload.withdrawals) ||
+      payload.batch_withdrawal_id != null ||
+      payload.withdrawal_id != null;
+
+    if (isPayoutEvent) {
+      await walletService.handleNowPaymentsPayoutIpn(rawBody, signature);
+    } else {
+      await walletService.handleNowPaymentsDepositIpn(rawBody, signature);
+    }
+
     res.status(200).json({ ok: true });
   } catch (error) {
     next(error);
@@ -279,6 +326,7 @@ export const walletController = {
   getMyWallet,
   getMyTransactions,
   getDepositCurrencies,
+  getDepositEstimate,
   createDepositCheckout,
   createLegacyCryptoDeposit,
   createLegacyCardDeposit,
@@ -286,6 +334,7 @@ export const walletController = {
   createWithdrawal,
   verifyWithdrawal,
   listWithdrawals,
+  nowPaymentsIpn,
   nowPaymentsDepositIpn,
   nowPaymentsPayoutIpn,
 };

@@ -76,6 +76,14 @@ type NowPaymentsVerifyPayoutResponse = {
   message?: string;
 };
 
+type NowPaymentsEstimateResponse = {
+  currency_from?: string;
+  amount_from?: number | string;
+  currency_to?: string;
+  estimated_amount?: number | string;
+  rate?: number | string;
+};
+
 export class NowPaymentsApiError extends Error {
   status: number;
   payload: unknown;
@@ -256,10 +264,35 @@ export async function verifyPayout(
   return body;
 }
 
+export async function estimatePrice(
+  apiKey: string,
+  amount: number,
+  currencyFrom: string,
+  currencyTo: string,
+): Promise<NowPaymentsEstimateResponse> {
+  const normalized = normalizeNowPaymentsApiKey(apiKey);
+  const query = new URLSearchParams({
+    amount: String(amount),
+    currency_from: currencyFrom.toUpperCase(),
+    currency_to: currencyTo.toUpperCase(),
+  });
+
+  const res = await fetch(`${NOWPAYMENTS_BASE}/estimate?${query.toString()}`, {
+    method: 'GET',
+    headers: { 'x-api-key': normalized },
+  });
+  const body = (await parseJsonSafe(res)) as NowPaymentsEstimateResponse | null;
+  if (!res.ok || !body) {
+    throw new NowPaymentsApiError(res.status, body);
+  }
+  return body;
+}
+
 export type {
   NowPaymentsInvoicePayload,
   NowPaymentsInvoiceResponse,
   NowPaymentsCreatePayoutPayload,
   NowPaymentsCreatePayoutResponse,
   NowPaymentsVerifyPayoutResponse,
+  NowPaymentsEstimateResponse,
 };

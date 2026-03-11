@@ -28,6 +28,8 @@ export type ReservationProfile = {
   currency: string;
   createdAt: string;
   updatedAt: string;
+  /** Platform verified (profile complete + 1000 USD deposited) */
+  verificationBadgeEarned?: boolean;
 };
 
 export type ReservationSlot = {

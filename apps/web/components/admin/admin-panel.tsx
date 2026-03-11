@@ -6,6 +6,7 @@ import { useEffect, useState } from 'react';
 import { AdminCategoriesTab } from './admin-categories-tab';
 import { AdminDashboardTab } from './admin-dashboard-tab';
 import { AdminPlansTab } from './admin-plans-tab';
+import { AdminReviewReportsTab } from './admin-review-reports-tab';
 import { AdminServicesTab } from './admin-services-tab';
 import { AdminSettingsTab } from './admin-settings-tab';
 import { AdminTransactionsTab } from './admin-transactions-tab';
@@ -33,6 +34,7 @@ type TabId =
   | 'services'
   | 'categories'
   | 'verifications'
+  | 'reviewReports'
   | 'settings';
 
 export const AdminPanel = ({ locale, dictionary }: AdminPanelProps) => {
@@ -64,6 +66,7 @@ export const AdminPanel = ({ locale, dictionary }: AdminPanelProps) => {
     { id: 'services', label: dictionary.admin.tabs.services, permission: 'manage_services' },
     { id: 'categories', label: dictionary.admin.tabs.categories, permission: 'manage_services' },
     { id: 'verifications', label: dictionary.admin.tabs.verifications, permission: 'manage_verifications' },
+    { id: 'reviewReports', label: dictionary.admin.tabs.reviewReports ?? 'Review reports', permission: 'manage_verifications' },
     { id: 'settings', label: dictionary.admin.tabs.settings, permission: 'manage_settings' },
   ];
 
@@ -152,6 +155,9 @@ export const AdminPanel = ({ locale, dictionary }: AdminPanelProps) => {
             accessToken={accessToken}
             refreshSession={refreshSession}
           />
+        )}
+        {activeTab === 'reviewReports' && (
+          <AdminReviewReportsTab dictionary={dictionary} accessToken={accessToken} />
         )}
         {activeTab === 'settings' && (
           <AdminSettingsTab

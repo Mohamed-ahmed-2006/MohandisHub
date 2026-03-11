@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import type {
   Reservation,
@@ -15,6 +15,7 @@ import { Container } from '@/components/ui/container';
 import { buildLocalePath } from '@/lib/i18n/path';
 import type { Dictionary, Locale } from '@/lib/i18n/types';
 import { reservationsApiClient } from '@/lib/reservations/client';
+import { reviewsApiClient } from '@/lib/reviews/client';
 
 import '@/app/dashboard.css';
 
@@ -54,7 +55,7 @@ function formatDateTime(d: string): string {
 }
 
 function formatMoney(value: number): string {
-  return `${value.toFixed(2)} EGP`;
+  return `${value.toFixed(2)} USD`;
 }
 
 function timelineSteps(reservation: Reservation): string[] {
@@ -91,6 +92,11 @@ export const BookingsScreen = ({ locale, dictionary }: Props) => {
   const [counterpartyCode, setCounterpartyCode] = useState('');
   const [callSnapshot, setCallSnapshot] = useState<ReservationCallSnapshot | null>(null);
   const [filterStatus, setFilterStatus] = useState<string>('all');
+  const [reviewingReservationId, setReviewingReservationId] = useState<string | null>(null);
+  const [reviewRating, setReviewRating] = useState(5);
+  const [reviewComment, setReviewComment] = useState('');
+  const [reviewSubmitting, setReviewSubmitting] = useState(false);
+  const [reviewedReservationIds, setReviewedReservationIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     if (!isReady) return;
@@ -307,6 +313,36 @@ export const BookingsScreen = ({ locale, dictionary }: Props) => {
     return reservations.filter((item) => item.status === filterStatus);
   }, [filterStatus, reservations]);
 
+  const submitReview = useCallback(
+    async (reservationId: string) => {
+      if (!accessToken || reviewSubmitting) return;
+      setReviewSubmitting(true);
+      setError(null);
+      try {
+      await reviewsApiClient.create(accessToken, {
+        reservationId,
+        rating: reviewRating,
+        ...(reviewComment.trim() ? { comment: reviewComment.trim() } : {}),
+      });
+        setReviewedReservationIds((prev) => new Set(prev).add(reservationId));
+        setReviewingReservationId(null);
+        setReviewComment('');
+        setReviewRating(5);
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : 'Failed to submit review';
+        if (msg.includes('already reviewed') || msg.includes('ALREADY_REVIEWED')) {
+          setReviewedReservationIds((prev) => new Set(prev).add(reservationId));
+          setReviewingReservationId(null);
+        } else {
+          setError(msg);
+        }
+      } finally {
+        setReviewSubmitting(false);
+      }
+    },
+    [accessToken, reviewComment, reviewRating, reviewSubmitting],
+  );
+
   const bp = dictionary.bookingsPage ?? {};
   const title = bp.title ?? 'My Reservations';
   const noBookings = bp.noBookings ?? 'No reservations yet.';
@@ -402,6 +438,63 @@ export const BookingsScreen = ({ locale, dictionary }: Props) => {
                   >
                     Details
                   </button>
+                  {r.status === 'completed' && !reviewedReservationIds.has(r.id) && (
+                    <>
+                      {reviewingReservationId !== r.id ? (
+                        <button
+                          type="button"
+                          className="dashboard-btn dashboard-btn--small dashboard-btn--primary"
+                          onClick={() => setReviewingReservationId(r.id)}
+                        >
+                          Rate
+                        </button>
+                      ) : (
+                        <div className="reservation-review-form">
+                          <div className="reservation-review-stars">
+                            {[1, 2, 3, 4, 5].map((star) => (
+                              <button
+                                key={star}
+                                type="button"
+                                className="reservation-review-star-btn"
+                                onClick={() => setReviewRating(star)}
+                                aria-label={`${star} star`}
+                              >
+                                {star <= reviewRating ? '★' : '☆'}
+                              </button>
+                            ))}
+                          </div>
+                          <input
+                            type="text"
+                            className="dashboard-input reservation-review-comment"
+                            placeholder="Optional comment"
+                            value={reviewComment}
+                            onChange={(e) => setReviewComment(e.target.value)}
+                          />
+                          <div className="reservation-review-actions">
+                            <button
+                              type="button"
+                              className="dashboard-btn dashboard-btn--small dashboard-btn--secondary"
+                              onClick={() => {
+                                setReviewingReservationId(null);
+                                setReviewComment('');
+                                setReviewRating(5);
+                              }}
+                            >
+                              Cancel
+                            </button>
+                            <button
+                              type="button"
+                              className="dashboard-btn dashboard-btn--small dashboard-btn--primary"
+                              disabled={reviewSubmitting}
+                              onClick={() => void submitReview(r.id)}
+                            >
+                              {reviewSubmitting ? '...' : 'Submit review'}
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  )}
                   {role === 'provider' && r.status === 'pending' && (
                     <>
                       <button
@@ -645,11 +738,78 @@ export const BookingsScreen = ({ locale, dictionary }: Props) => {
                     </button>
                   </div>
                 )}
+                {selectedReservation.status === 'completed' && !reviewedReservationIds.has(selectedReservation.id) && (
+                  <div className="reservation-details-review-box" style={{ marginTop: '1rem' }}>
+                    <h4>Leave a review</h4>
+                    {reviewingReservationId !== selectedReservation.id ? (
+                      <button
+                        type="button"
+                        className="dashboard-btn dashboard-btn--small dashboard-btn--primary"
+                        onClick={() => setReviewingReservationId(selectedReservation.id)}
+                      >
+                        Rate this {role === 'customer' ? 'provider' : 'customer'}
+                      </button>
+                    ) : (
+                      <>
+                        <div className="reservation-review-stars">
+                          {[1, 2, 3, 4, 5].map((star) => (
+                            <button
+                              key={star}
+                              type="button"
+                              className="reservation-review-star-btn"
+                              onClick={() => setReviewRating(star)}
+                              aria-label={`${star} star`}
+                            >
+                              {star <= reviewRating ? '★' : '☆'}
+                            </button>
+                          ))}
+                        </div>
+                        <input
+                          type="text"
+                          className="dashboard-input reservation-review-comment"
+                          placeholder="Optional comment"
+                          value={reviewComment}
+                          onChange={(e) => setReviewComment(e.target.value)}
+                          style={{ marginTop: '0.5rem', display: 'block', width: '100%' }}
+                        />
+                        <div className="reservation-review-actions" style={{ marginTop: '0.5rem' }}>
+                          <button
+                            type="button"
+                            className="dashboard-btn dashboard-btn--small dashboard-btn--secondary"
+                            onClick={() => {
+                              setReviewingReservationId(null);
+                              setReviewComment('');
+                              setReviewRating(5);
+                            }}
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            type="button"
+                            className="dashboard-btn dashboard-btn--small dashboard-btn--primary"
+                            disabled={reviewSubmitting}
+                            onClick={() => void submitReview(selectedReservation.id)}
+                          >
+                            {reviewSubmitting ? '...' : 'Submit review'}
+                          </button>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                )}
               </>
             )}
 
             <div className="plan-modal-actions" style={{ marginTop: '1.25rem' }}>
-              <button type="button" className="plan-modal-cancel" onClick={closeDetails}>
+              <button
+                type="button"
+                className="plan-modal-cancel"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  e.preventDefault();
+                  setTimeout(closeDetails, 0);
+                }}
+              >
                 Close
               </button>
             </div>
@@ -677,4 +837,3 @@ export const BookingsScreen = ({ locale, dictionary }: Props) => {
     </main>
   );
 };
-

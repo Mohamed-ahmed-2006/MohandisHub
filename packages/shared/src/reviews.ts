@@ -6,7 +6,7 @@ export type Review = {
   id: string;
   reviewerId: string;
   targetUserId: string;
-  targetType: 'expert' | 'business';
+  targetType: 'expert' | 'business' | 'customer';
   reservationId: string | null;
   bookingId: string | null;
   needId: string | null;

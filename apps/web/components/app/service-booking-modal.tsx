@@ -160,9 +160,16 @@ export const ServiceBookingModal = ({
     >
       <div className="service-booking-modal" onClick={(e) => e.stopPropagation()}>
         <h2 className="service-booking-title">{service.title}</h2>
-        <p className="service-booking-provider">{service.providerName}</p>
+        <p className="service-booking-provider">
+          {service.providerName}
+          {profile?.verificationBadgeEarned && (
+              <span className="profile-screen-badge profile-screen-badge_verified" style={{ marginLeft: '0.5rem' }} title="Completed profile and deposited 1000 USD">
+              Verified
+            </span>
+          )}
+        </p>
         {service.price != null && (
-          <p className="service-booking-price">{service.price} EGP</p>
+          <p className="service-booking-price">{service.price} USD</p>
         )}
 
         <div style={{ marginBottom: '0.75rem', display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
@@ -207,7 +214,7 @@ export const ServiceBookingModal = ({
         </div>
         {modePrice != null && (
           <p className="service-booking-price" style={{ marginTop: '-0.5rem' }}>
-            Reservation price: {modePrice.toFixed(2)} EGP
+              Reservation price: {modePrice.toFixed(2)} USD
           </p>
         )}
 

@@ -15,6 +15,7 @@ import {
   authenticateNowPayments,
   createInvoice,
   createPayout,
+  estimatePrice,
   getAvailableCurrencies,
   getAvailableCurrenciesDetailed,
   NowPaymentsApiError,
@@ -45,6 +46,12 @@ type CreateDepositCheckoutInput = {
   currency?: string;
   payCurrency?: string;
   returnUrl?: string;
+};
+
+type EstimateDepositInput = {
+  amount: number;
+  currencyFrom?: string;
+  currencyTo?: string;
 };
 
 type CreateWithdrawalInput = {
@@ -110,6 +117,53 @@ export class WalletService {
     return normalized;
   }
 
+  async estimateDeposit(input: EstimateDepositInput): Promise<{
+    amountFrom: number;
+    currencyFrom: string;
+    currencyTo: string;
+    estimatedAmount: number;
+    rate: number | null;
+  }> {
+    if (!env.NOWPAYMENTS_API_KEY) {
+      throw new HttpError({
+        statusCode: 503,
+        code: 'PAYMENT_UNAVAILABLE',
+        message: 'NOWPayments is not configured.',
+      });
+    }
+
+    const amount = Number(input.amount);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      throw new HttpError({
+        statusCode: 400,
+        code: 'INVALID_AMOUNT',
+        message: 'Valid amount is required.',
+      });
+    }
+
+    const currencyFrom = (input.currencyFrom || 'USD').toUpperCase();
+    const currencyTo = (input.currencyTo || env.NOWPAYMENTS_WITHDRAWAL_DEFAULT_CURRENCY).toUpperCase();
+    const estimate = await estimatePrice(env.NOWPAYMENTS_API_KEY, amount, currencyFrom, currencyTo);
+    const estimatedAmount = Number(estimate.estimated_amount);
+    const rate = estimate.rate != null ? Number(estimate.rate) : null;
+
+    if (!Number.isFinite(estimatedAmount) || estimatedAmount <= 0) {
+      throw new HttpError({
+        statusCode: 502,
+        code: 'PAYMENT_GATEWAY_ERROR',
+        message: 'Could not estimate conversion amount.',
+      });
+    }
+
+    return {
+      amountFrom: amount,
+      currencyFrom,
+      currencyTo,
+      estimatedAmount,
+      rate: rate != null && Number.isFinite(rate) ? rate : null,
+    };
+  }
+
   async createDepositCheckout(
     userId: string,
     input: CreateDepositCheckoutInput,
@@ -165,7 +219,7 @@ export class WalletService {
 
     const wallet = await this.getOrCreateWallet(userId);
     const orderId = `np_dep_${wallet.id.replace(/-/g, '')}_${Date.now()}`.slice(0, 128);
-    const priceCurrency = (input.currency || 'EGP').toUpperCase();
+    const priceCurrency = (input.currency || 'USD').toUpperCase();
     const requestedPayCurrency = input.payCurrency ? input.payCurrency.toUpperCase() : undefined;
     const defaultPayCurrency = env.NOWPAYMENTS_WITHDRAWAL_DEFAULT_CURRENCY.toUpperCase();
     const payCurrency =
@@ -197,7 +251,7 @@ export class WalletService {
       ...(payCurrency ? { pay_currency: payCurrency } : {}),
       order_id: orderId,
       order_description: `Wallet deposit ${input.amount.toFixed(2)} ${priceCurrency}`,
-      ipn_callback_url: `${apiBase}/api/wallet/nowpayments/ipn/deposit`,
+      ipn_callback_url: `${apiBase}/api/wallet/nowpayments/ipn`,
       success_url: successUrl,
       cancel_url: cancelUrl,
       is_fee_paid_by_user: false,
@@ -592,7 +646,7 @@ export class WalletService {
       const apiBase = (env.API_PUBLIC_URL || `http://localhost:${env.PORT}`).replace(/\/$/, '');
       const payoutResult = await createPayout(env.NOWPAYMENTS_API_KEY, jwt, {
         payout_description: `Freelancer withdrawal ${row.id}`,
-        ipn_callback_url: `${apiBase}/api/wallet/nowpayments/ipn/payout`,
+        ipn_callback_url: `${apiBase}/api/wallet/nowpayments/ipn`,
         withdrawals: [
           {
             address: row.payout_address,
@@ -708,11 +762,12 @@ export class WalletService {
   }
 
   private toWallet(row: WalletRow): Wallet {
+    const normalizedCurrency = row.currency.toUpperCase() === 'EGP' ? 'USD' : row.currency;
     return {
       id: row.id,
       userId: row.user_id,
       balance: parseFloat(row.balance),
-      currency: row.currency,
+      currency: normalizedCurrency,
       isFrozen: row.is_frozen,
       createdAt: row.created_at,
       updatedAt: row.updated_at,

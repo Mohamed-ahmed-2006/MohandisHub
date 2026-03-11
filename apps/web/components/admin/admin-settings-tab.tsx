@@ -281,7 +281,7 @@ export const AdminSettingsTab = ({ dictionary, accessToken, refreshSession }: Pr
         <h3 className="admin-settings-section-title">Reservations</h3>
         <div className="admin-settings-row">
           <div className="admin-settings-label-wrap">
-            <label className="admin-settings-label">Acceptance fee (EGP)</label>
+                <label className="admin-settings-label">Acceptance fee (USD)</label>
             <span className="admin-settings-desc">
               Charged to customer when provider accepts a reservation.
             </span>
@@ -302,7 +302,7 @@ export const AdminSettingsTab = ({ dictionary, accessToken, refreshSession }: Pr
         </div>
         <div className="admin-settings-row">
           <div className="admin-settings-label-wrap">
-            <label className="admin-settings-label">Voice minute fee (EGP)</label>
+                <label className="admin-settings-label">Voice minute fee (USD)</label>
             <span className="admin-settings-desc">
               Global online voice minute fee (split equally customer/provider).
             </span>
@@ -323,7 +323,7 @@ export const AdminSettingsTab = ({ dictionary, accessToken, refreshSession }: Pr
         </div>
         <div className="admin-settings-row">
           <div className="admin-settings-label-wrap">
-            <label className="admin-settings-label">Video minute fee (EGP)</label>
+                <label className="admin-settings-label">Video minute fee (USD)</label>
             <span className="admin-settings-desc">
               Global online video minute fee (split equally customer/provider).
             </span>

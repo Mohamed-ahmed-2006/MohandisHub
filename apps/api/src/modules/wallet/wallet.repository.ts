@@ -136,9 +136,20 @@ export class WalletRepository {
     return rows[0] ?? null;
   }
 
+  /** Sum of completed deposit transaction amounts for the user (for verification badge). */
+  async getTotalDeposited(userId: string): Promise<number> {
+    const { rows } = await this.db.query<{ sum: string }>(
+      `SELECT COALESCE(SUM(amount), 0)::text AS sum
+       FROM transactions
+       WHERE user_id = $1 AND type = 'deposit' AND status = 'completed'`,
+      [userId],
+    );
+    return parseFloat(rows[0]?.sum ?? '0');
+  }
+
   async createForUser(userId: string): Promise<WalletRow> {
     const { rows } = await this.db.query<WalletRow>(
-      `INSERT INTO wallets (user_id) VALUES ($1)
+      `INSERT INTO wallets (user_id, currency) VALUES ($1, 'USD')
        ON CONFLICT (user_id) DO UPDATE SET user_id = wallets.user_id
        RETURNING id, user_id, balance::text, currency, is_frozen, created_at, updated_at`,
       [userId],
@@ -516,7 +527,7 @@ export class WalletRepository {
     );
     if (rows.length === 0) {
       const ins = await client.query<{ id: string }>(
-        `INSERT INTO wallets (user_id) VALUES ($1) RETURNING id`,
+        `INSERT INTO wallets (user_id, currency) VALUES ($1, 'USD') RETURNING id`,
         [receiverId],
       );
       return ins.rows[0]!.id;
@@ -797,7 +808,7 @@ export class WalletRepository {
         walletId,
         params.userId,
         params.amount,
-        'EGP',
+        'USD',
         'withdrawal_request',
         null,
         {

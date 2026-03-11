@@ -1183,6 +1183,42 @@
   gap: 0.55rem;
 }
 
+.reservation-review-form,
+.reservation-details-review-box {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.75rem;
+  border-radius: var(--radius-md);
+  border: 1px solid hsl(var(--border));
+  background: hsl(var(--muted) / 0.2);
+}
+
+.reservation-review-stars {
+  display: flex;
+  gap: 0.25rem;
+  align-items: center;
+}
+
+.reservation-review-star-btn {
+  padding: 0.25rem;
+  font-size: 1.25rem;
+  color: hsl(var(--warning));
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+.reservation-review-comment {
+  max-width: 100%;
+}
+
+.reservation-review-actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
 /* Service booking modal */
 .service-booking-modal {
   background: hsl(var(--background));

@@ -574,4 +574,77 @@ export const adminApiClient = {
       path: `/api/admin/user/${userId}/profile`,
       accessToken,
     }),
+
+  listReviewReports: (
+    accessToken: string,
+    params?: { page?: number; limit?: number; status?: 'pending' | 'all' },
+  ) =>
+    apiRequest<{
+      rows: Array<{
+        id: string;
+        review_id: string;
+        reporter_id: string;
+        reason: string;
+        comment: string | null;
+        status: string;
+        created_at: string;
+        review_rating: number;
+        review_comment: string | null;
+        target_user_id: string;
+        reporter_name: string;
+      }>;
+      total: number;
+    }>({
+      method: 'GET',
+      path: `/api/admin/review-reports?page=${params?.page ?? 1}&limit=${params?.limit ?? 20}&status=${params?.status ?? 'pending'}`,
+      accessToken,
+    }),
+
+  listReviewDisputes: (
+    accessToken: string,
+    params?: { page?: number; limit?: number; status?: 'pending' | 'all' },
+  ) =>
+    apiRequest<{
+      rows: Array<{
+        id: string;
+        review_id: string;
+        disputer_id: string;
+        reason: string;
+        status: string;
+        created_at: string;
+        review_rating: number;
+        review_comment: string | null;
+        target_user_id: string;
+        disputer_name: string;
+      }>;
+      total: number;
+    }>({
+      method: 'GET',
+      path: `/api/admin/review-disputes?page=${params?.page ?? 1}&limit=${params?.limit ?? 20}&status=${params?.status ?? 'pending'}`,
+      accessToken,
+    }),
+
+  resolveReviewReport: (
+    accessToken: string,
+    reportId: string,
+    body: { decision: 'dismissed' | 'upheld'; hideReview?: boolean },
+  ) =>
+    apiRequest<{ reportId: string; decision: string; hideReview: boolean }>({
+      method: 'PATCH',
+      path: `/api/admin/review-reports/${reportId}`,
+      body,
+      accessToken,
+    }),
+
+  resolveReviewDispute: (
+    accessToken: string,
+    disputeId: string,
+    body: { decision: 'dismissed' | 'upheld'; hideReview?: boolean },
+  ) =>
+    apiRequest<{ disputeId: string; decision: string; hideReview: boolean }>({
+      method: 'PATCH',
+      path: `/api/admin/review-disputes/${disputeId}`,
+      body,
+      accessToken,
+    }),
 };

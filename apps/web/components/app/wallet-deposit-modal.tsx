@@ -34,6 +34,8 @@ export const WalletDepositModal = ({
   const [amount, setAmount] = useState('');
   const [payCurrency, setPayCurrency] = useState('USDTTRC20');
   const [availableCurrencies, setAvailableCurrencies] = useState<string[]>(['USDTTRC20']);
+  const [estimatedPayAmount, setEstimatedPayAmount] = useState<number | null>(null);
+  const [estimating, setEstimating] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -53,6 +55,35 @@ export const WalletDepositModal = ({
         // keep fallback currency
       });
   }, [accessToken, payCurrency]);
+
+  useEffect(() => {
+    if (!accessToken || method !== 'crypto' || step !== 'amount') {
+      setEstimatedPayAmount(null);
+      return;
+    }
+    const numericAmount = parseFloat(amount.replace(/,/g, '.'));
+    if (!Number.isFinite(numericAmount) || numericAmount <= 0) {
+      setEstimatedPayAmount(null);
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      setEstimating(true);
+      void walletApiClient
+        .getDepositEstimate(accessToken, numericAmount, 'USD', payCurrency)
+        .then((result) => {
+          setEstimatedPayAmount(result.estimatedAmount);
+        })
+        .catch(() => {
+          setEstimatedPayAmount(null);
+        })
+        .finally(() => {
+          setEstimating(false);
+        });
+    }, 350);
+
+    return () => clearTimeout(timer);
+  }, [accessToken, method, step, amount, payCurrency]);
 
   const handleMethodClick = (nextMethod: 'crypto' | 'card') => {
     setMethod(nextMethod);
@@ -79,7 +110,7 @@ export const WalletDepositModal = ({
           : undefined;
       const result = await walletApiClient.createDepositCheckout(accessToken, {
         amount: num,
-        currency: 'EGP',
+        currency: 'USD',
         method,
         ...(method === 'crypto' ? { payCurrency } : {}),
         ...(returnUrl ? { returnUrl } : {}),
@@ -166,6 +197,13 @@ export const WalletDepositModal = ({
             />
             {method === 'crypto' && (
               <>
+                <p className="deposit-modal-subtitle" style={{ marginTop: '0.4rem', marginBottom: '0.4rem' }}>
+                  {estimating
+                    ? 'Estimating conversion...'
+                    : estimatedPayAmount != null
+                      ? `Estimated to pay: ${estimatedPayAmount.toFixed(6)} ${payCurrency}`
+                      : 'Enter amount in USD to see USDT estimate'}
+                </p>
                 <label className="deposit-form-label" style={{ marginTop: '0.75rem' }}>
                   Pay currency
                 </label>

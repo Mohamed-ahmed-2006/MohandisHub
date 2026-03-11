@@ -109,6 +109,12 @@ export type ExpertProfile = {
   payoutExtraId: string | null;
   payoutUpdatedAt: string | null;
   createdAt: string;
+  /** Set by API when profile is fetched for display */
+  averageRating?: number | null;
+  reviewCount?: number;
+  /** Earned when profile is complete and user has deposited >= 1000 USD */
+  verificationBadgeEarned?: boolean;
+  platformVerifiedAt?: string | null;
 };
 
 export type UpdateExpertProfileBody = {
@@ -163,6 +169,11 @@ export type BusinessProfile = {
   identityVerified: boolean;
   businessVerified: boolean;
   createdAt: string;
+  /** Set by API when profile is fetched for display */
+  averageRating?: number | null;
+  reviewCount?: number;
+  verificationBadgeEarned?: boolean;
+  platformVerifiedAt?: string | null;
 };
 
 export type UpdateBusinessProfileBody = {

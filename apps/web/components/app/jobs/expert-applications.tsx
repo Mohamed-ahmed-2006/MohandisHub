@@ -83,7 +83,7 @@ export const ExpertApplications = ({ accessToken }: { accessToken: string }) => 
                             <li key={m.id} style={{ marginBottom: '1rem', paddingBottom: '1rem', borderBottom: '1px solid #eee' }}>
                               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
                                 <strong>{m.title}</strong>
-                                <span>{m.amount} EGP - <span className={`badge badge--${m.status}`}>{m.status}</span></span>
+                    <span>{m.amount} USD - <span className={`badge badge--${m.status}`}>{m.status}</span></span>
                               </div>
                               
                               {(m.status === 'pending' || m.status === 'active' || m.status === 'rejected') && (

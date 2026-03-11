@@ -64,6 +64,31 @@ export const walletApiClient = {
     return data.currencies;
   },
 
+  getDepositEstimate: async (
+    accessToken: string,
+    amount: number,
+    currencyFrom: string = 'USD',
+    currencyTo: string = 'USDTTRC20',
+  ): Promise<{
+    amountFrom: number;
+    currencyFrom: string;
+    currencyTo: string;
+    estimatedAmount: number;
+    rate: number | null;
+  }> =>
+    requestJson<{
+      amountFrom: number;
+      currencyFrom: string;
+      currencyTo: string;
+      estimatedAmount: number;
+      rate: number | null;
+    }>({
+      accessToken,
+      path: `/api/wallet/deposit/estimate?amount=${encodeURIComponent(String(amount))}&currencyFrom=${encodeURIComponent(
+        currencyFrom,
+      )}&currencyTo=${encodeURIComponent(currencyTo)}`,
+    }),
+
   createDepositCheckout: async (
     accessToken: string,
     payload: CreateDepositCheckoutBody,
@@ -83,7 +108,7 @@ export const walletApiClient = {
   ): Promise<{ paymentUrl: string; orderId: string }> => {
     const result = await walletApiClient.createDepositCheckout(accessToken, {
       amount,
-      currency: 'EGP',
+      currency: 'USD',
       method: 'crypto',
       payCurrency,
     });
@@ -93,7 +118,7 @@ export const walletApiClient = {
   createStripeCheckout: async (
     accessToken: string,
     amount: number,
-    currency: string = 'EGP',
+    currency: string = 'USD',
     returnUrl?: string,
   ): Promise<{ checkoutUrl: string; sessionId: string }> => {
     const result = await walletApiClient.createDepositCheckout(accessToken, {

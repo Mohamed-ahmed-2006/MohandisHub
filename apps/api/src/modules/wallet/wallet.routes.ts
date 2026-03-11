@@ -16,6 +16,7 @@ walletRouter.use(authenticate, requireEmailVerified);
 walletRouter.get('/me', walletController.getMyWallet);
 walletRouter.get('/me/transactions', walletController.getMyTransactions);
 walletRouter.get('/deposit/currencies', walletController.getDepositCurrencies);
+walletRouter.get('/deposit/estimate', walletController.getDepositEstimate);
 walletRouter.post('/deposit/checkout', walletController.createDepositCheckout);
 // Legacy aliases kept for rollout compatibility
 walletRouter.post('/deposit/crypto', walletController.createLegacyCryptoDeposit);

@@ -138,7 +138,7 @@ export const BusinessJobsTab = ({ accessToken }: { accessToken: string }) => {
               <input name="title" className="dashboard-input" placeholder="Job Title" required />
               <textarea name="description" className="dashboard-textarea" placeholder="Job Description" required />
               <textarea name="requirements" className="dashboard-textarea" placeholder="Requirements" />
-              <input name="salaryRange" className="dashboard-input" placeholder="Salary Range (e.g. 5000-10000 EGP)" />
+                  <input name="salaryRange" className="dashboard-input" placeholder="Salary Range (e.g. 5000-10000 USD)" />
               <div className="dashboard-form-row">
                 <button type="button" className="plan-modal-cancel" onClick={() => setShowCreate(false)}>Cancel</button>
                 <button type="submit" className="dashboard-primary-btn" disabled={creating}>{creating ? '...' : 'Post Job'}</button>

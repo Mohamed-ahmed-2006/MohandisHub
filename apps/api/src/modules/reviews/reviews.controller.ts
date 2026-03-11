@@ -2,7 +2,7 @@ import { asyncHandler } from '../../utils/async-handler.js';
 import { HttpError } from '../../utils/http-error.js';
 
 import { ReviewsService } from './reviews.service.js';
-import { createReviewSchema } from './reviews.validation.js';
+import { createReviewSchema, reportReviewSchema, disputeReviewSchema } from './reviews.validation.js';
 
 const svc = new ReviewsService();
 
@@ -43,7 +43,7 @@ const create = asyncHandler(async (req, res) => {
 
 const list = asyncHandler(async (req, res) => {
   const targetUserId = req.query.targetUserId as string;
-  const targetType = (req.query.targetType as 'expert' | 'business') || 'expert';
+  const targetType = (req.query.targetType as 'expert' | 'business' | 'customer') || 'expert';
   if (!targetUserId) {
     throw new HttpError({
       statusCode: 400,
@@ -57,7 +57,25 @@ const list = asyncHandler(async (req, res) => {
   res.json({ ok: true, data });
 });
 
+const report = asyncHandler(async (req, res) => {
+  const user = requireUser(req);
+  const reviewId = req.params.reviewId as string;
+  const input = parseBody(reportReviewSchema, req.body);
+  const data = await svc.createReport(user.id, reviewId, input.reason, input.comment);
+  res.status(201).json({ ok: true, data });
+});
+
+const dispute = asyncHandler(async (req, res) => {
+  const user = requireUser(req);
+  const reviewId = req.params.reviewId as string;
+  const input = parseBody(disputeReviewSchema, req.body);
+  const data = await svc.createDispute(user.id, reviewId, input.reason);
+  res.status(201).json({ ok: true, data });
+});
+
 export const reviewsController = {
   create,
   list,
+  report,
+  dispute,
 };

@@ -217,7 +217,7 @@ export class AdminRepository {
 
   async setWalletFrozen(userId: string, isFrozen: boolean): Promise<UserDetailRow | null> {
     await this.db.query(
-      `INSERT INTO wallets (user_id) VALUES ($1)
+      `INSERT INTO wallets (user_id, currency) VALUES ($1, 'USD')
        ON CONFLICT (user_id) DO UPDATE SET user_id = wallets.user_id`,
       [userId],
     );
@@ -521,7 +521,7 @@ export class AdminRepository {
 
   async createWalletIfNotExists(userId: string): Promise<{ id: string; balance: string }> {
     const { rows } = await this.db.query<{ id: string; balance: string }>(
-      `INSERT INTO wallets (user_id) VALUES ($1)
+      `INSERT INTO wallets (user_id, currency) VALUES ($1, 'USD')
        ON CONFLICT (user_id) DO UPDATE SET user_id = wallets.user_id
        RETURNING id, balance::text`,
       [userId],

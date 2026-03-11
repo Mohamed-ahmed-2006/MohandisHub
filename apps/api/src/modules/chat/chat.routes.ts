@@ -32,5 +32,11 @@ chatRouter.post(
   requireEmailVerified,
   chatController.sendMessage,
 );
+chatRouter.delete(
+  '/conversations/:conversationId/messages/:messageId',
+  authenticate,
+  requireEmailVerified,
+  chatController.deleteMessage,
+);
 
 export { chatRouter };

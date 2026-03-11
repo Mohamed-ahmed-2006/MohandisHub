@@ -72,6 +72,21 @@ export class ProfilesRepository {
     return rows[0] ?? null;
   }
 
+  async getPlatformVerifiedAt(userId: string): Promise<Date | null> {
+    const { rows } = await this.db.query<{ platform_verified_at: Date | null }>(
+      'SELECT platform_verified_at FROM users WHERE id = $1',
+      [userId],
+    );
+    return rows[0]?.platform_verified_at ?? null;
+  }
+
+  async setPlatformVerifiedAt(userId: string): Promise<void> {
+    await this.db.query(
+      `UPDATE users SET platform_verified_at = now() WHERE id = $1 AND platform_verified_at IS NULL`,
+      [userId],
+    );
+  }
+
   async updateBusinessProfile(
     userId: string,
     fields: Partial<{

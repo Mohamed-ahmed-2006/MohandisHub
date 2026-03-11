@@ -87,6 +87,7 @@ const mapProfile = (row: ReservationProfileRow): ReservationProfile => ({
   currency: row.currency,
   createdAt: row.created_at,
   updatedAt: row.updated_at,
+  verificationBadgeEarned: row.platform_verified_at != null,
 });
 
 const mapSlot = (row: ReservationSlotRow): ReservationSlot => ({
@@ -410,7 +411,7 @@ export class ReservationsService {
       requestedStartAt: new Date(slot.start_at),
       requestedEndAt: new Date(slot.end_at),
       expertPriceAmount: expertPrice,
-      currency: profile.currency || 'EGP',
+      currency: profile.currency || 'USD',
       adminAcceptanceFee: status.reservationAcceptanceFee,
       adminMinuteRate,
     };
@@ -2542,7 +2543,11 @@ export class ReservationsService {
     const providerId = 'provider_id' in reservation ? reservation.provider_id : reservation.providerId;
     const senderId = actorId === customerId || actorId === providerId ? actorId : providerId;
     try {
-      await this.chatRepo.sendMessage(conversationId, senderId, `[Reservation] ${body}`);
+      const payload: Parameters<ChatRepository['sendMessage']>[2] = {
+        body: `[Reservation] ${body}`,
+        messageType: 'text',
+      };
+      await this.chatRepo.sendMessage(conversationId, senderId, payload);
     } catch {
       // Messaging should never break reservation state transitions.
     }

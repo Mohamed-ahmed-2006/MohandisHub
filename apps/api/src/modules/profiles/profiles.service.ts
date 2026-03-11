@@ -14,7 +14,9 @@ import type {
 import { HttpError } from '../../utils/http-error.js';
 import { sendTransactionalEmail } from '../../utils/send-transactional-email.js';
 import { AdminRepository } from '../admin/admin.repository.js';
+import { ReviewsRepository } from '../reviews/reviews.repository.js';
 import { SettingsService } from '../settings/settings.service.js';
+import { WalletRepository } from '../wallet/wallet.repository.js';
 
 import { ProfilesRepository } from './profiles.repository.js';
 import type {
@@ -29,6 +31,8 @@ export class ProfilesService {
     private readonly repo: ProfilesRepository = new ProfilesRepository(),
     private readonly settingsService: SettingsService = new SettingsService(),
     private readonly adminRepo: AdminRepository = new AdminRepository(),
+    private readonly reviewsRepo: ReviewsRepository = new ReviewsRepository(),
+    private readonly walletRepo: WalletRepository = new WalletRepository(),
   ) {}
 
   // ── Expert profile ─────────────────────────────────────────────────────
@@ -42,7 +46,29 @@ export class ProfilesService {
         message: 'Expert profile not found.',
       });
     }
-    return this.toExpertProfile(row);
+    const profile = this.toExpertProfile(row);
+    const [averageRating, reviewCount] = await Promise.all([
+      this.reviewsRepo.getAvgRating(userId, 'expert'),
+      this.reviewsRepo.getReviewCount(userId, 'expert'),
+    ]);
+    const isProfileComplete =
+      Boolean(row.title?.trim()) &&
+      Boolean(row.bio?.trim()) &&
+      Array.isArray(row.specializations) &&
+      row.specializations.length > 0 &&
+      Boolean(row.city?.trim()) &&
+      Boolean(row.country?.trim());
+    const totalDeposited = await this.walletRepo.getTotalDeposited(userId);
+    const badgeEligible = isProfileComplete && totalDeposited >= 1000;
+    if (badgeEligible) await this.repo.setPlatformVerifiedAt(userId);
+    const platformVerifiedAt = await this.repo.getPlatformVerifiedAt(userId);
+    return {
+      ...profile,
+      averageRating: averageRating ?? null,
+      reviewCount,
+      verificationBadgeEarned: platformVerifiedAt != null,
+      platformVerifiedAt: platformVerifiedAt?.toISOString() ?? null,
+    };
   }
 
   async updateExpertProfile(
@@ -107,7 +133,28 @@ export class ProfilesService {
         message: 'Business profile not found.',
       });
     }
-    return this.toBusinessProfile(row);
+    const profile = this.toBusinessProfile(row);
+    const [averageRating, reviewCount] = await Promise.all([
+      this.reviewsRepo.getAvgRating(userId, 'business'),
+      this.reviewsRepo.getReviewCount(userId, 'business'),
+    ]);
+    const isProfileComplete =
+      Boolean(row.company_name?.trim()) &&
+      Boolean(row.industry?.trim()) &&
+      Boolean(row.city?.trim()) &&
+      Boolean(row.country?.trim()) &&
+      Boolean(row.description?.trim());
+    const totalDeposited = await this.walletRepo.getTotalDeposited(userId);
+    const badgeEligible = isProfileComplete && totalDeposited >= 1000;
+    if (badgeEligible) await this.repo.setPlatformVerifiedAt(userId);
+    const platformVerifiedAt = await this.repo.getPlatformVerifiedAt(userId);
+    return {
+      ...profile,
+      averageRating: averageRating ?? null,
+      reviewCount,
+      verificationBadgeEarned: platformVerifiedAt != null,
+      platformVerifiedAt: platformVerifiedAt?.toISOString() ?? null,
+    };
   }
 
   async updateBusinessProfile(

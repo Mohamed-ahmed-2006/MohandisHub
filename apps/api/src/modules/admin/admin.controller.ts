@@ -24,6 +24,7 @@ import type {
 
 import { asyncHandler } from '../../utils/async-handler.js';
 import { HttpError } from '../../utils/http-error.js';
+import { ReviewsService } from '../reviews/reviews.service.js';
 import { SettingsService } from '../settings/settings.service.js';
 
 import { AdminService } from './admin.service.js';
@@ -59,6 +60,7 @@ import {
 
 const adminService = new AdminService();
 const settingsService = new SettingsService();
+const reviewsService = new ReviewsService();
 
 function getAdminId(req: { user?: { id: string } }): string {
   if (!req.user) {
@@ -428,6 +430,42 @@ const updateSettings = asyncHandler(async (req, res) => {
   res.json(response);
 });
 
+const listReviewReports = asyncHandler(async (req, res) => {
+  const page = parseInt(req.query.page as string, 10) || 1;
+  const limit = Math.min(parseInt(req.query.limit as string, 10) || 20, 100);
+  const status = (req.query.status as string) === 'all' ? 'all' : 'pending';
+  const data = await reviewsService.listReports(page, limit, status);
+  res.json({ ok: true, data });
+});
+
+const listReviewDisputes = asyncHandler(async (req, res) => {
+  const page = parseInt(req.query.page as string, 10) || 1;
+  const limit = Math.min(parseInt(req.query.limit as string, 10) || 20, 100);
+  const status = (req.query.status as string) === 'all' ? 'all' : 'pending';
+  const data = await reviewsService.listDisputes(page, limit, status);
+  res.json({ ok: true, data });
+});
+
+const resolveReviewReport = asyncHandler(async (req, res) => {
+  const adminId = getAdminId(req);
+  const reportId = req.params.id as string;
+  const body = req.body as { decision: 'dismissed' | 'upheld'; hideReview?: boolean };
+  const decision = body.decision ?? 'dismissed';
+  const hideReview = body.hideReview === true;
+  await reviewsService.resolveReport(reportId, adminId, decision, hideReview);
+  res.json({ ok: true, data: { reportId, decision, hideReview } });
+});
+
+const resolveReviewDispute = asyncHandler(async (req, res) => {
+  const adminId = getAdminId(req);
+  const disputeId = req.params.id as string;
+  const body = req.body as { decision: 'dismissed' | 'upheld'; hideReview?: boolean };
+  const decision = body.decision ?? 'dismissed';
+  const hideReview = body.hideReview === true;
+  await reviewsService.resolveDispute(disputeId, adminId, decision, hideReview);
+  res.json({ ok: true, data: { disputeId, decision, hideReview } });
+});
+
 export const adminController = {
   getDashboardStats,
   listUsers,
@@ -464,4 +502,8 @@ export const adminController = {
   deleteCategory,
   getSettings,
   updateSettings,
+  listReviewReports,
+  listReviewDisputes,
+  resolveReviewReport,
+  resolveReviewDispute,
 };

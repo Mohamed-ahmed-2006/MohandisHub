@@ -6,6 +6,7 @@ import { useEffect, useState } from 'react';
 import { AppAvatarMenu } from './app-avatar-menu';
 import { AppSidebar } from './app-sidebar';
 import { ToastProvider, useToast } from './toast';
+import { WalletDepositModal } from './wallet-deposit-modal';
 
 import { useAuth } from '@/components/auth/auth-provider';
 import { SkeletonAvatar } from '@/components/ui/skeleton';
@@ -45,6 +46,7 @@ const AppShellInner = ({ locale, dictionary, children }: AppShellProps) => {
   const { authUser, accessToken, logout, isReady } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [wallet, setWallet] = useState<{ balance: number; currency: string } | null>(null);
+  const [showDepositModal, setShowDepositModal] = useState(false);
   const [depositMessage, setDepositMessage] = useState<'success' | 'cancelled' | null>(null);
   const { addToast } = useToast();
 
@@ -190,17 +192,29 @@ const AppShellInner = ({ locale, dictionary, children }: AppShellProps) => {
             {isReady && authUser ? (
               <>
                 {(wallet != null || accessToken) && (
-                  <button
-                    type="button"
-                    className="app-topbar-balance app-topbar-balance-link"
-                    onClick={() => router.push(buildLocalePath(locale, '/app/settings/wallet'))}
-                    aria-label="Open wallet settings"
-                  >
-                    <span className="app-topbar-balance-label">{dictionary.wallet.balance}</span>
-                    <span className="app-topbar-balance-amount">
-                      {wallet != null ? `${wallet.balance.toFixed(2)} ${wallet.currency}` : '-'}
-                    </span>
-                  </button>
+                  <div className="app-topbar-balance">
+                    <button
+                      type="button"
+                      className="app-topbar-balance-link app-topbar-balance-main"
+                      onClick={() => router.push(buildLocalePath(locale, '/app/settings/wallet'))}
+                      aria-label="Open wallet settings"
+                    >
+                      <span className="app-topbar-balance-label">{dictionary.wallet.balance}</span>
+                      <span className="app-topbar-balance-amount">
+                        {wallet != null ? `${wallet.balance.toFixed(2)} ${wallet.currency}` : '-'}
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      className="app-topbar-balance-plus"
+                      aria-label={dictionary.wallet.deposit}
+                      onClick={() => {
+                        if (accessToken) setShowDepositModal(true);
+                      }}
+                    >
+                      +
+                    </button>
+                  </div>
                 )}
                 <AppAvatarMenu
                   locale={locale}
@@ -254,6 +268,17 @@ const AppShellInner = ({ locale, dictionary, children }: AppShellProps) => {
               x
             </button>
           </div>
+        )}
+
+        {showDepositModal && accessToken && (
+          <WalletDepositModal
+            dictionary={dictionary}
+            accessToken={accessToken}
+            onClose={() => setShowDepositModal(false)}
+            onDepositCreated={() => {
+              window.dispatchEvent(new CustomEvent('wallet-updated'));
+            }}
+          />
         )}
       </div>
     </div>

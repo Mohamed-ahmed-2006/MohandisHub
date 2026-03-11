@@ -39,6 +39,13 @@ export const createApp = () => {
   );
   // Webhooks must receive raw body for signature verification
   app.use(
+    '/api/wallet/nowpayments/ipn',
+    express.raw({ type: 'application/json' }),
+    (req, res, next) => {
+      void walletController.nowPaymentsIpn(req, res, next);
+    },
+  );
+  app.use(
     '/api/wallet/nowpayments/ipn/deposit',
     express.raw({ type: 'application/json' }),
     (req, res, next) => {

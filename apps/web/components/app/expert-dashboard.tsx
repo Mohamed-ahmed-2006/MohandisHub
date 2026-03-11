@@ -345,14 +345,14 @@ export const ExpertDashboard = ({
                 min="1"
                 step="0.01"
                 className="dashboard-input"
-                placeholder={d.bidAmountPlaceholder ?? 'Your total bid amount (EGP)'}
+                placeholder={d.bidAmountPlaceholder ?? 'Your total bid amount (USD)'}
                 value={bidAmountInput}
                 onChange={(e) => setBidAmountInput(e.target.value)}
                 required
               />
               <p className="dashboard-form-hint" style={{ marginTop: '-0.5rem', marginBottom: '0.5rem' }}>
                 {bidAmountInput && !isNaN(Number(bidAmountInput)) ? (
-                  <>You will receive approximately <strong>{(Number(bidAmountInput) * 0.9).toFixed(2)} EGP</strong> after the 10% platform commission.</>
+                  <>You will receive approximately <strong>{(Number(bidAmountInput) * 0.9).toFixed(2)} USD</strong> after the 10% platform commission.</>
                 ) : (
                   <>Note: A platform commission (typically ~10%) will be deducted from this total upon payout.</>
                 )}

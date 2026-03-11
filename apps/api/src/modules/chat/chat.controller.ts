@@ -5,8 +5,17 @@ import { asyncHandler } from '../../utils/async-handler.js';
 import { HttpError } from '../../utils/http-error.js';
 
 import { ChatService } from './chat.service.js';
+import { deleteMessageSchema, sendMessageSchema } from './chat.validation.js';
 
 const chatService = new ChatService();
+
+function parseBody<T>(schema: { parse: (v: unknown) => T }, value: unknown): T {
+  return schema.parse(value);
+}
+
+function parseQuery<T>(schema: { parse: (v: unknown) => T }, value: unknown): T {
+  return schema.parse(value);
+}
 
 const status = asyncHandler((_req, res) => {
   const message = chatService.getStatus();
@@ -48,19 +57,33 @@ const sendMessage = asyncHandler(async (req, res) => {
       code: 'MISSING_ID',
       message: 'Conversation ID required.',
     });
-  const body = (req.body as { body?: string })?.body;
-  if (!body || !body.trim())
-    throw new HttpError({
-      statusCode: 400,
-      code: 'EMPTY_MESSAGE',
-      message: 'Message body required.',
-    });
-  const message = await chatService.sendMessage(user.id, conversationId, body.trim());
+  const input = parseBody(sendMessageSchema, req.body);
+  const message = await chatService.sendMessage(user.id, conversationId, input);
   const io = getSocketServer();
   if (io) {
     io.to(`conversation:${conversationId}`).emit('new_message', message);
   }
   res.status(201).json({ ok: true, data: message });
+});
+
+const deleteMessage = asyncHandler(async (req, res) => {
+  const user = req.user;
+  if (!user)
+    throw new HttpError({ statusCode: 401, code: 'UNAUTHORIZED', message: 'Auth required.' });
+  const { conversationId, messageId } = req.params;
+  if (!conversationId || !messageId)
+    throw new HttpError({
+      statusCode: 400,
+      code: 'MISSING_ID',
+      message: 'Conversation ID and message ID required.',
+    });
+  const { scope } = parseQuery(deleteMessageSchema, { scope: req.query.scope });
+  const result = await chatService.deleteMessage(user.id, conversationId, messageId, scope);
+  const io = getSocketServer();
+  if (io) {
+    io.to(`conversation:${conversationId}`).emit('message_deleted', { messageId, scope: result.scope });
+  }
+  res.json({ ok: true, data: result });
 });
 
 const startConversation = asyncHandler(async (req, res) => {
@@ -83,5 +106,6 @@ export const chatController = {
   listConversations,
   getMessages,
   sendMessage,
+  deleteMessage,
   startConversation,
 };

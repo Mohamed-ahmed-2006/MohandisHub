@@ -4,6 +4,7 @@ import type {
   AuthUser,
   BusinessProfile,
   ExpertProfile,
+  Review,
   UpdateBusinessProfileBody,
   UpdateExpertProfileBody,
 } from '@mohandishub/shared';
@@ -22,6 +23,7 @@ import { COUNTRIES } from '@/lib/data/countries';
 import { buildLocalePath } from '@/lib/i18n/path';
 import type { Dictionary, Locale } from '@/lib/i18n/types';
 import { profilesApiClient } from '@/lib/profiles/client';
+import { reviewsApiClient } from '@/lib/reviews/client';
 import { usersApiClient } from '@/lib/users/client';
 import { formatApiError } from '@/lib/utils/format-api-error';
 
@@ -354,6 +356,17 @@ export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
     type: 'success' | 'error';
     text: string;
   } | null>(null);
+  const [reviews, setReviews] = useState<Review[]>([]);
+  const [reviewsLoading, setReviewsLoading] = useState(false);
+  const [reviewsPage, _setReviewsPage] = useState(1);
+  const [_reviewsTotal, setReviewsTotal] = useState(0);
+  const [reportModalReviewId, setReportModalReviewId] = useState<string | null>(null);
+  const [reportReason, setReportReason] = useState<'inappropriate' | 'fake' | 'spam' | 'other'>('inappropriate');
+  const [reportComment, setReportComment] = useState('');
+  const [disputeModalReviewId, setDisputeModalReviewId] = useState<string | null>(null);
+  const [disputeReason, setDisputeReason] = useState('');
+  const [reportSubmitting, setReportSubmitting] = useState(false);
+  const [disputeSubmitting, setDisputeSubmitting] = useState(false);
 
   const role = authUser?.role;
   const isExpert = role === 'expert';
@@ -390,6 +403,60 @@ export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
     }
     void loadProfile();
   }, [isReady, isAuthenticated, authUser, authGuard.emailVerified, locale, router, loadProfile]);
+
+  const targetUserId = isExpert ? expertProfile?.userId : isBusiness ? businessProfile?.userId : null;
+  const targetType = isExpert ? 'expert' : isBusiness ? 'business' : null;
+  const loadReviews = useCallback(async () => {
+    if (!accessToken || !targetUserId || !targetType) return;
+    setReviewsLoading(true);
+    try {
+      const data = await reviewsApiClient.list(accessToken, {
+        targetUserId,
+        targetType,
+        page: reviewsPage,
+        limit: 10,
+      });
+      setReviews(data.items);
+      setReviewsTotal(data.total);
+    } catch {
+      setReviews([]);
+    } finally {
+      setReviewsLoading(false);
+    }
+  }, [accessToken, targetUserId, targetType, reviewsPage]);
+
+  useEffect(() => {
+    if (activeTab === 'profile' && targetUserId && targetType) void loadReviews();
+  }, [activeTab, targetUserId, targetType, loadReviews]);
+
+  const submitReport = useCallback(async () => {
+    if (!accessToken || !reportModalReviewId || reportSubmitting) return;
+    setReportSubmitting(true);
+    try {
+      await reviewsApiClient.report(accessToken, reportModalReviewId, {
+        reason: reportReason,
+        ...(reportComment.trim() ? { comment: reportComment.trim() } : {}),
+      });
+      setReportModalReviewId(null);
+      setReportComment('');
+    } finally {
+      setReportSubmitting(false);
+    }
+  }, [accessToken, reportModalReviewId, reportReason, reportComment, reportSubmitting]);
+
+  const submitDispute = useCallback(async () => {
+    if (!accessToken || !disputeModalReviewId || !disputeReason.trim() || disputeSubmitting) return;
+    setDisputeSubmitting(true);
+    try {
+      await reviewsApiClient.dispute(accessToken, disputeModalReviewId, {
+        reason: disputeReason.trim(),
+      });
+      setDisputeModalReviewId(null);
+      setDisputeReason('');
+    } finally {
+      setDisputeSubmitting(false);
+    }
+  }, [accessToken, disputeModalReviewId, disputeReason, disputeSubmitting]);
 
   const handleSaveExpert = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -580,6 +647,23 @@ export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
               {verLabels[expertProfile.verificationStatus as keyof typeof verLabels] ??
                 expertProfile.verificationStatus}
             </span>
+            {expertProfile.verificationBadgeEarned && (
+                <span className="profile-screen-badge profile-screen-badge_verified" title="Completed profile and deposited 1000 USD">
+                Verified
+              </span>
+            )}
+            {(expertProfile.averageRating != null || (expertProfile.reviewCount ?? 0) > 0) && (
+              <p className="profile-screen-rating-row">
+                <span className="profile-screen-stars" aria-label={(dictionary.profile as { reviews?: { averageRating?: string } }).reviews?.averageRating ?? 'Average rating'}>
+                  {'★'.repeat(Math.round(expertProfile.averageRating ?? 0))}
+                  {'☆'.repeat(5 - Math.round(expertProfile.averageRating ?? 0))}
+                </span>
+                <span className="profile-screen-review-count">
+                  {expertProfile.averageRating != null && `${Number(expertProfile.averageRating).toFixed(1)} · `}
+                  {(expertProfile.reviewCount ?? 0)} {(dictionary.profile as { reviews?: { reviewCount?: string } }).reviews?.reviewCount ?? 'reviews'}
+                </span>
+              </p>
+            )}
             <form onSubmit={(e) => void handleSaveExpert(e)} className="profile-screen-form">
               <div className="profile-screen-field">
                 <label className="profile-screen-label">{pf.titleLabel}</label>
@@ -728,6 +812,106 @@ export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
                 {saving ? dictionary.common.continue : dictionary.common.save}
               </button>
             </form>
+            {hasRoleProfile && (
+              <div className="profile-screen-reviews-section">
+                <h3 className="profile-screen-reviews-title">
+                  {(dictionary.profile as { reviews?: { sectionTitle?: string } }).reviews?.sectionTitle ?? 'Reviews'}
+                </h3>
+                {reviewsLoading ? (
+                  <p className="profile-screen-muted">{(dictionary.profile as { loading?: string }).loading ?? 'Loading...'}</p>
+                ) : reviews.length === 0 ? (
+                  <p className="profile-screen-muted">{(dictionary.profile as { reviews?: { noReviews?: string } }).reviews?.noReviews ?? 'No reviews yet.'}</p>
+                ) : (
+                  <ul className="profile-screen-reviews-list">
+                    {reviews.map((r) => (
+                      <li key={r.id} className="profile-screen-review-item">
+                        <span className="profile-screen-stars small">
+                          {'★'.repeat(r.rating)}{'☆'.repeat(5 - r.rating)}
+                        </span>
+                        {r.comment && <p className="profile-screen-review-comment">{r.comment}</p>}
+                        <p className="profile-screen-review-meta">
+                          {r.reviewerName ?? 'Anonymous'} · {new Date(r.createdAt).toLocaleDateString(locale)}
+                        </p>
+                        <div className="profile-screen-review-actions">
+                          {r.reviewerId !== authUser?.id && (
+                            <>
+                              {reportModalReviewId !== r.id ? (
+                                <button
+                                  type="button"
+                                  className="profile-screen-review-action-btn"
+                                  onClick={() => setReportModalReviewId(r.id)}
+                                >
+                                  Report
+                                </button>
+                              ) : (
+                                <div className="profile-screen-report-form">
+                                  <select
+                                    value={reportReason}
+                                    onChange={(e) => setReportReason(e.target.value as 'inappropriate' | 'fake' | 'spam' | 'other')}
+                                    className="profile-screen-select"
+                                  >
+                                    <option value="inappropriate">Inappropriate</option>
+                                    <option value="fake">Fake</option>
+                                    <option value="spam">Spam</option>
+                                    <option value="other">Other</option>
+                                  </select>
+                                  <input
+                                    type="text"
+                                    className="profile-screen-input"
+                                    placeholder={(dictionary.profile as { reviews?: { commentPlaceholder?: string } }).reviews?.commentPlaceholder ?? 'Optional comment'}
+                                    value={reportComment}
+                                    onChange={(e) => setReportComment(e.target.value)}
+                                  />
+                                  <div className="profile-screen-review-form-actions">
+                                    <button type="button" className="profile-screen-cancel-btn" onClick={() => { setReportModalReviewId(null); setReportComment(''); }}>
+                                      Cancel
+                                    </button>
+                                    <button type="button" className="profile-screen-submit-button" disabled={reportSubmitting} onClick={() => void submitReport()}>
+                                      {reportSubmitting ? '...' : 'Submit'}
+                                    </button>
+                                  </div>
+                                </div>
+                              )}
+                            </>
+                          )}
+                          {r.targetUserId === authUser?.id && (
+                            <>
+                              {disputeModalReviewId !== r.id ? (
+                                <button
+                                  type="button"
+                                  className="profile-screen-review-action-btn"
+                                  onClick={() => setDisputeModalReviewId(r.id)}
+                                >
+                                  Dispute
+                                </button>
+                              ) : (
+                                <div className="profile-screen-report-form">
+                                  <textarea
+                                    className="profile-screen-textarea"
+                                    rows={2}
+                                    placeholder="Reason for disputing"
+                                    value={disputeReason}
+                                    onChange={(e) => setDisputeReason(e.target.value)}
+                                  />
+                                  <div className="profile-screen-review-form-actions">
+                                    <button type="button" className="profile-screen-cancel-btn" onClick={() => { setDisputeModalReviewId(null); setDisputeReason(''); }}>
+                                      Cancel
+                                    </button>
+                                    <button type="button" className="profile-screen-submit-button" disabled={disputeSubmitting || !disputeReason.trim()} onClick={() => void submitDispute()}>
+                                      {disputeSubmitting ? '...' : 'Submit'}
+                                    </button>
+                                  </div>
+                                </div>
+                              )}
+                            </>
+                          )}
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            )}
           </section>
         )}
 
@@ -747,6 +931,23 @@ export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
               {verLabels[businessProfile.verificationStatus as keyof typeof verLabels] ??
                 businessProfile.verificationStatus}
             </span>
+            {businessProfile.verificationBadgeEarned && (
+                <span className="profile-screen-badge profile-screen-badge_verified" title="Completed profile and deposited 1000 USD">
+                Verified
+              </span>
+            )}
+            {(businessProfile.averageRating != null || (businessProfile.reviewCount ?? 0) > 0) && (
+              <p className="profile-screen-rating-row">
+                <span className="profile-screen-stars" aria-label={(dictionary.profile as { reviews?: { averageRating?: string } }).reviews?.averageRating ?? 'Average rating'}>
+                  {'★'.repeat(Math.round(businessProfile.averageRating ?? 0))}
+                  {'☆'.repeat(5 - Math.round(businessProfile.averageRating ?? 0))}
+                </span>
+                <span className="profile-screen-review-count">
+                  {businessProfile.averageRating != null && `${Number(businessProfile.averageRating).toFixed(1)} · `}
+                  {(businessProfile.reviewCount ?? 0)} {(dictionary.profile as { reviews?: { reviewCount?: string } }).reviews?.reviewCount ?? 'reviews'}
+                </span>
+              </p>
+            )}
             <form onSubmit={(e) => void handleSaveBusiness(e)} className="profile-screen-form">
               <div className="profile-screen-field">
                 <label className="profile-screen-label">{cf.companyNameLabel}</label>
@@ -934,6 +1135,70 @@ export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
                 {saving ? dictionary.common.continue : dictionary.common.save}
               </button>
             </form>
+            {hasRoleProfile && (
+              <div className="profile-screen-reviews-section">
+                <h3 className="profile-screen-reviews-title">
+                  {(dictionary.profile as { reviews?: { sectionTitle?: string } }).reviews?.sectionTitle ?? 'Reviews'}
+                </h3>
+                {reviewsLoading ? (
+                  <p className="profile-screen-muted">{(dictionary.profile as { loading?: string }).loading ?? 'Loading...'}</p>
+                ) : reviews.length === 0 ? (
+                  <p className="profile-screen-muted">{(dictionary.profile as { reviews?: { noReviews?: string } }).reviews?.noReviews ?? 'No reviews yet.'}</p>
+                ) : (
+                  <ul className="profile-screen-reviews-list">
+                    {reviews.map((r) => (
+                      <li key={r.id} className="profile-screen-review-item">
+                        <span className="profile-screen-stars small">
+                          {'★'.repeat(r.rating)}{'☆'.repeat(5 - r.rating)}
+                        </span>
+                        {r.comment && <p className="profile-screen-review-comment">{r.comment}</p>}
+                        <p className="profile-screen-review-meta">
+                          {r.reviewerName ?? 'Anonymous'} · {new Date(r.createdAt).toLocaleDateString(locale)}
+                        </p>
+                        <div className="profile-screen-review-actions">
+                          {r.reviewerId !== authUser?.id && (
+                            <>
+                              {reportModalReviewId !== r.id ? (
+                                <button type="button" className="profile-screen-review-action-btn" onClick={() => setReportModalReviewId(r.id)}>Report</button>
+                              ) : (
+                                <div className="profile-screen-report-form">
+                                  <select value={reportReason} onChange={(e) => setReportReason(e.target.value as 'inappropriate' | 'fake' | 'spam' | 'other')} className="profile-screen-select">
+                                    <option value="inappropriate">Inappropriate</option>
+                                    <option value="fake">Fake</option>
+                                    <option value="spam">Spam</option>
+                                    <option value="other">Other</option>
+                                  </select>
+                                  <input type="text" className="profile-screen-input" placeholder="Optional comment" value={reportComment} onChange={(e) => setReportComment(e.target.value)} />
+                                  <div className="profile-screen-review-form-actions">
+                                    <button type="button" className="profile-screen-cancel-btn" onClick={() => { setReportModalReviewId(null); setReportComment(''); }}>Cancel</button>
+                                    <button type="button" className="profile-screen-submit-button" disabled={reportSubmitting} onClick={() => void submitReport()}>{reportSubmitting ? '...' : 'Submit'}</button>
+                                  </div>
+                                </div>
+                              )}
+                            </>
+                          )}
+                          {r.targetUserId === authUser?.id && (
+                            <>
+                              {disputeModalReviewId !== r.id ? (
+                                <button type="button" className="profile-screen-review-action-btn" onClick={() => setDisputeModalReviewId(r.id)}>Dispute</button>
+                              ) : (
+                                <div className="profile-screen-report-form">
+                                  <textarea className="profile-screen-textarea" rows={2} placeholder="Reason for disputing" value={disputeReason} onChange={(e) => setDisputeReason(e.target.value)} />
+                                  <div className="profile-screen-review-form-actions">
+                                    <button type="button" className="profile-screen-cancel-btn" onClick={() => { setDisputeModalReviewId(null); setDisputeReason(''); }}>Cancel</button>
+                                    <button type="button" className="profile-screen-submit-button" disabled={disputeSubmitting || !disputeReason.trim()} onClick={() => void submitDispute()}>{disputeSubmitting ? '...' : 'Submit'}</button>
+                                  </div>
+                                </div>
+                              )}
+                            </>
+                          )}
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            )}
           </section>
         )}
 

@@ -118,7 +118,7 @@ export class PlansService {
       name: typeof name === 'string' ? name : 'Free',
       description: (row.description as string) ?? null,
       price: Number.isFinite(price) ? price : 0,
-      currency: typeof currency === 'string' ? currency : 'EGP',
+      currency: typeof currency === 'string' ? currency : 'USD',
       billingCycle: (row.billing_cycle as Plan['billingCycle']) ?? 'monthly',
       durationDays: (row.duration_days as number) ?? null,
       trialDays: (row.trial_days as number) ?? 0,

@@ -44,7 +44,7 @@
   display: flex;
   align-items: center;
   gap: 0.35rem;
-  padding: 0.35rem 0.75rem;
+  padding: 0.2rem 0.35rem 0.2rem 0.75rem;
   border-radius: 999px;
   border: 1px solid hsl(var(--border));
   background: color-mix(in srgb, hsl(var(--surface-elevated)) 90%, transparent);
@@ -55,9 +55,20 @@
   appearance: none;
   font: inherit;
   cursor: pointer;
+  border: none;
+  background: transparent;
+  color: inherit;
 }
 
-.app-topbar-balance-link:hover {
+.app-topbar-balance-main {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.15rem 0.1rem;
+  border-radius: 999px;
+}
+
+.app-topbar-balance-main:hover {
   background: hsl(var(--muted));
 }
 
@@ -69,6 +80,26 @@
 .app-topbar-balance-amount {
   font-weight: 700;
   color: hsl(var(--foreground));
+}
+
+.app-topbar-balance-plus {
+  width: 1.45rem;
+  height: 1.45rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  border: 1px solid hsl(var(--border));
+  background: hsl(var(--background));
+  font-size: 1rem;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+  color: hsl(var(--foreground));
+}
+
+.app-topbar-balance-plus:hover {
+  background: hsl(var(--muted));
 }
 
 .app-topbar-hamburger {

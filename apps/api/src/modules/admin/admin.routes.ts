@@ -73,4 +73,10 @@ adminRouter.post('/academic/:recordId/review', requireAdminPermission('manage_ve
 adminRouter.post('/business/:userId/review', requireAdminPermission('manage_verifications'), profilesController.reviewBusinessDocs);
 adminRouter.get('/user/:userId/profile', requireAdminPermission('manage_users'), profilesController.getAnyUserProfile);
 
+// Review reports and disputes
+adminRouter.get('/review-reports', requireAdminPermission('manage_verifications'), adminController.listReviewReports);
+adminRouter.get('/review-disputes', requireAdminPermission('manage_verifications'), adminController.listReviewDisputes);
+adminRouter.patch('/review-reports/:id', requireAdminPermission('manage_verifications'), adminController.resolveReviewReport);
+adminRouter.patch('/review-disputes/:id', requireAdminPermission('manage_verifications'), adminController.resolveReviewDispute);
+
 export { adminRouter };

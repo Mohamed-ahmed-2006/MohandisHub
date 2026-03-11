@@ -29,12 +29,16 @@ console.log("🚀 Starting check, build, commit, and migrate process...");
 console.log("\n1️⃣  Checking for errors...");
 run('npm run typecheck');
 
-// 2. Build npm
-console.log("\n2️⃣  Building the project...");
+// 2. Lint
+console.log("\n2️⃣  Running lint...");
+run('npm run lint');
+
+// 3. Build npm
+console.log("\n3️⃣  Building the project...");
 run('npm run build');
 
-// 3. Git commit (not push)
-console.log("\n3️⃣  Committing to Git...");
+// 4. Git commit (not push)
+console.log("\n4️⃣  Committing to Git...");
 run('git add .');
 
 try {
@@ -50,8 +54,8 @@ try {
   console.log("Failed to commit changes or no changes to commit.");
 }
 
-// 4. Migrate database
-console.log("\n4️⃣  Pushing database migrations...");
+// 5. Migrate database
+console.log("\n5️⃣  Pushing database migrations...");
 // Uses local DATABASE_URL when available to avoid requiring a linked Supabase project in local dev.
 const dbUrl = getApiDatabaseUrl();
 if (dbUrl) {

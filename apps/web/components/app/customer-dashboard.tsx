@@ -216,7 +216,7 @@ export const CustomerDashboard = ({
       description,
       budgetType,
       budgetAmount,
-      currency: 'EGP',
+      currency: 'USD',
     };
     if (
       categoryIdVal &&

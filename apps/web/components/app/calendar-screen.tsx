@@ -511,7 +511,7 @@ export const CalendarScreen = ({ locale, dictionary }: Props) => {
                   {' '}Auto-accept requests when slot is still free
                 </label>
                 <label className="dashboard-card-meta">
-                  Voice session fixed price (EGP)
+                Voice session fixed price (USD)
                   <input
                     type="number"
                     min={0}
@@ -522,7 +522,7 @@ export const CalendarScreen = ({ locale, dictionary }: Props) => {
                   />
                 </label>
                 <label className="dashboard-card-meta">
-                  Video session fixed price (EGP)
+                Video session fixed price (USD)
                   <input
                     type="number"
                     min={0}
@@ -533,7 +533,7 @@ export const CalendarScreen = ({ locale, dictionary }: Props) => {
                   />
                 </label>
                 <label className="dashboard-card-meta">
-                  Offline session fixed price (EGP)
+                Offline session fixed price (USD)
                   <input
                     type="number"
                     min={0}

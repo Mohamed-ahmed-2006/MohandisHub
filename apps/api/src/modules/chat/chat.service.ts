@@ -2,6 +2,7 @@ import { HttpError } from '../../utils/http-error.js';
 import { SettingsService } from '../settings/settings.service.js';
 
 import { ChatRepository } from './chat.repository.js';
+import type { SendMessageInput } from './chat.validation.js';
 
 export class ChatService {
   constructor(
@@ -40,7 +41,7 @@ export class ChatService {
     return { messages: await this.repo.getMessages(conversationId, 50, 0, userId), status: conv.status };
   }
 
-  async sendMessage(userId: string, conversationId: string, body: string) {
+  async sendMessage(userId: string, conversationId: string, input: SendMessageInput) {
     const status = await this.settingsService.getAppStatus();
     if (status.pauseChat) {
       throw new HttpError({
@@ -68,7 +69,72 @@ export class ChatService {
         message: 'This conversation is closed.',
       });
     }
-    return this.repo.sendMessage(conversationId, userId, body);
+
+    const body =
+      input.messageType === 'link' || input.messageType === 'location'
+        ? (input.body ?? '').trim() || null
+        : (input.body ?? '').trim() || null;
+    return this.repo.sendMessage(conversationId, userId, {
+      body,
+      replyToId: input.replyToId ?? null,
+      messageType: input.messageType ?? 'text',
+      attachmentUrl: input.attachmentUrl ?? null,
+      linkUrl: input.linkUrl ?? null,
+      locationLat: input.lat ?? null,
+      locationLng: input.lng ?? null,
+      locationLabel: input.label ?? null,
+    });
+  }
+
+  async deleteMessage(
+    userId: string,
+    conversationId: string,
+    messageId: string,
+    scope: 'for_me' | 'for_everyone',
+  ) {
+    const conv = await this.repo.getConversation(conversationId);
+    if (!conv) {
+      throw new HttpError({
+        statusCode: 404,
+        code: 'CONVERSATION_NOT_FOUND',
+        message: 'Conversation not found.',
+      });
+    }
+    if (conv.participant_a !== userId && conv.participant_b !== userId) {
+      throw new HttpError({ statusCode: 403, code: 'FORBIDDEN', message: 'Not a participant.' });
+    }
+
+    const msg = await this.repo.findMessage(messageId, conversationId);
+    if (!msg) {
+      throw new HttpError({
+        statusCode: 404,
+        code: 'MESSAGE_NOT_FOUND',
+        message: 'Message not found.',
+      });
+    }
+
+    if (scope === 'for_me') {
+      const ok = await this.repo.deleteForSender(messageId, userId);
+      if (!ok) {
+        throw new HttpError({
+          statusCode: 403,
+          code: 'FORBIDDEN',
+          message: 'Can only delete your own messages for yourself.',
+        });
+      }
+      return { deleted: true, scope: 'for_me' as const };
+    }
+
+    if (msg.sender_id !== userId) {
+      throw new HttpError({
+        statusCode: 403,
+        code: 'FORBIDDEN',
+        message: 'Only the sender can delete for everyone.',
+      });
+    }
+    const ok = await this.repo.deleteForEveryone(messageId, userId);
+    if (!ok) throw new HttpError({ statusCode: 404, code: 'MESSAGE_NOT_FOUND', message: 'Message not found.' });
+    return { deleted: true, scope: 'for_everyone' as const };
   }
 
   async startConversation(userId: string, otherUserId: string) {

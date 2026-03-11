@@ -261,6 +261,22 @@ export type Dictionary = {
     orders?: string;
     analytics?: string;
   };
+  chatPage?: {
+    shareLink: string;
+    shareLocation: string;
+    reply: string;
+    replyingTo: string;
+    copy: string;
+    deleteForMe: string;
+    deleteForEveryone: string;
+    openLink: string;
+    viewOnMap: string;
+    sendLink: string;
+    cancelReply: string;
+    typeMessage: string;
+    pasteLinkUrl: string;
+    optionalCaption: string;
+  };
   appHome: {
     loading: string;
     roleLabel: string;
@@ -339,6 +355,7 @@ export type Dictionary = {
       services: string;
       categories: string;
       verifications: string;
+      reviewReports?: string;
       settings: string;
     };
     dashboard: {
@@ -737,6 +754,16 @@ export type Dictionary = {
       academicDescription: string;
       noDocuments: string;
       status: string;
+    };
+    reviews?: {
+      sectionTitle: string;
+      averageRating: string;
+      reviewCount: string;
+      noReviews: string;
+      rateProvider: string;
+      rateCustomer: string;
+      leaveReview: string;
+      commentPlaceholder: string;
     };
   };
   auth: {

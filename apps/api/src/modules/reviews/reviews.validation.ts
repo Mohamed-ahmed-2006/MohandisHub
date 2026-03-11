@@ -13,3 +13,14 @@ export const createReviewSchema = z
   });
 
 export type CreateReviewInput = z.infer<typeof createReviewSchema>;
+
+export const reportReviewSchema = z.object({
+  reason: z.enum(['inappropriate', 'fake', 'spam', 'other']),
+  comment: z.string().max(1000).optional(),
+});
+export type ReportReviewInput = z.infer<typeof reportReviewSchema>;
+
+export const disputeReviewSchema = z.object({
+  reason: z.string().min(1).max(2000),
+});
+export type DisputeReviewInput = z.infer<typeof disputeReviewSchema>;
