@@ -83,6 +83,18 @@ export const BusinessOnboardingScreen = ({ locale, dictionary }: Props) => {
     void loadKycStatus();
   }, [loadKycStatus]);
 
+  // When on complete step or pending KYC, refresh auth and status so verificationStatus updates after admin approval
+  useEffect(() => {
+    if ((step !== 'complete' && kycStatus !== 'pending') || !accessToken) return;
+    void updateAuthUser();
+    void loadKycStatus();
+    const interval = setInterval(() => {
+      void updateAuthUser();
+      void loadKycStatus();
+    }, 15000);
+    return () => clearInterval(interval);
+  }, [step, kycStatus, accessToken, updateAuthUser, loadKycStatus]);
+
   useEffect(() => {
     if (!accessToken) return;
     let cancelled = false;
@@ -96,9 +108,15 @@ export const BusinessOnboardingScreen = ({ locale, dictionary }: Props) => {
         if (cancelled) return;
         setKycStatus(verification.verificationStatus);
         const companyComplete = Boolean(profile?.companyName?.trim());
-        const identityDone = verification.verificationStatus === 'verified' || verification.verificationStatus === 'pending';
+        // Use profile/API status; authUser.verificationStatus reflects GET /me (profile) so include for consistency after refresh
+        const effectiveVerified =
+          verification.verificationStatus === 'verified' || authUser?.verificationStatus === 'verified';
+        const identityDone =
+          verification.verificationStatus === 'verified' ||
+          verification.verificationStatus === 'pending' ||
+          authUser?.verificationStatus === 'verified';
         const hasSubmittedDocs = Array.isArray(identityDocs) && identityDocs.length > 0;
-        const fullyVerified = verification.verificationStatus === 'verified';
+        const fullyVerified = effectiveVerified;
         if (!companyComplete) {
           setStep('company');
         } else if (!identityDone) {
@@ -117,7 +135,7 @@ export const BusinessOnboardingScreen = ({ locale, dictionary }: Props) => {
     return () => {
       cancelled = true;
     };
-  }, [accessToken]);
+  }, [accessToken, authUser?.verificationStatus]);
 
   const handleSaveCompany = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();

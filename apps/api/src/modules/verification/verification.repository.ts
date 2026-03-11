@@ -72,6 +72,32 @@ export class VerificationRepository {
     return rows[0] ?? null;
   }
 
+  /**
+   * Get the verification_status from the role-specific profile (used for manual identity flow
+   * where admin approves identity_documents and updates profile only, no verification_request).
+   */
+  async getProfileVerificationStatus(
+    userId: string,
+    role: 'expert' | 'business',
+  ): Promise<'unverified' | 'pending' | 'under_review' | 'verified' | 'rejected' | null> {
+    const table = role === 'expert' ? 'expert_profiles' : 'business_profiles';
+    const { rows } = await this.db.query<{ verification_status: string }>(
+      `SELECT verification_status FROM ${table} WHERE user_id = $1 LIMIT 1`,
+      [userId],
+    );
+    const status = rows[0]?.verification_status;
+    if (
+      status === 'unverified' ||
+      status === 'pending' ||
+      status === 'under_review' ||
+      status === 'verified' ||
+      status === 'rejected'
+    ) {
+      return status;
+    }
+    return null;
+  }
+
   async updateStatus(
     requestId: string,
     status: VerificationRequestStatus,

@@ -25,7 +25,7 @@ const RESEND_COOLDOWN_SECONDS = 60;
 
 export const VerifyEmailScreen = ({ locale, dictionary }: VerifyEmailScreenProps) => {
   const router = useRouter();
-  const { authUser, accessToken, isAuthenticated, isReady, authGuard, updateAuthUser } = useAuth();
+  const { authUser, accessToken, isAuthenticated, isReady, authGuard, refreshSession } = useAuth();
   const dict = dictionary.emailVerification;
 
   const [code, setCode] = useState('');
@@ -121,7 +121,9 @@ export const VerifyEmailScreen = ({ locale, dictionary }: VerifyEmailScreenProps
         setIsVerified(true);
         setStatusVariant('success');
         setStatusMessage(dict.verifiedMessage);
-        await updateAuthUser();
+        // Refresh tokens so the new access token includes emailVerified: true;
+        // otherwise API calls (e.g. business onboarding) still see the old JWT and return 403.
+        await refreshSession();
       }
     } catch (error: unknown) {
       if (isApiClientError(error)) {

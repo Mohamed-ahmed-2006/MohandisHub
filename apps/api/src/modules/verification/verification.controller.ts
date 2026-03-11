@@ -61,7 +61,7 @@ const getStatus = asyncHandler(async (req, res) => {
     });
   }
 
-  const result = await verificationService.getStatus(user.id);
+  const result = await verificationService.getStatus(user.id, user.role);
 
   const response: ApiSuccessBody<{ verificationStatus: VerificationStatus }> = {
     ok: true,

@@ -88,10 +88,31 @@ export class VerificationService {
 
   // ── Get current verification status ────────────────────────────────────
 
-  async getStatus(userId: string): Promise<{
+  async getStatus(
+    userId: string,
+    role?: string,
+  ): Promise<{
     status: VerificationStatus;
     latestRequest: VerificationRequestRow | null;
   }> {
+    // For manual identity flow, admin approves identity_documents and updates only
+    // business_profiles/expert_profiles.verification_status (no verification_request).
+    // So we must consider profile status so GET /status returns 'verified' after admin approval.
+    if (role === 'expert' || role === 'business') {
+      const profileStatus = await this.verificationRepo.getProfileVerificationStatus(
+        userId,
+        role as 'expert' | 'business',
+      );
+      if (profileStatus === 'verified') {
+        const latestRequest = await this.verificationRepo.findLatestByUserId(userId);
+        return { status: 'verified', latestRequest };
+      }
+      if (profileStatus === 'rejected') {
+        const latestRequest = await this.verificationRepo.findLatestByUserId(userId);
+        return { status: 'rejected', latestRequest };
+      }
+    }
+
     const latestRequest = await this.verificationRepo.findLatestByUserId(userId);
 
     if (!latestRequest) {

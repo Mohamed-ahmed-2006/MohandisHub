@@ -1,4 +1,3 @@
-import { SpeedInsights } from '@vercel/speed-insights/next';
 import type { Metadata } from 'next';
 import { Manrope, Sora } from 'next/font/google';
 import Script from 'next/script';
@@ -6,6 +5,7 @@ import Script from 'next/script';
 import { AppStatusProvider } from '@/components/app-status-provider';
 import { AuthProvider } from '@/components/auth/auth-provider';
 import { MaintenanceGate } from '@/components/maintenance-gate';
+import SpeedInsightsClient from '@/components/speed-insights-client';
 import { ThemeProvider, themeInitScript } from '@/components/theme-provider';
 
 import './globals.css';
@@ -53,7 +53,7 @@ const RootLayout = ({ children }: RootLayoutProps) => {
             </AppStatusProvider>
           </AuthProvider>
         </ThemeProvider>
-        <SpeedInsights />
+        <SpeedInsightsClient />
       </body>
     </html>
   );
