@@ -1,5 +1,6 @@
 'use client';
 
+import Image from 'next/image';
 import { useEffect } from 'react';
 
 type ImagePreviewModalProps = {
@@ -38,7 +39,14 @@ export function ImagePreviewModal({ imageUrl, title, onClose }: ImagePreviewModa
           </button>
         </div>
         <div className="image-preview-content">
-          <img src={imageUrl} alt={title ?? 'Preview'} className="image-preview-img" />
+          <Image
+            src={imageUrl}
+            alt={title ?? 'Preview'}
+            className="image-preview-img"
+            width={1200}
+            height={800}
+            unoptimized
+          />
         </div>
       </div>
     </div>

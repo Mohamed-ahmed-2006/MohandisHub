@@ -13,13 +13,12 @@ import { useCallback, useEffect, useState } from 'react';
 import { useAuth } from '@/components/auth/auth-provider';
 import { LanguageToggle } from '@/components/language-toggle';
 import { ThemeToggle } from '@/components/theme-toggle';
+import { CityCountrySelect } from '@/components/ui/city-country-select';
 import { Container } from '@/components/ui/container';
+import { IndustrySelect } from '@/components/ui/industry-select';
+import { LanguagesCheckboxes } from '@/components/ui/languages-checkboxes';
 import { SkeletonForm } from '@/components/ui/skeleton';
 import { COUNTRIES } from '@/lib/data/countries';
-import { INDUSTRIES } from '@/lib/data/industries';
-import { IndustrySelect } from '@/components/ui/industry-select';
-import { CityCountrySelect } from '@/components/ui/city-country-select';
-import { LanguagesCheckboxes } from '@/components/ui/languages-checkboxes';
 import { buildLocalePath } from '@/lib/i18n/path';
 import type { Dictionary, Locale } from '@/lib/i18n/types';
 import { profilesApiClient } from '@/lib/profiles/client';
@@ -425,7 +424,7 @@ export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
       linkedinUrl: val('linkedinUrl'),
       portfolioUrl: val('portfolioUrl'),
       languages: Array.from(
-        (form.querySelectorAll('input[name="languages"]:checked') as NodeListOf<HTMLInputElement>),
+        form.querySelectorAll<HTMLInputElement>('input[name="languages"]:checked'),
       ).map((el) => el.value),
       educationSummary: val('educationSummary'),
     });

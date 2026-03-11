@@ -3,10 +3,10 @@
 import type { PendingVerificationItem } from '@mohandishub/shared';
 import { useCallback, useEffect, useState } from 'react';
 
+import { ImagePreviewModal } from '@/components/ui/image-preview-modal';
 import { adminApiClient } from '@/lib/admin/client';
 import { isApiClientError } from '@/lib/auth/client';
 import type { Dictionary } from '@/lib/i18n/types';
-import { ImagePreviewModal } from '@/components/ui/image-preview-modal';
 
 type Props = {
   dictionary: Dictionary;

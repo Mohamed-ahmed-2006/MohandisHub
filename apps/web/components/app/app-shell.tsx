@@ -11,9 +11,9 @@ import { WalletDepositModal } from './wallet-deposit-modal';
 import { useAuth } from '@/components/auth/auth-provider';
 import { SkeletonAvatar } from '@/components/ui/skeleton';
 import { getChatSocket } from '@/lib/chat/socket';
-import { profilesApiClient } from '@/lib/profiles/client';
 import { buildLocalePath } from '@/lib/i18n/path';
 import type { Dictionary, Locale } from '@/lib/i18n/types';
+import { profilesApiClient } from '@/lib/profiles/client';
 import { walletApiClient } from '@/lib/wallet/client';
 
 import './app-shell.css';

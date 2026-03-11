@@ -2,14 +2,14 @@
 
 import { useEffect, useMemo, useState } from 'react';
 
-import { DEGREES } from '@/lib/data/degrees';
 import { COUNTRIES } from '@/lib/data/countries';
-import { getCountryFromIp } from '@/lib/geo/ip-geo';
+import { DEGREES } from '@/lib/data/degrees';
 import {
   getUniversitiesByCountry,
   getUniversityName,
   type Locale,
 } from '@/lib/data/universities';
+import { getCountryFromIp } from '@/lib/geo/ip-geo';
 
 type Props = {
   locale: Locale;
@@ -45,7 +45,7 @@ export function DegreeInstitutionSelect({
       setCountryResolved(true);
       return;
     }
-    getCountryFromIp()
+    void getCountryFromIp()
       .then((code) => {
         if (code && COUNTRIES.some((c) => c.code === code)) {
           setCountryCode(code);

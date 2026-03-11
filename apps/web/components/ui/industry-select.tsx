@@ -29,7 +29,7 @@ export function IndustrySelect({
   defaultValue = '',
 }: Props) {
   const nameKey = locale === 'ar' ? 'nameAr' : 'nameEn';
-  const [primary, sub] = defaultValue.split(/\s*[—\-]\s*/);
+  const [primary, sub] = defaultValue.split(/\s*[—-]\s*/);
   const initialIndustry = primary?.trim() ?? '';
   const initialSub = sub?.trim() ?? '';
   const [selectedIndustryName, setSelectedIndustryName] = useState(initialIndustry);

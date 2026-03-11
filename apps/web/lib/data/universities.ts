@@ -3,8 +3,8 @@
  * Source: Hipo university-domains-list (world_universities_and_domains.json)
  * Arabic names added for major institutions in Arab countries.
  */
-import universitiesByCountry from './universities-by-country.json';
 import { COUNTRIES } from './countries';
+import universitiesByCountry from './universities-by-country.json';
 
 /** Arabic name mapping for major universities (English name -> Arabic name) */
 const UNIVERSITY_AR: Record<string, string> = {

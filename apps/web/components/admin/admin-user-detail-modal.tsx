@@ -60,6 +60,14 @@ const formatDateTime = (value: string | null): string => {
   return new Date(value).toLocaleString();
 };
 
+const formatPrimitive = (value: unknown, fallback = '-'): string => {
+  if (typeof value === 'string') return value;
+  if (typeof value === 'number' || typeof value === 'boolean' || typeof value === 'bigint') {
+    return String(value);
+  }
+  return fallback;
+};
+
 const availablePermissions = [
   { id: 'manage_users', label: 'Manage Users' },
   { id: 'manage_plans', label: 'Manage Plans' },
@@ -678,10 +686,10 @@ export const AdminUserDetailModal = ({
                         <tbody>
                           {activityData.items.map((item) => (
                             <tr key={String(item.id)}>
-                              <td>{String(item.id ?? '-')}</td>
-                              <td>{String(item.title ?? item.needTitle ?? item.jobTitle ?? item.serviceTitle ?? item.type ?? '-')}</td>
-                              <td>{String(item.status ?? '-')}</td>
-                              <td>{item.amount != null ? `${Number(item.amount).toFixed(2)} ${String(item.currency ?? '')}` : '-'}</td>
+                              <td>{formatPrimitive(item.id)}</td>
+                              <td>{formatPrimitive(item.title ?? item.needTitle ?? item.jobTitle ?? item.serviceTitle ?? item.type)}</td>
+                              <td>{formatPrimitive(item.status)}</td>
+                              <td>{item.amount != null ? `${Number(item.amount).toFixed(2)} ${formatPrimitive(item.currency, '')}` : '-'}</td>
                               <td>{formatDateTime((item.createdAt as string | null) ?? null)}</td>
                             </tr>
                           ))}

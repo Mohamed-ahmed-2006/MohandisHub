@@ -64,7 +64,7 @@ export function CityCountrySelect({
       setIpLoading(false);
       return;
     }
-    getCountryFromIp()
+    void getCountryFromIp()
       .then((code) => {
         if (code && COUNTRIES.some((c) => c.code === code)) {
           setCountryCode(code);

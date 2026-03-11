@@ -8,8 +8,8 @@ import { useCallback, useEffect, useState } from 'react';
 import { useAuth } from '@/components/auth/auth-provider';
 import { OnboardingStepper } from '@/components/onboarding/onboarding-stepper';
 import { SiteLogo } from '@/components/site-logo';
-import { Container } from '@/components/ui/container';
 import { CityCountrySelect } from '@/components/ui/city-country-select';
+import { Container } from '@/components/ui/container';
 import { DegreeInstitutionSelect } from '@/components/ui/degree-institution-select';
 import { ImageUploadOrCapture } from '@/components/ui/image-upload-or-capture';
 import { LanguagesCheckboxes } from '@/components/ui/languages-checkboxes';
@@ -19,8 +19,8 @@ import { getApiBaseUrl } from '@/lib/env';
 import { buildLocalePath } from '@/lib/i18n/path';
 import type { Dictionary, Locale } from '@/lib/i18n/types';
 import { profilesApiClient } from '@/lib/profiles/client';
-import { formatApiError } from '@/lib/utils/format-api-error';
 import { uploadFile } from '@/lib/upload/client';
+import { formatApiError } from '@/lib/utils/format-api-error';
 import { verificationApiClient } from '@/lib/verification/client';
 
 type Props = { locale: Locale; dictionary: Dictionary };
@@ -154,7 +154,7 @@ export const ExpertOnboardingScreen = ({ locale, dictionary }: Props) => {
 
     const titleVal = val('title');
     const languages = Array.from(
-      (form.querySelectorAll('input[name="languages"]:checked') as NodeListOf<HTMLInputElement>),
+      form.querySelectorAll<HTMLInputElement>('input[name="languages"]:checked'),
     ).map((el) => el.value);
     if (languages.length === 0) {
       setError(dict.profileForm.languagesHint || 'Please select at least one language.');
