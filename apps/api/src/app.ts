@@ -39,17 +39,17 @@ export const createApp = () => {
   );
   // Webhooks must receive raw body for signature verification
   app.use(
-    '/api/wallet/cryptomus-webhook',
+    '/api/wallet/nowpayments/ipn/deposit',
     express.raw({ type: 'application/json' }),
     (req, res, next) => {
-      void walletController.cryptomusWebhook(req, res, next);
+      void walletController.nowPaymentsDepositIpn(req, res, next);
     },
   );
   app.use(
-    '/api/wallet/stripe-webhook',
+    '/api/wallet/nowpayments/ipn/payout',
     express.raw({ type: 'application/json' }),
     (req, res, next) => {
-      void walletController.stripeWebhook(req, res, next);
+      void walletController.nowPaymentsPayoutIpn(req, res, next);
     },
   );
   app.use(express.json({ limit: '1mb' }));

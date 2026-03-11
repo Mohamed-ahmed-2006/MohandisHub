@@ -104,6 +104,10 @@ export type ExpertProfile = {
   academicVerified: boolean;
   /** How identity was verified: 'didit' = external KYC (e.g. Didit), 'manual' = admin-reviewed identity document */
   identityVerificationMethod: 'didit' | 'manual' | null;
+  payoutCurrency: string | null;
+  payoutAddress: string | null;
+  payoutExtraId: string | null;
+  payoutUpdatedAt: string | null;
   createdAt: string;
 };
 

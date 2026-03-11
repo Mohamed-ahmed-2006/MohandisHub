@@ -1,11 +1,17 @@
 // ---------------------------------------------------------------------------
-// Wallet controller — HTTP handlers
+// Wallet controller - HTTP handlers
 // ---------------------------------------------------------------------------
 
-import type { ApiSuccessBody, Wallet } from '@mohandishub/shared';
-import type { Request, Response, NextFunction } from 'express';
+import type {
+  ApiSuccessBody,
+  CreateDepositCheckoutBody,
+  CreateWithdrawalRequestBody,
+  DepositCheckoutResponse,
+  Wallet,
+  WithdrawalRequest,
+} from '@mohandishub/shared';
+import type { NextFunction, Request, Response } from 'express';
 
-import { env } from '../../config/env.js';
 import { asyncHandler } from '../../utils/async-handler.js';
 import { HttpError } from '../../utils/http-error.js';
 
@@ -13,7 +19,7 @@ import { WalletService } from './wallet.service.js';
 
 const walletService = new WalletService();
 
-function getUserId(req: { user?: { id: string } }): string {
+function getUser(req: { user?: { id: string; role: string } }): { id: string; role: string } {
   if (!req.user) {
     throw new HttpError({
       statusCode: 401,
@@ -21,142 +27,265 @@ function getUserId(req: { user?: { id: string } }): string {
       message: 'Authentication required.',
     });
   }
-  return req.user.id;
+  return req.user;
+}
+
+function parseDepositBody(body: unknown): CreateDepositCheckoutBody {
+  const source = body && typeof body === 'object' ? (body as Record<string, unknown>) : {};
+  const amountRaw = source.amount;
+  const amount =
+    typeof amountRaw === 'number'
+      ? amountRaw
+      : typeof amountRaw === 'string'
+        ? parseFloat(amountRaw)
+        : NaN;
+  const method = source.method;
+  if (method !== 'crypto' && method !== 'card') {
+    throw new HttpError({
+      statusCode: 400,
+      code: 'INVALID_METHOD',
+      message: 'Deposit method must be crypto or card.',
+    });
+  }
+
+  const payload: CreateDepositCheckoutBody = {
+    amount,
+    method,
+    ...(typeof source.currency === 'string' ? { currency: source.currency } : {}),
+    ...(typeof source.payCurrency === 'string' ? { payCurrency: source.payCurrency } : {}),
+    ...(typeof source.returnUrl === 'string' ? { returnUrl: source.returnUrl } : {}),
+  };
+  return payload;
+}
+
+function parseWithdrawalBody(body: unknown): CreateWithdrawalRequestBody {
+  const source = body && typeof body === 'object' ? (body as Record<string, unknown>) : {};
+  const amountRaw = source.amount;
+  const amount =
+    typeof amountRaw === 'number'
+      ? amountRaw
+      : typeof amountRaw === 'string'
+        ? parseFloat(amountRaw)
+        : NaN;
+
+  return {
+    amount,
+    ...(typeof source.currency === 'string' ? { currency: source.currency } : {}),
+    ...(typeof source.address === 'string' ? { address: source.address } : {}),
+    ...(typeof source.extraId === 'string' ? { extraId: source.extraId } : {}),
+    ...(typeof source.saveAddress === 'boolean' ? { saveAddress: source.saveAddress } : {}),
+  };
 }
 
 const getMyWallet = asyncHandler(async (req, res) => {
-  const userId = getUserId(req);
-  const wallet = await walletService.getOrCreateWallet(userId);
+  const user = getUser(req);
+  const wallet = await walletService.getOrCreateWallet(user.id);
   const response: ApiSuccessBody<Wallet> = { ok: true, data: wallet };
   res.json(response);
 });
 
 const getMyTransactions = asyncHandler(async (req, res) => {
-  const userId = getUserId(req);
+  const user = getUser(req);
   const page = parseInt(req.query.page as string, 10) || 1;
   const limit = Math.min(parseInt(req.query.limit as string, 10) || 20, 100);
-  const result = await walletService.getTransactions(userId, page, limit);
+  const result = await walletService.getTransactions(user.id, page, limit);
   const response: ApiSuccessBody<typeof result> = { ok: true, data: result };
   res.json(response);
 });
 
-function parseDepositBody(body: unknown): { amount: number; currency: string; returnUrl?: string } {
-  const b = body && typeof body === 'object' ? (body as Record<string, unknown>) : {};
-  const rawAmount = b.amount;
+const getDepositCurrencies = asyncHandler(async (_req, res) => {
+  const currencies = await walletService.getDepositCurrencies();
+  const response: ApiSuccessBody<{ currencies: string[] }> = {
+    ok: true,
+    data: { currencies },
+  };
+  res.json(response);
+});
+
+const createDepositCheckout = asyncHandler(async (req, res) => {
+  const user = getUser(req);
+  const payload = parseDepositBody(req.body);
+  if (!Number.isFinite(payload.amount) || payload.amount <= 0) {
+    throw new HttpError({
+      statusCode: 400,
+      code: 'INVALID_AMOUNT',
+      message: 'Valid amount is required.',
+    });
+  }
+
+  const result = await walletService.createDepositCheckout(user.id, payload);
+  const response: ApiSuccessBody<DepositCheckoutResponse> = { ok: true, data: result };
+  res.json(response);
+});
+
+const createLegacyCryptoDeposit = asyncHandler(async (req, res) => {
+  const user = getUser(req);
+  const source = req.body && typeof req.body === 'object' ? (req.body as Record<string, unknown>) : {};
+  const amountRaw = source.amount;
   const amount =
-    typeof rawAmount === 'number'
-      ? rawAmount
-      : typeof rawAmount === 'string'
-        ? parseFloat(rawAmount)
-        : 0;
-  const currency = typeof b.currency === 'string' ? b.currency : 'EGP';
-  const returnUrl = typeof b.returnUrl === 'string' ? b.returnUrl : undefined;
-  const out: { amount: number; currency: string; returnUrl?: string } = { amount, currency };
-  if (returnUrl !== undefined) out.returnUrl = returnUrl;
-  return out;
-}
-
-const STRIPE_MIN_AMOUNT_EGP = 50;
-
-const createStripeCheckout = asyncHandler(async (req, res) => {
-  const userId = getUserId(req);
-  const { amount, currency, returnUrl } = parseDepositBody(req.body);
-  if (typeof amount !== 'number' || !Number.isFinite(amount) || amount <= 0) {
+    typeof amountRaw === 'number'
+      ? amountRaw
+      : typeof amountRaw === 'string'
+        ? parseFloat(amountRaw)
+        : NaN;
+  const payCurrency = typeof source.currency === 'string' ? source.currency : 'USDTTRC20';
+  const returnUrl = typeof source.returnUrl === 'string' ? source.returnUrl : undefined;
+  if (!Number.isFinite(amount) || amount <= 0) {
     throw new HttpError({
       statusCode: 400,
       code: 'INVALID_AMOUNT',
       message: 'Valid amount is required.',
     });
   }
-  const currencyUpper = currency.toUpperCase();
-  if (currencyUpper === 'EGP' && amount < STRIPE_MIN_AMOUNT_EGP) {
-    throw new HttpError({
-      statusCode: 400,
-      code: 'AMOUNT_TOO_LOW',
-      message: `Minimum card deposit is ${STRIPE_MIN_AMOUNT_EGP} EGP.`,
-    });
-  }
-  const base = (
-    returnUrl ||
-    env.CORS_ORIGIN ||
-    env.API_PUBLIC_URL ||
-    'http://localhost:3000'
-  ).replace(/\/$/, '');
-  const successBase = returnUrl ? returnUrl.replace(/\/$/, '') : base;
-  // Stripe replaces {CHECKOUT_SESSION_ID} with the real session id on redirect
-  const result = await walletService.createStripeCheckout(
-    userId,
+  const result = await walletService.createDepositCheckout(user.id, {
     amount,
-    currency,
-    `${successBase}?stripe=success&session_id={CHECKOUT_SESSION_ID}`,
-    `${successBase}?stripe=cancelled`,
-  );
-  res.json({ ok: true, data: result });
+    method: 'crypto',
+    currency: 'EGP',
+    payCurrency,
+    ...(returnUrl ? { returnUrl } : {}),
+  });
+  res.json({ ok: true, data: { paymentUrl: result.checkoutUrl, orderId: result.orderId } });
 });
 
-const createCryptoDeposit = asyncHandler(async (req, res) => {
-  const userId = getUserId(req);
-  const { amount, currency, returnUrl } = parseDepositBody(req.body);
-  if (typeof amount !== 'number' || !Number.isFinite(amount) || amount <= 0) {
+const createLegacyCardDeposit = asyncHandler(async (req, res) => {
+  const user = getUser(req);
+  const source = req.body && typeof req.body === 'object' ? (req.body as Record<string, unknown>) : {};
+  const amountRaw = source.amount;
+  const amount =
+    typeof amountRaw === 'number'
+      ? amountRaw
+      : typeof amountRaw === 'string'
+        ? parseFloat(amountRaw)
+        : NaN;
+  const currency = typeof source.currency === 'string' ? source.currency : 'EGP';
+  const returnUrl = typeof source.returnUrl === 'string' ? source.returnUrl : undefined;
+  if (!Number.isFinite(amount) || amount <= 0) {
     throw new HttpError({
       statusCode: 400,
       code: 'INVALID_AMOUNT',
       message: 'Valid amount is required.',
     });
   }
-  const baseUrl = returnUrl;
-  const result = await walletService.createCryptoDeposit(userId, amount, currency, baseUrl);
-  res.json({ ok: true, data: result });
+  const result = await walletService.createDepositCheckout(user.id, {
+    amount,
+    method: 'card',
+    currency,
+    ...(returnUrl ? { returnUrl } : {}),
+  });
+  res.json({ ok: true, data: { checkoutUrl: result.checkoutUrl, sessionId: result.orderId } });
 });
 
-const confirmStripeSession = asyncHandler(async (req, res) => {
-  const userId = getUserId(req);
-  const body = req.body as { sessionId?: unknown } | undefined;
-  const query = req.query as { session_id?: unknown };
-  const sessionIdFromBody = typeof body?.sessionId === 'string' ? body.sessionId.trim() : '';
-  const sessionIdFromQuery = typeof query?.session_id === 'string' ? query.session_id.trim() : '';
-  const sessionId = sessionIdFromBody || sessionIdFromQuery;
-  if (!sessionId) {
+const confirmLegacyStripeSession = asyncHandler(async (_req, res) => {
+  res.json({ ok: true, data: { credited: false } });
+});
+
+const createWithdrawal = asyncHandler(async (req, res) => {
+  const user = getUser(req);
+  if (user.role !== 'expert') {
     throw new HttpError({
-      statusCode: 400,
-      code: 'MISSING_SESSION',
-      message: 'session_id or sessionId is required.',
+      statusCode: 403,
+      code: 'FORBIDDEN',
+      message: 'Only experts can request withdrawals.',
     });
   }
-  const result = await walletService.confirmStripeSession(userId, sessionId);
-  res.json({ ok: true, data: result });
+
+  const payload = parseWithdrawalBody(req.body);
+  if (!Number.isFinite(payload.amount) || payload.amount <= 0) {
+    throw new HttpError({
+      statusCode: 400,
+      code: 'INVALID_AMOUNT',
+      message: 'Valid amount is required.',
+    });
+  }
+
+  const result = await walletService.createWithdrawalRequest(user.id, payload);
+  const response: ApiSuccessBody<WithdrawalRequest> = { ok: true, data: result };
+  res.status(201).json(response);
 });
 
-async function cryptomusWebhook(req: Request, res: Response, next: NextFunction): Promise<void> {
+const verifyWithdrawal = asyncHandler(async (req, res) => {
+  const user = getUser(req);
+  if (user.role !== 'expert') {
+    throw new HttpError({
+      statusCode: 403,
+      code: 'FORBIDDEN',
+      message: 'Only experts can verify withdrawals.',
+    });
+  }
+
+  const withdrawalId = (req.params.withdrawalId ?? '').trim();
+  if (!withdrawalId) {
+    throw new HttpError({
+      statusCode: 400,
+      code: 'INVALID_REQUEST',
+      message: 'withdrawalId is required.',
+    });
+  }
+
+  const body = req.body as { verificationCode?: unknown } | undefined;
+  const verificationCode =
+    typeof body?.verificationCode === 'string' ? body.verificationCode.trim() : '';
+  if (!verificationCode) {
+    throw new HttpError({
+      statusCode: 400,
+      code: 'INVALID_VERIFICATION_CODE',
+      message: 'verificationCode is required.',
+    });
+  }
+
+  const result = await walletService.verifyWithdrawal(user.id, withdrawalId, verificationCode);
+  const response: ApiSuccessBody<WithdrawalRequest> = { ok: true, data: result };
+  res.json(response);
+});
+
+const listWithdrawals = asyncHandler(async (req, res) => {
+  const user = getUser(req);
+  const result = await walletService.listWithdrawals(user.id);
+  const response: ApiSuccessBody<WithdrawalRequest[]> = { ok: true, data: result };
+  res.json(response);
+});
+
+async function nowPaymentsDepositIpn(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
     const rawBody = Buffer.isBuffer(req.body)
       ? req.body.toString('utf8')
-      : JSON.stringify(req.body ?? '');
-    const sign = (req.headers.sign as string) ?? '';
-    await walletService.handleCryptomusWebhook(rawBody, sign);
+      : typeof req.body === 'string'
+        ? req.body
+        : JSON.stringify(req.body ?? '');
+    const signature = (req.headers['x-nowpayments-sig'] as string) ?? '';
+    await walletService.handleNowPaymentsDepositIpn(rawBody, signature);
     res.status(200).json({ ok: true });
-  } catch (e) {
-    next(e);
+  } catch (error) {
+    next(error);
   }
 }
 
-async function stripeWebhook(req: Request, res: Response, next: NextFunction): Promise<void> {
+async function nowPaymentsPayoutIpn(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
-    const rawBody = Buffer.isBuffer(req.body) ? req.body : (req.body as string);
-    const signature = (req.headers['stripe-signature'] as string) ?? '';
-    await walletService.handleStripeWebhook(rawBody, signature);
-    res.status(200).json({ received: true });
-  } catch (e) {
-    next(e);
+    const rawBody = Buffer.isBuffer(req.body)
+      ? req.body.toString('utf8')
+      : typeof req.body === 'string'
+        ? req.body
+        : JSON.stringify(req.body ?? '');
+    const signature = (req.headers['x-nowpayments-sig'] as string) ?? '';
+    await walletService.handleNowPaymentsPayoutIpn(rawBody, signature);
+    res.status(200).json({ ok: true });
+  } catch (error) {
+    next(error);
   }
 }
 
 export const walletController = {
   getMyWallet,
   getMyTransactions,
-  createStripeCheckout,
-  createCryptoDeposit,
-  confirmStripeSession,
-  cryptomusWebhook,
-  stripeWebhook,
+  getDepositCurrencies,
+  createDepositCheckout,
+  createLegacyCryptoDeposit,
+  createLegacyCardDeposit,
+  confirmLegacyStripeSession,
+  createWithdrawal,
+  verifyWithdrawal,
+  listWithdrawals,
+  nowPaymentsDepositIpn,
+  nowPaymentsPayoutIpn,
 };

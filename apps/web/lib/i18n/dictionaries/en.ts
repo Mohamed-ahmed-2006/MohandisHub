@@ -645,7 +645,7 @@ export const enDictionary: Dictionary = {
     chooseMethod: 'How would you like to deposit?',
     depositAmountPlaceholder: 'Amount (USDT)',
     depositAmountPlaceholderCard: 'Amount (EGP)',
-    depositPayWithCrypto: 'Pay with Cryptomus',
+    depositPayWithCrypto: 'Pay with crypto (NOWPayments)',
     depositPayWithCard: 'Pay with card',
     depositRedirecting: 'Redirecting to payment…',
     depositError: 'Could not create payment. Try again.',

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 import { useAppStatus } from '@/components/app-status-provider';
 import { isApiClientError } from '@/lib/auth/client';
@@ -25,64 +25,51 @@ export const WalletDepositModal = ({
 
   const depositsPaused = status?.depositsPaused === true;
   const cryptoDisabled = status?.disableCryptoDeposits === true;
-  const cardDisabled = status?.disableCardDeposits === true;
+  const fiatEnabled = process.env.NEXT_PUBLIC_NOWPAYMENTS_FIAT_ENABLED === 'true';
+  const cardDisabled = status?.disableCardDeposits === true || !fiatEnabled;
   const canDeposit = !depositsPaused && (cryptoDisabled === false || cardDisabled === false);
+
   const [step, setStep] = useState<'choose' | 'amount'>('choose');
   const [method, setMethod] = useState<'crypto' | 'card'>('crypto');
   const [amount, setAmount] = useState('');
+  const [payCurrency, setPayCurrency] = useState('USDTTRC20');
+  const [availableCurrencies, setAvailableCurrencies] = useState<string[]>(['USDTTRC20']);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const handleCryptoClick = () => {
-    setMethod('crypto');
+  useEffect(() => {
+    if (!accessToken) return;
+    void walletApiClient
+      .getDepositCurrencies(accessToken)
+      .then((currencies) => {
+        if (currencies.length > 0) {
+          setAvailableCurrencies(currencies);
+          if (!currencies.includes(payCurrency)) {
+            setPayCurrency(currencies[0]!);
+          }
+        }
+      })
+      .catch(() => {
+        // keep fallback currency
+      });
+  }, [accessToken, payCurrency]);
+
+  const handleMethodClick = (nextMethod: 'crypto' | 'card') => {
+    setMethod(nextMethod);
     setStep('amount');
     setError(null);
   };
 
-  const handleCardClick = () => {
-    setMethod('card');
-    setStep('amount');
-    setError(null);
-  };
-
-  const handleCryptoSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!accessToken) return;
+
     const num = parseFloat(amount.replace(/,/g, '.'));
     if (!Number.isFinite(num) || num <= 0) {
       setError(d.depositError);
       return;
     }
-    setLoading(true);
-    setError(null);
-    try {
-      const { paymentUrl } = await walletApiClient.createCryptoDeposit(accessToken, num, 'USDT');
-      onDepositCreated?.();
-      onClose();
-      window.open(paymentUrl, '_blank', 'noopener,noreferrer');
-    } catch (err) {
-      setError(
-        isApiClientError(err) && err.code === 'DEPOSITS_PAUSED'
-          ? 'Deposits are temporarily paused.'
-          : d.depositError,
-      );
-    } finally {
-      setLoading(false);
-    }
-  };
 
-  const handleCardSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!accessToken) return;
-    const num = parseFloat(amount.replace(/,/g, '.'));
-    if (!Number.isFinite(num) || num <= 0) {
-      setError(d.depositError);
-      return;
-    }
-    if (num < 50) {
-      setError(d.depositMinAmount ?? 'Minimum card deposit is 50 EGP.');
-      return;
-    }
     setLoading(true);
     setError(null);
     try {
@@ -90,24 +77,26 @@ export const WalletDepositModal = ({
         typeof window !== 'undefined'
           ? `${window.location.origin}${window.location.pathname}`
           : undefined;
-      const { checkoutUrl } = await walletApiClient.createStripeCheckout(
-        accessToken,
-        num,
-        'EGP',
-        returnUrl,
-      );
+      const result = await walletApiClient.createDepositCheckout(accessToken, {
+        amount: num,
+        currency: 'EGP',
+        method,
+        ...(method === 'crypto' ? { payCurrency } : {}),
+        ...(returnUrl ? { returnUrl } : {}),
+      });
       onDepositCreated?.();
       onClose();
-      window.location.href = checkoutUrl;
+      window.location.href = result.checkoutUrl;
     } catch (err) {
       const msg =
         isApiClientError(err) && err.code === 'DEPOSITS_PAUSED'
           ? 'Deposits are temporarily paused.'
           : isApiClientError(err) && err.code === 'AMOUNT_TOO_LOW'
-          ? err.message
-          : isApiClientError(err) && err.code === 'STRIPE_UNAVAILABLE'
-            ? (d.depositCardUnavailable ?? 'Card payments are not available. Try again later.')
-            : d.depositError;
+            ? err.message
+            : isApiClientError(err) &&
+                (err.code === 'CARD_DEPOSITS_DISABLED' || err.code === 'CRYPTO_DEPOSITS_DISABLED')
+              ? err.message
+              : d.depositError;
       setError(msg);
     } finally {
       setLoading(false);
@@ -124,7 +113,7 @@ export const WalletDepositModal = ({
     <div className="home-drawer-overlay" onClick={onClose}>
       <div className="deposit-modal" onClick={(e) => e.stopPropagation()}>
         <button type="button" className="deposit-modal-close" onClick={onClose}>
-          ×
+          x
         </button>
         <h2 className="deposit-modal-title">{d.depositTitle}</h2>
 
@@ -139,15 +128,21 @@ export const WalletDepositModal = ({
             <p className="deposit-modal-subtitle">{d.chooseMethod}</p>
             <div className="deposit-options">
               {!cryptoDisabled && (
-                <button type="button" className="deposit-option-card" onClick={handleCryptoClick}>
-                  <span className="deposit-option-icon">₿</span>
+                <button
+                  type="button"
+                  className="deposit-option-card"
+                  onClick={() => handleMethodClick('crypto')}
+                >
                   <span className="deposit-option-label">{d.crypto}</span>
                   <span className="deposit-option-action">{d.depositPayWithCrypto}</span>
                 </button>
               )}
               {!cardDisabled && (
-                <button type="button" className="deposit-option-card" onClick={handleCardClick}>
-                  <span className="deposit-option-icon">💳</span>
+                <button
+                  type="button"
+                  className="deposit-option-card"
+                  onClick={() => handleMethodClick('card')}
+                >
                   <span className="deposit-option-label">{d.creditCard}</span>
                   <span className="deposit-option-action">{d.depositPayWithCard}</span>
                 </button>
@@ -155,13 +150,7 @@ export const WalletDepositModal = ({
             </div>
           </>
         ) : (
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              void (method === 'card' ? handleCardSubmit(e) : handleCryptoSubmit(e));
-            }}
-            className="deposit-form"
-          >
+          <form onSubmit={(e) => void handleSubmit(e)} className="deposit-form">
             <label className="deposit-form-label">
               {method === 'card' ? d.depositAmountPlaceholderCard : d.depositAmountPlaceholder}
             </label>
@@ -175,6 +164,25 @@ export const WalletDepositModal = ({
               onChange={(e) => setAmount(e.target.value)}
               disabled={loading}
             />
+            {method === 'crypto' && (
+              <>
+                <label className="deposit-form-label" style={{ marginTop: '0.75rem' }}>
+                  Pay currency
+                </label>
+                <select
+                  className="deposit-form-input"
+                  value={payCurrency}
+                  onChange={(e) => setPayCurrency(e.target.value)}
+                  disabled={loading}
+                >
+                  {availableCurrencies.map((currency) => (
+                    <option key={currency} value={currency}>
+                      {currency}
+                    </option>
+                  ))}
+                </select>
+              </>
+            )}
             {error && <p className="deposit-form-error">{error}</p>}
             <div className="deposit-form-actions">
               <button

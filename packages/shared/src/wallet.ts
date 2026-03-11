@@ -65,3 +65,60 @@ export type WalletHold = {
   releasedAt: string | null;
   capturedAt: string | null;
 };
+
+export type DepositMethod = 'crypto' | 'card';
+
+export type CreateDepositCheckoutBody = {
+  amount: number;
+  currency?: string;
+  method: DepositMethod;
+  payCurrency?: string;
+  returnUrl?: string;
+};
+
+export type DepositCheckoutResponse = {
+  checkoutUrl: string;
+  orderId: string;
+  method: DepositMethod;
+  provider: 'nowpayments';
+};
+
+export type WithdrawalRequestStatus =
+  | 'pending_verification'
+  | 'processing'
+  | 'finished'
+  | 'failed'
+  | 'rejected'
+  | 'cancelled'
+  | 'blocked';
+
+export type WithdrawalRequest = {
+  id: string;
+  userId: string;
+  walletId: string;
+  holdId: string | null;
+  amount: number;
+  currency: string;
+  payoutAddress: string | null;
+  payoutExtraId: string | null;
+  status: WithdrawalRequestStatus;
+  provider: string;
+  providerBatchWithdrawalId: string | null;
+  providerWithdrawalId: string | null;
+  providerStatus: string | null;
+  providerError: string | null;
+  verificationRequired: boolean;
+  verifiedAt: string | null;
+  processedAt: string | null;
+  failedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type CreateWithdrawalRequestBody = {
+  amount: number;
+  currency?: string;
+  address?: string;
+  extraId?: string;
+  saveAddress?: boolean;
+};

@@ -639,7 +639,7 @@ export const arDictionary: Dictionary = {
     chooseMethod: 'كيف تود الإيداع؟',
     depositAmountPlaceholder: 'المبلغ (USDT)',
     depositAmountPlaceholderCard: 'المبلغ (EGP)',
-    depositPayWithCrypto: 'الدفع عبر Cryptomus',
+    depositPayWithCrypto: 'الدفع عبر NOWPayments',
     depositPayWithCard: 'الدفع بالبطاقة',
     depositRedirecting: 'جاري التحويل للدفع…',
     depositError: 'تعذر إنشاء الدفع. حاول مرة أخرى.',

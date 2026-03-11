@@ -1,73 +1,93 @@
-import type { ApiErrorBody, ApiSuccessBody, Wallet } from '@mohandishub/shared';
+import type {
+  ApiErrorBody,
+  ApiSuccessBody,
+  CreateDepositCheckoutBody,
+  CreateWithdrawalRequestBody,
+  DepositCheckoutResponse,
+  Wallet,
+  WithdrawalRequest,
+} from '@mohandishub/shared';
 
 import { ApiClientRequestError } from '../auth/client';
 
 import { getApiBaseUrl } from '@/lib/env';
 
-export const walletApiClient = {
-  getMyWallet: async (accessToken: string): Promise<Wallet> => {
-    const response = await fetch(`${getApiBaseUrl()}/api/wallet/me`, {
-      credentials: 'include',
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-      },
-    });
+type RequestOptions = {
+  accessToken: string;
+  path: string;
+  method?: 'GET' | 'POST';
+  body?: unknown;
+};
 
-    if (!response.ok) {
-      const rawErrorBody: unknown = await response.json().catch(() => null);
-      const maybeError = rawErrorBody as ApiErrorBody | null;
-      if (maybeError && maybeError.error) {
-        throw new ApiClientRequestError({
-          code: maybeError.error.code,
-          message: maybeError.error.message,
-          status: response.status,
-        });
-      }
+async function requestJson<T>({ accessToken, path, method = 'GET', body }: RequestOptions): Promise<T> {
+  const response = await fetch(`${getApiBaseUrl()}${path}`, {
+    method,
+    credentials: 'include',
+    headers: {
+      ...(body ? { 'Content-Type': 'application/json' } : {}),
+      Authorization: `Bearer ${accessToken}`,
+    },
+    ...(body ? { body: JSON.stringify(body) } : {}),
+  });
+
+  if (!response.ok) {
+    const rawErrorBody: unknown = await response.json().catch(() => null);
+    const maybeError = rawErrorBody as ApiErrorBody | null;
+    if (maybeError && maybeError.error) {
       throw new ApiClientRequestError({
-        code: 'HTTP_ERROR',
-        message: `Request failed with status ${response.status}`,
+        code: maybeError.error.code,
+        message: maybeError.error.message,
         status: response.status,
+        details: maybeError.error.details,
       });
     }
+    throw new ApiClientRequestError({
+      code: 'HTTP_ERROR',
+      message: `Request failed with status ${response.status}`,
+      status: response.status,
+    });
+  }
 
-    const body = (await response.json()) as ApiSuccessBody<Wallet>;
-    return body.data;
+  const bodyJson = (await response.json()) as ApiSuccessBody<T>;
+  return bodyJson.data;
+}
+
+export const walletApiClient = {
+  getMyWallet: async (accessToken: string): Promise<Wallet> =>
+    requestJson<Wallet>({ accessToken, path: '/api/wallet/me' }),
+
+  getDepositCurrencies: async (accessToken: string): Promise<string[]> => {
+    const data = await requestJson<{ currencies: string[] }>({
+      accessToken,
+      path: '/api/wallet/deposit/currencies',
+    });
+    return data.currencies;
   },
 
+  createDepositCheckout: async (
+    accessToken: string,
+    payload: CreateDepositCheckoutBody,
+  ): Promise<DepositCheckoutResponse> =>
+    requestJson<DepositCheckoutResponse>({
+      accessToken,
+      path: '/api/wallet/deposit/checkout',
+      method: 'POST',
+      body: payload,
+    }),
+
+  // Backward compatibility wrappers
   createCryptoDeposit: async (
     accessToken: string,
     amount: number,
-    currency: string = 'EGP',
+    payCurrency: string = 'USDTTRC20',
   ): Promise<{ paymentUrl: string; orderId: string }> => {
-    const response = await fetch(`${getApiBaseUrl()}/api/wallet/deposit/crypto`, {
-      method: 'POST',
-      credentials: 'include',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${accessToken}`,
-      },
-      body: JSON.stringify({ amount, currency }),
+    const result = await walletApiClient.createDepositCheckout(accessToken, {
+      amount,
+      currency: 'EGP',
+      method: 'crypto',
+      payCurrency,
     });
-
-    if (!response.ok) {
-      const rawErrorBody: unknown = await response.json().catch(() => null);
-      const maybeError = rawErrorBody as ApiErrorBody | null;
-      if (maybeError && maybeError.error) {
-        throw new ApiClientRequestError({
-          code: maybeError.error.code,
-          message: maybeError.error.message,
-          status: response.status,
-        });
-      }
-      throw new ApiClientRequestError({
-        code: 'HTTP_ERROR',
-        message: `Request failed with status ${response.status}`,
-        status: response.status,
-      });
-    }
-
-    const body = (await response.json()) as ApiSuccessBody<{ paymentUrl: string; orderId: string }>;
-    return body.data;
+    return { paymentUrl: result.checkoutUrl, orderId: result.orderId };
   },
 
   createStripeCheckout: async (
@@ -76,76 +96,38 @@ export const walletApiClient = {
     currency: string = 'EGP',
     returnUrl?: string,
   ): Promise<{ checkoutUrl: string; sessionId: string }> => {
-    const reqBody: { amount: number; currency: string; returnUrl?: string } = { amount, currency };
-    if (returnUrl) reqBody.returnUrl = returnUrl;
-    const response = await fetch(`${getApiBaseUrl()}/api/wallet/deposit/stripe`, {
-      method: 'POST',
-      credentials: 'include',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${accessToken}`,
-      },
-      body: JSON.stringify(reqBody),
+    const result = await walletApiClient.createDepositCheckout(accessToken, {
+      amount,
+      currency,
+      method: 'card',
+      ...(returnUrl ? { returnUrl } : {}),
     });
-
-    if (!response.ok) {
-      const rawErrorBody: unknown = await response.json().catch(() => null);
-      const maybeError = rawErrorBody as ApiErrorBody | null;
-      if (maybeError && maybeError.error) {
-        throw new ApiClientRequestError({
-          code: maybeError.error.code,
-          message: maybeError.error.message,
-          status: response.status,
-        });
-      }
-      throw new ApiClientRequestError({
-        code: 'HTTP_ERROR',
-        message: `Request failed with status ${response.status}`,
-        status: response.status,
-      });
-    }
-
-    const resBody = (await response.json()) as ApiSuccessBody<{
-      checkoutUrl: string;
-      sessionId: string;
-    }>;
-    return resBody.data;
+    return { checkoutUrl: result.checkoutUrl, sessionId: result.orderId };
   },
 
-  /** Confirm a Stripe checkout session (call after redirect with session_id). Credits wallet if not already done. */
-  confirmStripeSession: async (
+  createWithdrawal: async (
     accessToken: string,
-    sessionId: string,
-  ): Promise<{ credited: boolean }> => {
-    const response = await fetch(
-      `${getApiBaseUrl()}/api/wallet/deposit/confirm-stripe?session_id=${encodeURIComponent(sessionId)}`,
-      {
-        method: 'POST',
-        credentials: 'include',
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-        },
-      },
-    );
+    payload: CreateWithdrawalRequestBody,
+  ): Promise<WithdrawalRequest> =>
+    requestJson<WithdrawalRequest>({
+      accessToken,
+      path: '/api/wallet/withdrawals',
+      method: 'POST',
+      body: payload,
+    }),
 
-    if (!response.ok) {
-      const rawErrorBody: unknown = await response.json().catch(() => null);
-      const maybeError = rawErrorBody as ApiErrorBody | null;
-      if (maybeError && maybeError.error) {
-        throw new ApiClientRequestError({
-          code: maybeError.error.code,
-          message: maybeError.error.message,
-          status: response.status,
-        });
-      }
-      throw new ApiClientRequestError({
-        code: 'HTTP_ERROR',
-        message: `Request failed with status ${response.status}`,
-        status: response.status,
-      });
-    }
+  verifyWithdrawal: async (
+    accessToken: string,
+    withdrawalId: string,
+    verificationCode: string,
+  ): Promise<WithdrawalRequest> =>
+    requestJson<WithdrawalRequest>({
+      accessToken,
+      path: `/api/wallet/withdrawals/${encodeURIComponent(withdrawalId)}/verify`,
+      method: 'POST',
+      body: { verificationCode },
+    }),
 
-    const body = (await response.json()) as ApiSuccessBody<{ credited: boolean }>;
-    return body.data;
-  },
+  listWithdrawals: async (accessToken: string): Promise<WithdrawalRequest[]> =>
+    requestJson<WithdrawalRequest[]>({ accessToken, path: '/api/wallet/withdrawals' }),
 };

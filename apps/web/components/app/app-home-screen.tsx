@@ -212,6 +212,7 @@ export const AppHomeScreen = ({ locale, dictionary }: AppHomeScreenProps) => {
   const [results, setResults] = useState<ServiceSearchResult[]>([]);
   const [searching, setSearching] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('');
   const [selectedResult, setSelectedResult] = useState<ServiceSearchResult | null>(null);
   const [_customerNeedsCount, setCustomerNeedsCount] = useState<number | null>(null);
   const [customerTab, setCustomerTab] = useState<'browse' | 'posted'>('browse');
@@ -277,10 +278,11 @@ export const AppHomeScreen = ({ locale, dictionary }: AppHomeScreenProps) => {
     return () => clearInterval(t);
   }, []);
 
-  const handleSearch = useCallback(async () => {
+  const handleSearch = useCallback(async (qOverride?: string) => {
     setSearching(true);
     setHasSearched(true);
     try {
+      const q = qOverride !== undefined ? qOverride : searchQuery;
       const params: {
         categoryId?: string;
         city?: string;
@@ -292,7 +294,7 @@ export const AppHomeScreen = ({ locale, dictionary }: AppHomeScreenProps) => {
       if (city) params.city = city;
       if (area) params.area = area;
       if (providerType) params.providerType = providerType;
-      if (searchQuery.trim()) params.q = searchQuery.trim();
+      if (q.trim()) params.q = q.trim();
       const data = await servicesApiClient.searchServices(params);
       setResults(dedupeById(data.items));
     } catch {
@@ -301,6 +303,23 @@ export const AppHomeScreen = ({ locale, dictionary }: AppHomeScreenProps) => {
       setSearching(false);
     }
   }, [categoryId, city, area, providerType, searchQuery]);
+
+  const isSearchTabActive =
+    (authUser?.role === 'customer' && customerTab === 'browse') ||
+    (authUser?.role === 'expert' && providerTab === 'search') ||
+    (authUser?.role === 'business' && providerTab === 'search');
+
+  // Debounce text search input (400ms)
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearchQuery(searchQuery), 400);
+    return () => clearTimeout(t);
+  }, [searchQuery]);
+
+  // Run search on initial load and when filters or debounced query change (no button click needed)
+  useEffect(() => {
+    if (!isReady || !isSearchTabActive) return;
+    void handleSearch(debouncedSearchQuery);
+  }, [isReady, isSearchTabActive, categoryId, city, area, providerType, debouncedSearchQuery]);
 
   const d = dictionary.homeSearch;
   const commonDict = dictionary.common as Record<string, string | undefined>;

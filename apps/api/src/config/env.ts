@@ -51,9 +51,32 @@ const envSchema = z.object({
   STRIPE_WEBHOOK_SECRET: z.string().optional(),
   STRIPE_PUBLISHABLE_KEY: z.string().optional(),
 
+  // NOWPayments — deposits + payouts
+  NOWPAYMENTS_API_KEY: z.string().optional(),
+  NOWPAYMENTS_IPN_SECRET: z.string().optional(),
+  NOWPAYMENTS_AUTH_EMAIL: z.string().email().optional(),
+  NOWPAYMENTS_AUTH_PASSWORD: z.string().optional(),
+  NOWPAYMENTS_FIAT_ENABLED: z.coerce.boolean().default(false),
+  NOWPAYMENTS_CUSTODY_ENABLED: z.coerce.boolean().default(false),
+  NOWPAYMENTS_MASS_PAYOUTS_ENABLED: z.coerce.boolean().default(false),
+  NOWPAYMENTS_WITHDRAWALS_ENABLED: z.coerce.boolean().default(false),
+  NOWPAYMENTS_MANUAL_PAYOUT_VERIFY: z.coerce.boolean().default(true),
+  NOWPAYMENTS_WITHDRAWAL_MIN_AMOUNT: z.coerce.number().positive().default(20),
+  NOWPAYMENTS_WITHDRAWAL_DEFAULT_CURRENCY: z.string().default('USDTTRC20'),
+  NOWPAYMENTS_ALLOWED_PAY_CURRENCIES: z.string().optional(),
+
   // Agora RTC
   AGORA_APP_ID: z.string().optional(),
   AGORA_APP_CERTIFICATE: z.string().optional(),
+
+  // Data retention — sweep interval and per-entity retention (0 = never delete / skip)
+  RETENTION_SWEEP_INTERVAL_MS: z.coerce.number().int().positive().default(900_000), // 15 min
+  RETENTION_VERIFICATION_CODES_AFTER_EXPIRY_HOURS: z.coerce.number().int().min(0).default(24),
+  RETENTION_OTP_RATE_LIMIT_WINDOW_HOURS: z.coerce.number().int().min(0).default(24),
+  RETENTION_REFRESH_TOKENS_AFTER_EXPIRY_DAYS: z.coerce.number().int().min(0).default(7),
+  RETENTION_VERIFICATION_REQUESTS_DAYS: z.coerce.number().int().min(0).default(90),
+  RETENTION_CHAT_MESSAGES_DAYS: z.coerce.number().int().min(0).default(0),
+  RETENTION_UPLOADS_DAYS: z.coerce.number().int().min(0).default(0),
 });
 
 const parsed = envSchema.safeParse(process.env);

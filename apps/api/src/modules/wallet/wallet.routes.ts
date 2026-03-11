@@ -1,5 +1,5 @@
 // ---------------------------------------------------------------------------
-// Wallet routes — authenticated user wallet endpoints
+// Wallet routes - authenticated user wallet endpoints
 // ---------------------------------------------------------------------------
 
 import { Router } from 'express';
@@ -15,8 +15,15 @@ walletRouter.use(authenticate, requireEmailVerified);
 
 walletRouter.get('/me', walletController.getMyWallet);
 walletRouter.get('/me/transactions', walletController.getMyTransactions);
-walletRouter.post('/deposit/stripe', walletController.createStripeCheckout);
-walletRouter.post('/deposit/crypto', walletController.createCryptoDeposit);
-walletRouter.post('/deposit/confirm-stripe', walletController.confirmStripeSession);
+walletRouter.get('/deposit/currencies', walletController.getDepositCurrencies);
+walletRouter.post('/deposit/checkout', walletController.createDepositCheckout);
+// Legacy aliases kept for rollout compatibility
+walletRouter.post('/deposit/crypto', walletController.createLegacyCryptoDeposit);
+walletRouter.post('/deposit/stripe', walletController.createLegacyCardDeposit);
+walletRouter.post('/deposit/confirm-stripe', walletController.confirmLegacyStripeSession);
+
+walletRouter.get('/withdrawals', walletController.listWithdrawals);
+walletRouter.post('/withdrawals', walletController.createWithdrawal);
+walletRouter.post('/withdrawals/:withdrawalId/verify', walletController.verifyWithdrawal);
 
 export { walletRouter };

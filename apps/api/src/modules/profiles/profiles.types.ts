@@ -81,6 +81,10 @@ export type ExpertProfileRow = {
   identity_verified: boolean;
   academic_verified: boolean;
   identity_verification_method?: 'didit' | 'manual' | null;
+  payout_currency?: string | null;
+  payout_address?: string | null;
+  payout_extra_id?: string | null;
+  payout_updated_at?: Date | null;
   verified_at: Date | null;
   created_at: Date;
   updated_at: Date;

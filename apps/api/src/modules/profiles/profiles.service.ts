@@ -608,6 +608,10 @@ export class ProfilesService {
       identityVerified: row.identity_verified,
       academicVerified: row.academic_verified,
       identityVerificationMethod: row.identity_verification_method ?? null,
+      payoutCurrency: row.payout_currency ?? null,
+      payoutAddress: row.payout_address ?? null,
+      payoutExtraId: row.payout_extra_id ?? null,
+      payoutUpdatedAt: row.payout_updated_at ? row.payout_updated_at.toISOString() : null,
       createdAt: row.created_at.toISOString(),
     };
   }

@@ -43,6 +43,45 @@ type DepositRequestRow = {
   order_id: string;
   cryptomus_uuid: string | null;
   status: string;
+  provider: string;
+  provider_payment_id: string | null;
+  provider_invoice_id: string | null;
+  provider_purchase_id: string | null;
+  provider_parent_payment_id: string | null;
+  provider_status: string | null;
+  provider_payload: Record<string, unknown>;
+  paid_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+type ExpertPayoutSettingsRow = {
+  payout_currency: string | null;
+  payout_address: string | null;
+  payout_extra_id: string | null;
+  payout_updated_at: string | null;
+};
+
+type WithdrawalRequestRow = {
+  id: string;
+  user_id: string;
+  wallet_id: string;
+  hold_id: string | null;
+  amount: string;
+  currency: string;
+  payout_address: string | null;
+  payout_extra_id: string | null;
+  status: string;
+  provider: string;
+  provider_batch_withdrawal_id: string | null;
+  provider_withdrawal_id: string | null;
+  provider_status: string | null;
+  provider_error: string | null;
+  provider_payload: Record<string, unknown>;
+  verification_required: boolean;
+  verified_at: string | null;
+  processed_at: string | null;
+  failed_at: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -67,6 +106,26 @@ export class WalletRepository {
   private get db(): Pool {
     return getPool();
   }
+
+  private splitReferenceId(referenceId: string | null): {
+    validReferenceId: string | null;
+    metadata: Record<string, unknown>;
+  } {
+    if (!referenceId) return { validReferenceId: null, metadata: {} };
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (uuidRegex.test(referenceId)) {
+      return { validReferenceId: referenceId, metadata: {} };
+    }
+    return { validReferenceId: null, metadata: { original_reference_id: referenceId } };
+  }
+
+  private depositSelectColumns = `id, user_id, wallet_id, amount::text, currency, order_id, cryptomus_uuid, status,
+    provider, provider_payment_id, provider_invoice_id, provider_purchase_id, provider_parent_payment_id,
+    provider_status, provider_payload, paid_at, created_at, updated_at`;
+
+  private withdrawalSelectColumns = `id, user_id, wallet_id, hold_id, amount::text, currency, payout_address,
+    payout_extra_id, status, provider, provider_batch_withdrawal_id, provider_withdrawal_id, provider_status,
+    provider_error, provider_payload, verification_required, verified_at, processed_at, failed_at, created_at, updated_at`;
 
   async findByUserId(userId: string): Promise<WalletRow | null> {
     const { rows } = await this.db.query<WalletRow>(
@@ -118,21 +177,73 @@ export class WalletRepository {
     amount: number,
     currency: string,
     orderId: string,
+    provider: string = 'legacy',
+    providerInvoiceId: string | null = null,
+    providerPayload: Record<string, unknown> = {},
   ): Promise<DepositRequestRow> {
     const { rows } = await this.db.query<DepositRequestRow>(
-      `INSERT INTO deposit_requests (user_id, wallet_id, amount, currency, order_id)
-       VALUES ($1, $2, $3, $4, $5)
-       RETURNING id, user_id, wallet_id, amount::text, currency, order_id, cryptomus_uuid, status, created_at, updated_at`,
-      [userId, walletId, amount, currency, orderId],
+      `INSERT INTO deposit_requests (
+        user_id, wallet_id, amount, currency, order_id, provider, provider_invoice_id, provider_payload
+      )
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb)
+       RETURNING ${this.depositSelectColumns}`,
+      [userId, walletId, amount, currency, orderId, provider, providerInvoiceId, JSON.stringify(providerPayload)],
     );
     return rows[0]!;
   }
 
   async findDepositRequestByOrderId(orderId: string): Promise<DepositRequestRow | null> {
     const { rows } = await this.db.query<DepositRequestRow>(
-      `SELECT id, user_id, wallet_id, amount::text, currency, order_id, cryptomus_uuid, status, created_at, updated_at
+      `SELECT ${this.depositSelectColumns}
        FROM deposit_requests WHERE order_id = $1`,
       [orderId],
+    );
+    return rows[0] ?? null;
+  }
+
+  async findDepositRequestByProviderPaymentId(
+    providerPaymentId: string,
+  ): Promise<DepositRequestRow | null> {
+    const { rows } = await this.db.query<DepositRequestRow>(
+      `SELECT ${this.depositSelectColumns}
+       FROM deposit_requests
+       WHERE provider_payment_id = $1
+       ORDER BY created_at DESC
+       LIMIT 1`,
+      [providerPaymentId],
+    );
+    return rows[0] ?? null;
+  }
+
+  async updateDepositProviderStateByOrderId(params: {
+    orderId: string;
+    providerStatus: string | null;
+    providerPaymentId?: string | null;
+    providerInvoiceId?: string | null;
+    providerPurchaseId?: string | null;
+    providerParentPaymentId?: string | null;
+    providerPayload?: Record<string, unknown>;
+  }): Promise<DepositRequestRow | null> {
+    const { rows } = await this.db.query<DepositRequestRow>(
+      `UPDATE deposit_requests
+       SET provider_status = COALESCE($2, provider_status),
+           provider_payment_id = COALESCE($3, provider_payment_id),
+           provider_invoice_id = COALESCE($4, provider_invoice_id),
+           provider_purchase_id = COALESCE($5, provider_purchase_id),
+           provider_parent_payment_id = COALESCE($6, provider_parent_payment_id),
+           provider_payload = provider_payload || COALESCE($7::jsonb, '{}'::jsonb),
+           updated_at = now()
+       WHERE order_id = $1
+       RETURNING ${this.depositSelectColumns}`,
+      [
+        params.orderId,
+        params.providerStatus ?? null,
+        params.providerPaymentId ?? null,
+        params.providerInvoiceId ?? null,
+        params.providerPurchaseId ?? null,
+        params.providerParentPaymentId ?? null,
+        params.providerPayload ? JSON.stringify(params.providerPayload) : null,
+      ],
     );
     return rows[0] ?? null;
   }
@@ -146,6 +257,118 @@ export class WalletRepository {
       `UPDATE deposit_requests SET status = $1, cryptomus_uuid = COALESCE($2, cryptomus_uuid) WHERE order_id = $3`,
       [status, cryptomusUuid ?? null, orderId],
     );
+  }
+
+  async creditDepositIfPendingByOrderId(params: {
+    orderId: string;
+    providerStatus: string;
+    referenceType: string;
+    referenceId: string | null;
+    description: string;
+    providerPaymentId?: string | null;
+    providerInvoiceId?: string | null;
+    providerPurchaseId?: string | null;
+    providerParentPaymentId?: string | null;
+    providerPayload?: Record<string, unknown>;
+  }): Promise<{ credited: boolean; row: DepositRequestRow | null }> {
+    const client = await this.db.connect();
+    try {
+      await client.query('BEGIN');
+      const { rows: depositRows } = await client.query<DepositRequestRow>(
+        `SELECT ${this.depositSelectColumns}
+         FROM deposit_requests
+         WHERE order_id = $1
+         FOR UPDATE`,
+        [params.orderId],
+      );
+      const deposit = depositRows[0] ?? null;
+      if (!deposit) {
+        await client.query('ROLLBACK');
+        return { credited: false, row: null };
+      }
+
+      await client.query(
+        `UPDATE deposit_requests
+         SET provider_status = COALESCE($2, provider_status),
+             provider_payment_id = COALESCE($3, provider_payment_id),
+             provider_invoice_id = COALESCE($4, provider_invoice_id),
+             provider_purchase_id = COALESCE($5, provider_purchase_id),
+             provider_parent_payment_id = COALESCE($6, provider_parent_payment_id),
+             provider_payload = provider_payload || COALESCE($7::jsonb, '{}'::jsonb),
+             updated_at = now()
+         WHERE id = $1`,
+        [
+          deposit.id,
+          params.providerStatus,
+          params.providerPaymentId ?? null,
+          params.providerInvoiceId ?? null,
+          params.providerPurchaseId ?? null,
+          params.providerParentPaymentId ?? null,
+          params.providerPayload ? JSON.stringify(params.providerPayload) : null,
+        ],
+      );
+
+      if (deposit.status !== 'pending') {
+        const { rows: currentRows } = await client.query<DepositRequestRow>(
+          `SELECT ${this.depositSelectColumns}
+           FROM deposit_requests WHERE id = $1`,
+          [deposit.id],
+        );
+        await client.query('COMMIT');
+        return { credited: false, row: currentRows[0] ?? deposit };
+      }
+
+      const amount = parseFloat(deposit.amount);
+      const { rows: walletRows } = await client.query<{ balance: string }>(
+        `UPDATE wallets SET balance = balance + $1 WHERE id = $2 RETURNING balance::text`,
+        [amount, deposit.wallet_id],
+      );
+      if (walletRows.length === 0) {
+        throw new Error('Wallet not found');
+      }
+      const balanceAfter = parseFloat(walletRows[0]!.balance);
+      const reference = this.splitReferenceId(params.referenceId);
+      const metadata = {
+        ...reference.metadata,
+        provider_status: params.providerStatus,
+        provider_payment_id: params.providerPaymentId ?? null,
+        provider_invoice_id: params.providerInvoiceId ?? null,
+        provider_purchase_id: params.providerPurchaseId ?? null,
+      };
+      await client.query(
+        `INSERT INTO transactions (
+          wallet_id, user_id, type, amount, balance_after, status, description, reference_type, reference_id, metadata
+        ) VALUES ($1, $2, 'deposit', $3, $4, 'completed', $5, $6, $7, $8)`,
+        [
+          deposit.wallet_id,
+          deposit.user_id,
+          amount,
+          balanceAfter,
+          params.description,
+          params.referenceType,
+          reference.validReferenceId,
+          metadata,
+        ],
+      );
+      await client.query(
+        `UPDATE deposit_requests
+         SET status = 'paid', paid_at = now(), updated_at = now()
+         WHERE id = $1`,
+        [deposit.id],
+      );
+      const { rows: updatedRows } = await client.query<DepositRequestRow>(
+        `SELECT ${this.depositSelectColumns}
+         FROM deposit_requests WHERE id = $1`,
+        [deposit.id],
+      );
+      await client.query('COMMIT');
+      return { credited: true, row: updatedRows[0] ?? null };
+    } catch (e) {
+      await client.query('ROLLBACK');
+      throw e;
+    } finally {
+      client.release();
+    }
   }
 
   async creditWallet(
@@ -516,6 +739,363 @@ export class WalletRepository {
     );
     return rows[0]!;
   }
+
+  async getExpertPayoutSettings(userId: string): Promise<ExpertPayoutSettingsRow | null> {
+    const { rows } = await this.db.query<ExpertPayoutSettingsRow>(
+      `SELECT payout_currency, payout_address, payout_extra_id, payout_updated_at
+       FROM expert_profiles
+       WHERE user_id = $1
+       LIMIT 1`,
+      [userId],
+    );
+    return rows[0] ?? null;
+  }
+
+  async updateExpertPayoutSettings(
+    userId: string,
+    params: {
+      payoutCurrency: string;
+      payoutAddress: string;
+      payoutExtraId?: string | null;
+    },
+  ): Promise<ExpertPayoutSettingsRow | null> {
+    const { rows } = await this.db.query<ExpertPayoutSettingsRow>(
+      `UPDATE expert_profiles
+       SET payout_currency = $2,
+           payout_address = $3,
+           payout_extra_id = $4,
+           payout_updated_at = now()
+       WHERE user_id = $1
+       RETURNING payout_currency, payout_address, payout_extra_id, payout_updated_at`,
+      [userId, params.payoutCurrency, params.payoutAddress, params.payoutExtraId ?? null],
+    );
+    return rows[0] ?? null;
+  }
+
+  async createWithdrawalRequestWithHold(params: {
+    userId: string;
+    amount: number;
+    currency: string;
+    payoutAddress: string;
+    payoutExtraId?: string | null;
+    verificationRequired: boolean;
+    providerPayload?: Record<string, unknown>;
+  }): Promise<WithdrawalRequestRow> {
+    const client = await this.db.connect();
+    try {
+      await client.query('BEGIN');
+      const { rows: walletRows } = await client.query<{ id: string }>(
+        `SELECT id FROM wallets WHERE user_id = $1 LIMIT 1`,
+        [params.userId],
+      );
+      if (walletRows.length === 0) {
+        throw new Error('WALLET_NOT_FOUND');
+      }
+      const walletId = walletRows[0]!.id;
+      const hold = await this.createHoldInTransaction(
+        client,
+        walletId,
+        params.userId,
+        params.amount,
+        'EGP',
+        'withdrawal_request',
+        null,
+        {
+          payout_currency: params.currency,
+          payout_address: params.payoutAddress,
+        },
+      );
+      const { rows } = await client.query<WithdrawalRequestRow>(
+        `INSERT INTO withdrawal_requests (
+          user_id, wallet_id, hold_id, amount, currency, payout_address, payout_extra_id,
+          status, provider, verification_required, provider_payload
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, $7, 'pending_verification', 'nowpayments', $8, $9::jsonb)
+        RETURNING ${this.withdrawalSelectColumns}`,
+        [
+          params.userId,
+          walletId,
+          hold.id,
+          params.amount,
+          params.currency,
+          params.payoutAddress,
+          params.payoutExtraId ?? null,
+          params.verificationRequired,
+          JSON.stringify(params.providerPayload ?? {}),
+        ],
+      );
+      const row = rows[0]!;
+      await client.query(`UPDATE wallet_holds SET reference_id = $2 WHERE id = $1`, [hold.id, row.id]);
+      await client.query('COMMIT');
+      return row;
+    } catch (e) {
+      await client.query('ROLLBACK');
+      throw e;
+    } finally {
+      client.release();
+    }
+  }
+
+  async listWithdrawalRequestsByUserId(userId: string): Promise<WithdrawalRequestRow[]> {
+    const { rows } = await this.db.query<WithdrawalRequestRow>(
+      `SELECT ${this.withdrawalSelectColumns}
+       FROM withdrawal_requests
+       WHERE user_id = $1
+       ORDER BY created_at DESC`,
+      [userId],
+    );
+    return rows;
+  }
+
+  async findWithdrawalRequestByIdForUser(
+    withdrawalId: string,
+    userId: string,
+  ): Promise<WithdrawalRequestRow | null> {
+    const { rows } = await this.db.query<WithdrawalRequestRow>(
+      `SELECT ${this.withdrawalSelectColumns}
+       FROM withdrawal_requests
+       WHERE id = $1 AND user_id = $2
+       LIMIT 1`,
+      [withdrawalId, userId],
+    );
+    return rows[0] ?? null;
+  }
+
+  async findWithdrawalRequestByProviderIds(params: {
+    batchWithdrawalId?: string | null;
+    withdrawalId?: string | null;
+  }): Promise<WithdrawalRequestRow | null> {
+    if (!params.batchWithdrawalId && !params.withdrawalId) return null;
+    const { rows } = await this.db.query<WithdrawalRequestRow>(
+      `SELECT ${this.withdrawalSelectColumns}
+       FROM withdrawal_requests
+       WHERE (
+         ($1::text IS NOT NULL AND provider_batch_withdrawal_id = $1::text)
+         OR ($2::text IS NOT NULL AND provider_withdrawal_id = $2::text)
+       )
+       ORDER BY created_at DESC
+       LIMIT 1`,
+      [params.batchWithdrawalId ?? null, params.withdrawalId ?? null],
+    );
+    return rows[0] ?? null;
+  }
+
+  async setWithdrawalAfterPayoutCreate(params: {
+    withdrawalId: string;
+    batchWithdrawalId?: string | null;
+    providerWithdrawalId?: string | null;
+    providerStatus?: string | null;
+    providerPayload?: Record<string, unknown>;
+    status: 'pending_verification' | 'processing';
+  }): Promise<WithdrawalRequestRow | null> {
+    const { rows } = await this.db.query<WithdrawalRequestRow>(
+      `UPDATE withdrawal_requests
+       SET provider_batch_withdrawal_id = COALESCE($2, provider_batch_withdrawal_id),
+           provider_withdrawal_id = COALESCE($3, provider_withdrawal_id),
+           provider_status = COALESCE($4, provider_status),
+           provider_payload = provider_payload || COALESCE($5::jsonb, '{}'::jsonb),
+           provider_error = NULL,
+           status = $6,
+           updated_at = now()
+       WHERE id = $1
+       RETURNING ${this.withdrawalSelectColumns}`,
+      [
+        params.withdrawalId,
+        params.batchWithdrawalId ?? null,
+        params.providerWithdrawalId ?? null,
+        params.providerStatus ?? null,
+        params.providerPayload ? JSON.stringify(params.providerPayload) : null,
+        params.status,
+      ],
+    );
+    return rows[0] ?? null;
+  }
+
+  async setWithdrawalBlocked(params: {
+    withdrawalId: string;
+    error: string;
+    providerStatus?: string | null;
+    providerPayload?: Record<string, unknown>;
+  }): Promise<WithdrawalRequestRow | null> {
+    const { rows } = await this.db.query<WithdrawalRequestRow>(
+      `UPDATE withdrawal_requests
+       SET status = 'blocked',
+           provider_status = COALESCE($3, provider_status),
+           provider_error = $2,
+           provider_payload = provider_payload || COALESCE($4::jsonb, '{}'::jsonb),
+           updated_at = now()
+       WHERE id = $1
+       RETURNING ${this.withdrawalSelectColumns}`,
+      [
+        params.withdrawalId,
+        params.error,
+        params.providerStatus ?? null,
+        params.providerPayload ? JSON.stringify(params.providerPayload) : null,
+      ],
+    );
+    return rows[0] ?? null;
+  }
+
+  async markWithdrawalVerified(
+    withdrawalId: string,
+    providerStatus: string | null,
+    providerPayload?: Record<string, unknown>,
+  ): Promise<WithdrawalRequestRow | null> {
+    const { rows } = await this.db.query<WithdrawalRequestRow>(
+      `UPDATE withdrawal_requests
+       SET status = 'processing',
+           verified_at = now(),
+           provider_status = COALESCE($2, provider_status),
+           provider_payload = provider_payload || COALESCE($3::jsonb, '{}'::jsonb),
+           updated_at = now()
+       WHERE id = $1
+       RETURNING ${this.withdrawalSelectColumns}`,
+      [
+        withdrawalId,
+        providerStatus,
+        providerPayload ? JSON.stringify(providerPayload) : null,
+      ],
+    );
+    return rows[0] ?? null;
+  }
+
+  async applyWithdrawalWebhookStatus(params: {
+    batchWithdrawalId?: string | null;
+    withdrawalId?: string | null;
+    providerStatus: string;
+    providerPayload?: Record<string, unknown>;
+  }): Promise<{ updated: boolean; status: string | null; row: WithdrawalRequestRow | null }> {
+    const client = await this.db.connect();
+    try {
+      await client.query('BEGIN');
+      const { rows: wrRows } = await client.query<WithdrawalRequestRow>(
+        `SELECT ${this.withdrawalSelectColumns}
+         FROM withdrawal_requests
+         WHERE (
+           ($1::text IS NOT NULL AND provider_batch_withdrawal_id = $1::text)
+           OR ($2::text IS NOT NULL AND provider_withdrawal_id = $2::text)
+         )
+         ORDER BY created_at DESC
+         LIMIT 1
+         FOR UPDATE`,
+        [params.batchWithdrawalId ?? null, params.withdrawalId ?? null],
+      );
+      const row = wrRows[0] ?? null;
+      if (!row) {
+        await client.query('ROLLBACK');
+        return { updated: false, status: null, row: null };
+      }
+
+      await client.query(
+        `UPDATE withdrawal_requests
+         SET provider_status = $2,
+             provider_payload = provider_payload || COALESCE($3::jsonb, '{}'::jsonb),
+             updated_at = now()
+         WHERE id = $1`,
+        [row.id, params.providerStatus, params.providerPayload ? JSON.stringify(params.providerPayload) : null],
+      );
+
+      const terminalStatuses = new Set(['finished', 'failed', 'rejected', 'cancelled']);
+      if (terminalStatuses.has(row.status)) {
+        const { rows: refreshed } = await client.query<WithdrawalRequestRow>(
+          `SELECT ${this.withdrawalSelectColumns}
+           FROM withdrawal_requests WHERE id = $1`,
+          [row.id],
+        );
+        await client.query('COMMIT');
+        return { updated: false, status: refreshed[0]?.status ?? row.status, row: refreshed[0] ?? row };
+      }
+
+      const normalizedProviderStatus = params.providerStatus.toLowerCase();
+      if (normalizedProviderStatus === 'finished') {
+        if (row.hold_id) {
+          await this.captureHoldInTransaction(client, row.hold_id, 'Withdrawal payout finished', {
+            provider_status: params.providerStatus,
+          });
+        }
+        const { rows: walletRows } = await client.query<{ balance: string }>(
+          `SELECT balance::text FROM wallets WHERE id = $1`,
+          [row.wallet_id],
+        );
+        const balanceAfter = parseFloat(walletRows[0]?.balance ?? '0');
+        const ref = this.splitReferenceId(row.provider_withdrawal_id ?? params.withdrawalId ?? null);
+        const metadata = {
+          ...ref.metadata,
+          provider_batch_withdrawal_id: row.provider_batch_withdrawal_id,
+          provider_withdrawal_id: row.provider_withdrawal_id,
+          provider_status: params.providerStatus,
+        };
+        await client.query(
+          `INSERT INTO transactions (
+            wallet_id, user_id, type, amount, balance_after, status, description, reference_type, reference_id, metadata
+          ) VALUES ($1, $2, 'withdrawal', $3, $4, 'completed', $5, 'nowpayments_payout', $6, $7)`,
+          [
+            row.wallet_id,
+            row.user_id,
+            parseFloat(row.amount),
+            balanceAfter,
+            'Freelancer withdrawal payout',
+            ref.validReferenceId,
+            metadata,
+          ],
+        );
+        await client.query(
+          `UPDATE withdrawal_requests
+           SET status = 'finished',
+               processed_at = COALESCE(processed_at, now()),
+               updated_at = now()
+           WHERE id = $1`,
+          [row.id],
+        );
+      } else if (
+        normalizedProviderStatus === 'failed' ||
+        normalizedProviderStatus === 'rejected' ||
+        normalizedProviderStatus === 'cancelled'
+      ) {
+        if (row.hold_id) {
+          await this.releaseHoldInTransaction(client, row.hold_id, 'Withdrawal payout failed', {
+            provider_status: params.providerStatus,
+          });
+        }
+        await client.query(
+          `UPDATE withdrawal_requests
+           SET status = $2,
+               failed_at = COALESCE(failed_at, now()),
+               updated_at = now()
+           WHERE id = $1`,
+          [row.id, normalizedProviderStatus],
+        );
+      } else {
+        await client.query(
+          `UPDATE withdrawal_requests
+           SET status = 'processing',
+               updated_at = now()
+           WHERE id = $1`,
+          [row.id],
+        );
+      }
+
+      const { rows: refreshed } = await client.query<WithdrawalRequestRow>(
+        `SELECT ${this.withdrawalSelectColumns}
+         FROM withdrawal_requests WHERE id = $1`,
+        [row.id],
+      );
+      await client.query('COMMIT');
+      return { updated: true, status: refreshed[0]?.status ?? null, row: refreshed[0] ?? null };
+    } catch (e) {
+      await client.query('ROLLBACK');
+      throw e;
+    } finally {
+      client.release();
+    }
+  }
 }
 
-export type { WalletRow, TransactionRow, DepositRequestRow, WalletHoldRow };
+export type {
+  WalletRow,
+  TransactionRow,
+  DepositRequestRow,
+  WalletHoldRow,
+  ExpertPayoutSettingsRow,
+  WithdrawalRequestRow,
+};
