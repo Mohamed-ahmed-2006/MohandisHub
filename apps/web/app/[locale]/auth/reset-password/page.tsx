@@ -26,7 +26,7 @@ const ResetPasswordPage = async ({ params, searchParams }: ResetPasswordPageProp
     notFound();
   }
 
-  const dictionary = getDictionary(locale);
+  const dictionary = await getDictionary(locale);
   const resolvedSearch = await searchParams;
   const token = typeof resolvedSearch.token === 'string' ? resolvedSearch.token : null;
 

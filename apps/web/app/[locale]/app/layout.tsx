@@ -2,7 +2,6 @@ import { notFound } from 'next/navigation';
 
 import { AppShell } from '@/components/app/app-shell';
 import { isSupportedLocale } from '@/lib/i18n/config';
-import { getDictionary } from '@/lib/i18n/get-dictionary';
 
 type AppLayoutProps = {
   children: React.ReactNode;
@@ -16,13 +15,7 @@ const AppLayout = async ({ children, params }: AppLayoutProps) => {
     notFound();
   }
 
-  const dictionary = getDictionary(locale);
-
-  return (
-    <AppShell locale={locale} dictionary={dictionary}>
-      {children}
-    </AppShell>
-  );
+  return <AppShell>{children}</AppShell>;
 };
 
 export default AppLayout;

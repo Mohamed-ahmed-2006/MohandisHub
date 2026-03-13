@@ -240,16 +240,20 @@ export class ServicesRepository {
     return rows[0]!;
   }
 
+  async countServicesByProvider(providerId: string): Promise<number> {
+    const { rows } = await this.db.query<{ count: string }>(
+      `SELECT COUNT(*)::text AS count FROM services WHERE provider_id = $1`,
+      [providerId],
+    );
+    return rows.length > 0 ? parseInt(rows[0]!.count, 10) : 0;
+  }
+
   async listServicesByProvider(
     providerId: string,
     page: number,
     limit: number,
   ): Promise<{ rows: ServiceDetailRow[]; total: number }> {
-    const countResult = await this.db.query<{ count: string }>(
-      `SELECT COUNT(*)::text AS count FROM services WHERE provider_id = $1`,
-      [providerId],
-    );
-    const total = parseInt(countResult.rows[0]!.count, 10);
+    const total = await this.countServicesByProvider(providerId);
     const offset = (page - 1) * limit;
     const { rows } = await this.db.query<ServiceDetailRow>(
       `SELECT * FROM services WHERE provider_id = $1 ORDER BY created_at DESC LIMIT $2::int OFFSET $3::int`,

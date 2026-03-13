@@ -40,28 +40,29 @@ export const AppSidebar = ({
 
   useEffect(() => {
     if (!accessToken) return;
-    const sock = getChatSocket(accessToken);
-    if (!sock) return;
-
-    const onNotification = (data: { type?: string }) => {
-      if (data.type === 'new_message' || data.type === 'new_application_message') {
-        setHasUnreadChat(true);
-      } else {
-        setHasUnreadJobs(true);
-      }
-    };
-
-    sock.on('notification', onNotification);
+    getChatSocket(accessToken).then((sock) => {
+      if (!sock) return;
+      const onNotification = (data: { type?: string }) => {
+        if (data.type === 'new_message' || data.type === 'new_application_message') {
+          setHasUnreadChat(true);
+        } else {
+          setHasUnreadJobs(true);
+        }
+      };
+      sock.on('notification', onNotification);
+    });
     return () => {
-      sock.off('notification', onNotification);
+      void getChatSocket(accessToken).then((sock) => {
+        if (sock) sock.off('notification');
+      });
     };
   }, [accessToken]);
 
-  // Clear unread when visiting the pages
+  // Clear unread when visiting the pages (pathname is locale-prefixed e.g. /en/app, /ar/app/chat)
   useEffect(() => {
     if (pathname.includes('/app/chat')) setHasUnreadChat(false);
-    if (pathname === '/app') setHasUnreadJobs(false);
-  }, [pathname]);
+    if (pathname === buildLocalePath(locale, '/app')) setHasUnreadJobs(false);
+  }, [pathname, locale]);
 
   const navItems: NavItem[] = [
     { href: '/app', label: dictionary.nav.home },

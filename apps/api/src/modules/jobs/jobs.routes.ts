@@ -25,6 +25,8 @@ const expertMw = [authenticate, requireEmailVerified, requireRole('expert'), req
 // Business endpoints
 jobsRouter.post('/', ...businessMw, asHandler(jobsController.createJob));
 jobsRouter.get('/my', ...businessMw, asHandler(jobsController.listBusinessJobs));
+jobsRouter.get('/:id/interview-slots', ...businessMw, asHandler(jobsController.listBusinessInterviewSlots));
+jobsRouter.post('/:id/interview-slots', ...businessMw, asHandler(jobsController.createInterviewSlot));
 jobsRouter.get('/:id/applications', ...businessMw, asHandler(jobsController.getJobApplications));
 jobsRouter.post('/:id/close', ...businessMw, asHandler(jobsController.closeJob));
 jobsRouter.patch(
@@ -32,6 +34,8 @@ jobsRouter.patch(
   ...businessMw,
   asHandler(jobsController.updateApplicationStatus),
 );
+jobsRouter.patch('/interview-slots/:slotId', ...businessMw, asHandler(jobsController.updateInterviewSlot));
+jobsRouter.delete('/interview-slots/:slotId', ...businessMw, asHandler(jobsController.deleteInterviewSlot));
 
 jobsRouter.post('/applications/:appId/milestones', ...businessMw, asHandler(jobsController.createMilestone));
 jobsRouter.get(
@@ -45,6 +49,16 @@ jobsRouter.post('/milestones/:milestoneId/review', ...businessMw, asHandler(jobs
 
 // Shared application messages endpoints
 const sharedMw = [authenticate, requireEmailVerified, requireVerified];
+jobsRouter.get(
+  '/applications/:appId/interview-slots',
+  ...sharedMw,
+  asHandler(jobsController.listApplicationInterviewSlots),
+);
+jobsRouter.post(
+  '/applications/:appId/interview-book',
+  ...sharedMw,
+  asHandler(jobsController.bookInterview),
+);
 jobsRouter.get('/applications/:appId/messages', ...sharedMw, asHandler(jobsController.getApplicationMessages));
 jobsRouter.post(
   '/applications/:appId/messages',

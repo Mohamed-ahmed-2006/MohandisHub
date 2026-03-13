@@ -17,6 +17,8 @@ export type ReservationProfileRow = {
 export type ReservationSlotRow = {
   id: string;
   provider_id: string;
+  purpose: string;
+  job_id: string | null;
   start_at: string;
   end_at: string;
   status: string;
@@ -30,6 +32,9 @@ export type ReservationRow = {
   id: string;
   customer_id: string;
   provider_id: string;
+  purpose: string;
+  job_id: string | null;
+  job_application_id: string | null;
   service_id: string | null;
   slot_id: string | null;
   mode: string;
@@ -41,6 +46,7 @@ export type ReservationRow = {
   currency: string;
   admin_acceptance_fee: string;
   admin_minute_rate: string;
+  policy_snapshot: Record<string, unknown> | null;
   fixed_price_hold_id: string | null;
   rejection_reason: string | null;
   auto_rejected: boolean;
@@ -53,6 +59,16 @@ export type ReservationRow = {
   started_at: string | null;
   ended_at: string | null;
   completed_at: string | null;
+  cancelled_at: string | null;
+  cancelled_by: string | null;
+  cancellation_actor: string | null;
+  cancellation_reason_code: string | null;
+  cancellation_effective_outcome: string | null;
+  refund_amount: string;
+  captured_amount: string;
+  penalty_amount: string;
+  refund_status: string;
+  settlement_status: string;
   customer_done_due_at: string | null;
   done_prompted_at: string | null;
   disconnect_auto_release_at: string | null;
@@ -135,6 +151,38 @@ export type ReservationDisputeRow = {
   updated_at: string;
 };
 
+export type ReservationEventRow = {
+  id: string;
+  reservation_id: string;
+  event_type: string;
+  actor_id: string | null;
+  metadata: Record<string, unknown>;
+  created_at: string;
+};
+
+export type ReservationActionIdempotencyRow = {
+  id: string;
+  actor_id: string;
+  action: string;
+  idempotency_key: string;
+  reservation_id: string | null;
+  response_json: Record<string, unknown>;
+  created_at: string;
+};
+
+export type ReservationActionFailureRow = {
+  id: string;
+  reservation_id: string | null;
+  action_type: string;
+  actor_id: string | null;
+  error_code: string | null;
+  error_message: string;
+  metadata: Record<string, unknown>;
+  resolved_at: string | null;
+  last_replayed_at: string | null;
+  created_at: string;
+};
+
 export class ReservationsRepository {
   async getProfile(providerId: string): Promise<ReservationProfileRow | null> {
     const { rows } = await getPool().query<ReservationProfileRow>(
@@ -186,15 +234,27 @@ export class ReservationsRepository {
     from: Date,
     to: Date,
     availableOnly: boolean,
+    filters?: {
+      purpose?: string;
+      jobId?: string;
+    },
   ): Promise<ReservationSlotRow[]> {
+    const params: unknown[] = [providerId, from, to];
+    const clauses = ['provider_id = $1', 'start_at < $3', 'end_at > $2'];
+    if (availableOnly) clauses.push(`status = 'available'`);
+    if (filters?.purpose) {
+      params.push(filters.purpose);
+      clauses.push(`purpose = $${params.length}`);
+    }
+    if (filters?.jobId) {
+      params.push(filters.jobId);
+      clauses.push(`job_id = $${params.length}`);
+    }
     const { rows } = await getPool().query<ReservationSlotRow>(
       `SELECT * FROM reservation_slots
-       WHERE provider_id = $1
-         AND start_at < $3
-         AND end_at > $2
-         ${availableOnly ? `AND status = 'available'` : ''}
+       WHERE ${clauses.join('\n         AND ')}
        ORDER BY start_at ASC`,
-      [providerId, from, to],
+      params,
     );
     return rows;
   }
@@ -214,13 +274,32 @@ export class ReservationsRepository {
       endAt: Date;
       supportsOnline: boolean;
       supportsOffline: boolean;
+      purpose?: string;
+      jobId?: string | null;
     },
   ): Promise<ReservationSlotRow> {
     const { rows } = await getPool().query<ReservationSlotRow>(
-      `INSERT INTO reservation_slots (provider_id, start_at, end_at, status, supports_online, supports_offline)
-       VALUES ($1, $2, $3, 'available', $4, $5)
+      `INSERT INTO reservation_slots (
+         provider_id,
+         purpose,
+         job_id,
+         start_at,
+         end_at,
+         status,
+         supports_online,
+         supports_offline
+       )
+       VALUES ($1, $2, $3, $4, $5, 'available', $6, $7)
        RETURNING *`,
-      [providerId, input.startAt, input.endAt, input.supportsOnline, input.supportsOffline],
+      [
+        providerId,
+        input.purpose ?? 'service',
+        input.jobId ?? null,
+        input.startAt,
+        input.endAt,
+        input.supportsOnline,
+        input.supportsOffline,
+      ],
     );
     return rows[0]!;
   }
@@ -278,6 +357,9 @@ export class ReservationsRepository {
     data: {
       customerId: string;
       providerId: string;
+      purpose?: string;
+      jobId?: string | null;
+      jobApplicationId?: string | null;
       serviceId?: string;
       slotId: string;
       mode: string;
@@ -288,19 +370,23 @@ export class ReservationsRepository {
       currency: string;
       adminAcceptanceFee: number;
       adminMinuteRate: number;
+      policySnapshot?: Record<string, unknown>;
     },
   ): Promise<ReservationRow> {
     const { rows } = await getPool().query<ReservationRow>(
       `INSERT INTO reservations (
-         customer_id, provider_id, service_id, slot_id, mode, online_type, status,
+         customer_id, provider_id, purpose, job_id, job_application_id, service_id, slot_id, mode, online_type, status,
          requested_start_at, requested_end_at, expert_price_amount, currency,
-         admin_acceptance_fee, admin_minute_rate
+         admin_acceptance_fee, admin_minute_rate, policy_snapshot
        )
-       VALUES ($1, $2, $3, $4, $5, $6, 'pending', $7, $8, $9, $10, $11, $12)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'pending', $10, $11, $12, $13, $14, $15, $16::jsonb)
        RETURNING *`,
       [
         data.customerId,
         data.providerId,
+        data.purpose ?? 'service',
+        data.jobId ?? null,
+        data.jobApplicationId ?? null,
         data.serviceId ?? null,
         data.slotId,
         data.mode,
@@ -311,24 +397,43 @@ export class ReservationsRepository {
         data.currency,
         data.adminAcceptanceFee,
         data.adminMinuteRate,
+        JSON.stringify(data.policySnapshot ?? {}),
       ],
     );
     return rows[0]!;
   }
 
   async findReservationById(id: string): Promise<ReservationRow | null> {
-    const { rows } = await getPool().query<ReservationRow>(
-      `SELECT r.*,
+    const pool = getPool();
+    const hasJobIdColumn = await pool
+      .query(
+        `SELECT 1 FROM information_schema.columns WHERE table_name = 'reservations' AND column_name = 'job_id'`,
+      )
+      .then((r) => r.rows.length > 0)
+      .catch(() => false);
+
+    const sql = hasJobIdColumn
+      ? `SELECT r.*,
+              COALESCE(up.display_name, up.email) AS provider_name,
+              COALESCE(uc.display_name, uc.email) AS customer_name,
+              COALESCE(s.title, j.title) AS service_title
+         FROM reservations r
+         JOIN users up ON up.id = r.provider_id
+         JOIN users uc ON uc.id = r.customer_id
+         LEFT JOIN services s ON s.id = r.service_id
+         LEFT JOIN jobs j ON j.id = r.job_id
+         WHERE r.id = $1`
+      : `SELECT r.*,
               COALESCE(up.display_name, up.email) AS provider_name,
               COALESCE(uc.display_name, uc.email) AS customer_name,
               s.title AS service_title
-       FROM reservations r
-       JOIN users up ON up.id = r.provider_id
-       JOIN users uc ON uc.id = r.customer_id
-       LEFT JOIN services s ON s.id = r.service_id
-       WHERE r.id = $1`,
-      [id],
-    );
+         FROM reservations r
+         JOIN users up ON up.id = r.provider_id
+         JOIN users uc ON uc.id = r.customer_id
+         LEFT JOIN services s ON s.id = r.service_id
+         WHERE r.id = $1`;
+
+    const { rows } = await pool.query<ReservationRow>(sql, [id]);
     return rows[0] ?? null;
   }
 
@@ -340,22 +445,42 @@ export class ReservationsRepository {
   ): Promise<{ rows: ReservationRow[]; total: number }> {
     const offset = (page - 1) * limit;
     const column = role === 'customer' ? 'customer_id' : 'provider_id';
-    const { rows } = await getPool().query<ReservationRow>(
-      `SELECT r.*,
+    const pool = getPool();
+    const hasJobIdColumn = await pool
+      .query(
+        `SELECT 1 FROM information_schema.columns WHERE table_name = 'reservations' AND column_name = 'job_id'`,
+      )
+      .then((r) => r.rows.length > 0)
+      .catch(() => false);
+
+    const sql = hasJobIdColumn
+      ? `SELECT r.*,
+              COALESCE(up.display_name, up.email) AS provider_name,
+              COALESCE(uc.display_name, uc.email) AS customer_name,
+              COALESCE(s.title, j.title) AS service_title
+         FROM reservations r
+         JOIN users up ON up.id = r.provider_id
+         JOIN users uc ON uc.id = r.customer_id
+         LEFT JOIN services s ON s.id = r.service_id
+         LEFT JOIN jobs j ON j.id = r.job_id
+         WHERE r.${column} = $1
+         ORDER BY r.created_at DESC
+         LIMIT $2::int OFFSET $3::int`
+      : `SELECT r.*,
               COALESCE(up.display_name, up.email) AS provider_name,
               COALESCE(uc.display_name, uc.email) AS customer_name,
               s.title AS service_title
-       FROM reservations r
-       JOIN users up ON up.id = r.provider_id
-       JOIN users uc ON uc.id = r.customer_id
-       LEFT JOIN services s ON s.id = r.service_id
-       WHERE r.${column} = $1
-       ORDER BY r.created_at DESC
-       LIMIT $2::int OFFSET $3::int`,
-      [userId, limit, offset],
-    );
+         FROM reservations r
+         JOIN users up ON up.id = r.provider_id
+         JOIN users uc ON uc.id = r.customer_id
+         LEFT JOIN services s ON s.id = r.service_id
+         WHERE r.${column} = $1
+         ORDER BY r.created_at DESC
+         LIMIT $2::int OFFSET $3::int`;
 
-    const { rows: countRows } = await getPool().query<{ count: string }>(
+    const { rows } = await pool.query<ReservationRow>(sql, [userId, limit, offset]);
+
+    const { rows: countRows } = await pool.query<{ count: string }>(
       `SELECT COUNT(*)::text AS count FROM reservations WHERE ${column} = $1`,
       [userId],
     );
@@ -375,6 +500,16 @@ export class ReservationsRepository {
       startedAt: Date | null;
       endedAt: Date | null;
       completedAt: Date | null;
+      cancelledAt: Date | null;
+      cancelledBy: string | null;
+      cancellationActor: string | null;
+      cancellationReasonCode: string | null;
+      cancellationEffectiveOutcome: string | null;
+      refundAmount: number;
+      capturedAmount: number;
+      penaltyAmount: number;
+      refundStatus: string;
+      settlementStatus: string;
       fixedPriceHoldId: string | null;
       customerDoneDueAt: Date | null;
       donePromptedAt: Date | null;
@@ -397,6 +532,16 @@ export class ReservationsRepository {
       startedAt: 'started_at',
       endedAt: 'ended_at',
       completedAt: 'completed_at',
+      cancelledAt: 'cancelled_at',
+      cancelledBy: 'cancelled_by',
+      cancellationActor: 'cancellation_actor',
+      cancellationReasonCode: 'cancellation_reason_code',
+      cancellationEffectiveOutcome: 'cancellation_effective_outcome',
+      refundAmount: 'refund_amount',
+      capturedAmount: 'captured_amount',
+      penaltyAmount: 'penalty_amount',
+      refundStatus: 'refund_status',
+      settlementStatus: 'settlement_status',
       fixedPriceHoldId: 'fixed_price_hold_id',
       customerDoneDueAt: 'customer_done_due_at',
       donePromptedAt: 'done_prompted_at',
@@ -754,6 +899,164 @@ export class ReservationsRepository {
        WHERE id = $1
        RETURNING *`,
       [disputeId, status, resolutionNotes, resolvedBy],
+    );
+    return rows[0] ?? null;
+  }
+
+  async createEvent(
+    input: {
+      reservationId: string;
+      eventType: string;
+      actorId?: string | null;
+      metadata?: Record<string, unknown>;
+    },
+    client?: PoolClient,
+  ): Promise<ReservationEventRow> {
+    const db = client ?? getPool();
+    const { rows } = await db.query<ReservationEventRow>(
+      `INSERT INTO reservation_events (reservation_id, event_type, actor_id, metadata)
+       VALUES ($1, $2, $3, $4::jsonb)
+       RETURNING *`,
+      [
+        input.reservationId,
+        input.eventType,
+        input.actorId ?? null,
+        JSON.stringify(input.metadata ?? {}),
+      ],
+    );
+    return rows[0]!;
+  }
+
+  async listEvents(reservationId: string): Promise<ReservationEventRow[]> {
+    const { rows } = await getPool().query<ReservationEventRow>(
+      `SELECT *
+       FROM reservation_events
+       WHERE reservation_id = $1
+       ORDER BY created_at DESC`,
+      [reservationId],
+    );
+    return rows;
+  }
+
+  async findActionIdempotency(
+    actorId: string,
+    action: string,
+    idempotencyKey: string,
+  ): Promise<ReservationActionIdempotencyRow | null> {
+    const { rows } = await getPool().query<ReservationActionIdempotencyRow>(
+      `SELECT *
+       FROM reservation_action_idempotency
+       WHERE actor_id = $1
+         AND action = $2
+         AND idempotency_key = $3
+       LIMIT 1`,
+      [actorId, action, idempotencyKey],
+    );
+    return rows[0] ?? null;
+  }
+
+  async storeActionIdempotency(
+    input: {
+      actorId: string;
+      action: string;
+      idempotencyKey: string;
+      reservationId?: string | null;
+      responseJson: Record<string, unknown>;
+    },
+    client?: PoolClient,
+  ): Promise<ReservationActionIdempotencyRow> {
+    const db = client ?? getPool();
+    const { rows } = await db.query<ReservationActionIdempotencyRow>(
+      `INSERT INTO reservation_action_idempotency (
+         actor_id, action, idempotency_key, reservation_id, response_json
+       )
+       VALUES ($1, $2, $3, $4, $5::jsonb)
+       ON CONFLICT (actor_id, action, idempotency_key)
+       DO UPDATE SET reservation_id = COALESCE(EXCLUDED.reservation_id, reservation_action_idempotency.reservation_id),
+                     response_json = EXCLUDED.response_json
+       RETURNING *`,
+      [
+        input.actorId,
+        input.action,
+        input.idempotencyKey,
+        input.reservationId ?? null,
+        JSON.stringify(input.responseJson),
+      ],
+    );
+    return rows[0]!;
+  }
+
+  async createActionFailure(
+    input: {
+      reservationId?: string | null;
+      actionType: string;
+      actorId?: string | null;
+      errorCode?: string | null;
+      errorMessage: string;
+      metadata?: Record<string, unknown>;
+    },
+    client?: PoolClient,
+  ): Promise<ReservationActionFailureRow> {
+    const db = client ?? getPool();
+    const { rows } = await db.query<ReservationActionFailureRow>(
+      `INSERT INTO reservation_action_failures (
+         reservation_id, action_type, actor_id, error_code, error_message, metadata
+       )
+       VALUES ($1, $2, $3, $4, $5, $6::jsonb)
+       RETURNING *`,
+      [
+        input.reservationId ?? null,
+        input.actionType,
+        input.actorId ?? null,
+        input.errorCode ?? null,
+        input.errorMessage,
+        JSON.stringify(input.metadata ?? {}),
+      ],
+    );
+    return rows[0]!;
+  }
+
+  async listActionFailures(
+    onlyOpen: boolean,
+    limit: number,
+  ): Promise<ReservationActionFailureRow[]> {
+    const { rows } = await getPool().query<ReservationActionFailureRow>(
+      `SELECT *
+       FROM reservation_action_failures
+       ${onlyOpen ? 'WHERE resolved_at IS NULL' : ''}
+       ORDER BY created_at DESC
+       LIMIT $1::int`,
+      [limit],
+    );
+    return rows;
+  }
+
+  async findActionFailureById(id: string): Promise<ReservationActionFailureRow | null> {
+    const { rows } = await getPool().query<ReservationActionFailureRow>(
+      `SELECT * FROM reservation_action_failures WHERE id = $1 LIMIT 1`,
+      [id],
+    );
+    return rows[0] ?? null;
+  }
+
+  async markActionFailureReplayed(id: string): Promise<ReservationActionFailureRow | null> {
+    const { rows } = await getPool().query<ReservationActionFailureRow>(
+      `UPDATE reservation_action_failures
+       SET last_replayed_at = now()
+       WHERE id = $1
+       RETURNING *`,
+      [id],
+    );
+    return rows[0] ?? null;
+  }
+
+  async resolveActionFailure(id: string): Promise<ReservationActionFailureRow | null> {
+    const { rows } = await getPool().query<ReservationActionFailureRow>(
+      `UPDATE reservation_action_failures
+       SET resolved_at = now()
+       WHERE id = $1
+       RETURNING *`,
+      [id],
     );
     return rows[0] ?? null;
   }

@@ -11,7 +11,7 @@ type BrowsePageProps = {
 const BrowsePage = async ({ params }: BrowsePageProps) => {
   const { locale } = await params;
   if (!isSupportedLocale(locale)) notFound();
-  const dictionary = getDictionary(locale);
+  const dictionary = await getDictionary(locale);
   return <ComingSoonPage locale={locale} dictionary={dictionary} title={dictionary.nav.browse} />;
 };
 

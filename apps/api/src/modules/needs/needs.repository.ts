@@ -82,6 +82,14 @@ export class NeedsRepository {
     return rows[0] as NeedRow;
   }
 
+  async countNeedsByCustomer(customerId: string): Promise<number> {
+    const { rows } = await getPool().query<{ count: string }>(
+      `SELECT count(*)::text AS count FROM needs WHERE customer_id = $1`,
+      [customerId],
+    );
+    return rows.length > 0 ? parseInt(rows[0]!.count, 10) : 0;
+  }
+
   async listNeedsByCustomer(
     customerId: string,
     page: number,
@@ -176,6 +184,23 @@ export class NeedsRepository {
       [needId],
     );
     return rows as BidRow[];
+  }
+
+  /** List bids for a need with expert's plan slug for visibility/sorting by plan. */
+  async listBidsForNeedWithExpertPlan(
+    needId: string,
+  ): Promise<(BidRow & { expert_plan_slug: string | null })[]> {
+    const { rows } = await getPool().query(
+      `SELECT b.*, COALESCE(u.display_name, u.email) AS expert_name, u.email AS expert_email,
+        ((SELECT m.created_at FROM bid_messages m WHERE m.bid_id = b.id ORDER BY m.created_at DESC LIMIT 1) > b.customer_last_read_at) AS has_unread,
+        p.slug AS expert_plan_slug
+       FROM bids b
+       JOIN users u ON u.id = b.expert_id
+       LEFT JOIN plans p ON p.id = u.plan_id
+       WHERE b.need_id = $1 ORDER BY b.created_at ASC`,
+      [needId],
+    );
+    return rows as (BidRow & { expert_plan_slug: string | null })[];
   }
 
   async listBidsByExpert(

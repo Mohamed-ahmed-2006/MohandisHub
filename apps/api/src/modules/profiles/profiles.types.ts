@@ -125,6 +125,18 @@ export type BusinessProfileRow = {
   updated_at: Date;
 };
 
+/** Row from `customer_profiles` table. */
+export type CustomerProfileRow = {
+  id: string;
+  user_id: string;
+  address: string | null;
+  city: string | null;
+  country: string | null;
+  preferences: Record<string, unknown> | null;
+  created_at: Date;
+  updated_at: Date;
+};
+
 /** Row from `admin_reviews` table. */
 export type AdminReviewRow = {
   id: string;

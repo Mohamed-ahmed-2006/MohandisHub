@@ -36,6 +36,7 @@ export type AppSettings = {
   reservationVoiceMinuteRate: number;
   reservationVideoMinuteRate: number;
   reservationMinPrejoinMinutes: number;
+  jobInterviewFeeAmount: number;
 };
 
 /** Public app status returned by GET /api/app/status — subset needed by frontend */
@@ -69,6 +70,7 @@ export type AppStatus = {
   reservationVoiceMinuteRate: number;
   reservationVideoMinuteRate: number;
   reservationMinPrejoinMinutes: number;
+  jobInterviewFeeAmount: number;
 };
 
 export type UpdateAppSettingsBody = Partial<{
@@ -101,4 +103,5 @@ export type UpdateAppSettingsBody = Partial<{
   reservationVoiceMinuteRate: number;
   reservationVideoMinuteRate: number;
   reservationMinPrejoinMinutes: number;
+  jobInterviewFeeAmount: number;
 }>;

@@ -87,6 +87,16 @@ export type BookingActivityRow = {
   created_at: string;
 };
 
+/** Plan limits as stored in JSONB (camelCase to match shared PlanLimits). */
+export type PlanLimitsRow = {
+  maxServices?: number | null;
+  maxNeeds?: number | null;
+  maxJobs?: number | null;
+  canPriorityListing?: boolean;
+  bidsVisibleToCustomer?: string | null;
+  bidsVisibleTopN?: number | null;
+};
+
 export type PlanRow = {
   id: string;
   slug: string;
@@ -100,6 +110,7 @@ export type PlanRow = {
   max_services: number | null;
   max_projects: number | null;
   features: string[];
+  plan_limits?: PlanLimitsRow | null;
   is_active: boolean;
   sort_order: number;
   created_at: string;

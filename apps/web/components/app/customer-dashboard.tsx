@@ -4,7 +4,9 @@ import type { ServiceCategory } from '@mohandishub/shared';
 import Image from 'next/image';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
+import { useToast } from '@/components/app/toast';
 import { getApiBaseUrl } from '@/lib/env';
+import { pickLocalized } from '@/lib/i18n/api';
 import type { Dictionary, Locale } from '@/lib/i18n/types';
 import type { Bid, BidMessage, Need } from '@/lib/needs/client';
 import { needsApiClient } from '@/lib/needs/client';
@@ -75,12 +77,20 @@ export const CustomerDashboard = ({
   const [uploading, setUploading] = useState(false);
   const [previewImage, setPreviewImage] = useState<{ url: string; urls: string[] } | null>(null);
   const [markingCompleted, setMarkingCompleted] = useState<string | null>(null);
+  const { addToast } = useToast();
 
   const isVideoFile = (file: File) => file.type.startsWith('video/');
   const maxImages = 5;
   const maxVideos = 1;
 
   const d = (dictionary.needs ?? {}) as Record<string, string>;
+  const needStatusLabels: Record<string, string> = {
+    open: d.needStatusOpen ?? 'Open',
+    awarded: d.needStatusAwarded ?? 'Awarded',
+    in_progress: d.needStatusInProgress ?? 'In progress',
+    completed: d.needStatusCompleted ?? 'Completed',
+    cancelled: d.needStatusCancelled ?? 'Cancelled',
+  };
   const categoryName = (cat: ServiceCategory) => (locale === 'ar' ? cat.nameAr : cat.nameEn);
 
   const getNeedMediaUrls = (referenceUrl: string | null | undefined): string[] => {
@@ -245,6 +255,7 @@ export const CustomerDashboard = ({
       setUploadedFiles([]);
       setError(null);
       setFieldErrors(null);
+      addToast(dictionary.common.success ?? 'Success', d.needCreated ?? 'Need created. Experts can now submit bids.');
       void loadNeeds();
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed';
@@ -314,7 +325,7 @@ export const CustomerDashboard = ({
       setSelectedNeed(null);
       void loadNeeds();
     } catch (err: unknown) {
-      alert(err instanceof Error ? err.message : 'Failed to award bid');
+      addToast('Error', err instanceof Error ? err.message : 'Failed to award bid');
     }
   };
 
@@ -324,14 +335,15 @@ export const CustomerDashboard = ({
       const amount = parseFloat(amountRaw);
       const wallet = await walletApiClient.getMyWallet(accessToken);
       if (wallet.balance < amount) {
-        alert('Insufficient balance. Please deposit funds first.');
+        addToast('Insufficient balance', 'Please deposit funds first.');
         return;
       }
       await needsApiClient.payBid(accessToken, selectedNeed.id, bidId);
       setSelectedNeed(null);
       void loadNeeds();
+      addToast('Success', 'Payment completed.');
     } catch (err: unknown) {
-      alert(err instanceof Error ? err.message : 'Failed to pay bid');
+      addToast('Error', err instanceof Error ? err.message : 'Failed to pay bid');
     }
   };
 
@@ -443,7 +455,7 @@ export const CustomerDashboard = ({
                           name="country"
                           className="dashboard-input"
                           placeholder="Country (optional)"
-                          defaultValue="Egypt"
+                          defaultValue=""
                         />
                       </div>
                       <div className="dashboard-form-field">
@@ -592,11 +604,11 @@ export const CustomerDashboard = ({
                 </div>
                 <aside className="dashboard-need-side">
                   <section className="dashboard-need-card dashboard-need-card--summary">
-                    <h4 className="dashboard-need-card-title">Before publishing</h4>
+                    <h4 className="dashboard-need-card-title">{d.beforePublishing ?? 'Before publishing'}</h4>
                     <ul className="dashboard-need-checklist">
-                      <li>State deliverables and constraints clearly.</li>
-                      <li>Set realistic budget and timeline to attract better bids.</li>
-                      <li>Attach screenshots or links for faster expert understanding.</li>
+                      <li>{d.checklistItem1 ?? 'State deliverables and constraints clearly.'}</li>
+                      <li>{d.checklistItem2 ?? 'Set realistic budget and timeline to attract better bids.'}</li>
+                      <li>{d.checklistItem3 ?? 'Attach screenshots or links for faster expert understanding.'}</li>
                     </ul>
                   </section>
                 </aside>
@@ -694,7 +706,14 @@ export const CustomerDashboard = ({
                 )}
                 <div className="dashboard-card-meta-row">
                   {(need.category_name_en || need.category_name_ar) && (
-                    <span>{locale === 'ar' ? need.category_name_ar : need.category_name_en}</span>
+                    <span>
+                      {pickLocalized(
+                        need as { category_name_en?: string; category_name_ar?: string },
+                        locale,
+                        'category_name_en',
+                        'category_name_ar',
+                      )}
+                    </span>
                   )}
                   <span>
                     <strong>
@@ -706,7 +725,7 @@ export const CustomerDashboard = ({
                   <span>
                     {d.bidsCount ?? 'Bids'}: {need.bid_count ?? 0}
                   </span>
-                  <span>{need.status}</span>
+                  <span>{needStatusLabels[need.status] ?? need.status}</span>
                 </div>
                 {mediaUrls.length > 0 && (
                   <div className="dashboard-card--need__attachments">
@@ -834,15 +853,14 @@ export const CustomerDashboard = ({
       {selectedNeed && (
         <div className="plan-modal-overlay" onClick={() => setSelectedNeed(null)}>
           <div
-            className="plan-modal"
+            className="plan-modal plan-modal--bids"
             onClick={(e) => e.stopPropagation()}
-            style={{ maxWidth: 560 }}
           >
             <h3 className="plan-modal-title">
               {d.bidsFor ?? 'Bids for'}: {selectedNeed.title}
             </h3>
             {loadingBids ? (
-              <p>Loading...</p>
+              <p>{d.loading ?? dictionary.common.loading ?? 'Loading...'}</p>
             ) : bids.length === 0 ? (
               <p>{d.noBids ?? 'No bids yet.'}</p>
             ) : (
@@ -859,8 +877,8 @@ export const CustomerDashboard = ({
                       </p>
                     </div>
                     {bid.status === 'pending' && (
-                      <div style={{ display: 'flex', gap: '0.5rem', flexDirection: 'column' }}>
-                        {bid.has_unread && <span className="dashboard-badge" style={{ background: 'hsl(var(--destructive))', color: '#fff', alignSelf: 'flex-start' }}>New Message</span>}
+                      <div className="dashboard-bid-actions">
+                        {bid.has_unread && <span className="dashboard-badge dashboard-badge--unread">New Message</span>}
                         <button
                           type="button"
                           className="dashboard-primary-btn dashboard-primary-btn--sm"
@@ -878,12 +896,11 @@ export const CustomerDashboard = ({
                       </div>
                     )}
                     {bid.status === 'accepted' && (
-                      <div style={{ display: 'flex', gap: '0.5rem', flexDirection: 'column', alignItems: 'flex-start' }}>
+                      <div className="dashboard-bid-actions dashboard-bid-actions--accepted">
                         <span className="dashboard-badge dashboard-badge--awarded">Accepted</span>
                         <button
                           type="button"
-                          className="dashboard-primary-btn dashboard-primary-btn--sm"
-                          style={{ marginTop: '0.5rem' }}
+                          className="dashboard-primary-btn dashboard-primary-btn--sm dashboard-bid-pay-btn"
                           onClick={() => void handlePay(bid.id, bid.amount)}
                         >
                           Pay Expert
@@ -896,17 +913,17 @@ export const CustomerDashboard = ({
             )}
             
             {chatBidId && (
-              <div style={{ marginTop: '1.5rem', borderTop: '1px solid #ccc', paddingTop: '1rem' }}>
-                <h4 style={{ marginBottom: '1rem' }}>Pre-Award Chat</h4>
-                <div style={{ maxHeight: '200px', overflowY: 'auto', marginBottom: '1rem', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+              <div className="dashboard-need-chat">
+                <h4 className="dashboard-need-chat-title">Pre-Award Chat</h4>
+                <div className="dashboard-need-chat-messages">
                   {messages.map(m => (
-                    <div key={m.id} style={{ padding: '0.5rem', background: 'hsl(var(--muted))', color: 'hsl(var(--foreground))', borderRadius: '4px' }}>
+                    <div key={m.id} className="dashboard-need-chat-message">
                       <strong>{m.sender_name}</strong>: {m.content}
                     </div>
                   ))}
                   {messages.length === 0 && <p className="dashboard-empty">No messages yet.</p>}
                 </div>
-                  <form onSubmit={(e) => { void sendMsg(e); }} style={{ display: 'flex', gap: '0.5rem' }}>
+                <form onSubmit={(e) => { void sendMsg(e); }} className="dashboard-need-chat-form">
                   <input className="dashboard-input" value={msgContent} onChange={e => setMsgContent(e.target.value)} placeholder="Type a message..." required />
                   <button type="submit" className="dashboard-primary-btn">Send</button>
                 </form>
@@ -914,8 +931,7 @@ export const CustomerDashboard = ({
             )}
             <button
               type="button"
-              className="plan-modal-cancel"
-              style={{ marginTop: '1rem' }}
+              className="plan-modal-cancel plan-modal-cancel--top"
               onClick={() => setSelectedNeed(null)}
             >
               {dictionary.common.back}

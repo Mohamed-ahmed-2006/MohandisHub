@@ -6,6 +6,7 @@ import { useCallback, useEffect, useState } from 'react';
 
 import { ExpertJobsTab } from './expert-jobs-tab';
 
+import { useToast } from '@/components/app/toast';
 import { buildLocalePath } from '@/lib/i18n/path';
 import type { Dictionary, Locale } from '@/lib/i18n/types';
 import type { Bid, BidMessage, Need } from '@/lib/needs/client';
@@ -25,6 +26,7 @@ export const ExpertDashboard = ({
   accessToken,
   categories: _categories,
 }: Props) => {
+  const { addToast } = useToast();
   const [openNeeds, setOpenNeeds] = useState<Need[]>([]);
   const [myBids, setMyBids] = useState<Bid[]>([]);
   const [loading, setLoading] = useState(true);
@@ -68,7 +70,7 @@ export const ExpertDashboard = ({
       await needsApiClient.deleteBid(accessToken, needId, bidId);
       void loadData();
     } catch (err: unknown) {
-      alert(err instanceof Error ? err.message : 'Failed to delete bid');
+      addToast('Error', err instanceof Error ? err.message : 'Failed to delete bid');
     }
   };
 

@@ -230,6 +230,15 @@
   margin-top: 0;
 }
 
+.profile-screen-sectionTitle--spaced {
+  margin-top: 1.5rem;
+}
+
+.profile-screen-hint--muted {
+  font-size: 0.85rem;
+  color: hsl(var(--muted-foreground));
+}
+
 .profile-screen-hint,
 .profile-screen-noDocuments {
   margin: 0;
@@ -478,4 +487,86 @@
 .profile-screen-review-form-actions {
   display: flex;
   gap: 0.5rem;
+}
+
+/* Documents tab — verification center */
+.profile-screen-documents-card .profile-screen-doc-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.profile-screen-doc-item {
+  padding: 1rem;
+  border-radius: 0.5rem;
+  border: 1px solid hsl(var(--border));
+  background: hsl(var(--muted) / 0.2);
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.profile-screen-doc-type {
+  font-weight: 600;
+  color: hsl(var(--foreground));
+}
+
+.profile-screen-doc-status {
+  font-size: 0.9rem;
+}
+
+.profile-screen-doc-status--approved {
+  color: var(--success, #16a34a);
+}
+
+.profile-screen-doc-status--rejected {
+  color: var(--destructive, #dc2626);
+}
+
+.profile-screen-doc-status--pending,
+.profile-screen-doc-status--under_review {
+  color: hsl(var(--muted-foreground));
+}
+
+.profile-screen-doc-meta {
+  font-size: 0.85rem;
+  color: hsl(var(--muted-foreground));
+}
+
+.profile-screen-doc-rejection {
+  margin: 0.25rem 0 0;
+  padding: 0.5rem;
+  border-radius: 0.35rem;
+  background: hsl(var(--destructive) / 0.1);
+  color: hsl(var(--foreground));
+  font-size: 0.9rem;
+}
+
+.profile-screen-doc-resubmit {
+  margin-top: 0.5rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: hsl(var(--primary));
+}
+
+.profile-screen-doc-resubmit:hover {
+  text-decoration: underline;
+}
+
+.profile-screen-cta-link {
+  display: inline-block;
+  margin-top: 1rem;
+  padding: 0.65rem 1.25rem;
+  border-radius: 0.5rem;
+  background: hsl(var(--primary));
+  color: hsl(var(--primary-foreground));
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.profile-screen-cta-link:hover {
+  opacity: 0.9;
 }

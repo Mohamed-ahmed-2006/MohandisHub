@@ -136,6 +136,149 @@
   color: hsl(var(--accent));
 }
 
+.home-page-role-grid {
+  margin-top: 1.75rem;
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: 1fr;
+}
+
+@media (min-width: 640px) {
+  .home-page-role-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+.home-page-role-card {
+  display: block;
+  padding: 1.25rem 1.5rem;
+  border-radius: var(--radius-md, 0.5rem);
+  border: 1px solid hsl(var(--border));
+  background: hsl(var(--card));
+  color: hsl(var(--foreground));
+  text-align: center;
+  text-decoration: none;
+  font-weight: 600;
+  transition: background 0.2s, border-color 0.2s;
+}
+
+.home-page-role-card:hover {
+  background: hsl(var(--muted) / 0.5);
+  border-color: hsl(var(--primary) / 0.5);
+}
+
+.home-page-role-label {
+  font-size: 1rem;
+}
+
+.home-page-trust-list {
+  margin-top: 1rem;
+  padding-left: 1.5rem;
+  list-style: disc;
+}
+
+.home-page-trust-item {
+  margin-top: 0.5rem;
+  font-size: 0.95rem;
+  line-height: 1.6;
+  color: hsl(var(--text-soft));
+}
+
+[dir='rtl'] .home-page-trust-list {
+  padding-left: 0;
+  padding-right: 1.5rem;
+}
+
+.home-page-testimonials-grid {
+  margin-top: 1.5rem;
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: 1fr;
+}
+
+@media (min-width: 640px) {
+  .home-page-testimonials-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+.home-page-testimonial-card {
+  padding: 1.25rem;
+}
+
+.home-page-testimonial-quote {
+  font-style: italic;
+  margin: 0 0 0.5rem;
+  color: hsl(var(--text-soft));
+}
+
+.home-page-testimonial-author {
+  margin: 0;
+  font-size: 0.9rem;
+  color: hsl(var(--muted-foreground));
+}
+
+.home-page-metrics-grid {
+  margin-top: 1.5rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2rem;
+  justify-content: center;
+}
+
+.home-page-metric {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+.home-page-metric-value {
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: hsl(var(--primary));
+}
+
+.home-page-metric-label {
+  font-size: 0.9rem;
+  color: hsl(var(--muted-foreground));
+}
+
+.home-page-faq-list {
+  margin-top: 1rem;
+  padding-left: 0;
+  list-style: none;
+}
+
+.home-page-faq-item {
+  margin-bottom: 1.25rem;
+  padding-bottom: 1.25rem;
+  border-bottom: 1px solid hsl(var(--border));
+}
+
+.home-page-faq-item:last-child {
+  margin-bottom: 0;
+  padding-bottom: 0;
+  border-bottom: 0;
+}
+
+.home-page-faq-question {
+  display: block;
+  margin-bottom: 0.35rem;
+  font-size: 1rem;
+}
+
+.home-page-faq-answer {
+  margin: 0;
+  font-size: 0.95rem;
+  line-height: 1.6;
+  color: hsl(var(--muted-foreground));
+}
+
+[dir='rtl'] .home-page-faq-list {
+  padding-right: 0;
+}
+
 .home-page-footer {
   margin-top: 5rem;
   border-top: 1px solid hsl(var(--border));

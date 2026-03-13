@@ -7,6 +7,7 @@ import type {
   AdminReview,
   ApiSuccessBody,
   BusinessProfile,
+  CustomerProfile,
   ExpertProfile,
   IdentityDocument,
   PendingVerificationItem,
@@ -21,6 +22,7 @@ import {
   adminReviewSchema,
   identityDocumentSchema,
   updateBusinessProfileSchema,
+  updateCustomerProfileSchema,
   updateExpertProfileSchema,
 } from './profiles.validation.js';
 
@@ -78,6 +80,39 @@ const updateExpertProfile = asyncHandler(async (req, res) => {
 });
 
 // ═════════════════════════════════════════════════════════════════════════
+// CUSTOMER PROFILE
+// ═════════════════════════════════════════════════════════════════════════
+
+const getCustomerProfile = asyncHandler(async (req, res) => {
+  const user = requireAuth(req);
+  if (user.role !== 'customer') {
+    throw new HttpError({
+      statusCode: 403,
+      code: 'FORBIDDEN',
+      message: 'Only customers have a customer profile.',
+    });
+  }
+  const profile = await profilesService.getCustomerProfile(user.id);
+  const response: ApiSuccessBody<CustomerProfile> = { ok: true, data: profile };
+  res.json(response);
+});
+
+const updateCustomerProfile = asyncHandler(async (req, res) => {
+  const user = requireAuth(req);
+  if (user.role !== 'customer') {
+    throw new HttpError({
+      statusCode: 403,
+      code: 'FORBIDDEN',
+      message: 'Only customers can update customer profile.',
+    });
+  }
+  const input = updateCustomerProfileSchema.parse(req.body);
+  const profile = await profilesService.updateCustomerProfile(user.id, input);
+  const response: ApiSuccessBody<CustomerProfile> = { ok: true, data: profile };
+  res.json(response);
+});
+
+// ═════════════════════════════════════════════════════════════════════════
 // BUSINESS PROFILE
 // ═════════════════════════════════════════════════════════════════════════
 
@@ -101,6 +136,19 @@ const updateBusinessProfile = asyncHandler(async (req, res) => {
   const profile = await profilesService.updateBusinessProfile(user.id, input);
   const response: ApiSuccessBody<BusinessProfile> = { ok: true, data: profile };
   res.json(response);
+});
+
+const completeBusinessOnboarding = asyncHandler(async (req, res) => {
+  const user = requireAuth(req);
+  if (user.role !== 'business') {
+    throw new HttpError({
+      statusCode: 403,
+      code: 'FORBIDDEN',
+      message: 'Only business users can complete business onboarding.',
+    });
+  }
+  await profilesService.completeBusinessOnboarding(user.id);
+  res.json({ ok: true, data: null });
 });
 
 // ═════════════════════════════════════════════════════════════════════════
@@ -260,8 +308,11 @@ export const profilesController = {
   getTopBusinesses,
   getExpertProfile,
   updateExpertProfile,
+  getCustomerProfile,
+  updateCustomerProfile,
   getBusinessProfile,
   updateBusinessProfile,
+  completeBusinessOnboarding,
   submitIdentityDocument,
   getIdentityDocuments,
   submitAcademicRecord,

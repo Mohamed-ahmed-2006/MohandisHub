@@ -24,6 +24,7 @@ import type {
 
 import { asyncHandler } from '../../utils/async-handler.js';
 import { HttpError } from '../../utils/http-error.js';
+import { NotificationsService } from '../notifications/notifications.service.js';
 import { ReviewsService } from '../reviews/reviews.service.js';
 import { SettingsService } from '../settings/settings.service.js';
 
@@ -52,6 +53,7 @@ import {
   updateBusinessProfileSchema,
   updateCategorySchema,
   updateExpertProfileSchema,
+  sendNotificationSchema,
   updatePlanSchema,
   updateServiceSchema,
   updateSettingsSchema,
@@ -59,6 +61,7 @@ import {
 } from './admin.validation.js';
 
 const adminService = new AdminService();
+const notificationsService = new NotificationsService();
 const settingsService = new SettingsService();
 const reviewsService = new ReviewsService();
 
@@ -104,6 +107,27 @@ function parseValidation<T>(
   }
   return parsed.data as T;
 }
+
+// ── Notifications ──────────────────────────────────────────────────────────
+
+const sendNotification = asyncHandler(async (req, res) => {
+  const body = parseValidation(sendNotificationSchema, req.body);
+  let userIds: string[];
+  if (body.target === 'all') {
+    userIds = await adminService.listUserIds({ isActive: true });
+  } else if (body.target === 'role') {
+    userIds = await adminService.listUserIds({ role: body.role!, isActive: true });
+  } else {
+    userIds = body.userIds!;
+  }
+  const { created } = await notificationsService.createForUsers(userIds, {
+    type: 'admin',
+    title: body.title,
+    message: body.message,
+  });
+  const response: ApiSuccessBody<{ created: number }> = { ok: true, data: { created } };
+  res.json(response);
+});
 
 // ── Dashboard ─────────────────────────────────────────────────────────────
 
@@ -506,4 +530,5 @@ export const adminController = {
   listReviewDisputes,
   resolveReviewReport,
   resolveReviewDispute,
+  sendNotification,
 };

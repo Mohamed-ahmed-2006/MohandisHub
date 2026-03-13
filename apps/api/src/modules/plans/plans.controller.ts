@@ -1,4 +1,4 @@
-import type { ApiSuccessBody, Plan } from '@mohandishub/shared';
+import type { ApiSuccessBody, Plan, SubscribeToPlanResponse } from '@mohandishub/shared';
 
 import { asyncHandler } from '../../utils/async-handler.js';
 import { HttpError } from '../../utils/http-error.js';
@@ -10,6 +10,23 @@ const plansService = new PlansService();
 const listActivePlans = asyncHandler(async (_req, res) => {
   const plans = await plansService.listActivePlans();
   const response: ApiSuccessBody<Plan[]> = { ok: true, data: plans };
+  res.json(response);
+});
+
+const getCurrentSubscription = asyncHandler(async (req, res) => {
+  const user = req.user;
+  if (!user) {
+    throw new HttpError({
+      statusCode: 401,
+      code: 'UNAUTHORIZED',
+      message: 'Authentication required.',
+    });
+  }
+  const subscription = await plansService.getCurrentSubscription(user.id);
+  const response: ApiSuccessBody<{ subscriptionEndsAt: string } | null> = {
+    ok: true,
+    data: subscription,
+  };
   res.json(response);
 });
 
@@ -31,11 +48,11 @@ const subscribe = asyncHandler(async (req, res) => {
     });
   }
   const result = await plansService.subscribeToPlan(user.id, planId);
-  const response: ApiSuccessBody<{ plan: Plan; walletBalance: number }> = {
+  const response: ApiSuccessBody<SubscribeToPlanResponse> = {
     ok: true,
     data: result,
   };
   res.json(response);
 });
 
-export const plansController = { listActivePlans, subscribe };
+export const plansController = { listActivePlans, getCurrentSubscription, subscribe };

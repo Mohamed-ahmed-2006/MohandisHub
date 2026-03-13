@@ -48,5 +48,6 @@ function getDefaultAppStatus(): AppStatus {
     reservationVoiceMinuteRate: 1,
     reservationVideoMinuteRate: 2,
     reservationMinPrejoinMinutes: 5,
+    jobInterviewFeeAmount: 0,
   };
 }

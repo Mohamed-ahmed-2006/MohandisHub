@@ -24,6 +24,7 @@ import {
 import { logger } from '../../config/logger.js';
 import { HttpError } from '../../utils/http-error.js';
 import { buildTransactionalEmailHtml } from '../../utils/transactional-email-template.js';
+import { PlansService } from '../plans/plans.service.js';
 import { SettingsService } from '../settings/settings.service.js';
 
 import { AuthRepository } from './auth.repository.js';
@@ -50,6 +51,7 @@ export class AuthService {
   public constructor(
     private readonly authRepository: AuthRepository = new AuthRepository(),
     private readonly settingsService: SettingsService = new SettingsService(),
+    private readonly plansService: PlansService = new PlansService(),
   ) {}
 
   // ── Register ──────────────────────────────────────────────────────────
@@ -328,7 +330,8 @@ export class AuthService {
     }
 
     const verificationStatus = await this.getVerificationStatus(userRow);
-    return this.toAuthUser(userRow, verificationStatus);
+    const effectivePlanSlug = await this.plansService.getEffectivePlanSlug(userId);
+    return this.toAuthUser(userRow, verificationStatus, effectivePlanSlug);
   }
 
   // ── Private helpers ───────────────────────────────────────────────────
@@ -474,7 +477,11 @@ export class AuthService {
     throw new Error('SendGrid email sender not configured. Set SENDGRID_API_KEY in .env');
   }
 
-  private toAuthUser(user: UserRow, verificationStatus: VerificationStatus | null): AuthUser {
+  private toAuthUser(
+    user: UserRow,
+    verificationStatus: VerificationStatus | null,
+    effectivePlanSlug?: string,
+  ): AuthUser {
     return {
       id: user.id,
       email: user.email,
@@ -487,7 +494,7 @@ export class AuthService {
       role: user.primary_role,
       isAdmin: user.is_admin === true,
       adminPermissions: Array.isArray(user.admin_permissions) ? user.admin_permissions : [],
-      plan: user.plan_slug,
+      plan: effectivePlanSlug ?? user.plan_slug,
       emailVerified: user.email_verified_at !== null,
       verificationStatus,
       createdAt: user.created_at.toISOString(),

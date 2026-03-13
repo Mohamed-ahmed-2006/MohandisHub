@@ -1,6 +1,7 @@
 import 'express-async-errors';
 import path from 'node:path';
 
+import compression from 'compression';
 import cookieParser from 'cookie-parser';
 import cors from 'cors';
 import express from 'express';
@@ -18,6 +19,7 @@ export const createApp = () => {
 
   app.disable('x-powered-by');
   app.use(requestIdMiddleware);
+  app.use(compression());
   const allowedOrigins: string[] = env.CORS_ORIGIN.split(',')
     .map((o) => o.trim())
     .filter(Boolean);

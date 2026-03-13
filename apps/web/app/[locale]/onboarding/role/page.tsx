@@ -27,7 +27,7 @@ const RoleSelectionPage = async ({ params }: RoleSelectionPageProps) => {
     notFound();
   }
 
-  const dictionary = getDictionary(locale);
+  const dictionary = await getDictionary(locale);
   const typedLocale: Locale = locale;
 
   const rolePathMap: Record<SelectableRole, string> = {

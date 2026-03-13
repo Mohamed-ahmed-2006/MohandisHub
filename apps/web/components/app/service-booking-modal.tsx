@@ -163,8 +163,8 @@ export const ServiceBookingModal = ({
         <p className="service-booking-provider">
           {service.providerName}
           {profile?.verificationBadgeEarned && (
-              <span className="profile-screen-badge profile-screen-badge_verified" style={{ marginLeft: '0.5rem' }} title="Completed profile and deposited 1000 USD">
-              Verified
+              <span className="profile-screen-badge profile-screen-badge_verified" style={{ marginLeft: '0.5rem' }} title="Complete profile and 1000 USD total deposits.">
+              Platform verified
             </span>
           )}
         </p>
@@ -217,6 +217,11 @@ export const ServiceBookingModal = ({
               Reservation price: {modePrice.toFixed(2)} USD
           </p>
         )}
+        <div className="reservation-note-box" style={{ marginBottom: '0.75rem' }}>
+          <p>Cancellation policy snapshot is locked at booking time.</p>
+          <p>Customer cancellation more than 24 hours before start refunds the fixed reservation hold.</p>
+          <p>Provider cancellation inside 2 hours of start may trigger a penalty.</p>
+        </div>
 
         <div className="service-booking-slots">
           <div className="service-booking-week-nav">

@@ -93,6 +93,14 @@ export const updateExpertProfileSchema = z.object({
 
 // ── Business profile update ──────────────────────────────────────────────
 
+export const updateCustomerProfileSchema = z.object({
+  city: z.string().max(100).nullable().optional(),
+  country: z.string().max(100).nullable().optional(),
+  contactPreference: z.string().max(50).nullable().optional(),
+});
+
+export type UpdateCustomerProfileInput = z.infer<typeof updateCustomerProfileSchema>;
+
 export const updateBusinessProfileSchema = z.object({
   companyName: z.string().min(2).max(200).optional(),
   tradeLicenseNumber: z.string().max(100).optional(),

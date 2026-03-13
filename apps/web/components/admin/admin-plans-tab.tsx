@@ -1,6 +1,6 @@
 'use client';
 
-import type { Plan } from '@mohandishub/shared';
+import type { Plan, PlanLimits } from '@mohandishub/shared';
 import { useCallback, useEffect, useState } from 'react';
 
 import { adminApiClient } from '@/lib/admin/client';
@@ -18,6 +18,15 @@ const getErrorMessage = (error: unknown, dictionary: Dictionary): string => {
   return dictionary.auth.errors.generic;
 };
 
+const defaultPlanLimits = (): PlanLimits => ({
+  maxServices: null,
+  maxNeeds: null,
+  maxJobs: null,
+  canPriorityListing: false,
+  bidsVisibleToCustomer: null,
+  bidsVisibleTopN: 3,
+});
+
 export const AdminPlansTab = ({ dictionary, accessToken, refreshSession }: Props) => {
   const [plans, setPlans] = useState<Plan[]>([]);
   const [loading, setLoading] = useState(true);
@@ -32,7 +41,16 @@ export const AdminPlansTab = ({ dictionary, accessToken, refreshSession }: Props
     description: string;
     billingCycle: Plan['billingCycle'];
     features: string;
-  }>({ slug: '', name: '', price: 0, description: '', billingCycle: 'monthly', features: '' });
+    planLimits: PlanLimits;
+  }>({
+    slug: '',
+    name: '',
+    price: 0,
+    description: '',
+    billingCycle: 'monthly',
+    features: '',
+    planLimits: defaultPlanLimits(),
+  });
 
   const d = dictionary.admin.plansMgmt;
 
@@ -63,6 +81,7 @@ export const AdminPlansTab = ({ dictionary, accessToken, refreshSession }: Props
       description: '',
       billingCycle: 'monthly',
       features: '',
+      planLimits: defaultPlanLimits(),
     });
     setError(null);
     setShowForm(true);
@@ -70,6 +89,7 @@ export const AdminPlansTab = ({ dictionary, accessToken, refreshSession }: Props
 
   const openEdit = (plan: Plan) => {
     setEditingPlan(plan);
+    const limits = plan.planLimits ?? defaultPlanLimits();
     setFormData({
       slug: plan.slug,
       name: plan.name,
@@ -77,6 +97,14 @@ export const AdminPlansTab = ({ dictionary, accessToken, refreshSession }: Props
       description: plan.description ?? '',
       billingCycle: plan.billingCycle,
       features: plan.features.join(', '),
+      planLimits: {
+        maxServices: limits.maxServices ?? null,
+        maxNeeds: limits.maxNeeds ?? null,
+        maxJobs: limits.maxJobs ?? null,
+        canPriorityListing: limits.canPriorityListing ?? false,
+        bidsVisibleToCustomer: limits.bidsVisibleToCustomer ?? null,
+        bidsVisibleTopN: limits.bidsVisibleTopN ?? 3,
+      },
     });
     setError(null);
     setShowForm(true);
@@ -89,12 +117,21 @@ export const AdminPlansTab = ({ dictionary, accessToken, refreshSession }: Props
       .split(',')
       .map((f) => f.trim())
       .filter(Boolean);
+    const planLimits: PlanLimits = {
+      maxServices: formData.planLimits.maxServices ?? null,
+      maxNeeds: formData.planLimits.maxNeeds ?? null,
+      maxJobs: formData.planLimits.maxJobs ?? null,
+      canPriorityListing: formData.planLimits.canPriorityListing ?? false,
+      bidsVisibleToCustomer: formData.planLimits.bidsVisibleToCustomer ?? null,
+      bidsVisibleTopN: formData.planLimits.bidsVisibleToCustomer === 'top_n' ? (formData.planLimits.bidsVisibleTopN ?? 3) : null,
+    };
     const baseBody = {
       slug: formData.slug,
       name: formData.name,
       price: formData.price,
       billingCycle: formData.billingCycle,
       features: featuresArr,
+      planLimits,
     };
     const bodyWithDesc = formData.description
       ? { ...baseBody, description: formData.description }
@@ -256,6 +293,124 @@ export const AdminPlansTab = ({ dictionary, accessToken, refreshSession }: Props
                 placeholder="Feature 1, Feature 2, ..."
               />
             </div>
+
+            <fieldset className="admin-form-group" style={{ border: '1px solid #ccc', padding: '0.75rem', borderRadius: 4 }}>
+              <legend className="admin-form-label">{d.planLimits}</legend>
+              <div className="admin-form-group">
+                <label className="admin-form-label">{d.maxServices}</label>
+                <input
+                  className="admin-form-input"
+                  type="number"
+                  min={0}
+                  placeholder="Unlimited"
+                  value={formData.planLimits.maxServices ?? ''}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      planLimits: {
+                        ...formData.planLimits,
+                        maxServices: e.target.value === '' ? null : parseInt(e.target.value, 10),
+                      },
+                    })
+                  }
+                />
+              </div>
+              <div className="admin-form-group">
+                <label className="admin-form-label">{d.maxNeeds}</label>
+                <input
+                  className="admin-form-input"
+                  type="number"
+                  min={0}
+                  placeholder="Unlimited"
+                  value={formData.planLimits.maxNeeds ?? ''}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      planLimits: {
+                        ...formData.planLimits,
+                        maxNeeds: e.target.value === '' ? null : parseInt(e.target.value, 10),
+                      },
+                    })
+                  }
+                />
+              </div>
+              <div className="admin-form-group">
+                <label className="admin-form-label">{d.maxJobs}</label>
+                <input
+                  className="admin-form-input"
+                  type="number"
+                  min={0}
+                  placeholder="Unlimited"
+                  value={formData.planLimits.maxJobs ?? ''}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      planLimits: {
+                        ...formData.planLimits,
+                        maxJobs: e.target.value === '' ? null : parseInt(e.target.value, 10),
+                      },
+                    })
+                  }
+                />
+              </div>
+              <div className="admin-form-group" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <input
+                  type="checkbox"
+                  id="plan-can-priority-listing"
+                  checked={formData.planLimits.canPriorityListing ?? false}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      planLimits: { ...formData.planLimits, canPriorityListing: e.target.checked },
+                    })
+                  }
+                />
+                <label className="admin-form-label" htmlFor="plan-can-priority-listing" style={{ marginBottom: 0 }}>
+                  {d.canPriorityListing}
+                </label>
+              </div>
+              <div className="admin-form-group">
+                <label className="admin-form-label">{d.bidsVisibleToCustomer}</label>
+                <select
+                  className="admin-form-select"
+                  value={formData.planLimits.bidsVisibleToCustomer ?? ''}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      planLimits: {
+                        ...formData.planLimits,
+                        bidsVisibleToCustomer: (e.target.value ? e.target.value : null) as PlanLimits['bidsVisibleToCustomer'],
+                      } as PlanLimits,
+                    })
+                  }
+                >
+                  <option value="">—</option>
+                  <option value="all">All</option>
+                  <option value="top_n">Top N</option>
+                  <option value="premium_first">Premium first</option>
+                </select>
+              </div>
+              {formData.planLimits.bidsVisibleToCustomer === 'top_n' && (
+                <div className="admin-form-group">
+                  <label className="admin-form-label">{d.bidsVisibleTopN}</label>
+                  <input
+                    className="admin-form-input"
+                    type="number"
+                    min={1}
+                    value={formData.planLimits.bidsVisibleTopN ?? 3}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        planLimits: {
+                          ...formData.planLimits,
+                          bidsVisibleTopN: parseInt(e.target.value, 10) || 3,
+                        },
+                      })
+                    }
+                  />
+                </div>
+              )}
+            </fieldset>
 
             <div className="admin-modal-actions">
               <button type="button" className="admin-btn" onClick={() => setShowForm(false)}>

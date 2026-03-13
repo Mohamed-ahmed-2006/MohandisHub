@@ -6,6 +6,7 @@ import type {
   AcademicRecord,
   AdminReview,
   BusinessProfile,
+  CustomerProfile,
   ExpertProfile,
   IdentityDocument,
   PendingVerificationItem,
@@ -122,6 +123,53 @@ export class ProfilesService {
     return this.toExpertProfile(row);
   }
 
+  // ── Customer profile ───────────────────────────────────────────────────
+
+  async getCustomerProfile(userId: string): Promise<CustomerProfile> {
+    const row = await this.repo.findCustomerProfile(userId);
+    if (!row) {
+      throw new HttpError({
+        statusCode: 404,
+        code: 'PROFILE_NOT_FOUND',
+        message: 'Customer profile not found.',
+      });
+    }
+    const contactPreference =
+      typeof row.preferences?.contactPreference === 'string'
+        ? row.preferences.contactPreference
+        : null;
+    return {
+      userId: row.user_id,
+      city: row.city ?? null,
+      country: row.country ?? null,
+      contactPreference,
+    };
+  }
+
+  async updateCustomerProfile(
+    userId: string,
+    input: { city?: string | null | undefined; country?: string | null | undefined; contactPreference?: string | null | undefined },
+  ): Promise<CustomerProfile> {
+    const updated = await this.repo.updateCustomerProfile(userId, input);
+    if (!updated) {
+      throw new HttpError({
+        statusCode: 404,
+        code: 'PROFILE_NOT_FOUND',
+        message: 'Customer profile not found.',
+      });
+    }
+    const contactPreference =
+      typeof updated.preferences?.contactPreference === 'string'
+        ? updated.preferences.contactPreference
+        : null;
+    return {
+      userId: updated.user_id,
+      city: updated.city ?? null,
+      country: updated.country ?? null,
+      contactPreference,
+    };
+  }
+
   // ── Business profile ───────────────────────────────────────────────────
 
   async getBusinessProfile(userId: string): Promise<BusinessProfile> {
@@ -221,6 +269,18 @@ export class ProfilesService {
       });
     }
     return this.toBusinessProfile(row);
+  }
+
+  async completeBusinessOnboarding(userId: string): Promise<void> {
+    const row = await this.repo.findBusinessProfile(userId);
+    if (!row) {
+      throw new HttpError({
+        statusCode: 404,
+        code: 'PROFILE_NOT_FOUND',
+        message: 'Business profile not found.',
+      });
+    }
+    await this.repo.setBusinessOnboardingCompletedAt(userId);
   }
 
   // ── Identity documents ─────────────────────────────────────────────────

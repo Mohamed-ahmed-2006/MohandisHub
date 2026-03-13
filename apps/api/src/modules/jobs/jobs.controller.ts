@@ -10,11 +10,26 @@ const createJobSchema = z.object({
   description: z.string().min(10),
   requirements: z.string().optional(),
   salaryRange: z.string().optional(),
+  applicationFeeAmount: z.number().min(0),
+  interviewEnabled: z.boolean().optional(),
+  interviewInstructions: z.string().max(4000).optional(),
 });
 
-const applyJobSchema = z.object({
-  coverLetter: z.string().optional(),
-});
+const applyJobSchema = z
+  .object({
+    coverLetter: z.string().optional(),
+    submissionType: z.enum(['profile_snapshot', 'cv_upload']),
+    cvFileUrl: z.string().url().optional(),
+  })
+  .superRefine((value, ctx) => {
+    if (value.submissionType === 'cv_upload' && !value.cvFileUrl?.trim()) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'cvFileUrl is required for CV uploads',
+        path: ['cvFileUrl'],
+      });
+    }
+  });
 
 const createMilestoneSchema = z.object({
   title: z.string().min(3).max(300),
@@ -31,11 +46,43 @@ const applicationMessageSchema = z.object({
 });
 
 const updateApplicationStatusSchema = z.object({
-  status: z.enum(['pending', 'reviewed', 'accepted', 'rejected']),
+  status: z.enum([
+    'pending',
+    'reviewed',
+    'interview_invited',
+    'interview_booked',
+    'interview_completed',
+    'accepted',
+    'rejected',
+  ]),
 });
 
 const reviewMilestoneSchema = z.object({
   status: z.enum(['approved', 'rejected']),
+});
+
+const createInterviewSlotSchema = z
+  .object({
+    startAt: z.string().datetime(),
+    endAt: z.string().datetime(),
+    supportsOnline: z.boolean().optional(),
+    supportsOffline: z.boolean().optional(),
+  })
+  .refine((value) => new Date(value.endAt) > new Date(value.startAt), {
+    message: 'endAt must be after startAt',
+  });
+
+const updateInterviewSlotSchema = z.object({
+  startAt: z.string().datetime().optional(),
+  endAt: z.string().datetime().optional(),
+  status: z.enum(['available', 'booked', 'blocked']).optional(),
+  supportsOnline: z.boolean().optional(),
+  supportsOffline: z.boolean().optional(),
+});
+
+const bookInterviewSchema = z.object({
+  slotId: z.string().uuid(),
+  mode: z.enum(['online', 'offline']),
 });
 
 function parseBody<T>(
@@ -60,6 +107,18 @@ function parseBody<T>(
   return result.data as T;
 }
 
+function requireIdempotencyKey(req: Request): string {
+  const key = req.header('Idempotency-Key')?.trim();
+  if (!key) {
+    throw new HttpError({
+      statusCode: 400,
+      code: 'IDEMPOTENCY_KEY_REQUIRED',
+      message: 'Idempotency-Key header is required.',
+    });
+  }
+  return key;
+}
+
 class JobsController {
   constructor(private readonly service: JobsService = new JobsService()) {}
 
@@ -78,7 +137,17 @@ class JobsController {
     try {
       const user = req.user!;
       const data = parseBody(createJobSchema, req.body);
-      const job = await this.service.createJob(user.id, data);
+      const job = await this.service.createJob(user.id, {
+        title: data.title,
+        description: data.description,
+        applicationFeeAmount: data.applicationFeeAmount,
+        ...(data.requirements !== undefined ? { requirements: data.requirements } : {}),
+        ...(data.salaryRange !== undefined ? { salaryRange: data.salaryRange } : {}),
+        ...(data.interviewEnabled !== undefined ? { interviewEnabled: data.interviewEnabled } : {}),
+        ...(data.interviewInstructions !== undefined
+          ? { interviewInstructions: data.interviewInstructions }
+          : {}),
+      });
       res.status(201).json({ ok: true, data: job });
     } catch (err) {
       next(err);
@@ -137,6 +206,99 @@ class JobsController {
       const { status } = parseBody(updateApplicationStatusSchema, req.body);
       const app = await this.service.updateApplicationStatus(appId, user.id, status);
       res.json({ ok: true, data: app });
+    } catch (err) {
+      next(err);
+    }
+  };
+
+  createInterviewSlot = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const user = req.user!;
+      const jobId = req.params.id!;
+      const data = parseBody(createInterviewSlotSchema, req.body);
+      const slot = await this.service.createInterviewSlot(jobId, user.id, {
+        startAt: data.startAt,
+        endAt: data.endAt,
+        ...(data.supportsOnline !== undefined ? { supportsOnline: data.supportsOnline } : {}),
+        ...(data.supportsOffline !== undefined ? { supportsOffline: data.supportsOffline } : {}),
+      });
+      res.status(201).json({ ok: true, data: slot });
+    } catch (err) {
+      next(err);
+    }
+  };
+
+  listBusinessInterviewSlots = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const user = req.user!;
+      const jobId = req.params.id!;
+      const fromRaw =
+        (req.query.from as string | undefined) ?? new Date().toISOString();
+      const toRaw =
+        (req.query.to as string | undefined) ??
+        new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString();
+      const result = await this.service.listBusinessInterviewSlots(jobId, user.id, {
+        from: new Date(fromRaw),
+        to: new Date(toRaw),
+      });
+      res.json({ ok: true, data: result });
+    } catch (err) {
+      next(err);
+    }
+  };
+
+  updateInterviewSlot = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const user = req.user!;
+      const slotId = req.params.slotId!;
+      const data = parseBody(updateInterviewSlotSchema, req.body);
+      const slot = await this.service.updateInterviewSlot(slotId, user.id, {
+        ...(data.startAt !== undefined ? { startAt: data.startAt } : {}),
+        ...(data.endAt !== undefined ? { endAt: data.endAt } : {}),
+        ...(data.status !== undefined ? { status: data.status } : {}),
+        ...(data.supportsOnline !== undefined ? { supportsOnline: data.supportsOnline } : {}),
+        ...(data.supportsOffline !== undefined ? { supportsOffline: data.supportsOffline } : {}),
+      });
+      res.json({ ok: true, data: slot });
+    } catch (err) {
+      next(err);
+    }
+  };
+
+  deleteInterviewSlot = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const user = req.user!;
+      const slotId = req.params.slotId!;
+      const result = await this.service.deleteInterviewSlot(slotId, user.id);
+      res.json({ ok: true, data: result });
+    } catch (err) {
+      next(err);
+    }
+  };
+
+  listApplicationInterviewSlots = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const user = req.user!;
+      const appId = req.params.appId!;
+      const slots = await this.service.listApplicationInterviewSlots(appId, user.id);
+      res.json({ ok: true, data: slots });
+    } catch (err) {
+      next(err);
+    }
+  };
+
+  bookInterview = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const user = req.user!;
+      const appId = req.params.appId!;
+      const data = parseBody(bookInterviewSchema, req.body);
+      const reservation = await this.service.bookInterview(
+        appId,
+        user.id,
+        data,
+        requireIdempotencyKey(req),
+      );
+      res.status(201).json({ ok: true, data: reservation });
     } catch (err) {
       next(err);
     }

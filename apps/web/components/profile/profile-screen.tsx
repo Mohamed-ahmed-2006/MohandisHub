@@ -1,13 +1,16 @@
 'use client';
 
 import type {
+  AcademicRecord,
   AuthUser,
   BusinessProfile,
   ExpertProfile,
+  IdentityDocument,
   Review,
   UpdateBusinessProfileBody,
   UpdateExpertProfileBody,
 } from '@mohandishub/shared';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 
@@ -367,6 +370,9 @@ export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
   const [disputeReason, setDisputeReason] = useState('');
   const [reportSubmitting, setReportSubmitting] = useState(false);
   const [disputeSubmitting, setDisputeSubmitting] = useState(false);
+  const [identityDocuments, setIdentityDocuments] = useState<IdentityDocument[]>([]);
+  const [academicRecords, setAcademicRecords] = useState<AcademicRecord[]>([]);
+  const [documentsLoading, setDocumentsLoading] = useState(false);
 
   const role = authUser?.role;
   const isExpert = role === 'expert';
@@ -428,6 +434,28 @@ export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
   useEffect(() => {
     if (activeTab === 'profile' && targetUserId && targetType) void loadReviews();
   }, [activeTab, targetUserId, targetType, loadReviews]);
+
+  const loadDocuments = useCallback(async () => {
+    if (!accessToken || !hasRoleProfile) return;
+    setDocumentsLoading(true);
+    try {
+      const [ids, acads] = await Promise.all([
+        profilesApiClient.getIdentityDocuments(accessToken),
+        profilesApiClient.getAcademicRecords(accessToken),
+      ]);
+      setIdentityDocuments(Array.isArray(ids) ? ids : []);
+      setAcademicRecords(Array.isArray(acads) ? acads : []);
+    } catch {
+      setIdentityDocuments([]);
+      setAcademicRecords([]);
+    } finally {
+      setDocumentsLoading(false);
+    }
+  }, [accessToken, hasRoleProfile]);
+
+  useEffect(() => {
+    if (activeTab === 'documents') void loadDocuments();
+  }, [activeTab, loadDocuments]);
 
   const submitReport = useCallback(async () => {
     if (!accessToken || !reportModalReviewId || reportSubmitting) return;
@@ -592,7 +620,9 @@ export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
   return (
     <main className="profile-screen-main">
       <Container className="profile-screen-container">
-        <h1 className="profile-screen-pageTitle">{dictionary.nav.settings}</h1>
+        <div className="app-page-header">
+          <h1 className="app-page-title">{dictionary.nav.settings}</h1>
+        </div>
 
         <div className="profile-screen-tabs">
           {tabs
@@ -648,8 +678,8 @@ export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
                 expertProfile.verificationStatus}
             </span>
             {expertProfile.verificationBadgeEarned && (
-                <span className="profile-screen-badge profile-screen-badge_verified" title="Completed profile and deposited 1000 USD">
-                Verified
+                <span className="profile-screen-badge profile-screen-badge_verified" title="Complete profile and 1000 USD total deposits.">
+                Platform verified
               </span>
             )}
             {(expertProfile.averageRating != null || (expertProfile.reviewCount ?? 0) > 0) && (
@@ -932,8 +962,8 @@ export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
                 businessProfile.verificationStatus}
             </span>
             {businessProfile.verificationBadgeEarned && (
-                <span className="profile-screen-badge profile-screen-badge_verified" title="Completed profile and deposited 1000 USD">
-                Verified
+                <span className="profile-screen-badge profile-screen-badge_verified" title="Complete profile and 1000 USD total deposits.">
+                Platform verified
               </span>
             )}
             {(businessProfile.averageRating != null || (businessProfile.reviewCount ?? 0) > 0) && (
@@ -1203,20 +1233,196 @@ export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
         )}
 
         {activeTab === 'documents' && hasRoleProfile && (
-          <section className="profile-screen-card">
-            <h2 className="profile-screen-sectionTitle">
-              {dictionary.profile.documents.identityTitle}
-            </h2>
-            <p className="profile-screen-hint">
-              {dictionary.profile.documents.identityDescription}
-            </p>
-            <h2 className="profile-screen-sectionTitle">
-              {dictionary.profile.documents.academicTitle}
-            </h2>
-            <p className="profile-screen-hint">
-              {dictionary.profile.documents.academicDescription}
-            </p>
-            <p className="profile-screen-noDocuments">{dictionary.profile.documents.noDocuments}</p>
+          <section className="profile-screen-card profile-screen-documents-card">
+            {documentsLoading ? (
+              <div className="profile-screen-skeleton">
+                <SkeletonForm fields={4} />
+              </div>
+            ) : (
+              <>
+                <h2 className="profile-screen-sectionTitle">
+                  {dictionary.profile.documents.identityTitle}
+                </h2>
+                <p className="profile-screen-hint">
+                  {dictionary.profile.documents.identityDescription}
+                </p>
+                {isBusiness && businessProfile && (
+                  <>
+                    <h2 className="profile-screen-sectionTitle profile-screen-sectionTitle--spaced">
+                      {dictionary.profile.documents.companyDetailsTitle ?? 'Company details'}
+                    </h2>
+                    <p className="profile-screen-hint">
+                      {dictionary.profile.documents.companyDetailsHint ?? 'Registration details submitted with your business profile. Admin may use these for verification.'}
+                    </p>
+                    <p className="profile-screen-hint profile-screen-hint--muted">
+                      {dictionary.profile.documents.companyUploadNote ?? 'Upload of company document files (e.g. trade license scan) will be available here in a future update.'}
+                    </p>
+                    <ul className="profile-screen-doc-list" aria-label="Company details">
+                      <li className="profile-screen-doc-item">
+                        <span className="profile-screen-doc-type">
+                          {dictionary.profile.documents.tradeLicense ?? 'Trade license'}
+                        </span>
+                        <span className="profile-screen-doc-meta">
+                          {businessProfile.tradeLicenseNumber || (dictionary.profile.documents.notSubmitted ?? 'Not submitted')}
+                        </span>
+                      </li>
+                      <li className="profile-screen-doc-item">
+                        <span className="profile-screen-doc-type">
+                          {dictionary.profile.documents.taxId ?? 'Tax ID'}
+                        </span>
+                        <span className="profile-screen-doc-meta">
+                          {businessProfile.taxId || (dictionary.profile.documents.notSubmitted ?? 'Not submitted')}
+                        </span>
+                      </li>
+                      <li className="profile-screen-doc-item">
+                        <span className="profile-screen-doc-type">
+                          {dictionary.profile.documents.commercialRegister ?? 'Commercial register'}
+                        </span>
+                        <span className="profile-screen-doc-meta">
+                          {businessProfile.commercialRegister || (dictionary.profile.documents.notSubmitted ?? 'Not submitted')}
+                        </span>
+                      </li>
+                      <li className="profile-screen-doc-item">
+                        <span className="profile-screen-doc-type">{dictionary.profile.documents.status}</span>
+                        <span className={`profile-screen-doc-status profile-screen-doc-status--${businessProfile.verificationStatus ?? 'unverified'}`}>
+                          {businessProfile.verificationStatus === 'verified'
+                            ? 'Verified'
+                            : businessProfile.verificationStatus === 'pending'
+                              ? 'Pending'
+                              : businessProfile.verificationStatus === 'rejected'
+                                ? 'Rejected'
+                                : 'Unverified'}
+                        </span>
+                      </li>
+                    </ul>
+                  </>
+                )}
+
+                {identityDocuments.length === 0 ? (
+                  <p className="profile-screen-noDocuments">
+                    {dictionary.profile.documents.noDocuments}
+                  </p>
+                ) : (
+                  <ul className="profile-screen-doc-list" aria-label="Identity documents">
+                    {identityDocuments.map((doc) => (
+                      <li key={doc.id} className="profile-screen-doc-item">
+                        <span className="profile-screen-doc-type">
+                          {doc.documentType === 'national_id'
+                            ? 'National ID'
+                            : doc.documentType === 'passport'
+                              ? 'Passport'
+                              : 'Driving license'}
+                        </span>
+                        <span
+                          className={`profile-screen-doc-status profile-screen-doc-status--${doc.status}`}
+                        >
+                          {dictionary.profile.documents.status}:{' '}
+                          {doc.status === 'pending'
+                            ? 'Pending'
+                            : doc.status === 'under_review'
+                              ? 'Under review'
+                              : doc.status === 'approved'
+                                ? 'Approved'
+                                : 'Rejected'}
+                        </span>
+                        {doc.reviewedAt && (
+                          <span className="profile-screen-doc-meta">
+                            {dictionary.profile.documents.reviewedAt}:{' '}
+                            {new Date(doc.reviewedAt).toLocaleDateString(undefined, {
+                              year: 'numeric',
+                              month: 'short',
+                              day: 'numeric',
+                            })}
+                          </span>
+                        )}
+                        {doc.rejectionReason && (
+                          <p className="profile-screen-doc-rejection">
+                            {dictionary.profile.documents.rejectionReason}: {doc.rejectionReason}
+                          </p>
+                        )}
+                        {doc.status === 'rejected' && (
+                          <Link
+                            href={buildLocalePath(locale, isExpert ? '/onboarding/expert' : '/onboarding/business')}
+                            className="profile-screen-doc-resubmit"
+                          >
+                            {dictionary.profile.documents.resubmit}
+                          </Link>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+
+                <h2 className="profile-screen-sectionTitle" style={{ marginTop: '1.5rem' }}>
+                  {dictionary.profile.documents.academicTitle}
+                </h2>
+                <p className="profile-screen-hint">
+                  {dictionary.profile.documents.academicDescription}
+                </p>
+                {academicRecords.length === 0 ? (
+                  <p className="profile-screen-noDocuments">
+                    {dictionary.profile.documents.noDocuments}
+                  </p>
+                ) : (
+                  <ul className="profile-screen-doc-list" aria-label="Academic records">
+                    {academicRecords.map((rec) => (
+                      <li key={rec.id} className="profile-screen-doc-item">
+                        <span className="profile-screen-doc-type">
+                          {rec.title} — {rec.institution}
+                        </span>
+                        <span
+                          className={`profile-screen-doc-status profile-screen-doc-status--${rec.status}`}
+                        >
+                          {dictionary.profile.documents.status}:{' '}
+                          {rec.status === 'pending'
+                            ? 'Pending'
+                            : rec.status === 'under_review'
+                              ? 'Under review'
+                              : rec.status === 'approved'
+                                ? 'Approved'
+                                : 'Rejected'}
+                        </span>
+                        {rec.reviewedAt && (
+                          <span className="profile-screen-doc-meta">
+                            {dictionary.profile.documents.reviewedAt}:{' '}
+                            {new Date(rec.reviewedAt).toLocaleDateString(undefined, {
+                              year: 'numeric',
+                              month: 'short',
+                              day: 'numeric',
+                            })}
+                          </span>
+                        )}
+                        {rec.rejectionReason && (
+                          <p className="profile-screen-doc-rejection">
+                            {dictionary.profile.documents.rejectionReason}: {rec.rejectionReason}
+                          </p>
+                        )}
+                        {rec.status === 'rejected' && isExpert && (
+                          <Link
+                            href={buildLocalePath(locale, '/onboarding/expert')}
+                            className="profile-screen-doc-resubmit"
+                          >
+                            {dictionary.profile.documents.resubmit}
+                          </Link>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+
+                {identityDocuments.length === 0 && academicRecords.length === 0 && (
+                  <Link
+                    href={buildLocalePath(
+                      locale,
+                      isExpert ? '/onboarding/expert' : '/onboarding/business',
+                    )}
+                    className="profile-screen-cta-link"
+                  >
+                    {dictionary.profile.documents.goToVerification}
+                  </Link>
+                )}
+              </>
+            )}
           </section>
         )}
 

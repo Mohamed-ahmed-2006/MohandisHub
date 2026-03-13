@@ -130,6 +130,32 @@ export class AdminRepository {
     return rows;
   }
 
+  /** List user IDs for admin broadcast (e.g. send notification). Filter by role and/or isActive. */
+  async listUserIds(filters: { role?: string; isActive?: boolean }): Promise<string[]> {
+    const conditions: string[] = ['deleted_at IS NULL'];
+    const params: unknown[] = [];
+    let idx = 1;
+
+    if (filters.role) {
+      if (filters.role === 'admin') {
+        conditions.push('is_admin = true');
+      } else {
+        conditions.push(`primary_role = $${idx++}`);
+        params.push(filters.role);
+      }
+    }
+    if (filters.isActive !== undefined) {
+      conditions.push(`is_active = $${idx++}`);
+      params.push(filters.isActive);
+    }
+
+    const { rows } = await this.db.query<{ id: string }>(
+      `SELECT id FROM users WHERE ${conditions.join(' AND ')}`,
+      params,
+    );
+    return rows.map((r) => r.id);
+  }
+
   async getUserDetail(userId: string): Promise<UserDetailRow | null> {
     const { rows } = await this.db.query<UserDetailRow>(
       `SELECT u.*, p.slug AS plan_slug, p.name AS plan_name, u.admin_permissions,

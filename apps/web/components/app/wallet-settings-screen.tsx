@@ -10,16 +10,13 @@ import { WalletDepositModal } from './wallet-deposit-modal';
 import { useAuth } from '@/components/auth/auth-provider';
 import { Container } from '@/components/ui/container';
 import { isApiClientError } from '@/lib/auth/client';
+import { useI18n } from '@/lib/i18n/context';
 import { buildLocalePath } from '@/lib/i18n/path';
-import type { Dictionary, Locale } from '@/lib/i18n/types';
 import { walletApiClient } from '@/lib/wallet/client';
 
 import './wallet-settings-screen.css';
 
-type WalletSettingsScreenProps = {
-  locale: Locale;
-  dictionary: Dictionary;
-};
+type WalletSettingsScreenProps = Record<string, never>;
 
 const MIN_WITHDRAWAL_AMOUNT = 20;
 
@@ -44,7 +41,8 @@ const formatStatus = (status: WithdrawalRequest['status']): string => {
   }
 };
 
-export const WalletSettingsScreen = ({ locale, dictionary }: WalletSettingsScreenProps) => {
+export const WalletSettingsScreen = (_props: WalletSettingsScreenProps) => {
+  const { locale, dictionary } = useI18n();
   const router = useRouter();
   const searchParams = useSearchParams();
   const { authUser, accessToken, isAuthenticated, isReady, authGuard } = useAuth();
@@ -194,11 +192,15 @@ export const WalletSettingsScreen = ({ locale, dictionary }: WalletSettingsScree
   return (
     <main className="wallet-settings-main">
       <Container className="wallet-settings-container">
-        <div className="wallet-settings-head">
-          <h1 className="wallet-settings-title">{dictionary.wallet.balance}</h1>
-          <Link href={buildLocalePath(locale, '/app/settings')} className="wallet-settings-back">
-            {dictionary.nav.settings}
-          </Link>
+        <div className="app-page-header">
+          <div>
+            <h1 className="app-page-title">{dictionary.wallet.balance}</h1>
+          </div>
+          <div className="app-page-header-actions">
+            <Link href={buildLocalePath(locale, '/app/settings')} className="wallet-settings-back">
+              {dictionary.nav.settings}
+            </Link>
+          </div>
         </div>
 
         {depositResult && (

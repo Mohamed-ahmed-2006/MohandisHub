@@ -21,6 +21,7 @@ export const MyPlanScreen = ({ locale, dictionary }: Props) => {
 
   const [plans, setPlans] = useState<Plan[]>([]);
   const [wallet, setWallet] = useState<Wallet | null>(null);
+  const [subscriptionEndsAt, setSubscriptionEndsAt] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [confirmPlan, setConfirmPlan] = useState<Plan | null>(null);
   const [subscribing, setSubscribing] = useState(false);
@@ -42,12 +43,14 @@ export const MyPlanScreen = ({ locale, dictionary }: Props) => {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [planList, w] = await Promise.all([
+      const [planList, w, subscription] = await Promise.all([
         plansApiClient.listActivePlans(),
         accessToken ? walletApiClient.getMyWallet(accessToken) : Promise.resolve(null),
+        accessToken ? plansApiClient.getCurrentSubscription(accessToken) : Promise.resolve(null),
       ]);
       setPlans(planList);
       setWallet(w);
+      setSubscriptionEndsAt(subscription?.subscriptionEndsAt ?? null);
     } catch {
       // ignore
     } finally {
@@ -66,9 +69,20 @@ export const MyPlanScreen = ({ locale, dictionary }: Props) => {
     try {
       const result = await plansApiClient.subscribe(accessToken, confirmPlan.id);
       setWallet((prev) => (prev ? { ...prev, balance: result.walletBalance } : prev));
+      setSubscriptionEndsAt(result.subscriptionEndsAt);
       await updateAuthUser();
       window.dispatchEvent(new CustomEvent('wallet-updated'));
-      setMessage({ type: 'success', text: d.subscribeSuccess ?? 'Subscribed successfully!' });
+      const endDate = result.subscriptionEndsAt
+        ? new Date(result.subscriptionEndsAt).toLocaleDateString(undefined, {
+            year: 'numeric',
+            month: 'short',
+            day: 'numeric',
+          })
+        : '';
+      const successText = endDate
+        ? `${d.subscribeSuccess ?? 'Subscribed successfully!'} (${d.subscriptionEndsAt ?? 'Subscription ends'}: ${endDate})`
+        : (d.subscribeSuccess ?? 'Subscribed successfully!');
+      setMessage({ type: 'success', text: successText });
       setConfirmPlan(null);
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Subscription failed';
@@ -175,7 +189,17 @@ export const MyPlanScreen = ({ locale, dictionary }: Props) => {
           </span>
           {wallet && (
             <span className="plan-screen-balance">
-              {dictionary.wallet.balance}: {wallet.balance.toFixed(2)} {wallet.currency}
+              {dictionary.wallet.balance}: {wallet.balance.toFixed(2)} {wallet.currency ?? 'USD'}
+            </span>
+          )}
+          {subscriptionEndsAt && (
+            <span className="plan-screen-ends-at">
+              {d.subscriptionEndsAt ?? 'Subscription ends'}:{' '}
+              {new Date(subscriptionEndsAt).toLocaleDateString(undefined, {
+                year: 'numeric',
+                month: 'short',
+                day: 'numeric',
+              })}
             </span>
           )}
         </div>
@@ -220,7 +244,7 @@ export const MyPlanScreen = ({ locale, dictionary }: Props) => {
                   {plan.description && <p className="plan-card-desc">{plan.description}</p>}
                   <div className="plan-card-price-wrap">
                     <span className="plan-card-price">
-                      {plan.price} {plan.currency}
+                      {plan.price} {plan.currency ?? 'USD'}
                     </span>
                     <span className="plan-card-cycle">
                       /{plan.billingCycle === 'monthly' ? (d.monthly ?? 'mo') : plan.billingCycle}
@@ -267,8 +291,8 @@ export const MyPlanScreen = ({ locale, dictionary }: Props) => {
                   ? d.confirmText
                       .replace('{name}', confirmPlan.name)
                       .replace('{price}', String(confirmPlan.price))
-                      .replace('{currency}', confirmPlan.currency)
-                  : `Subscribe to ${confirmPlan.name} for ${confirmPlan.price} ${confirmPlan.currency}? This will be deducted from your wallet balance.`}
+                      .replace('{currency}', confirmPlan.currency ?? 'USD')
+                  : `Subscribe to ${confirmPlan.name} for ${confirmPlan.price} ${confirmPlan.currency ?? 'USD'}? This will be deducted from your wallet balance.`}
               </p>
               <div className="plan-modal-actions">
                 <button

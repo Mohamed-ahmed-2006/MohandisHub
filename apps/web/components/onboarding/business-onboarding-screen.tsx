@@ -50,9 +50,6 @@ export const BusinessOnboardingScreen = ({ locale, dictionary }: Props) => {
   const [manualFrontFile, setManualFrontFile] = useState<File | null>(null);
   const [manualBackFile, setManualBackFile] = useState<File | null>(null);
   const [manualSelfieFile, setManualSelfieFile] = useState<File | null>(null);
-  const [businessDocsFrontFile, setBusinessDocsFrontFile] = useState<File | null>(null);
-  const [businessDocsBackFile, setBusinessDocsBackFile] = useState<File | null>(null);
-  const [businessDocsSelfieFile, setBusinessDocsSelfieFile] = useState<File | null>(null);
 
   const dict = dictionary.onboarding.business;
   const stepLabels = [dict.steps.companyDetails, dict.steps.kyc, dict.steps.documents];
@@ -257,54 +254,16 @@ export const BusinessOnboardingScreen = ({ locale, dictionary }: Props) => {
     }
   };
 
-  const handleSubmitBusinessDocs = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
+  /** Business documents step: persist completion on backend then move to complete. */
+  const handleBusinessDocsContinue = async () => {
     if (!accessToken) return;
-    const form = e.currentTarget;
-    const docType = (form.elements.namedItem('documentType') as HTMLSelectElement)
-      ?.value as IdentityDocumentType;
-    const fullNameOnDoc =
-      (form.elements.namedItem('fullNameOnDoc') as HTMLInputElement)?.value?.trim() || '';
-
-    const needsBack = docType === 'national_id' || docType === 'driving_license';
-    if (
-      !businessDocsFrontFile ||
-      !businessDocsSelfieFile ||
-      (needsBack && !businessDocsBackFile)
-    ) {
-      setError(
-        'Please capture/upload all required images: document front, document back (if applicable), and a live selfie.',
-      );
-      return;
-    }
-
     setSaving(true);
     setError(null);
     try {
-      const base = (getApiBaseUrl() || '').replace(/\/$/, '');
-      const toFullUrl = (url: string) =>
-        url.startsWith('http') ? url : base ? `${base}${url.startsWith('/') ? '' : '/'}${url}` : url;
-
-      const [frontRes, backRes, selfieRes] = await Promise.all([
-        uploadFile(accessToken, businessDocsFrontFile),
-        businessDocsBackFile ? uploadFile(accessToken, businessDocsBackFile) : Promise.resolve(null),
-        uploadFile(accessToken, businessDocsSelfieFile),
-      ]);
-
-      await profilesApiClient.submitIdentityDocument(accessToken, {
-        documentType: docType,
-        fullNameOnDoc,
-        frontImageUrl: toFullUrl(frontRes.url),
-        selfieImageUrl: toFullUrl(selfieRes.url),
-        ...(backRes && { backImageUrl: toFullUrl(backRes.url) }),
-      });
-      await updateAuthUser();
+      await profilesApiClient.completeBusinessOnboarding(accessToken);
       setStep('complete');
-      setBusinessDocsFrontFile(null);
-      setBusinessDocsBackFile(null);
-      setBusinessDocsSelfieFile(null);
     } catch (err) {
-      setError(formatApiError(err, dictionary.profile.saveError));
+      setError(formatApiError(err, dictionary.profile?.saveError ?? 'Failed to complete onboarding'));
     } finally {
       setSaving(false);
     }
@@ -607,80 +566,31 @@ export const BusinessOnboardingScreen = ({ locale, dictionary }: Props) => {
             <div className="onboarding-docs-section">
               <h2 className="onboarding-subtitle">{dict.documentsForm.businessDocsTitle}</h2>
               <p className="onboarding-description">
-                {dict.documentsForm.businessDocsDescription} You must take a live photo of yourself and a photo of your ID. Upload or take live pictures.
+                {dict.documentsForm.businessDocsDescription}
               </p>
-
-              <form className="onboarding-form" onSubmit={(e) => void handleSubmitBusinessDocs(e)}>
-                <div className="onboarding-field">
-                  <label className="onboarding-label">{dict.documentsForm.documentTypeLabel}</label>
-                  <select name="documentType" className="onboarding-input">
-                    <option value="national_id">
-                      {dictionary.verification.identityDocTypes.nationalId}
-                    </option>
-                    <option value="passport">
-                      {dictionary.verification.identityDocTypes.passport}
-                    </option>
-                    <option value="driving_license">
-                      {dictionary.verification.identityDocTypes.drivingLicense}
-                    </option>
-                  </select>
-                </div>
-                <div className="onboarding-field">
-                  <label className="onboarding-label">
-                    {dict.documentsForm.fullNameOnDocLabel}
-                  </label>
-                  <input type="text" name="fullNameOnDoc" className="onboarding-input" required />
-                </div>
-                <div className="onboarding-field">
-                  <ImageUploadOrCapture
-                    label={dict.documentsForm.frontImageLabel}
-                    onImage={(f) => setBusinessDocsFrontFile(f)}
-                    onClear={() => setBusinessDocsFrontFile(null)}
-                    onError={setError}
-                    required
-                    disabled={saving}
-                  />
-                </div>
-                <div className="onboarding-field">
-                  <ImageUploadOrCapture
-                    label={dict.documentsForm.backImageLabel}
-                    onImage={(f) => setBusinessDocsBackFile(f)}
-                    onClear={() => setBusinessDocsBackFile(null)}
-                    onError={setError}
-                    required={false}
-                    disabled={saving}
-                  />
-                  <p className="onboarding-description" style={{ marginTop: '0.25rem', fontSize: '0.8rem' }}>
-                    Required for National ID and Driving License. Skip for passport.
-                  </p>
-                </div>
-                <div className="onboarding-field">
-                  <LiveCapture
-                    facingMode="user"
-                    label={dict.documentsForm.selfieImageLabel}
-                    onCapture={(f) => setBusinessDocsSelfieFile(f)}
-                    onClear={() => setBusinessDocsSelfieFile(null)}
-                    onError={setError}
-                    required
-                    disabled={saving}
-                  />
-                  <p className="onboarding-description" style={{ marginTop: '0.25rem', fontSize: '0.8rem' }}>
-                    You must take a live photo of yourself now. No uploads allowed for selfie.
-                  </p>
-                </div>
-                <div className="onboarding-nav-row">
-                  <button
-                    type="button"
-                    className="onboarding-back-button"
-                    onClick={() => setStep('kyc')}
-                  >
-                    {dictionary.common.back}
-                  </button>
-                  <button type="submit" className="onboarding-cta-button" disabled={saving}>
-                    {saving ? dictionary.auth.common.loading : dictionary.common.submit}
-                  </button>
-                </div>
-              </form>
+              <p className="onboarding-description">
+                {dict.documentsForm.businessDocsCompanyInfo ?? 'Your company details (trade license, tax ID, commercial register) have been submitted with your profile. Our team will review your business verification. No additional document upload is required at this time.'}
+              </p>
+              <p className="onboarding-description onboarding-description--muted">
+                {dict.documentsForm.companyUploadComingSoon ?? 'Upload of company document files (e.g. trade license scan) will be available in Profile → Documents after you complete onboarding.'}
+              </p>
+              <div className="onboarding-nav-row">
+                <button
+                  type="button"
+                  className="onboarding-back-button"
+                  onClick={() => setStep('kyc')}
+                >
+                  {dictionary.common.back}
+                </button>
+                <button
+                  type="button"
+                  className="onboarding-cta-button"
+                  onClick={() => void handleBusinessDocsContinue()}
+                  disabled={saving}
+                >
+                  {saving ? (dictionary.auth?.common?.loading ?? 'Saving...') : dictionary.common.continue}
+                </button>
+              </div>
             </div>
           )}
 

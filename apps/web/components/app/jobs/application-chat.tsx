@@ -34,22 +34,23 @@ export const ApplicationChat = ({ applicationId }: Props) => {
   useEffect(() => {
     void loadMessages();
     if (!accessToken) return;
-    const sock = getChatSocket(accessToken);
-    if (!sock) return;
-
-    sock.emit('join_application', { applicationId });
-
-    const onNewMessage = (msg: JobApplicationMessage) => {
-      if (msg.jobApplicationId === applicationId) {
-        setMessages(prev => prev.some(m => m.id === msg.id) ? prev : [...prev, msg]);
-      }
-    };
-    
-    sock.on('new_application_message', onNewMessage);
-
+    getChatSocket(accessToken).then((sock) => {
+      if (!sock) return;
+      sock.emit('join_application', { applicationId });
+      const onNewMessage = (msg: JobApplicationMessage) => {
+        if (msg.jobApplicationId === applicationId) {
+          setMessages(prev => prev.some(m => m.id === msg.id) ? prev : [...prev, msg]);
+        }
+      };
+      sock.on('new_application_message', onNewMessage);
+    });
     return () => {
-      sock.emit('leave_application', { applicationId });
-      sock.off('new_application_message', onNewMessage);
+      void getChatSocket(accessToken).then((sock) => {
+        if (sock) {
+          sock.emit('leave_application', { applicationId });
+          sock.off('new_application_message');
+        }
+      });
     };
   }, [loadMessages, applicationId, accessToken]);
 

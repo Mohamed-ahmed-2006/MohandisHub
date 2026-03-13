@@ -3,6 +3,7 @@ import { HttpError } from '../../utils/http-error.js';
 
 import { ReservationsService } from './reservations.service.js';
 import {
+  cancelReservationSchema,
   callExtensionSchema,
   callHeartbeatSchema,
   callJoinSchema,
@@ -49,6 +50,18 @@ function parseBody<T>(
     });
   }
   return result.data as T;
+}
+
+function requireIdempotencyKey(req: { header: (name: string) => string | undefined }): string {
+  const key = req.header('Idempotency-Key')?.trim();
+  if (!key) {
+    throw new HttpError({
+      statusCode: 400,
+      code: 'IDEMPOTENCY_KEY_REQUIRED',
+      message: 'Idempotency-Key header is required.',
+    });
+  }
+  return key;
 }
 
 const getMyProfile = asyncHandler(async (req, res) => {
@@ -149,7 +162,7 @@ const deleteSlot = asyncHandler(async (req, res) => {
 const createReservation = asyncHandler(async (req, res) => {
   const user = requireUser(req);
   const input = parseBody(createReservationSchema, req.body);
-  const reservation = await svc.createReservation(user.id, input);
+  const reservation = await svc.createReservation(user.id, input, requireIdempotencyKey(req));
   res.status(201).json({ ok: true, data: reservation });
 });
 
@@ -190,8 +203,48 @@ const decideReservation = asyncHandler(async (req, res) => {
     });
   }
   const input = parseBody(decideReservationSchema, req.body);
-  const reservation = await svc.decideReservation(user.id, reservationId, input);
+  const reservation = await svc.decideReservation(
+    user.id,
+    reservationId,
+    input,
+    requireIdempotencyKey(req),
+  );
   res.json({ ok: true, data: reservation });
+});
+
+const cancelReservation = asyncHandler(async (req, res) => {
+  const user = requireUser(req);
+  const reservationId = req.params.reservationId;
+  if (!reservationId) {
+    throw new HttpError({
+      statusCode: 400,
+      code: 'VALIDATION_ERROR',
+      message: 'reservationId is required.',
+    });
+  }
+  const input = parseBody(cancelReservationSchema, req.body);
+  const reservation = await svc.cancelReservation(
+    user.id,
+    user.role ?? 'customer',
+    reservationId,
+    input,
+    requireIdempotencyKey(req),
+  );
+  res.json({ ok: true, data: reservation });
+});
+
+const listReservationTimeline = asyncHandler(async (req, res) => {
+  const user = requireUser(req);
+  const reservationId = req.params.reservationId;
+  if (!reservationId) {
+    throw new HttpError({
+      statusCode: 400,
+      code: 'VALIDATION_ERROR',
+      message: 'reservationId is required.',
+    });
+  }
+  const data = await svc.listReservationTimeline(user.id, reservationId);
+  res.json({ ok: true, data });
 });
 
 const listLocationProposals = asyncHandler(async (req, res) => {
@@ -398,6 +451,45 @@ const resolveDispute = asyncHandler(async (req, res) => {
   res.json({ ok: true, data });
 });
 
+const listActionFailures = asyncHandler(async (req, res) => {
+  const user = requireUser(req);
+  const onlyOpen = ((req.query.onlyOpen as string | undefined) ?? 'true').toLowerCase() !== 'false';
+  const limit = Math.min(
+    Math.max(parseInt((req.query.limit as string | undefined) ?? '50', 10), 1),
+    200,
+  );
+  const data = await svc.listActionFailures(user.id, user.role ?? 'customer', onlyOpen, limit);
+  res.json({ ok: true, data });
+});
+
+const replayActionFailure = asyncHandler(async (req, res) => {
+  const user = requireUser(req);
+  const failureId = req.params.failureId;
+  if (!failureId) {
+    throw new HttpError({
+      statusCode: 400,
+      code: 'VALIDATION_ERROR',
+      message: 'failureId is required.',
+    });
+  }
+  const data = await svc.replayActionFailure(user.id, user.role ?? 'customer', failureId);
+  res.json({ ok: true, data });
+});
+
+const reconcileReservation = asyncHandler(async (req, res) => {
+  const user = requireUser(req);
+  const reservationId = req.params.reservationId;
+  if (!reservationId) {
+    throw new HttpError({
+      statusCode: 400,
+      code: 'VALIDATION_ERROR',
+      message: 'reservationId is required.',
+    });
+  }
+  const data = await svc.reconcileReservationMoney(user.id, user.role ?? 'customer', reservationId);
+  res.json({ ok: true, data });
+});
+
 export const reservationsController = {
   getMyProfile,
   getProviderProfile,
@@ -410,6 +502,8 @@ export const reservationsController = {
   listMyReservations,
   getReservationById,
   decideReservation,
+  cancelReservation,
+  listReservationTimeline,
   listLocationProposals,
   proposeLocation,
   respondLocation,
@@ -424,4 +518,7 @@ export const reservationsController = {
   getCallSnapshot,
   listDisputes,
   resolveDispute,
+  listActionFailures,
+  replayActionFailure,
+  reconcileReservation,
 };

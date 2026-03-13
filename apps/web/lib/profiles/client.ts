@@ -4,10 +4,12 @@ import type {
   ApiErrorBody,
   ApiSuccessBody,
   BusinessProfile,
+  CustomerProfile,
   ExpertProfile,
   IdentityDocument,
   IdentityDocumentBody,
   UpdateBusinessProfileBody,
+  UpdateCustomerProfileBody,
   UpdateExpertProfileBody,
 } from '@mohandishub/shared';
 
@@ -103,6 +105,17 @@ export const profilesApiClient = {
   updateExpertProfile: (accessToken: string, body: UpdateExpertProfileBody) =>
     apiRequest<ExpertProfile>({ method: 'PATCH', path: '/api/profiles/expert', body, accessToken }),
 
+  getCustomerProfile: (accessToken: string) =>
+    apiRequest<CustomerProfile>({ method: 'GET', path: '/api/profiles/customer', accessToken }),
+
+  updateCustomerProfile: (accessToken: string, body: UpdateCustomerProfileBody) =>
+    apiRequest<CustomerProfile>({
+      method: 'PATCH',
+      path: '/api/profiles/customer',
+      body,
+      accessToken,
+    }),
+
   getBusinessProfile: (accessToken: string) =>
     apiRequest<BusinessProfile>({ method: 'GET', path: '/api/profiles/business', accessToken }),
 
@@ -111,6 +124,13 @@ export const profilesApiClient = {
       method: 'PATCH',
       path: '/api/profiles/business',
       body,
+      accessToken,
+    }),
+
+  completeBusinessOnboarding: (accessToken: string) =>
+    apiRequest<null>({
+      method: 'POST',
+      path: '/api/profiles/business/complete-onboarding',
       accessToken,
     }),
 

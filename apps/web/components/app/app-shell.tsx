@@ -5,22 +5,21 @@ import { useEffect, useState } from 'react';
 
 import { AppAvatarMenu } from './app-avatar-menu';
 import { AppSidebar } from './app-sidebar';
+import { NotificationCenter } from './notification-center';
 import { ToastProvider, useToast } from './toast';
 import { WalletDepositModal } from './wallet-deposit-modal';
 
 import { useAuth } from '@/components/auth/auth-provider';
 import { SkeletonAvatar } from '@/components/ui/skeleton';
 import { getChatSocket } from '@/lib/chat/socket';
+import { useWallet } from '@/lib/hooks/use-api-swr';
+import { useI18n } from '@/lib/i18n/context';
 import { buildLocalePath } from '@/lib/i18n/path';
-import type { Dictionary, Locale } from '@/lib/i18n/types';
 import { profilesApiClient } from '@/lib/profiles/client';
-import { walletApiClient } from '@/lib/wallet/client';
 
 import './app-shell.css';
 
 type AppShellProps = {
-  locale: Locale;
-  dictionary: Dictionary;
   children: React.ReactNode;
 };
 
@@ -39,24 +38,17 @@ export const AppShell = (props: AppShellProps) => {
   );
 };
 
-const AppShellInner = ({ locale, dictionary, children }: AppShellProps) => {
+const AppShellInner = ({ children }: AppShellProps) => {
+  const { locale, dictionary } = useI18n();
   const router = useRouter();
   const searchParams = useSearchParams();
 
   const { authUser, accessToken, logout, isReady } = useAuth();
+  const { wallet, mutate: mutateWallet } = useWallet(isReady && accessToken ? accessToken : null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [wallet, setWallet] = useState<{ balance: number; currency: string } | null>(null);
   const [showDepositModal, setShowDepositModal] = useState(false);
   const [depositMessage, setDepositMessage] = useState<'success' | 'cancelled' | null>(null);
   const { addToast } = useToast();
-
-  useEffect(() => {
-    if (!isReady || !accessToken) return;
-    void walletApiClient
-      .getMyWallet(accessToken)
-      .then((w) => setWallet(w))
-      .catch(() => setWallet(null));
-  }, [isReady, accessToken]);
 
   useEffect(() => {
     if (!isReady || !authUser || !accessToken) return;
@@ -83,35 +75,31 @@ const AppShellInner = ({ locale, dictionary, children }: AppShellProps) => {
 
   useEffect(() => {
     if (!isReady || !authUser || !accessToken) return;
-    const sock = getChatSocket(accessToken);
-    if (!sock) return;
-
-    sock.emit('join_user', { userId: authUser.id });
-
-    const onNotification = (data: AppNotification) => {
-      addToast(data.title, data.message);
-    };
-
-    sock.on('notification', onNotification);
+    let cancelled = false;
+    getChatSocket(accessToken).then((sock) => {
+      if (cancelled || !sock) return;
+      sock.emit('join_user', { userId: authUser.id });
+      const onNotification = (data: AppNotification) => {
+        addToast(data.title, data.message);
+      };
+      sock.on('notification', onNotification);
+    });
     return () => {
-      sock.off('notification', onNotification);
+      cancelled = true;
+      void getChatSocket(accessToken).then((sock) => {
+        if (sock) sock.off('notification');
+      });
     };
   }, [isReady, authUser, accessToken, addToast]);
 
   useEffect(() => {
     if (!isReady || !accessToken) return;
-    const onVisible = () => {
-      void walletApiClient
-        .getMyWallet(accessToken)
-        .then((w) => setWallet(w))
-        .catch(() => setWallet(null));
-    };
     const onVisibilityChange = () => {
-      if (document.visibilityState === 'visible') onVisible();
+      if (document.visibilityState === 'visible') void mutateWallet();
     };
     document.addEventListener('visibilitychange', onVisibilityChange);
     return () => document.removeEventListener('visibilitychange', onVisibilityChange);
-  }, [isReady, accessToken]);
+  }, [isReady, accessToken, mutateWallet]);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -144,15 +132,10 @@ const AppShellInner = ({ locale, dictionary, children }: AppShellProps) => {
 
   useEffect(() => {
     if (!isReady || !accessToken) return;
-    const handler = () => {
-      void walletApiClient
-        .getMyWallet(accessToken)
-        .then((w) => setWallet(w))
-        .catch(() => setWallet(null));
-    };
+    const handler = () => void mutateWallet();
     window.addEventListener('wallet-updated', handler);
     return () => window.removeEventListener('wallet-updated', handler);
-  }, [isReady, accessToken]);
+  }, [isReady, accessToken, mutateWallet]);
 
   const handleLogout = async () => {
     await logout();
@@ -189,8 +172,9 @@ const AppShellInner = ({ locale, dictionary, children }: AppShellProps) => {
           </div>
 
           <div className="app-topbar-end">
-            {isReady && authUser ? (
+            {isReady && authUser && accessToken ? (
               <>
+                <NotificationCenter accessToken={accessToken} dictionary={dictionary} />
                 {(wallet != null || accessToken) && (
                   <div className="app-topbar-balance">
                     <button

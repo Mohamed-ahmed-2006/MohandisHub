@@ -17,7 +17,7 @@ const PrivacyPage = async ({ params }: PrivacyPageProps) => {
     notFound();
   }
 
-  const dictionary = getDictionary(locale);
+  const dictionary = await getDictionary(locale);
   const title = dictionary.auth.register.privacyPolicy;
   const content = getPrivacyContent(locale);
   const email = 'support@mohandishub.com';

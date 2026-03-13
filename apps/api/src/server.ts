@@ -7,7 +7,6 @@ import { env } from './config/env.js';
 import { logger } from './config/logger.js';
 import { closePool } from './db/pool.js';
 import { registerChatSocket } from './modules/chat/chat.socket.js';
-import { startReservationLifecycleWorker } from './modules/reservations/reservations.lifecycle-worker.js';
 
 const app = createApp();
 const httpServer = createServer(app);
@@ -21,7 +20,6 @@ const io = new SocketServer(httpServer, {
 });
 
 registerChatSocket(io);
-const reservationLifecycleWorker = startReservationLifecycleWorker();
 
 httpServer.listen(env.PORT, () => {
   logger.info('API server started', { port: env.PORT, env: env.NODE_ENV });
@@ -37,7 +35,6 @@ const shutdown = async (signal: string): Promise<void> => {
     });
   });
 
-  await reservationLifecycleWorker.stop();
   await closePool();
   logger.info('Graceful shutdown finished');
   process.exit(0);

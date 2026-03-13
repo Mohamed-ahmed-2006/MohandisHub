@@ -17,7 +17,7 @@ const TermsPage = async ({ params }: TermsPageProps) => {
     notFound();
   }
 
-  const dictionary = getDictionary(locale);
+  const dictionary = await getDictionary(locale);
   const title = dictionary.auth.register.termsAndConditions;
   const content = getTermsContent(locale);
   const email = 'support@mohandishub.com';

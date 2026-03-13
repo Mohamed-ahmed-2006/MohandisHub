@@ -17,7 +17,7 @@ const VerifyEmailPage = async ({ params }: VerifyEmailPageProps) => {
     notFound();
   }
 
-  const dictionary = getDictionary(locale);
+  const dictionary = await getDictionary(locale);
 
   return <VerifyEmailScreen locale={locale} dictionary={dictionary} />;
 };

@@ -16,16 +16,13 @@ import {
 
 import { useAuth } from '@/components/auth/auth-provider';
 import { Container } from '@/components/ui/container';
+import { useI18n } from '@/lib/i18n/context';
 import { buildLocalePath } from '@/lib/i18n/path';
-import type { Dictionary, Locale } from '@/lib/i18n/types';
 import { reservationsApiClient } from '@/lib/reservations/client';
 
 import '@/app/dashboard.css';
 
-type Props = {
-  locale: Locale;
-  dictionary: Dictionary;
-};
+type Props = Record<string, never>;
 
 function formatDateLabel(date: Date): string {
   return date.toLocaleDateString(undefined, {
@@ -54,7 +51,8 @@ const withDayKeyAndTime = (value: string, dayKey: string, fallbackTime: string):
   return `${dayKey}T${timePart || fallbackTime}`;
 };
 
-export const CalendarScreen = ({ locale, dictionary }: Props) => {
+export const CalendarScreen = (_props: Props) => {
+  const { locale, dictionary } = useI18n();
   const router = useRouter();
   const { authUser, accessToken, isAuthenticated, isReady, authGuard } = useAuth();
 
@@ -307,7 +305,9 @@ export const CalendarScreen = ({ locale, dictionary }: Props) => {
   return (
     <main className="profile-screen-main">
       <Container className="profile-screen-container">
-        <h1 className="dashboard-title">{title}</h1>
+        <div className="app-page-header">
+          <h1 className="app-page-title">{title}</h1>
+        </div>
         {error && <p className="dashboard-error">{error}</p>}
 
         <div className="calendar-shell">

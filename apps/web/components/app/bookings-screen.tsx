@@ -4,6 +4,7 @@ import type {
   Reservation,
   ReservationCallSnapshot,
   ReservationLocationProposal,
+  ReservationTimelineEvent,
 } from '@mohandishub/shared';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -12,17 +13,14 @@ import { OnlineCallModal } from './online-call-modal';
 
 import { useAuth } from '@/components/auth/auth-provider';
 import { Container } from '@/components/ui/container';
+import { useI18n } from '@/lib/i18n/context';
 import { buildLocalePath } from '@/lib/i18n/path';
-import type { Dictionary, Locale } from '@/lib/i18n/types';
 import { reservationsApiClient } from '@/lib/reservations/client';
 import { reviewsApiClient } from '@/lib/reviews/client';
 
 import '@/app/dashboard.css';
 
-type Props = {
-  locale: Locale;
-  dictionary: Dictionary;
-};
+type Props = Record<string, never>;
 
 type CheckinCodeState = {
   myCode: string;
@@ -58,6 +56,26 @@ function formatMoney(value: number): string {
   return `${value.toFixed(2)} USD`;
 }
 
+function isInterviewReservation(reservation: Reservation): boolean {
+  return reservation.purpose === 'job_interview';
+}
+
+function getReservationTitle(reservation: Reservation): string {
+  if (isInterviewReservation(reservation)) {
+    return reservation.serviceTitle ? `Interview: ${reservation.serviceTitle}` : 'Job Interview';
+  }
+  return reservation.serviceTitle ?? 'Reservation';
+}
+
+function getReservationModeLabel(reservation: Reservation): string {
+  if (reservation.mode === 'online') {
+    return isInterviewReservation(reservation)
+      ? `Online interview ${reservation.onlineType ?? 'video'}`
+      : `Online ${reservation.onlineType ?? 'voice'}`;
+  }
+  return isInterviewReservation(reservation) ? 'Offline interview' : 'Offline';
+}
+
 function timelineSteps(reservation: Reservation): string[] {
   if (reservation.status === 'rejected' || reservation.status === 'cancelled' || reservation.status === 'expired') {
     return ['pending', reservation.status];
@@ -75,7 +93,94 @@ function reachedStep(currentStatus: string, step: string): boolean {
   return currentIndex >= stepIndex;
 }
 
-export const BookingsScreen = ({ locale, dictionary }: Props) => {
+function canCancelReservation(reservation: Reservation): boolean {
+  return ['pending', 'accepted', 'awaiting_start'].includes(reservation.status);
+}
+
+function describeSettlement(reservation: Reservation): string {
+  switch (reservation.settlementStatus) {
+    case 'held':
+      return 'Customer funds are currently held.';
+    case 'released_to_provider':
+      return 'Held funds were released to the provider/business.';
+    case 'refunded_to_customer':
+      return 'Held funds were returned to the customer/expert.';
+    case 'cancelled_no_refund':
+      return 'Reservation was cancelled without automatic refund.';
+    case 'partially_refunded':
+      return 'Reservation settled with a partial refund.';
+    default:
+      return 'No money is currently held.';
+  }
+}
+
+function getCancellationPreview(reservation: Reservation, viewerId: string): string | null {
+  if (!canCancelReservation(reservation)) return null;
+  if (reservation.status === 'pending') {
+    return 'Cancelling now will close the request without additional charges.';
+  }
+
+  const hoursUntilStart =
+    (new Date(reservation.requestedStartAt).getTime() - Date.now()) / (1000 * 60 * 60);
+  const viewerIsCustomer = reservation.customerId === viewerId;
+  const policy = reservation.policySnapshot;
+
+  if (reservation.purpose === 'job_interview') {
+    return viewerIsCustomer
+      ? 'Cancelling this interview usually keeps the interview fee captured unless the business or platform failed.'
+      : 'Cancelling this interview returns the interview fee to the expert.';
+  }
+
+  if (!policy) return 'Cancellation outcome will be applied from the reservation policy snapshot.';
+
+  if (viewerIsCustomer) {
+    return hoursUntilStart >= policy.customerFreeCancelHours
+      ? `Free cancellation window is still open. The fixed reservation hold will be refunded.`
+      : `Free cancellation window has passed. The fixed reservation amount will be released to the provider.`;
+  }
+
+  return hoursUntilStart >= policy.providerPenaltyCancelHours
+    ? 'Cancelling now refunds the customer with no provider penalty.'
+    : `Cancelling now refunds the customer and applies a provider penalty of ${formatMoney(policy.providerLateCancelPenaltyAmount)}.`;
+}
+
+function cancellationOutcomeLabel(outcome: string): string {
+  const labels: Record<string, string> = {
+    refunded_to_customer: 'Refunded to customer',
+    released_to_provider: 'Released to provider',
+    partially_refunded: 'Partially refunded',
+    cancelled_no_refund: 'Cancelled (no refund)',
+    held: 'Funds held',
+  };
+  return labels[outcome] ?? outcome.replaceAll('_', ' ');
+}
+
+function formatTimelineMetadata(metadata: Record<string, unknown> | null | undefined): string {
+  if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) return '';
+  const formatVal = (v: unknown): string => {
+    if (v == null || v === '') return '';
+    if (typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean') return String(v);
+    if (v instanceof Date) return v.toLocaleString();
+    if (Array.isArray(v)) return v.map(formatVal).filter(Boolean).join(', ');
+    if (typeof v === 'object') {
+      return Object.entries(v as Record<string, unknown>)
+        .filter(([, val]) => val != null && val !== '')
+        .map(([key, val]) => `${key.replace(/_/g, ' ')}: ${formatVal(val)}`)
+        .join('; ');
+    }
+    return String(v);
+  };
+  return Object.entries(metadata)
+    .filter(([, v]) => v != null && v !== '')
+    .map(([k, v]) => {
+      const key = k.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+      return `${key}: ${formatVal(v)}`;
+    })
+    .join(' · ');
+}
+
+export const BookingsScreen = (_props: Props) => {
+  const { locale, dictionary } = useI18n();
   const router = useRouter();
   const { authUser, accessToken, isAuthenticated, isReady, authGuard } = useAuth();
   const [reservations, setReservations] = useState<Reservation[]>([]);
@@ -91,12 +196,14 @@ export const BookingsScreen = ({ locale, dictionary }: Props) => {
   const [checkinInfo, setCheckinInfo] = useState<CheckinCodeState | null>(null);
   const [counterpartyCode, setCounterpartyCode] = useState('');
   const [callSnapshot, setCallSnapshot] = useState<ReservationCallSnapshot | null>(null);
+  const [timeline, setTimeline] = useState<ReservationTimelineEvent[]>([]);
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [reviewingReservationId, setReviewingReservationId] = useState<string | null>(null);
   const [reviewRating, setReviewRating] = useState(5);
   const [reviewComment, setReviewComment] = useState('');
   const [reviewSubmitting, setReviewSubmitting] = useState(false);
   const [reviewedReservationIds, setReviewedReservationIds] = useState<Set<string>>(new Set());
+  const [showCancelModal, setShowCancelModal] = useState(false);
 
   useEffect(() => {
     if (!isReady) return;
@@ -109,22 +216,41 @@ export const BookingsScreen = ({ locale, dictionary }: Props) => {
     }
   }, [isReady, isAuthenticated, authUser, authGuard.emailVerified, locale, router]);
 
-  const role: 'customer' | 'provider' =
-    authUser?.role === 'expert' || authUser?.role === 'business' ? 'provider' : 'customer';
-
   const load = useCallback(async () => {
     if (!accessToken) return;
     setLoading(true);
     setError(null);
     try {
-      const res = await reservationsApiClient.listMyReservations(accessToken, {
-        role,
-        page: 1,
-        limit: 80,
-      });
-      setReservations(res.items);
+      const requests =
+        authUser?.role === 'expert'
+          ? [
+              reservationsApiClient.listMyReservations(accessToken, {
+                role: 'provider',
+                page: 1,
+                limit: 80,
+              }),
+              reservationsApiClient.listMyReservations(accessToken, {
+                role: 'customer',
+                page: 1,
+                limit: 80,
+              }),
+            ]
+          : [
+              reservationsApiClient.listMyReservations(accessToken, {
+                role: authUser?.role === 'business' ? 'provider' : 'customer',
+                page: 1,
+                limit: 80,
+              }),
+            ];
+      const responses = await Promise.all(requests);
+      const merged = responses
+        .flatMap((response) => response.items)
+        .filter((item, index, array) => array.findIndex((candidate) => candidate.id === item.id) === index)
+        .sort((a, b) => new Date(b.requestedStartAt).getTime() - new Date(a.requestedStartAt).getTime());
+
+      setReservations(merged);
       if (selectedReservation) {
-        const refreshed = res.items.find((item) => item.id === selectedReservation.id) ?? null;
+        const refreshed = merged.find((item) => item.id === selectedReservation.id) ?? null;
         setSelectedReservation(refreshed);
       }
     } catch (e) {
@@ -133,7 +259,7 @@ export const BookingsScreen = ({ locale, dictionary }: Props) => {
     } finally {
       setLoading(false);
     }
-  }, [accessToken, role, selectedReservation]);
+  }, [accessToken, authUser?.role, selectedReservation]);
 
   useEffect(() => {
     void load();
@@ -148,13 +274,23 @@ export const BookingsScreen = ({ locale, dictionary }: Props) => {
       setCheckinInfo(null);
       setCounterpartyCode('');
       setCallSnapshot(null);
+      setTimeline([]);
       try {
+        const timelinePromise = reservationsApiClient.listReservationTimeline(accessToken, reservation.id);
         if (reservation.mode === 'offline') {
-          const proposals = await reservationsApiClient.listLocationProposals(accessToken, reservation.id);
+          const [proposals, events] = await Promise.all([
+            reservationsApiClient.listLocationProposals(accessToken, reservation.id),
+            timelinePromise,
+          ]);
           setLocationProposals(proposals);
+          setTimeline(events);
         } else {
-          const snapshot = await reservationsApiClient.callSnapshot(accessToken, reservation.id).catch(() => null);
+          const [snapshot, events] = await Promise.all([
+            reservationsApiClient.callSnapshot(accessToken, reservation.id).catch(() => null),
+            timelinePromise,
+          ]);
           if (snapshot) setCallSnapshot(snapshot);
+          setTimeline(events);
         }
       } catch (e) {
         setError(e instanceof Error ? e.message : 'Failed to load reservation details');
@@ -171,19 +307,32 @@ export const BookingsScreen = ({ locale, dictionary }: Props) => {
     setCounterpartyCode('');
     setCheckinInfo(null);
     setCallSnapshot(null);
+    setTimeline([]);
   };
 
   const refreshSelected = useCallback(async () => {
     if (!accessToken || !selectedReservation) return;
     const refreshed = await reservationsApiClient.getReservationById(accessToken, selectedReservation.id);
     setSelectedReservation(refreshed);
-    setReservations((prev) => prev.map((item) => (item.id === refreshed.id ? refreshed : item)));
+    setReservations((prev) => {
+      const existing = prev.some((item) => item.id === refreshed.id);
+      if (!existing) return [refreshed, ...prev];
+      return prev.map((item) => (item.id === refreshed.id ? refreshed : item));
+    });
     if (refreshed.mode === 'offline') {
-      const proposals = await reservationsApiClient.listLocationProposals(accessToken, refreshed.id);
+      const [proposals, events] = await Promise.all([
+        reservationsApiClient.listLocationProposals(accessToken, refreshed.id),
+        reservationsApiClient.listReservationTimeline(accessToken, refreshed.id),
+      ]);
       setLocationProposals(proposals);
+      setTimeline(events);
     } else {
-      const snapshot = await reservationsApiClient.callSnapshot(accessToken, refreshed.id).catch(() => null);
+      const [snapshot, events] = await Promise.all([
+        reservationsApiClient.callSnapshot(accessToken, refreshed.id).catch(() => null),
+        reservationsApiClient.listReservationTimeline(accessToken, refreshed.id),
+      ]);
       setCallSnapshot(snapshot);
+      setTimeline(events);
     }
   }, [accessToken, selectedReservation]);
 
@@ -207,6 +356,32 @@ export const BookingsScreen = ({ locale, dictionary }: Props) => {
     },
     [accessToken, load, refreshSelected, selectedReservation?.id],
   );
+
+  const cancelReservation = useCallback(async () => {
+    if (!accessToken || !selectedReservation || !authUser) return;
+    setShowCancelModal(false);
+
+    const reasonCode =
+      selectedReservation.customerId === authUser.id
+        ? isInterviewReservation(selectedReservation)
+          ? 'customer_schedule_conflict'
+          : 'customer_changed_mind'
+        : 'provider_unavailable';
+
+    setUpdatingId(selectedReservation.id);
+    setError(null);
+    try {
+      await reservationsApiClient.cancelReservation(accessToken, selectedReservation.id, {
+        reasonCode,
+      });
+      await load();
+      await refreshSelected();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Cancellation failed');
+    } finally {
+      setUpdatingId(null);
+    }
+  }, [accessToken, authUser, load, refreshSelected, selectedReservation]);
 
   const finish = useCallback(
     async (id: string, action: 'done' | 'report') => {
@@ -359,8 +534,45 @@ export const BookingsScreen = ({ locale, dictionary }: Props) => {
 
   return (
     <main className="profile-screen-main">
+      {showCancelModal && selectedReservation && authUser && (
+        <div
+          className="bookings-cancel-modal-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="cancel-modal-title"
+        >
+          <div className="bookings-cancel-modal">
+            <h2 id="cancel-modal-title" className="bookings-cancel-modal-title">
+              Cancel reservation?
+            </h2>
+            <p className="bookings-cancel-modal-preview">
+              {getCancellationPreview(selectedReservation, authUser.id) ??
+                'This will cancel the reservation. Continue?'}
+            </p>
+            <div className="bookings-cancel-modal-actions">
+              <button
+                type="button"
+                className="dashboard-btn dashboard-btn--secondary"
+                onClick={() => setShowCancelModal(false)}
+              >
+                Back
+              </button>
+              <button
+                type="button"
+                className="dashboard-btn dashboard-btn--danger"
+                onClick={() => void cancelReservation()}
+                disabled={updatingId === selectedReservation.id}
+              >
+                {updatingId === selectedReservation.id ? 'Cancelling...' : 'Confirm cancellation'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       <Container className="profile-screen-container">
-        <h1 className="dashboard-title">{title}</h1>
+        <div className="app-page-header">
+          <h1 className="app-page-title">{title}</h1>
+        </div>
         {error && <p className="dashboard-error">{error}</p>}
 
         <div className="reservation-filter-row">
@@ -393,10 +605,13 @@ export const BookingsScreen = ({ locale, dictionary }: Props) => {
               <li key={r.id} className="calendar-booking-item reservation-card">
                 <div className="reservation-card-main">
                   <div className="calendar-booking-info">
-                    <strong>{r.serviceTitle ?? 'Reservation'}</strong>
-                    <span className="reservation-mode-pill">
-                      {r.mode === 'online' ? `Online ${r.onlineType ?? 'voice'}` : 'Offline'}
-                    </span>
+                    <strong>{getReservationTitle(r)}</strong>
+                    <span className="reservation-mode-pill">{getReservationModeLabel(r)}</span>
+                    {isInterviewReservation(r) && (
+                      <span className="dashboard-card-meta">
+                        Hiring interview{r.jobApplicationId ? ` • Application ${r.jobApplicationId}` : ''}
+                      </span>
+                    )}
                     <span>{formatDateTime(r.requestedStartAt)}</span>
                     <span className={`calendar-booking-status calendar-booking-status--${r.status}`}>
                       {statusLabels[r.status] ?? r.status}
@@ -438,7 +653,7 @@ export const BookingsScreen = ({ locale, dictionary }: Props) => {
                   >
                     Details
                   </button>
-                  {r.status === 'completed' && !reviewedReservationIds.has(r.id) && (
+                  {r.status === 'completed' && !isInterviewReservation(r) && !reviewedReservationIds.has(r.id) && (
                     <>
                       {reviewingReservationId !== r.id ? (
                         <button
@@ -495,7 +710,7 @@ export const BookingsScreen = ({ locale, dictionary }: Props) => {
                       )}
                     </>
                   )}
-                  {role === 'provider' && r.status === 'pending' && (
+                  {authUser.id === r.providerId && r.status === 'pending' && (
                     <>
                       <button
                         type="button"
@@ -521,7 +736,7 @@ export const BookingsScreen = ({ locale, dictionary }: Props) => {
                       className="dashboard-btn dashboard-btn--small dashboard-btn--primary"
                       onClick={() => setCallReservation(r)}
                     >
-                      Join Call
+                      {isInterviewReservation(r) ? 'Join Interview' : 'Join Call'}
                     </button>
                   )}
                 </div>
@@ -534,9 +749,9 @@ export const BookingsScreen = ({ locale, dictionary }: Props) => {
       {selectedReservation && (
         <div className="plan-modal-overlay" onClick={closeDetails}>
           <div className="plan-modal reservation-details-modal" onClick={(e) => e.stopPropagation()}>
-            <h3 className="plan-modal-title">{selectedReservation.serviceTitle ?? 'Reservation Details'}</h3>
+            <h3 className="plan-modal-title">{getReservationTitle(selectedReservation)}</h3>
             <p className="dashboard-card-meta">
-              {selectedReservation.mode === 'online' ? `Online (${selectedReservation.onlineType ?? 'voice'})` : 'Offline'} | {formatDateTime(selectedReservation.requestedStartAt)}
+              {getReservationModeLabel(selectedReservation)} | {formatDateTime(selectedReservation.requestedStartAt)}
             </p>
 
             {detailsLoading ? (
@@ -555,33 +770,90 @@ export const BookingsScreen = ({ locale, dictionary }: Props) => {
                 </div>
 
                 <div className="reservation-billing-box">
-                  <h4>Billing Summary</h4>
+                  <h4>{isInterviewReservation(selectedReservation) ? 'Interview Billing' : 'Billing Summary'}</h4>
                   <p>Acceptance fee: {formatMoney(selectedReservation.adminAcceptanceFee)}</p>
-                  <p>Fixed reservation price: {formatMoney(selectedReservation.expertPriceAmount)}</p>
-                  {selectedReservation.mode === 'online' && (
+                  <p>
+                    {isInterviewReservation(selectedReservation) ? 'Fixed interview price' : 'Fixed reservation price'}:{' '}
+                    {formatMoney(selectedReservation.expertPriceAmount)}
+                  </p>
+                  {selectedReservation.mode === 'online' && !isInterviewReservation(selectedReservation) && (
                     <p>Minute fee (global): {formatMoney(selectedReservation.adminMinuteRate)} / min (split 50/50)</p>
+                  )}
+                  {selectedReservation.mode === 'online' && isInterviewReservation(selectedReservation) && (
+                    <p>Interview calls use a fixed price only. No per-minute billing applies.</p>
                   )}
                   {selectedReservation.fixedPriceHoldId && (
                     <p>Fixed price hold: Active</p>
+                  )}
+                  <p>Settlement: {describeSettlement(selectedReservation)}</p>
+                  {(selectedReservation.refundAmount > 0 || selectedReservation.capturedAmount > 0 || selectedReservation.penaltyAmount > 0) && (
+                    <>
+                      <p>Refunded: {formatMoney(selectedReservation.refundAmount)}</p>
+                      <p>Captured: {formatMoney(selectedReservation.capturedAmount)}</p>
+                      <p>Penalty: {formatMoney(selectedReservation.penaltyAmount)}</p>
+                    </>
+                  )}
+                  {selectedReservation.cancellationEffectiveOutcome && (
+                    <p>
+                      Cancellation outcome:{' '}
+                      {cancellationOutcomeLabel(selectedReservation.cancellationEffectiveOutcome)}
+                    </p>
+                  )}
+                </div>
+
+                <div className="reservation-section-box">
+                  <h4>Cancellation Policy</h4>
+                  {selectedReservation.policySnapshot ? (
+                    <>
+                      <p>Customer free cancellation window: {selectedReservation.policySnapshot.customerFreeCancelHours} hours.</p>
+                      <p>Provider penalty window: {selectedReservation.policySnapshot.providerPenaltyCancelHours} hours.</p>
+                      <p>Late provider penalty: {formatMoney(selectedReservation.policySnapshot.providerLateCancelPenaltyAmount)}</p>
+                    </>
+                  ) : (
+                    <p className="dashboard-card-meta">Policy snapshot unavailable for this reservation.</p>
+                  )}
+                  {authUser && getCancellationPreview(selectedReservation, authUser.id) && (
+                    <p>{getCancellationPreview(selectedReservation, authUser.id)}</p>
+                  )}
+                </div>
+
+                <div className="reservation-section-box">
+                  <h4>Timeline</h4>
+                  {timeline.length === 0 ? (
+                    <p className="dashboard-card-meta">No timeline events yet.</p>
+                  ) : (
+                    <ul className="reservation-proposal-list">
+                      {timeline.map((event) => (
+                        <li key={event.id} className="reservation-proposal-item">
+                          <div>
+                            <strong>{event.eventType.replaceAll('_', ' ')}</strong>
+                            <p className="dashboard-card-meta">{formatDateTime(event.createdAt)}</p>
+                            {event.metadata && Object.keys(event.metadata).length > 0 && (
+                              <p className="dashboard-card-meta">{formatTimelineMetadata(event.metadata)}</p>
+                            )}
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
                   )}
                 </div>
 
                 {selectedReservation.mode === 'online' && (
                   <div className="reservation-section-box">
-                    <h4>Online Session</h4>
+                    <h4>{isInterviewReservation(selectedReservation) ? (bp.onlineInterview ?? 'Online Interview') : (bp.onlineSession ?? 'Online Session')}</h4>
                     {callSnapshot ? (
                       <>
-                        <p>Minimum prejoin minutes: {callSnapshot.minimumPrejoinMinutes}</p>
-                        <p>Customer remaining minutes: {callSnapshot.customerRemainingMinutes}</p>
-                        <p>Provider remaining minutes: {callSnapshot.providerRemainingMinutes}</p>
+                        <p>{bp.preJoinBuffer ?? 'Pre-join buffer'}: {callSnapshot.minimumPrejoinMinutes} {bp.durationMin ?? 'min'}</p>
+                        <p>{bp.yourRemainingTime ?? 'Your remaining time'}: {callSnapshot.customerRemainingMinutes} {bp.durationMin ?? 'min'}</p>
+                        <p>{bp.providerRemainingTime ?? 'Provider remaining time'}: {callSnapshot.providerRemainingMinutes} {bp.durationMin ?? 'min'}</p>
                         {callSnapshot.session && (
                           <p>
-                            Call status: {callSnapshot.session.status} | billed seconds: {callSnapshot.session.billedSeconds} (minutes: {callSnapshot.session.billedMinutes})
+                            Session: {callSnapshot.session.status === 'active' ? (bp.inProgress ?? 'In progress') : callSnapshot.session.status === 'ended' ? (bp.ended ?? 'Ended') : callSnapshot.session.status} — Duration: {callSnapshot.session.billedMinutes ?? Math.round((callSnapshot.session.billedSeconds ?? 0) / 60)} {bp.durationMin ?? 'min'}
                           </p>
                         )}
                       </>
                     ) : (
-                      <p className="dashboard-card-meta">Call snapshot unavailable until call session starts.</p>
+                      <p className="dashboard-card-meta">{bp.callDetailsWhenStart ?? 'Call details will appear when the session starts.'}</p>
                     )}
                     {['accepted', 'in_session', 'awaiting_start'].includes(selectedReservation.status) && (
                       <button
@@ -589,7 +861,7 @@ export const BookingsScreen = ({ locale, dictionary }: Props) => {
                         className="dashboard-btn dashboard-btn--small dashboard-btn--primary"
                         onClick={() => setCallReservation(selectedReservation)}
                       >
-                        Join Call
+                        {isInterviewReservation(selectedReservation) ? (bp.joinInterview ?? 'Join Interview') : (bp.joinCall ?? 'Join Call')}
                       </button>
                     )}
                   </div>
@@ -597,7 +869,7 @@ export const BookingsScreen = ({ locale, dictionary }: Props) => {
 
                 {selectedReservation.mode === 'offline' && (
                   <div className="reservation-section-box">
-                    <h4>Offline Meeting</h4>
+                    <h4>{isInterviewReservation(selectedReservation) ? 'Offline Interview' : 'Offline Meeting'}</h4>
                     {selectedReservation.finalLocationText && (
                       <p>Agreed location: {selectedReservation.finalLocationText}</p>
                     )}
@@ -697,15 +969,15 @@ export const BookingsScreen = ({ locale, dictionary }: Props) => {
                   </div>
                 )}
 
-                {role === 'provider' && selectedReservation.status === 'pending' && (
-                  <div className="calendar-booking-actions" style={{ marginTop: '1rem' }}>
+                {authUser.id === selectedReservation.providerId && selectedReservation.status === 'pending' && (
+                  <div className="calendar-booking-actions calendar-booking-actions--spaced">
                     <button
                       type="button"
                       className="dashboard-btn dashboard-btn--small dashboard-btn--primary"
                       onClick={() => void decide(selectedReservation.id, 'accept')}
                       disabled={updatingId === selectedReservation.id}
                     >
-                      Accept
+                      {bp.accept ?? 'Accept'}
                     </button>
                     <button
                       type="button"
@@ -713,20 +985,36 @@ export const BookingsScreen = ({ locale, dictionary }: Props) => {
                       onClick={() => void decide(selectedReservation.id, 'reject')}
                       disabled={updatingId === selectedReservation.id}
                     >
-                      Reject
+                      {bp.reject ?? 'Reject'}
                     </button>
                   </div>
                 )}
 
-                {role === 'customer' && selectedReservation.status === 'waiting_customer_done' && (
-                  <div className="calendar-booking-actions" style={{ marginTop: '1rem' }}>
+                {authUser &&
+                  canCancelReservation(selectedReservation) &&
+                  (authUser.id === selectedReservation.customerId ||
+                    authUser.id === selectedReservation.providerId) && (
+                  <div className="calendar-booking-actions calendar-booking-actions--spaced">
+                    <button
+                      type="button"
+                      className="dashboard-btn dashboard-btn--small dashboard-btn--danger"
+                      onClick={() => setShowCancelModal(true)}
+                      disabled={updatingId === selectedReservation.id}
+                    >
+                      {bp.cancelReservation ?? 'Cancel Reservation'}
+                    </button>
+                  </div>
+                )}
+
+                {authUser.id === selectedReservation.customerId && selectedReservation.status === 'waiting_customer_done' && (
+                  <div className="calendar-booking-actions calendar-booking-actions--spaced">
                     <button
                       type="button"
                       className="dashboard-btn dashboard-btn--small dashboard-btn--primary"
                       onClick={() => void finish(selectedReservation.id, 'done')}
                       disabled={updatingId === selectedReservation.id}
                     >
-                      Done
+                      {bp.done ?? 'Done'}
                     </button>
                     <button
                       type="button"
@@ -734,20 +1022,22 @@ export const BookingsScreen = ({ locale, dictionary }: Props) => {
                       onClick={() => void finish(selectedReservation.id, 'report')}
                       disabled={updatingId === selectedReservation.id}
                     >
-                      Report
+                      {bp.report ?? 'Report'}
                     </button>
                   </div>
                 )}
-                {selectedReservation.status === 'completed' && !reviewedReservationIds.has(selectedReservation.id) && (
-                  <div className="reservation-details-review-box" style={{ marginTop: '1rem' }}>
-                    <h4>Leave a review</h4>
+                {selectedReservation.status === 'completed' &&
+                  !isInterviewReservation(selectedReservation) &&
+                  !reviewedReservationIds.has(selectedReservation.id) && (
+                  <div className="reservation-details-review-box reservation-details-review-box--spaced">
+                    <h4>{bp.leaveReview ?? 'Leave a review'}</h4>
                     {reviewingReservationId !== selectedReservation.id ? (
                       <button
                         type="button"
                         className="dashboard-btn dashboard-btn--small dashboard-btn--primary"
                         onClick={() => setReviewingReservationId(selectedReservation.id)}
                       >
-                        Rate this {role === 'customer' ? 'provider' : 'customer'}
+                        {authUser.id === selectedReservation.customerId ? (bp.rateProvider ?? 'Rate this provider') : (bp.rateCustomer ?? 'Rate this customer')}
                       </button>
                     ) : (
                       <>
@@ -766,13 +1056,12 @@ export const BookingsScreen = ({ locale, dictionary }: Props) => {
                         </div>
                         <input
                           type="text"
-                          className="dashboard-input reservation-review-comment"
-                          placeholder="Optional comment"
+                          className="dashboard-input reservation-review-comment reservation-review-comment--spaced"
+                          placeholder={dictionary.profile?.reviews?.commentPlaceholder ?? 'Optional comment'}
                           value={reviewComment}
                           onChange={(e) => setReviewComment(e.target.value)}
-                          style={{ marginTop: '0.5rem', display: 'block', width: '100%' }}
                         />
-                        <div className="reservation-review-actions" style={{ marginTop: '0.5rem' }}>
+                        <div className="reservation-review-actions reservation-review-actions--spaced">
                           <button
                             type="button"
                             className="dashboard-btn dashboard-btn--small dashboard-btn--secondary"
@@ -800,7 +1089,7 @@ export const BookingsScreen = ({ locale, dictionary }: Props) => {
               </>
             )}
 
-            <div className="plan-modal-actions" style={{ marginTop: '1.25rem' }}>
+            <div className="plan-modal-actions plan-modal-actions--spaced">
               <button
                 type="button"
                 className="plan-modal-cancel"

@@ -11,7 +11,7 @@ type PlanPageProps = {
 const PlanPage = async ({ params }: PlanPageProps) => {
   const { locale } = await params;
   if (!isSupportedLocale(locale)) notFound();
-  const dictionary = getDictionary(locale);
+  const dictionary = await getDictionary(locale);
   return <MyPlanScreen locale={locale} dictionary={dictionary} />;
 };
 

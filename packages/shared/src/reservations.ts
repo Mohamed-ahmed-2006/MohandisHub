@@ -4,6 +4,31 @@
 
 export type ReservationMode = 'online' | 'offline';
 export type ReservationOnlineType = 'voice' | 'video';
+export type ReservationPurpose = 'service' | 'job_interview';
+export type ReservationCancellationActor = 'customer' | 'provider' | 'admin' | 'system';
+export type ReservationCancellationReasonCode =
+  | 'customer_changed_mind'
+  | 'customer_schedule_conflict'
+  | 'provider_unavailable'
+  | 'provider_schedule_conflict'
+  | 'slot_invalidated'
+  | 'platform_failure'
+  | 'other';
+export type ReservationCancellationOutcome =
+  | 'none'
+  | 'full_refund'
+  | 'provider_paid'
+  | 'customer_refund_with_provider_penalty'
+  | 'cancelled_no_refund'
+  | 'platform_refund';
+export type ReservationRefundStatus = 'none' | 'pending' | 'succeeded' | 'failed';
+export type ReservationSettlementStatus =
+  | 'unsettled'
+  | 'held'
+  | 'released_to_provider'
+  | 'refunded_to_customer'
+  | 'cancelled_no_refund'
+  | 'partially_refunded';
 
 export type ReservationStatus =
   | 'pending'
@@ -35,6 +60,8 @@ export type ReservationProfile = {
 export type ReservationSlot = {
   id: string;
   providerId: string;
+  purpose: ReservationPurpose;
+  jobId: string | null;
   startAt: string;
   endAt: string;
   status: ReservationSlotStatus;
@@ -48,6 +75,9 @@ export type Reservation = {
   id: string;
   customerId: string;
   providerId: string;
+  purpose: ReservationPurpose;
+  jobId: string | null;
+  jobApplicationId: string | null;
   serviceId: string | null;
   slotId: string | null;
   mode: ReservationMode;
@@ -59,6 +89,7 @@ export type Reservation = {
   currency: string;
   adminAcceptanceFee: number;
   adminMinuteRate: number;
+  policySnapshot: ReservationPolicySnapshot | null;
   fixedPriceHoldId: string | null;
   rejectionReason: string | null;
   autoRejected: boolean;
@@ -71,6 +102,16 @@ export type Reservation = {
   startedAt: string | null;
   endedAt: string | null;
   completedAt: string | null;
+  cancelledAt: string | null;
+  cancelledBy: string | null;
+  cancellationActor: ReservationCancellationActor | null;
+  cancellationReasonCode: ReservationCancellationReasonCode | null;
+  cancellationEffectiveOutcome: ReservationCancellationOutcome | null;
+  refundAmount: number;
+  capturedAmount: number;
+  penaltyAmount: number;
+  refundStatus: ReservationRefundStatus;
+  settlementStatus: ReservationSettlementStatus;
   customerDoneDueAt: string | null;
   donePromptedAt: string | null;
   disconnectAutoReleaseAt: string | null;
@@ -79,6 +120,55 @@ export type Reservation = {
   providerName?: string;
   customerName?: string;
   serviceTitle?: string | null;
+};
+
+export type ReservationPolicySnapshot = {
+  customerFreeCancelHours: number;
+  providerPenaltyCancelHours: number;
+  customerLateCancelPayoutPercent: number;
+  providerLateCancelPenaltyAmount: number;
+  interviewBusinessFailureRefundOnly: boolean;
+};
+
+export type ReservationTimelineEventType =
+  | 'created'
+  | 'accepted'
+  | 'rejected'
+  | 'cancelled'
+  | 'started'
+  | 'ended'
+  | 'completed'
+  | 'dispute_opened'
+  | 'dispute_resolved'
+  | 'hold_created'
+  | 'hold_released'
+  | 'hold_captured'
+  | 'refund_applied'
+  | 'penalty_applied'
+  | 'call_join_failed'
+  | 'reconciled'
+  | 'worker_replayed';
+
+export type ReservationTimelineEvent = {
+  id: string;
+  reservationId: string;
+  eventType: ReservationTimelineEventType;
+  actorId: string | null;
+  metadata: Record<string, unknown>;
+  createdAt: string;
+};
+
+export type ReservationActionFailure = {
+  id: string;
+  reservationId: string | null;
+  actionType: string;
+  actorId: string | null;
+  errorCode: string | null;
+  errorMessage: string;
+  metadata: Record<string, unknown>;
+  resolvedAt: string | null;
+  lastReplayedAt: string | null;
+  createdAt: string;
 };
 
 export type ReservationLocationProposalStatus = 'pending' | 'accepted' | 'rejected';
@@ -218,6 +308,11 @@ export type ConfirmCheckInBody = {
 export type FinishReservationBody = {
   action: 'done' | 'report';
   reportReason?: string;
+};
+
+export type CancelReservationBody = {
+  reasonCode: ReservationCancellationReasonCode;
+  reasonText?: string;
 };
 
 export type CallJoinBody = {

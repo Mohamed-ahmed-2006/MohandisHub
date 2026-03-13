@@ -363,6 +363,27 @@ export const AdminSettingsTab = ({ dictionary, accessToken, refreshSession }: Pr
             }
           />
         </div>
+        <div className="admin-settings-row">
+          <div className="admin-settings-label-wrap">
+            <label className="admin-settings-label">Job interview fee (USD)</label>
+            <span className="admin-settings-desc">
+              Global fee charged to experts when they reserve an interview slot with a business.
+            </span>
+          </div>
+          <input
+            type="number"
+            min={0}
+            step={0.01}
+            className="admin-settings-input admin-settings-input--number"
+            defaultValue={settings.jobInterviewFeeAmount}
+            onBlur={(e) =>
+              handleNumberChange(
+                'jobInterviewFeeAmount',
+                e.target.value === '' ? 0 : parseFloat(e.target.value) ?? 0,
+              )
+            }
+          />
+        </div>
       </section>
 
       <section className="admin-settings-section">

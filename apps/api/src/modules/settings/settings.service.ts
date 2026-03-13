@@ -51,6 +51,7 @@ export class SettingsService {
       reservationVoiceMinuteRate: parseFloat(row.reservation_voice_minute_rate ?? '1'),
       reservationVideoMinuteRate: parseFloat(row.reservation_video_minute_rate ?? '2'),
       reservationMinPrejoinMinutes: row.reservation_min_prejoin_minutes ?? 5,
+      jobInterviewFeeAmount: parseFloat(row.job_interview_fee_amount ?? '0'),
     };
   }
 
@@ -91,6 +92,8 @@ export class SettingsService {
       dbPartial.reservation_video_minute_rate = partial.reservationVideoMinuteRate;
     if (partial.reservationMinPrejoinMinutes !== undefined)
       dbPartial.reservation_min_prejoin_minutes = partial.reservationMinPrejoinMinutes;
+    if (partial.jobInterviewFeeAmount !== undefined)
+      dbPartial.job_interview_fee_amount = partial.jobInterviewFeeAmount;
 
     const row = await this.repo.update(dbPartial);
     return row ? this.toAppSettings(row) : null;
@@ -131,6 +134,7 @@ export class SettingsService {
       reservationVoiceMinuteRate: parseFloat(row.reservation_voice_minute_rate ?? '1'),
       reservationVideoMinuteRate: parseFloat(row.reservation_video_minute_rate ?? '2'),
       reservationMinPrejoinMinutes: row.reservation_min_prejoin_minutes ?? 5,
+      jobInterviewFeeAmount: parseFloat(row.job_interview_fee_amount ?? '0'),
     };
   }
 
@@ -165,6 +169,7 @@ export class SettingsService {
       reservationVoiceMinuteRate: 1,
       reservationVideoMinuteRate: 2,
       reservationMinPrejoinMinutes: 5,
+      jobInterviewFeeAmount: 0,
     };
   }
 }

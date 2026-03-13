@@ -1,6 +1,24 @@
-import type { CreateJobDto, Job, JobApplication, ApplyJobDto, JobMilestone, CreateMilestoneDto, SubmitMilestoneDto, JobSubmission, JobApplicationMessage } from '@mohandishub/shared';
+import type {
+  ApplyJobDto,
+  BookJobInterviewDto,
+  CreateJobDto,
+  CreateJobInterviewSlotDto,
+  CreateMilestoneDto,
+  Job,
+  JobApplication,
+  JobApplicationMessage,
+  JobMilestone,
+  JobSubmission,
+  Reservation,
+  ReservationSlot,
+  SubmitMilestoneDto,
+  UpdateJobInterviewSlotDto,
+} from '@mohandishub/shared';
 
 import { getApiBaseUrl } from '../env';
+
+const createIdempotencyKey = () =>
+  typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : `${Date.now()}`;
 
 async function apiReq<T>(path: string, options?: RequestInit): Promise<T> {
   const res = await fetch(`${getApiBaseUrl()}${path}`, options);
@@ -129,6 +147,81 @@ export const jobsApiClient = {
         Authorization: `Bearer ${accessToken}`,
       },
       body: JSON.stringify({ content }),
+    });
+  },
+
+  async createInterviewSlot(
+    accessToken: string,
+    jobId: string,
+    dto: CreateJobInterviewSlotDto,
+  ): Promise<ReservationSlot> {
+    return apiReq(`/api/jobs/${jobId}/interview-slots`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify(dto),
+    });
+  },
+
+  async listBusinessInterviewSlots(
+    accessToken: string,
+    jobId: string,
+    params?: { from?: string; to?: string },
+  ): Promise<{ items: ReservationSlot[] }> {
+    const query = new URLSearchParams();
+    if (params?.from) query.set('from', params.from);
+    if (params?.to) query.set('to', params.to);
+    return apiReq(`/api/jobs/${jobId}/interview-slots${query.toString() ? `?${query.toString()}` : ''}`, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+  },
+
+  async updateInterviewSlot(
+    accessToken: string,
+    slotId: string,
+    dto: UpdateJobInterviewSlotDto,
+  ): Promise<ReservationSlot> {
+    return apiReq(`/api/jobs/interview-slots/${slotId}`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify(dto),
+    });
+  },
+
+  async deleteInterviewSlot(accessToken: string, slotId: string): Promise<{ deleted: boolean }> {
+    return apiReq(`/api/jobs/interview-slots/${slotId}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+  },
+
+  async listApplicationInterviewSlots(
+    accessToken: string,
+    appId: string,
+  ): Promise<{ items: ReservationSlot[] }> {
+    return apiReq(`/api/jobs/applications/${appId}/interview-slots`, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+  },
+
+  async bookInterview(
+    accessToken: string,
+    appId: string,
+    dto: BookJobInterviewDto,
+  ): Promise<Reservation> {
+    return apiReq(`/api/jobs/applications/${appId}/interview-book`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${accessToken}`,
+        'Idempotency-Key': createIdempotencyKey(),
+      },
+      body: JSON.stringify(dto),
     });
   },
 };

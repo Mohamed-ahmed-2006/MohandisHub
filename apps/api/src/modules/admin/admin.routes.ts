@@ -16,6 +16,9 @@ const adminRouter = Router();
 
 adminRouter.use(authenticate, requireEmailVerified, loadAdminFromDb, requireRole('admin'));
 
+// Notifications (admin send to users)
+adminRouter.post('/notifications/send', requireAdminPermission('manage_notifications'), adminController.sendNotification);
+
 // Dashboard
 adminRouter.get('/dashboard/stats', adminController.getDashboardStats);
 

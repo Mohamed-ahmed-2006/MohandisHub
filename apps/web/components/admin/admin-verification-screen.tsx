@@ -4,6 +4,7 @@ import type { PendingVerificationItem } from '@mohandishub/shared';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 
+import { useToast } from '@/components/app/toast';
 import { useAuth } from '@/components/auth/auth-provider';
 import { Container } from '@/components/ui/container';
 import { SkeletonCard } from '@/components/ui/skeleton';
@@ -22,6 +23,7 @@ type TabId = 'identity' | 'academic' | 'business';
 
 export const AdminVerificationScreen = ({ locale, dictionary }: AdminVerificationScreenProps) => {
   const router = useRouter();
+  const { addToast } = useToast();
   const { authUser, accessToken, isAuthenticated, isReady, authGuard } = useAuth();
   const [activeTab, setActiveTab] = useState<TabId>('identity');
   const [items, setItems] = useState<PendingVerificationItem[]>([]);
@@ -108,12 +110,12 @@ export const AdminVerificationScreen = ({ locale, dictionary }: AdminVerificatio
     try {
       const result = await adminApiClient.syncVerifiedAt(accessToken);
       if (result.experts > 0 || result.businesses > 0) {
-        alert(`Synced: ${result.experts} expert(s), ${result.businesses} business(es).`);
+        addToast('Success', `Synced: ${result.experts} expert(s), ${result.businesses} business(es).`);
       } else {
-        alert('No profiles needed syncing.');
+        addToast('Info', 'No profiles needed syncing.');
       }
     } catch {
-      alert('Sync failed.');
+      addToast('Error', 'Sync failed.');
     } finally {
       setSyncing(false);
     }

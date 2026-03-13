@@ -34,7 +34,7 @@ const ProfilePage = async ({ params }: ProfilePageProps) => {
     notFound();
   }
 
-  const dictionary = getDictionary(locale);
+  const dictionary = await getDictionary(locale);
 
   return <ProfileScreen locale={locale} dictionary={dictionary} />;
 };

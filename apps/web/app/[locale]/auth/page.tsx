@@ -21,7 +21,7 @@ const AuthPage = async ({ params, searchParams }: AuthPageProps) => {
     notFound();
   }
 
-  const dictionary = getDictionary(locale);
+  const dictionary = await getDictionary(locale);
   const resolvedSearch = await searchParams;
 
   const mode = resolvedSearch.mode === 'register' ? 'register' : 'login';

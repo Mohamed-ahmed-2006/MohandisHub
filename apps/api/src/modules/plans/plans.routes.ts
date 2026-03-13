@@ -8,6 +8,11 @@ import { plansController } from './plans.controller.js';
 const plansRouter = Router();
 
 plansRouter.get('/', plansController.listActivePlans);
+plansRouter.get(
+  '/my-subscription',
+  authenticate,
+  plansController.getCurrentSubscription,
+);
 plansRouter.post(
   '/:planId/subscribe',
   authenticate,

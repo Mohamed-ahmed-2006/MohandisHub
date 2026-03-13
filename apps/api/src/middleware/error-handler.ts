@@ -53,12 +53,12 @@ export const errorHandler: ErrorRequestHandler = (error, req, res, next) => {
   });
 
   const pgLikeError = error as { code?: string; message?: string };
+  const pgMessage = typeof pgLikeError.message === 'string' ? pgLikeError.message : '';
   const isReservationSchemaError =
     pgLikeError.code === '42P01' &&
-    typeof pgLikeError.message === 'string' &&
-    (pgLikeError.message.includes('reservations') ||
-      pgLikeError.message.includes('reservation_slots') ||
-      pgLikeError.message.includes('reservation_'));
+    (pgMessage.includes('reservations') ||
+      pgMessage.includes('reservation_slots') ||
+      pgMessage.includes('reservation_'));
   if (isReservationSchemaError) {
     const body: ApiErrorBody = {
       ok: false,
@@ -66,6 +66,22 @@ export const errorHandler: ErrorRequestHandler = (error, req, res, next) => {
         code: 'SCHEMA_OUTDATED',
         message:
           'Reservation schema is missing in database. Run migrations (`npx supabase db push`) and restart API.',
+        ...(requestId ? { requestId } : {}),
+      },
+    };
+    res.status(503).json(body);
+    return;
+  }
+
+  const isNotificationsSchemaError =
+    pgLikeError.code === '42P01' && pgMessage.includes('notifications');
+  if (isNotificationsSchemaError) {
+    const body: ApiErrorBody = {
+      ok: false,
+      error: {
+        code: 'SCHEMA_OUTDATED',
+        message:
+          'Notifications table is missing. Run migrations (e.g. `npx supabase db push` or apply 20260313000001_notifications.sql) and restart API.',
         ...(requestId ? { requestId } : {}),
       },
     };

@@ -3,6 +3,7 @@ import type {
   CallExtensionBody,
   CallHeartbeatBody,
   CallJoinBody,
+  CancelReservationBody,
   ConfirmCheckInBody,
   CreateReservationBody,
   CreateReservationSlotBody,
@@ -16,12 +17,16 @@ import type {
   ReservationLocationProposal,
   ReservationProfile,
   ReservationSlot,
+  ReservationTimelineEvent,
   RespondLocationBody,
   UpdateReservationProfileBody,
   UpdateReservationSlotBody,
 } from '@mohandishub/shared';
 
 import { getApiBaseUrl } from '@/lib/env';
+
+const createIdempotencyKey = () =>
+  typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : `${Date.now()}`;
 
 async function apiReq<T>(path: string, token: string, opts?: RequestInit): Promise<T> {
   const res = await fetch(`${getApiBaseUrl()}${path}`, {
@@ -85,6 +90,9 @@ export const reservationsApiClient = {
   createReservation: (token: string, body: CreateReservationBody): Promise<Reservation> =>
     apiReq('/api/reservations', token, {
       method: 'POST',
+      headers: {
+        'Idempotency-Key': createIdempotencyKey(),
+      },
       body: JSON.stringify(body),
     }),
 
@@ -115,8 +123,30 @@ export const reservationsApiClient = {
   ): Promise<Reservation> =>
     apiReq(`/api/reservations/${reservationId}/decision`, token, {
       method: 'POST',
+      headers: {
+        'Idempotency-Key': createIdempotencyKey(),
+      },
       body: JSON.stringify(body),
     }),
+
+  cancelReservation: (
+    token: string,
+    reservationId: string,
+    body: CancelReservationBody,
+  ): Promise<Reservation> =>
+    apiReq(`/api/reservations/${reservationId}/cancel`, token, {
+      method: 'POST',
+      headers: {
+        'Idempotency-Key': createIdempotencyKey(),
+      },
+      body: JSON.stringify(body),
+    }),
+
+  listReservationTimeline: (
+    token: string,
+    reservationId: string,
+  ): Promise<ReservationTimelineEvent[]> =>
+    apiReq(`/api/reservations/${reservationId}/timeline`, token),
 
   listLocationProposals: (token: string, reservationId: string): Promise<ReservationLocationProposal[]> =>
     apiReq(`/api/reservations/${reservationId}/location`, token),

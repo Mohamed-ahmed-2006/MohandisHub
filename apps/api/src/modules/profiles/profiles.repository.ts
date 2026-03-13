@@ -10,6 +10,7 @@ import type {
   AcademicRecordRow,
   AdminReviewRow,
   BusinessProfileRow,
+  CustomerProfileRow,
   ExpertProfileRow,
   IdentityDocumentRow,
 } from './profiles.types.js';
@@ -62,6 +63,44 @@ export class ProfilesRepository {
     return rows[0] ?? null;
   }
 
+  // ── Customer profiles ───────────────────────────────────────────────────
+
+  async findCustomerProfile(userId: string): Promise<CustomerProfileRow | null> {
+    const { rows } = await this.db.query<CustomerProfileRow>(
+      'SELECT * FROM customer_profiles WHERE user_id = $1 LIMIT 1',
+      [userId],
+    );
+    return rows[0] ?? null;
+  }
+
+  async updateCustomerProfile(
+    userId: string,
+    fields: { city?: string | null | undefined; country?: string | null | undefined; contactPreference?: string | null | undefined },
+  ): Promise<CustomerProfileRow | null> {
+    const updates: string[] = [];
+    const values: unknown[] = [];
+    let idx = 1;
+    if (fields.city !== undefined) {
+      updates.push(`city = $${idx++}`);
+      values.push(fields.city);
+    }
+    if (fields.country !== undefined) {
+      updates.push(`country = $${idx++}`);
+      values.push(fields.country);
+    }
+    if (fields.contactPreference !== undefined) {
+      updates.push(`preferences = COALESCE(preferences, '{}'::jsonb) || jsonb_build_object('contactPreference', $${idx++}::text)`);
+      values.push(fields.contactPreference);
+    }
+    if (updates.length === 0) return this.findCustomerProfile(userId);
+    values.push(userId);
+    await this.db.query(
+      `UPDATE customer_profiles SET ${updates.join(', ')}, updated_at = now() WHERE user_id = $${idx}`,
+      values,
+    );
+    return this.findCustomerProfile(userId);
+  }
+
   // ── Business profiles ──────────────────────────────────────────────────
 
   async findBusinessProfile(userId: string): Promise<BusinessProfileRow | null> {
@@ -83,6 +122,13 @@ export class ProfilesRepository {
   async setPlatformVerifiedAt(userId: string): Promise<void> {
     await this.db.query(
       `UPDATE users SET platform_verified_at = now() WHERE id = $1 AND platform_verified_at IS NULL`,
+      [userId],
+    );
+  }
+
+  async setBusinessOnboardingCompletedAt(userId: string): Promise<void> {
+    await this.db.query(
+      `UPDATE business_profiles SET onboarding_completed_at = COALESCE(onboarding_completed_at, now()) WHERE user_id = $1`,
       [userId],
     );
   }

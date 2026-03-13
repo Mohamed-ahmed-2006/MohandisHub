@@ -1,13 +1,15 @@
-import { io, type Socket } from 'socket.io-client';
+import type { Socket } from 'socket.io-client';
 
 import { getApiBaseUrl } from '@/lib/env';
 
 let socket: Socket | null = null;
 
-export function getChatSocket(accessToken?: string): Socket | null {
+export async function getChatSocket(accessToken?: string): Promise<Socket | null> {
   const baseUrl = getApiBaseUrl();
   if (!baseUrl) return null;
+
   if (!socket) {
+    const { io } = await import('socket.io-client');
     socket = io(baseUrl, {
       path: '/socket.io',
       transports: ['websocket', 'polling'],

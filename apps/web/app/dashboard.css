@@ -639,6 +639,10 @@
   overflow-y: auto;
 }
 
+.plan-modal--bids {
+  max-width: 560px;
+}
+
 .plan-modal--post-need {
   max-width: 980px;
   width: 100%;
@@ -842,6 +846,10 @@
   justify-content: flex-end;
 }
 
+.plan-modal-actions--spaced {
+  margin-top: 1.25rem;
+}
+
 .plan-modal-cancel {
   padding: 0.5rem 1rem;
   border-radius: 999px;
@@ -850,6 +858,10 @@
   cursor: pointer;
   font-size: 0.85rem;
   color: hsl(var(--foreground));
+}
+
+.plan-modal-cancel--top {
+  margin-top: 1rem;
 }
 
 .plan-modal-confirm {
@@ -1054,6 +1066,67 @@
   gap: 0.5rem;
 }
 
+.calendar-booking-actions--spaced {
+  margin-top: 1rem;
+}
+
+.reservation-details-review-box--spaced {
+  margin-top: 1rem;
+}
+
+.dashboard-bid-actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-direction: column;
+}
+
+.dashboard-bid-actions--accepted {
+  align-items: flex-start;
+}
+
+.dashboard-badge--unread {
+  background: hsl(var(--destructive));
+  color: #fff;
+  align-self: flex-start;
+}
+
+.dashboard-bid-pay-btn {
+  margin-top: 0.5rem;
+}
+
+.dashboard-need-chat {
+  margin-top: 1.5rem;
+  border-top: 1px solid hsl(var(--border));
+  padding-top: 1rem;
+}
+
+.dashboard-need-chat-title {
+  margin-bottom: 1rem;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.dashboard-need-chat-messages {
+  max-height: 200px;
+  overflow-y: auto;
+  margin-bottom: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.dashboard-need-chat-message {
+  padding: 0.5rem;
+  background: hsl(var(--muted));
+  color: hsl(var(--foreground));
+  border-radius: 4px;
+}
+
+.dashboard-need-chat-form {
+  display: flex;
+  gap: 0.5rem;
+}
+
 .reservation-filter-row {
   display: flex;
   flex-wrap: wrap;
@@ -1213,10 +1286,20 @@
   max-width: 100%;
 }
 
+.reservation-review-comment--spaced {
+  margin-top: 0.5rem;
+  display: block;
+  width: 100%;
+}
+
 .reservation-review-actions {
   display: flex;
   gap: 0.5rem;
   flex-wrap: wrap;
+}
+
+.reservation-review-actions--spaced {
+  margin-top: 0.5rem;
 }
 
 /* Service booking modal */
@@ -1407,4 +1490,44 @@
     opacity: 1;
     transform: scale(1) translateY(0);
   }
+}
+
+/* Cancellation confirmation modal */
+.bookings-cancel-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: hsl(0 0% 0% / 0.5);
+  padding: 1rem;
+}
+
+.bookings-cancel-modal {
+  background: hsl(var(--card));
+  border: 1px solid hsl(var(--border));
+  border-radius: var(--radius-lg, 0.75rem);
+  padding: 1.5rem;
+  max-width: 28rem;
+  width: 100%;
+  box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.1);
+}
+
+.bookings-cancel-modal-title {
+  margin: 0 0 0.75rem;
+  font-size: 1.25rem;
+  font-weight: 600;
+}
+
+.bookings-cancel-modal-preview {
+  margin: 0 0 1.25rem;
+  color: hsl(var(--muted-foreground));
+  line-height: 1.5;
+}
+
+.bookings-cancel-modal-actions {
+  display: flex;
+  gap: 0.75rem;
+  justify-content: flex-end;
 }

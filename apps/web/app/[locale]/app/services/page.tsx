@@ -11,7 +11,7 @@ type ServicesPageProps = {
 const ServicesPage = async ({ params }: ServicesPageProps) => {
   const { locale } = await params;
   if (!isSupportedLocale(locale)) notFound();
-  const dictionary = getDictionary(locale);
+  const dictionary = await getDictionary(locale);
   return <ServicesScreen locale={locale} dictionary={dictionary} />;
 };
 

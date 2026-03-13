@@ -15,7 +15,7 @@ const ExpertOnboardingPage = async ({ params }: ExpertOnboardingPageProps) => {
     notFound();
   }
 
-  const dictionary = getDictionary(locale);
+  const dictionary = await getDictionary(locale);
 
   return <ExpertOnboardingScreen locale={locale} dictionary={dictionary} />;
 };

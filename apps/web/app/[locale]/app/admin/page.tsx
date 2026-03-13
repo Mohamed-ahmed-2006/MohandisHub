@@ -36,7 +36,7 @@ const AdminPage = async ({ params }: AdminPageProps) => {
     notFound();
   }
 
-  const dictionary = getDictionary(locale);
+  const dictionary = await getDictionary(locale);
 
   return <AdminPanel locale={locale} dictionary={dictionary} />;
 };

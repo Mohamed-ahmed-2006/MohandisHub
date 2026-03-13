@@ -42,6 +42,18 @@ export const userActivityTypeSchema = z.enum([
   'transactions',
 ]);
 
+export const planLimitsSchema = z
+  .object({
+    maxServices: z.number().int().min(0).nullable().optional(),
+    maxNeeds: z.number().int().min(0).nullable().optional(),
+    maxJobs: z.number().int().min(0).nullable().optional(),
+    canPriorityListing: z.boolean().optional(),
+    bidsVisibleToCustomer: z.enum(['all', 'top_n', 'premium_first']).nullable().optional(),
+    bidsVisibleTopN: z.number().int().min(1).nullable().optional(),
+  })
+  .optional()
+  .nullable();
+
 export const createPlanSchema = z.object({
   slug: z.string().min(1).max(50),
   name: z.string().min(1).max(100),
@@ -54,6 +66,7 @@ export const createPlanSchema = z.object({
   maxServices: z.number().int().positive().optional(),
   maxProjects: z.number().int().positive().optional(),
   features: z.array(z.string()).default([]),
+  planLimits: planLimitsSchema,
   sortOrder: z.number().int().min(0).default(0),
 });
 
@@ -71,6 +84,23 @@ export const adjustBalanceSchema = z.object({
 export const rejectServiceSchema = z.object({
   reason: z.string().min(1).max(1000),
 });
+
+export const sendNotificationSchema = z
+  .object({
+    target: z.enum(['all', 'users', 'role']),
+    userIds: z.array(z.string().uuid()).optional(),
+    role: z.enum(['customer', 'expert', 'business']).optional(),
+    title: z.string().min(1).max(200),
+    message: z.string().min(1).max(2000),
+  })
+  .refine(
+    (data) => {
+      if (data.target === 'users') return Array.isArray(data.userIds) && data.userIds.length > 0;
+      if (data.target === 'role') return typeof data.role === 'string';
+      return true;
+    },
+    { message: 'target "users" requires userIds; target "role" requires role' },
+  );
 
 export const createCategorySchema = z.object({
   nameEn: z.string().min(1).max(100),
@@ -124,6 +154,7 @@ export const updateSettingsSchema = z.object({
   reservationVoiceMinuteRate: z.number().min(0).optional(),
   reservationVideoMinuteRate: z.number().min(0).optional(),
   reservationMinPrejoinMinutes: z.number().int().min(1).max(180).optional(),
+  jobInterviewFeeAmount: z.number().min(0).optional(),
 });
 
 export type UpdateUserInput = z.infer<typeof updateUserSchema>;

@@ -2,19 +2,25 @@
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 
 import { useAuth } from '@/components/auth/auth-provider';
 import { SiteLogo } from '@/components/site-logo';
 import { Container } from '@/components/ui/container';
 import { buildLocalePath } from '@/lib/i18n/path';
 import type { Dictionary, Locale } from '@/lib/i18n/types';
+import { profilesApiClient } from '@/lib/profiles/client';
+import { usersApiClient } from '@/lib/users/client';
+import { formatApiError } from '@/lib/utils/format-api-error';
 
 type Props = { locale: Locale; dictionary: Dictionary };
 
 export const CustomerOnboardingScreen = ({ locale, dictionary }: Props) => {
   const router = useRouter();
-  const { authUser, isAuthenticated, isReady, authGuard } = useAuth();
+  const { authUser, accessToken, isAuthenticated, isReady, authGuard, updateAuthUser } = useAuth();
+  const [step, setStep] = useState<'welcome' | 'profile' | 'done'>('welcome');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!isReady) return;
@@ -26,6 +32,37 @@ export const CustomerOnboardingScreen = ({ locale, dictionary }: Props) => {
       router.replace(buildLocalePath(locale, '/verify-email'));
     }
   }, [isReady, isAuthenticated, authUser, authGuard.emailVerified, locale, router]);
+
+  const handleProfileSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (!accessToken) return;
+    const form = e.currentTarget;
+    const displayName = (form.elements.namedItem('displayName') as HTMLInputElement)?.value?.trim();
+    const phone = (form.elements.namedItem('phone') as HTMLInputElement)?.value?.trim() || null;
+    const city = (form.elements.namedItem('city') as HTMLInputElement)?.value?.trim() || null;
+    const contactPreference = (form.elements.namedItem('contactPreference') as HTMLSelectElement)?.value?.trim() || null;
+    if (!displayName || displayName.length < 2) {
+      setError(dictionary.onboarding.customer.profileDisplayNameRequired ?? 'Display name is required (at least 2 characters).');
+      return;
+    }
+    setSaving(true);
+    setError(null);
+    try {
+      await Promise.all([
+        usersApiClient.updateAccount(accessToken, { displayName, phone: phone ? phone : null }),
+        profilesApiClient.updateCustomerProfile(accessToken, {
+          city: city || null,
+          contactPreference: contactPreference || null,
+        }),
+      ]);
+      await updateAuthUser();
+      setStep('done');
+    } catch (err) {
+      setError(formatApiError(err, dictionary.profile?.saveError ?? 'Save failed'));
+    } finally {
+      setSaving(false);
+    }
+  };
 
   if (!isReady || !authUser) {
     return (
@@ -47,12 +84,109 @@ export const CustomerOnboardingScreen = ({ locale, dictionary }: Props) => {
         </header>
 
         <section className="onboarding-card">
-          <h1 className="onboarding-title">{dictionary.onboarding.customer.title}</h1>
-          <p className="onboarding-description">{dictionary.onboarding.customer.welcomeMessage}</p>
+          {step === 'welcome' && (
+            <>
+              <h1 className="onboarding-title">{dictionary.onboarding.customer.title}</h1>
+              <p className="onboarding-description">{dictionary.onboarding.customer.welcomeMessage}</p>
+              <button
+                type="button"
+                className="onboarding-cta-button"
+                onClick={() => setStep('profile')}
+              >
+                {dictionary.onboarding.customer.setupProfile ?? 'Set up your profile'}
+              </button>
+            </>
+          )}
 
-          <Link href={buildLocalePath(locale, '/app')} className="onboarding-cta-button">
-            {dictionary.onboarding.customer.goToDashboard}
-          </Link>
+          {step === 'profile' && (
+            <>
+              <h1 className="onboarding-title">{dictionary.onboarding.customer.profileTitle ?? 'Profile setup'}</h1>
+              <p className="onboarding-description">
+                {dictionary.onboarding.customer.profileDescription ?? 'Add a few details so providers can recognize you.'}
+              </p>
+              <form className="onboarding-form" onSubmit={handleProfileSubmit}>
+                {error && <p className="onboarding-error" role="alert">{error}</p>}
+                <div className="onboarding-field">
+                  <label className="onboarding-label" htmlFor="customer-displayName">
+                    {dictionary.onboarding.customer.profileDisplayName ?? 'Display name'}
+                  </label>
+                  <input
+                    id="customer-displayName"
+                    name="displayName"
+                    type="text"
+                    className="onboarding-input"
+                    defaultValue={authUser.displayName ?? ''}
+                    placeholder={dictionary.onboarding.customer.profileDisplayNamePlaceholder ?? 'How should we call you?'}
+                    minLength={2}
+                    maxLength={100}
+                    required
+                  />
+                </div>
+                <div className="onboarding-field">
+                  <label className="onboarding-label" htmlFor="customer-phone">
+                    {dictionary.onboarding.customer.profilePhone ?? 'Phone (optional)'}
+                  </label>
+                  <input
+                    id="customer-phone"
+                    name="phone"
+                    type="tel"
+                    className="onboarding-input"
+                    placeholder="+1 234 567 8900"
+                  />
+                </div>
+                <div className="onboarding-field">
+                  <label className="onboarding-label" htmlFor="customer-city">
+                    {dictionary.onboarding.customer.profileCity ?? 'City (optional)'}
+                  </label>
+                  <input
+                    id="customer-city"
+                    name="city"
+                    type="text"
+                    className="onboarding-input"
+                    placeholder={dictionary.onboarding.customer.profileCityPlaceholder ?? 'e.g. Cairo, Dubai'}
+                  />
+                </div>
+                <div className="onboarding-field">
+                  <label className="onboarding-label" htmlFor="customer-contactPreference">
+                    {dictionary.onboarding.customer.profileContactPref ?? 'Preferred contact'}
+                  </label>
+                  <select
+                    id="customer-contactPreference"
+                    name="contactPreference"
+                    className="onboarding-input"
+                  >
+                    <option value="">{dictionary.onboarding.customer.profileContactPrefOptional ?? 'Any'}</option>
+                    <option value="email">Email</option>
+                    <option value="phone">Phone</option>
+                  </select>
+                </div>
+                <div className="onboarding-nav-row">
+                  <button
+                    type="button"
+                    className="onboarding-back-button"
+                    onClick={() => setStep('welcome')}
+                  >
+                    {dictionary.common.back}
+                  </button>
+                  <button type="submit" className="onboarding-cta-button" disabled={saving}>
+                    {saving ? dictionary.auth?.common?.loading ?? 'Saving...' : dictionary.common.continue}
+                  </button>
+                </div>
+              </form>
+            </>
+          )}
+
+          {step === 'done' && (
+            <>
+              <h1 className="onboarding-title">{dictionary.onboarding.customer.profileCompleteTitle ?? "You're all set"}</h1>
+              <p className="onboarding-description">
+                {dictionary.onboarding.customer.profileCompleteDescription ?? 'Your profile is ready. Head to the dashboard to post needs or browse services.'}
+              </p>
+              <Link href={buildLocalePath(locale, '/app')} className="onboarding-cta-button">
+                {dictionary.onboarding.customer.goToDashboard}
+              </Link>
+            </>
+          )}
         </section>
       </Container>
     </main>

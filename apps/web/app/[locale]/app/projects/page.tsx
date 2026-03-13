@@ -11,7 +11,7 @@ type ProjectsPageProps = {
 const ProjectsPage = async ({ params }: ProjectsPageProps) => {
   const { locale } = await params;
   if (!isSupportedLocale(locale)) notFound();
-  const dictionary = getDictionary(locale);
+  const dictionary = await getDictionary(locale);
   return <ComingSoonPage locale={locale} dictionary={dictionary} title={dictionary.nav.projects} />;
 };
 

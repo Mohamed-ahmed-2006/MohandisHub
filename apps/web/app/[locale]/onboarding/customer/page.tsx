@@ -15,7 +15,7 @@ const CustomerOnboardingPage = async ({ params }: CustomerOnboardingPageProps) =
     notFound();
   }
 
-  const dictionary = getDictionary(locale);
+  const dictionary = await getDictionary(locale);
 
   return <CustomerOnboardingScreen locale={locale} dictionary={dictionary} />;
 };

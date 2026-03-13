@@ -86,6 +86,19 @@ export const finishReservationSchema = z.object({
   reportReason: z.string().max(2000).optional(),
 });
 
+export const cancelReservationSchema = z.object({
+  reasonCode: z.enum([
+    'customer_changed_mind',
+    'customer_schedule_conflict',
+    'provider_unavailable',
+    'provider_schedule_conflict',
+    'slot_invalidated',
+    'platform_failure',
+    'other',
+  ]),
+  reasonText: z.string().max(2000).optional(),
+});
+
 export const callJoinSchema = z.object({
   mediaType: z.enum(['voice', 'video']),
 });
@@ -123,6 +136,7 @@ export type ProposeLocationInput = z.infer<typeof proposeLocationSchema>;
 export type RespondLocationInput = z.infer<typeof respondLocationSchema>;
 export type ConfirmCheckinInput = z.infer<typeof confirmCheckinSchema>;
 export type FinishReservationInput = z.infer<typeof finishReservationSchema>;
+export type CancelReservationInput = z.infer<typeof cancelReservationSchema>;
 export type CallJoinInput = z.infer<typeof callJoinSchema>;
 export type CallHeartbeatInput = z.infer<typeof callHeartbeatSchema>;
 export type CallExtensionInput = z.infer<typeof callExtensionSchema>;

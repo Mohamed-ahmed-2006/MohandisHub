@@ -51,3 +51,9 @@ export const useToast = () => {
   if (!ctx) throw new Error('useToast must be used within ToastProvider');
   return ctx;
 };
+
+/** Use when component may render outside ToastProvider; falls back to no-op or console. */
+export const useToastOptional = (): ToastContextType => {
+  const ctx = useContext(ToastContext);
+  return ctx ?? { addToast: () => {} };
+};

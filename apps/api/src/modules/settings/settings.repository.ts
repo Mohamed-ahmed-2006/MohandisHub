@@ -39,6 +39,7 @@ export type AppSettingsRow = {
   reservation_voice_minute_rate?: string;
   reservation_video_minute_rate?: string;
   reservation_min_prejoin_minutes?: number;
+  job_interview_fee_amount?: string;
 };
 
 export type AppSettingsUpdate = Partial<{
@@ -72,6 +73,7 @@ export type AppSettingsUpdate = Partial<{
   reservation_voice_minute_rate: number;
   reservation_video_minute_rate: number;
   reservation_min_prejoin_minutes: number;
+  job_interview_fee_amount: number;
 }>;
 
 export class SettingsRepository {
@@ -115,6 +117,7 @@ export class SettingsRepository {
     reservationVoiceMinuteRate: 'reservation_voice_minute_rate',
     reservationVideoMinuteRate: 'reservation_video_minute_rate',
     reservationMinPrejoinMinutes: 'reservation_min_prejoin_minutes',
+    jobInterviewFeeAmount: 'job_interview_fee_amount',
   };
 
   async update(partial: AppSettingsUpdate): Promise<AppSettingsRow | null> {

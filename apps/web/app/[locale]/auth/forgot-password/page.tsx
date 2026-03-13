@@ -23,7 +23,7 @@ const ForgotPasswordPage = async ({ params }: ForgotPasswordPageProps) => {
     notFound();
   }
 
-  const dictionary = getDictionary(locale);
+  const dictionary = await getDictionary(locale);
 
   return (
     <main className="auth-page-main" suppressHydrationWarning>

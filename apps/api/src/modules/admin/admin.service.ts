@@ -112,6 +112,10 @@ export class AdminService {
     };
   }
 
+  async listUserIds(filters: { role?: string; isActive?: boolean }): Promise<string[]> {
+    return this.repo.listUserIds(filters);
+  }
+
   async getUserDetail(userId: string): Promise<AdminUserDetail> {
     const row = await this.repo.getUserDetail(userId);
     if (!row) {
@@ -507,6 +511,7 @@ export class AdminService {
     if (input.maxProjects !== undefined) dbFields.max_projects = input.maxProjects;
     if (input.features !== undefined)
       dbFields.features = Array.isArray(input.features) ? input.features : [];
+    if (input.planLimits !== undefined) dbFields.plan_limits = input.planLimits;
     if (input.sortOrder !== undefined) dbFields.sort_order = input.sortOrder;
 
     try {
@@ -531,6 +536,7 @@ export class AdminService {
     if (input.maxProjects !== undefined) dbFields.max_projects = input.maxProjects;
     if (input.features !== undefined)
       dbFields.features = Array.isArray(input.features) ? input.features : [];
+    if (input.planLimits !== undefined) dbFields.plan_limits = input.planLimits;
     if (input.sortOrder !== undefined) dbFields.sort_order = input.sortOrder;
     if (input.isActive !== undefined) dbFields.is_active = input.isActive;
 
@@ -855,6 +861,11 @@ export class AdminService {
   }
 
   private toPlan(row: PlanRow): Plan {
+    const rawLimits = row.plan_limits as Record<string, unknown> | null | undefined;
+    const planLimits =
+      rawLimits && typeof rawLimits === 'object' && !Array.isArray(rawLimits)
+        ? (rawLimits as Plan['planLimits'])
+        : null;
     return {
       id: row.id,
       slug: row.slug,
@@ -868,6 +879,7 @@ export class AdminService {
       maxServices: row.max_services,
       maxProjects: row.max_projects,
       features: Array.isArray(row.features) ? row.features : [],
+      planLimits: planLimits ?? null,
       isActive: row.is_active,
       sortOrder: row.sort_order,
       createdAt: row.created_at,

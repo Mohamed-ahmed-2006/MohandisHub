@@ -1,13 +1,18 @@
 import { randomInt } from 'node:crypto';
 
 import type {
+  ReservationActionFailure,
+  ReservationCancellationActor,
+  ReservationCancellationOutcome,
   Reservation,
   ReservationCallParticipant,
   ReservationCallSession,
   ReservationDispute,
   ReservationLocationProposal,
   ReservationProfile,
+  ReservationPolicySnapshot,
   ReservationSlot,
+  ReservationTimelineEvent,
 } from '@mohandishub/shared';
 import type { PoolClient } from 'pg';
 
@@ -16,14 +21,17 @@ import { getPool } from '../../db/pool.js';
 import { buildAgoraRtcToken } from '../../lib/agora-token.js';
 import { HttpError } from '../../utils/http-error.js';
 import { ChatRepository } from '../chat/chat.repository.js';
+import { JobsRepository } from '../jobs/jobs.repository.js';
 import { SettingsService } from '../settings/settings.service.js';
 import { WalletRepository } from '../wallet/wallet.repository.js';
 
 import { ReservationsRepository } from './reservations.repository.js';
 import type {
+  ReservationActionFailureRow,
   ReservationCallParticipantRow,
   ReservationCallSessionRow,
   ReservationDisputeRow,
+  ReservationEventRow,
   ReservationLocationProposalRow,
   ReservationProfileRow,
   ReservationRow,
@@ -32,6 +40,7 @@ import type {
 import type {
   CallExtensionInput,
   CallHeartbeatInput,
+  CancelReservationInput,
   CallJoinInput,
   ConfirmCheckinInput,
   CreateReservationInput,
@@ -47,6 +56,9 @@ import type {
 } from './reservations.validation.js';
 
 const PLATFORM_USER_ID = '00000000-0000-0000-0000-000000000001';
+const CUSTOMER_FREE_CANCEL_HOURS = 24;
+const PROVIDER_PENALTY_CANCEL_HOURS = 2;
+const CUSTOMER_LATE_CANCEL_PAYOUT_PERCENT = 100;
 const DISCONNECT_AUTO_RELEASE_HOURS = 3;
 const OFFLINE_DONE_TIMEOUT_HOURS = 6;
 const MINUTE_MS = 60_000;
@@ -56,6 +68,12 @@ const MILLI_PIASTER_PER_PIASTER = 1_000;
 const MILLI_PIASTER_PER_EGP = PIASTER_PER_EGP * MILLI_PIASTER_PER_PIASTER;
 const AGORA_TOKEN_EXPIRY_SECONDS = 7_200;
 const LIFECYCLE_SWEEP_LOCK_KEY = 6_310_019;
+
+type IdempotentReservationAction =
+  | 'create_reservation'
+  | 'decide_reservation'
+  | 'cancel_reservation'
+  | 'book_job_interview';
 
 const toNumber = (value: string | number | null | undefined): number => {
   if (value == null) return 0;
@@ -93,6 +111,8 @@ const mapProfile = (row: ReservationProfileRow): ReservationProfile => ({
 const mapSlot = (row: ReservationSlotRow): ReservationSlot => ({
   id: row.id,
   providerId: row.provider_id,
+  purpose: row.purpose as ReservationSlot['purpose'],
+  jobId: row.job_id,
   startAt: row.start_at,
   endAt: row.end_at,
   status: row.status as ReservationSlot['status'],
@@ -107,6 +127,9 @@ const mapReservation = (row: ReservationRow): Reservation => {
     id: row.id,
     customerId: row.customer_id,
     providerId: row.provider_id,
+    purpose: row.purpose as Reservation['purpose'],
+    jobId: row.job_id,
+    jobApplicationId: row.job_application_id,
     serviceId: row.service_id,
     slotId: row.slot_id,
     mode: row.mode as Reservation['mode'],
@@ -118,6 +141,7 @@ const mapReservation = (row: ReservationRow): Reservation => {
     currency: row.currency,
     adminAcceptanceFee: toNumber(row.admin_acceptance_fee),
     adminMinuteRate: toNumber(row.admin_minute_rate),
+    policySnapshot: (row.policy_snapshot as ReservationPolicySnapshot | null) ?? null,
     fixedPriceHoldId: row.fixed_price_hold_id,
     rejectionReason: row.rejection_reason,
     autoRejected: row.auto_rejected,
@@ -130,6 +154,17 @@ const mapReservation = (row: ReservationRow): Reservation => {
     startedAt: row.started_at,
     endedAt: row.ended_at,
     completedAt: row.completed_at,
+    cancelledAt: row.cancelled_at,
+    cancelledBy: row.cancelled_by,
+    cancellationActor: row.cancellation_actor as Reservation['cancellationActor'],
+    cancellationReasonCode: row.cancellation_reason_code as Reservation['cancellationReasonCode'],
+    cancellationEffectiveOutcome:
+      row.cancellation_effective_outcome as Reservation['cancellationEffectiveOutcome'],
+    refundAmount: toNumber(row.refund_amount),
+    capturedAmount: toNumber(row.captured_amount),
+    penaltyAmount: toNumber(row.penalty_amount),
+    refundStatus: row.refund_status as Reservation['refundStatus'],
+    settlementStatus: row.settlement_status as Reservation['settlementStatus'],
     customerDoneDueAt: row.customer_done_due_at,
     donePromptedAt: row.done_prompted_at,
     disconnectAutoReleaseAt: row.disconnect_auto_release_at,
@@ -202,6 +237,28 @@ const mapDispute = (row: ReservationDisputeRow): ReservationDispute => ({
   updatedAt: row.updated_at,
 });
 
+const mapTimelineEvent = (row: ReservationEventRow): ReservationTimelineEvent => ({
+  id: row.id,
+  reservationId: row.reservation_id,
+  eventType: row.event_type as ReservationTimelineEvent['eventType'],
+  actorId: row.actor_id,
+  metadata: row.metadata ?? {},
+  createdAt: row.created_at,
+});
+
+const mapActionFailure = (row: ReservationActionFailureRow): ReservationActionFailure => ({
+  id: row.id,
+  reservationId: row.reservation_id,
+  actionType: row.action_type,
+  actorId: row.actor_id,
+  errorCode: row.error_code,
+  errorMessage: row.error_message,
+  metadata: row.metadata ?? {},
+  resolvedAt: row.resolved_at,
+  lastReplayedAt: row.last_replayed_at,
+  createdAt: row.created_at,
+});
+
 type CallSnapshot = {
   session: ReservationCallSession | null;
   participants: ReservationCallParticipant[];
@@ -217,6 +274,7 @@ export class ReservationsService {
     private readonly settingsService: SettingsService = new SettingsService(),
     private readonly walletRepo: WalletRepository = new WalletRepository(),
     private readonly chatRepo: ChatRepository = new ChatRepository(),
+    private readonly jobsRepo: JobsRepository = new JobsRepository(),
   ) {}
 
   async getMyProfile(userId: string, role: string): Promise<ReservationProfile> {
@@ -261,7 +319,9 @@ export class ReservationsService {
     availableOnly: boolean;
   }): Promise<{ items: ReservationSlot[] }> {
     const providerId = this.resolveProviderIdForSlots(params.userId, params.role, params.providerId);
-    const rows = await this.repo.listSlots(providerId, params.from, params.to, params.availableOnly);
+    const rows = await this.repo.listSlots(providerId, params.from, params.to, params.availableOnly, {
+      purpose: 'service',
+    });
     return { items: rows.map(mapSlot) };
   }
 
@@ -277,6 +337,7 @@ export class ReservationsService {
         endAt: new Date(input.endAt),
         supportsOnline: input.supportsOnline ?? true,
         supportsOffline: input.supportsOffline ?? true,
+        purpose: 'service',
       });
       return mapSlot(slot);
     } catch (error) {
@@ -348,7 +409,19 @@ export class ReservationsService {
     return { deleted };
   }
 
-  async createReservation(customerId: string, input: CreateReservationInput): Promise<Reservation> {
+  async createReservation(
+    customerId: string,
+    input: CreateReservationInput,
+    idempotencyKey?: string,
+  ): Promise<Reservation> {
+    if (idempotencyKey) {
+      const existing = await this.getIdempotentReservationResponse(
+        customerId,
+        'create_reservation',
+        idempotencyKey,
+      );
+      if (existing) return existing;
+    }
     const status = await this.settingsService.getAppStatus();
     if (status.moneyMovementsPaused) {
       throw new HttpError({
@@ -372,6 +445,14 @@ export class ReservationsService {
         statusCode: 409,
         code: 'SLOT_NOT_AVAILABLE',
         message: 'Selected slot is no longer available.',
+      });
+    }
+
+    if (slot.purpose !== 'service') {
+      throw new HttpError({
+        statusCode: 400,
+        code: 'SLOT_TYPE_NOT_SUPPORTED',
+        message: 'Selected slot is not available for standard reservations.',
       });
     }
 
@@ -402,6 +483,10 @@ export class ReservationsService {
           ? status.reservationVideoMinuteRate
           : status.reservationVoiceMinuteRate
         : 0;
+    const policySnapshot = this.buildPolicySnapshot({
+      purpose: 'service',
+      adminAcceptanceFee: status.reservationAcceptanceFee,
+    });
 
     const createInput: Parameters<ReservationsRepository['createReservation']>[0] = {
       customerId,
@@ -414,24 +499,169 @@ export class ReservationsService {
       currency: profile.currency || 'USD',
       adminAcceptanceFee: status.reservationAcceptanceFee,
       adminMinuteRate,
+      policySnapshot,
     };
     if (input.serviceId !== undefined) createInput.serviceId = input.serviceId;
     if (input.mode === 'online' && input.onlineType !== undefined) {
       createInput.onlineType = input.onlineType;
     }
     const reservation = await this.repo.createReservation(createInput);
+    await this.repo.createEvent({
+      reservationId: reservation.id,
+      eventType: 'created',
+      actorId: customerId,
+      metadata: {
+        purpose: 'service',
+        mode: input.mode,
+      },
+    });
 
     if (profile.auto_accept) {
-      return this.decideReservationInternal({
+      const accepted = await this.decideReservationInternal({
         reservationId: reservation.id,
         providerId: input.providerId,
         decision: 'accept',
         rejectionReason: null,
         autoDecision: true,
       });
+      if (idempotencyKey) {
+        await this.storeReservationActionIdempotency(
+          customerId,
+          'create_reservation',
+          idempotencyKey,
+          accepted.id,
+          accepted,
+        );
+      }
+      return accepted;
+    }
+    const mapped = mapReservation(reservation);
+    if (idempotencyKey) {
+      await this.storeReservationActionIdempotency(
+        customerId,
+        'create_reservation',
+        idempotencyKey,
+        mapped.id,
+        mapped,
+      );
+    }
+    return mapped;
+  }
+
+  async createJobInterviewReservation(params: {
+    expertId: string;
+    businessId: string;
+    jobId: string;
+    jobApplicationId: string;
+    slotId: string;
+    mode: 'online' | 'offline';
+    idempotencyKey?: string;
+  }): Promise<Reservation> {
+    if (params.idempotencyKey) {
+      const existing = await this.getIdempotentReservationResponse(
+        params.expertId,
+        'book_job_interview',
+        params.idempotencyKey,
+      );
+      if (existing) return existing;
+    }
+    const status = await this.settingsService.getAppStatus();
+    if (status.moneyMovementsPaused) {
+      throw new HttpError({
+        statusCode: 503,
+        code: 'MONEY_MOVEMENTS_PAUSED',
+        message: 'Reservations are temporarily unavailable.',
+      });
     }
 
-    return mapReservation(reservation);
+    const slot = await this.repo.findSlotById(params.slotId);
+    if (!slot || slot.provider_id !== params.businessId) {
+      throw new HttpError({
+        statusCode: 404,
+        code: 'SLOT_NOT_FOUND',
+        message: 'Selected interview slot is not available.',
+      });
+    }
+    if (slot.purpose !== 'job_interview' || slot.job_id !== params.jobId) {
+      throw new HttpError({
+        statusCode: 400,
+        code: 'INVALID_INTERVIEW_SLOT',
+        message: 'Selected slot is not linked to this hiring post.',
+      });
+    }
+    if (slot.status !== 'available') {
+      throw new HttpError({
+        statusCode: 409,
+        code: 'SLOT_NOT_AVAILABLE',
+        message: 'Selected slot is no longer available.',
+      });
+    }
+    if (params.mode === 'online' && !slot.supports_online) {
+      throw new HttpError({
+        statusCode: 400,
+        code: 'SLOT_MODE_NOT_SUPPORTED',
+        message: 'This interview slot does not support online interviews.',
+      });
+    }
+    if (params.mode === 'offline' && !slot.supports_offline) {
+      throw new HttpError({
+        statusCode: 400,
+        code: 'SLOT_MODE_NOT_SUPPORTED',
+        message: 'This interview slot does not support offline interviews.',
+      });
+    }
+
+    const policySnapshot = this.buildPolicySnapshot({
+      purpose: 'job_interview',
+      adminAcceptanceFee: 0,
+    });
+
+    const reservation = await this.repo.createReservation({
+      customerId: params.expertId,
+      providerId: params.businessId,
+      purpose: 'job_interview',
+      jobId: params.jobId,
+      jobApplicationId: params.jobApplicationId,
+      slotId: params.slotId,
+      mode: params.mode,
+      ...(params.mode === 'online' ? { onlineType: 'video' } : {}),
+      requestedStartAt: new Date(slot.start_at),
+      requestedEndAt: new Date(slot.end_at),
+      expertPriceAmount: status.jobInterviewFeeAmount,
+      currency: 'USD',
+      adminAcceptanceFee: 0,
+      adminMinuteRate: 0,
+      policySnapshot,
+    });
+    await this.repo.createEvent({
+      reservationId: reservation.id,
+      eventType: 'created',
+      actorId: params.expertId,
+      metadata: {
+        purpose: 'job_interview',
+        mode: params.mode,
+        jobId: params.jobId,
+        jobApplicationId: params.jobApplicationId,
+      },
+    });
+
+    const accepted = await this.decideReservationInternal({
+      reservationId: reservation.id,
+      providerId: params.businessId,
+      decision: 'accept',
+      rejectionReason: null,
+      autoDecision: true,
+    });
+    if (params.idempotencyKey) {
+      await this.storeReservationActionIdempotency(
+        params.expertId,
+        'book_job_interview',
+        params.idempotencyKey,
+        accepted.id,
+        accepted,
+      );
+    }
+    return accepted;
   }
 
   async listMyReservations(
@@ -479,14 +709,33 @@ export class ReservationsService {
     providerId: string,
     reservationId: string,
     input: DecideReservationInput,
+    idempotencyKey?: string,
   ): Promise<Reservation> {
-    return this.decideReservationInternal({
+    if (idempotencyKey) {
+      const existing = await this.getIdempotentReservationResponse(
+        providerId,
+        'decide_reservation',
+        idempotencyKey,
+      );
+      if (existing) return existing;
+    }
+    const reservation = await this.decideReservationInternal({
       reservationId,
       providerId,
       decision: input.decision,
       rejectionReason: input.rejectionReason?.trim() || null,
       autoDecision: false,
     });
+    if (idempotencyKey) {
+      await this.storeReservationActionIdempotency(
+        providerId,
+        'decide_reservation',
+        idempotencyKey,
+        reservation.id,
+        reservation,
+      );
+    }
+    return reservation;
   }
 
   async proposeLocation(
@@ -735,8 +984,19 @@ export class ReservationsService {
           {
             status: 'waiting_customer_done',
             startedAt: now,
+            settlementStatus:
+              toNumber(reservationForUpdate.expert_price_amount) > 0 ? 'held' : 'unsettled',
             customerDoneDueAt: dueAt,
             donePromptedAt: null,
+          },
+          client,
+        );
+        await this.repo.createEvent(
+          {
+            reservationId,
+            eventType: 'started',
+            actorId: userId,
+            metadata: { mode: 'offline' },
           },
           client,
         );
@@ -804,6 +1064,10 @@ export class ReservationsService {
           message: 'Reservation not found.',
         });
       }
+      await this.recordReservationEvent(reservationId, 'dispute_opened', userId, {
+        disputeId: dispute.id,
+        reason: dispute.reason,
+      });
       await this.sendReservationMessage(updatedReservation, 'Reservation was reported and moved to dispute.', userId);
       return {
         reservation: mapReservation(updatedReservation),
@@ -845,9 +1109,33 @@ export class ReservationsService {
           status: 'completed',
           completedAt: new Date(),
           endedAt: new Date(),
+          capturedAmount: toNumber(reservationForUpdate.expert_price_amount),
+          settlementStatus:
+            toNumber(reservationForUpdate.expert_price_amount) > 0
+              ? 'released_to_provider'
+              : 'unsettled',
           customerDoneDueAt: null,
           donePromptedAt: null,
           disconnectAutoReleaseAt: null,
+        },
+        client,
+      );
+      await this.syncInterviewApplicationStatus(reservationForUpdate, 'interview_completed', client);
+      await this.repo.createEvent(
+        {
+          reservationId,
+          eventType: 'hold_captured',
+          actorId: userId,
+          metadata: { amount: toNumber(reservationForUpdate.expert_price_amount) },
+        },
+        client,
+      );
+      await this.repo.createEvent(
+        {
+          reservationId,
+          eventType: 'completed',
+          actorId: userId,
+          metadata: { source: 'customer_done' },
         },
         client,
       );
@@ -958,7 +1246,18 @@ export class ReservationsService {
           {
             status: 'in_session',
             startedAt: asDate(reservationForUpdate.started_at) ?? now,
+            settlementStatus:
+              toNumber(reservationForUpdate.expert_price_amount) > 0 ? 'held' : 'unsettled',
             disconnectAutoReleaseAt: null,
+          },
+          client,
+        );
+        await this.repo.createEvent(
+          {
+            reservationId,
+            eventType: 'started',
+            actorId: userId,
+            metadata: { mode: 'online' },
           },
           client,
         );
@@ -994,6 +1293,17 @@ export class ReservationsService {
       };
     } catch (error) {
       await client.query('ROLLBACK');
+      await this.recordReservationActionFailure({
+        reservationId,
+        actionType: 'call_join',
+        actorId: userId,
+        errorCode: error instanceof Error ? error.name : 'UNKNOWN',
+        errorMessage: error instanceof Error ? error.message : 'Failed to join call.',
+        metadata: { mediaType: input.mediaType },
+      });
+      await this.recordReservationEvent(reservationId, 'call_join_failed', userId, {
+        mediaType: input.mediaType,
+      });
       throw error;
     } finally {
       client.release();
@@ -1378,9 +1688,41 @@ export class ReservationsService {
           status: 'completed',
           endedAt: now,
           completedAt: now,
+          refundAmount: endedByCustomer ? 0 : toNumber(reservationForUpdate.expert_price_amount),
+          capturedAmount: endedByCustomer ? toNumber(reservationForUpdate.expert_price_amount) : 0,
+          refundStatus:
+            endedByCustomer || toNumber(reservationForUpdate.expert_price_amount) <= 0
+              ? 'none'
+              : 'succeeded',
+          settlementStatus: endedByCustomer
+            ? toNumber(reservationForUpdate.expert_price_amount) > 0
+              ? 'released_to_provider'
+              : 'unsettled'
+            : toNumber(reservationForUpdate.expert_price_amount) > 0
+              ? 'refunded_to_customer'
+              : 'unsettled',
           customerDoneDueAt: null,
           donePromptedAt: null,
           disconnectAutoReleaseAt: null,
+        },
+        client,
+      );
+      await this.syncInterviewApplicationStatus(reservationForUpdate, 'interview_completed', client);
+      await this.repo.createEvent(
+        {
+          reservationId,
+          eventType: endedByCustomer ? 'hold_captured' : 'hold_released',
+          actorId: userId,
+          metadata: { amount: toNumber(reservationForUpdate.expert_price_amount) },
+        },
+        client,
+      );
+      await this.repo.createEvent(
+        {
+          reservationId,
+          eventType: 'completed',
+          actorId: userId,
+          metadata: { endedByCustomer },
         },
         client,
       );
@@ -1486,12 +1828,510 @@ export class ReservationsService {
         message: 'Dispute not found.',
       });
     }
+    await this.recordReservationEvent(dispute.reservation_id, 'dispute_resolved', userId, {
+      disputeId: dispute.id,
+      status: dispute.status,
+    });
     return mapDispute(dispute);
+  }
+
+  async cancelReservation(
+    userId: string,
+    role: string,
+    reservationId: string,
+    input: CancelReservationInput,
+    idempotencyKey?: string,
+  ): Promise<Reservation> {
+    if (idempotencyKey) {
+      const existing = await this.getIdempotentReservationResponse(
+        userId,
+        'cancel_reservation',
+        idempotencyKey,
+      );
+      if (existing) return existing;
+    }
+
+    const current = await this.repo.findReservationById(reservationId);
+    if (!current) {
+      throw new HttpError({
+        statusCode: 404,
+        code: 'RESERVATION_NOT_FOUND',
+        message: 'Reservation not found.',
+      });
+    }
+
+    const actor = this.resolveCancellationActor(current, userId, role);
+    const cancellableStatuses = new Set(['pending', 'accepted', 'awaiting_start']);
+    if (!cancellableStatuses.has(current.status)) {
+      throw new HttpError({
+        statusCode: 409,
+        code: 'INVALID_RESERVATION_STATE',
+        message: 'Reservation cannot be cancelled in its current state.',
+      });
+    }
+
+    const pool = getPool();
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      const reservation = await this.findReservationForUpdate(client, reservationId);
+      if (!reservation) {
+        throw new HttpError({
+          statusCode: 404,
+          code: 'RESERVATION_NOT_FOUND',
+          message: 'Reservation not found.',
+        });
+      }
+
+      const now = new Date();
+      const policy = this.getPolicySnapshot(reservation);
+      const priceAmount = toNumber(reservation.expert_price_amount);
+      let refundAmount = 0;
+      let capturedAmount = 0;
+      let penaltyAmount = 0;
+      let refundStatus: Reservation['refundStatus'] = 'none';
+      let settlementStatus: Reservation['settlementStatus'] =
+        (reservation.settlement_status as Reservation['settlementStatus']) || 'unsettled';
+      let outcome: ReservationCancellationOutcome = 'none';
+
+      if (reservation.slot_id && reservation.status !== 'pending') {
+        const slot = await this.findSlotForUpdate(client, reservation.slot_id);
+        if (slot?.status === 'booked') {
+          await this.updateSlotStatusInTransaction(client, slot.id, 'available');
+        }
+      }
+
+      if (reservation.purpose === 'job_interview') {
+        const shouldRefund =
+          actor === 'provider' ||
+          actor === 'admin' ||
+          input.reasonCode === 'slot_invalidated' ||
+          input.reasonCode === 'platform_failure';
+        if (shouldRefund) {
+          await this.refundFixedHold(client, reservation, 'Interview reservation cancelled');
+          if (priceAmount > 0) {
+            refundAmount = priceAmount;
+            refundStatus = 'succeeded';
+            settlementStatus = 'refunded_to_customer';
+          }
+          outcome = input.reasonCode === 'platform_failure' ? 'platform_refund' : 'full_refund';
+          await this.repo.createEvent(
+            {
+              reservationId,
+              eventType: 'hold_released',
+              actorId: userId,
+              metadata: { reasonCode: input.reasonCode, amount: refundAmount },
+            },
+            client,
+          );
+        } else {
+          if (reservation.fixed_price_hold_id) {
+            await this.walletRepo.captureHoldInTransaction(
+              client,
+              reservation.fixed_price_hold_id,
+              'Interview cancellation without refund',
+              { reservationId },
+            );
+          }
+          capturedAmount = priceAmount;
+          settlementStatus = priceAmount > 0 ? 'cancelled_no_refund' : settlementStatus;
+          outcome = 'cancelled_no_refund';
+          await this.repo.createEvent(
+            {
+              reservationId,
+              eventType: 'hold_captured',
+              actorId: userId,
+              metadata: { reasonCode: input.reasonCode, amount: capturedAmount },
+            },
+            client,
+          );
+        }
+      } else if (reservation.status === 'pending') {
+        outcome = 'none';
+      } else if (actor === 'customer') {
+        const hoursUntilStart =
+          (new Date(reservation.requested_start_at).getTime() - now.getTime()) / (60 * MINUTE_MS);
+        if (hoursUntilStart >= policy.customerFreeCancelHours) {
+          await this.refundFixedHold(client, reservation, 'Customer cancelled reservation');
+          if (priceAmount > 0) {
+            refundAmount = priceAmount;
+            refundStatus = 'succeeded';
+            settlementStatus = 'refunded_to_customer';
+          }
+          outcome = 'full_refund';
+          await this.repo.createEvent(
+            {
+              reservationId,
+              eventType: 'hold_released',
+              actorId: userId,
+              metadata: { reasonCode: input.reasonCode, amount: refundAmount },
+            },
+            client,
+          );
+        } else {
+          await this.releaseExpertFixedPayout(client, reservation, 'Customer late cancellation');
+          capturedAmount = priceAmount;
+          settlementStatus = priceAmount > 0 ? 'released_to_provider' : settlementStatus;
+          outcome = 'provider_paid';
+          await this.repo.createEvent(
+            {
+              reservationId,
+              eventType: 'hold_captured',
+              actorId: userId,
+              metadata: { reasonCode: input.reasonCode, amount: capturedAmount },
+            },
+            client,
+          );
+        }
+      } else {
+        const hoursUntilStart =
+          (new Date(reservation.requested_start_at).getTime() - now.getTime()) / (60 * MINUTE_MS);
+        await this.refundFixedHold(client, reservation, 'Provider cancelled reservation');
+        if (priceAmount > 0) {
+          refundAmount = priceAmount;
+          refundStatus = 'succeeded';
+          settlementStatus = 'refunded_to_customer';
+        }
+        if (actor === 'provider' && hoursUntilStart < policy.providerPenaltyCancelHours) {
+          penaltyAmount = Math.max(0, policy.providerLateCancelPenaltyAmount);
+          if (penaltyAmount > 0) {
+            try {
+              await this.applyProviderLateCancellationPenalty(
+                client,
+                reservation,
+                penaltyAmount,
+                input.reasonCode,
+              );
+              await this.repo.createEvent(
+                {
+                  reservationId,
+                  eventType: 'penalty_applied',
+                  actorId: userId,
+                  metadata: { amount: penaltyAmount, reasonCode: input.reasonCode },
+                },
+                client,
+              );
+            } catch (error) {
+              await this.recordReservationActionFailure(
+                {
+                  reservationId,
+                  actionType: 'provider_late_cancel_penalty',
+                  actorId: userId,
+                  errorCode: error instanceof Error ? error.name : 'UNKNOWN',
+                  errorMessage:
+                    error instanceof Error ? error.message : 'Failed to apply provider penalty.',
+                  metadata: {
+                    penaltyAmount,
+                    reasonCode: input.reasonCode,
+                    reservationId,
+                  },
+                },
+                client,
+              );
+            }
+          }
+          outcome = 'customer_refund_with_provider_penalty';
+        } else {
+          outcome = 'full_refund';
+        }
+        await this.repo.createEvent(
+          {
+            reservationId,
+            eventType: 'hold_released',
+            actorId: userId,
+            metadata: { reasonCode: input.reasonCode, amount: refundAmount },
+          },
+          client,
+        );
+      }
+
+      await this.repo.updateReservation(
+        reservationId,
+        {
+          status: 'cancelled',
+          cancelledAt: now,
+          cancelledBy: userId,
+          cancellationActor: actor,
+          cancellationReasonCode: input.reasonCode,
+          cancellationEffectiveOutcome: outcome,
+          refundAmount,
+          capturedAmount,
+          penaltyAmount,
+          refundStatus,
+          settlementStatus,
+          customerDoneDueAt: null,
+          donePromptedAt: null,
+          disconnectAutoReleaseAt: null,
+        },
+        client,
+      );
+      await this.repo.createEvent(
+        {
+          reservationId,
+          eventType: 'cancelled',
+          actorId: userId,
+          metadata: {
+            actor,
+            reasonCode: input.reasonCode,
+            reasonText: input.reasonText?.trim() || null,
+            outcome,
+            refundAmount,
+            capturedAmount,
+            penaltyAmount,
+          },
+        },
+        client,
+      );
+      await this.syncInterviewApplicationStatus(reservation, 'interview_invited', client, {
+        interviewReservationId: null,
+      });
+      await client.query('COMMIT');
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+
+    const updated = await this.repo.findReservationById(reservationId);
+    if (!updated) {
+      throw new HttpError({
+        statusCode: 404,
+        code: 'RESERVATION_NOT_FOUND',
+        message: 'Reservation not found.',
+      });
+    }
+    const mapped = mapReservation(updated);
+    if (idempotencyKey) {
+      await this.storeReservationActionIdempotency(
+        userId,
+        'cancel_reservation',
+        idempotencyKey,
+        mapped.id,
+        mapped,
+      );
+    }
+    await this.sendReservationMessage(
+      updated,
+      `Reservation cancelled${input.reasonText?.trim() ? `: ${input.reasonText.trim()}` : '.'}`,
+      userId,
+    );
+    return mapped;
+  }
+
+  async listReservationTimeline(userId: string, reservationId: string): Promise<ReservationTimelineEvent[]> {
+    await this.requireReservationForParticipant(reservationId, userId);
+    const rows = await this.repo.listEvents(reservationId);
+    return rows.reverse().map(mapTimelineEvent);
+  }
+
+  async listActionFailures(
+    userId: string,
+    role: string,
+    onlyOpen: boolean,
+    limit: number,
+  ): Promise<ReservationActionFailure[]> {
+    this.ensureAdminRole(userId, role);
+    const rows = await this.repo.listActionFailures(onlyOpen, limit);
+    return rows.map(mapActionFailure);
+  }
+
+  async replayActionFailure(
+    userId: string,
+    role: string,
+    failureId: string,
+  ): Promise<ReservationActionFailure> {
+    this.ensureAdminRole(userId, role);
+    const failure = await this.repo.findActionFailureById(failureId);
+    if (!failure) {
+      throw new HttpError({
+        statusCode: 404,
+        code: 'ACTION_FAILURE_NOT_FOUND',
+        message: 'Reservation action failure not found.',
+      });
+    }
+
+    await this.repo.markActionFailureReplayed(failureId);
+    if (
+      failure.action_type === 'provider_late_cancel_penalty' &&
+      failure.reservation_id &&
+      typeof failure.metadata.penaltyAmount === 'number'
+    ) {
+      const pool = getPool();
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+        const reservation = await this.findReservationForUpdate(client, failure.reservation_id);
+        if (!reservation) {
+          throw new HttpError({
+            statusCode: 404,
+            code: 'RESERVATION_NOT_FOUND',
+            message: 'Reservation not found.',
+          });
+        }
+        await this.applyProviderLateCancellationPenalty(
+          client,
+          reservation,
+          failure.metadata.penaltyAmount,
+          typeof failure.metadata.reasonCode === 'string' ? failure.metadata.reasonCode : 'other',
+        );
+        await this.repo.resolveActionFailure(failureId);
+        await this.repo.createEvent(
+          {
+            reservationId: reservation.id,
+            eventType: 'worker_replayed',
+            actorId: userId,
+            metadata: {
+              failureId,
+              actionType: failure.action_type,
+            },
+          },
+          client,
+        );
+        await client.query('COMMIT');
+      } catch (error) {
+        await client.query('ROLLBACK');
+        throw error;
+      } finally {
+        client.release();
+      }
+    }
+
+    const updated = await this.repo.findActionFailureById(failureId);
+    return mapActionFailure(updated ?? failure);
+  }
+
+  async reconcileReservationMoney(
+    userId: string,
+    role: string,
+    reservationId: string,
+  ): Promise<Reservation> {
+    this.ensureAdminRole(userId, role);
+    const reservation = await this.repo.findReservationById(reservationId);
+    if (!reservation) {
+      throw new HttpError({
+        statusCode: 404,
+        code: 'RESERVATION_NOT_FOUND',
+        message: 'Reservation not found.',
+      });
+    }
+
+    let settlementStatus: Reservation['settlementStatus'] =
+      (reservation.settlement_status as Reservation['settlementStatus']) || 'unsettled';
+    const holdId = reservation.fixed_price_hold_id;
+    if (!holdId) {
+      settlementStatus = reservation.status === 'cancelled' ? 'unsettled' : settlementStatus;
+    } else {
+      const hold = await this.walletRepo.findWalletHoldById(holdId);
+      if (hold?.status === 'held') settlementStatus = 'held';
+      if (hold?.status === 'released') settlementStatus = 'refunded_to_customer';
+      if (hold?.status === 'captured') {
+        settlementStatus =
+          reservation.cancellation_effective_outcome === 'cancelled_no_refund'
+            ? 'cancelled_no_refund'
+            : 'released_to_provider';
+      }
+    }
+
+    const updated = await this.repo.updateReservation(reservationId, {
+      settlementStatus,
+    });
+    if (!updated) {
+      throw new HttpError({
+        statusCode: 404,
+        code: 'RESERVATION_NOT_FOUND',
+        message: 'Reservation not found.',
+      });
+    }
+    await this.recordReservationEvent(reservationId, 'reconciled', userId, {
+      settlementStatus,
+    });
+    return mapReservation(updated);
   }
 
   private async getCommissionReceiverId(): Promise<string> {
     const status = await this.settingsService.getAppStatus();
     return status.commissionReceiverId || PLATFORM_USER_ID;
+  }
+
+  private buildPolicySnapshot(input: {
+    purpose: Reservation['purpose'];
+    adminAcceptanceFee: number;
+  }): ReservationPolicySnapshot {
+    return {
+      customerFreeCancelHours: CUSTOMER_FREE_CANCEL_HOURS,
+      providerPenaltyCancelHours: PROVIDER_PENALTY_CANCEL_HOURS,
+      customerLateCancelPayoutPercent: CUSTOMER_LATE_CANCEL_PAYOUT_PERCENT,
+      providerLateCancelPenaltyAmount:
+        input.purpose === 'service' ? Math.max(0, input.adminAcceptanceFee) : 0,
+      interviewBusinessFailureRefundOnly: input.purpose === 'job_interview',
+    };
+  }
+
+  private getPolicySnapshot(reservation: ReservationRow): ReservationPolicySnapshot {
+    return (reservation.policy_snapshot as ReservationPolicySnapshot | null) ?? this.buildPolicySnapshot({
+      purpose: reservation.purpose as Reservation['purpose'],
+      adminAcceptanceFee: toNumber(reservation.admin_acceptance_fee),
+    });
+  }
+
+  private async getIdempotentReservationResponse(
+    actorId: string,
+    action: IdempotentReservationAction,
+    idempotencyKey: string,
+  ): Promise<Reservation | null> {
+    const existing = await this.repo.findActionIdempotency(actorId, action, idempotencyKey);
+    if (!existing) return null;
+    if (existing.reservation_id) {
+      const reservation = await this.repo.findReservationById(existing.reservation_id);
+      if (reservation) return mapReservation(reservation);
+    }
+    return existing.response_json as Reservation;
+  }
+
+  private async storeReservationActionIdempotency(
+    actorId: string,
+    action: IdempotentReservationAction,
+    idempotencyKey: string,
+    reservationId: string,
+    reservation: Reservation,
+    client?: PoolClient,
+  ): Promise<void> {
+    await this.repo.storeActionIdempotency(
+      {
+        actorId,
+        action,
+        idempotencyKey,
+        reservationId,
+        responseJson: reservation as unknown as Record<string, unknown>,
+      },
+      client,
+    );
+  }
+
+  private async recordReservationEvent(
+    reservationId: string,
+    eventType: ReservationTimelineEvent['eventType'],
+    actorId?: string | null,
+    metadata?: Record<string, unknown>,
+    client?: PoolClient,
+  ): Promise<void> {
+    const eventInput: Parameters<ReservationsRepository['createEvent']>[0] = {
+      reservationId,
+      eventType,
+      actorId: actorId ?? null,
+    };
+    if (metadata !== undefined) {
+      eventInput.metadata = metadata;
+    }
+    await this.repo.createEvent(eventInput, client);
+  }
+
+  private async recordReservationActionFailure(
+    input: Parameters<ReservationsRepository['createActionFailure']>[0],
+    client?: PoolClient,
+  ): Promise<void> {
+    await this.repo.createActionFailure(input, client);
   }
 
   private ensureProviderRole(role: string): void {
@@ -1502,6 +2342,88 @@ export class ReservationsService {
         message: 'This action is only available to experts and businesses.',
       });
     }
+  }
+
+  private resolveCancellationActor(
+    reservation: ReservationRow,
+    userId: string,
+    role: string,
+  ): ReservationCancellationActor {
+    if (reservation.customer_id === userId) return 'customer';
+    if (reservation.provider_id === userId) return 'provider';
+    if (role === 'admin') return 'admin';
+    throw new HttpError({
+      statusCode: 403,
+      code: 'FORBIDDEN',
+      message: 'You do not have access to this reservation.',
+    });
+  }
+
+  private async syncInterviewApplicationStatus(
+    reservation: ReservationRow,
+    status: 'interview_invited' | 'interview_completed',
+    client?: PoolClient,
+    overrides?: {
+      interviewReservationId?: string | null;
+    },
+  ): Promise<void> {
+    if (reservation.purpose !== 'job_interview' || !reservation.job_application_id) return;
+    await this.jobsRepo.updateApplication(
+      reservation.job_application_id,
+      {
+        status,
+        ...(overrides?.interviewReservationId !== undefined
+          ? { interviewReservationId: overrides.interviewReservationId }
+          : {}),
+      },
+      client,
+    );
+  }
+
+  private async applyProviderLateCancellationPenalty(
+    client: PoolClient,
+    reservation: ReservationRow,
+    amount: number,
+    reasonCode: string,
+  ): Promise<void> {
+    if (amount <= 0) return;
+    const providerWallet = await this.walletRepo.findByUserId(reservation.provider_id);
+    if (!providerWallet) {
+      throw new Error('Provider wallet not found for penalty.');
+    }
+    const receiverId = await this.getCommissionReceiverId();
+    const platformWalletId = await this.walletRepo.getOrCreateCommissionWallet(client, receiverId);
+    await this.walletRepo.debitWalletInTransaction(
+      client,
+      providerWallet.id,
+      reservation.provider_id,
+      amount,
+      'Provider late cancellation penalty',
+      'reservation',
+      reservation.id,
+    );
+    await this.walletRepo.creditWithTypeInTransaction(
+      client,
+      platformWalletId,
+      receiverId,
+      amount,
+      'commission',
+      'Provider late cancellation penalty',
+      'reservation',
+      reservation.id,
+    );
+    await this.repo.createEvent(
+      {
+        reservationId: reservation.id,
+        eventType: 'penalty_applied',
+        actorId: reservation.provider_id,
+        metadata: {
+          amount,
+          reasonCode,
+        },
+      },
+      client,
+    );
   }
 
   private ensureAdminRole(userId: string, role: string): void {
@@ -1648,6 +2570,18 @@ export class ReservationsService {
           },
           client,
         );
+        await this.repo.createEvent(
+          {
+            reservationId: params.reservationId,
+            eventType: 'rejected',
+            actorId: params.providerId,
+            metadata: {
+              autoDecision: params.autoDecision,
+              rejectionReason: rejectionReason ?? 'Rejected by provider',
+            },
+          },
+          client,
+        );
       } else {
         if (!reservation.slot_id) {
           throw new HttpError({
@@ -1679,8 +2613,23 @@ export class ReservationsService {
             },
             client,
           );
+          await this.repo.createEvent(
+            {
+              reservationId: params.reservationId,
+              eventType: 'rejected',
+              actorId: params.providerId,
+              metadata: {
+                autoDecision: true,
+                rejectionReason,
+                reason: 'slot_conflict',
+                suggestedSlots: suggestions,
+              },
+            },
+            client,
+          );
         } else {
           await this.updateSlotStatusInTransaction(client, slot.id, 'booked');
+          await this.ensureFixedPriceHold(client, reservation);
           await this.chargeAcceptanceFee(client, reservation);
           await this.repo.updateReservation(
             params.reservationId,
@@ -1689,6 +2638,30 @@ export class ReservationsService {
               acceptedAt: new Date(),
               rejectionReason: null,
               autoRejected: false,
+              settlementStatus:
+                toNumber(reservation.expert_price_amount) > 0 ? 'held' : 'unsettled',
+            },
+            client,
+          );
+          await this.repo.createEvent(
+            {
+              reservationId: params.reservationId,
+              eventType: 'hold_created',
+              actorId: reservation.customer_id,
+              metadata: {
+                amount: toNumber(reservation.expert_price_amount),
+              },
+            },
+            client,
+          );
+          await this.repo.createEvent(
+            {
+              reservationId: params.reservationId,
+              eventType: 'accepted',
+              actorId: params.providerId,
+              metadata: {
+                autoDecision: params.autoDecision,
+              },
             },
             client,
           );
@@ -2103,9 +3076,31 @@ export class ReservationsService {
           status: 'completed',
           endedAt: new Date(),
           completedAt: new Date(),
+          capturedAmount: toNumber(reservation.expert_price_amount),
+          settlementStatus:
+            toNumber(reservation.expert_price_amount) > 0 ? 'released_to_provider' : 'unsettled',
           customerDoneDueAt: null,
           donePromptedAt: null,
           disconnectAutoReleaseAt: null,
+        },
+        client,
+      );
+      await this.syncInterviewApplicationStatus(reservation, 'interview_completed', client);
+      await this.repo.createEvent(
+        {
+          reservationId: reservation.id,
+          eventType: 'hold_captured',
+          actorId: null,
+          metadata: { source: 'low_balance_auto_end', amount: toNumber(reservation.expert_price_amount) },
+        },
+        client,
+      );
+      await this.repo.createEvent(
+        {
+          reservationId: reservation.id,
+          eventType: 'completed',
+          actorId: null,
+          metadata: { source: 'low_balance_auto_end' },
         },
         client,
       );
@@ -2151,12 +3146,18 @@ export class ReservationsService {
             status: 'completed',
             endedAt: new Date(),
             completedAt: new Date(),
+            capturedAmount: toNumber(reservation.expert_price_amount),
+            settlementStatus:
+              toNumber(reservation.expert_price_amount) > 0
+                ? 'released_to_provider'
+                : 'unsettled',
             customerDoneDueAt: null,
             donePromptedAt: null,
             disconnectAutoReleaseAt: null,
           },
           client,
         );
+        await this.syncInterviewApplicationStatus(reservation, 'interview_completed', client);
         if (session && session.status !== 'ended') {
           await this.repo.updateCallSession(
             session.id,
@@ -2167,6 +3168,27 @@ export class ReservationsService {
             client,
           );
         }
+        await this.repo.createEvent(
+          {
+            reservationId: reservation.id,
+            eventType: 'hold_captured',
+            actorId: null,
+            metadata: {
+              source: 'disconnect_timeout',
+              amount: toNumber(reservation.expert_price_amount),
+            },
+          },
+          client,
+        );
+        await this.repo.createEvent(
+          {
+            reservationId: reservation.id,
+            eventType: 'completed',
+            actorId: null,
+            metadata: { source: 'disconnect_timeout' },
+          },
+          client,
+        );
         await client.query('COMMIT');
         processed += 1;
         notifyReservation = reservation;
@@ -2253,12 +3275,18 @@ export class ReservationsService {
           status: 'completed',
           completedAt: new Date(),
           endedAt: new Date(),
+          capturedAmount: toNumber(reservationForUpdate.expert_price_amount),
+          settlementStatus:
+            toNumber(reservationForUpdate.expert_price_amount) > 0
+              ? 'released_to_provider'
+              : 'unsettled',
           customerDoneDueAt: null,
           donePromptedAt: null,
           disconnectAutoReleaseAt: null,
         },
         client,
       );
+      await this.syncInterviewApplicationStatus(reservationForUpdate, 'interview_completed', client);
       if (session) {
         await this.repo.updateCallSession(
           session.id,
@@ -2269,6 +3297,27 @@ export class ReservationsService {
           client,
         );
       }
+      await this.repo.createEvent(
+        {
+          reservationId,
+          eventType: 'hold_captured',
+          actorId: null,
+          metadata: {
+            source: 'disconnect_timeout',
+            amount: toNumber(reservationForUpdate.expert_price_amount),
+          },
+        },
+        client,
+      );
+      await this.repo.createEvent(
+        {
+          reservationId,
+          eventType: 'completed',
+          actorId: null,
+          metadata: { source: 'disconnect_timeout' },
+        },
+        client,
+      );
       await client.query('COMMIT');
     } catch (error) {
       await client.query('ROLLBACK');

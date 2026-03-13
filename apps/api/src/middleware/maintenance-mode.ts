@@ -8,7 +8,7 @@ import { SettingsRepository } from '../modules/settings/settings.repository.js';
 
 const settingsRepo = new SettingsRepository();
 
-const ALLOWED_PATHS = ['/app/status', '/auth/login', '/auth/refresh', '/auth/forgot-password', '/admin'];
+const ALLOWED_PATHS = ['/app/status', '/auth/login', '/auth/refresh', '/auth/forgot-password', '/admin', '/notifications'];
 
 export async function maintenanceMode(
   req: Request,
@@ -16,7 +16,8 @@ export async function maintenanceMode(
   next: NextFunction,
 ): Promise<void> {
   const path = req.path || req.url?.split('?')[0] || '';
-  if (ALLOWED_PATHS.some((p) => path === p || path.startsWith(p + '/') || path.startsWith(p))) {
+  const allowed = ALLOWED_PATHS.some((p) => path === p || path.startsWith(p + '/') || path.startsWith(p));
+  if (allowed) {
     return next();
   }
 

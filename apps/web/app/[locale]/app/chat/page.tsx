@@ -11,7 +11,7 @@ type ChatPageProps = {
 const ChatPage = async ({ params }: ChatPageProps) => {
   const { locale } = await params;
   if (!isSupportedLocale(locale)) notFound();
-  const dictionary = getDictionary(locale);
+  const dictionary = await getDictionary(locale);
   return <ChatScreen locale={locale} dictionary={dictionary} />;
 };
 

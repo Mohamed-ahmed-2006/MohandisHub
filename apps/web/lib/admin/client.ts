@@ -272,6 +272,19 @@ export const adminApiClient = {
       ...(options?.refreshSession ? { refreshSession: options.refreshSession } : {}),
     }),
 
+  sendNotification: (
+    accessToken: string,
+    body: { target: 'all' | 'users' | 'role'; userIds?: string[]; role?: string; title: string; message: string },
+    options?: AdminClientOptions,
+  ) =>
+    apiRequest<{ created: number }>({
+      method: 'POST',
+      path: '/api/admin/notifications/send',
+      body,
+      accessToken,
+      ...(options?.refreshSession ? { refreshSession: options.refreshSession } : {}),
+    }),
+
   updateExpertProfile: (
     accessToken: string,
     userId: string,

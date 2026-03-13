@@ -17,7 +17,7 @@ const AppPage = async ({ params }: AppPageProps) => {
     notFound();
   }
 
-  const dictionary = getDictionary(locale);
+  const dictionary = await getDictionary(locale);
 
   return <AppHomeScreen locale={locale} dictionary={dictionary} />;
 };

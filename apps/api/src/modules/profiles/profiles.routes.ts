@@ -31,6 +31,20 @@ profilesRouter.patch(
   profilesController.updateExpertProfile,
 );
 
+// Customer profile
+profilesRouter.get(
+  '/customer',
+  authenticate,
+  requireEmailVerified,
+  profilesController.getCustomerProfile,
+);
+profilesRouter.patch(
+  '/customer',
+  authenticate,
+  requireEmailVerified,
+  profilesController.updateCustomerProfile,
+);
+
 // Business profile
 profilesRouter.get(
   '/business',
@@ -43,6 +57,12 @@ profilesRouter.patch(
   authenticate,
   requireEmailVerified,
   profilesController.updateBusinessProfile,
+);
+profilesRouter.post(
+  '/business/complete-onboarding',
+  authenticate,
+  requireEmailVerified,
+  profilesController.completeBusinessOnboarding,
 );
 
 // Identity documents (expert + business) — no requireVerified so unverified users can submit for KYC

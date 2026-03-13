@@ -43,6 +43,21 @@ reservationsRouter.delete(
 reservationsRouter.post('/', requireRole('customer'), reservationsController.createReservation);
 reservationsRouter.get('/my', reservationsController.listMyReservations);
 reservationsRouter.get('/disputes', requireRole('admin'), reservationsController.listDisputes);
+reservationsRouter.get(
+  '/admin/action-failures',
+  requireRole('admin'),
+  reservationsController.listActionFailures,
+);
+reservationsRouter.post(
+  '/admin/action-failures/:failureId/replay',
+  requireRole('admin'),
+  reservationsController.replayActionFailure,
+);
+reservationsRouter.post(
+  '/admin/:reservationId/reconcile',
+  requireRole('admin'),
+  reservationsController.reconcileReservation,
+);
 reservationsRouter.post(
   '/disputes/:disputeId/resolve',
   requireRole('admin'),
@@ -50,11 +65,13 @@ reservationsRouter.post(
 );
 
 reservationsRouter.get('/:reservationId', reservationsController.getReservationById);
+reservationsRouter.get('/:reservationId/timeline', reservationsController.listReservationTimeline);
 reservationsRouter.post(
   '/:reservationId/decision',
   requireRole('expert', 'business'),
   reservationsController.decideReservation,
 );
+reservationsRouter.post('/:reservationId/cancel', reservationsController.cancelReservation);
 
 reservationsRouter.get('/:reservationId/location', reservationsController.listLocationProposals);
 reservationsRouter.post('/:reservationId/location/propose', reservationsController.proposeLocation);

@@ -7,14 +7,15 @@ import { useAuth } from '@/components/auth/auth-provider';
 import { Container } from '@/components/ui/container';
 import type { ActivityItem } from '@/lib/activity/client';
 import { getMyActivity } from '@/lib/activity/client';
+import { useI18n } from '@/lib/i18n/context';
 import { buildLocalePath } from '@/lib/i18n/path';
-import type { Dictionary, Locale } from '@/lib/i18n/types';
 
 import './history-screen.css';
 
-type Props = { locale: Locale; dictionary: Dictionary };
+type Props = Record<string, never>;
 
-export const HistoryScreen = ({ locale, dictionary }: Props) => {
+export const HistoryScreen = (_props: Props) => {
+  const { locale, dictionary } = useI18n();
   const router = useRouter();
   const { authUser, accessToken, isAuthenticated, isReady, authGuard } = useAuth();
 

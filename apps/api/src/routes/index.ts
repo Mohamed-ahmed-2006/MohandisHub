@@ -1,12 +1,14 @@
 import { Router } from 'express';
 
 import { maintenanceMode } from '../middleware/maintenance-mode.js';
+import { apiRateLimiter, authRateLimiter } from '../middleware/rate-limit.js';
 import { adminRouter } from '../modules/admin/admin.routes.js';
 import { appRouter } from '../modules/app/app.routes.js';
 import { authRouter } from '../modules/auth/auth.routes.js';
 import { chatRouter } from '../modules/chat/chat.routes.js';
 import { jobsRouter } from '../modules/jobs/jobs.routes.js';
 import { needsRouter, bidsRouter } from '../modules/needs/needs.routes.js';
+import { notificationsRouter } from '../modules/notifications/notifications.routes.js';
 import { otpRouter } from '../modules/otp/otp.routes.js';
 import { plansRouter } from '../modules/plans/plans.routes.js';
 import { profilesRouter } from '../modules/profiles/profiles.routes.js';
@@ -22,9 +24,10 @@ import { asyncHandler } from '../utils/async-handler.js';
 const apiRouter = Router();
 
 apiRouter.use(asyncHandler(maintenanceMode));
+apiRouter.use(apiRateLimiter);
 apiRouter.use('/app', appRouter);
-apiRouter.use('/auth', authRouter);
-apiRouter.use('/otp', otpRouter);
+apiRouter.use('/auth', authRateLimiter, authRouter);
+apiRouter.use('/otp', authRateLimiter, otpRouter);
 apiRouter.use('/users', usersRouter);
 apiRouter.use('/profiles', profilesRouter);
 apiRouter.use('/admin', adminRouter);
@@ -39,5 +42,6 @@ apiRouter.use('/bids', bidsRouter);
 apiRouter.use('/reservations', reservationsRouter);
 apiRouter.use('/reviews', reviewsRouter);
 apiRouter.use('/jobs', jobsRouter);
+apiRouter.use('/notifications', notificationsRouter);
 
 export { apiRouter };

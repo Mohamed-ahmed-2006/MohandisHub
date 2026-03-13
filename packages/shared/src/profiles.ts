@@ -76,6 +76,21 @@ export type AcademicRecord = {
   createdAt: string;
 };
 
+// ── Customer profile types ────────────────────────────────────────────────
+
+export type CustomerProfile = {
+  userId: string;
+  city: string | null;
+  country: string | null;
+  contactPreference: string | null;
+};
+
+export type UpdateCustomerProfileBody = {
+  city?: string | null;
+  country?: string | null;
+  contactPreference?: string | null;
+};
+
 // ── Expert profile types ─────────────────────────────────────────────────
 
 export type AvailabilityStatus = 'available' | 'busy' | 'offline';

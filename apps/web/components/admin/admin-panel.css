@@ -306,7 +306,8 @@
   display: flex;
   flex-direction: column;
   gap: 1.5rem;
-  max-width: 640px;
+  width: 100%;
+  margin-inline: auto;
 }
 
 .admin-settings-title {
@@ -507,6 +508,45 @@
   border-radius: 0.8rem;
   resize: vertical;
   min-height: 60px;
+}
+
+.admin-section {
+  margin-bottom: 1.5rem;
+}
+
+.admin-section-title {
+  margin: 0 0 0.35rem;
+  font-size: 1.15rem;
+  font-weight: 600;
+  color: hsl(var(--foreground));
+}
+
+.admin-section-desc {
+  margin: 0 0 1rem;
+  font-size: 0.9rem;
+  color: hsl(var(--text-soft));
+}
+
+.admin-form-error {
+  padding: 0.5rem 0.75rem;
+  margin-bottom: 0.75rem;
+  border-radius: 0.5rem;
+  background-color: hsl(var(--destructive) / 0.12);
+  color: hsl(var(--destructive));
+  font-size: 0.85rem;
+}
+
+.admin-form-success {
+  padding: 0.5rem 0.75rem;
+  margin-bottom: 0.75rem;
+  border-radius: 0.5rem;
+  background-color: hsl(var(--primary) / 0.12);
+  color: hsl(var(--primary));
+  font-size: 0.85rem;
+}
+
+.admin-notifications-form {
+  max-width: 32rem;
 }
 
 .admin-actions-row {

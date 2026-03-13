@@ -1,6 +1,7 @@
 export * from './admin.js';
 export * from './app-settings.js';
 export * from './api.js';
+export * from './notifications.js';
 export * from './availability.js';
 export * from './bookings.js';
 export * from './auth.js';

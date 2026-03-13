@@ -5,13 +5,19 @@
 import type { Service, ServiceCategory, ServiceSearchResult } from '@mohandishub/shared';
 
 import { HttpError } from '../../utils/http-error.js';
+import { PlansService } from '../plans/plans.service.js';
+import { SettingsService } from '../settings/settings.service.js';
 
 import { ServicesRepository } from './services.repository.js';
 import type { CategoryRow, ServiceDetailRow, ServiceSearchRow } from './services.repository.js';
 import type { CreateServiceInput, UpdateServiceInput } from './services.validation.js';
 
 export class ServicesService {
-  constructor(private readonly repo: ServicesRepository = new ServicesRepository()) {}
+  constructor(
+    private readonly repo: ServicesRepository = new ServicesRepository(),
+    private readonly plansService: PlansService = new PlansService(),
+    private readonly settingsService: SettingsService = new SettingsService(),
+  ) {}
 
   async listCategories(): Promise<ServiceCategory[]> {
     const rows = await this.repo.listActiveCategories();
@@ -59,6 +65,20 @@ export class ServicesService {
   }
 
   async createService(providerId: string, input: CreateServiceInput): Promise<Service> {
+    const appStatus = await this.settingsService.getAppStatus();
+    if (appStatus.featurePlansEnabled) {
+      const limits = await this.plansService.getEffectivePlanLimits(providerId);
+      if (limits.maxServices != null) {
+        const count = await this.repo.countServicesByProvider(providerId);
+        if (count >= limits.maxServices) {
+          throw new HttpError({
+            statusCode: 403,
+            code: 'PLAN_LIMIT_REACHED',
+            message: `Your plan allows up to ${limits.maxServices} services. Upgrade to add more.`,
+          });
+        }
+      }
+    }
     const status = input.submitForReview ? 'active' : 'draft';
     const dbInput: {
       title: string;

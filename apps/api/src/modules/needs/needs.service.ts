@@ -2,6 +2,7 @@ import type { PoolClient } from 'pg';
 
 import { getPool } from '../../db/pool.js';
 import { HttpError } from '../../utils/http-error.js';
+import { PlansService } from '../plans/plans.service.js';
 import { SettingsService } from '../settings/settings.service.js';
 import { WalletRepository } from '../wallet/wallet.repository.js';
 
@@ -16,6 +17,7 @@ export class NeedsService {
     private readonly repo: NeedsRepository = new NeedsRepository(),
     private readonly settingsService: SettingsService = new SettingsService(),
     private readonly walletRepo: WalletRepository = new WalletRepository(),
+    private readonly plansService: PlansService = new PlansService(),
   ) {}
 
   async createNeed(customerId: string, input: CreateNeedInput) {
@@ -26,6 +28,19 @@ export class NeedsService {
         code: 'NEEDS_PAUSED',
         message: 'Posting new needs is temporarily disabled.',
       });
+    }
+    if (status.featurePlansEnabled) {
+      const limits = await this.plansService.getEffectivePlanLimits(customerId);
+      if (limits.maxNeeds != null) {
+        const count = await this.repo.countNeedsByCustomer(customerId);
+        if (count >= limits.maxNeeds) {
+          throw new HttpError({
+            statusCode: 403,
+            code: 'PLAN_LIMIT_REACHED',
+            message: `Your plan allows up to ${limits.maxNeeds} needs. Upgrade to post more.`,
+          });
+        }
+      }
     }
     try {
       return await this.repo.createNeed(customerId, input);
@@ -154,7 +169,29 @@ export class NeedsService {
       });
     }
     try {
-      return await this.repo.listBidsForNeed(needId);
+      const status = await this.settingsService.getAppStatus();
+      if (!status.featurePlansEnabled) {
+        return await this.repo.listBidsForNeed(needId);
+      }
+      const limits = await this.plansService.getEffectivePlanLimits(userId);
+      const visibility = limits.bidsVisibleToCustomer;
+      if (!visibility || visibility === 'all') {
+        return await this.repo.listBidsForNeed(needId);
+      }
+      const bidsWithPlan = await this.repo.listBidsForNeedWithExpertPlan(needId);
+      let result = bidsWithPlan;
+      if (visibility === 'premium_first') {
+        result = [...bidsWithPlan].sort((a, b) => {
+          const aPremium = a.expert_plan_slug && a.expert_plan_slug !== 'free' ? 1 : 0;
+          const bPremium = b.expert_plan_slug && b.expert_plan_slug !== 'free' ? 1 : 0;
+          return bPremium - aPremium;
+        });
+      }
+      if (visibility === 'top_n') {
+        const n = limits.bidsVisibleTopN ?? 3;
+        result = result.slice(0, n);
+      }
+      return result.map(({ expert_plan_slug: _plan, ...bid }) => bid as BidRow);
     } catch (err: unknown) {
       const pgErr = err as { code?: string; message?: string };
       if (pgErr.code === '42703' || (pgErr.message?.includes('does not exist') ?? false)) {

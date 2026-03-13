@@ -18,6 +18,10 @@ export type Dictionary = {
     optional: string;
     step: string;
     of: string;
+    success?: string;
+    loading?: string;
+    accept?: string;
+    reject?: string;
     completeVerification?: string;
     addFirstService?: string;
   };
@@ -44,6 +48,22 @@ export type Dictionary = {
       description: string;
     }>;
     steps: string[];
+    joinAsTitle?: string;
+    joinAsCustomer?: string;
+    joinAsExpert?: string;
+    joinAsBusiness?: string;
+    trustTitle?: string;
+    trustVerified?: string;
+    trustPayments?: string;
+    trustCancellation?: string;
+    testimonialsTitle?: string;
+    testimonials?: Array<{ quote: string; author: string }>;
+    metricsTitle?: string;
+    metricsExperts?: string;
+    metricsProjects?: string;
+    metricsCustomers?: string;
+    faqTitle?: string;
+    faqItems?: Array<{ question: string; answer: string }>;
   };
   login: {
     title: string;
@@ -73,6 +93,19 @@ export type Dictionary = {
       description: string;
       welcomeMessage: string;
       goToDashboard: string;
+      setupProfile?: string;
+      profileTitle?: string;
+      profileDescription?: string;
+      profileDisplayName?: string;
+      profileDisplayNamePlaceholder?: string;
+      profileDisplayNameRequired?: string;
+      profilePhone?: string;
+      profileCity?: string;
+      profileCityPlaceholder?: string;
+      profileContactPref?: string;
+      profileContactPrefOptional?: string;
+      profileCompleteTitle?: string;
+      profileCompleteDescription?: string;
       steps: {
         emailVerification: string;
       };
@@ -174,6 +207,8 @@ export type Dictionary = {
         identityDescription: string;
         businessDocsTitle: string;
         businessDocsDescription: string;
+        businessDocsCompanyInfo?: string;
+        companyUploadComingSoon?: string;
         documentTypeLabel: string;
         fullNameOnDocLabel: string;
         documentNumberLabel: string;
@@ -260,6 +295,19 @@ export type Dictionary = {
     calendar?: string;
     orders?: string;
     analytics?: string;
+  };
+  notificationCenter: {
+    title: string;
+    markAllRead: string;
+    loading: string;
+    empty: string;
+    ariaUnread: string;
+    ariaNotifications: string;
+    sendDemo: string;
+    justNow: string;
+    timeAgoMinutes: string;
+    timeAgoHours: string;
+    timeAgoDays: string;
   };
   chatPage?: {
     shareLink: string;
@@ -356,6 +404,7 @@ export type Dictionary = {
       categories: string;
       verifications: string;
       reviewReports?: string;
+      notifications?: string;
       settings: string;
     };
     dashboard: {
@@ -490,6 +539,12 @@ export type Dictionary = {
       trialDays: string;
       maxServices: string;
       maxProjects: string;
+      maxNeeds: string;
+      maxJobs: string;
+      planLimits: string;
+      canPriorityListing: string;
+      bidsVisibleToCustomer: string;
+      bidsVisibleTopN: string;
       sortOrder: string;
     };
     txns: {
@@ -652,6 +707,7 @@ export type Dictionary = {
   plan: {
     subtitle?: string;
     currentPlan: string;
+    subscriptionEndsAt: string;
     noPlans: string;
     choosePlan: string;
     activePlan: string;
@@ -690,6 +746,17 @@ export type Dictionary = {
     bidMessagePlaceholder: string;
     bidDeliveryPlaceholder: string;
     submitBid: string;
+    needCreated?: string;
+    needStatusOpen?: string;
+    needStatusAwarded?: string;
+    needStatusInProgress?: string;
+    needStatusCompleted?: string;
+    needStatusCancelled?: string;
+    beforePublishing?: string;
+    checklistItem1?: string;
+    checklistItem2?: string;
+    checklistItem3?: string;
+    loading?: string;
   };
   homeSearch: {
     welcomeBack: string;
@@ -754,6 +821,18 @@ export type Dictionary = {
       academicDescription: string;
       noDocuments: string;
       status: string;
+      rejectionReason: string;
+      reviewedAt: string;
+      resubmit: string;
+      goToVerification: string;
+      companyDetailsTitle?: string;
+      companyDetailsHint?: string;
+      tradeLicense?: string;
+      taxId?: string;
+      commercialRegister?: string;
+      notSubmitted?: string;
+      companyUploadNote?: string;
+      companyUploadComingSoon?: string;
     };
     reviews?: {
       sectionTitle: string;
@@ -877,6 +956,25 @@ export type Dictionary = {
     confirmComplete?: string;
     start?: string;
     complete?: string;
+    preJoinBuffer?: string;
+    yourRemainingTime?: string;
+    providerRemainingTime?: string;
+    inProgress?: string;
+    ended?: string;
+    durationMin?: string;
+    callDetailsWhenStart?: string;
+    onlineInterview?: string;
+    onlineSession?: string;
+    joinInterview?: string;
+    joinCall?: string;
+    accept?: string;
+    reject?: string;
+    cancelReservation?: string;
+    done?: string;
+    report?: string;
+    leaveReview?: string;
+    rateProvider?: string;
+    rateCustomer?: string;
   };
   calendarPage?: {
     title?: string;

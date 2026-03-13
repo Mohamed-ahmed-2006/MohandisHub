@@ -3,6 +3,7 @@
 import type { JobMilestone } from '@mohandishub/shared';
 import { useCallback, useEffect, useState } from 'react';
 
+import { useToast } from '@/components/app/toast';
 import { jobsApiClient } from '@/lib/jobs/client';
 
 type Props = {
@@ -11,6 +12,7 @@ type Props = {
 };
 
 export const BusinessMilestoneManager = ({ accessToken, applicationId }: Props) => {
+  const { addToast } = useToast();
   const [milestones, setMilestones] = useState<JobMilestone[]>([]);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
@@ -42,7 +44,7 @@ export const BusinessMilestoneManager = ({ accessToken, applicationId }: Props) 
       form.reset();
       void loadMilestones();
     } catch (err: unknown) {
-      alert(err instanceof Error ? err.message : 'Failed to create milestone');
+      addToast('Error', err instanceof Error ? err.message : 'Failed to create milestone');
     } finally {
       setCreating(false);
     }
@@ -52,8 +54,9 @@ export const BusinessMilestoneManager = ({ accessToken, applicationId }: Props) 
     try {
       await jobsApiClient.reviewMilestone(accessToken, milestoneId, status);
       void loadMilestones();
+      addToast('Success', status === 'approved' ? 'Milestone approved' : 'Milestone rejected');
     } catch (err: unknown) {
-      alert(err instanceof Error ? err.message : 'Failed to review milestone');
+      addToast('Error', err instanceof Error ? err.message : 'Failed to review milestone');
     }
   };
 

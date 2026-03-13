@@ -112,31 +112,38 @@ export const ChatScreen = ({ locale, dictionary }: Props) => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
+  const chatSocketRef = useRef<Awaited<ReturnType<typeof getChatSocket>>>(null);
   useEffect(() => {
     if (!activeConvId || !accessToken) return;
-    const sock = getChatSocket(accessToken);
-    if (!sock) return;
-    sock.emit('join_conversation', { conversationId: activeConvId });
-    const onNewMessage = (msg: Message) => {
-      if (msg.conversation_id === activeConvId) {
+    getChatSocket(accessToken).then((s) => {
+      chatSocketRef.current = s;
+      if (!s) return;
+      s.emit('join_conversation', { conversationId: activeConvId });
+      const onNewMessage = (msg: Message) => {
+        if (msg.conversation_id === activeConvId) {
+          setMessages((prev) => {
+            const hasDup = prev.some((m) => m.id === msg.id);
+            return hasDup ? prev : [...prev, msg];
+          });
+        }
+      };
+      const onMessageDeleted = (payload: { messageId: string; scope: string }) => {
         setMessages((prev) => {
-          const hasDup = prev.some((m) => m.id === msg.id);
-          return hasDup ? prev : [...prev, msg];
+          if (payload.scope === 'for_everyone') return prev.filter((m) => m.id !== payload.messageId);
+          return prev.filter((m) => !(m.id === payload.messageId && m.sender_id === authUser?.id));
         });
-      }
-    };
-    const onMessageDeleted = (payload: { messageId: string; scope: string }) => {
-      setMessages((prev) => {
-        if (payload.scope === 'for_everyone') return prev.filter((m) => m.id !== payload.messageId);
-        return prev.filter((m) => !(m.id === payload.messageId && m.sender_id === authUser?.id));
-      });
-    };
-    sock.on('new_message', onNewMessage);
-    sock.on('message_deleted', onMessageDeleted);
+      };
+      s.on('new_message', onNewMessage);
+      s.on('message_deleted', onMessageDeleted);
+    });
     return () => {
-      sock.emit('leave_conversation', { conversationId: activeConvId });
-      sock.off('new_message', onNewMessage);
-      sock.off('message_deleted', onMessageDeleted);
+      const s = chatSocketRef.current;
+      if (s) {
+        s.emit('leave_conversation', { conversationId: activeConvId });
+        s.off('new_message');
+        s.off('message_deleted');
+        chatSocketRef.current = null;
+      }
     };
   }, [activeConvId, accessToken, authUser?.id]);
 
