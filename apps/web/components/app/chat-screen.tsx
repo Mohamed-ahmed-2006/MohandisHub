@@ -115,7 +115,7 @@ export const ChatScreen = ({ locale, dictionary }: Props) => {
   const chatSocketRef = useRef<Awaited<ReturnType<typeof getChatSocket>>>(null);
   useEffect(() => {
     if (!activeConvId || !accessToken) return;
-    getChatSocket(accessToken).then((s) => {
+    void getChatSocket(accessToken).then((s) => {
       chatSocketRef.current = s;
       if (!s) return;
       s.emit('join_conversation', { conversationId: activeConvId });

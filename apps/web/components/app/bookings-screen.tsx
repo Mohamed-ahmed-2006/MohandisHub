@@ -162,13 +162,16 @@ function formatTimelineMetadata(metadata: Record<string, unknown> | null | undef
     if (typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean') return String(v);
     if (v instanceof Date) return v.toLocaleString();
     if (Array.isArray(v)) return v.map(formatVal).filter(Boolean).join(', ');
-    if (typeof v === 'object') {
+    if (typeof v === 'object' && v !== null) {
       return Object.entries(v as Record<string, unknown>)
         .filter(([, val]) => val != null && val !== '')
         .map(([key, val]) => `${key.replace(/_/g, ' ')}: ${formatVal(val)}`)
         .join('; ');
     }
-    return String(v);
+    // v is narrowed to primitive or symbol; avoid String(object) for no-base-to-string
+    if (typeof v === 'symbol') return v.toString();
+    if (typeof v === 'number' || typeof v === 'boolean') return String(v);
+    return v as string;
   };
   return Object.entries(metadata)
     .filter(([, v]) => v != null && v !== '')

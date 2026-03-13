@@ -10,11 +10,11 @@ const AUTH_ME_KEY = 'api/auth/me';
 const WALLET_ME_KEY = 'api/wallet/me';
 
 export function useAuthMe(accessToken: string | null) {
-  const { data, error, mutate } = useSWR<AuthUser | null>(
+  const { data, error, mutate } = useSWR<AuthUser | null, Error>(
     accessToken ? [AUTH_ME_KEY, accessToken] : null,
-    async () => {
-      if (!accessToken) return null;
-      return authApiClient.me(accessToken);
+    async ([, token]: [string, string]) => {
+      if (!token) return null;
+      return authApiClient.me(token);
     },
     {
       revalidateOnFocus: false,
@@ -25,11 +25,11 @@ export function useAuthMe(accessToken: string | null) {
 }
 
 export function useWallet(accessToken: string | null, options?: { revalidateOnFocus?: boolean }) {
-  const { data, error, mutate } = useSWR<Wallet | null>(
+  const { data, error, mutate } = useSWR<Wallet | null, Error>(
     accessToken ? [WALLET_ME_KEY, accessToken] : null,
-    async () => {
-      if (!accessToken) return null;
-      return walletApiClient.getMyWallet(accessToken);
+    async ([, token]: [string, string]) => {
+      if (!token) return null;
+      return walletApiClient.getMyWallet(token);
     },
     {
       revalidateOnFocus: options?.revalidateOnFocus ?? true,

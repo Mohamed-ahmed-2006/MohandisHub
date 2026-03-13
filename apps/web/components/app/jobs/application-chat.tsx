@@ -34,7 +34,7 @@ export const ApplicationChat = ({ applicationId }: Props) => {
   useEffect(() => {
     void loadMessages();
     if (!accessToken) return;
-    getChatSocket(accessToken).then((sock) => {
+    void getChatSocket(accessToken).then((sock) => {
       if (!sock) return;
       sock.emit('join_application', { applicationId });
       const onNewMessage = (msg: JobApplicationMessage) => {

@@ -65,7 +65,7 @@ export function NotificationCenter({ accessToken, dictionary }: Props) {
 
   useEffect(() => {
     if (!accessToken) return;
-    getChatSocket(accessToken).then((sock) => {
+    void getChatSocket(accessToken).then((sock) => {
       if (!sock) return;
       const onNotification = () => {
         void fetchUnreadCount();

@@ -104,7 +104,7 @@ export const CustomerOnboardingScreen = ({ locale, dictionary }: Props) => {
               <p className="onboarding-description">
                 {dictionary.onboarding.customer.profileDescription ?? 'Add a few details so providers can recognize you.'}
               </p>
-              <form className="onboarding-form" onSubmit={handleProfileSubmit}>
+              <form className="onboarding-form" onSubmit={(e) => void handleProfileSubmit(e)}>
                 {error && <p className="onboarding-error" role="alert">{error}</p>}
                 <div className="onboarding-field">
                   <label className="onboarding-label" htmlFor="customer-displayName">

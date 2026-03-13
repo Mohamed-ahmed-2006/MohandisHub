@@ -1,4 +1,4 @@
-import type { ApiErrorBody, ApiSuccessBody, Notification, NotificationListResponse } from '@mohandishub/shared';
+import type { ApiErrorBody, ApiSuccessBody, NotificationListResponse } from '@mohandishub/shared';
 
 import { ApiClientRequestError } from '../auth/client';
 

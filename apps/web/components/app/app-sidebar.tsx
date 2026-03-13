@@ -40,7 +40,7 @@ export const AppSidebar = ({
 
   useEffect(() => {
     if (!accessToken) return;
-    getChatSocket(accessToken).then((sock) => {
+    void getChatSocket(accessToken).then((sock) => {
       if (!sock) return;
       const onNotification = (data: { type?: string }) => {
         if (data.type === 'new_message' || data.type === 'new_application_message') {

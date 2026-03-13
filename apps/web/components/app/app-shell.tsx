@@ -76,7 +76,7 @@ const AppShellInner = ({ children }: AppShellProps) => {
   useEffect(() => {
     if (!isReady || !authUser || !accessToken) return;
     let cancelled = false;
-    getChatSocket(accessToken).then((sock) => {
+    void getChatSocket(accessToken).then((sock) => {
       if (cancelled || !sock) return;
       sock.emit('join_user', { userId: authUser.id });
       const onNotification = (data: AppNotification) => {

@@ -85,7 +85,7 @@ export const AdminNotificationsTab = ({ dictionary, accessToken, refreshSession 
         Send an in-app notification to all users, users in a role, or specific user IDs.
       </p>
 
-      <form onSubmit={handleSubmit} className="admin-notifications-form">
+      <form onSubmit={(e) => void handleSubmit(e)} className="admin-notifications-form">
         <div className="admin-form-group">
           <label className="admin-form-label">Target</label>
           <select
