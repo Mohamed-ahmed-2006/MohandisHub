@@ -82,4 +82,8 @@ adminRouter.get('/review-disputes', requireAdminPermission('manage_verifications
 adminRouter.patch('/review-reports/:id', requireAdminPermission('manage_verifications'), adminController.resolveReviewReport);
 adminRouter.patch('/review-disputes/:id', requireAdminPermission('manage_verifications'), adminController.resolveReviewDispute);
 
+// Support tickets
+adminRouter.get('/support/tickets', requireAdminPermission('manage_users'), adminController.listSupportTickets);
+adminRouter.patch('/support/tickets/:id', requireAdminPermission('manage_users'), adminController.updateSupportTicket);
+
 export { adminRouter };

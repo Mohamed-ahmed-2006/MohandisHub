@@ -15,6 +15,7 @@ walletRouter.use(authenticate, requireEmailVerified);
 
 walletRouter.get('/me', walletController.getMyWallet);
 walletRouter.get('/me/transactions', walletController.getMyTransactions);
+walletRouter.get('/me/transactions/:id/receipt', walletController.getReceipt);
 walletRouter.get('/deposit/currencies', walletController.getDepositCurrencies);
 walletRouter.get('/deposit/estimate', walletController.getDepositEstimate);
 walletRouter.post('/deposit/checkout', walletController.createDepositCheckout);

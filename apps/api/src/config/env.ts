@@ -69,6 +69,13 @@ const envSchema = z.object({
   AGORA_APP_ID: z.string().optional(),
   AGORA_APP_CERTIFICATE: z.string().optional(),
 
+  // Supabase Storage (optional; when set, uploads go to Supabase instead of local disk)
+  SUPABASE_URL: z.string().url().optional(),
+  SUPABASE_SERVICE_ROLE_KEY: z.string().optional(),
+
+  // Sentry (optional; when set, 5xx and unhandled errors are reported)
+  SENTRY_DSN: z.string().url().optional(),
+
   // Data retention — sweep interval and per-entity retention (0 = never delete / skip)
   RETENTION_SWEEP_INTERVAL_MS: z.coerce.number().int().positive().default(900_000), // 15 min
   RETENTION_VERIFICATION_CODES_AFTER_EXPIRY_HOURS: z.coerce.number().int().min(0).default(24),

@@ -11,6 +11,7 @@ import { OnlineCallModal } from './online-call-modal';
 import { useToast } from '@/components/app/toast';
 import { jobsApiClient } from '@/lib/jobs/client';
 import { reservationsApiClient } from '@/lib/reservations/client';
+import { getPrivateFileUrl } from '@/lib/upload/client';
 
 export const BusinessJobsTab = ({ accessToken }: { accessToken: string }) => {
   const { addToast } = useToast();
@@ -218,9 +219,23 @@ export const BusinessJobsTab = ({ accessToken }: { accessToken: string }) => {
                         {app.coverLetter && <p style={{ marginTop: '0.75rem' }}>{app.coverLetter}</p>}
                         {app.cvFileUrl ? (
                           <p style={{ marginTop: '0.5rem' }}>
-                            <a href={app.cvFileUrl} target="_blank" rel="noreferrer">
-                              Open CV
-                            </a>
+                            {app.cvFileUrl.startsWith('http') ? (
+                              <a href={app.cvFileUrl} target="_blank" rel="noreferrer">
+                                Open CV
+                              </a>
+                            ) : (
+                              <button
+                                type="button"
+                                className="dashboard-link-btn"
+                                onClick={() => {
+                                  void getPrivateFileUrl(accessToken, app.cvFileUrl!)
+                                    .then((url) => window.open(url, '_blank', 'noopener,noreferrer'))
+                                    .catch(() => {});
+                                }}
+                              >
+                                Open CV
+                              </button>
+                            )}
                           </p>
                         ) : (
                           <p className="dashboard-card-meta" style={{ marginTop: '0.5rem' }}>

@@ -8,7 +8,7 @@ import { JobCard } from './jobs/job-card';
 
 import { useToast } from '@/components/app/toast';
 import { jobsApiClient } from '@/lib/jobs/client';
-import { uploadFile } from '@/lib/upload/client';
+import { uploadPrivateFile } from '@/lib/upload/client';
 
 export const ExpertJobsTab = ({ accessToken }: { accessToken: string }) => {
   const { addToast } = useToast();
@@ -45,7 +45,7 @@ export const ExpertJobsTab = ({ accessToken }: { accessToken: string }) => {
         if (!cvFile) {
           throw new Error('Please select a CV file.');
         }
-        const uploaded = await uploadFile(accessToken, cvFile);
+        const uploaded = await uploadPrivateFile(accessToken, cvFile);
         cvFileUrl = uploaded.url;
       }
 

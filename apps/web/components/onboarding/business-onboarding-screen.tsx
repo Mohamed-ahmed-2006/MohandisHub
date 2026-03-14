@@ -17,7 +17,7 @@ import { getApiBaseUrl } from '@/lib/env';
 import { buildLocalePath } from '@/lib/i18n/path';
 import type { Dictionary, Locale } from '@/lib/i18n/types';
 import { profilesApiClient } from '@/lib/profiles/client';
-import { uploadFile } from '@/lib/upload/client';
+import { uploadPrivateFile } from '@/lib/upload/client';
 import { formatApiError } from '@/lib/utils/format-api-error';
 import { verificationApiClient } from '@/lib/verification/client';
 
@@ -230,9 +230,9 @@ export const BusinessOnboardingScreen = ({ locale, dictionary }: Props) => {
         url.startsWith('http') ? url : base ? `${base}${url.startsWith('/') ? '' : '/'}${url}` : url;
 
       const [frontRes, backRes, selfieRes] = await Promise.all([
-        uploadFile(accessToken, manualFrontFile),
-        manualBackFile ? uploadFile(accessToken, manualBackFile) : Promise.resolve(null),
-        uploadFile(accessToken, manualSelfieFile),
+        uploadPrivateFile(accessToken, manualFrontFile),
+        manualBackFile ? uploadPrivateFile(accessToken, manualBackFile) : Promise.resolve(null),
+        uploadPrivateFile(accessToken, manualSelfieFile),
       ]);
 
       await profilesApiClient.submitIdentityDocument(accessToken, {

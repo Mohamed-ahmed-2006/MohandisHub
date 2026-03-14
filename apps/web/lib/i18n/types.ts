@@ -24,6 +24,20 @@ export type Dictionary = {
     reject?: string;
     completeVerification?: string;
     addFirstService?: string;
+    noOrders?: string;
+    viewDetails?: string;
+    totalEarnings?: string;
+    serviceViews?: string;
+    ordersCount?: string;
+    topServices?: string;
+    errorLoading?: string;
+    createTicket?: string;
+    noTickets?: string;
+    cancel?: string;
+    subject?: string;
+    message?: string;
+    messages?: string;
+    reply?: string;
   };
   theme: {
     switchToLight: string;
@@ -273,6 +287,8 @@ export type Dictionary = {
       '201-500': string;
       '500+': string;
     };
+    /** Shown near verification status: e.g. "Verification typically takes 1–5 business days." */
+    verificationTimeNote?: string;
   };
   nav: {
     home: string;
@@ -291,6 +307,7 @@ export type Dictionary = {
     helpSupport: string;
     menuOpen: string;
     menuClose: string;
+    support: string;
     myServices?: string;
     calendar?: string;
     orders?: string;
@@ -773,9 +790,22 @@ export type Dictionary = {
     expert: string;
     businessProvider: string;
     anyProvider: string;
+    any: string;
+    minRating: string;
+    minPrice: string;
+    maxPrice: string;
+    sort: string;
+    sortNewest: string;
+    sortRating: string;
+    sortPriceAsc: string;
+    sortPriceDesc: string;
+    sortPopular: string;
+    verifiedOnly: string;
+    verified: string;
     search: string;
     searchPlaceholder: string;
     noResults: string;
+    topRated: string;
     topExperts: string;
     topBusinesses: string;
     results: string;
@@ -787,6 +817,7 @@ export type Dictionary = {
     expertTab: string;
     businessTab: string;
     documentsTab: string;
+    verificationSection?: string;
     preferencesTab: string;
     backToApp: string;
     saveSuccess: string;

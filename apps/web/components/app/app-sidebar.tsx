@@ -72,6 +72,7 @@ export const AppSidebar = ({
     { href: '/app/settings', label: dictionary.nav.settings },
     { href: '/app/chat', label: dictionary.nav.chat },
     { href: '/app/history', label: dictionary.nav.history },
+    { href: '/app/support', label: dictionary.nav.support ?? 'Support' },
     { href: '/app/plan', label: dictionary.nav.plan },
     { href: '/app/admin', label: dictionary.nav.admin, roles: ['admin'] },
   ];

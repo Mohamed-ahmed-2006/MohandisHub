@@ -10,6 +10,7 @@ import { ApplicationChat } from './application-chat';
 import { useToast } from '@/components/app/toast';
 import { jobsApiClient } from '@/lib/jobs/client';
 import { reservationsApiClient } from '@/lib/reservations/client';
+import { getPrivateFileUrl } from '@/lib/upload/client';
 
 function formatMoney(value: number): string {
   return `${value.toFixed(2)} USD`;
@@ -143,9 +144,23 @@ export const ExpertApplications = ({ accessToken }: { accessToken: string }) => 
                   {app.coverLetter && <p style={{ marginTop: '0.75rem' }}>{app.coverLetter}</p>}
                   {app.cvFileUrl ? (
                     <p style={{ marginTop: '0.5rem' }}>
-                      <a href={app.cvFileUrl} target="_blank" rel="noreferrer">
-                        Open submitted CV
-                      </a>
+                      {app.cvFileUrl.startsWith('http') ? (
+                        <a href={app.cvFileUrl} target="_blank" rel="noreferrer">
+                          Open submitted CV
+                        </a>
+                      ) : (
+                        <button
+                          type="button"
+                          className="dashboard-link-btn"
+                          onClick={() => {
+                            void getPrivateFileUrl(accessToken, app.cvFileUrl!)
+                              .then((url) => window.open(url, '_blank', 'noopener,noreferrer'))
+                              .catch(() => {});
+                          }}
+                        >
+                          Open submitted CV
+                        </button>
+                      )}
                     </p>
                   ) : (
                     <p className="dashboard-card-meta" style={{ marginTop: '0.5rem' }}>

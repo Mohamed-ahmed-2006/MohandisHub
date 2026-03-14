@@ -70,12 +70,24 @@ export type Service = {
   updatedAt: string;
 };
 
+export type ServiceSearchSort =
+  | 'newest'
+  | 'rating'
+  | 'price_asc'
+  | 'price_desc'
+  | 'completed_count';
+
 export type ServiceSearchParams = {
   categoryId?: string;
   city?: string;
   area?: string;
   providerType?: 'expert' | 'business';
   query?: string;
+  minRating?: number;
+  minPrice?: number;
+  maxPrice?: number;
+  verifiedOnly?: boolean;
+  sort?: ServiceSearchSort;
   page?: number;
   limit?: number;
 };
@@ -119,6 +131,7 @@ export type ServiceSearchResult = {
   providerName: string;
   providerRole: string;
   providerAvatar: string | null;
+  providerVerified: boolean;
   categorySlug: string | null;
   categoryNameEn: string | null;
   categoryNameAr: string | null;

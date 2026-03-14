@@ -4,6 +4,7 @@ import { ZodError } from 'zod';
 
 import { env } from '../config/env.js';
 import { logger } from '../config/logger.js';
+import { captureException } from '../config/sentry.js';
 import { HttpError } from '../utils/http-error.js';
 
 export const errorHandler: ErrorRequestHandler = (error, req, res, next) => {
@@ -32,6 +33,12 @@ export const errorHandler: ErrorRequestHandler = (error, req, res, next) => {
   }
 
   if (error instanceof HttpError) {
+    if (error.statusCode >= 500) {
+      captureException(error, {
+        ...(requestId && { requestId }),
+        ...(req.user?.id && { userId: req.user.id }),
+      });
+    }
     const body: ApiErrorBody = {
       ok: false,
       error: {
@@ -50,6 +57,10 @@ export const errorHandler: ErrorRequestHandler = (error, req, res, next) => {
     requestId,
     error: error instanceof Error ? error.message : 'Unknown error',
     ...(error instanceof Error && error.stack ? { stack: error.stack } : {}),
+  });
+  captureException(error, {
+    ...(requestId && { requestId }),
+    ...(req.user?.id && { userId: req.user.id }),
   });
 
   const pgLikeError = error as { code?: string; message?: string };
@@ -88,6 +99,11 @@ export const errorHandler: ErrorRequestHandler = (error, req, res, next) => {
     res.status(503).json(body);
     return;
   }
+
+  captureException(error, {
+    ...(requestId && { requestId }),
+    ...(req.user?.id && { userId: req.user.id }),
+  });
 
   const body: ApiErrorBody = {
     ok: false,

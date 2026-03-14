@@ -1,0 +1,84 @@
+# Render Blueprint: MohandisHub API + Worker
+# https://render.com/docs/blueprint-spec
+# Deploy: Connect repo and use this blueprint, or create services manually from Dashboard.
+
+services:
+  - type: web
+    name: mohandishub-api
+    runtime: node
+    region: oregon
+    plan: free
+
+    buildCommand: npm ci && npm run build -w @mohandishub/shared && npm run build -w @mohandishub/api
+    startCommand: node apps/api/dist/server.js
+
+    healthCheckPath: /health
+
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      - key: DATABASE_URL
+        sync: false
+      - key: CORS_ORIGIN
+        sync: false
+      - key: CORS_EXTRA_ORIGINS
+        sync: false
+      - key: API_PUBLIC_URL
+        sync: false
+      - key: WEB_PUBLIC_URL
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true
+      - key: JWT_REFRESH_SECRET
+        generateValue: true
+      - key: VERIFICATION_PROVIDER
+        value: didit
+      - key: DIDIT_API_KEY
+        sync: false
+      - key: DIDIT_WEBHOOK_SECRET
+        sync: false
+      - key: DIDIT_WORKFLOW_ID
+        sync: false
+      - key: OTP_EMAIL_PROVIDER
+        value: brevo
+      - key: BREVO_API_KEY
+        sync: false
+      - key: EMAIL_FROM
+        sync: false
+      - key: NOWPAYMENTS_API_KEY
+        sync: false
+      - key: NOWPAYMENTS_IPN_SECRET
+        sync: false
+      - key: NOWPAYMENTS_WITHDRAWALS_ENABLED
+        sync: false
+      - key: AGORA_APP_ID
+        sync: false
+      - key: AGORA_APP_CERTIFICATE
+        sync: false
+
+  - type: worker
+    name: mohandishub-worker
+    runtime: node
+    region: oregon
+    plan: free
+
+    buildCommand: npm ci && npm run build -w @mohandishub/shared && npm run build -w @mohandishub/api
+    startCommand: node apps/api/dist/worker.js
+
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: JWT_REFRESH_SECRET
+        sync: false
+      - key: NOWPAYMENTS_API_KEY
+        sync: false
+      - key: NOWPAYMENTS_AUTH_EMAIL
+        sync: false
+      - key: NOWPAYMENTS_AUTH_PASSWORD
+        sync: false

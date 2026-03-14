@@ -1,0 +1,97 @@
+# CI: typecheck, lint, unit tests, optional staging migrations, e2e against staging.
+# Production: gated ship/manual only; do not auto-deploy or auto-migrate production from CI.
+# E2E runs against staging when STAGING_WEB_URL is set.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  check:
+    name: Typecheck, lint, test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Unit tests
+        run: npm run test
+
+  migrate-staging:
+    name: Migrate staging DB
+    runs-on: ubuntu-latest
+    needs: check
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    env:
+      STAGING_DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install
+        run: npm ci
+
+      - name: Run migrations against staging
+        if: env.STAGING_DATABASE_URL != ''
+        run: npx supabase db push --db-url "$STAGING_DATABASE_URL"
+        env:
+          DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL }}
+
+      - name: Skip migrations (no secret)
+        if: env.STAGING_DATABASE_URL == ''
+        run: echo "STAGING_DATABASE_URL not set; skipping staging migrations."
+
+  e2e:
+    name: E2E (staging)
+    runs-on: ubuntu-latest
+    needs: check
+    env:
+      PLAYWRIGHT_BASE_URL: ${{ secrets.STAGING_WEB_URL }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install
+        run: npm ci
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+        cwd: apps/e2e
+
+      - name: Run E2E
+        run: |
+          if [ -n "$PLAYWRIGHT_BASE_URL" ]; then
+            npm run e2e
+          else
+            echo "STAGING_WEB_URL not set; skipping e2e."
+          fi
+        env:
+          PLAYWRIGHT_BASE_URL: ${{ secrets.STAGING_WEB_URL }}

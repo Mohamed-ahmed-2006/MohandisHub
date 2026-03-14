@@ -31,6 +31,11 @@ export class ServicesService {
       area?: string;
       providerType?: string;
       query?: string;
+      minRating?: number;
+      minPrice?: number;
+      maxPrice?: number;
+      verifiedOnly?: boolean;
+      sort?: string;
     },
     page: number = 1,
     limit: number = 20,
@@ -49,6 +54,11 @@ export class ServicesService {
       limit,
       totalPages: Math.ceil(total / limit),
     };
+  }
+
+  async getRecommendedServices(limit: number = 10, categoryId?: string): Promise<ServiceSearchResult[]> {
+    const rows = await this.repo.getRecommendedServices(limit, categoryId);
+    return rows.map((r) => this.toSearchResult(r));
   }
 
   async getServiceDetail(serviceId: string): Promise<Service> {
@@ -264,6 +274,7 @@ export class ServicesService {
       providerName: row.provider_name,
       providerRole: row.provider_role,
       providerAvatar: row.provider_avatar,
+      providerVerified: Boolean(row.provider_verified),
       categorySlug: row.category_slug,
       categoryNameEn: row.category_name_en,
       categoryNameAr: row.category_name_ar,

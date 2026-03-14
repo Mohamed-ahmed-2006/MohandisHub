@@ -19,7 +19,7 @@ const applyJobSchema = z
   .object({
     coverLetter: z.string().optional(),
     submissionType: z.enum(['profile_snapshot', 'cv_upload']),
-    cvFileUrl: z.string().url().optional(),
+    cvFileUrl: z.string().min(1).optional(), // URL or /api/upload/private/:id
   })
   .superRefine((value, ctx) => {
     if (value.submissionType === 'cv_upload' && !value.cvFileUrl?.trim()) {

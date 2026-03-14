@@ -1,4 +1,6 @@
 export * from './admin.js';
+export * from './favorites.js';
+export * from './analytics.js';
 export * from './app-settings.js';
 export * from './api.js';
 export * from './notifications.js';
@@ -12,6 +14,7 @@ export * from './plans.js';
 export * from './profiles.js';
 export * from './reservations.js';
 export * from './reviews.js';
+export * from './support.js';
 export * from './roles.js';
 export * from './services.js';
 export * from './verification.js';

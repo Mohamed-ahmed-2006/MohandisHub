@@ -10,6 +10,7 @@ import { env } from './config/env.js';
 import { errorHandler } from './middleware/error-handler.js';
 import { notFoundHandler } from './middleware/not-found.js';
 import { requestIdMiddleware } from './middleware/request-id.js';
+import { requestLoggingMiddleware } from './middleware/request-logging.js';
 import { walletController } from './modules/wallet/wallet.controller.js';
 import { healthRouter } from './routes/health.routes.js';
 import { apiRouter } from './routes/index.js';
@@ -19,6 +20,7 @@ export const createApp = () => {
 
   app.disable('x-powered-by');
   app.use(requestIdMiddleware);
+  app.use(requestLoggingMiddleware);
   app.use(compression());
   const allowedOrigins: string[] = env.CORS_ORIGIN.split(',')
     .map((o) => o.trim())

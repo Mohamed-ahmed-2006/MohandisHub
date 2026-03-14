@@ -26,15 +26,29 @@ const dedupeSlotsById = (items: ReservationSlot[]): ReservationSlot[] => {
   });
 };
 
+const getStartOfToday = (): Date => {
+  const date = new Date();
+  date.setHours(0, 0, 0, 0);
+  return date;
+};
+
+const isUpcomingSlot = (slot: ReservationSlot, now: Date): boolean =>
+  new Date(slot.startAt).getTime() >= now.getTime();
+
 function formatSlot(slot: ReservationSlot): string {
   const start = new Date(slot.startAt);
   const end = new Date(slot.endAt);
-  return start.toLocaleDateString(undefined, {
-    weekday: 'short',
-    month: 'short',
-    day: 'numeric',
-  }) + ' ' + start.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' }) +
-    ' – ' + end.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+  return (
+    start.toLocaleDateString(undefined, {
+      weekday: 'short',
+      month: 'short',
+      day: 'numeric',
+    }) +
+    ' ' +
+    start.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' }) +
+    ' - ' +
+    end.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })
+  );
 }
 
 export const ServiceBookingModal = ({
@@ -53,21 +67,19 @@ export const ServiceBookingModal = ({
   const [selectedSlot, setSelectedSlot] = useState<ReservationSlot | null>(null);
   const [mode, setMode] = useState<'online' | 'offline'>('online');
   const [onlineType, setOnlineType] = useState<'voice' | 'video'>('voice');
+  const [slotFilter, setSlotFilter] = useState<'today' | 'next7Days' | 'thisMonth' | 'allUpcoming'>(
+    'allUpcoming',
+  );
   const [modeReady, setModeReady] = useState(false);
-  const [weekStart, setWeekStart] = useState(() => {
-    const d = new Date();
-    d.setDate(d.getDate() - d.getDay());
-    d.setHours(0, 0, 0, 0);
-    return d;
-  });
 
   const loadSlots = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const start = new Date(weekStart);
-      const end = new Date(weekStart);
-      end.setDate(end.getDate() + 14);
+      const start = getStartOfToday();
+      const end = new Date(start);
+      end.setDate(end.getDate() + 90);
+
       const [slotsRes, profileRes] = await Promise.all([
         reservationsApiClient.listSlots(accessToken, {
           providerId: service.providerId,
@@ -77,17 +89,24 @@ export const ServiceBookingModal = ({
         }),
         reservationsApiClient.getProviderProfile(accessToken, service.providerId),
       ]);
-      setSlots(dedupeSlotsById(slotsRes.items));
+
+      const now = new Date();
+      const upcomingSlots = dedupeSlotsById(slotsRes.items)
+        .filter((slot) => isUpcomingSlot(slot, now))
+        .sort((a, b) => new Date(a.startAt).getTime() - new Date(b.startAt).getTime());
+
+      setSlots(upcomingSlots);
       setProfile(profileRes);
-      const onlineSupported = slotsRes.items.some((s) => s.supportsOnline);
-      const offlineSupported = slotsRes.items.some((s) => s.supportsOffline);
+
+      const onlineSupported = upcomingSlots.some((slot) => slot.supportsOnline);
+      const offlineSupported = upcomingSlots.some((slot) => slot.supportsOffline);
       const modeSupported = mode === 'online' ? onlineSupported : offlineSupported;
+
       if (!modeSupported) {
-        const otherSupported = mode === 'online' ? offlineSupported : onlineSupported;
-        if (otherSupported) {
-          setMode(mode === 'online' ? 'offline' : 'online');
-        }
+        const fallbackMode = onlineSupported ? 'online' : offlineSupported ? 'offline' : mode;
+        setMode(fallbackMode);
       }
+
       setModeReady(true);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load slots');
@@ -97,7 +116,7 @@ export const ServiceBookingModal = ({
     } finally {
       setLoading(false);
     }
-  }, [accessToken, mode, service.providerId, weekStart]);
+  }, [accessToken, mode, service.providerId]);
 
   const prevOpenRef = useRef(false);
   useEffect(() => {
@@ -109,6 +128,7 @@ export const ServiceBookingModal = ({
         setError(null);
         setMode('online');
         setOnlineType('voice');
+        setSlotFilter('allUpcoming');
         setModeReady(false);
       }
       void loadSlots();
@@ -116,6 +136,40 @@ export const ServiceBookingModal = ({
       prevOpenRef.current = false;
     }
   }, [open, loadSlots]);
+
+  const now = new Date();
+  const startOfToday = getStartOfToday();
+  const endOfToday = new Date(startOfToday);
+  endOfToday.setDate(endOfToday.getDate() + 1);
+  const next7Days = new Date(now);
+  next7Days.setDate(next7Days.getDate() + 7);
+  const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+
+  const filteredSlots = slots.filter((slot) => {
+    if (!isUpcomingSlot(slot, now)) return false;
+    if (mode === 'online' && !slot.supportsOnline) return false;
+    if (mode === 'offline' && !slot.supportsOffline) return false;
+
+    const slotStart = new Date(slot.startAt);
+
+    switch (slotFilter) {
+      case 'today':
+        return slotStart >= now && slotStart < endOfToday;
+      case 'next7Days':
+        return slotStart >= now && slotStart < next7Days;
+      case 'thisMonth':
+        return slotStart >= now && slotStart < endOfMonth;
+      case 'allUpcoming':
+      default:
+        return slotStart >= now;
+    }
+  });
+
+  useEffect(() => {
+    if (selectedSlot && !filteredSlots.some((slot) => slot.id === selectedSlot.id)) {
+      setSelectedSlot(null);
+    }
+  }, [filteredSlots, selectedSlot]);
 
   const handleBook = async () => {
     if (!selectedSlot || !accessToken) return;
@@ -139,8 +193,12 @@ export const ServiceBookingModal = ({
   };
 
   const common = dictionary.common ?? {};
-  const bookLabel = (dictionary as { appHome?: { requestService?: string } }).appHome?.requestService ?? 'Book';
-  const noSlots = (dictionary as { calendarPage?: { noSlots?: string } }).calendarPage?.noSlots ?? 'No available slots. Try another week.';
+  const bookLabel =
+    (dictionary as { appHome?: { requestService?: string } }).appHome?.requestService ?? 'Book';
+  const noSlots =
+    (dictionary as { calendarPage?: { noSlots?: string } }).calendarPage?.noSlots ??
+    'No available upcoming slots.';
+  const noFilteredSlots = 'No available slots match the selected filter.';
   const modePrice =
     mode === 'offline'
       ? profile?.offlinePrice ?? null
@@ -163,14 +221,16 @@ export const ServiceBookingModal = ({
         <p className="service-booking-provider">
           {service.providerName}
           {profile?.verificationBadgeEarned && (
-              <span className="profile-screen-badge profile-screen-badge_verified" style={{ marginLeft: '0.5rem' }} title="Complete profile and 1000 USD total deposits.">
+            <span
+              className="profile-screen-badge profile-screen-badge_verified"
+              style={{ marginLeft: '0.5rem' }}
+              title="Complete profile and 1000 USD total deposits."
+            >
               Platform verified
             </span>
           )}
         </p>
-        {service.price != null && (
-          <p className="service-booking-price">{service.price} USD</p>
-        )}
+        {service.price != null && <p className="service-booking-price">{service.price} USD</p>}
 
         <div style={{ marginBottom: '0.75rem', display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
           {modeReady ? (
@@ -209,12 +269,14 @@ export const ServiceBookingModal = ({
               )}
             </>
           ) : (
-            <span style={{ color: 'hsl(var(--muted-foreground))', fontSize: '0.9rem' }}>{common.continue ?? 'Loading...'}</span>
+            <span style={{ color: 'hsl(var(--muted-foreground))', fontSize: '0.9rem' }}>
+              {common.continue ?? 'Loading...'}
+            </span>
           )}
         </div>
         {modePrice != null && (
           <p className="service-booking-price" style={{ marginTop: '-0.5rem' }}>
-              Reservation price: {modePrice.toFixed(2)} USD
+            Reservation price: {modePrice.toFixed(2)} USD
           </p>
         )}
         <div className="reservation-note-box" style={{ marginBottom: '0.75rem' }}>
@@ -224,25 +286,39 @@ export const ServiceBookingModal = ({
         </div>
 
         <div className="service-booking-slots">
-          <div className="service-booking-week-nav">
-            <button type="button" onClick={() => setWeekStart((d) => { const n = new Date(d); n.setDate(n.getDate() - 7); return n; })}>
-              ←
-            </button>
-            <span>{weekStart.toLocaleDateString(undefined, { month: 'long' })}</span>
-            <button type="button" onClick={() => setWeekStart((d) => { const n = new Date(d); n.setDate(n.getDate() + 7); return n; })}>
-              →
-            </button>
+          <div style={{ marginBottom: '0.75rem', display: 'grid', gap: '0.35rem' }}>
+            <label htmlFor="service-booking-filter" style={{ fontSize: '0.9rem', fontWeight: 600 }}>
+              Filter slots
+            </label>
+            <select
+              id="service-booking-filter"
+              className="dashboard-select"
+              value={slotFilter}
+              onChange={(e) =>
+                setSlotFilter(
+                  e.target.value as 'today' | 'next7Days' | 'thisMonth' | 'allUpcoming',
+                )
+              }
+            >
+              <option value="today">Today</option>
+              <option value="next7Days">Next 7 days</option>
+              <option value="thisMonth">This month</option>
+              <option value="allUpcoming">All upcoming</option>
+            </select>
+            <p style={{ margin: 0, fontSize: '0.85rem', color: 'hsl(var(--muted-foreground))' }}>
+              Showing only slots from {startOfToday.toLocaleDateString()} onward.
+            </p>
           </div>
 
           {loading ? (
             <p>{common.continue ?? 'Loading...'}</p>
           ) : slots.length === 0 ? (
             <p className="service-booking-empty">{noSlots}</p>
+          ) : filteredSlots.length === 0 ? (
+            <p className="service-booking-empty">{noFilteredSlots}</p>
           ) : (
             <div className="service-booking-slot-grid">
-              {slots
-                .filter((slot) => (mode === 'online' ? slot.supportsOnline : slot.supportsOffline))
-                .map((slot) => (
+              {filteredSlots.map((slot) => (
                 <button
                   key={slot.id}
                   type="button"
@@ -251,7 +327,7 @@ export const ServiceBookingModal = ({
                 >
                   {formatSlot(slot)}
                 </button>
-                ))}
+              ))}
             </div>
           )}
         </div>

@@ -23,6 +23,7 @@ const sora = Sora({
 export const metadata: Metadata = {
   title: 'MohandisHub',
   description: 'Engineering services marketplace connecting customers, experts, and businesses.',
+  manifest: '/manifest.json',
   icons: {
     icon: [
       { url: '/icon', type: 'image/png', sizes: '32x32' },

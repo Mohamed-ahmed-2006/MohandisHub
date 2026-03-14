@@ -99,6 +99,19 @@ const getMyTransactions = asyncHandler(async (req, res) => {
   res.json(response);
 });
 
+const getReceipt = asyncHandler(async (req, res) => {
+  const user = getUser(req);
+  const transactionId = req.params.id;
+  if (!transactionId) {
+    throw new HttpError({ statusCode: 400, code: 'VALIDATION_ERROR', message: 'Transaction ID required.' });
+  }
+  const receipt = await walletService.getReceipt(user.id, transactionId);
+  if (!receipt) {
+    throw new HttpError({ statusCode: 404, code: 'NOT_FOUND', message: 'Transaction not found.' });
+  }
+  res.json({ ok: true, data: { receipt, title: 'Transaction receipt' } });
+});
+
 const getDepositCurrencies = asyncHandler(async (_req, res) => {
   const currencies = await walletService.getDepositCurrencies();
   const response: ApiSuccessBody<{ currencies: string[] }> = {
@@ -325,6 +338,7 @@ async function nowPaymentsIpn(req: Request, res: Response, next: NextFunction): 
 export const walletController = {
   getMyWallet,
   getMyTransactions,
+  getReceipt,
   getDepositCurrencies,
   getDepositEstimate,
   createDepositCheckout,

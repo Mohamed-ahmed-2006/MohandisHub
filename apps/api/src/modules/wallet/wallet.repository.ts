@@ -182,6 +182,16 @@ export class WalletRepository {
     return { rows, total };
   }
 
+  async getTransactionById(userId: string, transactionId: string): Promise<TransactionRow | null> {
+    const { rows } = await this.db.query<TransactionRow>(
+      `SELECT id, wallet_id, user_id, type, amount::text, balance_after::text, status,
+              description, reference_type, reference_id, metadata, created_by, created_at
+       FROM transactions WHERE id = $1 AND user_id = $2`,
+      [transactionId, userId],
+    );
+    return rows[0] ?? null;
+  }
+
   async createDepositRequest(
     userId: string,
     walletId: string,

@@ -43,6 +43,13 @@ function parseBody<T>(
   return result.data as T;
 }
 
+const getRecommendations = asyncHandler(async (req, res) => {
+  const limit = Math.min(parseInt(req.query.limit as string, 10) || 10, 20);
+  const categoryId = req.query.categoryId as string | undefined;
+  const items = await servicesService.getRecommendedServices(limit, categoryId);
+  res.json({ ok: true, data: { items } });
+});
+
 const listCategories = asyncHandler(async (_req, res) => {
   const categories = await servicesService.listCategories();
   const response: ApiSuccessBody<ServiceCategory[]> = { ok: true, data: categories };
@@ -58,12 +65,25 @@ const searchServices = asyncHandler(async (req, res) => {
     area?: string;
     providerType?: string;
     query?: string;
+    minRating?: number;
+    minPrice?: number;
+    maxPrice?: number;
+    verifiedOnly?: boolean;
+    sort?: string;
   } = {};
   if (req.query.categoryId) filters.categoryId = req.query.categoryId as string;
   if (req.query.city) filters.city = req.query.city as string;
   if (req.query.area) filters.area = req.query.area as string;
   if (req.query.providerType) filters.providerType = req.query.providerType as string;
   if (req.query.q) filters.query = req.query.q as string;
+  const minRatingNum = parseInt(req.query.minRating as string, 10);
+  if (!Number.isNaN(minRatingNum) && minRatingNum >= 0) filters.minRating = minRatingNum;
+  const minPriceNum = parseFloat(req.query.minPrice as string);
+  if (!Number.isNaN(minPriceNum) && minPriceNum >= 0) filters.minPrice = minPriceNum;
+  const maxPriceNum = parseFloat(req.query.maxPrice as string);
+  if (!Number.isNaN(maxPriceNum) && maxPriceNum >= 0) filters.maxPrice = maxPriceNum;
+  if (req.query.verifiedOnly === 'true') filters.verifiedOnly = true;
+  if (req.query.sort && typeof req.query.sort === 'string') filters.sort = req.query.sort;
 
   const result = await servicesService.searchServices(filters, page, limit);
   const response: ApiSuccessBody<typeof result> = { ok: true, data: result };
@@ -118,6 +138,7 @@ const activateService = asyncHandler(async (req, res) => {
 
 export const servicesController = {
   listCategories,
+  getRecommendations,
   searchServices,
   getServiceDetail,
   createService,

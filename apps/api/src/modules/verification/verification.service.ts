@@ -8,6 +8,7 @@ import { isVerifiableRole } from '@mohandishub/shared';
 import { env } from '../../config/env.js';
 import { logger } from '../../config/logger.js';
 import { HttpError } from '../../utils/http-error.js';
+import { logAudit } from '../audit/audit.service.js';
 
 import type { IVerificationProvider } from './verification.provider.js';
 import { createVerificationProvider } from './verification.provider.js';
@@ -176,6 +177,13 @@ export class VerificationService {
         profileStatus,
         identityMethod,
       );
+      await logAudit({
+        actorId: null,
+        action: 'verification.webhook_result',
+        resourceType: 'verification_request',
+        resourceId: request.id,
+        details: { approved: result.approved },
+      });
       return;
     }
 
@@ -227,5 +235,12 @@ export class VerificationService {
       profileStatus,
       identityMethod,
     );
+    await logAudit({
+      actorId: params.reviewedBy,
+      action: 'verification.admin_review',
+      resourceType: 'verification_request',
+      resourceId: request.id,
+      details: { approved: params.approved },
+    });
   }
 }

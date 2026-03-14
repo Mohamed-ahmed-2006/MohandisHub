@@ -28,6 +28,7 @@ type ServiceSearchRow = {
   provider_name: string;
   provider_role: string;
   provider_avatar: string | null;
+  provider_verified: boolean;
   category_slug: string | null;
   category_name_en: string | null;
   category_name_ar: string | null;
@@ -87,6 +88,11 @@ export class ServicesRepository {
       area?: string;
       providerType?: string;
       query?: string;
+      minRating?: number;
+      minPrice?: number;
+      maxPrice?: number;
+      verifiedOnly?: boolean;
+      sort?: string;
     },
     page: number,
     limit: number,
@@ -116,15 +122,40 @@ export class ServicesRepository {
       params.push(`%${filters.query}%`);
       idx++;
     }
+    if (filters.minRating != null && filters.minRating > 0) {
+      conditions.push(`s.avg_rating >= $${idx++}`);
+      params.push(filters.minRating);
+    }
+    if (filters.minPrice != null && filters.minPrice >= 0) {
+      conditions.push(`s.price >= $${idx++}`);
+      params.push(filters.minPrice);
+    }
+    if (filters.maxPrice != null && filters.maxPrice >= 0) {
+      conditions.push(`s.price <= $${idx++}`);
+      params.push(filters.maxPrice);
+    }
+    if (filters.verifiedOnly === true) {
+      conditions.push('u.platform_verified_at IS NOT NULL');
+    }
 
     const where = conditions.join(' AND ');
 
     const countParams = [...params];
     const countResult = await this.db.query<{ count: string }>(
-      `SELECT COUNT(*)::text AS count FROM services s JOIN users u ON u.id = s.provider_id WHERE ${where}`,
+      `SELECT COUNT(*)::text AS count FROM services s JOIN users u ON u.id = s.provider_id LEFT JOIN service_categories c ON c.id = s.category_id WHERE ${where}`,
       countParams,
     );
     const total = parseInt(countResult.rows[0]!.count, 10);
+
+    const sortMap: Record<string, string> = {
+      newest: 's.created_at DESC',
+      rating: 's.avg_rating DESC NULLS LAST, s.created_at DESC',
+      price_asc: 's.price ASC NULLS LAST, s.created_at DESC',
+      price_desc: 's.price DESC NULLS LAST, s.created_at DESC',
+      completed_count: 's.order_count DESC NULLS LAST, s.created_at DESC',
+    };
+    const orderClause =
+      sortMap[filters.sort ?? ''] ?? 's.is_featured DESC, s.created_at DESC';
 
     const offset = (page - 1) * limit;
     params.push(limit, offset);
@@ -132,18 +163,46 @@ export class ServicesRepository {
     const { rows } = await this.db.query<ServiceSearchRow>(
       `SELECT s.id, s.title, s.provider_id, u.display_name AS provider_name,
               u.primary_role AS provider_role, u.avatar_url AS provider_avatar,
+              (u.platform_verified_at IS NOT NULL) AS provider_verified,
               c.slug AS category_slug, c.name_en AS category_name_en, c.name_ar AS category_name_ar,
               s.price::text, s.price_type, s.is_negotiable, s.city, s.area, s.avg_rating::text, s.is_featured
        FROM services s
        JOIN users u ON u.id = s.provider_id
        LEFT JOIN service_categories c ON c.id = s.category_id
        WHERE ${where}
-       ORDER BY s.is_featured DESC, s.created_at DESC
+       ORDER BY ${orderClause}
        LIMIT $${idx++} OFFSET $${idx}`,
       params,
     );
 
     return { rows, total };
+  }
+
+  /** Rule-based recommendations: top-rated active services, optionally by category. */
+  async getRecommendedServices(limit: number = 10, categoryId?: string): Promise<ServiceSearchRow[]> {
+    const conditions: string[] = ["s.status = 'active'"];
+    const params: unknown[] = [];
+    let idx = 1;
+    if (categoryId) {
+      conditions.push(`s.category_id = $${idx++}`);
+      params.push(categoryId);
+    }
+    params.push(limit);
+    const { rows } = await this.db.query<ServiceSearchRow>(
+      `SELECT s.id, s.title, s.provider_id, u.display_name AS provider_name,
+              u.primary_role AS provider_role, u.avatar_url AS provider_avatar,
+              (u.platform_verified_at IS NOT NULL) AS provider_verified,
+              c.slug AS category_slug, c.name_en AS category_name_en, c.name_ar AS category_name_ar,
+              s.price::text, s.price_type, s.is_negotiable, s.city, s.area, s.avg_rating::text, s.is_featured
+       FROM services s
+       JOIN users u ON u.id = s.provider_id
+       LEFT JOIN service_categories c ON c.id = s.category_id
+       WHERE ${conditions.join(' AND ')}
+       ORDER BY s.avg_rating DESC NULLS LAST, s.order_count DESC NULLS LAST, s.created_at DESC
+       LIMIT $${idx}`,
+      params,
+    );
+    return rows;
   }
 
   async getServiceById(serviceId: string): Promise<ServiceDetailRow | null> {

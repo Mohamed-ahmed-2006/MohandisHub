@@ -40,6 +40,11 @@ export const servicesApiClient = {
     area?: string;
     providerType?: string;
     q?: string;
+    minRating?: number;
+    minPrice?: number;
+    maxPrice?: number;
+    verifiedOnly?: boolean;
+    sort?: string;
     page?: number;
     limit?: number;
   }): Promise<{
@@ -55,6 +60,11 @@ export const servicesApiClient = {
     if (params.area) query.set('area', params.area);
     if (params.providerType) query.set('providerType', params.providerType);
     if (params.q) query.set('q', params.q);
+    if (params.minRating != null) query.set('minRating', String(params.minRating));
+    if (params.minPrice != null) query.set('minPrice', String(params.minPrice));
+    if (params.maxPrice != null) query.set('maxPrice', String(params.maxPrice));
+    if (params.verifiedOnly === true) query.set('verifiedOnly', 'true');
+    if (params.sort) query.set('sort', params.sort);
     if (params.page) query.set('page', String(params.page));
     if (params.limit) query.set('limit', String(params.limit));
     const qs = query.toString();

@@ -15,6 +15,7 @@ const servicesRouter = Router();
 
 // Public
 servicesRouter.get('/categories', servicesController.listCategories);
+servicesRouter.get('/recommendations', servicesController.getRecommendations);
 servicesRouter.get('/search', servicesController.searchServices);
 
 // Provider endpoints (expert, business) — order matters: /my before /:id

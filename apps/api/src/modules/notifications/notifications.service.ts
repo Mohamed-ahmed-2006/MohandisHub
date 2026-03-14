@@ -1,10 +1,12 @@
 // ---------------------------------------------------------------------------
-// Notifications service — create, list, mark read; emit via Socket
+// Notifications service — create, list, mark read; emit via Socket; optional email
 // ---------------------------------------------------------------------------
 
 import type { NotificationPayload } from '@mohandishub/shared';
 
+import { logger } from '../../config/logger.js';
 import { getSocketServer } from '../../lib/socket-instance.js';
+import { sendTransactionalEmail } from '../../utils/send-transactional-email.js';
 
 import { NotificationsRepository } from './notifications.repository.js';
 import type { NotificationRow } from './notifications.repository.js';
@@ -20,6 +22,9 @@ export type CreateNotificationInput = {
   title: string;
   message: string;
   payload?: NotificationPayload | null;
+  /** When set, a transactional email is also sent (fire-and-forget). */
+  recipientEmail?: string;
+  recipientDisplayName?: string;
 };
 
 export class NotificationsService {
@@ -38,7 +43,7 @@ export class NotificationsService {
     };
   }
 
-  /** Create one notification, persist, and emit to user's Socket room. */
+  /** Create one notification, persist, and emit to user's Socket room. Optionally send email when recipientEmail is set. */
   async createForUser(userId: string, input: CreateNotificationInput) {
     try {
       const row = await this.repo.create(
@@ -59,6 +64,19 @@ export class NotificationsService {
           readAt: null,
           createdAt: row.created_at.toISOString(),
         });
+      }
+      if (input.recipientEmail) {
+        const emailParams: Parameters<typeof sendTransactionalEmail>[0] = {
+          to: input.recipientEmail,
+          subject: input.title,
+          preheader: input.message.slice(0, 120),
+          title: input.title,
+          introLines: [input.message],
+        };
+        if (input.recipientDisplayName != null) emailParams.displayName = input.recipientDisplayName;
+        sendTransactionalEmail(emailParams).catch((err: unknown) =>
+          logger.warn('Notification email send failed', { err, userId, type: input.type }),
+        );
       }
       return this.toNotification(row);
     } catch (err) {

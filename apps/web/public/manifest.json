@@ -1,0 +1,10 @@
+{
+  "name": "MohandisHub",
+  "short_name": "MohandisHub",
+  "description": "Engineering services marketplace connecting customers, experts, and businesses.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#0f766e",
+  "icons": []
+}

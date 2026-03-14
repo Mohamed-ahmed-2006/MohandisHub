@@ -24,9 +24,11 @@ import type {
 
 import { asyncHandler } from '../../utils/async-handler.js';
 import { HttpError } from '../../utils/http-error.js';
+import { logAudit } from '../audit/audit.service.js';
 import { NotificationsService } from '../notifications/notifications.service.js';
 import { ReviewsService } from '../reviews/reviews.service.js';
 import { SettingsService } from '../settings/settings.service.js';
+import { SupportService } from '../support/support.service.js';
 
 import { AdminService } from './admin.service.js';
 import type {
@@ -62,6 +64,7 @@ import {
 
 const adminService = new AdminService();
 const notificationsService = new NotificationsService();
+const supportService = new SupportService();
 const settingsService = new SettingsService();
 const reviewsService = new ReviewsService();
 
@@ -202,6 +205,19 @@ const getUserActivity = asyncHandler(async (req, res) => {
 const updateUser = asyncHandler(async (req, res) => {
   const input = parseValidation<UpdateUserInput>(updateUserSchema, req.body);
   const user = await adminService.updateUser(req.params.id!, input);
+  if (input.primaryRole !== undefined || input.isAdmin !== undefined) {
+    await logAudit({
+      actorId: getAdminId(req),
+      action: 'admin.user.update',
+      resourceType: 'user',
+      resourceId: req.params.id!,
+      details: {
+        ...(input.primaryRole !== undefined && { primaryRole: input.primaryRole }),
+        ...(input.isAdmin !== undefined && { isAdmin: input.isAdmin }),
+      },
+      ip: req.ip ?? (req.socket?.remoteAddress ?? undefined) ?? null,
+    });
+  }
   const response: ApiSuccessBody<AdminUserListItem> = { ok: true, data: user };
   res.json(response);
 });
@@ -342,6 +358,14 @@ const adjustBalance = asyncHandler(async (req, res) => {
   const adminId = getAdminId(req);
   const input = parseValidation<AdjustBalanceInput>(adjustBalanceSchema, req.body);
   const txn = await adminService.adjustBalance(input, adminId);
+  await logAudit({
+    actorId: adminId,
+    action: 'admin.wallet.adjust',
+    resourceType: 'wallet',
+    resourceId: input.userId,
+    details: { type: input.type, amount: input.amount },
+    ip: req.ip ?? (req.socket?.remoteAddress ?? undefined) ?? null,
+  });
   const response: ApiSuccessBody<Transaction> = { ok: true, data: txn };
   res.status(201).json(response);
 });
@@ -490,6 +514,32 @@ const resolveReviewDispute = asyncHandler(async (req, res) => {
   res.json({ ok: true, data: { disputeId, decision, hideReview } });
 });
 
+// ── Support tickets ───────────────────────────────────────────────────────
+
+const listSupportTickets = asyncHandler(async (req, res) => {
+  const page = parseInt(req.query.page as string, 10) || 1;
+  const limit = Math.min(parseInt(req.query.limit as string, 10) || 20, 100);
+  const status = req.query.status as string | undefined;
+  const filters: { status?: string } = {};
+  if (status) filters.status = status;
+  const data = await supportService.listAllTickets(filters, page, limit);
+  res.json({ ok: true, data });
+});
+
+const updateSupportTicket = asyncHandler(async (req, res) => {
+  const adminId = getAdminId(req);
+  const ticketId = req.params.id as string;
+  const body = (req.body || {}) as { status?: string; assignedTo?: string | null };
+  if (body.status != null) {
+    await supportService.updateStatus(ticketId, body.status as 'open' | 'in_progress' | 'waiting_reply' | 'resolved' | 'closed', adminId);
+  }
+  if (body.assignedTo !== undefined) {
+    await supportService.assign(ticketId, body.assignedTo ?? null, adminId);
+  }
+  const ticket = await supportService.getTicket(ticketId, '', true);
+  res.json({ ok: true, data: ticket });
+});
+
 export const adminController = {
   getDashboardStats,
   listUsers,
@@ -531,4 +581,6 @@ export const adminController = {
   resolveReviewReport,
   resolveReviewDispute,
   sendNotification,
+  listSupportTickets,
+  updateSupportTicket,
 };

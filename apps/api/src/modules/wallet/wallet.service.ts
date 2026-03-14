@@ -99,6 +99,12 @@ export class WalletService {
     };
   }
 
+  /** Get a single transaction as receipt (for invoicing/export). */
+  async getReceipt(userId: string, transactionId: string): Promise<Transaction | null> {
+    const row = await this.repo.getTransactionById(userId, transactionId);
+    return row ? this.toTransaction(row) : null;
+  }
+
   async getDepositCurrencies(): Promise<string[]> {
     if (!env.NOWPAYMENTS_API_KEY) {
       return [];

@@ -14,6 +14,8 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 
+import { getVisibleProfileSections, type ProfileSectionId } from './profile-screen-sections';
+
 import { useAuth } from '@/components/auth/auth-provider';
 import { LanguageToggle } from '@/components/language-toggle';
 import { ThemeToggle } from '@/components/theme-toggle';
@@ -49,9 +51,58 @@ type ProfileScreenProps = {
   dictionary: Dictionary;
 };
 
-type TabId = 'account' | 'profile' | 'documents' | 'preferences';
-
 const COMPANY_SIZES = ['1-10', '11-50', '51-200', '201-500', '500+'] as const;
+
+type AccountPreferencesProps = {
+  locale: Locale;
+  dictionary: Dictionary;
+};
+
+const AccountPreferences = ({ locale, dictionary }: AccountPreferencesProps) => {
+  return (
+    <div className="profile-screen-subsection">
+      <div className="profile-screen-subsection-header">
+        <h3 className="profile-screen-subsection-title">
+          {dictionary.profile.preferencesTab ?? 'Preferences'}
+        </h3>
+      </div>
+      <div className="profile-screen-pref-grid">
+        <div className="profile-screen-pref-card">
+          <span className="profile-screen-label">{dictionary.language.switchLabel}</span>
+          <LanguageToggle
+            locale={locale}
+            targetLabel={dictionary.language.target}
+            ariaLabel={dictionary.language.switchLabel}
+          />
+        </div>
+        <div className="profile-screen-pref-card">
+          <span className="profile-screen-label">
+            {dictionary.theme.darkLabel} / {dictionary.theme.lightLabel}
+          </span>
+          <ThemeToggle
+            switchToLightLabel={dictionary.theme.switchToLight}
+            switchToDarkLabel={dictionary.theme.switchToDark}
+            darkLabel={dictionary.theme.darkLabel}
+            lightLabel={dictionary.theme.lightLabel}
+          />
+        </div>
+      </div>
+    </div>
+  );
+};
+
+function getSectionLabel(
+  sectionId: ProfileSectionId,
+  dictionary: Dictionary,
+  isExpert: boolean,
+): string {
+  if (sectionId === 'account') return dictionary.profile.accountTab;
+  if (sectionId === 'profile') {
+    return isExpert ? dictionary.profile.expertTab : dictionary.profile.businessTab;
+  }
+
+  return dictionary.profile.verificationSection ?? 'Verification';
+}
 
 // ── Account Form (all roles) ─────────────────────────────────────────────
 
@@ -162,7 +213,7 @@ const AccountForm = ({
   };
 
   return (
-    <section className="profile-screen-card">
+    <section id="account-settings" className="profile-screen-card profile-screen-section-card">
       <h2 className="profile-screen-sectionTitle">{labels.sectionTitle}</h2>
       <form onSubmit={(e) => void handleSaveAccount(e)} className="profile-screen-form">
         <div className="profile-screen-field">
@@ -341,6 +392,7 @@ const AccountForm = ({
           {saving ? dictionary.common.continue : dictionary.common.save}
         </button>
       </form>
+      <AccountPreferences locale={locale} dictionary={dictionary} />
     </section>
   );
 };
@@ -350,7 +402,6 @@ const AccountForm = ({
 export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
   const router = useRouter();
   const { authUser, accessToken, isAuthenticated, isReady, authGuard, updateAuthUser } = useAuth();
-  const [activeTab, setActiveTab] = useState<TabId>('account');
   const [expertProfile, setExpertProfile] = useState<ExpertProfile | null>(null);
   const [businessProfile, setBusinessProfile] = useState<BusinessProfile | null>(null);
   const [loading, setLoading] = useState(true);
@@ -381,6 +432,13 @@ export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
 
   const loadProfile = useCallback(async () => {
     if (!accessToken) return;
+    if (!hasRoleProfile) {
+      setExpertProfile(null);
+      setBusinessProfile(null);
+      setLoading(false);
+      return;
+    }
+
     setLoading(true);
     try {
       if (isExpert) {
@@ -396,7 +454,7 @@ export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
     } finally {
       setLoading(false);
     }
-  }, [accessToken, isExpert, isBusiness]);
+  }, [accessToken, hasRoleProfile, isExpert, isBusiness]);
 
   useEffect(() => {
     if (!isReady || !isAuthenticated || !authUser) {
@@ -432,8 +490,14 @@ export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
   }, [accessToken, targetUserId, targetType, reviewsPage]);
 
   useEffect(() => {
-    if (activeTab === 'profile' && targetUserId && targetType) void loadReviews();
-  }, [activeTab, targetUserId, targetType, loadReviews]);
+    if (targetUserId && targetType) {
+      void loadReviews();
+      return;
+    }
+
+    setReviews([]);
+    setReviewsTotal(0);
+  }, [targetUserId, targetType, loadReviews]);
 
   const loadDocuments = useCallback(async () => {
     if (!accessToken || !hasRoleProfile) return;
@@ -454,8 +518,14 @@ export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
   }, [accessToken, hasRoleProfile]);
 
   useEffect(() => {
-    if (activeTab === 'documents') void loadDocuments();
-  }, [activeTab, loadDocuments]);
+    if (hasRoleProfile) {
+      void loadDocuments();
+      return;
+    }
+
+    setIdentityDocuments([]);
+    setAcademicRecords([]);
+  }, [hasRoleProfile, loadDocuments]);
 
   const submitReport = useCallback(async () => {
     if (!accessToken || !reportModalReviewId || reportSubmitting) return;
@@ -605,17 +675,7 @@ export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
   const pf = dictionary.onboarding.expert.profileForm;
   const cf = dictionary.onboarding.business.companyForm;
   const verLabels = dictionary.verification.statusLabels;
-
-  const tabs: { id: TabId; label: string; show: boolean }[] = [
-    { id: 'account', label: dictionary.profile.accountTab, show: true },
-    {
-      id: 'profile',
-      label: isExpert ? dictionary.profile.expertTab : dictionary.profile.businessTab,
-      show: hasRoleProfile,
-    },
-    { id: 'documents', label: dictionary.profile.documentsTab, show: hasRoleProfile },
-    { id: 'preferences', label: dictionary.profile.preferencesTab ?? 'Preferences', show: true },
-  ];
+  const visibleSections = getVisibleProfileSections(role);
 
   return (
     <main className="profile-screen-main">
@@ -624,59 +684,64 @@ export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
           <h1 className="app-page-title">{dictionary.nav.settings}</h1>
         </div>
 
-        <div className="profile-screen-tabs">
-          {tabs
-            .filter((t) => t.show)
-            .map((t) => (
-              <button
-                key={t.id}
-                type="button"
-                className={
-                  activeTab === t.id
-                    ? 'profile-screen-tab profile-screen-tab-active'
-                    : 'profile-screen-tab'
-                }
-                onClick={() => setActiveTab(t.id)}
-              >
-                {t.label}
-              </button>
-            ))}
-        </div>
+        <nav className="profile-screen-jump-nav" aria-label={dictionary.nav.settings}>
+          {visibleSections.map((section) => (
+            <a
+              key={section.id}
+              href={`#${section.anchorId}`}
+              className="profile-screen-jump-link"
+            >
+              {getSectionLabel(section.id, dictionary, isExpert)}
+            </a>
+          ))}
+        </nav>
 
         {/* Account tab — all roles */}
-        {activeTab === 'account' && (
-          <AccountForm
-            authUser={authUser}
-            accessToken={accessToken}
-            locale={locale}
-            dictionary={dictionary}
-            onUserUpdated={updateAuthUser}
-          />
-        )}
+        <AccountForm
+          authUser={authUser}
+          accessToken={accessToken}
+          locale={locale}
+          dictionary={dictionary}
+          onUserUpdated={updateAuthUser}
+        />
 
         {/* Role-specific profile tab */}
-        {activeTab === 'profile' && loading && (
-          <div className="profile-screen-skeleton">
-            <SkeletonForm fields={5} />
-          </div>
+        {hasRoleProfile && loading && (
+          <section id="profile-settings" className="profile-screen-card profile-screen-section-card">
+            <h2 className="profile-screen-sectionTitle">
+              {getSectionLabel('profile', dictionary, isExpert)}
+            </h2>
+            <div className="profile-screen-skeleton">
+              <SkeletonForm fields={5} />
+            </div>
+          </section>
         )}
 
-        {activeTab === 'profile' && !loading && isExpert && !expertProfile && (
-          <section className="profile-screen-card">
+        {hasRoleProfile && !loading && isExpert && !expertProfile && (
+          <section id="profile-settings" className="profile-screen-card profile-screen-section-card">
+            <h2 className="profile-screen-sectionTitle">
+              {getSectionLabel('profile', dictionary, isExpert)}
+            </h2>
             <p className="profile-screen-no-profile">
               Expert profile not found. Please complete onboarding first.
             </p>
           </section>
         )}
 
-        {activeTab === 'profile' && !loading && isExpert && expertProfile && (
-          <section className="profile-screen-card">
+        {!loading && isExpert && expertProfile && (
+          <section id="profile-settings" className="profile-screen-card profile-screen-section-card">
+            <h2 className="profile-screen-sectionTitle">
+              {getSectionLabel('profile', dictionary, isExpert)}
+            </h2>
             <span
               className={`profile-screen-badge profile-screen-badge_${expertProfile.verificationStatus}`}
             >
               {verLabels[expertProfile.verificationStatus as keyof typeof verLabels] ??
                 expertProfile.verificationStatus}
             </span>
+            {dictionary.verification?.verificationTimeNote && (
+              <p className="profile-screen-verification-note">{dictionary.verification.verificationTimeNote}</p>
+            )}
             {expertProfile.verificationBadgeEarned && (
                 <span className="profile-screen-badge profile-screen-badge_verified" title="Complete profile and 1000 USD total deposits.">
                 Platform verified
@@ -945,22 +1010,31 @@ export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
           </section>
         )}
 
-        {activeTab === 'profile' && !loading && isBusiness && !businessProfile && (
-          <section className="profile-screen-card">
+        {hasRoleProfile && !loading && isBusiness && !businessProfile && (
+          <section id="profile-settings" className="profile-screen-card profile-screen-section-card">
+            <h2 className="profile-screen-sectionTitle">
+              {getSectionLabel('profile', dictionary, isExpert)}
+            </h2>
             <p className="profile-screen-no-profile">
               Business profile not found. Please complete onboarding first.
             </p>
           </section>
         )}
 
-        {activeTab === 'profile' && !loading && isBusiness && businessProfile && (
-          <section className="profile-screen-card">
+        {!loading && isBusiness && businessProfile && (
+          <section id="profile-settings" className="profile-screen-card profile-screen-section-card">
+            <h2 className="profile-screen-sectionTitle">
+              {getSectionLabel('profile', dictionary, isExpert)}
+            </h2>
             <span
               className={`profile-screen-badge profile-screen-badge_${businessProfile.verificationStatus}`}
             >
               {verLabels[businessProfile.verificationStatus as keyof typeof verLabels] ??
                 businessProfile.verificationStatus}
             </span>
+            {dictionary.verification?.verificationTimeNote && (
+              <p className="profile-screen-verification-note">{dictionary.verification.verificationTimeNote}</p>
+            )}
             {businessProfile.verificationBadgeEarned && (
                 <span className="profile-screen-badge profile-screen-badge_verified" title="Complete profile and 1000 USD total deposits.">
                 Platform verified
@@ -1232,25 +1306,31 @@ export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
           </section>
         )}
 
-        {activeTab === 'documents' && hasRoleProfile && (
-          <section className="profile-screen-card profile-screen-documents-card">
+        {hasRoleProfile && (
+          <section
+            id="verification-settings"
+            className="profile-screen-card profile-screen-documents-card profile-screen-section-card"
+          >
+            <h2 className="profile-screen-sectionTitle">
+              {getSectionLabel('verification', dictionary, isExpert)}
+            </h2>
             {documentsLoading ? (
               <div className="profile-screen-skeleton">
                 <SkeletonForm fields={4} />
               </div>
             ) : (
               <>
-                <h2 className="profile-screen-sectionTitle">
+                <h3 className="profile-screen-sectionTitle">
                   {dictionary.profile.documents.identityTitle}
-                </h2>
+                </h3>
                 <p className="profile-screen-hint">
                   {dictionary.profile.documents.identityDescription}
                 </p>
                 {isBusiness && businessProfile && (
                   <>
-                    <h2 className="profile-screen-sectionTitle profile-screen-sectionTitle--spaced">
+                    <h3 className="profile-screen-sectionTitle profile-screen-sectionTitle--spaced">
                       {dictionary.profile.documents.companyDetailsTitle ?? 'Company details'}
-                    </h2>
+                    </h3>
                     <p className="profile-screen-hint">
                       {dictionary.profile.documents.companyDetailsHint ?? 'Registration details submitted with your business profile. Admin may use these for verification.'}
                     </p>
@@ -1353,9 +1433,9 @@ export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
                   </ul>
                 )}
 
-                <h2 className="profile-screen-sectionTitle" style={{ marginTop: '1.5rem' }}>
+                <h3 className="profile-screen-sectionTitle" style={{ marginTop: '1.5rem' }}>
                   {dictionary.profile.documents.academicTitle}
-                </h2>
+                </h3>
                 <p className="profile-screen-hint">
                   {dictionary.profile.documents.academicDescription}
                 </p>
@@ -1423,35 +1503,6 @@ export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
                 )}
               </>
             )}
-          </section>
-        )}
-
-        {activeTab === 'preferences' && (
-          <section className="profile-screen-card">
-            <h2 className="profile-screen-sectionTitle">
-              {dictionary.profile.preferencesTab ?? 'Preferences'}
-            </h2>
-            <div className="profile-screen-pref-row">
-              <div className="profile-screen-pref-item">
-                <span className="profile-screen-label">{dictionary.language.switchLabel}</span>
-                <LanguageToggle
-                  locale={locale}
-                  targetLabel={dictionary.language.target}
-                  ariaLabel={dictionary.language.switchLabel}
-                />
-              </div>
-              <div className="profile-screen-pref-item">
-                <span className="profile-screen-label">
-                  {dictionary.theme.darkLabel} / {dictionary.theme.lightLabel}
-                </span>
-                <ThemeToggle
-                  switchToLightLabel={dictionary.theme.switchToLight}
-                  switchToDarkLabel={dictionary.theme.switchToDark}
-                  darkLabel={dictionary.theme.darkLabel}
-                  lightLabel={dictionary.theme.lightLabel}
-                />
-              </div>
-            </div>
           </section>
         )}
       </Container>

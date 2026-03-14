@@ -5,8 +5,11 @@ import { Server as SocketServer } from 'socket.io';
 import { createApp } from './app.js';
 import { env } from './config/env.js';
 import { logger } from './config/logger.js';
+import { initSentry } from './config/sentry.js';
 import { closePool } from './db/pool.js';
 import { registerChatSocket } from './modules/chat/chat.socket.js';
+
+initSentry();
 
 const app = createApp();
 const httpServer = createServer(app);

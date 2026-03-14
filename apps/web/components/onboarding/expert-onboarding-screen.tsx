@@ -19,7 +19,7 @@ import { getApiBaseUrl } from '@/lib/env';
 import { buildLocalePath } from '@/lib/i18n/path';
 import type { Dictionary, Locale } from '@/lib/i18n/types';
 import { profilesApiClient } from '@/lib/profiles/client';
-import { uploadFile } from '@/lib/upload/client';
+import { uploadPrivateFile } from '@/lib/upload/client';
 import { formatApiError } from '@/lib/utils/format-api-error';
 import { verificationApiClient } from '@/lib/verification/client';
 
@@ -237,9 +237,9 @@ export const ExpertOnboardingScreen = ({ locale, dictionary }: Props) => {
         url.startsWith('http') ? url : base ? `${base}${url.startsWith('/') ? '' : '/'}${url}` : url;
 
       const [frontRes, backRes, selfieRes] = await Promise.all([
-        uploadFile(accessToken, manualFrontFile),
-        manualBackFile ? uploadFile(accessToken, manualBackFile) : Promise.resolve(null),
-        uploadFile(accessToken, manualSelfieFile),
+        uploadPrivateFile(accessToken, manualFrontFile),
+        manualBackFile ? uploadPrivateFile(accessToken, manualBackFile) : Promise.resolve(null),
+        uploadPrivateFile(accessToken, manualSelfieFile),
       ]);
 
       await profilesApiClient.submitIdentityDocument(accessToken, {
@@ -290,8 +290,8 @@ export const ExpertOnboardingScreen = ({ locale, dictionary }: Props) => {
         url.startsWith('http') ? url : base ? `${base}${url.startsWith('/') ? '' : '/'}${url}` : url;
 
       const [certRes, transcriptRes] = await Promise.all([
-        uploadFile(accessToken, certificateFile),
-        transcriptFile ? uploadFile(accessToken, transcriptFile) : Promise.resolve(null),
+        uploadPrivateFile(accessToken, certificateFile),
+        transcriptFile ? uploadPrivateFile(accessToken, transcriptFile) : Promise.resolve(null),
       ]);
 
       await profilesApiClient.submitAcademicRecord(accessToken, {
@@ -499,6 +499,11 @@ export const ExpertOnboardingScreen = ({ locale, dictionary }: Props) => {
                   <p className="onboarding-description">
                     {dict.documentsForm.identityDescription} You must take a live photo of yourself and a photo of your ID (National ID, passport, or driving license). Upload or take live pictures.
                   </p>
+                  {dictionary.verification?.verificationTimeNote && (
+                    <p className="onboarding-description onboarding-verification-note">
+                      {dictionary.verification.verificationTimeNote}
+                    </p>
+                  )}
                   <div className="onboarding-field">
                     <label className="onboarding-label">
                       {dict.documentsForm.documentTypeLabel}

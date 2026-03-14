@@ -13,7 +13,6 @@ import { ServiceBookingModal } from './service-booking-modal';
 import { useAuth } from '@/components/auth/auth-provider';
 import { Container } from '@/components/ui/container';
 import { Skeleton, SkeletonCard, SkeletonText } from '@/components/ui/skeleton';
-import { chatApiClient } from '@/lib/chat/client';
 import { EGYPTIAN_CITIES } from '@/lib/data/egyptian-cities';
 import { buildLocalePath } from '@/lib/i18n/path';
 import type { Dictionary, Locale } from '@/lib/i18n/types';
@@ -209,6 +208,11 @@ export const AppHomeScreen = ({ locale, dictionary }: AppHomeScreenProps) => {
   const [city, setCity] = useState('');
   const [area, setArea] = useState('');
   const [providerType, setProviderType] = useState('');
+  const [minRating, setMinRating] = useState<number | ''>('');
+  const [minPrice, setMinPrice] = useState<number | ''>('');
+  const [maxPrice, setMaxPrice] = useState<number | ''>('');
+  const [verifiedOnly, setVerifiedOnly] = useState(false);
+  const [sort, setSort] = useState<string>('newest');
   const [results, setResults] = useState<ServiceSearchResult[]>([]);
   const [searching, setSearching] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
@@ -289,12 +293,22 @@ export const AppHomeScreen = ({ locale, dictionary }: AppHomeScreenProps) => {
         area?: string;
         providerType?: string;
         q?: string;
+        minRating?: number;
+        minPrice?: number;
+        maxPrice?: number;
+        verifiedOnly?: boolean;
+        sort?: string;
       } = {};
       if (categoryId) params.categoryId = categoryId;
       if (city) params.city = city;
       if (area) params.area = area;
       if (providerType) params.providerType = providerType;
       if (q.trim()) params.q = q.trim();
+      if (minRating !== '' && minRating >= 1) params.minRating = minRating;
+      if (minPrice !== '' && minPrice >= 0) params.minPrice = minPrice;
+      if (maxPrice !== '' && maxPrice >= 0) params.maxPrice = maxPrice;
+      if (verifiedOnly) params.verifiedOnly = true;
+      if (sort) params.sort = sort;
       const data = await servicesApiClient.searchServices(params);
       setResults(dedupeById(data.items));
     } catch {
@@ -302,7 +316,7 @@ export const AppHomeScreen = ({ locale, dictionary }: AppHomeScreenProps) => {
     } finally {
       setSearching(false);
     }
-  }, [categoryId, city, area, providerType, searchQuery]);
+  }, [categoryId, city, area, providerType, searchQuery, minRating, minPrice, maxPrice, verifiedOnly, sort]);
 
   const isSearchTabActive =
     (authUser?.role === 'customer' && customerTab === 'browse') ||
@@ -319,7 +333,21 @@ export const AppHomeScreen = ({ locale, dictionary }: AppHomeScreenProps) => {
   useEffect(() => {
     if (!isReady || !isSearchTabActive) return;
     void handleSearch(debouncedSearchQuery);
-  }, [isReady, isSearchTabActive, categoryId, city, area, providerType, debouncedSearchQuery]);
+  }, [
+    isReady,
+    isSearchTabActive,
+    handleSearch,
+    debouncedSearchQuery,
+    categoryId,
+    city,
+    area,
+    providerType,
+    minRating,
+    minPrice,
+    maxPrice,
+    verifiedOnly,
+    sort,
+  ]);
 
   const d = dictionary.homeSearch;
   const commonDict = dictionary.common as Record<string, string | undefined>;
@@ -601,6 +629,74 @@ export const AppHomeScreen = ({ locale, dictionary }: AppHomeScreenProps) => {
                         <option value="business">{d.businessProvider}</option>
                       </select>
                     </div>
+                    <div className="home-search-field">
+                      <label className="home-search-label">{d.minRating ?? 'Min rating'}</label>
+                      <select
+                        className="home-search-select"
+                        value={minRating === '' ? '' : String(minRating)}
+                        onChange={(e) => setMinRating(e.target.value === '' ? '' : Number(e.target.value))}
+                      >
+                        <option value="">{d.any ?? 'Any'}</option>
+                        {[1, 2, 3, 4, 5].map((n) => (
+                          <option key={n} value={n}>
+                            {n}+ ★
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="home-search-field">
+                      <label className="home-search-label">{d.minPrice ?? 'Min price'}</label>
+                      <input
+                        type="number"
+                        min={0}
+                        step={1}
+                        className="home-search-input"
+                        placeholder="0"
+                        value={minPrice === '' ? '' : minPrice}
+                        onChange={(e) =>
+                          setMinPrice(e.target.value === '' ? '' : parseFloat(e.target.value) || 0)
+                        }
+                      />
+                    </div>
+                    <div className="home-search-field">
+                      <label className="home-search-label">{d.maxPrice ?? 'Max price'}</label>
+                      <input
+                        type="number"
+                        min={0}
+                        step={1}
+                        className="home-search-input"
+                        placeholder="—"
+                        value={maxPrice === '' ? '' : maxPrice}
+                        onChange={(e) =>
+                          setMaxPrice(e.target.value === '' ? '' : parseFloat(e.target.value) || 0)
+                        }
+                      />
+                    </div>
+                    <div className="home-search-field">
+                      <label className="home-search-label">{d.sort ?? 'Sort by'}</label>
+                      <select
+                        className="home-search-select"
+                        value={sort}
+                        onChange={(e) => setSort(e.target.value)}
+                      >
+                        <option value="newest">{d.sortNewest ?? 'Newest'}</option>
+                        <option value="rating">{d.sortRating ?? 'Rating'}</option>
+                        <option value="price_asc">{d.sortPriceAsc ?? 'Price: low to high'}</option>
+                        <option value="price_desc">{d.sortPriceDesc ?? 'Price: high to low'}</option>
+                        <option value="completed_count">{d.sortPopular ?? 'Most orders'}</option>
+                      </select>
+                    </div>
+                    <div className="home-search-field home-search-field--full" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                      <input
+                        type="checkbox"
+                        id="verified-only"
+                        checked={verifiedOnly}
+                        onChange={(e) => setVerifiedOnly(e.target.checked)}
+                      />
+                      <label htmlFor="verified-only" className="home-search-label" style={{ margin: 0 }}>
+                        {d.verifiedOnly ?? 'Verified providers only'}
+                      </label>
+                    </div>
                   </div>
 
                   <button
@@ -647,10 +743,20 @@ export const AppHomeScreen = ({ locale, dictionary }: AppHomeScreenProps) => {
                             </div>
                             <div className="home-result-info">
                               <p className="home-result-title">{r.title}</p>
-                              <p className="home-result-provider">{r.providerName}</p>
+                              <p className="home-result-provider">
+                                {r.providerName}
+                                {r.providerVerified && (
+                                  <span className="home-result-badge" title={d.verified ?? 'Verified'}>
+                                    {d.verified ?? '✓'}
+                                  </span>
+                                )}
+                              </p>
                               <p className="home-result-meta">
                                 {locale === 'ar' ? r.categoryNameAr : r.categoryNameEn}
                                 {r.city && ` · ${r.city}`}
+                                {r.avgRating != null && (
+                                  <span> · {r.avgRating.toFixed(1)} ★{r.avgRating >= 4 ? ` · ${d.topRated ?? 'Top rated'}` : ''}</span>
+                                )}
                               </p>
                               {r.price != null && (
                                 <p className="home-result-price">
@@ -801,6 +907,74 @@ export const AppHomeScreen = ({ locale, dictionary }: AppHomeScreenProps) => {
                     <option value="business">{d.businessProvider}</option>
                   </select>
                 </div>
+                <div className="home-search-field">
+                  <label className="home-search-label">{d.minRating ?? 'Min rating'}</label>
+                  <select
+                    className="home-search-select"
+                    value={minRating === '' ? '' : String(minRating)}
+                    onChange={(e) => setMinRating(e.target.value === '' ? '' : Number(e.target.value))}
+                  >
+                    <option value="">{d.any ?? 'Any'}</option>
+                    {[1, 2, 3, 4, 5].map((n) => (
+                      <option key={n} value={n}>
+                        {n}+ ★
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="home-search-field">
+                  <label className="home-search-label">{d.minPrice ?? 'Min price'}</label>
+                  <input
+                    type="number"
+                    min={0}
+                    step={1}
+                    className="home-search-input"
+                    placeholder="0"
+                    value={minPrice === '' ? '' : minPrice}
+                    onChange={(e) =>
+                      setMinPrice(e.target.value === '' ? '' : parseFloat(e.target.value) || 0)
+                    }
+                  />
+                </div>
+                <div className="home-search-field">
+                  <label className="home-search-label">{d.maxPrice ?? 'Max price'}</label>
+                  <input
+                    type="number"
+                    min={0}
+                    step={1}
+                    className="home-search-input"
+                    placeholder="—"
+                    value={maxPrice === '' ? '' : maxPrice}
+                    onChange={(e) =>
+                      setMaxPrice(e.target.value === '' ? '' : parseFloat(e.target.value) || 0)
+                    }
+                  />
+                </div>
+                <div className="home-search-field">
+                  <label className="home-search-label">{d.sort ?? 'Sort by'}</label>
+                  <select
+                    className="home-search-select"
+                    value={sort}
+                    onChange={(e) => setSort(e.target.value)}
+                  >
+                    <option value="newest">{d.sortNewest ?? 'Newest'}</option>
+                    <option value="rating">{d.sortRating ?? 'Rating'}</option>
+                    <option value="price_asc">{d.sortPriceAsc ?? 'Price: low to high'}</option>
+                    <option value="price_desc">{d.sortPriceDesc ?? 'Price: high to low'}</option>
+                    <option value="completed_count">{d.sortPopular ?? 'Most orders'}</option>
+                  </select>
+                </div>
+                <div className="home-search-field home-search-field--full" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <input
+                    type="checkbox"
+                    id="verified-only-provider"
+                    checked={verifiedOnly}
+                    onChange={(e) => setVerifiedOnly(e.target.checked)}
+                  />
+                  <label htmlFor="verified-only-provider" className="home-search-label" style={{ margin: 0 }}>
+                    {d.verifiedOnly ?? 'Verified providers only'}
+                  </label>
+                </div>
               </div>
 
               <button
@@ -846,10 +1020,20 @@ export const AppHomeScreen = ({ locale, dictionary }: AppHomeScreenProps) => {
                         </div>
                         <div className="home-result-info">
                           <p className="home-result-title">{r.title}</p>
-                          <p className="home-result-provider">{r.providerName}</p>
+                          <p className="home-result-provider">
+                            {r.providerName}
+                            {r.providerVerified && (
+                              <span className="home-result-badge" title={d.verified ?? 'Verified'}>
+                                {d.verified ?? '✓'}
+                              </span>
+                            )}
+                          </p>
                           <p className="home-result-meta">
                             {locale === 'ar' ? r.categoryNameAr : r.categoryNameEn}
                             {r.city && ` · ${r.city}`}
+                            {r.avgRating != null && (
+                              <span> · {r.avgRating.toFixed(1)} ★{r.avgRating >= 4 ? ` · ${d.topRated ?? 'Top rated'}` : ''}</span>
+                            )}
                           </p>
                           {r.price != null && (
                             <p className="home-result-price">
@@ -922,29 +1106,6 @@ export const AppHomeScreen = ({ locale, dictionary }: AppHomeScreenProps) => {
                 <p className="home-drawer-rating">★ {selectedResult.avgRating.toFixed(1)}</p>
               )}
               <div className="home-drawer-actions">
-                <button
-                  type="button"
-                  className="dashboard-btn dashboard-btn--secondary"
-                  onClick={() => {
-                    if (!accessToken || !selectedResult) return;
-                    void (async () => {
-                      try {
-                        const { conversationId } = await chatApiClient.startConversation(
-                          accessToken,
-                          selectedResult.providerId,
-                        );
-                        router.push(
-                          `${buildLocalePath(locale, '/app/chat')}?c=${conversationId}`,
-                        );
-                        setSelectedResult(null);
-                      } catch {
-                        // show error
-                      }
-                    })();
-                  }}
-                >
-                  {(dictionary as { appHome?: { contactProvider?: string } }).appHome?.contactProvider ?? 'Contact'}
-                </button>
                 <button
                   type="button"
                   className="dashboard-btn dashboard-btn--primary"
