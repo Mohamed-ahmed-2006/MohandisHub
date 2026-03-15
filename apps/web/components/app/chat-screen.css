@@ -55,9 +55,24 @@
   background: hsl(var(--primary) / 0.08);
 }
 
-.chat-conv-name {
+.chat-conv-name,
+.chat-conv-name-btn {
   font-weight: 600;
   font-size: 0.9rem;
+}
+
+.chat-conv-name-btn {
+  padding: 0;
+  border: none;
+  background: none;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+}
+
+.chat-conv-name-btn:hover {
+  text-decoration: underline;
 }
 
 .chat-conv-preview {
@@ -96,6 +111,20 @@
   gap: 0.5rem;
 }
 
+.chat-messages-header-name-btn {
+  padding: 0;
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-weight: 700;
+  font-size: inherit;
+  color: inherit;
+}
+
+.chat-messages-header-name-btn:hover {
+  text-decoration: underline;
+}
+
 .chat-closed-badge {
   font-size: 0.7rem;
   background: hsl(var(--muted));
@@ -121,16 +150,19 @@
   display: flex;
   flex-direction: column;
   gap: 0.15rem;
+  border-radius: 12px;
 }
 
 .chat-msg--mine {
   align-self: flex-end;
   background: hsl(var(--primary));
+  border-top-right-radius: 0;
   color: hsl(var(--primary-foreground));
 }
 
 .chat-msg--other {
   align-self: flex-start;
+  border-top-left-radius: 0;
   background: hsl(var(--muted));
   color: hsl(var(--foreground));
 }

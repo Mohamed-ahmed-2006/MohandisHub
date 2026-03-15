@@ -25,6 +25,7 @@ adminRouter.get('/dashboard/stats', adminController.getDashboardStats);
 // Settings
 adminRouter.get('/settings', adminController.getSettings);
 adminRouter.patch('/settings', requireAdminPermission('manage_settings'), adminController.updateSettings);
+adminRouter.post('/factory-reset', requireAdminPermission('manage_settings'), adminController.factoryReset);
 
 // Users
 adminRouter.get('/users', requireAdminPermission('manage_users'), adminController.listUsers);

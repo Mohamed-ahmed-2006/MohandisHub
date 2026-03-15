@@ -2,6 +2,7 @@
 
 import type { AdminTransactionListItem, PaginatedResponse } from '@mohandishub/shared';
 import { useCallback, useEffect, useState } from 'react';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 
 import { adminApiClient } from '@/lib/admin/client';
 import type { Dictionary } from '@/lib/i18n/types';
@@ -179,8 +180,9 @@ export const AdminTransactionsTab = ({ dictionary, accessToken }: Props) => {
                 className="admin-btn admin-btn--small"
                 disabled={page <= 1}
                 onClick={() => setPage(page - 1)}
+                aria-label="Previous page"
               >
-                ←
+                <ChevronLeft size={16} aria-hidden />
               </button>
               <span className="admin-pagination-info">
                 {page} / {data.totalPages}
@@ -190,8 +192,9 @@ export const AdminTransactionsTab = ({ dictionary, accessToken }: Props) => {
                 className="admin-btn admin-btn--small"
                 disabled={page >= data.totalPages}
                 onClick={() => setPage(page + 1)}
+                aria-label="Next page"
               >
-                →
+                <ChevronRight size={16} aria-hidden />
               </button>
             </div>
           )}

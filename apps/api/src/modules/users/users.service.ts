@@ -9,6 +9,12 @@ import { HttpError } from '../../utils/http-error.js';
 import { AuthRepository } from '../auth/auth.repository.js';
 import type { UserRow } from '../auth/auth.types.js';
 import { createOtpSender } from '../otp/otp.provider.js';
+import { ProfilesRepository } from '../profiles/profiles.repository.js';
+import {
+  getEffectiveBusinessVerificationStatus,
+  getEffectiveExpertVerificationStatus,
+  syncVerificationStatusForRequiredImage,
+} from '../profiles/verification-image-requirements.js';
 
 import { UsersRepository } from './users.repository.js';
 import type { UserSummary } from './users.types.js';
@@ -20,6 +26,7 @@ export class UsersService {
   public constructor(
     private readonly usersRepository: UsersRepository = new UsersRepository(),
     private readonly authRepository: AuthRepository = new AuthRepository(),
+    private readonly profilesRepository: ProfilesRepository = new ProfilesRepository(),
   ) {}
 
   public listUsers(): UserSummary[] {
@@ -46,12 +53,14 @@ export class UsersService {
       phone?: string | null;
       phoneCode?: string | null;
       nationality?: string | null;
+      avatarUrl?: string | null;
       dateOfBirth?: string | null;
     } = {};
     if (input.displayName !== undefined) fields.displayName = input.displayName;
     if (input.phone !== undefined) fields.phone = input.phone;
     if (input.phoneCode !== undefined) fields.phoneCode = input.phoneCode;
     if (input.nationality !== undefined) fields.nationality = input.nationality;
+    if (input.avatarUrl !== undefined) fields.avatarUrl = input.avatarUrl;
     if (input.dateOfBirth !== undefined) fields.dateOfBirth = input.dateOfBirth;
 
     const updated = await this.authRepository.updateUser(userId, fields);
@@ -62,6 +71,14 @@ export class UsersService {
         code: 'USER_NOT_FOUND',
         message: 'User not found.',
       });
+    }
+
+    if (input.avatarUrl !== undefined && updated.primary_role === 'expert') {
+      await syncVerificationStatusForRequiredImage(
+        this.profilesRepository,
+        userId,
+        'expert',
+      );
     }
 
     const verificationStatus = await this.getVerificationStatus(updated);
@@ -162,11 +179,16 @@ export class UsersService {
     if (!isVerifiableRole(user.primary_role)) return null;
     if (user.primary_role === 'expert') {
       const profile = await this.authRepository.getExpertVerification(user.id);
-      return profile?.verification_status ?? 'unverified';
+      if (!profile) return 'unverified';
+      return getEffectiveExpertVerificationStatus(profile, Boolean(user.avatar_url?.trim()));
     }
     if (user.primary_role === 'business') {
-      const profile = await this.authRepository.getBusinessVerification(user.id);
-      return profile?.verification_status ?? 'unverified';
+      const [profile, logoUrl] = await Promise.all([
+        this.authRepository.getBusinessVerification(user.id),
+        this.profilesRepository.getBusinessLogoUrl(user.id),
+      ]);
+      if (!profile) return 'unverified';
+      return getEffectiveBusinessVerificationStatus(profile, Boolean(logoUrl?.trim()));
     }
     return null;
   }

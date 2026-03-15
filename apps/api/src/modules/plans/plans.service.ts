@@ -64,6 +64,11 @@ export class PlansService {
         canPriorityListing: false,
         bidsVisibleToCustomer: null,
         bidsVisibleTopN: null,
+        maxBidsPerNeed: null,
+        maxActiveBids: null,
+        maxBusinessServices: null,
+        maxTeamSlots: null,
+        canBusinessFeatured: false,
       };
     }
     const { rows: planRows } = await pool.query(
@@ -78,6 +83,11 @@ export class PlansService {
         canPriorityListing: false,
         bidsVisibleToCustomer: null,
         bidsVisibleTopN: null,
+        maxBidsPerNeed: null,
+        maxActiveBids: null,
+        maxBusinessServices: null,
+        maxTeamSlots: null,
+        canBusinessFeatured: false,
       };
     }
     const row = planRows[0] as {
@@ -108,6 +118,23 @@ export class PlansService {
         limits.bidsVisibleTopN !== undefined && limits.bidsVisibleTopN !== null
           ? Number(limits.bidsVisibleTopN)
           : null,
+      maxBidsPerNeed:
+        limits.maxBidsPerNeed !== undefined && limits.maxBidsPerNeed !== null
+          ? Number(limits.maxBidsPerNeed)
+          : null,
+      maxActiveBids:
+        limits.maxActiveBids !== undefined && limits.maxActiveBids !== null
+          ? Number(limits.maxActiveBids)
+          : null,
+      maxBusinessServices:
+        limits.maxBusinessServices !== undefined && limits.maxBusinessServices !== null
+          ? Number(limits.maxBusinessServices)
+          : null,
+      maxTeamSlots:
+        limits.maxTeamSlots !== undefined && limits.maxTeamSlots !== null
+          ? Number(limits.maxTeamSlots)
+          : null,
+      canBusinessFeatured: Boolean(limits.canBusinessFeatured),
     };
   }
 

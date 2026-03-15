@@ -10,6 +10,7 @@ import { AdminPlansTab } from './admin-plans-tab';
 import { AdminReviewReportsTab } from './admin-review-reports-tab';
 import { AdminServicesTab } from './admin-services-tab';
 import { AdminSettingsTab } from './admin-settings-tab';
+import { AdminSupportTab } from './admin-support-tab';
 import { AdminTransactionsTab } from './admin-transactions-tab';
 import { AdminUsersTab } from './admin-users-tab';
 import { AdminVerificationsTab } from './admin-verifications-tab';
@@ -36,6 +37,7 @@ type TabId =
   | 'categories'
   | 'verifications'
   | 'reviewReports'
+  | 'support'
   | 'notifications'
   | 'settings';
 
@@ -69,6 +71,7 @@ export const AdminPanel = ({ locale, dictionary }: AdminPanelProps) => {
     { id: 'categories', label: dictionary.admin.tabs.categories, permission: 'manage_services' },
     { id: 'verifications', label: dictionary.admin.tabs.verifications, permission: 'manage_verifications' },
     { id: 'reviewReports', label: dictionary.admin.tabs.reviewReports ?? 'Review reports', permission: 'manage_verifications' },
+    { id: 'support', label: dictionary.admin.tabs.support ?? 'Support', permission: 'manage_users' },
     { id: 'notifications', label: dictionary.admin.tabs.notifications ?? 'Notifications', permission: 'manage_notifications' },
     { id: 'settings', label: dictionary.admin.tabs.settings, permission: 'manage_settings' },
   ];
@@ -161,6 +164,13 @@ export const AdminPanel = ({ locale, dictionary }: AdminPanelProps) => {
         )}
         {activeTab === 'reviewReports' && (
           <AdminReviewReportsTab dictionary={dictionary} accessToken={accessToken} />
+        )}
+        {activeTab === 'support' && (
+          <AdminSupportTab
+            dictionary={dictionary}
+            accessToken={accessToken}
+            refreshSession={refreshSession}
+          />
         )}
         {activeTab === 'notifications' && (
           <AdminNotificationsTab

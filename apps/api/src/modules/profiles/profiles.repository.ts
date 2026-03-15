@@ -30,6 +30,14 @@ export class ProfilesRepository {
     return rows[0] ?? null;
   }
 
+  async getUserAvatarUrl(userId: string): Promise<string | null> {
+    const { rows } = await this.db.query<{ avatar_url: string | null }>(
+      'SELECT avatar_url FROM users WHERE id = $1 LIMIT 1',
+      [userId],
+    );
+    return rows[0]?.avatar_url ?? null;
+  }
+
   async updateExpertProfile(
     userId: string,
     fields: Partial<{
@@ -111,6 +119,14 @@ export class ProfilesRepository {
     return rows[0] ?? null;
   }
 
+  async getBusinessLogoUrl(userId: string): Promise<string | null> {
+    const { rows } = await this.db.query<{ logo_url: string | null }>(
+      'SELECT logo_url FROM business_profiles WHERE user_id = $1 LIMIT 1',
+      [userId],
+    );
+    return rows[0]?.logo_url ?? null;
+  }
+
   async getPlatformVerifiedAt(userId: string): Promise<Date | null> {
     const { rows } = await this.db.query<{ platform_verified_at: Date | null }>(
       'SELECT platform_verified_at FROM users WHERE id = $1',
@@ -146,7 +162,7 @@ export class ProfilesRepository {
       company_email: string;
       company_phone: string;
       address: string;
-      logo_url: string;
+      logo_url: string | null;
       city: string;
       country: string;
       description: string;
@@ -304,6 +320,71 @@ export class ProfilesRepository {
        WHERE id = $4`,
       [status, extra?.rejectionReason ?? null, extra?.reviewedBy ?? null, recordId, status],
     );
+  }
+
+  /** User-facing update of own academic record (expert only). Only updates provided fields. */
+  async updateAcademicRecord(
+    recordId: string,
+    userId: string,
+    params: {
+      recordType?: string;
+      title?: string;
+      institution?: string;
+      fieldOfStudy?: string | null;
+      graduationYear?: number | null;
+      grade?: string | null;
+      certificateImageUrl?: string | null;
+      transcriptImageUrl?: string | null;
+    },
+  ): Promise<AcademicRecordRow | null> {
+    const setClauses: string[] = [];
+    const values: unknown[] = [];
+    let i = 1;
+    if (params.recordType !== undefined) {
+      setClauses.push(`record_type = $${i++}`);
+      values.push(params.recordType);
+    }
+    if (params.title !== undefined) {
+      setClauses.push(`title = $${i++}`);
+      values.push(params.title);
+    }
+    if (params.institution !== undefined) {
+      setClauses.push(`institution = $${i++}`);
+      values.push(params.institution);
+    }
+    if (params.fieldOfStudy !== undefined) {
+      setClauses.push(`field_of_study = $${i++}`);
+      values.push(params.fieldOfStudy);
+    }
+    if (params.graduationYear !== undefined) {
+      setClauses.push(`graduation_year = $${i++}`);
+      values.push(params.graduationYear);
+    }
+    if (params.grade !== undefined) {
+      setClauses.push(`grade = $${i++}`);
+      values.push(params.grade);
+    }
+    if (params.certificateImageUrl !== undefined) {
+      setClauses.push(`certificate_image_url = $${i++}`);
+      values.push(params.certificateImageUrl);
+    }
+    if (params.transcriptImageUrl !== undefined) {
+      setClauses.push(`transcript_image_url = $${i++}`);
+      values.push(params.transcriptImageUrl);
+    }
+    if (setClauses.length === 0) {
+      const row = await this.findAcademicRecordById(recordId);
+      return row?.user_id === userId ? row : null;
+    }
+    setClauses.push(`updated_at = now()`);
+    const idParam = i;
+    const userIdParam = i + 1;
+    values.push(recordId, userId);
+    const { rows } = await this.db.query<AcademicRecordRow>(
+      `UPDATE academic_records SET ${setClauses.join(', ')} WHERE id = $${idParam} AND user_id = $${userIdParam} RETURNING *`,
+      values,
+    );
+    return rows[0] ?? null;
   }
 
   // ── Update verified flags on profiles ──────────────────────────────────
@@ -465,6 +546,28 @@ export class ProfilesRepository {
     return rows[0] ?? null;
   }
 
+  /** For public profile: active user with display name and avatar. */
+  async findActiveUserById(
+    userId: string,
+  ): Promise<{
+    id: string;
+    display_name: string;
+    avatar_url: string | null;
+    primary_role: string;
+  } | null> {
+    const { rows } = await this.db.query<{
+      id: string;
+      display_name: string;
+      avatar_url: string | null;
+      primary_role: string;
+    }>(
+      `SELECT id, COALESCE(display_name, email) AS display_name, avatar_url, primary_role
+       FROM users WHERE id = $1 AND is_active = true LIMIT 1`,
+      [userId],
+    );
+    return rows[0] ?? null;
+  }
+
   async findTopExperts(limit: number = 6): Promise<
     Array<{
       userId: string;
@@ -488,7 +591,7 @@ export class ProfilesRepository {
       `SELECT u.id AS user_id, u.display_name, u.avatar_url, e.title, e.headline, e.specializations, e.city
        FROM expert_profiles e
        JOIN users u ON u.id = e.user_id
-       WHERE e.verification_status = 'verified' AND u.is_active = true
+       WHERE e.verification_status = 'verified' AND u.is_active = true AND u.avatar_url IS NOT NULL
        ORDER BY e.verified_at DESC NULLS LAST, e.created_at DESC
        LIMIT $1::int`,
       [limit],
@@ -525,7 +628,7 @@ export class ProfilesRepository {
       `SELECT u.id AS user_id, u.display_name, u.avatar_url, b.company_name, b.industry, b.city
        FROM business_profiles b
        JOIN users u ON u.id = b.user_id
-       WHERE b.verification_status = 'verified' AND u.is_active = true
+       WHERE b.verification_status = 'verified' AND u.is_active = true AND b.logo_url IS NOT NULL
        ORDER BY b.verified_at DESC NULLS LAST, b.created_at DESC
        LIMIT $1::int`,
       [limit],

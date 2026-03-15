@@ -202,7 +202,7 @@ export type UpdateBusinessProfileBody = {
   companyEmail?: string;
   companyPhone?: string;
   address?: string;
-  logoUrl?: string;
+  logoUrl?: string | null;
   city?: string;
   country?: string;
   description?: string;
@@ -249,4 +249,58 @@ export type PendingVerificationItem = {
   academicRecords: AcademicRecord[];
   expertProfile: ExpertProfile | null;
   businessProfile: BusinessProfile | null;
+};
+
+// ── Public profile types (for viewing another user's profile) ──────────────
+
+export type PublicExpertProfile = {
+  title: string | null;
+  headline: string | null;
+  bio: string | null;
+  specializations: string[];
+  yearsOfExperience: number | null;
+  hourlyRate: number | null;
+  city: string | null;
+  country: string;
+  linkedinUrl: string | null;
+  portfolioUrl: string | null;
+  languages: string[];
+  educationSummary: string | null;
+  certificationsCount: number;
+  verificationStatus: VerificationStatus;
+  verificationBadgeEarned?: boolean;
+  averageRating: number | null;
+  reviewCount: number;
+};
+
+export type PublicBusinessProfile = {
+  companyName: string;
+  industry: string | null;
+  companySize: CompanySize | null;
+  website: string | null;
+  logoUrl: string | null;
+  city: string | null;
+  country: string;
+  description: string | null;
+  verificationStatus: VerificationStatus;
+  verificationBadgeEarned?: boolean;
+  averageRating: number | null;
+  reviewCount: number;
+};
+
+export type PublicCustomerProfile = {
+  city: string | null;
+  country: string | null;
+};
+
+export type PublicUserProfileRole = 'customer' | 'expert' | 'business';
+
+export type PublicUserProfile = {
+  userId: string;
+  role: PublicUserProfileRole;
+  displayName: string;
+  avatarUrl: string | null;
+  expertProfile?: PublicExpertProfile | null;
+  businessProfile?: PublicBusinessProfile | null;
+  customerProfile?: PublicCustomerProfile | null;
 };

@@ -6,7 +6,9 @@ import { useEffect, useState } from 'react';
 import { AppAvatarMenu } from './app-avatar-menu';
 import { AppSidebar } from './app-sidebar';
 import { NotificationCenter } from './notification-center';
+import { ProfileModalProvider, useProfileModal } from './profile-modal-context';
 import { ToastProvider, useToast } from './toast';
+import { UserProfileModal } from './user-profile-modal';
 import { WalletDepositModal } from './wallet-deposit-modal';
 
 import { useAuth } from '@/components/auth/auth-provider';
@@ -33,7 +35,9 @@ type AppNotification = {
 export const AppShell = (props: AppShellProps) => {
   return (
     <ToastProvider>
-      <AppShellInner {...props} />
+      <ProfileModalProvider>
+        <AppShellInner {...props} />
+      </ProfileModalProvider>
     </ToastProvider>
   );
 };
@@ -42,6 +46,7 @@ const AppShellInner = ({ children }: AppShellProps) => {
   const { locale, dictionary } = useI18n();
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { profileModalUserId, profileModalInitialData, closeProfileModal } = useProfileModal();
 
   const { authUser, accessToken, logout, isReady } = useAuth();
   const { wallet, mutate: mutateWallet } = useWallet(isReady && accessToken ? accessToken : null);
@@ -262,6 +267,16 @@ const AppShellInner = ({ children }: AppShellProps) => {
             onDepositCreated={() => {
               window.dispatchEvent(new CustomEvent('wallet-updated'));
             }}
+          />
+        )}
+
+        {profileModalUserId && (
+          <UserProfileModal
+            userId={profileModalUserId}
+            initialData={profileModalInitialData}
+            onClose={closeProfileModal}
+            locale={locale}
+            dictionary={dictionary}
           />
         )}
       </div>

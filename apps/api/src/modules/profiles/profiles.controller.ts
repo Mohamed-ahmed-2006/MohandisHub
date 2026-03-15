@@ -11,6 +11,7 @@ import type {
   ExpertProfile,
   IdentityDocument,
   PendingVerificationItem,
+  PublicUserProfile,
 } from '@mohandishub/shared';
 
 import { asyncHandler } from '../../utils/async-handler.js';
@@ -21,6 +22,7 @@ import {
   academicRecordSchema,
   adminReviewSchema,
   identityDocumentSchema,
+  updateAcademicRecordSchema,
   updateBusinessProfileSchema,
   updateCustomerProfileSchema,
   updateExpertProfileSchema,
@@ -165,7 +167,7 @@ const submitIdentityDocument = asyncHandler(async (req, res) => {
     });
   }
   const input = identityDocumentSchema.parse(req.body);
-  const doc = await profilesService.submitIdentityDocument(user.id, input);
+  const doc = await profilesService.submitIdentityDocument(user.id, user.role, input);
   const response: ApiSuccessBody<IdentityDocument> = { ok: true, data: doc };
   res.status(201).json(response);
 });
@@ -200,6 +202,22 @@ const getAcademicRecords = asyncHandler(async (req, res) => {
   const user = requireAuth(req);
   const records = await profilesService.getAcademicRecords(user.id);
   const response: ApiSuccessBody<AcademicRecord[]> = { ok: true, data: records };
+  res.json(response);
+});
+
+const updateAcademicRecord = asyncHandler(async (req, res) => {
+  const user = requireAuth(req);
+  if (user.role !== 'expert') {
+    throw new HttpError({
+      statusCode: 403,
+      code: 'FORBIDDEN',
+      message: 'Only experts can update academic records.',
+    });
+  }
+  const { recordId } = req.params;
+  const input = updateAcademicRecordSchema.parse(req.body);
+  const record = await profilesService.updateAcademicRecord(user.id, recordId!, input);
+  const response: ApiSuccessBody<AcademicRecord> = { ok: true, data: record };
   res.json(response);
 });
 
@@ -303,9 +321,24 @@ const getTopBusinesses = asyncHandler(async (_req, res) => {
   res.json({ ok: true, data: items });
 });
 
+const getPublicProfile = asyncHandler(async (req, res) => {
+  const userId = req.params.userId;
+  if (!userId) {
+    throw new HttpError({
+      statusCode: 400,
+      code: 'VALIDATION_ERROR',
+      message: 'userId is required.',
+    });
+  }
+  const profile = await profilesService.getPublicProfile(userId);
+  const response: ApiSuccessBody<PublicUserProfile> = { ok: true, data: profile };
+  res.json(response);
+});
+
 export const profilesController = {
   getTopExperts,
   getTopBusinesses,
+  getPublicProfile,
   getExpertProfile,
   updateExpertProfile,
   getCustomerProfile,
@@ -317,6 +350,7 @@ export const profilesController = {
   getIdentityDocuments,
   submitAcademicRecord,
   getAcademicRecords,
+  updateAcademicRecord,
   getPendingVerifications,
   syncVerifiedAt,
   reviewIdentityDocument,

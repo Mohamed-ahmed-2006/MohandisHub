@@ -25,10 +25,15 @@ import {
 
 const settingsService = new SettingsService();
 const PRIVATE_BUCKET = 'verification-docs';
+const PRIVATE_BUCKET_LOCAL = 'local';
 
 const UPLOAD_DIR = path.resolve(process.cwd(), 'uploads');
+const UPLOAD_PRIVATE_DIR = path.join(UPLOAD_DIR, 'private');
 if (!fs.existsSync(UPLOAD_DIR)) {
   fs.mkdirSync(UPLOAD_DIR, { recursive: true });
+}
+if (!fs.existsSync(UPLOAD_PRIVATE_DIR)) {
+  fs.mkdirSync(UPLOAD_PRIVATE_DIR, { recursive: true });
 }
 
 const ALLOWED_MIME = [
@@ -133,6 +138,21 @@ uploadRouter.post(
   requireEmailVerified,
   asyncHandler(async (req, res, next) => {
     const status = await settingsService.getAppStatus();
+    const supabaseConfigured = isSupabaseStorageConfigured();
+    // #region agent log
+    fetch('http://127.0.0.1:7325/ingest/ebd08bf8-7d73-450c-ad4d-4436a6c2225b', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '3da021' },
+      body: JSON.stringify({
+        sessionId: '3da021',
+        location: 'upload.routes.ts:POST /private pre-check',
+        message: 'Private upload pre-check',
+        data: { pauseUploads: status.pauseUploads, supabaseConfigured },
+        timestamp: Date.now(),
+        hypothesisId: 'H1-H2',
+      }),
+    }).catch(() => {});
+    // #endregion
     if (status.pauseUploads) {
       throw new HttpError({
         statusCode: 503,
@@ -140,36 +160,58 @@ uploadRouter.post(
         message: 'File uploads are temporarily disabled.',
       });
     }
-    if (!isSupabaseStorageConfigured()) {
-      throw new HttpError({
-        statusCode: 503,
-        code: 'PRIVATE_UPLOAD_UNAVAILABLE',
-        message: 'Private uploads require Supabase Storage.',
-      });
-    }
     next();
   }),
   upload.single('file'),
   asyncHandler(async (req, res) => {
+    // #region agent log
+    fetch('http://127.0.0.1:7325/ingest/ebd08bf8-7d73-450c-ad4d-4436a6c2225b', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '3da021' },
+      body: JSON.stringify({
+        sessionId: '3da021',
+        location: 'upload.routes.ts:POST /private handler',
+        message: 'Private upload handler entered',
+        data: { hasFile: !!req.file },
+        timestamp: Date.now(),
+        hypothesisId: 'H4',
+      }),
+    }).catch(() => {});
+    // #endregion
     if (!req.file) {
       throw new HttpError({ statusCode: 400, code: 'NO_FILE', message: 'No file provided.' });
     }
     const user = req.user!;
-    if (!req.file.buffer) {
-      throw new HttpError({
-        statusCode: 400,
-        code: 'PRIVATE_UPLOAD_REQUIRES_SUPABASE',
-        message: 'Private uploads are not supported with local storage.',
-      });
+    const useSupabase = isSupabaseStorageConfigured();
+    let storagePath: string;
+    let bucket: string;
+    if (useSupabase && req.file.buffer) {
+      const result = await uploadToSupabasePrivate(
+        req.file.buffer,
+        req.file.originalname,
+        req.file.mimetype,
+      );
+      storagePath = result.path;
+      bucket = PRIVATE_BUCKET;
+    } else {
+      const diskFile = req.file as Express.Multer.File & { path?: string; filename?: string };
+      const srcPath = diskFile.path;
+      const filename = diskFile.filename ?? `${Date.now()}-${Math.random().toString(36).slice(2, 10)}${path.extname(req.file.originalname)}`;
+      if (!srcPath || !filename) {
+        throw new HttpError({
+          statusCode: 400,
+          code: 'NO_FILE',
+          message: 'File data missing.',
+        });
+      }
+      const destPath = path.join(UPLOAD_PRIVATE_DIR, filename);
+      fs.renameSync(srcPath, destPath);
+      storagePath = `private/${filename}`;
+      bucket = PRIVATE_BUCKET_LOCAL;
     }
-    const { path: storagePath } = await uploadToSupabasePrivate(
-      req.file.buffer,
-      req.file.originalname,
-      req.file.mimetype,
-    );
     const row = await insertPrivateUpload({
       storagePath,
-      bucket: PRIVATE_BUCKET,
+      bucket,
       userId: user.id,
       originalName: req.file.originalname,
     });
@@ -199,12 +241,26 @@ uploadRouter.get(
         throw new HttpError({ statusCode: 403, code: 'FORBIDDEN', message: 'Access denied.' });
       }
     }
+    const wantsJson = req.accepts('application/json');
+    if (row.bucket === PRIVATE_BUCKET_LOCAL) {
+      const localPath = path.resolve(UPLOAD_DIR, row.storage_path);
+      if (!localPath.startsWith(UPLOAD_DIR) || !fs.existsSync(localPath)) {
+        throw new HttpError({ statusCode: 404, code: 'NOT_FOUND', message: 'File not found.' });
+      }
+      if (wantsJson) {
+        const baseUrl = `${req.protocol}://${req.get('host') ?? ''}`;
+        const url = `${baseUrl}/api/upload/private/${row.id}`;
+        res.json({ ok: true, data: { url } });
+      } else {
+        res.sendFile(localPath, { headers: { 'Content-Disposition': 'inline' } });
+      }
+      return;
+    }
     const signedUrl = await createPrivateSignedUrl(
       row.bucket,
       row.storage_path,
       SIGNED_URL_EXPIRY_SECONDS,
     );
-    const wantsJson = req.accepts('application/json');
     if (wantsJson) {
       res.json({ ok: true, data: { url: signedUrl } });
     } else {

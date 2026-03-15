@@ -17,7 +17,7 @@ import { getApiBaseUrl } from '@/lib/env';
 import { buildLocalePath } from '@/lib/i18n/path';
 import type { Dictionary, Locale } from '@/lib/i18n/types';
 import { profilesApiClient } from '@/lib/profiles/client';
-import { uploadPrivateFile } from '@/lib/upload/client';
+import { uploadFile, uploadPrivateFile } from '@/lib/upload/client';
 import { formatApiError } from '@/lib/utils/format-api-error';
 import { verificationApiClient } from '@/lib/verification/client';
 
@@ -38,6 +38,21 @@ function pickDefined(obj: Record<string, unknown>): Record<string, unknown> {
   return result;
 }
 
+function toAbsoluteAssetUrl(url: string): string {
+  if (url.startsWith('http')) return url;
+  const base = (getApiBaseUrl() || '').replace(/\/$/, '');
+  return base ? `${base}${url.startsWith('/') ? '' : '/'}${url}` : url;
+}
+
+function readFilePreview(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(typeof reader.result === 'string' ? reader.result : '');
+    reader.onerror = () => reject(new Error('Could not preview image.'));
+    reader.readAsDataURL(file);
+  });
+}
+
 export const BusinessOnboardingScreen = ({ locale, dictionary }: Props) => {
   const router = useRouter();
   const { authUser, accessToken, isAuthenticated, isReady, authGuard, updateAuthUser } = useAuth();
@@ -50,6 +65,8 @@ export const BusinessOnboardingScreen = ({ locale, dictionary }: Props) => {
   const [manualFrontFile, setManualFrontFile] = useState<File | null>(null);
   const [manualBackFile, setManualBackFile] = useState<File | null>(null);
   const [manualSelfieFile, setManualSelfieFile] = useState<File | null>(null);
+  const [logoFile, setLogoFile] = useState<File | null>(null);
+  const [logoPreviewUrl, setLogoPreviewUrl] = useState<string | null>(null);
 
   const dict = dictionary.onboarding.business;
   const stepLabels = [dict.steps.companyDetails, dict.steps.kyc, dict.steps.documents];
@@ -103,7 +120,7 @@ export const BusinessOnboardingScreen = ({ locale, dictionary }: Props) => {
         ]);
         if (cancelled) return;
         setKycStatus(verification.verificationStatus);
-        const companyComplete = Boolean(profile?.companyName?.trim());
+        const companyComplete = Boolean(profile?.companyName?.trim() && profile?.logoUrl?.trim());
         // Use profile/API status; authUser.verificationStatus reflects GET /me (profile) so include for consistency after refresh
         const effectiveVerified =
           verification.verificationStatus === 'verified' || authUser?.verificationStatus === 'verified';
@@ -133,6 +150,18 @@ export const BusinessOnboardingScreen = ({ locale, dictionary }: Props) => {
     };
   }, [accessToken, authUser?.verificationStatus]);
 
+  useEffect(() => {
+    if (!accessToken) return;
+    void (async () => {
+      try {
+        const profile = await profilesApiClient.getBusinessProfile(accessToken);
+        setLogoPreviewUrl(profile.logoUrl ?? null);
+      } catch {
+        setLogoPreviewUrl(null);
+      }
+    })();
+  }, [accessToken]);
+
   const handleSaveCompany = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!accessToken) return;
@@ -153,6 +182,15 @@ export const BusinessOnboardingScreen = ({ locale, dictionary }: Props) => {
       industryVal && subIndustryVal
         ? `${industryVal} — ${subIndustryVal}`
         : industryVal;
+    if (!logoFile && !logoPreviewUrl) {
+      setError(
+        (dict.companyForm as { logoHint?: string }).logoHint ??
+          'Upload a company logo before continuing to verification.',
+      );
+      setSaving(false);
+      return;
+    }
+
     const body = pickDefined({
       companyName: val('companyName'),
       tradeLicenseNumber: val('tradeLicenseNumber'),
@@ -175,7 +213,16 @@ export const BusinessOnboardingScreen = ({ locale, dictionary }: Props) => {
     });
 
     try {
-      await profilesApiClient.updateBusinessProfile(accessToken, body as UpdateBusinessProfileBody);
+      let logoUrl = logoPreviewUrl;
+      if (logoFile) {
+        const uploaded = await uploadFile(accessToken, logoFile);
+        logoUrl = toAbsoluteAssetUrl(uploaded.url);
+      }
+
+      await profilesApiClient.updateBusinessProfile(accessToken, {
+        ...(body as UpdateBusinessProfileBody),
+        ...(logoUrl ? { logoUrl } : {}),
+      });
       setStep('kyc');
     } catch (err) {
       setError(formatApiError(err, dictionary.profile.saveError));
@@ -198,8 +245,8 @@ export const BusinessOnboardingScreen = ({ locale, dictionary }: Props) => {
       } else {
         setKycStatus('pending');
       }
-    } catch {
-      setError(dict.kycRejected);
+    } catch (err) {
+      setError(formatApiError(err, dict.kycRejected));
     } finally {
       setSaving(false);
     }
@@ -339,6 +386,40 @@ export const BusinessOnboardingScreen = ({ locale, dictionary }: Props) => {
               <div className="onboarding-field">
                 <label className="onboarding-label">{dict.companyForm.companyPhoneLabel}</label>
                 <input type="tel" name="companyPhone" className="onboarding-input" maxLength={15} />
+              </div>
+              <div className="onboarding-field">
+                <label className="onboarding-label">
+                  {(dict.companyForm as { logoLabel?: string }).logoLabel ?? 'Company logo'}
+                </label>
+                <p className="onboarding-description">
+                  {(dict.companyForm as { logoHint?: string }).logoHint ??
+                    'Required for business verification and the platform verified badge.'}
+                </p>
+                {logoPreviewUrl && (
+                  <div style={{ maxWidth: '12rem', borderRadius: '1rem', overflow: 'hidden', border: '1px solid hsl(var(--border))' }}>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={logoPreviewUrl}
+                      alt={(dict.companyForm as { logoLabel?: string }).logoLabel ?? 'Company logo'}
+                      style={{ display: 'block', width: '100%', maxHeight: '12rem', objectFit: 'cover' }}
+                    />
+                  </div>
+                )}
+                <ImageUploadOrCapture
+                  label={(dict.companyForm as { logoUploadLabel?: string }).logoUploadLabel ?? 'Upload company logo'}
+                  onImage={(file) => {
+                    void (async () => {
+                      setLogoFile(file);
+                      setLogoPreviewUrl(await readFilePreview(file));
+                    })();
+                  }}
+                  onClear={() => {
+                    setLogoFile(null);
+                  }}
+                  onError={setError}
+                  required={!logoPreviewUrl}
+                  disabled={saving}
+                />
               </div>
               <CityCountrySelect
                 name="city"

@@ -21,14 +21,17 @@ import { LanguageToggle } from '@/components/language-toggle';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { CityCountrySelect } from '@/components/ui/city-country-select';
 import { Container } from '@/components/ui/container';
+import { ImageUploadOrCapture } from '@/components/ui/image-upload-or-capture';
 import { IndustrySelect } from '@/components/ui/industry-select';
 import { LanguagesCheckboxes } from '@/components/ui/languages-checkboxes';
 import { SkeletonForm } from '@/components/ui/skeleton';
 import { COUNTRIES } from '@/lib/data/countries';
+import { getApiBaseUrl } from '@/lib/env';
 import { buildLocalePath } from '@/lib/i18n/path';
 import type { Dictionary, Locale } from '@/lib/i18n/types';
 import { profilesApiClient } from '@/lib/profiles/client';
 import { reviewsApiClient } from '@/lib/reviews/client';
+import { uploadFile } from '@/lib/upload/client';
 import { usersApiClient } from '@/lib/users/client';
 import { formatApiError } from '@/lib/utils/format-api-error';
 
@@ -44,6 +47,21 @@ function pickDefined(obj: Record<string, unknown>): Record<string, unknown> {
     if (value !== undefined) result[key] = value;
   }
   return result;
+}
+
+function toAbsoluteAssetUrl(url: string): string {
+  if (url.startsWith('http')) return url;
+  const base = (getApiBaseUrl() || '').replace(/\/$/, '');
+  return base ? `${base}${url.startsWith('/') ? '' : '/'}${url}` : url;
+}
+
+function readFilePreview(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(typeof reader.result === 'string' ? reader.result : '');
+    reader.onerror = () => reject(new Error('Could not preview image.'));
+    reader.readAsDataURL(file);
+  });
 }
 
 type ProfileScreenProps = {
@@ -138,6 +156,21 @@ const AccountForm = ({
     type: 'success' | 'error' | 'info';
     text: string;
   } | null>(null);
+  const [avatarFile, setAvatarFile] = useState<File | null>(null);
+  const [avatarPreviewUrl, setAvatarPreviewUrl] = useState<string | null>(authUser.avatarUrl);
+  const [avatarRemoved, setAvatarRemoved] = useState(false);
+
+  useEffect(() => {
+    setAvatarPreviewUrl(authUser.avatarUrl);
+    setAvatarFile(null);
+    setAvatarRemoved(false);
+  }, [authUser.avatarUrl]);
+
+  const handleAvatarSelected = useCallback(async (file: File) => {
+    setAvatarFile(file);
+    setAvatarRemoved(false);
+    setAvatarPreviewUrl(await readFilePreview(file));
+  }, []);
 
   const handleSaveAccount = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -145,17 +178,28 @@ const AccountForm = ({
     const val = (name: string) =>
       nonEmpty((form.elements.namedItem(name) as HTMLInputElement)?.value);
 
-    const body = pickDefined({
-      displayName: val('displayName'),
-      phone: (form.elements.namedItem('phone') as HTMLInputElement)?.value?.trim() || null,
-      phoneCode: (form.elements.namedItem('phoneCode') as HTMLSelectElement)?.value || null,
-      nationality: (form.elements.namedItem('nationality') as HTMLSelectElement)?.value || null,
-      dateOfBirth: (form.elements.namedItem('dateOfBirth') as HTMLInputElement)?.value || null,
-    });
-
     setSaving(true);
     setSaveMessage(null);
     try {
+      let avatarUrl: string | null | undefined;
+      if (authUser.role === 'expert') {
+        if (avatarRemoved) {
+          avatarUrl = null;
+        } else if (avatarFile) {
+          const uploaded = await uploadFile(accessToken, avatarFile);
+          avatarUrl = toAbsoluteAssetUrl(uploaded.url);
+        }
+      }
+
+      const body = pickDefined({
+        displayName: val('displayName'),
+        phone: (form.elements.namedItem('phone') as HTMLInputElement)?.value?.trim() || null,
+        phoneCode: (form.elements.namedItem('phoneCode') as HTMLSelectElement)?.value || null,
+        nationality: (form.elements.namedItem('nationality') as HTMLSelectElement)?.value || null,
+        avatarUrl,
+        dateOfBirth: (form.elements.namedItem('dateOfBirth') as HTMLInputElement)?.value || null,
+      });
+
       await usersApiClient.updateAccount(
         accessToken,
         body as Parameters<typeof usersApiClient.updateAccount>[1],
@@ -377,6 +421,51 @@ const AccountForm = ({
           </div>
         </div>
 
+        {authUser.role === 'expert' && (
+          <div className="profile-screen-field">
+            <label className="profile-screen-label">
+              {(labels as { avatarLabel?: string }).avatarLabel ?? 'Profile picture'}
+            </label>
+            <p className="profile-screen-hint">
+              {(labels as { avatarHint?: string }).avatarHint ??
+                'Required for expert verification and the platform verified badge.'}
+            </p>
+            {avatarPreviewUrl && !avatarRemoved && (
+              <div className="profile-screen-image-preview">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={avatarPreviewUrl}
+                  alt={(labels as { avatarLabel?: string }).avatarLabel ?? 'Profile picture'}
+                  className="profile-screen-image-preview-img"
+                />
+              </div>
+            )}
+            <ImageUploadOrCapture
+              label={(labels as { avatarUploadLabel?: string }).avatarUploadLabel ?? 'Upload profile picture'}
+              onImage={(file) => void handleAvatarSelected(file)}
+              onClear={() => {
+                setAvatarFile(null);
+                setAvatarPreviewUrl(authUser.avatarUrl);
+              }}
+              onError={(message) => setSaveMessage({ type: 'error', text: message })}
+              disabled={saving}
+            />
+            {(avatarPreviewUrl || authUser.avatarUrl) && !avatarRemoved && (
+              <button
+                type="button"
+                className="profile-screen-cancel-btn profile-screen-inline-action"
+                onClick={() => {
+                  setAvatarFile(null);
+                  setAvatarPreviewUrl(null);
+                  setAvatarRemoved(true);
+                }}
+              >
+                {(labels as { avatarRemoveButton?: string }).avatarRemoveButton ?? 'Remove picture'}
+              </button>
+            )}
+          </div>
+        )}
+
         {saveMessage && (
           <p
             className={
@@ -424,11 +513,25 @@ export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
   const [identityDocuments, setIdentityDocuments] = useState<IdentityDocument[]>([]);
   const [academicRecords, setAcademicRecords] = useState<AcademicRecord[]>([]);
   const [documentsLoading, setDocumentsLoading] = useState(false);
+  const [editAcademicRecord, setEditAcademicRecord] = useState<AcademicRecord | null>(null);
+  const [academicEditSaving, setAcademicEditSaving] = useState(false);
+  const [academicEditError, setAcademicEditError] = useState<string | null>(null);
+  const [businessLogoFile, setBusinessLogoFile] = useState<File | null>(null);
+  const [businessLogoPreviewUrl, setBusinessLogoPreviewUrl] = useState<string | null>(null);
+  const [businessLogoRemoved, setBusinessLogoRemoved] = useState(false);
 
   const role = authUser?.role;
   const isExpert = role === 'expert';
   const isBusiness = role === 'business';
   const hasRoleProfile = isExpert || isBusiness;
+  const expertImageMissing = isExpert && !authUser?.avatarUrl;
+  const businessImageMissing = isBusiness && !businessProfile?.logoUrl;
+
+  useEffect(() => {
+    setBusinessLogoPreviewUrl(businessProfile?.logoUrl ?? null);
+    setBusinessLogoFile(null);
+    setBusinessLogoRemoved(false);
+  }, [businessProfile?.logoUrl]);
 
   const loadProfile = useCallback(async () => {
     if (!accessToken) return;
@@ -527,6 +630,39 @@ export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
     setAcademicRecords([]);
   }, [hasRoleProfile, loadDocuments]);
 
+  const handleSaveAcademicEdit = useCallback(
+    async (e: React.FormEvent<HTMLFormElement>) => {
+      e.preventDefault();
+      if (!accessToken || !editAcademicRecord) return;
+      setAcademicEditError(null);
+      setAcademicEditSaving(true);
+      const form = e.currentTarget;
+      const getVal = (name: string) =>
+        (form.elements.namedItem(name) as HTMLInputElement | HTMLSelectElement)?.value?.trim();
+      const body = {
+        recordType: getVal('recordType') as AcademicRecord['recordType'],
+        title: getVal('title') ?? editAcademicRecord.title,
+        institution: getVal('institution') ?? editAcademicRecord.institution,
+        fieldOfStudy: getVal('fieldOfStudy') || undefined,
+        graduationYear: (() => {
+          const y = parseInt(getVal('graduationYear') ?? '', 10);
+          return Number.isFinite(y) ? y : undefined;
+        })(),
+        grade: getVal('grade') || undefined,
+      };
+      try {
+        await profilesApiClient.updateAcademicRecord(accessToken, editAcademicRecord.id, body);
+        setEditAcademicRecord(null);
+        void loadDocuments();
+      } catch (err) {
+        setAcademicEditError(formatApiError(err, (dictionary.profile as { saveError?: string }).saveError));
+      } finally {
+        setAcademicEditSaving(false);
+      }
+    },
+    [accessToken, editAcademicRecord, dictionary.profile, loadDocuments],
+  );
+
   const submitReport = useCallback(async () => {
     if (!accessToken || !reportModalReviewId || reportSubmitting) return;
     setReportSubmitting(true);
@@ -624,6 +760,14 @@ export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
     const subIndustryVal = nonEmpty((form.elements.namedItem('subIndustry') as HTMLSelectElement)?.value);
     const industryDisplay =
       industryVal && subIndustryVal ? `${industryVal} — ${subIndustryVal}` : industryVal;
+    let logoUrl: string | null | undefined;
+    if (businessLogoRemoved) {
+      logoUrl = null;
+    } else if (businessLogoFile) {
+      const uploaded = await uploadFile(accessToken, businessLogoFile);
+      logoUrl = toAbsoluteAssetUrl(uploaded.url);
+    }
+
     const body = pickDefined({
       companyName: val('companyName'),
       tradeLicenseNumber: val('tradeLicenseNumber'),
@@ -635,6 +779,7 @@ export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
       companyEmail: val('companyEmail'),
       companyPhone: val('companyPhone'),
       address: val('address'),
+      logoUrl,
       city: val('city'),
       country: val('country'),
       description: val('description'),
@@ -741,6 +886,12 @@ export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
             </span>
             {dictionary.verification?.verificationTimeNote && (
               <p className="profile-screen-verification-note">{dictionary.verification.verificationTimeNote}</p>
+            )}
+            {expertImageMissing && (
+              <p className="profile-screen-save-error">
+                {(dictionary.profile.account as { avatarRequiredHint?: string }).avatarRequiredHint ??
+                  'Add a profile picture in settings before you can complete verification or earn the badge.'}
+              </p>
             )}
             {expertProfile.verificationBadgeEarned && (
                 <span className="profile-screen-badge profile-screen-badge_verified" title="Complete profile and 1000 USD total deposits.">
@@ -1035,6 +1186,12 @@ export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
             {dictionary.verification?.verificationTimeNote && (
               <p className="profile-screen-verification-note">{dictionary.verification.verificationTimeNote}</p>
             )}
+            {businessImageMissing && (
+              <p className="profile-screen-save-error">
+                {(dictionary.profile as { businessLogoRequiredHint?: string }).businessLogoRequiredHint ??
+                  'Add a company logo before you can complete verification or earn the badge.'}
+              </p>
+            )}
             {businessProfile.verificationBadgeEarned && (
                 <span className="profile-screen-badge profile-screen-badge_verified" title="Complete profile and 1000 USD total deposits.">
                 Platform verified
@@ -1144,6 +1301,54 @@ export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
                   defaultValue={businessProfile.companyPhone ?? ''}
                   maxLength={15}
                 />
+              </div>
+              <div className="profile-screen-field">
+                <label className="profile-screen-label">
+                  {(cf as { logoLabel?: string }).logoLabel ?? 'Company logo'}
+                </label>
+                <p className="profile-screen-hint">
+                  {(cf as { logoHint?: string }).logoHint ??
+                    'Required for business verification and the platform verified badge.'}
+                </p>
+                {businessLogoPreviewUrl && !businessLogoRemoved && (
+                  <div className="profile-screen-image-preview">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={businessLogoPreviewUrl}
+                      alt={(cf as { logoLabel?: string }).logoLabel ?? 'Company logo'}
+                      className="profile-screen-image-preview-img"
+                    />
+                  </div>
+                )}
+                <ImageUploadOrCapture
+                  label={(cf as { logoUploadLabel?: string }).logoUploadLabel ?? 'Upload company logo'}
+                  onImage={(file) => {
+                    void (async () => {
+                      setBusinessLogoFile(file);
+                      setBusinessLogoRemoved(false);
+                      setBusinessLogoPreviewUrl(await readFilePreview(file));
+                    })();
+                  }}
+                  onClear={() => {
+                    setBusinessLogoFile(null);
+                    setBusinessLogoPreviewUrl(businessProfile.logoUrl ?? null);
+                  }}
+                  onError={(message) => setSaveMessage({ type: 'error', text: message })}
+                  disabled={saving}
+                />
+                {(businessLogoPreviewUrl || businessProfile.logoUrl) && !businessLogoRemoved && (
+                  <button
+                    type="button"
+                    className="profile-screen-cancel-btn profile-screen-inline-action"
+                    onClick={() => {
+                      setBusinessLogoFile(null);
+                      setBusinessLogoPreviewUrl(null);
+                      setBusinessLogoRemoved(true);
+                    }}
+                  >
+                    {(cf as { logoRemoveButton?: string }).logoRemoveButton ?? 'Remove logo'}
+                  </button>
+                )}
               </div>
               <div className="profile-screen-field">
                 <label className="profile-screen-label">{cf.addressLabel}</label>
@@ -1326,6 +1531,18 @@ export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
                 <p className="profile-screen-hint">
                   {dictionary.profile.documents.identityDescription}
                 </p>
+                {isExpert && expertImageMissing && (
+                  <p className="profile-screen-save-error">
+                    {(dictionary.profile.account as { avatarRequiredHint?: string }).avatarRequiredHint ??
+                      'Add a profile picture in settings before you can complete verification or earn the badge.'}
+                  </p>
+                )}
+                {isBusiness && businessImageMissing && (
+                  <p className="profile-screen-save-error">
+                    {(dictionary.profile as { businessLogoRequiredHint?: string }).businessLogoRequiredHint ??
+                      'Add a company logo before you can complete verification or earn the badge.'}
+                  </p>
+                )}
                 {isBusiness && businessProfile && (
                   <>
                     <h3 className="profile-screen-sectionTitle profile-screen-sectionTitle--spaced">
@@ -1379,9 +1596,19 @@ export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
                 )}
 
                 {identityDocuments.length === 0 ? (
-                  <p className="profile-screen-noDocuments">
-                    {dictionary.profile.documents.noDocuments}
-                  </p>
+                  <>
+                    <p className="profile-screen-noDocuments">
+                      {dictionary.profile.documents.noDocuments}
+                    </p>
+                    {isExpert && (
+                      <Link
+                        href={buildLocalePath(locale, '/onboarding/expert')}
+                        className="profile-screen-cta-link"
+                      >
+                        {dictionary.profile.documents.addIdentityDocument ?? 'Add identity document'}
+                      </Link>
+                    )}
+                  </>
                 ) : (
                   <ul className="profile-screen-doc-list" aria-label="Identity documents">
                     {identityDocuments.map((doc) => (
@@ -1440,54 +1667,85 @@ export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
                   {dictionary.profile.documents.academicDescription}
                 </p>
                 {academicRecords.length === 0 ? (
-                  <p className="profile-screen-noDocuments">
-                    {dictionary.profile.documents.noDocuments}
-                  </p>
+                  <>
+                    <p className="profile-screen-noDocuments">
+                      {dictionary.profile.documents.noDocuments}
+                    </p>
+                    {isExpert && (
+                      <Link
+                        href={buildLocalePath(locale, '/onboarding/expert')}
+                        className="profile-screen-cta-link"
+                      >
+                        {dictionary.profile.documents.addAcademicRecord ?? 'Add academic record'}
+                      </Link>
+                    )}
+                  </>
                 ) : (
-                  <ul className="profile-screen-doc-list" aria-label="Academic records">
-                    {academicRecords.map((rec) => (
-                      <li key={rec.id} className="profile-screen-doc-item">
-                        <span className="profile-screen-doc-type">
-                          {rec.title} — {rec.institution}
-                        </span>
-                        <span
-                          className={`profile-screen-doc-status profile-screen-doc-status--${rec.status}`}
-                        >
-                          {dictionary.profile.documents.status}:{' '}
-                          {rec.status === 'pending'
-                            ? 'Pending'
-                            : rec.status === 'under_review'
-                              ? 'Under review'
-                              : rec.status === 'approved'
-                                ? 'Approved'
-                                : 'Rejected'}
-                        </span>
-                        {rec.reviewedAt && (
-                          <span className="profile-screen-doc-meta">
-                            {dictionary.profile.documents.reviewedAt}:{' '}
-                            {new Date(rec.reviewedAt).toLocaleDateString(undefined, {
-                              year: 'numeric',
-                              month: 'short',
-                              day: 'numeric',
-                            })}
+                  <>
+                    <ul className="profile-screen-doc-list" aria-label="Academic records">
+                      {academicRecords.map((rec) => (
+                        <li key={rec.id} className="profile-screen-doc-item profile-screen-doc-item--with-actions">
+                          <span className="profile-screen-doc-type">
+                            {rec.title} — {rec.institution}
                           </span>
-                        )}
-                        {rec.rejectionReason && (
-                          <p className="profile-screen-doc-rejection">
-                            {dictionary.profile.documents.rejectionReason}: {rec.rejectionReason}
-                          </p>
-                        )}
-                        {rec.status === 'rejected' && isExpert && (
-                          <Link
-                            href={buildLocalePath(locale, '/onboarding/expert')}
-                            className="profile-screen-doc-resubmit"
+                          <span
+                            className={`profile-screen-doc-status profile-screen-doc-status--${rec.status}`}
                           >
-                            {dictionary.profile.documents.resubmit}
-                          </Link>
-                        )}
-                      </li>
-                    ))}
-                  </ul>
+                            {dictionary.profile.documents.status}:{' '}
+                            {rec.status === 'pending'
+                              ? 'Pending'
+                              : rec.status === 'under_review'
+                                ? 'Under review'
+                                : rec.status === 'approved'
+                                  ? 'Approved'
+                                  : 'Rejected'}
+                          </span>
+                          {rec.reviewedAt && (
+                            <span className="profile-screen-doc-meta">
+                              {dictionary.profile.documents.reviewedAt}:{' '}
+                              {new Date(rec.reviewedAt).toLocaleDateString(undefined, {
+                                year: 'numeric',
+                                month: 'short',
+                                day: 'numeric',
+                              })}
+                            </span>
+                          )}
+                          {rec.rejectionReason && (
+                            <p className="profile-screen-doc-rejection">
+                              {dictionary.profile.documents.rejectionReason}: {rec.rejectionReason}
+                            </p>
+                          )}
+                          {isExpert && (
+                            <div className="profile-screen-doc-actions">
+                              <button
+                                type="button"
+                                className="profile-screen-doc-edit-btn"
+                                onClick={() => setEditAcademicRecord(rec)}
+                              >
+                                {dictionary.profile.documents.editAcademicRecord ?? 'Edit'}
+                              </button>
+                              {rec.status === 'rejected' && (
+                                <Link
+                                  href={buildLocalePath(locale, '/onboarding/expert')}
+                                  className="profile-screen-doc-resubmit"
+                                >
+                                  {dictionary.profile.documents.resubmit}
+                                </Link>
+                              )}
+                            </div>
+                          )}
+                        </li>
+                      ))}
+                    </ul>
+                    {isExpert && (
+                      <Link
+                        href={buildLocalePath(locale, '/onboarding/expert')}
+                        className="profile-screen-cta-link profile-screen-cta-link--secondary"
+                      >
+                        {dictionary.profile.documents.addAnotherAcademicRecord ?? 'Add another academic record'}
+                      </Link>
+                    )}
+                  </>
                 )}
 
                 {identityDocuments.length === 0 && academicRecords.length === 0 && (
@@ -1504,6 +1762,141 @@ export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
               </>
             )}
           </section>
+        )}
+
+        {editAcademicRecord && (
+          <div
+            className="profile-screen-modal-backdrop"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="edit-academic-record-title"
+            onClick={(e) => e.target === e.currentTarget && setEditAcademicRecord(null)}
+            onKeyDown={(e) => e.key === 'Escape' && setEditAcademicRecord(null)}
+          >
+            <div className="profile-screen-modal" onClick={(e) => e.stopPropagation()}>
+              <h2 id="edit-academic-record-title" className="profile-screen-sectionTitle">
+                {dictionary.profile.documents.editAcademicRecord ?? 'Edit'} — {editAcademicRecord.title}
+              </h2>
+              {academicEditError && (
+                <p className="profile-screen-save-error" role="alert">
+                  {academicEditError}
+                </p>
+              )}
+              <form onSubmit={(e) => void handleSaveAcademicEdit(e)} className="profile-screen-form">
+                <div className="profile-screen-field">
+                  <label htmlFor="edit-recordType" className="profile-screen-label">
+                    Record type
+                  </label>
+                  <select
+                    id="edit-recordType"
+                    name="recordType"
+                    className="profile-screen-input"
+                    defaultValue={editAcademicRecord.recordType}
+                    required
+                  >
+                    <option value="degree">
+                      {(dictionary.verification as { academicRecordTypes?: Record<string, string> })?.academicRecordTypes?.degree ?? 'Degree'}
+                    </option>
+                    <option value="diploma">
+                      {(dictionary.verification as { academicRecordTypes?: Record<string, string> })?.academicRecordTypes?.diploma ?? 'Diploma'}
+                    </option>
+                    <option value="certificate">
+                      {(dictionary.verification as { academicRecordTypes?: Record<string, string> })?.academicRecordTypes?.certificate ?? 'Certificate'}
+                    </option>
+                    <option value="license">
+                      {(dictionary.verification as { academicRecordTypes?: Record<string, string> })?.academicRecordTypes?.license ?? 'License'}
+                    </option>
+                  </select>
+                </div>
+                <div className="profile-screen-field">
+                  <label htmlFor="edit-title" className="profile-screen-label">
+                    Title
+                  </label>
+                  <input
+                    id="edit-title"
+                    name="title"
+                    type="text"
+                    className="profile-screen-input"
+                    defaultValue={editAcademicRecord.title}
+                    required
+                    minLength={2}
+                    maxLength={300}
+                  />
+                </div>
+                <div className="profile-screen-field">
+                  <label htmlFor="edit-institution" className="profile-screen-label">
+                    Institution
+                  </label>
+                  <input
+                    id="edit-institution"
+                    name="institution"
+                    type="text"
+                    className="profile-screen-input"
+                    defaultValue={editAcademicRecord.institution}
+                    required
+                    minLength={2}
+                    maxLength={300}
+                  />
+                </div>
+                <div className="profile-screen-field">
+                  <label htmlFor="edit-fieldOfStudy" className="profile-screen-label">
+                    Field of study
+                  </label>
+                  <input
+                    id="edit-fieldOfStudy"
+                    name="fieldOfStudy"
+                    type="text"
+                    className="profile-screen-input"
+                    defaultValue={editAcademicRecord.fieldOfStudy ?? ''}
+                    maxLength={200}
+                  />
+                </div>
+                <div className="profile-screen-field">
+                  <label htmlFor="edit-graduationYear" className="profile-screen-label">
+                    Graduation year
+                  </label>
+                  <input
+                    id="edit-graduationYear"
+                    name="graduationYear"
+                    type="number"
+                    className="profile-screen-input"
+                    defaultValue={editAcademicRecord.graduationYear ?? ''}
+                    min={1950}
+                    max={new Date().getFullYear()}
+                  />
+                </div>
+                <div className="profile-screen-field">
+                  <label htmlFor="edit-grade" className="profile-screen-label">
+                    Grade
+                  </label>
+                  <input
+                    id="edit-grade"
+                    name="grade"
+                    type="text"
+                    className="profile-screen-input"
+                    defaultValue={editAcademicRecord.grade ?? ''}
+                    maxLength={50}
+                  />
+                </div>
+                <div className="profile-screen-form-actions">
+                  <button
+                    type="button"
+                    className="profile-screen-button profile-screen-button--secondary"
+                    onClick={() => { setEditAcademicRecord(null); setAcademicEditError(null); }}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="profile-screen-button profile-screen-button--primary"
+                    disabled={academicEditSaving}
+                  >
+                    {academicEditSaving ? (dictionary.common?.saving ?? 'Saving...') : (dictionary.common?.save ?? 'Save')}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
         )}
       </Container>
     </main>

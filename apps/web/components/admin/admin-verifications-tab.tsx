@@ -156,6 +156,7 @@ export const AdminVerificationsTab = ({ dictionary, accessToken, refreshSession 
           imageUrl={previewImage.url}
           title={previewImage.title}
           onClose={() => setPreviewImage(null)}
+          accessToken={accessToken}
         />
       )}
       {error && <p className="admin-error-banner">{error}</p>}

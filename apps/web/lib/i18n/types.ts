@@ -326,6 +326,14 @@ export type Dictionary = {
     timeAgoHours: string;
     timeAgoDays: string;
   };
+  profileModal?: {
+    message: string;
+    close: string;
+    verified: string;
+    roleExpert?: string;
+    roleBusiness?: string;
+    roleCustomer?: string;
+  };
   chatPage?: {
     shareLink: string;
     shareLocation: string;
@@ -421,6 +429,7 @@ export type Dictionary = {
       categories: string;
       verifications: string;
       reviewReports?: string;
+      support?: string;
       notifications?: string;
       settings: string;
     };
@@ -656,6 +665,12 @@ export type Dictionary = {
       commissionPercentDesc: string;
       commissionMinEgp: string;
       commissionMinEgpDesc: string;
+      dangerZone: string;
+      factoryReset: string;
+      factoryResetWarning: string;
+      factoryResetConfirmPhraseLabel: string;
+      factoryResetConfirm: string;
+      factoryResetSuccess: string;
     };
     categoriesMgmt: {
       title: string;
@@ -851,6 +866,10 @@ export type Dictionary = {
       academicTitle: string;
       academicDescription: string;
       noDocuments: string;
+      addIdentityDocument?: string;
+      addAcademicRecord?: string;
+      addAnotherAcademicRecord?: string;
+      editAcademicRecord?: string;
       status: string;
       rejectionReason: string;
       reviewedAt: string;

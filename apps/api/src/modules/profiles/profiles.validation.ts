@@ -71,6 +71,9 @@ export const academicRecordSchema = z.object({
   transcriptImageUrl: z.string().url().optional(),
 });
 
+/** PATCH body for updating an academic record (all optional). */
+export const updateAcademicRecordSchema = academicRecordSchema.partial();
+
 // ── Expert profile update ────────────────────────────────────────────────
 
 export const updateExpertProfileSchema = z.object({
@@ -112,7 +115,9 @@ export const updateBusinessProfileSchema = z.object({
   companyEmail: z.string().email().max(255).optional(),
   companyPhone: z.string().max(20).optional(),
   address: z.string().max(500).optional(),
-  logoUrl: urlOrDomain(500),
+  logoUrl: z
+    .union([z.string().max(500).url(), z.null()])
+    .optional(),
   city: z.string().max(100).optional(),
   country: z.string().max(100).optional(),
   description: z.string().max(2000).optional(),

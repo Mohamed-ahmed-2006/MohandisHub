@@ -1,6 +1,6 @@
 'use client';
 
-import type { IdentityDocumentType, UpdateExpertProfileBody } from '@mohandishub/shared';
+import type { IdentityDocumentType, UpdateAccountBody, UpdateExpertProfileBody } from '@mohandishub/shared';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
@@ -19,7 +19,8 @@ import { getApiBaseUrl } from '@/lib/env';
 import { buildLocalePath } from '@/lib/i18n/path';
 import type { Dictionary, Locale } from '@/lib/i18n/types';
 import { profilesApiClient } from '@/lib/profiles/client';
-import { uploadPrivateFile } from '@/lib/upload/client';
+import { uploadFile, uploadPrivateFile } from '@/lib/upload/client';
+import { usersApiClient } from '@/lib/users/client';
 import { formatApiError } from '@/lib/utils/format-api-error';
 import { verificationApiClient } from '@/lib/verification/client';
 
@@ -40,6 +41,21 @@ function pickDefined(obj: Record<string, unknown>): Record<string, unknown> {
   return result;
 }
 
+function toAbsoluteAssetUrl(url: string): string {
+  if (url.startsWith('http')) return url;
+  const base = (getApiBaseUrl() || '').replace(/\/$/, '');
+  return base ? `${base}${url.startsWith('/') ? '' : '/'}${url}` : url;
+}
+
+function readFilePreview(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(typeof reader.result === 'string' ? reader.result : '');
+    reader.onerror = () => reject(new Error('Could not preview image.'));
+    reader.readAsDataURL(file);
+  });
+}
+
 export const ExpertOnboardingScreen = ({ locale, dictionary }: Props) => {
   const router = useRouter();
   const { authUser, accessToken, isAuthenticated, isReady, authGuard, updateAuthUser } = useAuth();
@@ -56,6 +72,8 @@ export const ExpertOnboardingScreen = ({ locale, dictionary }: Props) => {
   const [transcriptFile, setTranscriptFile] = useState<File | null>(null);
   const [profileCountry, setProfileCountry] = useState<string>('');
   const [documentRejectedResubmit, setDocumentRejectedResubmit] = useState(false);
+  const [avatarFile, setAvatarFile] = useState<File | null>(null);
+  const [avatarPreviewUrl, setAvatarPreviewUrl] = useState<string | null>(null);
 
   const dict = dictionary.onboarding.expert;
   const stepLabels = [dict.steps.profileDetails, dict.steps.kyc, dict.steps.documents];
@@ -111,7 +129,9 @@ export const ExpertOnboardingScreen = ({ locale, dictionary }: Props) => {
           const c = findCountryByName(profile.country);
           setProfileCountry(c?.code ?? '');
         }
-        const profileComplete = Boolean(profile?.title?.trim() && profile?.languages?.length);
+        const profileComplete = Boolean(
+          profile?.title?.trim() && profile?.languages?.length && authUser?.avatarUrl,
+        );
         const identityDone = verification.verificationStatus === 'verified' || verification.verificationStatus === 'pending';
         const hasApprovedAcademicRecord = Array.isArray(academicRecords) && academicRecords.some((r) => r.status === 'approved');
         const hasRejectedAcademic = Array.isArray(academicRecords) && academicRecords.some((r) => r.status === 'rejected');
@@ -139,6 +159,10 @@ export const ExpertOnboardingScreen = ({ locale, dictionary }: Props) => {
     };
   }, [accessToken, authUser?.verificationStatus]);
 
+  useEffect(() => {
+    setAvatarPreviewUrl(authUser?.avatarUrl ?? null);
+  }, [authUser?.avatarUrl]);
+
   const handleSaveProfile = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!accessToken) return;
@@ -158,6 +182,14 @@ export const ExpertOnboardingScreen = ({ locale, dictionary }: Props) => {
     ).map((el) => el.value);
     if (languages.length === 0) {
       setError(dict.profileForm.languagesHint || 'Please select at least one language.');
+      setSaving(false);
+      return;
+    }
+    if (!avatarFile && !authUser?.avatarUrl) {
+      setError(
+        (dict.profileForm as { avatarHint?: string }).avatarHint ??
+          'Upload a profile picture before continuing to verification.',
+      );
       setSaving(false);
       return;
     }
@@ -184,6 +216,17 @@ export const ExpertOnboardingScreen = ({ locale, dictionary }: Props) => {
     });
 
     try {
+      let avatarUrl = authUser?.avatarUrl ?? null;
+      if (avatarFile) {
+        const uploaded = await uploadFile(accessToken, avatarFile);
+        avatarUrl = toAbsoluteAssetUrl(uploaded.url);
+      }
+      if (avatarUrl) {
+        await usersApiClient.updateAccount(accessToken, {
+          avatarUrl,
+        } satisfies UpdateAccountBody);
+        await updateAuthUser();
+      }
       await profilesApiClient.updateExpertProfile(accessToken, body as UpdateExpertProfileBody);
       setStep('kyc');
     } catch (err) {
@@ -207,8 +250,8 @@ export const ExpertOnboardingScreen = ({ locale, dictionary }: Props) => {
       } else {
         setKycStatus('pending');
       }
-    } catch {
-      setError(dict.kycRejected);
+    } catch (err) {
+      setError(formatApiError(err, dict.kycRejected));
     } finally {
       setSaving(false);
     }
@@ -361,6 +404,41 @@ export const ExpertOnboardingScreen = ({ locale, dictionary }: Props) => {
               <div className="onboarding-field">
                 <label className="onboarding-label">{dict.profileForm.bioLabel}</label>
                 <textarea name="bio" className="onboarding-input onboarding-textarea" rows={3} />
+              </div>
+              <div className="onboarding-field">
+                <label className="onboarding-label">
+                  {(dict.profileForm as { avatarLabel?: string }).avatarLabel ?? 'Profile picture'}
+                </label>
+                <p className="onboarding-description">
+                  {(dict.profileForm as { avatarHint?: string }).avatarHint ??
+                    'Required for expert verification and the platform verified badge.'}
+                </p>
+                {avatarPreviewUrl && (
+                  <div style={{ maxWidth: '12rem', borderRadius: '1rem', overflow: 'hidden', border: '1px solid hsl(var(--border))' }}>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={avatarPreviewUrl}
+                      alt={(dict.profileForm as { avatarLabel?: string }).avatarLabel ?? 'Profile picture'}
+                      style={{ display: 'block', width: '100%', maxHeight: '12rem', objectFit: 'cover' }}
+                    />
+                  </div>
+                )}
+                <ImageUploadOrCapture
+                  label={(dict.profileForm as { avatarUploadLabel?: string }).avatarUploadLabel ?? 'Upload profile picture'}
+                  onImage={(file) => {
+                    void (async () => {
+                      setAvatarFile(file);
+                      setAvatarPreviewUrl(await readFilePreview(file));
+                    })();
+                  }}
+                  onClear={() => {
+                    setAvatarFile(null);
+                    setAvatarPreviewUrl(authUser?.avatarUrl ?? null);
+                  }}
+                  onError={setError}
+                  required={!authUser?.avatarUrl}
+                  disabled={saving}
+                />
               </div>
               <div className="onboarding-row">
                 <div className="onboarding-field">

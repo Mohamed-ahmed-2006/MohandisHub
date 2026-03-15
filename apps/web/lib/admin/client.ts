@@ -32,6 +32,7 @@ import type {
   PendingVerificationItem,
   Plan,
   ServiceCategory,
+  SupportTicket,
   Transaction,
   UpdateAppSettingsBody,
   UpdateCategoryBody,
@@ -150,6 +151,14 @@ export const adminApiClient = {
       method: 'PATCH',
       path: '/api/admin/settings',
       body,
+      accessToken,
+      ...(options?.refreshSession ? { refreshSession: options.refreshSession } : {}),
+    }),
+
+  factoryReset: (accessToken: string, options?: AdminClientOptions) =>
+    apiRequest<{ usersDeleted: number }>({
+      method: 'POST',
+      path: '/api/admin/factory-reset',
       accessToken,
       ...(options?.refreshSession ? { refreshSession: options.refreshSession } : {}),
     }),
@@ -659,5 +668,44 @@ export const adminApiClient = {
       path: `/api/admin/review-disputes/${disputeId}`,
       body,
       accessToken,
+    }),
+
+  // Support tickets (admin)
+  listSupportTickets: (
+    accessToken: string,
+    params?: { page?: number; limit?: number; status?: string },
+    options?: AdminClientOptions,
+  ) => {
+    const query = new URLSearchParams();
+    if (params?.page) query.set('page', String(params.page));
+    if (params?.limit) query.set('limit', String(params.limit));
+    if (params?.status) query.set('status', params.status);
+    const qs = query.toString();
+    return apiRequest<{
+      items: Array<SupportTicket & { userEmail?: string }>;
+      total: number;
+      page: number;
+      limit: number;
+      totalPages: number;
+    }>({
+      method: 'GET',
+      path: `/api/admin/support/tickets${qs ? `?${qs}` : ''}`,
+      accessToken,
+      ...(options?.refreshSession ? { refreshSession: options.refreshSession } : {}),
+    });
+  },
+
+  updateSupportTicket: (
+    accessToken: string,
+    ticketId: string,
+    body: { status?: string; assignedTo?: string | null },
+    options?: AdminClientOptions,
+  ) =>
+    apiRequest<SupportTicket>({
+      method: 'PATCH',
+      path: `/api/admin/support/tickets/${ticketId}`,
+      body,
+      accessToken,
+      ...(options?.refreshSession ? { refreshSession: options.refreshSession } : {}),
     }),
 };

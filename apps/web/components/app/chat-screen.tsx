@@ -5,11 +5,13 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { useAuth } from '@/components/auth/auth-provider';
 import { Container } from '@/components/ui/container';
+import { useProfileModal } from './profile-modal-context';
 import type { Conversation, Message } from '@/lib/chat/client';
 import { chatApiClient } from '@/lib/chat/client';
 import { getChatSocket } from '@/lib/chat/socket';
 import { buildLocalePath } from '@/lib/i18n/path';
 import type { Dictionary, Locale } from '@/lib/i18n/types';
+import { Link2 } from 'lucide-react';
 
 import './chat-screen.css';
 
@@ -210,6 +212,7 @@ export const ChatScreen = ({ locale, dictionary }: Props) => {
     );
   }
 
+  const { openProfileModal } = useProfileModal();
   const activeConv = conversations.find((c) => c.id === activeConvId);
   const isClosed = convStatus === 'closed';
   const t = dictionary.chatPage ?? {
@@ -242,13 +245,29 @@ export const ChatScreen = ({ locale, dictionary }: Props) => {
               <p className="chat-empty">No conversations yet.</p>
             ) : (
               conversations.map((conv) => (
-                <button
+                <div
                   key={conv.id}
-                  type="button"
+                  role="button"
+                  tabIndex={0}
                   className={`chat-conv-item ${conv.id === activeConvId ? 'chat-conv-item--active' : ''}`}
                   onClick={() => openConv(conv.id)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      openConv(conv.id);
+                    }
+                  }}
                 >
-                  <span className="chat-conv-name">{conv.other_display_name}</span>
+                  <button
+                    type="button"
+                    className="chat-conv-name-btn"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      openProfileModal(conv.other_user_id, { displayName: conv.other_display_name });
+                    }}
+                  >
+                    {conv.other_display_name}
+                  </button>
                   {conv.last_message_body && (
                     <span className="chat-conv-preview" style={{ fontWeight: conv.has_unread ? 700 : 400 }}>
                       {conv.last_message_body}
@@ -256,7 +275,7 @@ export const ChatScreen = ({ locale, dictionary }: Props) => {
                   )}
                   {conv.has_unread && <span className="chat-conv-badge" style={{ background: 'hsl(var(--destructive))', color: '#fff' }}>New</span>}
                   {conv.status === 'closed' && <span className="chat-conv-badge">Closed</span>}
-                </button>
+                </div>
               ))
             )}
           </aside>
@@ -268,7 +287,17 @@ export const ChatScreen = ({ locale, dictionary }: Props) => {
               <>
                 {activeConv && (
                   <div className="chat-messages-header">
-                    <strong>{activeConv.other_display_name}</strong>
+                    <button
+                      type="button"
+                      className="chat-messages-header-name-btn"
+                      onClick={() =>
+                        openProfileModal(activeConv.other_user_id, {
+                          displayName: activeConv.other_display_name,
+                        })
+                      }
+                    >
+                      {activeConv.other_display_name}
+                    </button>
                     {isClosed && <span className="chat-closed-badge">Closed</span>}
                   </div>
                 )}
@@ -543,8 +572,9 @@ export const ChatScreen = ({ locale, dictionary }: Props) => {
                           className="chat-action-btn"
                           onClick={() => setShareLinkOpen((v) => !v)}
                           title={t.shareLink}
+                          aria-label={t.shareLink}
                         >
-                          🔗
+                          <Link2 size={18} aria-hidden />
                         </button>
                         <button
                           type="button"

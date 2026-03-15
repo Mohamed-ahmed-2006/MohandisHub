@@ -505,16 +505,42 @@ export class ReservationsService {
     if (input.mode === 'online' && input.onlineType !== undefined) {
       createInput.onlineType = input.onlineType;
     }
-    const reservation = await this.repo.createReservation(createInput);
-    await this.repo.createEvent({
-      reservationId: reservation.id,
-      eventType: 'created',
-      actorId: customerId,
-      metadata: {
-        purpose: 'service',
-        mode: input.mode,
-      },
-    });
+
+    const holdAtCreate = expertPrice > 0;
+    let reservation: ReservationRow;
+
+    if (holdAtCreate) {
+      const pool = getPool();
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+        reservation = await this.repo.createReservation(createInput, client);
+        await this.repo.createEvent(
+          { reservationId: reservation.id, eventType: 'created', actorId: customerId, metadata: { purpose: 'service', mode: input.mode } },
+          client,
+        );
+        await this.ensureFixedPriceHold(client, reservation);
+        await client.query('COMMIT');
+      } catch (err) {
+        await client.query('ROLLBACK');
+        throw err;
+      } finally {
+        client.release();
+      }
+      const refreshed = await this.repo.findReservationById(reservation.id);
+      reservation = refreshed ?? reservation;
+    } else {
+      reservation = await this.repo.createReservation(createInput);
+      await this.repo.createEvent({
+        reservationId: reservation.id,
+        eventType: 'created',
+        actorId: customerId,
+        metadata: {
+          purpose: 'service',
+          mode: input.mode,
+        },
+      });
+    }
 
     if (profile.auto_accept) {
       const accepted = await this.decideReservationInternal({
@@ -1765,6 +1791,7 @@ export class ReservationsService {
   async runLifecycleSweep(): Promise<{
     disconnectReleased: number;
     donePrompted: number;
+    expiredPending: number;
   }> {
     const pool = getPool();
     const lock = await pool.query<{ locked: boolean }>(
@@ -1772,16 +1799,55 @@ export class ReservationsService {
       [LIFECYCLE_SWEEP_LOCK_KEY],
     );
     if (!lock.rows[0]?.locked) {
-      return { disconnectReleased: 0, donePrompted: 0 };
+      return { disconnectReleased: 0, donePrompted: 0, expiredPending: 0 };
     }
 
     try {
       const disconnectReleased = await this.processDueDisconnectAutoRelease(100);
       const donePrompted = await this.processDueOfflineDonePrompts(100);
-      return { disconnectReleased, donePrompted };
+      const expiredPending = await this.processExpiredPendingReservations(50);
+      return { disconnectReleased, donePrompted, expiredPending };
     } finally {
       await pool.query(`SELECT pg_advisory_unlock($1)`, [LIFECYCLE_SWEEP_LOCK_KEY]);
     }
+  }
+
+  private static readonly PENDING_EXPIRY_DAYS = 7;
+
+  private async processExpiredPendingReservations(limit: number): Promise<number> {
+    const cutoff = new Date(Date.now() - ReservationsService.PENDING_EXPIRY_DAYS * 24 * 60 * 60 * 1000);
+    const rows = await this.repo.listPendingReservationsCreatedBefore(cutoff, limit);
+    if (rows.length === 0) return 0;
+    const pool = getPool();
+    const client = await pool.connect();
+    let processed = 0;
+    try {
+      await client.query('BEGIN');
+      for (const row of rows) {
+        await this.refundFixedHold(client, row, 'Reservation expired (pending too long)');
+        await this.repo.updateReservation(
+          row.id,
+          {
+            status: 'expired',
+            settlementStatus: row.fixed_price_hold_id ? 'refunded_to_customer' : undefined,
+            refundStatus: row.fixed_price_hold_id ? 'succeeded' : undefined,
+          },
+          client,
+        );
+        await this.repo.createEvent(
+          { reservationId: row.id, eventType: 'rejected', actorId: null, metadata: { reason: 'expired_pending' } },
+          client,
+        );
+        processed++;
+      }
+      await client.query('COMMIT');
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
+    return processed;
   }
 
   async listDisputes(
@@ -1948,6 +2014,22 @@ export class ReservationsService {
         }
       } else if (reservation.status === 'pending') {
         outcome = 'none';
+        await this.refundFixedHold(client, reservation, 'Reservation cancelled while pending');
+        const pendingRefundAmount = toNumber(reservation.expert_price_amount);
+        if (pendingRefundAmount > 0) {
+          refundAmount = pendingRefundAmount;
+          refundStatus = 'succeeded';
+          settlementStatus = 'refunded_to_customer';
+          await this.repo.createEvent(
+            {
+              reservationId,
+              eventType: 'hold_released',
+              actorId: userId,
+              metadata: { reasonCode: input.reasonCode, amount: refundAmount },
+            },
+            client,
+          );
+        }
       } else if (actor === 'customer') {
         const hoursUntilStart =
           (new Date(reservation.requested_start_at).getTime() - now.getTime()) / (60 * MINUTE_MS);
@@ -2561,6 +2643,7 @@ export class ReservationsService {
       }
 
       if (params.decision === 'reject') {
+        await this.refundFixedHold(client, reservation, 'Reservation rejected by provider');
         await this.repo.updateReservation(
           params.reservationId,
           {
@@ -2603,6 +2686,7 @@ export class ReservationsService {
                   reservationDurationMinutes(reservation),
                 )
               : [];
+          await this.refundFixedHold(client, reservation, 'Slot no longer available');
           await this.repo.updateReservation(
             params.reservationId,
             {
@@ -2666,6 +2750,34 @@ export class ReservationsService {
             client,
           );
           accepted = true;
+
+          const otherPending = await this.repo.listPendingReservationsBySlot(
+            slot.id,
+            params.reservationId,
+            client,
+          );
+          const slotTakenReason = 'Slot no longer available. It was accepted for another request.';
+          for (const other of otherPending) {
+            await this.refundFixedHold(client, other, slotTakenReason);
+            await this.repo.updateReservation(
+              other.id,
+              {
+                status: 'rejected',
+                rejectionReason: slotTakenReason,
+                autoRejected: true,
+              },
+              client,
+            );
+            await this.repo.createEvent(
+              {
+                reservationId: other.id,
+                eventType: 'rejected',
+                actorId: params.providerId,
+                metadata: { reason: 'slot_taken_by_another', rejectionReason: slotTakenReason },
+              },
+              client,
+            );
+          }
         }
       }
 

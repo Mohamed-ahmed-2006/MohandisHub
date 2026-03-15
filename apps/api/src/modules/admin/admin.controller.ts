@@ -478,6 +478,20 @@ const updateSettings = asyncHandler(async (req, res) => {
   res.json(response);
 });
 
+const factoryReset = asyncHandler(async (req, res) => {
+  const adminId = getAdminId(req);
+  const usersDeleted = await adminService.factoryReset(adminId);
+  await logAudit({
+    actorId: adminId,
+    action: 'factory_reset',
+    resourceType: 'app',
+    details: { usersDeleted },
+    ip: req.ip ?? (req.socket?.remoteAddress ?? undefined) ?? null,
+  });
+  const response: ApiSuccessBody<{ usersDeleted: number }> = { ok: true, data: { usersDeleted } };
+  res.json(response);
+});
+
 const listReviewReports = asyncHandler(async (req, res) => {
   const page = parseInt(req.query.page as string, 10) || 1;
   const limit = Math.min(parseInt(req.query.limit as string, 10) || 20, 100);
@@ -576,6 +590,7 @@ export const adminController = {
   deleteCategory,
   getSettings,
   updateSettings,
+  factoryReset,
   listReviewReports,
   listReviewDisputes,
   resolveReviewReport,

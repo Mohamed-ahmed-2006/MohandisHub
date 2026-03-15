@@ -293,6 +293,22 @@
   margin-top: 0.5rem;
 }
 
+.profile-screen-image-preview {
+  max-width: 12rem;
+  border-radius: 1rem;
+  overflow: hidden;
+  border: 1px solid hsl(var(--border));
+  background: color-mix(in srgb, hsl(var(--surface-strong)) 92%, transparent);
+}
+
+.profile-screen-image-preview-img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  max-height: 12rem;
+  object-fit: cover;
+}
+
 .profile-screen-save-success {
   margin: 0;
   font-size: 0.9rem;
@@ -596,6 +612,10 @@
   color: hsl(var(--primary));
 }
 
+.profile-screen-inline-action {
+  align-self: flex-start;
+}
+
 .profile-screen-doc-resubmit:hover {
   text-decoration: underline;
 }
@@ -613,4 +633,104 @@
 
 .profile-screen-cta-link:hover {
   opacity: 0.9;
+}
+
+.profile-screen-cta-link--secondary {
+  margin-top: 0.75rem;
+  background: transparent;
+  color: hsl(var(--primary));
+  border: 1px solid hsl(var(--primary));
+}
+
+.profile-screen-cta-link--secondary:hover {
+  background: hsl(var(--primary) / 0.1);
+}
+
+.profile-screen-doc-item--with-actions {
+  gap: 0.5rem;
+}
+
+.profile-screen-doc-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+  align-items: center;
+}
+
+.profile-screen-doc-edit-btn {
+  padding: 0.35rem 0.75rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  border-radius: 0.375rem;
+  border: 1px solid hsl(var(--border));
+  background: hsl(var(--muted));
+  color: hsl(var(--foreground));
+  cursor: pointer;
+}
+
+.profile-screen-doc-edit-btn:hover {
+  background: hsl(var(--muted) / 0.8);
+}
+
+/* Edit academic record modal */
+.profile-screen-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: hsl(0 0% 0% / 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  padding: 1rem;
+}
+
+.profile-screen-modal {
+  background: hsl(var(--card));
+  border: 1px solid hsl(var(--border));
+  border-radius: 0.75rem;
+  padding: 1.5rem;
+  max-width: 28rem;
+  width: 100%;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+.profile-screen-form-actions {
+  display: flex;
+  gap: 0.75rem;
+  margin-top: 1.25rem;
+  flex-wrap: wrap;
+}
+
+.profile-screen-button {
+  padding: 0.5rem 1rem;
+  border-radius: 0.5rem;
+  font-weight: 600;
+  cursor: pointer;
+  border: none;
+}
+
+.profile-screen-button--primary {
+  background: hsl(var(--primary));
+  color: hsl(var(--primary-foreground));
+}
+
+.profile-screen-button--primary:hover:not(:disabled) {
+  opacity: 0.9;
+}
+
+.profile-screen-button--primary:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.profile-screen-button--secondary {
+  background: transparent;
+  color: hsl(var(--foreground));
+  border: 1px solid hsl(var(--border));
+}
+
+.profile-screen-button--secondary:hover {
+  background: hsl(var(--muted));
 }

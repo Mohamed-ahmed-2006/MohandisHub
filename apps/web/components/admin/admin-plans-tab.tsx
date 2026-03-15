@@ -19,12 +19,17 @@ const getErrorMessage = (error: unknown, dictionary: Dictionary): string => {
 };
 
 const defaultPlanLimits = (): PlanLimits => ({
-  maxServices: null,
   maxNeeds: null,
-  maxJobs: null,
-  canPriorityListing: false,
   bidsVisibleToCustomer: null,
   bidsVisibleTopN: 3,
+  maxBidsPerNeed: null,
+  maxServices: null,
+  maxJobs: null,
+  canPriorityListing: false,
+  maxActiveBids: null,
+  maxBusinessServices: null,
+  maxTeamSlots: null,
+  canBusinessFeatured: false,
 });
 
 export const AdminPlansTab = ({ dictionary, accessToken, refreshSession }: Props) => {
@@ -98,12 +103,17 @@ export const AdminPlansTab = ({ dictionary, accessToken, refreshSession }: Props
       billingCycle: plan.billingCycle,
       features: plan.features.join(', '),
       planLimits: {
-        maxServices: limits.maxServices ?? null,
         maxNeeds: limits.maxNeeds ?? null,
-        maxJobs: limits.maxJobs ?? null,
-        canPriorityListing: limits.canPriorityListing ?? false,
         bidsVisibleToCustomer: limits.bidsVisibleToCustomer ?? null,
         bidsVisibleTopN: limits.bidsVisibleTopN ?? 3,
+        maxBidsPerNeed: limits.maxBidsPerNeed ?? null,
+        maxServices: limits.maxServices ?? null,
+        maxJobs: limits.maxJobs ?? null,
+        canPriorityListing: limits.canPriorityListing ?? false,
+        maxActiveBids: limits.maxActiveBids ?? null,
+        maxBusinessServices: limits.maxBusinessServices ?? null,
+        maxTeamSlots: limits.maxTeamSlots ?? null,
+        canBusinessFeatured: limits.canBusinessFeatured ?? false,
       },
     });
     setError(null);
@@ -118,12 +128,17 @@ export const AdminPlansTab = ({ dictionary, accessToken, refreshSession }: Props
       .map((f) => f.trim())
       .filter(Boolean);
     const planLimits: PlanLimits = {
-      maxServices: formData.planLimits.maxServices ?? null,
       maxNeeds: formData.planLimits.maxNeeds ?? null,
-      maxJobs: formData.planLimits.maxJobs ?? null,
-      canPriorityListing: formData.planLimits.canPriorityListing ?? false,
       bidsVisibleToCustomer: formData.planLimits.bidsVisibleToCustomer ?? null,
       bidsVisibleTopN: formData.planLimits.bidsVisibleToCustomer === 'top_n' ? (formData.planLimits.bidsVisibleTopN ?? 3) : null,
+      maxBidsPerNeed: formData.planLimits.maxBidsPerNeed ?? null,
+      maxServices: formData.planLimits.maxServices ?? null,
+      maxJobs: formData.planLimits.maxJobs ?? null,
+      canPriorityListing: formData.planLimits.canPriorityListing ?? false,
+      maxActiveBids: formData.planLimits.maxActiveBids ?? null,
+      maxBusinessServices: formData.planLimits.maxBusinessServices ?? null,
+      maxTeamSlots: formData.planLimits.maxTeamSlots ?? null,
+      canBusinessFeatured: formData.planLimits.canBusinessFeatured ?? false,
     };
     const baseBody = {
       slug: formData.slug,
@@ -294,29 +309,12 @@ export const AdminPlansTab = ({ dictionary, accessToken, refreshSession }: Props
               />
             </div>
 
-            <fieldset className="admin-form-group" style={{ border: '1px solid #ccc', padding: '0.75rem', borderRadius: 4 }}>
+            <fieldset className="admin-form-group" style={{ border: '1px solid hsl(var(--border))', padding: '1rem', borderRadius: 8 }}>
               <legend className="admin-form-label">{d.planLimits}</legend>
+
+              <p className="admin-form-label" style={{ marginBottom: '0.5rem', fontWeight: 600, color: 'hsl(var(--text-soft))' }}>For customers</p>
               <div className="admin-form-group">
-                <label className="admin-form-label">{d.maxServices}</label>
-                <input
-                  className="admin-form-input"
-                  type="number"
-                  min={0}
-                  placeholder="Unlimited"
-                  value={formData.planLimits.maxServices ?? ''}
-                  onChange={(e) =>
-                    setFormData({
-                      ...formData,
-                      planLimits: {
-                        ...formData.planLimits,
-                        maxServices: e.target.value === '' ? null : parseInt(e.target.value, 10),
-                      },
-                    })
-                  }
-                />
-              </div>
-              <div className="admin-form-group">
-                <label className="admin-form-label">{d.maxNeeds}</label>
+                <label className="admin-form-label">Max active needs</label>
                 <input
                   className="admin-form-input"
                   type="number"
@@ -335,39 +333,23 @@ export const AdminPlansTab = ({ dictionary, accessToken, refreshSession }: Props
                 />
               </div>
               <div className="admin-form-group">
-                <label className="admin-form-label">{d.maxJobs}</label>
+                <label className="admin-form-label">Max bids per need</label>
                 <input
                   className="admin-form-input"
                   type="number"
                   min={0}
                   placeholder="Unlimited"
-                  value={formData.planLimits.maxJobs ?? ''}
+                  value={formData.planLimits.maxBidsPerNeed ?? ''}
                   onChange={(e) =>
                     setFormData({
                       ...formData,
                       planLimits: {
                         ...formData.planLimits,
-                        maxJobs: e.target.value === '' ? null : parseInt(e.target.value, 10),
+                        maxBidsPerNeed: e.target.value === '' ? null : parseInt(e.target.value, 10),
                       },
                     })
                   }
                 />
-              </div>
-              <div className="admin-form-group" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <input
-                  type="checkbox"
-                  id="plan-can-priority-listing"
-                  checked={formData.planLimits.canPriorityListing ?? false}
-                  onChange={(e) =>
-                    setFormData({
-                      ...formData,
-                      planLimits: { ...formData.planLimits, canPriorityListing: e.target.checked },
-                    })
-                  }
-                />
-                <label className="admin-form-label" htmlFor="plan-can-priority-listing" style={{ marginBottom: 0 }}>
-                  {d.canPriorityListing}
-                </label>
               </div>
               <div className="admin-form-group">
                 <label className="admin-form-label">{d.bidsVisibleToCustomer}</label>
@@ -410,6 +392,137 @@ export const AdminPlansTab = ({ dictionary, accessToken, refreshSession }: Props
                   />
                 </div>
               )}
+
+              <p className="admin-form-label" style={{ marginTop: '1rem', marginBottom: '0.5rem', fontWeight: 600, color: 'hsl(var(--text-soft))' }}>For experts</p>
+              <div className="admin-form-group">
+                <label className="admin-form-label">{d.maxServices}</label>
+                <input
+                  className="admin-form-input"
+                  type="number"
+                  min={0}
+                  placeholder="Unlimited"
+                  value={formData.planLimits.maxServices ?? ''}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      planLimits: {
+                        ...formData.planLimits,
+                        maxServices: e.target.value === '' ? null : parseInt(e.target.value, 10),
+                      },
+                    })
+                  }
+                />
+              </div>
+              <div className="admin-form-group">
+                <label className="admin-form-label">{d.maxJobs}</label>
+                <input
+                  className="admin-form-input"
+                  type="number"
+                  min={0}
+                  placeholder="Unlimited"
+                  value={formData.planLimits.maxJobs ?? ''}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      planLimits: {
+                        ...formData.planLimits,
+                        maxJobs: e.target.value === '' ? null : parseInt(e.target.value, 10),
+                      },
+                    })
+                  }
+                />
+              </div>
+              <div className="admin-form-group">
+                <label className="admin-form-label">Max active bids (applications)</label>
+                <input
+                  className="admin-form-input"
+                  type="number"
+                  min={0}
+                  placeholder="Unlimited"
+                  value={formData.planLimits.maxActiveBids ?? ''}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      planLimits: {
+                        ...formData.planLimits,
+                        maxActiveBids: e.target.value === '' ? null : parseInt(e.target.value, 10),
+                      },
+                    })
+                  }
+                />
+              </div>
+              <div className="admin-form-group" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <input
+                  type="checkbox"
+                  id="plan-can-priority-listing"
+                  checked={formData.planLimits.canPriorityListing ?? false}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      planLimits: { ...formData.planLimits, canPriorityListing: e.target.checked },
+                    })
+                  }
+                />
+                <label className="admin-form-label" htmlFor="plan-can-priority-listing" style={{ marginBottom: 0 }}>
+                  {d.canPriorityListing}
+                </label>
+              </div>
+
+              <p className="admin-form-label" style={{ marginTop: '1rem', marginBottom: '0.5rem', fontWeight: 600, color: 'hsl(var(--text-soft))' }}>For businesses</p>
+              <div className="admin-form-group">
+                <label className="admin-form-label">Max services</label>
+                <input
+                  className="admin-form-input"
+                  type="number"
+                  min={0}
+                  placeholder="Unlimited"
+                  value={formData.planLimits.maxBusinessServices ?? ''}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      planLimits: {
+                        ...formData.planLimits,
+                        maxBusinessServices: e.target.value === '' ? null : parseInt(e.target.value, 10),
+                      },
+                    })
+                  }
+                />
+              </div>
+              <div className="admin-form-group">
+                <label className="admin-form-label">Max team slots</label>
+                <input
+                  className="admin-form-input"
+                  type="number"
+                  min={0}
+                  placeholder="Unlimited"
+                  value={formData.planLimits.maxTeamSlots ?? ''}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      planLimits: {
+                        ...formData.planLimits,
+                        maxTeamSlots: e.target.value === '' ? null : parseInt(e.target.value, 10),
+                      },
+                    })
+                  }
+                />
+              </div>
+              <div className="admin-form-group" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <input
+                  type="checkbox"
+                  id="plan-can-business-featured"
+                  checked={formData.planLimits.canBusinessFeatured ?? false}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      planLimits: { ...formData.planLimits, canBusinessFeatured: e.target.checked },
+                    })
+                  }
+                />
+                <label className="admin-form-label" htmlFor="plan-can-business-featured" style={{ marginBottom: 0 }}>
+                  Can be featured
+                </label>
+              </div>
             </fieldset>
 
             <div className="admin-modal-actions">

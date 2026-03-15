@@ -1,15 +1,32 @@
 'use client';
 
 import Image from 'next/image';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
+
+import { getApiBaseUrl } from '@/lib/env';
 
 type ImagePreviewModalProps = {
   imageUrl: string;
   title?: string;
   onClose: () => void;
+  /** When set, private API URLs (/api/upload/private/...) are fetched with this token so the image loads. */
+  accessToken?: string | null;
 };
 
-export function ImagePreviewModal({ imageUrl, title, onClose }: ImagePreviewModalProps) {
+const isPrivateUploadUrl = (url: string): boolean => url.includes('/api/upload/private/');
+
+export function ImagePreviewModal({
+  imageUrl,
+  title,
+  onClose,
+  accessToken,
+}: ImagePreviewModalProps) {
+  const [resolvedUrl, setResolvedUrl] = useState<string | null>(() =>
+    !isPrivateUploadUrl(imageUrl) ? imageUrl : null,
+  );
+  const [loading, setLoading] = useState(() => isPrivateUploadUrl(imageUrl) && !!accessToken);
+  const [error, setError] = useState<string | null>(null);
+
   useEffect(() => {
     const handleEscape = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose();
@@ -17,6 +34,50 @@ export function ImagePreviewModal({ imageUrl, title, onClose }: ImagePreviewModa
     window.addEventListener('keydown', handleEscape);
     return () => window.removeEventListener('keydown', handleEscape);
   }, [onClose]);
+
+  useEffect(() => {
+    if (!isPrivateUploadUrl(imageUrl) || !accessToken) {
+      setResolvedUrl(imageUrl);
+      setLoading(false);
+      setError(null);
+      return () => {};
+    }
+    let revoked = false;
+    let blobUrl: string | null = null;
+    setLoading(true);
+    setError(null);
+    setResolvedUrl(null);
+    const fullUrl =
+      imageUrl.startsWith('http') ? imageUrl : `${(getApiBaseUrl() || '').replace(/\/$/, '')}${imageUrl.startsWith('/') ? '' : '/'}${imageUrl}`;
+    fetch(fullUrl, {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        Accept: 'image/*, application/pdf, video/*, */*',
+      },
+      credentials: 'include',
+    })
+      .then((res) => {
+        if (!res.ok) throw new Error(`Failed to load image: ${res.status}`);
+        return res.blob();
+      })
+      .then((blob) => {
+        if (revoked) return;
+        blobUrl = URL.createObjectURL(blob);
+        setResolvedUrl(blobUrl);
+        setLoading(false);
+      })
+      .catch((err) => {
+        if (!revoked) {
+          setError(err instanceof Error ? err.message : 'Failed to load image');
+          setLoading(false);
+        }
+      });
+    return () => {
+      revoked = true;
+      if (blobUrl) URL.revokeObjectURL(blobUrl);
+      setResolvedUrl(null);
+    };
+  }, [imageUrl, accessToken]);
 
   return (
     <div
@@ -39,14 +100,18 @@ export function ImagePreviewModal({ imageUrl, title, onClose }: ImagePreviewModa
           </button>
         </div>
         <div className="image-preview-content">
-          <Image
-            src={imageUrl}
-            alt={title ?? 'Preview'}
-            className="image-preview-img"
-            width={1200}
-            height={800}
-            unoptimized
-          />
+          {loading && <p className="admin-empty">Loading…</p>}
+          {error && <p className="admin-error-banner">{error}</p>}
+          {resolvedUrl && !loading && (
+            <Image
+              src={resolvedUrl}
+              alt={title ?? 'Preview'}
+              className="image-preview-img"
+              width={1200}
+              height={800}
+              unoptimized
+            />
+          )}
         </div>
       </div>
     </div>

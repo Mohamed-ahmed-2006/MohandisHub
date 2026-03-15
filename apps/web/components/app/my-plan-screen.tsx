@@ -10,6 +10,7 @@ import { buildLocalePath } from '@/lib/i18n/path';
 import type { Dictionary, Locale } from '@/lib/i18n/types';
 import { plansApiClient } from '@/lib/plans/client';
 import { walletApiClient } from '@/lib/wallet/client';
+import { ClipboardList } from 'lucide-react';
 
 import './my-plan-screen.css';
 
@@ -224,7 +225,7 @@ export const MyPlanScreen = ({ locale, dictionary }: Props) => {
         ) : plans.length === 0 ? (
           <div className="plan-screen-empty">
             <div className="plan-screen-empty-icon" aria-hidden>
-              📋
+              <ClipboardList size={32} aria-hidden />
             </div>
             <p>{d.noPlans ?? 'No plans available yet.'}</p>
           </div>

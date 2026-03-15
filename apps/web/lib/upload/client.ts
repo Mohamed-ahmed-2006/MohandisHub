@@ -47,7 +47,7 @@ export async function uploadPrivateFile(
   return json.data;
 }
 
-/** Resolve private file path (e.g. /api/upload/private/:id) to a short-lived signed URL. Use for "View CV" etc. */
+/** Resolve private file path (e.g. /api/upload/private/:id) to a short-lived signed URL. Use when you need a URL (e.g. for API). */
 export async function getPrivateFileUrl(
   accessToken: string,
   privatePathOrId: string,
@@ -64,4 +64,38 @@ export async function getPrivateFileUrl(
   }
   const json = (await res.json()) as unknown as { ok: boolean; data: { url: string } };
   return json.data.url;
+}
+
+/**
+ * Return a URL that can be opened in a new tab (e.g. "Open CV"). Fetches the private file with auth
+ * and returns a blob URL so it works for both Supabase (redirect) and local storage.
+ * The blob URL is revoked after 5 minutes.
+ */
+export async function getPrivateFileOpenableUrl(
+  accessToken: string,
+  privatePathOrId: string,
+): Promise<string> {
+  const base = (getApiBaseUrl() || '').replace(/\/$/, '');
+  const fullUrl =
+    privatePathOrId.startsWith('http')
+      ? privatePathOrId
+      : (() => {
+          const path = privatePathOrId.startsWith('/') ? privatePathOrId : `/${privatePathOrId}`;
+          return path.startsWith('/api/') ? `${base}${path}` : `${base}/api/upload/private/${privatePathOrId.replace(/^\//, '')}`;
+        })();
+  const res = await fetch(fullUrl, {
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      Accept: 'image/*, application/pdf, */*',
+    },
+    credentials: 'include',
+  });
+  if (!res.ok) {
+    const body = (await res.json().catch(() => ({}))) as { error?: { message?: string } };
+    throw new Error(body?.error?.message ?? 'Could not load file');
+  }
+  const blob = await res.blob();
+  const blobUrl = URL.createObjectURL(blob);
+  setTimeout(() => URL.revokeObjectURL(blobUrl), 5 * 60 * 1000);
+  return blobUrl;
 }

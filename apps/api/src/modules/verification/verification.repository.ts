@@ -151,4 +151,28 @@ export class VerificationRepository {
       params,
     );
   }
+
+  async markIdentityApproved(
+    userId: string,
+    role: 'expert' | 'business',
+    identityVerificationMethod?: 'didit' | 'manual',
+  ): Promise<void> {
+    if (role === 'expert') {
+      await this.db.query(
+        `UPDATE expert_profiles
+         SET identity_verified = true,
+             identity_verification_method = COALESCE($2, identity_verification_method)
+         WHERE user_id = $1`,
+        [userId, identityVerificationMethod ?? null],
+      );
+      return;
+    }
+
+    await this.db.query(
+      `UPDATE business_profiles
+       SET identity_verified = true
+       WHERE user_id = $1`,
+      [userId],
+    );
+  }
 }

@@ -319,6 +319,14 @@ export const arDictionary: Dictionary = {
     },
     verificationTimeNote: 'التحقق عادة يستغرق 1–5 أيام عمل. نستخدم Didit والمراجعة اليدوية الاختيارية.',
   },
+  profileModal: {
+    message: 'رسالة',
+    close: 'إغلاق',
+    verified: 'موثق',
+    roleExpert: 'خبير',
+    roleBusiness: 'شركة',
+    roleCustomer: 'عميل',
+  },
   nav: {
     home: 'الرئيسية',
     profile: 'الملف الشخصي',
@@ -466,6 +474,7 @@ export const arDictionary: Dictionary = {
       categories: 'التصنيفات',
       verifications: 'التحققات',
       reviewReports: 'تقارير المراجعة',
+      support: 'الدعم',
       notifications: 'الإشعارات',
       settings: 'الإعدادات',
     },
@@ -640,6 +649,13 @@ export const arDictionary: Dictionary = {
       commissionPercentDesc: 'نسبة عمولة المنصة (0–100) على مدفوعات العروض والحجوزات.',
       commissionMinEgp: 'الحد الأدنى للعمولة (ج.م)',
       commissionMinEgpDesc: 'الحد الأدنى لمبلغ العمولة بالجنيه المصري لكل معاملة.',
+      dangerZone: 'منطقة الخطر',
+      factoryReset: 'إعادة ضبط المصنع',
+      factoryResetWarning:
+        'إعادة ضبط المصنع تحذف نهائياً جميع حسابات المستخدمين وبياناتهم ما عدا حساب المنصة وحسابك كمشرف. لا يمكن التراجع عن ذلك.',
+      factoryResetConfirmPhraseLabel: 'اكتب "FACTORY RESET" للتأكيد',
+      factoryResetConfirm: 'تأكيد إعادة الضبط',
+      factoryResetSuccess: 'تمت إعادة الضبط. تمت إزالة جميع الحسابات الأخرى.',
     },
     plansMgmt: {
       title: 'إدارة الخطط',
@@ -920,6 +936,10 @@ export const arDictionary: Dictionary = {
         '\u0627\u0644\u0634\u0647\u0627\u062f\u0627\u062a \u0648\u0627\u0644\u062f\u0628\u0644\u0648\u0645\u0627\u062a \u0648\u0627\u0644\u0645\u0624\u0647\u0644\u0627\u062a.',
       noDocuments:
         '\u0644\u0645 \u064a\u062a\u0645 \u0631\u0641\u0639 \u0623\u064a \u0645\u0633\u062a\u0646\u062f\u0627\u062a \u0628\u0639\u062f.',
+      addIdentityDocument: '\u0625\u0636\u0627\u0641\u0629 \u0645\u0633\u062a\u0646\u062f \u0627\u0644\u0647\u0648\u064a\u0629',
+      addAcademicRecord: '\u0625\u0636\u0627\u0641\u0629 \u0633\u062c\u0644 \u0623\u0643\u0627\u062f\u064a\u0645\u064a',
+      addAnotherAcademicRecord: '\u0625\u0636\u0627\u0641\u0629 \u0633\u062c\u0644 \u0623\u0643\u0627\u062f\u064a\u0645\u064a \u0622\u062e\u0631',
+      editAcademicRecord: '\u062a\u062d\u062f\u064a\u062b',
       status: '\u0627\u0644\u062d\u0627\u0644\u0629',
       rejectionReason: '\u0633\u0628\u0628 \u0627\u0644\u0631\u0641\u0636',
       reviewedAt: '\u062a\u0645\u062a \u0627\u0644\u0645\u0631\u0627\u062c\u0639\u0629',

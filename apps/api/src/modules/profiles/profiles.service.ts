@@ -10,6 +10,10 @@ import type {
   ExpertProfile,
   IdentityDocument,
   PendingVerificationItem,
+  PublicBusinessProfile,
+  PublicCustomerProfile,
+  PublicExpertProfile,
+  PublicUserProfile,
 } from '@mohandishub/shared';
 
 import { HttpError } from '../../utils/http-error.js';
@@ -26,6 +30,13 @@ import type {
   ExpertProfileRow,
   IdentityDocumentRow,
 } from './profiles.types.js';
+import {
+  assertRequiredVerificationImage,
+  getEffectiveBusinessVerificationStatus,
+  getEffectiveExpertVerificationStatus,
+  hasRequiredVerificationImage,
+  syncVerificationStatusForRequiredImage,
+} from './verification-image-requirements.js';
 
 export class ProfilesService {
   constructor(
@@ -48,26 +59,31 @@ export class ProfilesService {
       });
     }
     const profile = this.toExpertProfile(row);
-    const [averageRating, reviewCount] = await Promise.all([
+    const [averageRating, reviewCount, avatarUrl] = await Promise.all([
       this.reviewsRepo.getAvgRating(userId, 'expert'),
       this.reviewsRepo.getReviewCount(userId, 'expert'),
+      this.repo.getUserAvatarUrl(userId),
     ]);
+    const hasAvatar = Boolean(avatarUrl?.trim());
     const isProfileComplete =
+      hasAvatar &&
       Boolean(row.title?.trim()) &&
       Boolean(row.bio?.trim()) &&
       Array.isArray(row.specializations) &&
       row.specializations.length > 0 &&
       Boolean(row.city?.trim()) &&
       Boolean(row.country?.trim());
+    const effectiveStatus = getEffectiveExpertVerificationStatus(row, hasAvatar);
     const totalDeposited = await this.walletRepo.getTotalDeposited(userId);
     const badgeEligible = isProfileComplete && totalDeposited >= 1000;
     if (badgeEligible) await this.repo.setPlatformVerifiedAt(userId);
     const platformVerifiedAt = await this.repo.getPlatformVerifiedAt(userId);
     return {
       ...profile,
+      verificationStatus: effectiveStatus,
       averageRating: averageRating ?? null,
       reviewCount,
-      verificationBadgeEarned: platformVerifiedAt != null,
+      verificationBadgeEarned: badgeEligible,
       platformVerifiedAt: platformVerifiedAt?.toISOString() ?? null,
     };
   }
@@ -120,7 +136,8 @@ export class ProfilesService {
         message: 'Expert profile not found.',
       });
     }
-    return this.toExpertProfile(row);
+    await syncVerificationStatusForRequiredImage(this.repo, userId, 'expert');
+    return this.toExpertProfile((await this.repo.findExpertProfile(userId)) ?? row);
   }
 
   // ── Customer profile ───────────────────────────────────────────────────
@@ -189,18 +206,24 @@ export class ProfilesService {
     const isProfileComplete =
       Boolean(row.company_name?.trim()) &&
       Boolean(row.industry?.trim()) &&
+      Boolean(row.logo_url?.trim()) &&
       Boolean(row.city?.trim()) &&
       Boolean(row.country?.trim()) &&
       Boolean(row.description?.trim());
+    const effectiveStatus = getEffectiveBusinessVerificationStatus(
+      row,
+      Boolean(row.logo_url?.trim()),
+    );
     const totalDeposited = await this.walletRepo.getTotalDeposited(userId);
     const badgeEligible = isProfileComplete && totalDeposited >= 1000;
     if (badgeEligible) await this.repo.setPlatformVerifiedAt(userId);
     const platformVerifiedAt = await this.repo.getPlatformVerifiedAt(userId);
     return {
       ...profile,
+      verificationStatus: effectiveStatus,
       averageRating: averageRating ?? null,
       reviewCount,
-      verificationBadgeEarned: platformVerifiedAt != null,
+      verificationBadgeEarned: badgeEligible,
       platformVerifiedAt: platformVerifiedAt?.toISOString() ?? null,
     };
   }
@@ -218,7 +241,7 @@ export class ProfilesService {
       companyEmail?: string | undefined;
       companyPhone?: string | undefined;
       address?: string | undefined;
-      logoUrl?: string | undefined;
+      logoUrl?: string | null | undefined;
       city?: string | undefined;
       country?: string | undefined;
       description?: string | undefined;
@@ -268,7 +291,10 @@ export class ProfilesService {
         message: 'Business profile not found.',
       });
     }
-    return this.toBusinessProfile(row);
+    if (input.logoUrl !== undefined) {
+      await syncVerificationStatusForRequiredImage(this.repo, userId, 'business');
+    }
+    return this.toBusinessProfile((await this.repo.findBusinessProfile(userId)) ?? row);
   }
 
   async completeBusinessOnboarding(userId: string): Promise<void> {
@@ -287,6 +313,7 @@ export class ProfilesService {
 
   async submitIdentityDocument(
     userId: string,
+    role: 'expert' | 'business',
     input: {
       documentType: string;
       fullNameOnDoc: string;
@@ -307,14 +334,19 @@ export class ProfilesService {
       });
     }
 
+    await assertRequiredVerificationImage(this.repo, userId, role);
+
     const row = await this.repo.createIdentityDocument({
       userId,
       ...input,
     });
 
-    // When user resubmits after rejection, move profile back to pending
-    const expertProfile = await this.repo.findExpertProfile(userId);
-    if (expertProfile?.verification_status === 'rejected') {
+    // Set profile verification_status to 'pending' so GET /verification/status returns 'pending'
+    // and the UI does not redirect back to the KYC selector.
+    if (role === 'business') {
+      await this.repo.updateBusinessOverallStatus(userId, 'pending');
+    } else {
+      // Expert: set pending on submit (and when resubmitting after rejection)
       await this.repo.updateExpertOverallStatus(userId, 'pending');
     }
 
@@ -372,6 +404,31 @@ export class ProfilesService {
     return rows.map((r) => this.toAcademicRecord(r));
   }
 
+  async updateAcademicRecord(
+    userId: string,
+    recordId: string,
+    input: {
+      recordType?: string;
+      title?: string;
+      institution?: string;
+      fieldOfStudy?: string | null;
+      graduationYear?: number | null;
+      grade?: string | null;
+      certificateImageUrl?: string | null;
+      transcriptImageUrl?: string | null;
+    },
+  ): Promise<AcademicRecord> {
+    const row = await this.repo.updateAcademicRecord(recordId, userId, input);
+    if (!row) {
+      throw new HttpError({
+        statusCode: 404,
+        code: 'ACADEMIC_RECORD_NOT_FOUND',
+        message: 'Academic record not found or you do not have permission to update it.',
+      });
+    }
+    return this.toAcademicRecord(row);
+  }
+
   // ── Admin: review identity document ────────────────────────────────────
 
   async adminReviewIdentityDocument(params: {
@@ -413,7 +470,8 @@ export class ProfilesService {
         await this.repo.setExpertIdentityVerified(doc.user_id, true);
         await this.repo.setExpertIdentityVerificationMethod(doc.user_id, 'manual');
         // Check if both identity + academic are verified → set overall status
-        if (expertProfile.academic_verified) {
+        const hasAvatar = await hasRequiredVerificationImage(this.repo, doc.user_id, 'expert');
+        if (expertProfile.academic_verified && hasAvatar) {
           await this.repo.updateExpertOverallStatus(doc.user_id, 'verified');
         } else {
           await this.repo.updateExpertOverallStatus(doc.user_id, 'under_review');
@@ -423,7 +481,8 @@ export class ProfilesService {
       const businessProfile = await this.repo.findBusinessProfile(doc.user_id);
       if (businessProfile) {
         await this.repo.setBusinessIdentityVerified(doc.user_id, true);
-        if (businessProfile.business_verified) {
+        const hasLogo = await hasRequiredVerificationImage(this.repo, doc.user_id, 'business');
+        if (businessProfile.business_verified && hasLogo) {
           await this.repo.updateBusinessOverallStatus(doc.user_id, 'verified');
         } else {
           await this.repo.updateBusinessOverallStatus(doc.user_id, 'under_review');
@@ -518,7 +577,8 @@ export class ProfilesService {
       const expertProfile = await this.repo.findExpertProfile(record.user_id);
       if (expertProfile) {
         await this.repo.setExpertAcademicVerified(record.user_id, true);
-        if (expertProfile.identity_verified) {
+        const hasAvatar = await hasRequiredVerificationImage(this.repo, record.user_id, 'expert');
+        if (expertProfile.identity_verified && hasAvatar) {
           await this.repo.updateExpertOverallStatus(record.user_id, 'verified');
         } else {
           await this.repo.updateExpertOverallStatus(record.user_id, 'under_review');
@@ -596,7 +656,8 @@ export class ProfilesService {
 
     if (params.decision === 'approved') {
       await this.repo.setBusinessBusinessVerified(params.userId, true);
-      if (profile.identity_verified) {
+      const hasLogo = await hasRequiredVerificationImage(this.repo, params.userId, 'business');
+      if (profile.identity_verified && hasLogo) {
         await this.repo.updateBusinessOverallStatus(params.userId, 'verified');
       } else {
         await this.repo.updateBusinessOverallStatus(params.userId, 'under_review');
@@ -648,6 +709,96 @@ export class ProfilesService {
     }
 
     return items;
+  }
+
+  // ── Public profile (view another user) ───────────────────────────────────
+
+  async getPublicProfile(userId: string): Promise<PublicUserProfile> {
+    const user = await this.repo.findActiveUserById(userId);
+    if (!user) {
+      throw new HttpError({
+        statusCode: 404,
+        code: 'USER_NOT_FOUND',
+        message: 'User not found or inactive.',
+      });
+    }
+    const role = user.primary_role as PublicUserProfile['role'];
+    if (role !== 'customer' && role !== 'expert' && role !== 'business') {
+      throw new HttpError({
+        statusCode: 404,
+        code: 'USER_NOT_FOUND',
+        message: 'User not found or inactive.',
+      });
+    }
+    const base = {
+      userId: user.id,
+      role,
+      displayName: user.display_name,
+      avatarUrl: user.avatar_url,
+    };
+
+    if (role === 'expert') {
+      const row = await this.repo.findExpertProfile(userId);
+      if (!row) {
+        return { ...base, expertProfile: null };
+      }
+      const [averageRating, reviewCount] = await Promise.all([
+        this.reviewsRepo.getAvgRating(userId, 'expert'),
+        this.reviewsRepo.getReviewCount(userId, 'expert'),
+      ]);
+      const expertProfile: PublicExpertProfile = {
+        title: row.title,
+        headline: row.headline,
+        bio: row.bio,
+        specializations: row.specializations ?? [],
+        yearsOfExperience: row.years_of_experience,
+        hourlyRate: row.hourly_rate ? Number(row.hourly_rate) : null,
+        city: row.city,
+        country: row.country ?? 'Egypt',
+        linkedinUrl: row.linkedin_url,
+        portfolioUrl: row.portfolio_url,
+        languages: row.languages ?? [],
+        educationSummary: row.education_summary,
+        certificationsCount: row.certifications_count ?? 0,
+        verificationStatus: row.verification_status,
+        verificationBadgeEarned: row.verification_status === 'verified',
+        averageRating: averageRating ?? null,
+        reviewCount,
+      };
+      return { ...base, expertProfile, businessProfile: null, customerProfile: null };
+    }
+
+    if (role === 'business') {
+      const row = await this.repo.findBusinessProfile(userId);
+      if (!row) {
+        return { ...base, businessProfile: null };
+      }
+      const [averageRating, reviewCount] = await Promise.all([
+        this.reviewsRepo.getAvgRating(userId, 'business'),
+        this.reviewsRepo.getReviewCount(userId, 'business'),
+      ]);
+      const businessProfile: PublicBusinessProfile = {
+        companyName: row.company_name,
+        industry: row.industry,
+        companySize: row.company_size,
+        website: row.website,
+        logoUrl: row.logo_url,
+        city: row.city,
+        country: row.country ?? 'Egypt',
+        description: row.description,
+        verificationStatus: row.verification_status,
+        verificationBadgeEarned: row.verification_status === 'verified',
+        averageRating: averageRating ?? null,
+        reviewCount,
+      };
+      return { ...base, expertProfile: null, businessProfile, customerProfile: null };
+    }
+
+    const custRow = await this.repo.findCustomerProfile(userId);
+    const customerProfile: PublicCustomerProfile | null = custRow
+      ? { city: custRow.city, country: custRow.country }
+      : null;
+    return { ...base, expertProfile: null, businessProfile: null, customerProfile };
   }
 
   // ── Top providers (public) ───────────────────────────────────────────────

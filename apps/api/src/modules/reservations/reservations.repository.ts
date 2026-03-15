@@ -372,8 +372,10 @@ export class ReservationsRepository {
       adminMinuteRate: number;
       policySnapshot?: Record<string, unknown>;
     },
+    client?: PoolClient,
   ): Promise<ReservationRow> {
-    const { rows } = await getPool().query<ReservationRow>(
+    const db = client ?? getPool();
+    const { rows } = await db.query<ReservationRow>(
       `INSERT INTO reservations (
          customer_id, provider_id, purpose, job_id, job_application_id, service_id, slot_id, mode, online_type, status,
          requested_start_at, requested_end_at, expert_price_amount, currency,
@@ -401,6 +403,39 @@ export class ReservationsRepository {
       ],
     );
     return rows[0]!;
+  }
+
+  /** Pending reservations for the same slot (e.g. to auto-reject when one is accepted). */
+  async listPendingReservationsBySlot(
+    slotId: string,
+    excludeReservationId: string,
+    poolClient?: PoolClient,
+  ): Promise<ReservationRow[]> {
+    const db = poolClient ?? getPool();
+    const { rows } = await db.query<ReservationRow>(
+      `SELECT * FROM reservations
+       WHERE slot_id = $1 AND status = 'pending' AND id != $2
+       ORDER BY created_at ASC`,
+      [slotId, excludeReservationId],
+    );
+    return rows;
+  }
+
+  /** Pending reservations created before the given date (for expiry sweep). */
+  async listPendingReservationsCreatedBefore(
+    createdBefore: Date,
+    limit: number,
+    poolClient?: PoolClient,
+  ): Promise<ReservationRow[]> {
+    const db = poolClient ?? getPool();
+    const { rows } = await db.query<ReservationRow>(
+      `SELECT * FROM reservations
+       WHERE status = 'pending' AND created_at < $1
+       ORDER BY created_at ASC
+       LIMIT $2`,
+      [createdBefore, limit],
+    );
+    return rows;
   }
 
   async findReservationById(id: string): Promise<ReservationRow | null> {

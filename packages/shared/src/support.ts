@@ -22,13 +22,18 @@ export type SupportTicketMessage = {
   body: string;
   isStaff: boolean;
   createdAt: string;
+  attachmentUrls?: string[];
 };
 
 export type CreateSupportTicketBody = {
   subject: string;
   body: string;
+  /** Optional URLs from POST /api/upload (images/files). */
+  attachmentUrls?: string[];
 };
 
 export type ReplySupportTicketBody = {
   body: string;
+  /** Optional URLs from POST /api/upload (images/files). */
+  attachmentUrls?: string[];
 };

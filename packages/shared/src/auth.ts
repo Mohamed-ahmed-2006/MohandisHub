@@ -62,6 +62,16 @@ export type AuthTokens = {
   expiresIn: number; // seconds
 };
 
+/** Payload sent when updating the current user's account details. */
+export type UpdateAccountBody = {
+  displayName?: string;
+  phone?: string | null;
+  phoneCode?: string | null;
+  nationality?: string | null;
+  avatarUrl?: string | null;
+  dateOfBirth?: string | null;
+};
+
 /** User info returned by GET /api/auth/me. */
 export type AuthUser = {
   id: string;

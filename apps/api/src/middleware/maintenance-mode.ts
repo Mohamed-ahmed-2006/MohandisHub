@@ -23,6 +23,20 @@ export async function maintenanceMode(
 
   const row = await settingsRepo.get();
   if (row?.maintenance_mode) {
+    // #region agent log
+    fetch('http://127.0.0.1:7325/ingest/ebd08bf8-7d73-450c-ad4d-4436a6c2225b', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '3da021' },
+      body: JSON.stringify({
+        sessionId: '3da021',
+        location: 'maintenance-mode.ts',
+        message: 'Maintenance mode 503',
+        data: { path },
+        timestamp: Date.now(),
+        hypothesisId: 'H3',
+      }),
+    }).catch(() => {});
+    // #endregion
     res.status(503).json({
       ok: false,
       error: {

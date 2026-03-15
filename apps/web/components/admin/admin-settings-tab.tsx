@@ -50,12 +50,19 @@ function Toggle({
   );
 }
 
+const FACTORY_RESET_CONFIRM_PHRASE = 'FACTORY RESET';
+
 export const AdminSettingsTab = ({ dictionary, accessToken, refreshSession }: Props) => {
   const [settings, setSettings] = useState<AppSettings | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [factoryResetModalOpen, setFactoryResetModalOpen] = useState(false);
+  const [factoryResetConfirmPhrase, setFactoryResetConfirmPhrase] = useState('');
+  const [factoryResetLoading, setFactoryResetLoading] = useState(false);
+  const [factoryResetError, setFactoryResetError] = useState<string | null>(null);
 
   const d = dictionary.admin.settingsMgmt;
 
@@ -88,8 +95,9 @@ export const AdminSettingsTab = ({ dictionary, accessToken, refreshSession }: Pr
           refreshSession,
         });
         setSettings(updated);
+        setSuccessMessage(d.saveSuccess);
         setSuccess(true);
-        setTimeout(() => setSuccess(false), 2000);
+        setTimeout(() => { setSuccess(false); setSuccessMessage(null); }, 2000);
       } catch (err: unknown) {
         setError(getErrorMessage(err, dictionary));
       } finally {
@@ -129,7 +137,9 @@ export const AdminSettingsTab = ({ dictionary, accessToken, refreshSession }: Pr
       <h2 className="admin-settings-title">{d.title}</h2>
 
       {error && <p className="admin-settings-error">{error}</p>}
-      {success && <p className="admin-settings-success">{d.saveSuccess}</p>}
+      {success && successMessage && (
+        <p className="admin-settings-success">{successMessage}</p>
+      )}
 
       <section className="admin-settings-section">
         <h3 className="admin-settings-section-title">{d.sections.availability}</h3>
@@ -492,6 +502,113 @@ export const AdminSettingsTab = ({ dictionary, accessToken, refreshSession }: Pr
           />
         </div>
       </section>
+
+      <section className="admin-settings-section admin-settings-section--danger">
+        <h3 className="admin-settings-section-title">
+          {d.dangerZone ?? 'Danger zone'}
+        </h3>
+        <p className="admin-settings-desc admin-settings-desc--block">
+          {d.factoryResetWarning ??
+            'Factory reset permanently removes all user accounts and their data except the platform and your admin account. This cannot be undone.'}
+        </p>
+        <div className="admin-settings-row">
+          <button
+            type="button"
+            className="admin-btn admin-btn--danger"
+            onClick={() => {
+              setFactoryResetModalOpen(true);
+              setFactoryResetConfirmPhrase('');
+              setFactoryResetError(null);
+            }}
+            disabled={saving}
+          >
+            {d.factoryReset ?? 'Factory reset'}
+          </button>
+        </div>
+      </section>
+
+      {factoryResetModalOpen && (
+        <div
+          className="admin-modal-overlay"
+          onClick={(e) => {
+            if (e.target === e.currentTarget && !factoryResetLoading) setFactoryResetModalOpen(false);
+          }}
+          role="presentation"
+        >
+          <div className="admin-modal" onClick={(e) => e.stopPropagation()}>
+            <h3 className="admin-modal-title">
+              {d.factoryReset ?? 'Factory reset'}
+            </h3>
+            <p className="admin-settings-desc admin-settings-desc--block">
+              {d.factoryResetWarning ??
+                'This will permanently remove all user accounts and data except the platform and your admin account. Type the confirmation phrase below to proceed.'}
+            </p>
+            <div className="admin-settings-row">
+              <label className="admin-settings-label" htmlFor="factory-reset-confirm">
+                {d.factoryResetConfirmPhraseLabel ??
+                  `Type "${FACTORY_RESET_CONFIRM_PHRASE}" to confirm`}
+              </label>
+              <input
+                id="factory-reset-confirm"
+                type="text"
+                className="admin-settings-input"
+                placeholder={FACTORY_RESET_CONFIRM_PHRASE}
+                value={factoryResetConfirmPhrase}
+                onChange={(e) => setFactoryResetConfirmPhrase(e.target.value)}
+                disabled={factoryResetLoading}
+                autoComplete="off"
+              />
+            </div>
+            {factoryResetError && (
+              <p className="admin-settings-error" role="alert">
+                {factoryResetError}
+              </p>
+            )}
+            <div className="admin-modal-actions" style={{ marginTop: '1rem', gap: '0.5rem' }}>
+              <button
+                type="button"
+                className="admin-btn"
+                onClick={() => {
+                  if (!factoryResetLoading) setFactoryResetModalOpen(false);
+                }}
+                disabled={factoryResetLoading}
+              >
+                {dictionary.common.cancel}
+              </button>
+              <button
+                type="button"
+                className="admin-btn admin-btn--danger"
+                disabled={
+                  factoryResetLoading ||
+                  factoryResetConfirmPhrase.trim().toUpperCase() !== FACTORY_RESET_CONFIRM_PHRASE
+                }
+                onClick={async () => {
+                  setFactoryResetError(null);
+                  setFactoryResetLoading(true);
+                  try {
+                    const result = await adminApiClient.factoryReset(accessToken, {
+                      refreshSession,
+                    });
+                    setFactoryResetModalOpen(false);
+                    setSuccessMessage(d.factoryResetSuccess);
+                    setSuccess(true);
+                    setTimeout(() => { setSuccess(false); setSuccessMessage(null); }, 5000);
+                    if (refreshSession) await refreshSession();
+                    setFactoryResetLoading(false);
+                  } catch (err: unknown) {
+                    setFactoryResetError(getErrorMessage(err, dictionary));
+                    setFactoryResetLoading(false);
+                  }
+                }}
+              >
+                {factoryResetLoading
+                  ? dictionary.common.loading
+                  : (d.factoryResetConfirm ?? 'Confirm factory reset')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

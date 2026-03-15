@@ -326,6 +326,14 @@ export const enDictionary: Dictionary = {
     verificationTimeNote:
       'Verification typically takes 1–5 business days. We use Didit and optional manual review.',
   },
+  profileModal: {
+    message: 'Message',
+    close: 'Close',
+    verified: 'Verified',
+    roleExpert: 'Expert',
+    roleBusiness: 'Business',
+    roleCustomer: 'Customer',
+  },
   nav: {
     home: 'Home',
     profile: 'Profile',
@@ -473,6 +481,7 @@ export const enDictionary: Dictionary = {
       categories: 'Categories',
       verifications: 'Verifications',
       reviewReports: 'Review reports',
+      support: 'Support',
       notifications: 'Notifications',
       settings: 'Settings',
     },
@@ -647,6 +656,13 @@ export const enDictionary: Dictionary = {
       commissionPercentDesc: 'Platform commission percentage (0–100) on bid/booking payments.',
     commissionMinEgp: 'Min commission (USD)',
     commissionMinEgpDesc: 'Minimum commission amount in USD per transaction.',
+    dangerZone: 'Danger zone',
+    factoryReset: 'Factory reset',
+    factoryResetWarning:
+      'Factory reset permanently removes all user accounts and their data except the platform and your admin account. This cannot be undone.',
+    factoryResetConfirmPhraseLabel: 'Type "FACTORY RESET" to confirm',
+    factoryResetConfirm: 'Confirm factory reset',
+    factoryResetSuccess: 'Factory reset complete. All other accounts have been removed.',
     },
     plansMgmt: {
       title: 'Plan Management',
@@ -913,6 +929,10 @@ export const enDictionary: Dictionary = {
       academicTitle: 'Academic records',
       academicDescription: 'Degrees, diplomas, and certificates.',
       noDocuments: 'No documents uploaded yet.',
+      addIdentityDocument: 'Add identity document',
+      addAcademicRecord: 'Add academic record',
+      addAnotherAcademicRecord: 'Add another academic record',
+      editAcademicRecord: 'Edit',
       status: 'Status',
       rejectionReason: 'Rejection reason',
       reviewedAt: 'Reviewed',

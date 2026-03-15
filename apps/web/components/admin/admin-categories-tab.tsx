@@ -5,6 +5,7 @@ import { useCallback, useEffect, useState } from 'react';
 
 import { adminApiClient } from '@/lib/admin/client';
 import type { Dictionary } from '@/lib/i18n/types';
+import { CategoryIcon, CATEGORY_ICON_NAMES } from '@/components/ui/category-icon';
 
 type Props = { dictionary: Dictionary; accessToken: string };
 
@@ -139,7 +140,12 @@ export const AdminCategoriesTab = ({ dictionary, accessToken }: Props) => {
                   <td>{cat.nameEn}</td>
                   <td>{cat.nameAr}</td>
                   <td>{cat.slug}</td>
-                  <td>{cat.icon ?? '—'}</td>
+                  <td>
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
+                      <CategoryIcon name={cat.icon} size={18} />
+                      {cat.icon ?? '—'}
+                    </span>
+                  </td>
                   <td>{cat.sortOrder}</td>
                   <td>
                     <span
@@ -204,11 +210,24 @@ export const AdminCategoriesTab = ({ dictionary, accessToken }: Props) => {
             </div>
             <div className="admin-form-group">
               <label className="admin-form-label">{d.icon}</label>
-              <input
-                className="admin-form-input"
-                value={formData.icon}
-                onChange={(e) => setFormData({ ...formData, icon: e.target.value })}
-              />
+              <select
+                className="admin-form-select"
+                value={formData.icon || ''}
+                onChange={(e) => setFormData({ ...formData, icon: e.target.value || '' })}
+              >
+                <option value="">— None —</option>
+                {CATEGORY_ICON_NAMES.map((iconName) => (
+                  <option key={iconName} value={iconName}>
+                    {iconName}
+                  </option>
+                ))}
+              </select>
+              {formData.icon && (
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem', marginTop: '0.35rem' }}>
+                  <CategoryIcon name={formData.icon} size={20} />
+                  <span className="admin-form-label" style={{ marginBottom: 0 }}>{formData.icon}</span>
+                </span>
+              )}
             </div>
             <div className="admin-form-group">
               <label className="admin-form-label">{d.sortOrder}</label>

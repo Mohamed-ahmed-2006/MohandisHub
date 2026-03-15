@@ -37,12 +37,18 @@ export class SupportService {
       body: row.body,
       isStaff: row.is_staff,
       createdAt: row.created_at,
+      ...(row.attachment_urls?.length ? { attachmentUrls: row.attachment_urls } : {}),
     };
   }
 
-  async createTicket(userId: string, subject: string, firstBody: string): Promise<SupportTicket> {
+  async createTicket(
+    userId: string,
+    subject: string,
+    firstBody: string,
+    attachmentUrls?: string[] | null,
+  ): Promise<SupportTicket> {
     const ticket = await this.repo.createTicket(userId, subject);
-    await this.repo.addMessage(ticket.id, userId, firstBody, false);
+    await this.repo.addMessage(ticket.id, userId, firstBody, false, attachmentUrls);
     return this.toTicket(ticket);
   }
 
@@ -75,7 +81,13 @@ export class SupportService {
     return rows.map((r) => this.toMessage(r));
   }
 
-  async reply(ticketId: string, userId: string, body: string, isStaff: boolean): Promise<SupportTicketMessage> {
+  async reply(
+    ticketId: string,
+    userId: string,
+    body: string,
+    isStaff: boolean,
+    attachmentUrls?: string[] | null,
+  ): Promise<SupportTicketMessage> {
     const ticket = await this.repo.getTicketById(ticketId);
     if (!ticket) {
       throw new HttpError({ statusCode: 404, code: 'TICKET_NOT_FOUND', message: 'Ticket not found.' });
@@ -83,7 +95,7 @@ export class SupportService {
     if (!isStaff && ticket.user_id !== userId) {
       throw new HttpError({ statusCode: 403, code: 'FORBIDDEN', message: 'Not your ticket.' });
     }
-    const msg = await this.repo.addMessage(ticketId, userId, body, isStaff);
+    const msg = await this.repo.addMessage(ticketId, userId, body, isStaff, attachmentUrls);
     const newStatus = isStaff ? 'in_progress' : 'waiting_reply';
     await this.repo.updateTicketStatus(ticketId, newStatus);
     return this.toMessage(msg);

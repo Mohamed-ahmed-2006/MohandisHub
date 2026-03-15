@@ -9,6 +9,7 @@ import { BusinessDashboard } from './business-dashboard';
 import { CustomerDashboard } from './customer-dashboard';
 import { ExpertDashboard } from './expert-dashboard';
 import { ServiceBookingModal } from './service-booking-modal';
+import { useProfileModal } from './profile-modal-context';
 
 import { useAuth } from '@/components/auth/auth-provider';
 import { Container } from '@/components/ui/container';
@@ -202,6 +203,7 @@ export const AppHomeScreen = ({ locale, dictionary }: AppHomeScreenProps) => {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { authUser, accessToken, isAuthenticated, isReady, authGuard } = useAuth();
+  const { openProfileModal } = useProfileModal();
   const [categories, setCategories] = useState<ServiceCategory[]>([]);
   const [categoryId, setCategoryId] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
@@ -410,7 +412,12 @@ export const AppHomeScreen = ({ locale, dictionary }: AppHomeScreenProps) => {
               <div className="home-top-cards-grid home-top-cards-grid--scroll">
                 {topExperts.length > 0
                   ? topExperts.map((expert) => (
-                      <div key={expert.userId} className="home-top-card home-top-card--large">
+                      <button
+                        key={expert.userId}
+                        type="button"
+                        className="home-top-card home-top-card--large home-top-card--clickable"
+                        onClick={() => openProfileModal(expert.userId, { displayName: expert.displayName, avatarUrl: expert.avatarUrl, role: 'expert' })}
+                      >
                         <div className="home-top-avatar home-top-avatar--large">
                           {expert.avatarUrl ? (
                             <Image
@@ -434,7 +441,7 @@ export const AppHomeScreen = ({ locale, dictionary }: AppHomeScreenProps) => {
                             : ''}
                           {expert.city ? ` · ${expert.city}` : ''}
                         </p>
-                      </div>
+                      </button>
                     ))
                   : [1, 2, 3].map((i) => (
                       <div
@@ -457,7 +464,12 @@ export const AppHomeScreen = ({ locale, dictionary }: AppHomeScreenProps) => {
               <div className="home-top-cards-grid home-top-cards-grid--scroll">
                 {topBusinesses.length > 0
                   ? topBusinesses.map((biz) => (
-                      <div key={biz.userId} className="home-top-card home-top-card--large">
+                      <button
+                        key={biz.userId}
+                        type="button"
+                        className="home-top-card home-top-card--large home-top-card--clickable"
+                        onClick={() => openProfileModal(biz.userId, { displayName: biz.companyName, avatarUrl: biz.avatarUrl, role: 'business' })}
+                      >
                         <div className="home-top-avatar home-top-avatar--large">
                           {biz.avatarUrl ? (
                             <Image
@@ -478,7 +490,7 @@ export const AppHomeScreen = ({ locale, dictionary }: AppHomeScreenProps) => {
                           {biz.industry ?? '—'}
                           {biz.city ? ` · ${biz.city}` : ''}
                         </p>
-                      </div>
+                      </button>
                     ))
                   : [1, 2, 3].map((i) => (
                       <div
@@ -726,7 +738,28 @@ export const AppHomeScreen = ({ locale, dictionary }: AppHomeScreenProps) => {
                             className="home-result-card"
                             onClick={() => setSelectedResult(r)}
                           >
-                            <div className="home-result-avatar">
+                            <div
+                              className="home-result-avatar home-result-avatar--clickable"
+                              role="button"
+                              tabIndex={0}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                openProfileModal(r.providerId, {
+                                  displayName: r.providerName,
+                                  avatarUrl: r.providerAvatar ?? null,
+                                });
+                              }}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter' || e.key === ' ') {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  openProfileModal(r.providerId, {
+                                    displayName: r.providerName,
+                                    avatarUrl: r.providerAvatar ?? null,
+                                  });
+                                }
+                              }}
+                            >
                               {r.providerAvatar ? (
                                 <Image
                                   src={r.providerAvatar}
@@ -1069,23 +1102,45 @@ export const AppHomeScreen = ({ locale, dictionary }: AppHomeScreenProps) => {
               >
                 ×
               </button>
-              <div className="home-drawer-avatar">
-                {selectedResult.providerAvatar ? (
-                  <Image
-                    src={selectedResult.providerAvatar}
-                    alt=""
-                    className="home-drawer-avatar-img"
-                    width={80}
-                    height={80}
-                  />
-                ) : (
-                  <span className="home-drawer-avatar-fallback">
-                    {selectedResult.providerName.charAt(0)}
-                  </span>
-                )}
-              </div>
+              <button
+                type="button"
+                className="home-drawer-avatar-wrap"
+                onClick={() =>
+                  openProfileModal(selectedResult.providerId, {
+                    displayName: selectedResult.providerName,
+                    avatarUrl: selectedResult.providerAvatar ?? null,
+                  })
+                }
+              >
+                <div className="home-drawer-avatar">
+                  {selectedResult.providerAvatar ? (
+                    <Image
+                      src={selectedResult.providerAvatar}
+                      alt=""
+                      className="home-drawer-avatar-img"
+                      width={80}
+                      height={80}
+                    />
+                  ) : (
+                    <span className="home-drawer-avatar-fallback">
+                      {selectedResult.providerName.charAt(0)}
+                    </span>
+                  )}
+                </div>
+              </button>
               <h2 className="home-drawer-title">{selectedResult.title}</h2>
-              <p className="home-drawer-provider">{selectedResult.providerName}</p>
+              <button
+                type="button"
+                className="home-drawer-provider-btn"
+                onClick={() =>
+                  openProfileModal(selectedResult.providerId, {
+                    displayName: selectedResult.providerName,
+                    avatarUrl: selectedResult.providerAvatar ?? null,
+                  })
+                }
+              >
+                {selectedResult.providerName}
+              </button>
               <p className="home-drawer-role">{selectedResult.providerRole}</p>
               {selectedResult.price != null && (
                 <p className="home-drawer-price">

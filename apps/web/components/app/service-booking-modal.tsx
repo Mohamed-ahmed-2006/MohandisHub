@@ -7,6 +7,8 @@ import { createPortal } from 'react-dom';
 import type { Dictionary, Locale } from '@/lib/i18n/types';
 import { reservationsApiClient } from '@/lib/reservations/client';
 
+import { useProfileModal } from './profile-modal-context';
+
 type Props = {
   open: boolean;
   onClose: () => void;
@@ -71,6 +73,7 @@ export const ServiceBookingModal = ({
     'allUpcoming',
   );
   const [modeReady, setModeReady] = useState(false);
+  const { openProfileModal } = useProfileModal();
 
   const loadSlots = useCallback(async () => {
     setLoading(true);
@@ -176,13 +179,18 @@ export const ServiceBookingModal = ({
     setBooking(true);
     setError(null);
     try {
-      await reservationsApiClient.createReservation(accessToken, {
-        serviceId: service.id,
-        providerId: service.providerId,
-        slotId: selectedSlot.id,
-        mode,
-        ...(mode === 'online' ? { onlineType } : {}),
-      });
+      const idempotencyKey = `create-${service.providerId}-${selectedSlot.id}`;
+      await reservationsApiClient.createReservation(
+        accessToken,
+        {
+          serviceId: service.id,
+          providerId: service.providerId,
+          slotId: selectedSlot.id,
+          mode,
+          ...(mode === 'online' ? { onlineType } : {}),
+        },
+        idempotencyKey,
+      );
       onSuccess?.();
       onClose();
     } catch (e) {
@@ -195,10 +203,15 @@ export const ServiceBookingModal = ({
   const common = dictionary.common ?? {};
   const bookLabel =
     (dictionary as { appHome?: { requestService?: string } }).appHome?.requestService ?? 'Book';
+  const serviceBookingCopy = (
+    dictionary as {
+      serviceBooking?: { noSlots?: string; noFilteredSlots?: string };
+    }
+  ).serviceBooking;
   const noSlots =
-    (dictionary as { calendarPage?: { noSlots?: string } }).calendarPage?.noSlots ??
-    'No available upcoming slots.';
-  const noFilteredSlots = 'No available slots match the selected filter.';
+    serviceBookingCopy?.noSlots ?? 'This expert has no available upcoming slots right now.';
+  const noFilteredSlots =
+    serviceBookingCopy?.noFilteredSlots ?? 'No available slots match the selected filter.';
   const modePrice =
     mode === 'offline'
       ? profile?.offlinePrice ?? null
@@ -219,7 +232,18 @@ export const ServiceBookingModal = ({
       <div className="service-booking-modal" onClick={(e) => e.stopPropagation()}>
         <h2 className="service-booking-title">{service.title}</h2>
         <p className="service-booking-provider">
-          {service.providerName}
+          <button
+            type="button"
+            className="service-booking-provider-btn"
+            onClick={() =>
+              openProfileModal(service.providerId, {
+                displayName: service.providerName,
+                avatarUrl: service.providerAvatar ?? null,
+              })
+            }
+          >
+            {service.providerName}
+          </button>
           {profile?.verificationBadgeEarned && (
             <span
               className="profile-screen-badge profile-screen-badge_verified"

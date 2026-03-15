@@ -10,6 +10,7 @@ import type {
 } from '@mohandishub/shared';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
+import { ImagePreviewModal } from '@/components/ui/image-preview-modal';
 import { adminApiClient } from '@/lib/admin/client';
 import type { Dictionary } from '@/lib/i18n/types';
 
@@ -124,6 +125,8 @@ export const AdminUserDetailModal = ({
     page: number;
     totalPages: number;
   } | null>(null);
+
+  const [previewImage, setPreviewImage] = useState<{ url: string; title: string } | null>(null);
 
   const d = dictionary.admin.users;
   const ud = d.userDetail;
@@ -465,12 +468,21 @@ export const AdminUserDetailModal = ({
   const currentOverview = overview as AdminUserOverview;
 
   return (
-    <div className="admin-modal-overlay" onClick={onClose} role="presentation">
-      <div
-        className="admin-modal admin-modal--profile admin-user360"
-        onClick={(e) => e.stopPropagation()}
-        role="dialog"
-      >
+    <>
+      {previewImage && (
+        <ImagePreviewModal
+          imageUrl={previewImage.url}
+          title={previewImage.title}
+          onClose={() => setPreviewImage(null)}
+          accessToken={accessToken}
+        />
+      )}
+      <div className="admin-modal-overlay" onClick={onClose} role="presentation">
+        <div
+          className="admin-modal admin-modal--profile admin-user360"
+          onClick={(e) => e.stopPropagation()}
+          role="dialog"
+        >
         {loading ? (
           <p className="admin-empty">{dictionary.admin.loading}</p>
         ) : !user ? (
@@ -632,7 +644,17 @@ export const AdminUserDetailModal = ({
                           <article key={doc.id} className="admin-user360-item">
                             <div className="admin-user360-item-head"><strong>{doc.fullNameOnDoc}</strong><span className="admin-badge">{doc.status}</span></div>
                             <p className="admin-user360-item-meta">{doc.documentType} | {doc.documentNumber ?? '-'}</p>
-                            <div className="admin-user360-links">{doc.frontImageUrl && <a href={doc.frontImageUrl} target="_blank" rel="noreferrer">Front</a>}{doc.backImageUrl && <a href={doc.backImageUrl} target="_blank" rel="noreferrer">Back</a>}{doc.selfieImageUrl && <a href={doc.selfieImageUrl} target="_blank" rel="noreferrer">Selfie</a>}</div>
+                            <div className="admin-user360-links">
+                              {doc.frontImageUrl && (
+                                <button type="button" className="admin-link-btn" onClick={() => setPreviewImage({ url: doc.frontImageUrl!, title: 'Document front' })}>Front</button>
+                              )}
+                              {doc.backImageUrl && (
+                                <button type="button" className="admin-link-btn" onClick={() => setPreviewImage({ url: doc.backImageUrl!, title: 'Document back' })}>Back</button>
+                              )}
+                              {doc.selfieImageUrl && (
+                                <button type="button" className="admin-link-btn" onClick={() => setPreviewImage({ url: doc.selfieImageUrl!, title: 'Selfie' })}>Selfie</button>
+                              )}
+                            </div>
                             {canManageVerifications && (doc.status === 'pending' || doc.status === 'under_review') && <div className="admin-actions-row"><button type="button" className="admin-btn admin-btn--small admin-btn--success" disabled={actionLoading === `identity-${doc.id}`} onClick={() => void reviewIdentity(doc.id, 'approved')}>{dictionary.admin.approve}</button><button type="button" className="admin-btn admin-btn--small admin-btn--danger" disabled={actionLoading === `identity-${doc.id}`} onClick={() => void reviewIdentity(doc.id, 'rejected')}>{dictionary.admin.reject}</button></div>}
                           </article>
                         ))}
@@ -648,7 +670,14 @@ export const AdminUserDetailModal = ({
                           <article key={record.id} className="admin-user360-item">
                             <div className="admin-user360-item-head"><strong>{record.title}</strong><span className="admin-badge">{record.status}</span></div>
                             <p className="admin-user360-item-meta">{record.recordType} | {record.institution}</p>
-                            <div className="admin-user360-links">{record.certificateImageUrl && <a href={record.certificateImageUrl} target="_blank" rel="noreferrer">Certificate</a>}{record.transcriptImageUrl && <a href={record.transcriptImageUrl} target="_blank" rel="noreferrer">Transcript</a>}</div>
+                            <div className="admin-user360-links">
+                              {record.certificateImageUrl && (
+                                <button type="button" className="admin-link-btn" onClick={() => setPreviewImage({ url: record.certificateImageUrl!, title: 'Certificate' })}>Certificate</button>
+                              )}
+                              {record.transcriptImageUrl && (
+                                <button type="button" className="admin-link-btn" onClick={() => setPreviewImage({ url: record.transcriptImageUrl!, title: 'Transcript' })}>Transcript</button>
+                              )}
+                            </div>
                             {canManageVerifications && (record.status === 'pending' || record.status === 'under_review') && <div className="admin-actions-row"><button type="button" className="admin-btn admin-btn--small admin-btn--success" disabled={actionLoading === `academic-${record.id}`} onClick={() => void reviewAcademic(record.id, 'approved')}>{dictionary.admin.approve}</button><button type="button" className="admin-btn admin-btn--small admin-btn--danger" disabled={actionLoading === `academic-${record.id}`} onClick={() => void reviewAcademic(record.id, 'rejected')}>{dictionary.admin.reject}</button></div>}
                           </article>
                         ))}
@@ -730,5 +759,6 @@ export const AdminUserDetailModal = ({
         </div>
       </div>
     </div>
+    </>
   );
 };

@@ -549,6 +549,27 @@
   max-width: 32rem;
 }
 
+/* Tab content: section title and toolbar spacing (fix title sticking to buttons/select) */
+.admin-tab-content {
+  margin-top: 0;
+  margin-bottom: 1.5rem;
+}
+
+.admin-tab-title {
+  margin: 0 0 1rem 0;
+  font-size: 1.15rem;
+  font-weight: 600;
+  color: hsl(var(--foreground));
+}
+
+.admin-subtabs {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
 .admin-actions-row {
   display: flex;
   gap: 0.35rem;
@@ -986,6 +1007,20 @@
   gap: 0.5rem;
   margin-bottom: 0.45rem;
   font-size: 0.8rem;
+}
+
+.admin-user360-links .admin-link-btn {
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  color: hsl(var(--link));
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.admin-user360-links .admin-link-btn:hover {
+  text-decoration: none;
 }
 
 .admin-user360-security-block {

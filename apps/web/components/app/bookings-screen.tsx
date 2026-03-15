@@ -10,6 +10,7 @@ import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { OnlineCallModal } from './online-call-modal';
+import { useProfileModal } from './profile-modal-context';
 
 import { useAuth } from '@/components/auth/auth-provider';
 import { Container } from '@/components/ui/container';
@@ -186,6 +187,7 @@ export const BookingsScreen = (_props: Props) => {
   const { locale, dictionary } = useI18n();
   const router = useRouter();
   const { authUser, accessToken, isAuthenticated, isReady, authGuard } = useAuth();
+  const { openProfileModal } = useProfileModal();
   const [reservations, setReservations] = useState<Reservation[]>([]);
   const [loading, setLoading] = useState(true);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
@@ -340,14 +342,14 @@ export const BookingsScreen = (_props: Props) => {
   }, [accessToken, selectedReservation]);
 
   const decide = useCallback(
-    async (id: string, decision: 'accept' | 'reject') => {
+    async (id: string, decision: 'accept' | 'reject', rejectionReason?: string) => {
       if (!accessToken) return;
       setUpdatingId(id);
       setError(null);
       try {
         await reservationsApiClient.decideReservation(accessToken, id, {
           decision,
-          ...(decision === 'reject' ? { rejectionReason: 'Rejected by provider' } : {}),
+          ...(decision === 'reject' ? { rejectionReason: rejectionReason?.trim() || 'Rejected by provider' } : {}),
         });
         await load();
         if (selectedReservation?.id === id) await refreshSelected();
@@ -726,7 +728,10 @@ export const BookingsScreen = (_props: Props) => {
                       <button
                         type="button"
                         className="dashboard-btn dashboard-btn--small dashboard-btn--danger"
-                        onClick={() => void decide(r.id, 'reject')}
+                        onClick={() => {
+                          const reason = window.prompt('Rejection reason (optional):');
+                          void decide(r.id, 'reject', reason ?? undefined);
+                        }}
                         disabled={updatingId === r.id}
                       >
                         Reject
@@ -756,6 +761,42 @@ export const BookingsScreen = (_props: Props) => {
             <p className="dashboard-card-meta">
               {getReservationModeLabel(selectedReservation)} | {formatDateTime(selectedReservation.requestedStartAt)}
             </p>
+            {(selectedReservation.providerName || selectedReservation.customerName) && (
+              <p className="dashboard-card-meta reservation-other-party">
+                {authUser.id === selectedReservation.providerId && selectedReservation.customerName && (
+                  <>
+                    Customer:{' '}
+                    <button
+                      type="button"
+                      className="reservation-other-party-btn"
+                      onClick={() =>
+                        openProfileModal(selectedReservation.customerId, {
+                          displayName: selectedReservation.customerName ?? undefined,
+                        })
+                      }
+                    >
+                      {selectedReservation.customerName}
+                    </button>
+                  </>
+                )}
+                {authUser.id === selectedReservation.customerId && selectedReservation.providerName && (
+                  <>
+                    Provider:{' '}
+                    <button
+                      type="button"
+                      className="reservation-other-party-btn"
+                      onClick={() =>
+                        openProfileModal(selectedReservation.providerId, {
+                          displayName: selectedReservation.providerName ?? undefined,
+                        })
+                      }
+                    >
+                      {selectedReservation.providerName}
+                    </button>
+                  </>
+                )}
+              </p>
+            )}
 
             {detailsLoading ? (
               <p className="dashboard-loading">Loading details...</p>
@@ -985,7 +1026,10 @@ export const BookingsScreen = (_props: Props) => {
                     <button
                       type="button"
                       className="dashboard-btn dashboard-btn--small dashboard-btn--danger"
-                      onClick={() => void decide(selectedReservation.id, 'reject')}
+                      onClick={() => {
+                        const reason = window.prompt('Rejection reason (optional):');
+                        void decide(selectedReservation.id, 'reject', reason ?? undefined);
+                      }}
                       disabled={updatingId === selectedReservation.id}
                     >
                       {bp.reject ?? 'Reject'}

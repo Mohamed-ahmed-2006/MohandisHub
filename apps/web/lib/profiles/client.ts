@@ -8,6 +8,7 @@ import type {
   ExpertProfile,
   IdentityDocument,
   IdentityDocumentBody,
+  PublicUserProfile,
   UpdateBusinessProfileBody,
   UpdateCustomerProfileBody,
   UpdateExpertProfileBody,
@@ -96,9 +97,36 @@ export type TopBusiness = {
   city: string | null;
 };
 
+async function getPublicProfileFetch(userId: string, accessToken?: string): Promise<PublicUserProfile> {
+  const response = await fetch(`${getApiBaseUrl()}/api/profiles/public/${userId}`, {
+    method: 'GET',
+    credentials: 'include',
+    headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {},
+  });
+  if (!response.ok) {
+    const raw: unknown = await response.json().catch(() => null);
+    if (isApiErrorBody(raw)) {
+      throw new ApiClientRequestError({
+        code: raw.error.code,
+        message: raw.error.message,
+        status: response.status,
+        details: raw.error.details,
+      });
+    }
+    throw new ApiClientRequestError({
+      code: 'HTTP_ERROR',
+      message: `Request failed with status ${response.status}`,
+      status: response.status,
+    });
+  }
+  const rawBody = (await response.json()) as ApiSuccessBody<PublicUserProfile>;
+  return rawBody.data;
+}
+
 export const profilesApiClient = {
   getTopExperts: () => publicFetch<TopExpert[]>('/api/profiles/top-experts'),
   getTopBusinesses: () => publicFetch<TopBusiness[]>('/api/profiles/top-businesses'),
+  getPublicProfile: getPublicProfileFetch,
   getExpertProfile: (accessToken: string) =>
     apiRequest<ExpertProfile>({ method: 'GET', path: '/api/profiles/expert', accessToken }),
 
@@ -160,6 +188,18 @@ export const profilesApiClient = {
     apiRequest<AcademicRecord>({
       method: 'POST',
       path: '/api/profiles/academic-records',
+      body,
+      accessToken,
+    }),
+
+  updateAcademicRecord: (
+    accessToken: string,
+    recordId: string,
+    body: Partial<AcademicRecordBody>,
+  ) =>
+    apiRequest<AcademicRecord>({
+      method: 'PATCH',
+      path: `/api/profiles/academic-records/${recordId}`,
       body,
       accessToken,
     }),

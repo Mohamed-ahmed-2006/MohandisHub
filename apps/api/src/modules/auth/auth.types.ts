@@ -44,9 +44,13 @@ export type RefreshTokenRow = {
 /** Row returned from expert_profiles (just verification fields). */
 export type ExpertVerificationRow = {
   verification_status: VerificationStatus;
+  identity_verified: boolean;
+  academic_verified: boolean;
 };
 
 /** Row returned from business_profiles (just verification fields). */
 export type BusinessVerificationRow = {
   verification_status: VerificationStatus;
+  identity_verified: boolean;
+  business_verified: boolean;
 };

@@ -302,6 +302,9 @@ export const CalendarScreen = (_props: Props) => {
     );
   }
 
+  const pendingCount = reservations.filter((r) => r.status === 'pending').length;
+  const bookingsPath = buildLocalePath(locale, '/app/bookings');
+
   return (
     <main className="profile-screen-main">
       <Container className="profile-screen-container">
@@ -309,6 +312,16 @@ export const CalendarScreen = (_props: Props) => {
           <h1 className="app-page-title">{title}</h1>
         </div>
         {error && <p className="dashboard-error">{error}</p>}
+        {pendingCount > 0 && (
+          <div className="dashboard-banner dashboard-banner--warning" role="status">
+            <p>
+              You have {pendingCount} pending request{pendingCount !== 1 ? 's' : ''}. Accept or reject them so customers get a response.
+            </p>
+            <a href={bookingsPath} className="dashboard-primary-btn" style={{ textDecoration: 'none', flexShrink: 0 }}>
+              View requests
+            </a>
+          </div>
+        )}
 
         <div className="calendar-shell">
           <section className="calendar-main">

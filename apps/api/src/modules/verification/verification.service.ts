@@ -9,6 +9,13 @@ import { env } from '../../config/env.js';
 import { logger } from '../../config/logger.js';
 import { HttpError } from '../../utils/http-error.js';
 import { logAudit } from '../audit/audit.service.js';
+import { ProfilesRepository } from '../profiles/profiles.repository.js';
+import {
+  assertRequiredVerificationImage,
+  getEffectiveBusinessVerificationStatus,
+  getEffectiveExpertVerificationStatus,
+  hasRequiredVerificationImage,
+} from '../profiles/verification-image-requirements.js';
 
 import type { IVerificationProvider } from './verification.provider.js';
 import { createVerificationProvider } from './verification.provider.js';
@@ -20,6 +27,7 @@ export class VerificationService {
 
   constructor(
     private readonly verificationRepo: VerificationRepository = new VerificationRepository(),
+    private readonly profilesRepo: ProfilesRepository = new ProfilesRepository(),
   ) {
     this.provider = createVerificationProvider(env.VERIFICATION_PROVIDER);
   }
@@ -43,6 +51,8 @@ export class VerificationService {
         message: 'Verification is not required for your role.',
       });
     }
+
+    await assertRequiredVerificationImage(this.profilesRepo, params.userId, params.role);
 
     // Check if there's already a pending/under_review verification
     const existing = await this.verificationRepo.findLatestByUserId(params.userId);
@@ -100,10 +110,24 @@ export class VerificationService {
     // business_profiles/expert_profiles.verification_status (no verification_request).
     // So we must consider profile status so GET /status returns 'verified' after admin approval.
     if (role === 'expert' || role === 'business') {
-      const profileStatus = await this.verificationRepo.getProfileVerificationStatus(
-        userId,
-        role,
-      );
+      const profileStatus =
+        role === 'expert'
+          ? getEffectiveExpertVerificationStatus(
+              (await this.profilesRepo.findExpertProfile(userId)) ?? {
+                verification_status: 'unverified',
+                identity_verified: false,
+                academic_verified: false,
+              },
+              Boolean((await this.profilesRepo.getUserAvatarUrl(userId))?.trim()),
+            )
+          : getEffectiveBusinessVerificationStatus(
+              (await this.profilesRepo.findBusinessProfile(userId)) ?? {
+                verification_status: 'unverified',
+                identity_verified: false,
+                business_verified: false,
+              },
+              Boolean((await this.profilesRepo.getBusinessLogoUrl(userId))?.trim()),
+            );
       if (profileStatus === 'verified') {
         const latestRequest = await this.verificationRepo.findLatestByUserId(userId);
         return { status: 'verified', latestRequest };
@@ -111,6 +135,10 @@ export class VerificationService {
       if (profileStatus === 'rejected') {
         const latestRequest = await this.verificationRepo.findLatestByUserId(userId);
         return { status: 'rejected', latestRequest };
+      }
+      if (profileStatus === 'pending' || profileStatus === 'under_review') {
+        const latestRequest = await this.verificationRepo.findLatestByUserId(userId);
+        return { status: profileStatus, latestRequest };
       }
     }
 
@@ -162,14 +190,21 @@ export class VerificationService {
         providerResponse: result.rawPayload,
       });
 
-      const profileStatus = result.approved ? 'verified' : 'rejected';
       const role = request.request_type === 'identity' ? 'expert' : 'business';
+      const hasRequiredImage =
+        await hasRequiredVerificationImage(this.profilesRepo, request.user_id, role);
+      const profileStatus =
+        result.approved && !hasRequiredImage ? 'under_review' : result.approved ? 'verified' : 'rejected';
       const identityMethod =
         result.approved && role === 'expert'
           ? request.provider === 'manual'
             ? 'manual'
             : 'didit'
           : undefined;
+
+      if (result.approved) {
+        await this.verificationRepo.markIdentityApproved(request.user_id, role, identityMethod);
+      }
 
       await this.verificationRepo.updateProfileVerificationStatus(
         request.user_id,
@@ -225,9 +260,17 @@ export class VerificationService {
       reviewedBy: params.reviewedBy,
     });
 
-    const profileStatus = params.approved ? 'verified' : 'rejected';
     const role = request.request_type === 'identity' ? 'expert' : 'business';
+    const hasRequiredImage = params.approved
+      ? await hasRequiredVerificationImage(this.profilesRepo, request.user_id, role)
+      : false;
+    const profileStatus =
+      params.approved && !hasRequiredImage ? 'under_review' : params.approved ? 'verified' : 'rejected';
     const identityMethod = params.approved && role === 'expert' ? 'manual' : undefined;
+
+    if (params.approved) {
+      await this.verificationRepo.markIdentityApproved(request.user_id, role, identityMethod);
+    }
 
     await this.verificationRepo.updateProfileVerificationStatus(
       request.user_id,

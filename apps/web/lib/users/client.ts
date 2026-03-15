@@ -1,4 +1,4 @@
-import type { ApiErrorBody, ApiSuccessBody, AuthUser } from '@mohandishub/shared';
+import type { ApiErrorBody, ApiSuccessBody, AuthUser, UpdateAccountBody } from '@mohandishub/shared';
 
 import { ApiClientRequestError } from '../auth/client';
 
@@ -55,14 +55,6 @@ const apiRequest = async <T>({
 
   const rawBody = (await response.json()) as ApiSuccessBody<T>;
   return rawBody.data;
-};
-
-export type UpdateAccountBody = {
-  displayName?: string;
-  phone?: string | null;
-  phoneCode?: string | null;
-  nationality?: string | null;
-  dateOfBirth?: string | null;
 };
 
 export type EmailChangeResult = {

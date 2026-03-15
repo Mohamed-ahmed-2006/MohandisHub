@@ -9,6 +9,9 @@ import { Container } from '@/components/ui/container';
 import { useI18n } from '@/lib/i18n/context';
 import { buildLocalePath } from '@/lib/i18n/path';
 import { supportApiClient } from '@/lib/support/client';
+import { uploadFile } from '@/lib/upload/client';
+import { getApiBaseUrl } from '@/lib/env';
+import { ChevronLeft } from 'lucide-react';
 
 import '@/app/dashboard.css';
 
@@ -27,6 +30,8 @@ export const SupportScreen = () => {
   const [showCreate, setShowCreate] = useState(false);
   const [createSubject, setCreateSubject] = useState('');
   const [createBody, setCreateBody] = useState('');
+  const [createFiles, setCreateFiles] = useState<File[]>([]);
+  const [replyFiles, setReplyFiles] = useState<File[]>([]);
 
   useEffect(() => {
     if (!isReady) return;
@@ -74,9 +79,19 @@ export const SupportScreen = () => {
     if (!accessToken || !selectedTicket || !replyBody.trim()) return;
     setSubmitting(true);
     try {
-      const msg = await supportApiClient.reply(accessToken, selectedTicket.id, { body: replyBody.trim() });
+      const attachmentUrls: string[] = [];
+      for (const file of replyFiles) {
+        const { url } = await uploadFile(accessToken, file);
+        const fullUrl = url.startsWith('http') ? url : `${getApiBaseUrl()}${url.startsWith('/') ? '' : '/'}${url}`;
+        attachmentUrls.push(fullUrl);
+      }
+      const msg = await supportApiClient.reply(accessToken, selectedTicket.id, {
+        body: replyBody.trim(),
+        ...(attachmentUrls.length ? { attachmentUrls } : {}),
+      });
       setMessages((prev) => [...prev, msg]);
       setReplyBody('');
+      setReplyFiles([]);
       void loadTickets();
     } finally {
       setSubmitting(false);
@@ -88,10 +103,21 @@ export const SupportScreen = () => {
     if (!accessToken || !createSubject.trim() || !createBody.trim()) return;
     setSubmitting(true);
     try {
-      await supportApiClient.createTicket(accessToken, { subject: createSubject.trim(), body: createBody.trim() });
+      const attachmentUrls: string[] = [];
+      for (const file of createFiles) {
+        const { url } = await uploadFile(accessToken, file);
+        const fullUrl = url.startsWith('http') ? url : `${getApiBaseUrl()}${url.startsWith('/') ? '' : '/'}${url}`;
+        attachmentUrls.push(fullUrl);
+      }
+      await supportApiClient.createTicket(accessToken, {
+        subject: createSubject.trim(),
+        body: createBody.trim(),
+        ...(attachmentUrls.length ? { attachmentUrls } : {}),
+      });
       setShowCreate(false);
       setCreateSubject('');
       setCreateBody('');
+      setCreateFiles([]);
       void loadTickets();
     } finally {
       setSubmitting(false);
@@ -137,6 +163,23 @@ export const SupportScreen = () => {
                 required
                 rows={4}
               />
+              <div className="dashboard-form-field">
+                <label className="dashboard-form-label-inline">
+                  {d.upload ?? 'Upload'} (images, max 5)
+                </label>
+                <input
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  className="dashboard-input"
+                  onChange={(e) => setCreateFiles(Array.from(e.target.files ?? []).slice(0, 5))}
+                />
+                {createFiles.length > 0 && (
+                  <p className="dashboard-form-hint">
+                    {createFiles.length} file(s) selected
+                  </p>
+                )}
+              </div>
               <div style={{ display: 'flex', gap: '0.5rem' }}>
                 <button type="submit" className="dashboard-primary-btn" disabled={submitting}>
                   {d.submit ?? 'Submit'}
@@ -189,8 +232,10 @@ export const SupportScreen = () => {
                   type="button"
                   className="dashboard-btn dashboard-btn--secondary"
                   onClick={() => setSelectedTicket(null)}
+                  aria-label={d.back ?? 'Back'}
                 >
-                  ← {d.back ?? 'Back'}
+                  <ChevronLeft size={16} style={{ marginRight: '0.35rem' }} aria-hidden />
+                  {d.back ?? 'Back'}
                 </button>
                 <div className="dashboard-card">
                   <h3>{selectedTicket.subject}</h3>
@@ -213,6 +258,18 @@ export const SupportScreen = () => {
                           {m.isStaff ? 'Staff' : 'You'} · {new Date(m.createdAt).toLocaleString()}
                         </p>
                         <p style={{ margin: 0 }}>{m.body}</p>
+                        {m.attachmentUrls?.length ? (
+                          <div className="dashboard-card-media" style={{ marginTop: '0.5rem' }}>
+                            {m.attachmentUrls.map((u) => {
+                              const src = u.startsWith('http') ? u : `${getApiBaseUrl()}${u.startsWith('/') ? '' : '/'}${u}`;
+                              return (
+                                <a key={u} href={src} target="_blank" rel="noopener noreferrer" className="dashboard-card-media-thumb">
+                                  <img src={src} alt="Attachment" width={80} height={80} />
+                                </a>
+                              );
+                            })}
+                          </div>
+                        ) : null}
                       </div>
                     ))}
                     <form onSubmit={(e) => { void handleReply(e); }} style={{ marginTop: '1rem' }}>
@@ -223,7 +280,19 @@ export const SupportScreen = () => {
                         onChange={(e) => setReplyBody(e.target.value)}
                         rows={3}
                       />
-                      <button type="submit" className="dashboard-primary-btn" disabled={submitting}>
+                      <div className="dashboard-form-field" style={{ marginTop: '0.5rem' }}>
+                        <label className="dashboard-form-label-inline">
+                          {d.upload ?? 'Upload'} (images, max 5)
+                        </label>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          multiple
+                          className="dashboard-input"
+                          onChange={(e) => setReplyFiles(Array.from(e.target.files ?? []).slice(0, 5))}
+                        />
+                      </div>
+                      <button type="submit" className="dashboard-primary-btn" style={{ marginTop: '0.5rem' }} disabled={submitting}>
                         {d.reply ?? 'Reply'}
                       </button>
                     </form>

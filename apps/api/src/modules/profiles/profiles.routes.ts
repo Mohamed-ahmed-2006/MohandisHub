@@ -13,9 +13,10 @@ import { profilesController } from './profiles.controller.js';
 
 const profilesRouter = Router();
 
-// Public — top providers (must be before /expert, /business)
+// Public — top providers and public profile (must be before /expert, /business)
 profilesRouter.get('/top-experts', profilesController.getTopExperts);
 profilesRouter.get('/top-businesses', profilesController.getTopBusinesses);
+profilesRouter.get('/public/:userId', profilesController.getPublicProfile);
 
 // Expert profile
 profilesRouter.get(
@@ -91,6 +92,12 @@ profilesRouter.get(
   authenticate,
   requireEmailVerified,
   profilesController.getAcademicRecords,
+);
+profilesRouter.patch(
+  '/academic-records/:recordId',
+  authenticate,
+  requireEmailVerified,
+  profilesController.updateAcademicRecord,
 );
 
 export { profilesRouter };

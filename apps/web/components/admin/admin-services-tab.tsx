@@ -2,6 +2,7 @@
 
 import type { AdminServiceListItem, PaginatedResponse } from '@mohandishub/shared';
 import { useCallback, useEffect, useState } from 'react';
+import { ChevronLeft, ChevronRight, Star } from 'lucide-react';
 
 import { adminApiClient } from '@/lib/admin/client';
 import type { Dictionary } from '@/lib/i18n/types';
@@ -117,7 +118,7 @@ export const AdminServicesTab = ({ dictionary, accessToken }: Props) => {
                         {svc.status}
                       </span>
                     </td>
-                    <td>{svc.isFeatured ? '⭐' : '—'}</td>
+                    <td>{svc.isFeatured ? <Star size={16} aria-hidden style={{ verticalAlign: 'middle' }} /> : '—'}</td>
                     <td>
                       <div className="admin-actions-row">
                         {svc.status === 'pending_review' && (
@@ -153,8 +154,9 @@ export const AdminServicesTab = ({ dictionary, accessToken }: Props) => {
                 className="admin-btn admin-btn--small"
                 disabled={page <= 1}
                 onClick={() => setPage(page - 1)}
+                aria-label="Previous page"
               >
-                ←
+                <ChevronLeft size={16} aria-hidden />
               </button>
               <span className="admin-pagination-info">
                 {page} / {data.totalPages}
@@ -164,8 +166,9 @@ export const AdminServicesTab = ({ dictionary, accessToken }: Props) => {
                 className="admin-btn admin-btn--small"
                 disabled={page >= data.totalPages}
                 onClick={() => setPage(page + 1)}
+                aria-label="Next page"
               >
-                →
+                <ChevronRight size={16} aria-hidden />
               </button>
             </div>
           )}

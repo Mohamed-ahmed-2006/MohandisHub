@@ -485,6 +485,10 @@ export class AdminService {
     return { user: this.toUserListItem(row), verificationEmailSent };
   }
 
+  async factoryReset(adminId: string): Promise<number> {
+    return this.repo.factoryReset(adminId);
+  }
+
   // ── Plans ───────────────────────────────────────────────────────────────
 
   async listPlans(): Promise<Plan[]> {

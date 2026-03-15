@@ -103,6 +103,7 @@ export class AuthRepository {
       phone?: string | null;
       phoneCode?: string | null;
       nationality?: string | null;
+      avatarUrl?: string | null;
       dateOfBirth?: string | null;
     },
   ): Promise<UserRow | null> {
@@ -125,6 +126,10 @@ export class AuthRepository {
     if (fields.nationality !== undefined) {
       setClauses.push(`nationality = $${idx++}`);
       values.push(fields.nationality);
+    }
+    if (fields.avatarUrl !== undefined) {
+      setClauses.push(`avatar_url = $${idx++}`);
+      values.push(fields.avatarUrl);
     }
     if (fields.dateOfBirth !== undefined) {
       setClauses.push(`date_of_birth = $${idx++}`);
@@ -267,7 +272,10 @@ export class AuthRepository {
 
   async getExpertVerification(userId: string): Promise<ExpertVerificationRow | null> {
     const { rows } = await this.db.query<ExpertVerificationRow>(
-      'SELECT verification_status FROM expert_profiles WHERE user_id = $1 LIMIT 1',
+      `SELECT verification_status, identity_verified, academic_verified
+       FROM expert_profiles
+       WHERE user_id = $1
+       LIMIT 1`,
       [userId],
     );
     return rows[0] ?? null;
@@ -275,7 +283,10 @@ export class AuthRepository {
 
   async getBusinessVerification(userId: string): Promise<BusinessVerificationRow | null> {
     const { rows } = await this.db.query<BusinessVerificationRow>(
-      'SELECT verification_status FROM business_profiles WHERE user_id = $1 LIMIT 1',
+      `SELECT verification_status, identity_verified, business_verified
+       FROM business_profiles
+       WHERE user_id = $1
+       LIMIT 1`,
       [userId],
     );
     return rows[0] ?? null;

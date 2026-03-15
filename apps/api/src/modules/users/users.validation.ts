@@ -5,6 +5,7 @@ export const updateAccountSchema = z.object({
   phone: z.string().max(20).nullable().optional(),
   phoneCode: z.string().max(6).nullable().optional(),
   nationality: z.string().max(3).nullable().optional(),
+  avatarUrl: z.string().url().max(500).nullable().optional(),
   dateOfBirth: z
     .string()
     .regex(/^\d{4}-\d{2}-\d{2}$/, 'Date of birth must be in YYYY-MM-DD format.')

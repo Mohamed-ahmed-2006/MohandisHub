@@ -87,11 +87,15 @@ export const reservationsApiClient = {
       method: 'DELETE',
     }),
 
-  createReservation: (token: string, body: CreateReservationBody): Promise<Reservation> =>
+  createReservation: (
+    token: string,
+    body: CreateReservationBody,
+    idempotencyKey?: string,
+  ): Promise<Reservation> =>
     apiReq('/api/reservations', token, {
       method: 'POST',
       headers: {
-        'Idempotency-Key': createIdempotencyKey(),
+        'Idempotency-Key': idempotencyKey ?? createIdempotencyKey(),
       },
       body: JSON.stringify(body),
     }),

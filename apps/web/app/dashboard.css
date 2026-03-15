@@ -12,6 +12,7 @@
 .dashboard-section-title {
   font-size: 1.2rem;
   font-weight: 700;
+  margin: 0 0 1rem 0;
 }
 
 .dashboard-primary-btn {
@@ -1183,6 +1184,18 @@
   background: hsl(var(--primary) / 0.08);
 }
 
+.reservation-other-party-btn {
+  padding: 0;
+  border: none;
+  background: none;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+  text-decoration: underline;
+}
+.reservation-other-party-btn:hover {
+  color: hsl(var(--primary));
+}
 .reservation-note-box {
   border: 1px solid hsl(var(--border));
   background: hsl(var(--muted) / 0.35);
@@ -1319,6 +1332,18 @@
   color: hsl(var(--muted-foreground));
   font-size: 0.9rem;
   margin: 0 0 0.5rem 0;
+}
+.service-booking-provider-btn {
+  padding: 0;
+  border: none;
+  background: none;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+}
+.service-booking-provider-btn:hover {
+  color: hsl(var(--primary));
+  text-decoration: underline;
 }
 .service-booking-price {
   font-weight: 600;

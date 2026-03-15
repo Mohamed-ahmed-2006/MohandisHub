@@ -792,4 +792,61 @@ export class AdminRepository {
     );
     return (rowCount ?? 0) > 0;
   }
+
+  /** Factory reset: delete all users except platform and current admin. Returns number of users deleted. */
+  async factoryReset(adminId: string): Promise<number> {
+    const PLATFORM_USER_ID = '00000000-0000-0000-0000-000000000001';
+    const client = await this.db.connect();
+    try {
+      await client.query('BEGIN');
+
+      const { rows: userRows } = await client.query<{ id: string }>(
+        `SELECT id FROM users WHERE id != $1 AND id != $2`,
+        [PLATFORM_USER_ID, adminId],
+      );
+      const toDelete = userRows.map((r) => r.id);
+      if (toDelete.length === 0) {
+        await client.query('COMMIT');
+        return 0;
+      }
+
+      // Delete in FK-safe order (tables that reference users without ON DELETE CASCADE)
+      await client.query(
+        `DELETE FROM transactions WHERE wallet_id IN (SELECT id FROM wallets WHERE user_id = ANY($1::uuid[]))`,
+        [toDelete],
+      );
+      await client.query(`DELETE FROM messages WHERE sender_id = ANY($1::uuid[])`, [toDelete]);
+      await client.query(
+        `DELETE FROM conversations WHERE participant_a = ANY($1::uuid[]) OR participant_b = ANY($1::uuid[])`,
+        [toDelete],
+      );
+      await client.query(
+        `DELETE FROM reviews WHERE reviewer_id = ANY($1::uuid[]) OR target_user_id = ANY($1::uuid[])`,
+        [toDelete],
+      );
+      await client.query(
+        `DELETE FROM reservations WHERE customer_id = ANY($1::uuid[]) OR provider_id = ANY($1::uuid[])`,
+        [toDelete],
+      );
+      await client.query(
+        `DELETE FROM bookings WHERE customer_id = ANY($1::uuid[]) OR provider_id = ANY($1::uuid[])`,
+        [toDelete],
+      );
+      await client.query(
+        `UPDATE needs SET awarded_bid_id = NULL WHERE awarded_bid_id IN (SELECT id FROM bids WHERE expert_id = ANY($1::uuid[]))`,
+        [toDelete],
+      );
+      await client.query(`DELETE FROM bids WHERE expert_id = ANY($1::uuid[])`, [toDelete]);
+      await client.query(`DELETE FROM needs WHERE customer_id = ANY($1::uuid[])`, [toDelete]);
+      await client.query(`DELETE FROM users WHERE id = ANY($1::uuid[])`, [toDelete]);
+
+      await client.query('COMMIT');
+      return toDelete.length;
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
+  }
 }

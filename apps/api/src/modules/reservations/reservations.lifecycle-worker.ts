@@ -33,7 +33,7 @@ export const startReservationLifecycleWorker = (): ReservationLifecycleWorkerHan
     running = true;
     try {
       const result = await service.runLifecycleSweep();
-      if (result.disconnectReleased > 0 || result.donePrompted > 0) {
+      if (result.disconnectReleased > 0 || result.donePrompted > 0 || result.expiredPending > 0) {
         logger.info('Reservation lifecycle sweep processed due items', result);
       }
     } catch (error) {

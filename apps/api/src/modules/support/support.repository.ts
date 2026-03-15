@@ -21,6 +21,7 @@ export type TicketMessageRow = {
   body: string;
   is_staff: boolean;
   created_at: string;
+  attachment_urls?: string[] | null;
 };
 
 export class SupportRepository {
@@ -36,13 +37,20 @@ export class SupportRepository {
     return rows[0];
   }
 
-  async addMessage(ticketId: string, authorId: string, body: string, isStaff: boolean): Promise<TicketMessageRow> {
+  async addMessage(
+    ticketId: string,
+    authorId: string,
+    body: string,
+    isStaff: boolean,
+    attachmentUrls?: string[] | null,
+  ): Promise<TicketMessageRow> {
     const pool = getPool();
+    const urls = attachmentUrls?.length ? attachmentUrls : [];
     const { rows } = await pool.query<TicketMessageRow>(
-      `INSERT INTO support_ticket_messages (ticket_id, author_id, body, is_staff)
-       VALUES ($1, $2, $3, $4)
-       RETURNING id, ticket_id, author_id, body, is_staff, created_at`,
-      [ticketId, authorId, body, isStaff],
+      `INSERT INTO support_ticket_messages (ticket_id, author_id, body, is_staff, attachment_urls)
+       VALUES ($1, $2, $3, $4, $5::text[])
+       RETURNING id, ticket_id, author_id, body, is_staff, created_at, attachment_urls`,
+      [ticketId, authorId, body, isStaff, urls],
     );
     if (!rows[0]) throw new Error('Insert message failed');
     await pool.query(
@@ -81,7 +89,8 @@ export class SupportRepository {
   async listMessages(ticketId: string): Promise<TicketMessageRow[]> {
     const pool = getPool();
     const { rows } = await pool.query<TicketMessageRow>(
-      `SELECT id, ticket_id, author_id, body, is_staff, created_at
+      `SELECT id, ticket_id, author_id, body, is_staff, created_at,
+              COALESCE(attachment_urls, '{}') AS attachment_urls
        FROM support_ticket_messages WHERE ticket_id = $1 ORDER BY created_at ASC`,
       [ticketId],
     );
