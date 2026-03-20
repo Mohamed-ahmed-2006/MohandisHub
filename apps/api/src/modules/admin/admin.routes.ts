@@ -35,6 +35,7 @@ adminRouter.get('/users/:id/activity/:type', requireAdminPermission('manage_user
 adminRouter.patch('/users/:id', requireAdminPermission('manage_users'), adminController.updateUser);
 adminRouter.patch('/users/:id/expert-profile', requireAdminPermission('manage_users'), adminController.updateUserExpertProfile);
 adminRouter.patch('/users/:id/business-profile', requireAdminPermission('manage_users'), adminController.updateUserBusinessProfile);
+adminRouter.patch('/users/:id/craftsman-profile', requireAdminPermission('manage_users'), adminController.updateUserCraftsmanProfile);
 adminRouter.delete('/users/:id', requireAdminPermission('manage_users'), adminController.deleteUser);
 adminRouter.post('/users/:id/activate', requireAdminPermission('manage_users'), adminController.activateUser);
 adminRouter.post('/users/:id/deactivate', requireAdminPermission('manage_users'), adminController.deactivateUser);

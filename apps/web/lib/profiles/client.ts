@@ -4,12 +4,14 @@ import type {
   ApiErrorBody,
   ApiSuccessBody,
   BusinessProfile,
+  CraftsmanProfile,
   CustomerProfile,
   ExpertProfile,
   IdentityDocument,
   IdentityDocumentBody,
   PublicUserProfile,
   UpdateBusinessProfileBody,
+  UpdateCraftsmanProfileBody,
   UpdateCustomerProfileBody,
   UpdateExpertProfileBody,
 } from '@mohandishub/shared';
@@ -97,6 +99,18 @@ export type TopBusiness = {
   city: string | null;
 };
 
+export type TopCraftsman = {
+  userId: string;
+  displayName: string;
+  avatarUrl: string | null;
+  trade: string | null;
+  title: string | null;
+  headline: string | null;
+  specializations: string[];
+  city: string | null;
+  workshopName: string | null;
+};
+
 async function getPublicProfileFetch(userId: string, accessToken?: string): Promise<PublicUserProfile> {
   const response = await fetch(`${getApiBaseUrl()}/api/profiles/public/${userId}`, {
     method: 'GET',
@@ -125,13 +139,29 @@ async function getPublicProfileFetch(userId: string, accessToken?: string): Prom
 
 export const profilesApiClient = {
   getTopExperts: () => publicFetch<TopExpert[]>('/api/profiles/top-experts'),
+  getTopCraftsmen: () => publicFetch<TopCraftsman[]>('/api/profiles/top-craftsmen'),
   getTopBusinesses: () => publicFetch<TopBusiness[]>('/api/profiles/top-businesses'),
   getPublicProfile: getPublicProfileFetch,
   getExpertProfile: (accessToken: string) =>
     apiRequest<ExpertProfile>({ method: 'GET', path: '/api/profiles/expert', accessToken }),
 
+  getCraftsmanProfile: (accessToken: string) =>
+    apiRequest<CraftsmanProfile>({
+      method: 'GET',
+      path: '/api/profiles/craftsman',
+      accessToken,
+    }),
+
   updateExpertProfile: (accessToken: string, body: UpdateExpertProfileBody) =>
     apiRequest<ExpertProfile>({ method: 'PATCH', path: '/api/profiles/expert', body, accessToken }),
+
+  updateCraftsmanProfile: (accessToken: string, body: UpdateCraftsmanProfileBody) =>
+    apiRequest<CraftsmanProfile>({
+      method: 'PATCH',
+      path: '/api/profiles/craftsman',
+      body,
+      accessToken,
+    }),
 
   getCustomerProfile: (accessToken: string) =>
     apiRequest<CustomerProfile>({ method: 'GET', path: '/api/profiles/customer', accessToken }),
@@ -159,6 +189,13 @@ export const profilesApiClient = {
     apiRequest<null>({
       method: 'POST',
       path: '/api/profiles/business/complete-onboarding',
+      accessToken,
+    }),
+
+  completeCraftsmanOnboarding: (accessToken: string) =>
+    apiRequest<null>({
+      method: 'POST',
+      path: '/api/profiles/craftsman/complete-onboarding',
       accessToken,
     }),
 

@@ -1,12 +1,12 @@
 'use client';
 
 import type { SupportTicket, SupportTicketMessage } from '@mohandishub/shared';
-import { useCallback, useEffect, useState } from 'react';
 import { ChevronLeft } from 'lucide-react';
+import { useCallback, useEffect, useState } from 'react';
 
 import { adminApiClient } from '@/lib/admin/client';
-import { supportApiClient } from '@/lib/support/client';
 import type { Dictionary } from '@/lib/i18n/types';
+import { supportApiClient } from '@/lib/support/client';
 
 type TicketWithEmail = SupportTicket & { userEmail?: string };
 
@@ -17,6 +17,15 @@ type Props = {
 };
 
 const STATUS_OPTIONS: SupportTicket['status'][] = ['open', 'in_progress', 'waiting_reply', 'resolved', 'closed'];
+
+const buildTicketListParams = (page: number, limit: number, statusFilter: string) => ({
+  page,
+  limit,
+  ...(statusFilter ? { status: statusFilter } : {}),
+});
+
+const buildAdminClientOptions = (refreshSession?: () => Promise<string | null>) =>
+  refreshSession ? { refreshSession } : {};
 
 export const AdminSupportTab = ({ dictionary, accessToken, refreshSession }: Props) => {
   const [tickets, setTickets] = useState<TicketWithEmail[]>([]);
@@ -37,8 +46,8 @@ export const AdminSupportTab = ({ dictionary, accessToken, refreshSession }: Pro
     try {
       const data = await adminApiClient.listSupportTickets(
         accessToken,
-        { page, limit, status: statusFilter || undefined },
-        { refreshSession },
+        buildTicketListParams(page, limit, statusFilter),
+        buildAdminClientOptions(refreshSession),
       );
       setTickets(data.items);
       setTotal(data.total);
@@ -80,7 +89,12 @@ export const AdminSupportTab = ({ dictionary, accessToken, refreshSession }: Pro
 
   const handleStatusChange = async (ticketId: string, newStatus: SupportTicket['status']) => {
     try {
-      await adminApiClient.updateSupportTicket(accessToken, ticketId, { status: newStatus }, { refreshSession });
+      await adminApiClient.updateSupportTicket(
+        accessToken,
+        ticketId,
+        { status: newStatus },
+        buildAdminClientOptions(refreshSession),
+      );
       void load();
       if (selectedTicket?.id === ticketId) {
         setSelectedTicket((prev) => (prev ? { ...prev, status: newStatus } : null));
@@ -125,7 +139,7 @@ export const AdminSupportTab = ({ dictionary, accessToken, refreshSession }: Pro
         <div className="admin-user-card" style={{ marginBottom: '1rem' }}>
           <p style={{ margin: '0 0 0.35rem', fontWeight: 600 }}>{selectedTicket.subject}</p>
           <p className="dashboard-card-meta" style={{ margin: 0 }}>
-            {(selectedTicket as TicketWithEmail).userEmail ?? selectedTicket.userId} · Status:{' '}
+            {selectedTicket.userEmail ?? selectedTicket.userId} · Status:{' '}
             <span className="admin-badge admin-badge--pending">{selectedTicket.status}</span>
           </p>
           <div style={{ marginTop: '0.5rem' }}>
@@ -168,7 +182,11 @@ export const AdminSupportTab = ({ dictionary, accessToken, refreshSession }: Pro
               ))}
             </ul>
           )}
-          <form onSubmit={handleReply}>
+          <form
+            onSubmit={(e) => {
+              void handleReply(e);
+            }}
+          >
             <label className="admin-form-label" htmlFor="admin-support-reply">
               Reply as staff
             </label>
@@ -240,7 +258,7 @@ export const AdminSupportTab = ({ dictionary, accessToken, refreshSession }: Pro
                     onClick={() => setSelectedTicket(t)}
                   >
                     <td>{t.subject}</td>
-                    <td>{(t as TicketWithEmail).userEmail ?? t.userId}</td>
+                    <td>{t.userEmail ?? t.userId}</td>
                     <td>
                       <span className="admin-badge admin-badge--pending">{t.status}</span>
                     </td>

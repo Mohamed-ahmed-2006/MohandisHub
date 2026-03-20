@@ -43,7 +43,8 @@ const create = asyncHandler(async (req, res) => {
 
 const list = asyncHandler(async (req, res) => {
   const targetUserId = req.query.targetUserId as string;
-  const targetType = (req.query.targetType as 'expert' | 'business' | 'customer') || 'expert';
+  const targetType =
+    (req.query.targetType as 'expert' | 'business' | 'craftsman' | 'customer') || 'expert';
   if (!targetUserId) {
     throw new HttpError({
       statusCode: 400,

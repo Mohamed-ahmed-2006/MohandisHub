@@ -32,7 +32,7 @@ export const reviewsApiClient = {
     accessToken: string,
     params: {
       targetUserId: string;
-      targetType: 'expert' | 'business' | 'customer';
+      targetType: 'expert' | 'business' | 'customer' | 'craftsman';
       page?: number;
       limit?: number;
     },

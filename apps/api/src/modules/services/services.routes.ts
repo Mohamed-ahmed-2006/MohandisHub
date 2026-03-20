@@ -19,7 +19,7 @@ servicesRouter.get('/recommendations', servicesController.getRecommendations);
 servicesRouter.get('/search', servicesController.searchServices);
 
 // Provider endpoints (expert, business) — order matters: /my before /:id
-const providerMw = [authenticate, requireEmailVerified, requireRole('expert', 'business')];
+const providerMw = [authenticate, requireEmailVerified, requireRole('expert', 'business', 'craftsman')];
 const providerVerifiedMw = [...providerMw, requireVerified];
 servicesRouter.get('/my', ...providerMw, servicesController.listMyServices);
 servicesRouter.post('/', ...providerVerifiedMw, servicesController.createService);

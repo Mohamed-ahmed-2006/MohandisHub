@@ -11,7 +11,8 @@
     "start": "next start -p 3000",
     "typecheck": "next typegen && tsc -p tsconfig.json --noEmit",
     "lint": "eslint app components lib tests next.config.ts tailwind.config.ts vitest.config.ts --max-warnings=0",
-    "test": "vitest --run"
+    "test": "vitest --run",
+    "test:coverage": "vitest --run --coverage"
   },
   "dependencies": {
     "@mohandishub/shared": "file:../../packages/shared",

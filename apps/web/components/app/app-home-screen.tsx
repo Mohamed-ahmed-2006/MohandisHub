@@ -8,8 +8,8 @@ import { useCallback, useEffect, useState } from 'react';
 import { BusinessDashboard } from './business-dashboard';
 import { CustomerDashboard } from './customer-dashboard';
 import { ExpertDashboard } from './expert-dashboard';
-import { ServiceBookingModal } from './service-booking-modal';
 import { useProfileModal } from './profile-modal-context';
+import { ServiceBookingModal } from './service-booking-modal';
 
 import { useAuth } from '@/components/auth/auth-provider';
 import { Container } from '@/components/ui/container';
@@ -17,7 +17,7 @@ import { Skeleton, SkeletonCard, SkeletonText } from '@/components/ui/skeleton';
 import { EGYPTIAN_CITIES } from '@/lib/data/egyptian-cities';
 import { buildLocalePath } from '@/lib/i18n/path';
 import type { Dictionary, Locale } from '@/lib/i18n/types';
-import type { TopBusiness, TopExpert } from '@/lib/profiles/client';
+import type { TopBusiness, TopCraftsman, TopExpert } from '@/lib/profiles/client';
 import { profilesApiClient } from '@/lib/profiles/client';
 import { servicesApiClient } from '@/lib/services/client';
 
@@ -225,8 +225,10 @@ export const AppHomeScreen = ({ locale, dictionary }: AppHomeScreenProps) => {
   const [providerTab, setProviderTab] = useState<'overview' | 'search'>('overview');
   const [topSlideIndex, setTopSlideIndex] = useState(0);
   const [topExperts, setTopExperts] = useState<TopExpert[]>([]);
+  const [topCraftsmen, setTopCraftsmen] = useState<TopCraftsman[]>([]);
   const [topBusinesses, setTopBusinesses] = useState<TopBusiness[]>([]);
   const [showBookingModal, setShowBookingModal] = useState(false);
+  const totalTopSlides = 3;
 
   const areaOptions = city ? (CITY_AREAS[city] ?? []) : [];
   const handleCityChange = (newCity: string) => {
@@ -265,9 +267,11 @@ export const AppHomeScreen = ({ locale, dictionary }: AppHomeScreenProps) => {
   useEffect(() => {
     void Promise.all([
       profilesApiClient.getTopExperts(),
+      profilesApiClient.getTopCraftsmen(),
       profilesApiClient.getTopBusinesses(),
-    ]).then(([experts, businesses]) => {
+    ]).then(([experts, craftsmen, businesses]) => {
       setTopExperts(experts);
+      setTopCraftsmen(craftsmen);
       setTopBusinesses(businesses);
     });
   }, []);
@@ -280,9 +284,9 @@ export const AppHomeScreen = ({ locale, dictionary }: AppHomeScreenProps) => {
 
   // Top experts/business slideshow auto-rotate
   useEffect(() => {
-    const t = setInterval(() => setTopSlideIndex((i) => (i + 1) % 2), 5000);
+    const t = setInterval(() => setTopSlideIndex((i) => (i + 1) % totalTopSlides), 5000);
     return () => clearInterval(t);
-  }, []);
+  }, [totalTopSlides]);
 
   const handleSearch = useCallback(async (qOverride?: string) => {
     setSearching(true);
@@ -323,6 +327,7 @@ export const AppHomeScreen = ({ locale, dictionary }: AppHomeScreenProps) => {
   const isSearchTabActive =
     (authUser?.role === 'customer' && customerTab === 'browse') ||
     (authUser?.role === 'expert' && providerTab === 'search') ||
+    (authUser?.role === 'craftsman' && providerTab === 'search') ||
     (authUser?.role === 'business' && providerTab === 'search');
 
   // Debounce text search input (400ms)
@@ -401,7 +406,7 @@ export const AppHomeScreen = ({ locale, dictionary }: AppHomeScreenProps) => {
         </section>
 
         {/* Top Experts / Top Businesses slideshow — arrows, dots below, scrollable cards */}
-        <section className="home-top-slideshow" aria-label="Top experts and businesses">
+        <section className="home-top-slideshow" aria-label="Top providers">
           <div className="home-top-slideshow-panels">
             <div
               className={`home-top-slideshow-panel ${topSlideIndex === 0 ? 'home-top-slideshow-panel--active' : ''}`}
@@ -460,6 +465,64 @@ export const AppHomeScreen = ({ locale, dictionary }: AppHomeScreenProps) => {
               role="tabpanel"
               aria-hidden={topSlideIndex !== 1}
             >
+              <h2 className="home-section-title">{d.topCraftsmen}</h2>
+              <div className="home-top-cards-grid home-top-cards-grid--scroll">
+                {topCraftsmen.length > 0
+                  ? topCraftsmen.map((craftsman) => (
+                      <button
+                        key={craftsman.userId}
+                        type="button"
+                        className="home-top-card home-top-card--large home-top-card--clickable"
+                        onClick={() =>
+                          openProfileModal(craftsman.userId, {
+                            displayName: craftsman.displayName,
+                            avatarUrl: craftsman.avatarUrl,
+                            role: 'craftsman',
+                          })
+                        }
+                      >
+                        <div className="home-top-avatar home-top-avatar--large">
+                          {craftsman.avatarUrl ? (
+                            <Image
+                              src={craftsman.avatarUrl}
+                              alt=""
+                              width={64}
+                              height={64}
+                              className="home-top-avatar-img"
+                            />
+                          ) : (
+                            <span className="home-top-avatar-fallback">
+                              {craftsman.displayName.charAt(0)}
+                            </span>
+                          )}
+                        </div>
+                        <p className="home-top-name">{craftsman.displayName}</p>
+                        <p className="home-top-meta">
+                          {craftsman.trade ?? craftsman.title ?? craftsman.headline ?? '—'}
+                          {craftsman.specializations?.length
+                            ? ` · ${craftsman.specializations.slice(0, 2).join(', ')}`
+                            : ''}
+                          {craftsman.city ? ` · ${craftsman.city}` : ''}
+                        </p>
+                      </button>
+                    ))
+                  : [1, 2, 3].map((i) => (
+                      <div
+                        key={i}
+                        className="home-top-card home-top-card--large home-top-placeholder"
+                      >
+                        <div className="home-top-avatar home-top-avatar--large" />
+                        <p className="home-top-name">{dictionary.common.comingSoon}</p>
+                        <p className="home-top-meta">—</p>
+                      </div>
+                    ))}
+              </div>
+            </div>
+            <div
+              className={`home-top-slideshow-panel ${topSlideIndex === 2 ? 'home-top-slideshow-panel--active' : ''}`}
+              role="tabpanel"
+              aria-hidden={topSlideIndex !== 2}
+            >
               <h2 className="home-section-title">{d.topBusinesses}</h2>
               <div className="home-top-cards-grid home-top-cards-grid--scroll">
                 {topBusinesses.length > 0
@@ -468,7 +531,13 @@ export const AppHomeScreen = ({ locale, dictionary }: AppHomeScreenProps) => {
                         key={biz.userId}
                         type="button"
                         className="home-top-card home-top-card--large home-top-card--clickable"
-                        onClick={() => openProfileModal(biz.userId, { displayName: biz.companyName, avatarUrl: biz.avatarUrl, role: 'business' })}
+                        onClick={() =>
+                          openProfileModal(biz.userId, {
+                            displayName: biz.companyName,
+                            avatarUrl: biz.avatarUrl,
+                            role: 'business',
+                          })
+                        }
                       >
                         <div className="home-top-avatar home-top-avatar--large">
                           {biz.avatarUrl ? (
@@ -510,7 +579,9 @@ export const AppHomeScreen = ({ locale, dictionary }: AppHomeScreenProps) => {
               type="button"
               className="home-top-slideshow-arrow home-top-slideshow-arrow--standalone"
               aria-label="Previous slide"
-              onClick={() => setTopSlideIndex((i) => (i === 0 ? 1 : 0))}
+              onClick={() =>
+                setTopSlideIndex((i) => (i === 0 ? totalTopSlides - 1 : i - 1))
+              }
             >
               ‹
             </button>
@@ -526,17 +597,25 @@ export const AppHomeScreen = ({ locale, dictionary }: AppHomeScreenProps) => {
               <button
                 type="button"
                 role="tab"
-                aria-label={d.topBusinesses}
+                aria-label={d.topCraftsmen}
                 aria-selected={topSlideIndex === 1}
                 className="home-top-slideshow-dot"
                 onClick={() => setTopSlideIndex(1)}
+              />
+              <button
+                type="button"
+                role="tab"
+                aria-label={d.topBusinesses}
+                aria-selected={topSlideIndex === 2}
+                className="home-top-slideshow-dot"
+                onClick={() => setTopSlideIndex(2)}
               />
             </div>
             <button
               type="button"
               className="home-top-slideshow-arrow home-top-slideshow-arrow--standalone"
               aria-label="Next slide"
-              onClick={() => setTopSlideIndex((i) => (i + 1) % 2)}
+              onClick={() => setTopSlideIndex((i) => (i + 1) % totalTopSlides)}
             >
               ›
             </button>
@@ -638,6 +717,7 @@ export const AppHomeScreen = ({ locale, dictionary }: AppHomeScreenProps) => {
                       >
                         <option value="">{d.anyProvider}</option>
                         <option value="expert">{d.expert}</option>
+                        <option value="craftsman">{d.craftsman}</option>
                         <option value="business">{d.businessProvider}</option>
                       </select>
                     </div>
@@ -747,6 +827,7 @@ export const AppHomeScreen = ({ locale, dictionary }: AppHomeScreenProps) => {
                                 openProfileModal(r.providerId, {
                                   displayName: r.providerName,
                                   avatarUrl: r.providerAvatar ?? null,
+                                  role: r.providerRole,
                                 });
                               }}
                               onKeyDown={(e) => {
@@ -756,6 +837,7 @@ export const AppHomeScreen = ({ locale, dictionary }: AppHomeScreenProps) => {
                                   openProfileModal(r.providerId, {
                                     displayName: r.providerName,
                                     avatarUrl: r.providerAvatar ?? null,
+                                    role: r.providerRole,
                                   });
                                 }
                               }}
@@ -822,7 +904,10 @@ export const AppHomeScreen = ({ locale, dictionary }: AppHomeScreenProps) => {
           </>
         )}
         {/* Expert / Business Dashboard Tabs */}
-        {(authUser.role === 'expert' || authUser.role === 'business') && accessToken && (
+        {(authUser.role === 'expert' ||
+          authUser.role === 'craftsman' ||
+          authUser.role === 'business') &&
+          accessToken && (
           <>
             <div className="dashboard-tabs" role="tablist">
               <button
@@ -847,12 +932,13 @@ export const AppHomeScreen = ({ locale, dictionary }: AppHomeScreenProps) => {
 
             {providerTab === 'overview' && (
               <>
-                {authUser.role === 'expert' && (
+                {(authUser.role === 'expert' || authUser.role === 'craftsman') && (
                   <ExpertDashboard
                     locale={locale}
                     dictionary={dictionary}
                     accessToken={accessToken}
                     categories={categories}
+                    providerRole={authUser.role}
                   />
                 )}
                 {authUser.role === 'business' && (
@@ -937,6 +1023,7 @@ export const AppHomeScreen = ({ locale, dictionary }: AppHomeScreenProps) => {
                   >
                     <option value="">{d.anyProvider}</option>
                     <option value="expert">{d.expert}</option>
+                    <option value="craftsman">{d.craftsman}</option>
                     <option value="business">{d.businessProvider}</option>
                   </select>
                 </div>
@@ -1106,10 +1193,11 @@ export const AppHomeScreen = ({ locale, dictionary }: AppHomeScreenProps) => {
                 type="button"
                 className="home-drawer-avatar-wrap"
                 onClick={() =>
-                  openProfileModal(selectedResult.providerId, {
-                    displayName: selectedResult.providerName,
-                    avatarUrl: selectedResult.providerAvatar ?? null,
-                  })
+                    openProfileModal(selectedResult.providerId, {
+                      displayName: selectedResult.providerName,
+                      avatarUrl: selectedResult.providerAvatar ?? null,
+                      role: selectedResult.providerRole,
+                    })
                 }
               >
                 <div className="home-drawer-avatar">
@@ -1133,10 +1221,11 @@ export const AppHomeScreen = ({ locale, dictionary }: AppHomeScreenProps) => {
                 type="button"
                 className="home-drawer-provider-btn"
                 onClick={() =>
-                  openProfileModal(selectedResult.providerId, {
-                    displayName: selectedResult.providerName,
-                    avatarUrl: selectedResult.providerAvatar ?? null,
-                  })
+                    openProfileModal(selectedResult.providerId, {
+                      displayName: selectedResult.providerName,
+                      avatarUrl: selectedResult.providerAvatar ?? null,
+                      role: selectedResult.providerRole,
+                    })
                 }
               >
                 {selectedResult.providerName}

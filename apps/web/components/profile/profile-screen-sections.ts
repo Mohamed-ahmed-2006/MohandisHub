@@ -12,7 +12,7 @@ const SECTION_CONFIG: ProfileSection[] = [
 ];
 
 export function getVisibleProfileSections(role?: string | null): ProfileSection[] {
-  const hasRoleProfile = role === 'expert' || role === 'business';
+  const hasRoleProfile = role === 'expert' || role === 'craftsman' || role === 'business';
 
   return SECTION_CONFIG.filter((section) => {
     if (section.id === 'account') return true;

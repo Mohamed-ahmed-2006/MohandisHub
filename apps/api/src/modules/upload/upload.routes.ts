@@ -138,21 +138,6 @@ uploadRouter.post(
   requireEmailVerified,
   asyncHandler(async (req, res, next) => {
     const status = await settingsService.getAppStatus();
-    const supabaseConfigured = isSupabaseStorageConfigured();
-    // #region agent log
-    fetch('http://127.0.0.1:7325/ingest/ebd08bf8-7d73-450c-ad4d-4436a6c2225b', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '3da021' },
-      body: JSON.stringify({
-        sessionId: '3da021',
-        location: 'upload.routes.ts:POST /private pre-check',
-        message: 'Private upload pre-check',
-        data: { pauseUploads: status.pauseUploads, supabaseConfigured },
-        timestamp: Date.now(),
-        hypothesisId: 'H1-H2',
-      }),
-    }).catch(() => {});
-    // #endregion
     if (status.pauseUploads) {
       throw new HttpError({
         statusCode: 503,
@@ -164,20 +149,6 @@ uploadRouter.post(
   }),
   upload.single('file'),
   asyncHandler(async (req, res) => {
-    // #region agent log
-    fetch('http://127.0.0.1:7325/ingest/ebd08bf8-7d73-450c-ad4d-4436a6c2225b', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '3da021' },
-      body: JSON.stringify({
-        sessionId: '3da021',
-        location: 'upload.routes.ts:POST /private handler',
-        message: 'Private upload handler entered',
-        data: { hasFile: !!req.file },
-        timestamp: Date.now(),
-        hypothesisId: 'H4',
-      }),
-    }).catch(() => {});
-    // #endregion
     if (!req.file) {
       throw new HttpError({ statusCode: 400, code: 'NO_FILE', message: 'No file provided.' });
     }

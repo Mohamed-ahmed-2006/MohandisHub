@@ -112,4 +112,20 @@ describe('NeedsService hardening', () => {
     });
     expect(walletRepo.findByUserId).not.toHaveBeenCalled();
   });
+
+  it('rejects invalid need status transitions', async () => {
+    const repo = {
+      getNeedById: vi.fn().mockResolvedValue(makeNeed({ status: 'open' })),
+      updateNeed: vi.fn(),
+    };
+    const service = new NeedsService(repo as never, {} as never, {} as never);
+
+    await expect(
+      service.updateNeed('need-1', 'customer-1', { status: 'completed' }),
+    ).rejects.toMatchObject({
+      code: 'INVALID_NEED_STATUS_TRANSITION',
+      statusCode: 400,
+    });
+    expect(repo.updateNeed).not.toHaveBeenCalled();
+  });
 });

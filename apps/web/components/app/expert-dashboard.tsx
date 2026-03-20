@@ -18,6 +18,7 @@ type Props = {
   dictionary: Dictionary;
   accessToken: string;
   categories: ServiceCategory[];
+  providerRole?: 'expert' | 'craftsman';
 };
 
 export const ExpertDashboard = ({
@@ -25,6 +26,7 @@ export const ExpertDashboard = ({
   dictionary,
   accessToken,
   categories: _categories,
+  providerRole = 'expert',
 }: Props) => {
   const { addToast } = useToast();
   const [openNeeds, setOpenNeeds] = useState<Need[]>([]);
@@ -153,8 +155,8 @@ export const ExpertDashboard = ({
     }
   };
 
-  const suggestions = dictionary.appHome?.suggestions?.expert;
-  const suggestTitle = suggestions?.title ?? 'Suggested actions for experts';
+  const suggestions = dictionary.appHome?.suggestions?.[providerRole];
+  const suggestTitle = suggestions?.title ?? 'Suggested actions for providers';
   const suggestItems = suggestions?.items ?? [];
   const suggestCta = suggestions?.ctaLabel ?? 'Manage Services';
 

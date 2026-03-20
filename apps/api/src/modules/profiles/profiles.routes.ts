@@ -16,6 +16,7 @@ const profilesRouter = Router();
 // Public — top providers and public profile (must be before /expert, /business)
 profilesRouter.get('/top-experts', profilesController.getTopExperts);
 profilesRouter.get('/top-businesses', profilesController.getTopBusinesses);
+profilesRouter.get('/top-craftsmen', profilesController.getTopCraftsmen);
 profilesRouter.get('/public/:userId', profilesController.getPublicProfile);
 
 // Expert profile
@@ -30,6 +31,26 @@ profilesRouter.patch(
   authenticate,
   requireEmailVerified,
   profilesController.updateExpertProfile,
+);
+
+// Craftsman profile
+profilesRouter.get(
+  '/craftsman',
+  authenticate,
+  requireEmailVerified,
+  profilesController.getCraftsmanProfile,
+);
+profilesRouter.patch(
+  '/craftsman',
+  authenticate,
+  requireEmailVerified,
+  profilesController.updateCraftsmanProfile,
+);
+profilesRouter.post(
+  '/craftsman/complete-onboarding',
+  authenticate,
+  requireEmailVerified,
+  profilesController.completeCraftsmanOnboarding,
 );
 
 // Customer profile

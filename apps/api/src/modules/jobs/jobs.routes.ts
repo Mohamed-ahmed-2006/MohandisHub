@@ -20,7 +20,7 @@ const asHandler = (
 jobsRouter.get('/', asHandler(jobsController.listOpenJobs));
 
 const businessMw = [authenticate, requireEmailVerified, requireRole('business'), requireVerified];
-const expertMw = [authenticate, requireEmailVerified, requireRole('expert'), requireVerified];
+const applicantMw = [authenticate, requireEmailVerified, requireRole('expert', 'craftsman'), requireVerified];
 
 // Business endpoints
 jobsRouter.post('/', ...businessMw, asHandler(jobsController.createJob));
@@ -67,8 +67,8 @@ jobsRouter.post(
 );
 
 // Expert endpoints
-jobsRouter.get('/my-applications', ...expertMw, asHandler(jobsController.listExpertApplications));
-jobsRouter.post('/:id/apply', ...expertMw, asHandler(jobsController.applyForJob));
-jobsRouter.post('/milestones/:milestoneId/submit', ...expertMw, asHandler(jobsController.submitMilestone));
+jobsRouter.get('/my-applications', ...applicantMw, asHandler(jobsController.listExpertApplications));
+jobsRouter.post('/:id/apply', ...applicantMw, asHandler(jobsController.applyForJob));
+jobsRouter.post('/milestones/:milestoneId/submit', ...applicantMw, asHandler(jobsController.submitMilestone));
 
 export { jobsRouter };

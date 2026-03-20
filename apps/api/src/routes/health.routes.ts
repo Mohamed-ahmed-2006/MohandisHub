@@ -23,7 +23,7 @@ healthRouter.get(
   '/ready',
   asyncHandler(async (_req, res) => {
     if (!hasDatabaseConfig()) {
-      res.status(200).json({ ok: true, ready: true });
+      res.status(503).json({ ok: false, ready: false, database: false });
       return;
     }
     const dbOk = await pingDb();

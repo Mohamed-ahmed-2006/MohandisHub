@@ -212,6 +212,14 @@ export class ServicesRepository {
     return rows[0] ?? null;
   }
 
+  async getActiveServiceById(serviceId: string): Promise<ServiceDetailRow | null> {
+    const { rows } = await this.db.query<ServiceDetailRow>(
+      `SELECT * FROM services WHERE id = $1 AND status = 'active'`,
+      [serviceId],
+    );
+    return rows[0] ?? null;
+  }
+
   async incrementViewCount(serviceId: string): Promise<void> {
     await this.db.query(`UPDATE services SET view_count = view_count + 1 WHERE id = $1`, [
       serviceId,

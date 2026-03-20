@@ -2,11 +2,16 @@ import type { VerificationStatus } from '@mohandishub/shared';
 
 import { HttpError } from '../../utils/http-error.js';
 
-type VerificationImageRole = 'expert' | 'business';
+type VerificationImageRole = 'expert' | 'business' | 'craftsman';
 
 type ExpertLikeProfile = {
   identity_verified: boolean;
   academic_verified: boolean;
+  verification_status: VerificationStatus;
+};
+
+type CraftsmanLikeProfile = {
+  identity_verified: boolean;
   verification_status: VerificationStatus;
 };
 
@@ -20,15 +25,17 @@ type VerificationImageRepository = {
   getUserAvatarUrl(userId: string): Promise<string | null>;
   getBusinessLogoUrl(userId: string): Promise<string | null>;
   findExpertProfile(userId: string): Promise<ExpertLikeProfile | null>;
+  findCraftsmanProfile(userId: string): Promise<CraftsmanLikeProfile | null>;
   findBusinessProfile(userId: string): Promise<BusinessLikeProfile | null>;
   updateExpertOverallStatus(userId: string, status: string): Promise<void>;
+  updateCraftsmanOverallStatus(userId: string, status: string): Promise<void>;
   updateBusinessOverallStatus(userId: string, status: string): Promise<void>;
 };
 
 export function getRequiredVerificationImageMessage(role: VerificationImageRole): string {
-  return role === 'expert'
-    ? 'Add your profile picture before starting or completing verification.'
-    : 'Add your company logo before starting or completing verification.';
+  return role === 'business'
+    ? 'Add your company logo before starting or completing verification.'
+    : 'Add your profile picture before starting or completing verification.';
 }
 
 export async function hasRequiredVerificationImage(
@@ -36,13 +43,13 @@ export async function hasRequiredVerificationImage(
   userId: string,
   role: VerificationImageRole,
 ): Promise<boolean> {
-  if (role === 'expert') {
-    const avatarUrl = await repo.getUserAvatarUrl(userId);
-    return Boolean(avatarUrl?.trim());
+  if (role === 'business') {
+    const logoUrl = await repo.getBusinessLogoUrl(userId);
+    return Boolean(logoUrl?.trim());
   }
 
-  const logoUrl = await repo.getBusinessLogoUrl(userId);
-  return Boolean(logoUrl?.trim());
+  const avatarUrl = await repo.getUserAvatarUrl(userId);
+  return Boolean(avatarUrl?.trim());
 }
 
 export async function assertRequiredVerificationImage(
@@ -71,6 +78,19 @@ export function getEffectiveExpertVerificationStatus(
     profile.verification_status === 'verified' &&
     (!hasAvatar || !profile.identity_verified || !profile.academic_verified)
   ) {
+    return 'under_review';
+  }
+  return profile.verification_status;
+}
+
+export function getEffectiveCraftsmanVerificationStatus(
+  profile: CraftsmanLikeProfile,
+  hasAvatar: boolean,
+): VerificationStatus {
+  if (profile.identity_verified && hasAvatar) {
+    return 'verified';
+  }
+  if (profile.verification_status === 'verified' && (!hasAvatar || !profile.identity_verified)) {
     return 'under_review';
   }
   return profile.verification_status;
@@ -107,6 +127,23 @@ export async function syncVerificationStatusForRequiredImage(
     const effectiveStatus = getEffectiveExpertVerificationStatus(profile, Boolean(avatarUrl?.trim()));
     if (effectiveStatus !== profile.verification_status) {
       await repo.updateExpertOverallStatus(userId, effectiveStatus);
+    }
+    return;
+  }
+
+  if (role === 'craftsman') {
+    const [profile, avatarUrl] = await Promise.all([
+      repo.findCraftsmanProfile(userId),
+      repo.getUserAvatarUrl(userId),
+    ]);
+    if (!profile) return;
+
+    const effectiveStatus = getEffectiveCraftsmanVerificationStatus(
+      profile,
+      Boolean(avatarUrl?.trim()),
+    );
+    if (effectiveStatus !== profile.verification_status) {
+      await repo.updateCraftsmanOverallStatus(userId, effectiveStatus);
     }
     return;
   }

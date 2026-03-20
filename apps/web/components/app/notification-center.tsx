@@ -65,18 +65,18 @@ export function NotificationCenter({ accessToken, dictionary }: Props) {
 
   useEffect(() => {
     if (!accessToken) return;
+    let activeSocket: Awaited<ReturnType<typeof getChatSocket>> | null = null;
+    const onNotification = () => {
+      void fetchUnreadCount();
+      if (open) void fetchList();
+    };
     void getChatSocket(accessToken).then((sock) => {
       if (!sock) return;
-      const onNotification = () => {
-        void fetchUnreadCount();
-        if (open) void fetchList();
-      };
+      activeSocket = sock;
       sock.on('notification', onNotification);
     });
     return () => {
-      void getChatSocket(accessToken).then((sock) => {
-        if (sock) sock.off('notification');
-      });
+      if (activeSocket) activeSocket.off('notification', onNotification);
     };
   }, [accessToken, open, fetchUnreadCount, fetchList]);
 

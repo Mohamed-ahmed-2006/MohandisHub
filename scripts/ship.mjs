@@ -1,6 +1,7 @@
 import { execSync } from 'child_process';
 import fs from 'fs';
 import process from 'process';
+import { URL } from 'url';
 
 function run(command) {
   console.log(`\n> ${command}`);
@@ -23,45 +24,45 @@ function getApiDatabaseUrl() {
   return line.slice('DATABASE_URL='.length).trim();
 }
 
-console.log("🚀 Starting check, build, commit, and migrate process...");
+function getDbTargetLabel(dbUrl) {
+  try {
+    const parsed = new URL(dbUrl);
+    return `${parsed.hostname}${parsed.pathname}`;
+  } catch {
+    return 'unknown-database-target';
+  }
+}
+
+console.log('🚀 Starting ship: check, build, and migrate (no git commit)...');
 
 // 1. Check for errors (Typecheck)
-console.log("\n1️⃣  Checking for errors...");
+console.log('\n1️⃣  Checking for errors (typecheck)...');
 run('npm run typecheck');
 
 // 2. Lint
-console.log("\n2️⃣  Running lint...");
+console.log('\n2️⃣  Running lint...');
 run('npm run lint');
 
 // 3. Build npm
-console.log("\n3️⃣  Building the project...");
+console.log('\n3️⃣  Building the project...');
 run('npm run build');
 
-// 4. Git commit (not push)
-console.log("\n4️⃣  Committing to Git...");
-run('git add .');
-
-try {
-  const status = execSync('git status --porcelain', { stdio: 'pipe' }).toString();
-  if (status.trim() === '') {
-    console.log("No changes to commit.");
-  } else {
-    // You can modify this message to be dynamic if you prefer.
-    run('git commit -m "chore: auto-check, build, and migrate"');
-    console.log("✅ Changes committed.");
-  }
-} catch (err) {
-  console.log("Failed to commit changes or no changes to commit.");
-}
-
-// 5. Migrate database
-console.log("\n5️⃣  Pushing database migrations...");
+// 4. Migrate database
+console.log('\n4️⃣  Pushing database migrations...');
 // Uses local DATABASE_URL when available to avoid requiring a linked Supabase project in local dev.
 const dbUrl = getApiDatabaseUrl();
+if (process.env.SHIP_CONFIRM !== 'YES') {
+  console.error(
+    '\n❌ Refusing to run migrations without explicit confirmation. Set SHIP_CONFIRM=YES and rerun.',
+  );
+  process.exit(1);
+}
 if (dbUrl) {
+  console.log(`Target database: ${getDbTargetLabel(dbUrl)}`);
   run(`npx supabase db push --db-url "${dbUrl}"`);
 } else {
+  console.log('Target database: linked Supabase project (no DATABASE_URL in apps/api/.env)');
   run('npx supabase db push');
 }
 
-console.log("\n🎉 All done successfully!");
+console.log('\n🎉 Ship completed: checks, build, and migrations all passed. You can now commit and push.');

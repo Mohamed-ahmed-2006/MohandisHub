@@ -40,21 +40,21 @@ export const AppSidebar = ({
 
   useEffect(() => {
     if (!accessToken) return;
+    let activeSocket: Awaited<ReturnType<typeof getChatSocket>> | null = null;
+    const onNotification = (data: { type?: string }) => {
+      if (data.type === 'new_message' || data.type === 'new_application_message') {
+        setHasUnreadChat(true);
+      } else {
+        setHasUnreadJobs(true);
+      }
+    };
     void getChatSocket(accessToken).then((sock) => {
       if (!sock) return;
-      const onNotification = (data: { type?: string }) => {
-        if (data.type === 'new_message' || data.type === 'new_application_message') {
-          setHasUnreadChat(true);
-        } else {
-          setHasUnreadJobs(true);
-        }
-      };
+      activeSocket = sock;
       sock.on('notification', onNotification);
     });
     return () => {
-      void getChatSocket(accessToken).then((sock) => {
-        if (sock) sock.off('notification');
-      });
+      if (activeSocket) activeSocket.off('notification', onNotification);
     };
   }, [accessToken]);
 
@@ -66,13 +66,13 @@ export const AppSidebar = ({
 
   const navItems: NavItem[] = [
     { href: '/app', label: dictionary.nav.home },
-    { href: '/app/bookings', label: dictionary.nav.bookings ?? 'My Bookings' },
-    { href: '/app/services', label: dictionary.nav.myServices ?? 'My Services', roles: ['expert', 'business'] },
-    { href: '/app/calendar', label: dictionary.nav.calendar ?? 'Calendar', roles: ['expert', 'business'] },
+    { href: '/app/bookings', label: dictionary.nav.bookings },
+    { href: '/app/services', label: dictionary.nav.myServices ?? dictionary.nav.browse, roles: ['expert', 'craftsman', 'business'] },
+    { href: '/app/calendar', label: dictionary.nav.calendar ?? dictionary.calendarPage?.title ?? dictionary.nav.home, roles: ['expert', 'craftsman', 'business'] },
     { href: '/app/settings', label: dictionary.nav.settings },
     { href: '/app/chat', label: dictionary.nav.chat },
     { href: '/app/history', label: dictionary.nav.history },
-    { href: '/app/support', label: dictionary.nav.support ?? 'Support' },
+    { href: '/app/support', label: dictionary.nav.support },
     { href: '/app/plan', label: dictionary.nav.plan },
     { href: '/app/admin', label: dictionary.nav.admin, roles: ['admin'] },
   ];

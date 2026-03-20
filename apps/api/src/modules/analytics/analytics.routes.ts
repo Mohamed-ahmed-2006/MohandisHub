@@ -16,7 +16,7 @@ analyticsRouter.use(authenticate, requireEmailVerified);
 
 analyticsRouter.get(
   '/me',
-  requireRole('expert', 'business'),
+  requireRole('expert', 'business', 'craftsman'),
   analyticsController.getMyAnalytics,
 );
 

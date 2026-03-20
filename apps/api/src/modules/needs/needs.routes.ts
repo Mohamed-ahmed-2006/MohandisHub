@@ -2,19 +2,44 @@ import { Router } from 'express';
 
 import { authenticate } from '../../middleware/authenticate.js';
 import { requireEmailVerified } from '../../middleware/require-email-verified.js';
+import { requireRole } from '../../middleware/require-role.js';
 import { requireVerified } from '../../middleware/require-verified.js';
 
 import { needsController } from './needs.controller.js';
 
 const needsRouter = Router();
 
-needsRouter.post('/', authenticate, requireEmailVerified, needsController.createNeed);
+needsRouter.post(
+  '/',
+  authenticate,
+  requireEmailVerified,
+  requireRole('customer'),
+  needsController.createNeed,
+);
 needsRouter.get('/my', authenticate, requireEmailVerified, needsController.listMyNeeds);
 needsRouter.get('/', authenticate, requireEmailVerified, needsController.listOpenNeeds);
 needsRouter.get('/:id', authenticate, requireEmailVerified, needsController.getNeed);
-needsRouter.patch('/:id', authenticate, requireEmailVerified, needsController.updateNeed);
-needsRouter.post('/:id/award', authenticate, requireEmailVerified, needsController.awardBid);
-needsRouter.post('/:id/bids/:bidId/pay', authenticate, requireEmailVerified, needsController.payBid);
+needsRouter.patch(
+  '/:id',
+  authenticate,
+  requireEmailVerified,
+  requireRole('customer'),
+  needsController.updateNeed,
+);
+needsRouter.post(
+  '/:id/award',
+  authenticate,
+  requireEmailVerified,
+  requireRole('customer'),
+  needsController.awardBid,
+);
+needsRouter.post(
+  '/:id/bids/:bidId/pay',
+  authenticate,
+  requireEmailVerified,
+  requireRole('customer'),
+  needsController.payBid,
+);
 
 needsRouter.post(
   '/:needId/bids',

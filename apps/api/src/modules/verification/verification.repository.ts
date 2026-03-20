@@ -78,9 +78,14 @@ export class VerificationRepository {
    */
   async getProfileVerificationStatus(
     userId: string,
-    role: 'expert' | 'business',
+    role: 'expert' | 'business' | 'craftsman',
   ): Promise<'unverified' | 'pending' | 'under_review' | 'verified' | 'rejected' | null> {
-    const table = role === 'expert' ? 'expert_profiles' : 'business_profiles';
+    const table =
+      role === 'expert'
+        ? 'expert_profiles'
+        : role === 'craftsman'
+          ? 'craftsman_profiles'
+          : 'business_profiles';
     const { rows } = await this.db.query<{ verification_status: string }>(
       `SELECT verification_status FROM ${table} WHERE user_id = $1 LIMIT 1`,
       [userId],
@@ -131,15 +136,21 @@ export class VerificationRepository {
    */
   async updateProfileVerificationStatus(
     userId: string,
-    role: 'expert' | 'business',
+    role: 'expert' | 'business' | 'craftsman',
     status: 'unverified' | 'pending' | 'under_review' | 'verified' | 'rejected',
     identityVerificationMethod?: 'didit' | 'manual',
   ): Promise<void> {
-    const table = role === 'expert' ? 'expert_profiles' : 'business_profiles';
+    const table =
+      role === 'expert'
+        ? 'expert_profiles'
+        : role === 'craftsman'
+          ? 'craftsman_profiles'
+          : 'business_profiles';
     const verifiedAt = status === 'verified' ? 'now()' : 'NULL';
-    const identityVerified = role === 'expert' && status === 'verified' ? ', identity_verified = true' : '';
+    const identityVerified =
+      role !== 'business' && status === 'verified' ? ', identity_verified = true' : '';
     const methodSet =
-      role === 'expert' && status === 'verified' && identityVerificationMethod
+      role !== 'business' && status === 'verified' && identityVerificationMethod
         ? ', identity_verification_method = $3'
         : '';
 
@@ -154,12 +165,23 @@ export class VerificationRepository {
 
   async markIdentityApproved(
     userId: string,
-    role: 'expert' | 'business',
+    role: 'expert' | 'business' | 'craftsman',
     identityVerificationMethod?: 'didit' | 'manual',
   ): Promise<void> {
     if (role === 'expert') {
       await this.db.query(
         `UPDATE expert_profiles
+         SET identity_verified = true,
+             identity_verification_method = COALESCE($2, identity_verification_method)
+         WHERE user_id = $1`,
+        [userId, identityVerificationMethod ?? null],
+      );
+      return;
+    }
+
+    if (role === 'craftsman') {
+      await this.db.query(
+        `UPDATE craftsman_profiles
          SET identity_verified = true,
              identity_verification_method = COALESCE($2, identity_verification_method)
          WHERE user_id = $1`,

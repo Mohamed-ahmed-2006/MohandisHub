@@ -12,6 +12,7 @@ import type {
   AdminServiceListItem,
   AdminTransactionListItem,
   AdminUpdateBusinessProfileBody,
+  AdminUpdateCraftsmanProfileBody,
   AdminUpdateExpertProfileBody,
   AdminUpdateUserBody,
   AdminUserDetail,
@@ -24,6 +25,7 @@ import type {
   ApiSuccessBody,
   AppSettings,
   BusinessProfile,
+  CraftsmanProfile,
   CreateCategoryBody,
   CreatePlanBody,
   ExpertProfile,
@@ -119,6 +121,7 @@ export type AdminClientOptions = {
 
 export type AdminUserProfile = {
   expertProfile: ExpertProfile | null;
+  craftsmanProfile: CraftsmanProfile | null;
   businessProfile: BusinessProfile | null;
   identityDocuments: IdentityDocument[];
   academicRecords: AcademicRecord[];
@@ -317,6 +320,20 @@ export const adminApiClient = {
     apiRequest<BusinessProfile>({
       method: 'PATCH',
       path: `/api/admin/users/${userId}/business-profile`,
+      body,
+      accessToken,
+      ...(options?.refreshSession ? { refreshSession: options.refreshSession } : {}),
+    }),
+
+  updateCraftsmanProfile: (
+    accessToken: string,
+    userId: string,
+    body: AdminUpdateCraftsmanProfileBody,
+    options?: AdminClientOptions,
+  ) =>
+    apiRequest<CraftsmanProfile>({
+      method: 'PATCH',
+      path: `/api/admin/users/${userId}/craftsman-profile`,
       body,
       accessToken,
       ...(options?.refreshSession ? { refreshSession: options.refreshSession } : {}),
@@ -533,7 +550,7 @@ export const adminApiClient = {
 
   // Verifications (existing)
   syncVerifiedAt: (accessToken: string, options?: AdminClientOptions) =>
-    apiRequest<{ experts: number; businesses: number }>({
+    apiRequest<{ experts: number; craftsmen: number; businesses: number }>({
       method: 'POST',
       path: '/api/admin/verification/sync-verified-at',
       accessToken,

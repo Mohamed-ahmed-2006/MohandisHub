@@ -582,23 +582,31 @@ export const AdminSettingsTab = ({ dictionary, accessToken, refreshSession }: Pr
                   factoryResetLoading ||
                   factoryResetConfirmPhrase.trim().toUpperCase() !== FACTORY_RESET_CONFIRM_PHRASE
                 }
-                onClick={async () => {
-                  setFactoryResetError(null);
-                  setFactoryResetLoading(true);
-                  try {
-                    const result = await adminApiClient.factoryReset(accessToken, {
-                      refreshSession,
-                    });
-                    setFactoryResetModalOpen(false);
-                    setSuccessMessage(d.factoryResetSuccess);
-                    setSuccess(true);
-                    setTimeout(() => { setSuccess(false); setSuccessMessage(null); }, 5000);
-                    if (refreshSession) await refreshSession();
-                    setFactoryResetLoading(false);
-                  } catch (err: unknown) {
-                    setFactoryResetError(getErrorMessage(err, dictionary));
-                    setFactoryResetLoading(false);
-                  }
+                onClick={() => {
+                  void (async () => {
+                    setFactoryResetError(null);
+                    setFactoryResetLoading(true);
+                    try {
+                      await adminApiClient.factoryReset(accessToken, {
+                        refreshSession,
+                      });
+                      setFactoryResetModalOpen(false);
+                      setSuccessMessage(d.factoryResetSuccess);
+                      setSuccess(true);
+                      setTimeout(
+                        () => {
+                          setSuccess(false);
+                          setSuccessMessage(null);
+                        },
+                        5000,
+                      );
+                      if (refreshSession) await refreshSession();
+                      setFactoryResetLoading(false);
+                    } catch (err: unknown) {
+                      setFactoryResetError(getErrorMessage(err, dictionary));
+                      setFactoryResetLoading(false);
+                    }
+                  })();
                 }}
               >
                 {factoryResetLoading

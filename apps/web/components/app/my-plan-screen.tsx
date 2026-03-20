@@ -1,6 +1,7 @@
 'use client';
 
 import type { Plan, Wallet } from '@mohandishub/shared';
+import { ClipboardList } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 
@@ -10,7 +11,6 @@ import { buildLocalePath } from '@/lib/i18n/path';
 import type { Dictionary, Locale } from '@/lib/i18n/types';
 import { plansApiClient } from '@/lib/plans/client';
 import { walletApiClient } from '@/lib/wallet/client';
-import { ClipboardList } from 'lucide-react';
 
 import './my-plan-screen.css';
 

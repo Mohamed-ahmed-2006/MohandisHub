@@ -5,6 +5,7 @@ type RegisterRole = Exclude<UserRole, 'admin'>;
 type AuthRoleLabels = {
   customer: string;
   expert: string;
+  craftsman: string;
   business: string;
 };
 
@@ -14,7 +15,7 @@ type AuthRoleSwitchProps = {
   onRoleChange: (nextRole: RegisterRole) => void;
 };
 
-const roleOptions: RegisterRole[] = ['customer', 'expert', 'business'];
+const roleOptions: RegisterRole[] = ['customer', 'expert', 'craftsman', 'business'];
 
 export const AuthRoleSwitch = ({ role, labels, onRoleChange }: AuthRoleSwitchProps) => {
   return (

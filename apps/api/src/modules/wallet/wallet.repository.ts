@@ -55,7 +55,7 @@ type DepositRequestRow = {
   updated_at: string;
 };
 
-type ExpertPayoutSettingsRow = {
+type IndividualProviderPayoutSettingsRow = {
   payout_currency: string | null;
   payout_address: string | null;
   payout_extra_id: string | null;
@@ -761,10 +761,14 @@ export class WalletRepository {
     return rows[0]!;
   }
 
-  async getExpertPayoutSettings(userId: string): Promise<ExpertPayoutSettingsRow | null> {
-    const { rows } = await this.db.query<ExpertPayoutSettingsRow>(
+  async getIndividualProviderPayoutSettings(
+    userId: string,
+    role: 'expert' | 'craftsman',
+  ): Promise<IndividualProviderPayoutSettingsRow | null> {
+    const table = role === 'craftsman' ? 'craftsman_profiles' : 'expert_profiles';
+    const { rows } = await this.db.query<IndividualProviderPayoutSettingsRow>(
       `SELECT payout_currency, payout_address, payout_extra_id, payout_updated_at
-       FROM expert_profiles
+       FROM ${table}
        WHERE user_id = $1
        LIMIT 1`,
       [userId],
@@ -772,16 +776,18 @@ export class WalletRepository {
     return rows[0] ?? null;
   }
 
-  async updateExpertPayoutSettings(
+  async updateIndividualProviderPayoutSettings(
     userId: string,
+    role: 'expert' | 'craftsman',
     params: {
       payoutCurrency: string;
       payoutAddress: string;
       payoutExtraId?: string | null;
     },
-  ): Promise<ExpertPayoutSettingsRow | null> {
-    const { rows } = await this.db.query<ExpertPayoutSettingsRow>(
-      `UPDATE expert_profiles
+  ): Promise<IndividualProviderPayoutSettingsRow | null> {
+    const table = role === 'craftsman' ? 'craftsman_profiles' : 'expert_profiles';
+    const { rows } = await this.db.query<IndividualProviderPayoutSettingsRow>(
+      `UPDATE ${table}
        SET payout_currency = $2,
            payout_address = $3,
            payout_extra_id = $4,
@@ -1117,6 +1123,6 @@ export type {
   TransactionRow,
   DepositRequestRow,
   WalletHoldRow,
-  ExpertPayoutSettingsRow,
+  IndividualProviderPayoutSettingsRow,
   WithdrawalRequestRow,
 };

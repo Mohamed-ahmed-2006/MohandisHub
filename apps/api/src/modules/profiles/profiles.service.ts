@@ -6,11 +6,13 @@ import type {
   AcademicRecord,
   AdminReview,
   BusinessProfile,
+  CraftsmanProfile,
   CustomerProfile,
   ExpertProfile,
   IdentityDocument,
   PendingVerificationItem,
   PublicBusinessProfile,
+  PublicCraftsmanProfile,
   PublicCustomerProfile,
   PublicExpertProfile,
   PublicUserProfile,
@@ -27,12 +29,14 @@ import { ProfilesRepository } from './profiles.repository.js';
 import type {
   AcademicRecordRow,
   BusinessProfileRow,
+  CraftsmanProfileRow,
   ExpertProfileRow,
   IdentityDocumentRow,
 } from './profiles.types.js';
 import {
   assertRequiredVerificationImage,
   getEffectiveBusinessVerificationStatus,
+  getEffectiveCraftsmanVerificationStatus,
   getEffectiveExpertVerificationStatus,
   hasRequiredVerificationImage,
   syncVerificationStatusForRequiredImage,
@@ -141,6 +145,109 @@ export class ProfilesService {
   }
 
   // ── Customer profile ───────────────────────────────────────────────────
+
+  async getCraftsmanProfile(userId: string): Promise<CraftsmanProfile> {
+    const row = await this.repo.findCraftsmanProfile(userId);
+    if (!row) {
+      throw new HttpError({
+        statusCode: 404,
+        code: 'PROFILE_NOT_FOUND',
+        message: 'Craftsman profile not found.',
+      });
+    }
+    const profile = this.toCraftsmanProfile(row);
+    const [averageRating, reviewCount, avatarUrl] = await Promise.all([
+      this.reviewsRepo.getAvgRating(userId, 'craftsman'),
+      this.reviewsRepo.getReviewCount(userId, 'craftsman'),
+      this.repo.getUserAvatarUrl(userId),
+    ]);
+    const hasAvatar = Boolean(avatarUrl?.trim());
+    const isProfileComplete =
+      hasAvatar &&
+      Boolean(row.trade?.trim() || row.title?.trim()) &&
+      Boolean(row.bio?.trim()) &&
+      Array.isArray(row.specializations) &&
+      row.specializations.length > 0 &&
+      Boolean(row.city?.trim()) &&
+      Boolean(row.country?.trim()) &&
+      Boolean(row.workshop_name?.trim()) &&
+      Boolean(row.workshop_address?.trim());
+    const effectiveStatus = getEffectiveCraftsmanVerificationStatus(row, hasAvatar);
+    const totalDeposited = await this.walletRepo.getTotalDeposited(userId);
+    const badgeEligible = isProfileComplete && totalDeposited >= 1000;
+    if (badgeEligible) await this.repo.setPlatformVerifiedAt(userId);
+    const platformVerifiedAt = await this.repo.getPlatformVerifiedAt(userId);
+    return {
+      ...profile,
+      verificationStatus: effectiveStatus,
+      averageRating: averageRating ?? null,
+      reviewCount,
+      verificationBadgeEarned: badgeEligible,
+      platformVerifiedAt: platformVerifiedAt?.toISOString() ?? null,
+    };
+  }
+
+  async updateCraftsmanProfile(
+    userId: string,
+    input: {
+      trade?: string | undefined;
+      title?: string | undefined;
+      headline?: string | undefined;
+      bio?: string | undefined;
+      specializations?: string[] | undefined;
+      yearsOfExperience?: number | undefined;
+      hourlyRate?: number | undefined;
+      city?: string | undefined;
+      country?: string | undefined;
+      availabilityStatus?: string | undefined;
+      workshopName?: string | undefined;
+      workshopAddress?: string | undefined;
+      workshopLatitude?: number | undefined;
+      workshopLongitude?: number | undefined;
+    },
+  ): Promise<CraftsmanProfile> {
+    const dbFields: Record<string, unknown> = {};
+    if (input.trade !== undefined) dbFields.trade = input.trade;
+    if (input.title !== undefined) dbFields.title = input.title;
+    if (input.headline !== undefined) dbFields.headline = input.headline;
+    if (input.bio !== undefined) dbFields.bio = input.bio;
+    if (input.specializations !== undefined) dbFields.specializations = input.specializations;
+    if (input.yearsOfExperience !== undefined)
+      dbFields.years_of_experience = input.yearsOfExperience;
+    if (input.hourlyRate !== undefined) dbFields.hourly_rate = input.hourlyRate;
+    if (input.city !== undefined) dbFields.city = input.city;
+    if (input.country !== undefined) dbFields.country = input.country;
+    if (input.availabilityStatus !== undefined)
+      dbFields.availability_status = input.availabilityStatus;
+    if (input.workshopName !== undefined) dbFields.workshop_name = input.workshopName;
+    if (input.workshopAddress !== undefined) dbFields.workshop_address = input.workshopAddress;
+    if (input.workshopLatitude !== undefined) dbFields.workshop_latitude = input.workshopLatitude;
+    if (input.workshopLongitude !== undefined)
+      dbFields.workshop_longitude = input.workshopLongitude;
+
+    const row = await this.repo.updateCraftsmanProfile(userId, dbFields);
+    if (!row) {
+      throw new HttpError({
+        statusCode: 404,
+        code: 'PROFILE_NOT_FOUND',
+        message: 'Craftsman profile not found.',
+      });
+    }
+    await syncVerificationStatusForRequiredImage(this.repo, userId, 'craftsman');
+    return this.toCraftsmanProfile((await this.repo.findCraftsmanProfile(userId)) ?? row);
+  }
+
+  async completeCraftsmanOnboarding(userId: string): Promise<void> {
+    const row = await this.repo.findCraftsmanProfile(userId);
+    if (!row) {
+      throw new HttpError({
+        statusCode: 404,
+        code: 'PROFILE_NOT_FOUND',
+        message: 'Craftsman profile not found.',
+      });
+    }
+    await this.repo.setCraftsmanOnboardingCompletedAt(userId);
+  }
 
   async getCustomerProfile(userId: string): Promise<CustomerProfile> {
     const row = await this.repo.findCustomerProfile(userId);
@@ -313,7 +420,7 @@ export class ProfilesService {
 
   async submitIdentityDocument(
     userId: string,
-    role: 'expert' | 'business',
+    role: 'expert' | 'business' | 'craftsman',
     input: {
       documentType: string;
       fullNameOnDoc: string;
@@ -345,8 +452,9 @@ export class ProfilesService {
     // and the UI does not redirect back to the KYC selector.
     if (role === 'business') {
       await this.repo.updateBusinessOverallStatus(userId, 'pending');
+    } else if (role === 'craftsman') {
+      await this.repo.updateCraftsmanOverallStatus(userId, 'pending');
     } else {
-      // Expert: set pending on submit (and when resubmitting after rejection)
       await this.repo.updateExpertOverallStatus(userId, 'pending');
     }
 
@@ -408,14 +516,14 @@ export class ProfilesService {
     userId: string,
     recordId: string,
     input: {
-      recordType?: string;
-      title?: string;
-      institution?: string;
-      fieldOfStudy?: string | null;
-      graduationYear?: number | null;
-      grade?: string | null;
-      certificateImageUrl?: string | null;
-      transcriptImageUrl?: string | null;
+      recordType?: string | undefined;
+      title?: string | undefined;
+      institution?: string | undefined;
+      fieldOfStudy?: string | null | undefined;
+      graduationYear?: number | null | undefined;
+      grade?: string | null | undefined;
+      certificateImageUrl?: string | null | undefined;
+      transcriptImageUrl?: string | null | undefined;
     },
   ): Promise<AcademicRecord> {
     const row = await this.repo.updateAcademicRecord(recordId, userId, input);
@@ -489,6 +597,18 @@ export class ProfilesService {
         }
       }
 
+      const craftsmanProfile = await this.repo.findCraftsmanProfile(doc.user_id);
+      if (craftsmanProfile) {
+        await this.repo.setCraftsmanIdentityVerified(doc.user_id, true);
+        await this.repo.setCraftsmanIdentityVerificationMethod(doc.user_id, 'manual');
+        const hasAvatar = await hasRequiredVerificationImage(this.repo, doc.user_id, 'craftsman');
+        if (hasAvatar) {
+          await this.repo.updateCraftsmanOverallStatus(doc.user_id, 'verified');
+        } else {
+          await this.repo.updateCraftsmanOverallStatus(doc.user_id, 'under_review');
+        }
+      }
+
       const user = await this.repo.findUserBasicById(doc.user_id);
       if (user) {
         await sendTransactionalEmail({
@@ -534,6 +654,11 @@ export class ProfilesService {
       if (businessProfile) {
         await this.repo.setBusinessIdentityVerified(doc.user_id, false);
         await this.repo.updateBusinessOverallStatus(doc.user_id, 'rejected');
+      }
+      const craftsmanProfile = await this.repo.findCraftsmanProfile(doc.user_id);
+      if (craftsmanProfile) {
+        await this.repo.setCraftsmanIdentityVerified(doc.user_id, false);
+        await this.repo.updateCraftsmanOverallStatus(doc.user_id, 'rejected');
       }
     }
 
@@ -691,6 +816,7 @@ export class ProfilesService {
 
       const expertProfile = await this.repo.findExpertProfile(userId);
       const businessProfile = await this.repo.findBusinessProfile(userId);
+      const craftsmanProfile = await this.repo.findCraftsmanProfile(userId);
 
       items.push({
         userId,
@@ -705,6 +831,7 @@ export class ProfilesService {
           .map((r) => this.toAcademicRecord(r)),
         expertProfile: expertProfile ? this.toExpertProfile(expertProfile) : null,
         businessProfile: businessProfile ? this.toBusinessProfile(businessProfile) : null,
+        craftsmanProfile: craftsmanProfile ? this.toCraftsmanProfile(craftsmanProfile) : null,
       });
     }
 
@@ -723,7 +850,7 @@ export class ProfilesService {
       });
     }
     const role = user.primary_role as PublicUserProfile['role'];
-    if (role !== 'customer' && role !== 'expert' && role !== 'business') {
+    if (role !== 'customer' && role !== 'expert' && role !== 'business' && role !== 'craftsman') {
       throw new HttpError({
         statusCode: 404,
         code: 'USER_NOT_FOUND',
@@ -768,6 +895,40 @@ export class ProfilesService {
       return { ...base, expertProfile, businessProfile: null, customerProfile: null };
     }
 
+    if (role === 'craftsman') {
+      const row = await this.repo.findCraftsmanProfile(userId);
+      if (!row) {
+        return { ...base, craftsmanProfile: null };
+      }
+      const [averageRating, reviewCount] = await Promise.all([
+        this.reviewsRepo.getAvgRating(userId, 'craftsman'),
+        this.reviewsRepo.getReviewCount(userId, 'craftsman'),
+      ]);
+      const craftsmanProfile: PublicCraftsmanProfile = {
+        trade: row.trade,
+        title: row.title,
+        headline: row.headline,
+        bio: row.bio,
+        specializations: row.specializations ?? [],
+        yearsOfExperience: row.years_of_experience,
+        hourlyRate: row.hourly_rate ? Number(row.hourly_rate) : null,
+        city: row.city,
+        country: row.country ?? 'Egypt',
+        workshopName: row.workshop_name,
+        verificationStatus: row.verification_status,
+        verificationBadgeEarned: row.verification_status === 'verified',
+        averageRating: averageRating ?? null,
+        reviewCount,
+      };
+      return {
+        ...base,
+        expertProfile: null,
+        businessProfile: null,
+        craftsmanProfile,
+        customerProfile: null,
+      };
+    }
+
     if (role === 'business') {
       const row = await this.repo.findBusinessProfile(userId);
       if (!row) {
@@ -791,14 +952,26 @@ export class ProfilesService {
         averageRating: averageRating ?? null,
         reviewCount,
       };
-      return { ...base, expertProfile: null, businessProfile, customerProfile: null };
+      return {
+        ...base,
+        expertProfile: null,
+        businessProfile,
+        craftsmanProfile: null,
+        customerProfile: null,
+      };
     }
 
     const custRow = await this.repo.findCustomerProfile(userId);
     const customerProfile: PublicCustomerProfile | null = custRow
       ? { city: custRow.city, country: custRow.country }
       : null;
-    return { ...base, expertProfile: null, businessProfile: null, customerProfile };
+    return {
+      ...base,
+      expertProfile: null,
+      businessProfile: null,
+      craftsmanProfile: null,
+      customerProfile,
+    };
   }
 
   // ── Top providers (public) ───────────────────────────────────────────────
@@ -820,6 +993,7 @@ export class ProfilesService {
   async syncVerifiedAtForManuallyVerified(): Promise<{
     experts: number;
     businesses: number;
+    craftsmen: number;
     expertsStatusSynced?: number;
   }> {
     const expertsStatusSynced = await this.repo.syncExpertVerificationStatusFromFlags();
@@ -838,6 +1012,20 @@ export class ProfilesService {
     }>
   > {
     return this.repo.findTopBusinesses(limit);
+  }
+
+  async getTopCraftsmen(limit: number = 6): Promise<
+    Array<{
+      userId: string;
+      displayName: string;
+      avatarUrl: string | null;
+      trade: string | null;
+      headline: string | null;
+      specializations: string[];
+      city: string | null;
+    }>
+  > {
+    return this.repo.findTopCraftsmen(limit);
   }
 
   // ── Mappers ────────────────────────────────────────────────────────────
@@ -865,6 +1053,35 @@ export class ProfilesService {
       verificationStatus: row.verification_status,
       identityVerified: row.identity_verified,
       academicVerified: row.academic_verified,
+      identityVerificationMethod: row.identity_verification_method ?? null,
+      payoutCurrency: row.payout_currency ?? null,
+      payoutAddress: row.payout_address ?? null,
+      payoutExtraId: row.payout_extra_id ?? null,
+      payoutUpdatedAt: row.payout_updated_at ? row.payout_updated_at.toISOString() : null,
+      createdAt: row.created_at.toISOString(),
+    };
+  }
+
+  private toCraftsmanProfile(row: CraftsmanProfileRow): CraftsmanProfile {
+    return {
+      id: row.id,
+      userId: row.user_id,
+      trade: row.trade,
+      title: row.title,
+      headline: row.headline,
+      bio: row.bio,
+      specializations: row.specializations ?? [],
+      yearsOfExperience: row.years_of_experience,
+      hourlyRate: row.hourly_rate ? Number(row.hourly_rate) : null,
+      city: row.city,
+      country: row.country ?? 'Egypt',
+      availabilityStatus: row.availability_status,
+      workshopName: row.workshop_name,
+      workshopAddress: row.workshop_address,
+      workshopLatitude: row.workshop_latitude ? Number(row.workshop_latitude) : null,
+      workshopLongitude: row.workshop_longitude ? Number(row.workshop_longitude) : null,
+      verificationStatus: row.verification_status,
+      identityVerified: row.identity_verified,
       identityVerificationMethod: row.identity_verification_method ?? null,
       payoutCurrency: row.payout_currency ?? null,
       payoutAddress: row.payout_address ?? null,

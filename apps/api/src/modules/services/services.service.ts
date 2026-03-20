@@ -62,7 +62,7 @@ export class ServicesService {
   }
 
   async getServiceDetail(serviceId: string): Promise<Service> {
-    const row = await this.repo.getServiceById(serviceId);
+    const row = await this.repo.getActiveServiceById(serviceId);
     if (!row) {
       throw new HttpError({
         statusCode: 404,
@@ -89,7 +89,7 @@ export class ServicesService {
         }
       }
     }
-    const status = input.submitForReview ? 'active' : 'draft';
+    const status = input.submitForReview ? 'pending_review' : 'draft';
     const dbInput: {
       title: string;
       description?: string;
@@ -198,13 +198,7 @@ export class ServicesService {
         message: 'Service not found.',
       });
     }
-    if (row.status !== 'draft') {
-      throw new HttpError({
-        statusCode: 400,
-        code: 'INVALID_STATUS',
-        message: 'Only draft services can be submitted for review.',
-      });
-    }
+    this.assertServiceStatusTransition(row.status, 'pending_review');
     const updated = await this.repo.updateServiceStatus(serviceId, providerId, 'pending_review');
     return this.toService(updated!);
   }
@@ -218,13 +212,7 @@ export class ServicesService {
         message: 'Service not found.',
       });
     }
-    if (row.status !== 'active') {
-      throw new HttpError({
-        statusCode: 400,
-        code: 'INVALID_STATUS',
-        message: 'Only active services can be paused.',
-      });
-    }
+    this.assertServiceStatusTransition(row.status, 'paused');
     const updated = await this.repo.updateServiceStatus(serviceId, providerId, 'paused');
     return this.toService(updated!);
   }
@@ -238,15 +226,27 @@ export class ServicesService {
         message: 'Service not found.',
       });
     }
-    if (row.status !== 'paused') {
+    this.assertServiceStatusTransition(row.status, 'active');
+    const updated = await this.repo.updateServiceStatus(serviceId, providerId, 'active');
+    return this.toService(updated!);
+  }
+
+  private assertServiceStatusTransition(from: string, to: string): void {
+    if (from === to) return;
+    const allowed: Record<string, string[]> = {
+      draft: ['pending_review'],
+      pending_review: ['active', 'rejected'],
+      active: ['paused', 'rejected'],
+      paused: ['active'],
+      rejected: [],
+    };
+    if (!(allowed[from] ?? []).includes(to)) {
       throw new HttpError({
         statusCode: 400,
         code: 'INVALID_STATUS',
-        message: 'Only paused services can be activated.',
+        message: `Cannot transition service status from ${from} to ${to}.`,
       });
     }
-    const updated = await this.repo.updateServiceStatus(serviceId, providerId, 'active');
-    return this.toService(updated!);
   }
 
   private toCategory(row: CategoryRow): ServiceCategory {

@@ -7,6 +7,7 @@ import type {
   AdminReview,
   ApiSuccessBody,
   BusinessProfile,
+  CraftsmanProfile,
   CustomerProfile,
   ExpertProfile,
   IdentityDocument,
@@ -24,6 +25,7 @@ import {
   identityDocumentSchema,
   updateAcademicRecordSchema,
   updateBusinessProfileSchema,
+  updateCraftsmanProfileSchema,
   updateCustomerProfileSchema,
   updateExpertProfileSchema,
 } from './profiles.validation.js';
@@ -84,6 +86,41 @@ const updateExpertProfile = asyncHandler(async (req, res) => {
 // ═════════════════════════════════════════════════════════════════════════
 // CUSTOMER PROFILE
 // ═════════════════════════════════════════════════════════════════════════
+
+const getCraftsmanProfile = asyncHandler(async (req, res) => {
+  const user = requireAuth(req);
+  const profile = await profilesService.getCraftsmanProfile(user.id);
+  const response: ApiSuccessBody<CraftsmanProfile> = { ok: true, data: profile };
+  res.json(response);
+});
+
+const updateCraftsmanProfile = asyncHandler(async (req, res) => {
+  const user = requireAuth(req);
+  if (user.role !== 'craftsman') {
+    throw new HttpError({
+      statusCode: 403,
+      code: 'FORBIDDEN',
+      message: 'Only craftsmen can update craftsman profiles.',
+    });
+  }
+  const input = updateCraftsmanProfileSchema.parse(req.body);
+  const profile = await profilesService.updateCraftsmanProfile(user.id, input);
+  const response: ApiSuccessBody<CraftsmanProfile> = { ok: true, data: profile };
+  res.json(response);
+});
+
+const completeCraftsmanOnboarding = asyncHandler(async (req, res) => {
+  const user = requireAuth(req);
+  if (user.role !== 'craftsman') {
+    throw new HttpError({
+      statusCode: 403,
+      code: 'FORBIDDEN',
+      message: 'Only craftsmen can complete craftsman onboarding.',
+    });
+  }
+  await profilesService.completeCraftsmanOnboarding(user.id);
+  res.json({ ok: true, data: null });
+});
 
 const getCustomerProfile = asyncHandler(async (req, res) => {
   const user = requireAuth(req);
@@ -159,11 +196,11 @@ const completeBusinessOnboarding = asyncHandler(async (req, res) => {
 
 const submitIdentityDocument = asyncHandler(async (req, res) => {
   const user = requireAuth(req);
-  if (user.role !== 'expert' && user.role !== 'business') {
+  if (user.role !== 'expert' && user.role !== 'business' && user.role !== 'craftsman') {
     throw new HttpError({
       statusCode: 403,
       code: 'FORBIDDEN',
-      message: 'Only experts and businesses need identity verification.',
+      message: 'Only providers with identity verification can submit identity documents.',
     });
   }
   const input = identityDocumentSchema.parse(req.body);
@@ -284,6 +321,7 @@ const syncVerifiedAt = asyncHandler(async (_req, res) => {
   const response: ApiSuccessBody<{
     experts: number;
     businesses: number;
+    craftsmen: number;
     expertsStatusSynced?: number;
   }> = { ok: true, data: result };
   res.json(response);
@@ -296,17 +334,25 @@ const getAnyUserProfile = asyncHandler(async (req, res) => {
 
   const expertProfile = await profilesService.getExpertProfile(userId!).catch(() => null);
   const businessProfile = await profilesService.getBusinessProfile(userId!).catch(() => null);
+  const craftsmanProfile = await profilesService.getCraftsmanProfile(userId!).catch(() => null);
   const identityDocs = await profilesService.getIdentityDocuments(userId!);
   const academicRecords = await profilesService.getAcademicRecords(userId!);
 
   const response: ApiSuccessBody<{
     expertProfile: ExpertProfile | null;
     businessProfile: BusinessProfile | null;
+    craftsmanProfile: CraftsmanProfile | null;
     identityDocuments: IdentityDocument[];
     academicRecords: AcademicRecord[];
   }> = {
     ok: true,
-    data: { expertProfile, businessProfile, identityDocuments: identityDocs, academicRecords },
+    data: {
+      expertProfile,
+      businessProfile,
+      craftsmanProfile,
+      identityDocuments: identityDocs,
+      academicRecords,
+    },
   };
   res.json(response);
 });
@@ -318,6 +364,11 @@ const getTopExperts = asyncHandler(async (_req, res) => {
 
 const getTopBusinesses = asyncHandler(async (_req, res) => {
   const items = await profilesService.getTopBusinesses(6);
+  res.json({ ok: true, data: items });
+});
+
+const getTopCraftsmen = asyncHandler(async (_req, res) => {
+  const items = await profilesService.getTopCraftsmen(6);
   res.json({ ok: true, data: items });
 });
 
@@ -338,9 +389,13 @@ const getPublicProfile = asyncHandler(async (req, res) => {
 export const profilesController = {
   getTopExperts,
   getTopBusinesses,
+  getTopCraftsmen,
   getPublicProfile,
   getExpertProfile,
   updateExpertProfile,
+  getCraftsmanProfile,
+  updateCraftsmanProfile,
+  completeCraftsmanOnboarding,
   getCustomerProfile,
   updateCustomerProfile,
   getBusinessProfile,

@@ -39,6 +39,7 @@ export class AdminRepository {
         (SELECT COUNT(*) FROM users WHERE primary_role = 'customer' AND deleted_at IS NULL)::text AS role_customer,
         (SELECT COUNT(*) FROM users WHERE primary_role = 'expert' AND deleted_at IS NULL)::text AS role_expert,
         (SELECT COUNT(*) FROM users WHERE primary_role = 'business' AND deleted_at IS NULL)::text AS role_business,
+        (SELECT COUNT(*) FROM users WHERE primary_role = 'craftsman' AND deleted_at IS NULL)::text AS role_craftsman,
         (SELECT COUNT(*) FROM users WHERE is_admin = true AND deleted_at IS NULL)::text AS role_admin,
         (SELECT COUNT(*) FROM transactions)::text AS total_transactions,
         (SELECT COALESCE(SUM(amount), 0) FROM transactions WHERE type = 'deposit' AND status = 'completed')::text AS total_revenue,

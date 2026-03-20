@@ -27,6 +27,7 @@ const AuthPage = async ({ params, searchParams }: AuthPageProps) => {
   const mode = resolvedSearch.mode === 'register' ? 'register' : 'login';
   const role =
     resolvedSearch.role === 'expert' ||
+    resolvedSearch.role === 'craftsman' ||
     resolvedSearch.role === 'business' ||
     resolvedSearch.role === 'customer'
       ? resolvedSearch.role

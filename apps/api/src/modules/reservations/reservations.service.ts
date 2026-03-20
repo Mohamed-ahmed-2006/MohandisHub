@@ -14,6 +14,7 @@ import type {
   ReservationSlot,
   ReservationTimelineEvent,
 } from '@mohandishub/shared';
+import { canManageReservationAvailability } from '@mohandishub/shared';
 import type { PoolClient } from 'pg';
 
 import { env } from '../../config/env.js';
@@ -703,7 +704,9 @@ export class ReservationsService {
     totalPages: number;
   }> {
     const normalizedRole: 'customer' | 'provider' =
-      role === 'provider' || role === 'expert' || role === 'business' ? 'provider' : 'customer';
+      role === 'provider' || role === 'expert' || role === 'business' || role === 'craftsman'
+        ? 'provider'
+        : 'customer';
     const { rows, total } = await this.repo.listReservationsByUser(userId, normalizedRole, page, limit);
     return {
       items: rows.map(mapReservation),
@@ -1825,13 +1828,20 @@ export class ReservationsService {
       await client.query('BEGIN');
       for (const row of rows) {
         await this.refundFixedHold(client, row, 'Reservation expired (pending too long)');
+        const updateFields: {
+          status: string;
+          settlementStatus?: string;
+          refundStatus?: string;
+        } = {
+          status: 'expired',
+        };
+        if (row.fixed_price_hold_id) {
+          updateFields.settlementStatus = 'refunded_to_customer';
+          updateFields.refundStatus = 'succeeded';
+        }
         await this.repo.updateReservation(
           row.id,
-          {
-            status: 'expired',
-            settlementStatus: row.fixed_price_hold_id ? 'refunded_to_customer' : undefined,
-            refundStatus: row.fixed_price_hold_id ? 'succeeded' : undefined,
-          },
+          updateFields,
           client,
         );
         await this.repo.createEvent(
@@ -2417,11 +2427,11 @@ export class ReservationsService {
   }
 
   private ensureProviderRole(role: string): void {
-    if (role !== 'expert' && role !== 'business') {
+    if (!canManageReservationAvailability(role)) {
       throw new HttpError({
         statusCode: 403,
         code: 'FORBIDDEN',
-        message: 'This action is only available to experts and businesses.',
+        message: 'This action is only available to provider accounts.',
       });
     }
   }
@@ -2525,7 +2535,7 @@ export class ReservationsService {
     providerId?: string,
   ): string {
     if (providerId) return providerId;
-    if (role === 'expert' || role === 'business') return userId;
+    if (role === 'expert' || role === 'business' || role === 'craftsman') return userId;
     throw new HttpError({
       statusCode: 400,
       code: 'PROVIDER_ID_REQUIRED',

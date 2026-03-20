@@ -1,17 +1,17 @@
 'use client';
 
 import type { SupportTicket, SupportTicketMessage } from '@mohandishub/shared';
+import { ChevronLeft } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 
 import { useAuth } from '@/components/auth/auth-provider';
 import { Container } from '@/components/ui/container';
+import { getApiBaseUrl } from '@/lib/env';
 import { useI18n } from '@/lib/i18n/context';
 import { buildLocalePath } from '@/lib/i18n/path';
 import { supportApiClient } from '@/lib/support/client';
 import { uploadFile } from '@/lib/upload/client';
-import { getApiBaseUrl } from '@/lib/env';
-import { ChevronLeft } from 'lucide-react';
 
 import '@/app/dashboard.css';
 
@@ -264,6 +264,7 @@ export const SupportScreen = () => {
                               const src = u.startsWith('http') ? u : `${getApiBaseUrl()}${u.startsWith('/') ? '' : '/'}${u}`;
                               return (
                                 <a key={u} href={src} target="_blank" rel="noopener noreferrer" className="dashboard-card-media-thumb">
+                                  {/* eslint-disable-next-line @next/next/no-img-element */}
                                   <img src={src} alt="Attachment" width={80} height={80} />
                                 </a>
                               );

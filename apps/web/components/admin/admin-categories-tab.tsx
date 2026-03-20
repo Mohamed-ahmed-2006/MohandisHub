@@ -3,9 +3,9 @@
 import type { ServiceCategory } from '@mohandishub/shared';
 import { useCallback, useEffect, useState } from 'react';
 
+import { CategoryIcon, CATEGORY_ICON_NAMES } from '@/components/ui/category-icon';
 import { adminApiClient } from '@/lib/admin/client';
 import type { Dictionary } from '@/lib/i18n/types';
-import { CategoryIcon, CATEGORY_ICON_NAMES } from '@/components/ui/category-icon';
 
 type Props = { dictionary: Dictionary; accessToken: string };
 

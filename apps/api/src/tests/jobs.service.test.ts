@@ -148,6 +148,8 @@ describe('JobsService hardening', () => {
     };
     const profilesService = {
       getExpertProfile: vi.fn().mockResolvedValue({ headline: 'Expert snapshot' }),
+      // JobsService now probes craftsmen profile first and falls back to expert.
+      getCraftsmanProfile: vi.fn().mockResolvedValue(null),
     };
 
     const service = new JobsService(
@@ -233,7 +235,7 @@ describe('JobsService hardening', () => {
           commissionReceiverId: 'platform-1',
         }),
       } as never,
-      { getExpertProfile: vi.fn() } as never,
+      { getExpertProfile: vi.fn(), getCraftsmanProfile: vi.fn().mockResolvedValue(null) } as never,
     );
 
     await expect(

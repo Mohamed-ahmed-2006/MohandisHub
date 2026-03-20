@@ -90,6 +90,37 @@ export type ExpertProfileRow = {
   updated_at: Date;
 };
 
+/** Row from `craftsman_profiles` table (full). */
+export type CraftsmanProfileRow = {
+  id: string;
+  user_id: string;
+  trade: string | null;
+  title: string | null;
+  headline: string | null;
+  bio: string | null;
+  specializations: string[];
+  years_of_experience: number | null;
+  hourly_rate: string | null;
+  city: string | null;
+  country: string;
+  availability_status: AvailabilityStatus;
+  workshop_name: string | null;
+  workshop_address: string | null;
+  workshop_latitude: string | null;
+  workshop_longitude: string | null;
+  verification_status: VerificationStatus;
+  identity_verified: boolean;
+  identity_verification_method?: 'didit' | 'manual' | null;
+  payout_currency?: string | null;
+  payout_address?: string | null;
+  payout_extra_id?: string | null;
+  payout_updated_at?: Date | null;
+  verified_at: Date | null;
+  onboarding_completed_at?: Date | null;
+  created_at: Date;
+  updated_at: Date;
+};
+
 /** Row from `business_profiles` table (full). */
 export type BusinessProfileRow = {
   id: string;

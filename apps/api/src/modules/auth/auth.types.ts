@@ -54,3 +54,9 @@ export type BusinessVerificationRow = {
   identity_verified: boolean;
   business_verified: boolean;
 };
+
+/** Row returned from craftsman_profiles (just verification fields). */
+export type CraftsmanVerificationRow = {
+  verification_status: VerificationStatus;
+  identity_verified: boolean;
+};

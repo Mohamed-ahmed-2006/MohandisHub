@@ -35,6 +35,15 @@ jobs:
       - name: Unit tests
         run: npm run test
 
+      - name: Coverage thresholds
+        run: npm run test:coverage
+
+      - name: i18n validation
+        run: npm run validate:i18n
+
+      - name: Format check
+        run: npm run format:check
+
   migrate-staging:
     name: Migrate staging DB
     runs-on: ubuntu-latest
@@ -84,14 +93,10 @@ jobs:
 
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium
-        cwd: apps/e2e
+        working-directory: apps/e2e
 
       - name: Run E2E
-        run: |
-          if [ -n "$PLAYWRIGHT_BASE_URL" ]; then
-            npm run e2e
-          else
-            echo "STAGING_WEB_URL not set; skipping e2e."
-          fi
+        run: npm run e2e
+        working-directory: apps/e2e
         env:
           PLAYWRIGHT_BASE_URL: ${{ secrets.STAGING_WEB_URL }}

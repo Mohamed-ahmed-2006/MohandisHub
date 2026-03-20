@@ -5,13 +5,13 @@ import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
+import type { ProfileModalInitialData } from './profile-modal-context';
+
 import { useAuth } from '@/components/auth/auth-provider';
 import { chatApiClient } from '@/lib/chat/client';
 import { buildLocalePath } from '@/lib/i18n/path';
 import type { Dictionary, Locale } from '@/lib/i18n/types';
 import { profilesApiClient } from '@/lib/profiles/client';
-
-import type { ProfileModalInitialData } from './profile-modal-context';
 
 import './user-profile-modal.css';
 
@@ -25,6 +25,7 @@ type UserProfileModalProps = {
 
 const ROLE_LABELS: Record<string, string> = {
   expert: 'Expert',
+  craftsman: 'Craftsman',
   business: 'Business',
   customer: 'Customer',
 };
@@ -88,8 +89,25 @@ export function UserProfileModal({
     }
   }, [accessToken, isAuthenticated, profile, onClose, router, locale]);
 
-  const roleLabel = (dictionary.profileModal as { roleExpert?: string; roleBusiness?: string; roleCustomer?: string })?.roleExpert
-    ?? ROLE_LABELS[profile?.role ?? initialData?.role ?? ''] ?? profile?.role ?? '';
+  const roleKey = profile?.role ?? initialData?.role ?? '';
+  const profileModalDict = dictionary.profileModal as {
+    roleExpert?: string;
+    roleCraftsman?: string;
+    roleBusiness?: string;
+    roleCustomer?: string;
+  } | undefined;
+  const roleLabel =
+    (roleKey === 'expert'
+      ? profileModalDict?.roleExpert
+      : roleKey === 'craftsman'
+        ? profileModalDict?.roleCraftsman
+        : roleKey === 'business'
+          ? profileModalDict?.roleBusiness
+          : roleKey === 'customer'
+            ? profileModalDict?.roleCustomer
+            : undefined) ??
+    ROLE_LABELS[roleKey] ??
+    roleKey;
 
   const msgLabel = (dictionary.profileModal as { message?: string })?.message ?? 'Message';
   const closeLabel = (dictionary.profileModal as { close?: string })?.close ?? 'Close';
@@ -151,8 +169,9 @@ export function UserProfileModal({
                 {profile.displayName}
               </h2>
               <div className="user-profile-modal-badges">
-                <span className="user-profile-modal-role">{ROLE_LABELS[profile.role] ?? profile.role}</span>
+                <span className="user-profile-modal-role">{roleLabel}</span>
                 {(profile.expertProfile?.verificationStatus === 'verified' ||
+                  profile.craftsmanProfile?.verificationStatus === 'verified' ||
                   profile.businessProfile?.verificationStatus === 'verified') && (
                   <span className="user-profile-modal-verified">{verifiedLabel}</span>
                 )}
@@ -214,7 +233,52 @@ export function UserProfileModal({
                 </div>
               )}
 
-              {profile.customerProfile && !profile.expertProfile && !profile.businessProfile && (
+              {profile.craftsmanProfile && (
+                <div className="user-profile-modal-section">
+                  {profile.craftsmanProfile.title && (
+                    <p className="user-profile-modal-headline">{profile.craftsmanProfile.title}</p>
+                  )}
+                  {profile.craftsmanProfile.headline && !profile.craftsmanProfile.title && (
+                    <p className="user-profile-modal-headline">{profile.craftsmanProfile.headline}</p>
+                  )}
+                  {profile.craftsmanProfile.bio && (
+                    <p className="user-profile-modal-bio">{profile.craftsmanProfile.bio}</p>
+                  )}
+                  {profile.craftsmanProfile.specializations?.length > 0 && (
+                    <p className="user-profile-modal-meta">
+                      {profile.craftsmanProfile.specializations.slice(0, 5).join(' · ')}
+                    </p>
+                  )}
+                  {(profile.craftsmanProfile.city ||
+                    profile.craftsmanProfile.workshopName ||
+                    profile.craftsmanProfile.hourlyRate != null) && (
+                    <p className="user-profile-modal-meta">
+                      {[
+                        profile.craftsmanProfile.city,
+                        profile.craftsmanProfile.workshopName,
+                        profile.craftsmanProfile.hourlyRate != null &&
+                          `${profile.craftsmanProfile.hourlyRate} USD/hr`,
+                      ]
+                        .filter(Boolean)
+                        .join(' · ')}
+                    </p>
+                  )}
+                  {(profile.craftsmanProfile.averageRating != null ||
+                    profile.craftsmanProfile.reviewCount > 0) && (
+                    <p className="user-profile-modal-meta">
+                      {profile.craftsmanProfile.averageRating != null &&
+                        `${profile.craftsmanProfile.averageRating.toFixed(1)} ★`}
+                      {profile.craftsmanProfile.reviewCount > 0 &&
+                        ` · ${profile.craftsmanProfile.reviewCount} reviews`}
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {profile.customerProfile &&
+                !profile.expertProfile &&
+                !profile.craftsmanProfile &&
+                !profile.businessProfile && (
                 <div className="user-profile-modal-section">
                   {(profile.customerProfile.city || profile.customerProfile.country) && (
                     <p className="user-profile-modal-meta">
@@ -229,7 +293,9 @@ export function UserProfileModal({
                   <button
                     type="button"
                     className="user-profile-modal-btn user-profile-modal-btn--primary"
-                    onClick={handleMessage}
+                    onClick={() => {
+                      void handleMessage();
+                    }}
                     disabled={messageLoading}
                   >
                     {messageLoading ? (dictionary.common?.loading ?? 'Loading...') : msgLabel}

@@ -168,6 +168,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       role:
         authUser?.role === 'customer' ||
         authUser?.role === 'expert' ||
+        authUser?.role === 'craftsman' ||
         authUser?.role === 'business'
           ? authUser.role
           : null,

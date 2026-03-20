@@ -6,10 +6,11 @@ import { z } from 'zod';
 
 import {
   updateBusinessProfileSchema,
+  updateCraftsmanProfileSchema,
   updateExpertProfileSchema,
 } from '../profiles/profiles.validation.js';
 
-export { updateBusinessProfileSchema, updateExpertProfileSchema };
+export { updateBusinessProfileSchema, updateCraftsmanProfileSchema, updateExpertProfileSchema };
 
 export const updateUserSchema = z.object({
   displayName: z.string().min(2).max(100).optional(),
@@ -22,7 +23,7 @@ export const updateUserSchema = z.object({
     .nullable()
     .optional(),
   isActive: z.boolean().optional(),
-  primaryRole: z.enum(['customer', 'expert', 'business']).optional(),
+  primaryRole: z.enum(['customer', 'expert', 'business', 'craftsman']).optional(),
   isAdmin: z.boolean().optional(),
   adminPermissions: z.array(z.string()).optional(),
   planId: z.string().uuid().nullable().optional(),
@@ -89,7 +90,7 @@ export const sendNotificationSchema = z
   .object({
     target: z.enum(['all', 'users', 'role']),
     userIds: z.array(z.string().uuid()).optional(),
-    role: z.enum(['customer', 'expert', 'business']).optional(),
+    role: z.enum(['customer', 'expert', 'business', 'craftsman']).optional(),
     title: z.string().min(1).max(200),
     message: z.string().min(1).max(2000),
   })
@@ -162,6 +163,7 @@ export type ChangeUserEmailInput = z.infer<typeof changeUserEmailSchema>;
 export type UserActivityTypeInput = z.infer<typeof userActivityTypeSchema>;
 export type UpdateExpertProfileByAdminInput = z.infer<typeof updateExpertProfileSchema>;
 export type UpdateBusinessProfileByAdminInput = z.infer<typeof updateBusinessProfileSchema>;
+export type UpdateCraftsmanProfileByAdminInput = z.infer<typeof updateCraftsmanProfileSchema>;
 export type CreatePlanInput = z.infer<typeof createPlanSchema>;
 export type UpdatePlanInput = z.infer<typeof updatePlanSchema>;
 export type AdjustBalanceInput = z.infer<typeof adjustBalanceSchema>;

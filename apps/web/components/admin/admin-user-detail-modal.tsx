@@ -32,7 +32,7 @@ type AccountForm = {
   phoneCode: string;
   nationality: string;
   dateOfBirth: string;
-  primaryRole: 'customer' | 'expert' | 'business';
+  primaryRole: 'customer' | 'expert' | 'craftsman' | 'business';
   isAdmin: boolean;
   adminPermissions: string[];
   planId: string;
@@ -106,6 +106,7 @@ export const AdminUserDetailModal = ({
   });
 
   const [expertJson, setExpertJson] = useState('{}');
+  const [craftsmanJson, setCraftsmanJson] = useState('{}');
   const [businessJson, setBusinessJson] = useState('{}');
   const [roleProfileError, setRoleProfileError] = useState<string | null>(null);
 
@@ -175,6 +176,7 @@ export const AdminUserDetailModal = ({
       });
 
       setExpertJson(JSON.stringify(overviewData.expertProfile ?? {}, null, 2));
+      setCraftsmanJson(JSON.stringify(overviewData.craftsmanProfile ?? {}, null, 2));
       setBusinessJson(JSON.stringify(overviewData.businessProfile ?? {}, null, 2));
       setRoleProfileError(null);
     } catch {
@@ -261,6 +263,14 @@ export const AdminUserDetailModal = ({
       if (account.primaryRole === 'expert') {
         const body = JSON.parse(expertJson) as Record<string, unknown>;
         await adminApiClient.updateExpertProfile(accessToken, user.id, body, opts(refreshSession));
+      } else if (account.primaryRole === 'craftsman') {
+        const body = JSON.parse(craftsmanJson) as Record<string, unknown>;
+        await adminApiClient.updateCraftsmanProfile(
+          accessToken,
+          user.id,
+          body,
+          opts(refreshSession),
+        );
       } else if (account.primaryRole === 'business') {
         const body = JSON.parse(businessJson) as Record<string, unknown>;
         await adminApiClient.updateBusinessProfile(accessToken, user.id, body, opts(refreshSession));
@@ -576,7 +586,7 @@ export const AdminUserDetailModal = ({
                     <label className="admin-form-group"><span className="admin-form-label">{u360?.labels?.phoneCode ?? 'Phone code'}</span><input className="admin-form-input" value={account.phoneCode} onChange={(e) => setAccount((prev) => ({ ...prev, phoneCode: e.target.value }))} /></label>
                     <label className="admin-form-group"><span className="admin-form-label">{ud.nationality}</span><input className="admin-form-input" value={account.nationality} onChange={(e) => setAccount((prev) => ({ ...prev, nationality: e.target.value }))} /></label>
                     <label className="admin-form-group"><span className="admin-form-label">{ud.dateOfBirth}</span><input type="date" className="admin-form-input" value={account.dateOfBirth} onChange={(e) => setAccount((prev) => ({ ...prev, dateOfBirth: e.target.value }))} /></label>
-                    <label className="admin-form-group"><span className="admin-form-label">{d.role}</span><select className="admin-form-select" value={account.primaryRole} onChange={(e) => setAccount((prev) => ({ ...prev, primaryRole: e.target.value as AccountForm['primaryRole'] }))}><option value="customer">Customer</option><option value="expert">Expert</option><option value="business">Business</option></select></label>
+                    <label className="admin-form-group"><span className="admin-form-label">{d.role}</span><select className="admin-form-select" value={account.primaryRole} onChange={(e) => setAccount((prev) => ({ ...prev, primaryRole: e.target.value as AccountForm['primaryRole'] }))}><option value="customer">Customer</option><option value="expert">Expert</option><option value="craftsman">Craftsman</option><option value="business">Business</option></select></label>
                     <label className="admin-form-group"><span className="admin-form-label">{ud.adminFlag}</span><select className="admin-form-select" value={account.isAdmin ? 'yes' : 'no'} onChange={(e) => setAccount((prev) => ({ ...prev, isAdmin: e.target.value === 'yes' }))}><option value="no">{ud.no}</option><option value="yes">{ud.yes}</option></select></label>
                     {canManagePlans && <label className="admin-form-group"><span className="admin-form-label">{d.plan}</span><select className="admin-form-select" value={account.planId} onChange={(e) => setAccount((prev) => ({ ...prev, planId: e.target.value }))}><option value="">- None -</option>{plans.map((plan) => <option key={plan.id} value={plan.id}>{plan.name}</option>)}</select></label>}
                   </div>
@@ -609,7 +619,7 @@ export const AdminUserDetailModal = ({
                   ) : (
                     <>
                       <p className="admin-user360-note">{u360?.roleProfile?.jsonHint ?? 'Edit all profile fields as JSON.'}</p>
-                      <textarea className="admin-user360-json" value={account.primaryRole === 'expert' ? expertJson : businessJson} onChange={(e) => (account.primaryRole === 'expert' ? setExpertJson(e.target.value) : setBusinessJson(e.target.value))} />
+                      <textarea className="admin-user360-json" value={account.primaryRole === 'expert' ? expertJson : account.primaryRole === 'craftsman' ? craftsmanJson : businessJson} onChange={(e) => (account.primaryRole === 'expert' ? setExpertJson(e.target.value) : account.primaryRole === 'craftsman' ? setCraftsmanJson(e.target.value) : setBusinessJson(e.target.value))} />
                       {roleProfileError && <p className="admin-error-banner">{roleProfileError}</p>}
                       <div className="admin-modal-actions">
                         <button type="button" className="admin-btn admin-btn--primary" disabled={!canManageUsers || actionLoading === 'saveRoleProfile'} onClick={() => void handleSaveRoleProfile()}>{dictionary.common.save}</button>
@@ -633,6 +643,21 @@ export const AdminUserDetailModal = ({
                       <p className="admin-user360-item-meta" style={{ fontSize: '0.85rem', color: 'var(--text-soft)' }}>
                         {currentOverview.expertProfile.verificationStatus === 'under_review' && 'Under review = identity and/or academic submitted, awaiting admin approval.'}
                         {currentOverview.expertProfile.verificationStatus === 'verified' && 'Fully verified (identity + academic approved).'}
+                      </p>
+                    </section>
+                  )}
+                  {currentOverview.craftsmanProfile && (
+                    <section className="admin-user-card admin-user360-span-2">
+                      <h3 className="admin-user-card-title">Craftsman verification</h3>
+                      <p className="admin-user360-item-meta">
+                        Status: <span className="admin-badge">{currentOverview.craftsmanProfile.verificationStatus}</span>
+                        {currentOverview.craftsmanProfile.identityVerificationMethod != null && (
+                          <> · Identity: {currentOverview.craftsmanProfile.identityVerificationMethod === 'didit' ? 'Didit (KYC)' : 'Manual review'}</>
+                        )}
+                      </p>
+                      <p className="admin-user360-item-meta" style={{ fontSize: '0.85rem', color: 'var(--text-soft)' }}>
+                        {currentOverview.craftsmanProfile.verificationStatus === 'under_review' && 'Under review = identity submitted and awaiting admin approval.'}
+                        {currentOverview.craftsmanProfile.verificationStatus === 'verified' && 'Identity verification approved.'}
                       </p>
                     </section>
                   )}

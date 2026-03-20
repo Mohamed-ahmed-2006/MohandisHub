@@ -2,12 +2,15 @@
 
 import type {
   AcademicRecord,
+  AcademicRecordBody,
   AuthUser,
   BusinessProfile,
+  CraftsmanProfile,
   ExpertProfile,
   IdentityDocument,
   Review,
   UpdateBusinessProfileBody,
+  UpdateCraftsmanProfileBody,
   UpdateExpertProfileBody,
 } from '@mohandishub/shared';
 import Link from 'next/link';
@@ -70,6 +73,7 @@ type ProfileScreenProps = {
 };
 
 const COMPANY_SIZES = ['1-10', '11-50', '51-200', '201-500', '500+'] as const;
+type RoleProfileKind = 'expert' | 'craftsman' | 'business';
 
 type AccountPreferencesProps = {
   locale: Locale;
@@ -112,14 +116,22 @@ const AccountPreferences = ({ locale, dictionary }: AccountPreferencesProps) => 
 function getSectionLabel(
   sectionId: ProfileSectionId,
   dictionary: Dictionary,
-  isExpert: boolean,
+  roleProfileKind: RoleProfileKind | null,
 ): string {
   if (sectionId === 'account') return dictionary.profile.accountTab;
   if (sectionId === 'profile') {
-    return isExpert ? dictionary.profile.expertTab : dictionary.profile.businessTab;
+    if (roleProfileKind === 'business') return dictionary.profile.businessTab;
+    if (roleProfileKind === 'craftsman') return dictionary.profile.craftsmanTab;
+    return dictionary.profile.expertTab;
   }
 
   return dictionary.profile.verificationSection ?? 'Verification';
+}
+
+function getOnboardingPath(roleProfileKind: RoleProfileKind | null): string {
+  if (roleProfileKind === 'business') return '/onboarding/business';
+  if (roleProfileKind === 'craftsman') return '/onboarding/craftsman';
+  return '/onboarding/expert';
 }
 
 // ── Account Form (all roles) ─────────────────────────────────────────────
@@ -141,6 +153,11 @@ const AccountForm = ({
 }: AccountFormProps) => {
   const countryNameKey = locale === 'ar' ? 'nameAr' : 'nameEn';
   const labels = dictionary.profile.account;
+  const allowsAvatarUpload = authUser.role === 'expert' || authUser.role === 'craftsman';
+  const avatarHint =
+    authUser.role === 'craftsman'
+      ? 'Required for craftsman verification and the platform verified badge.'
+      : 'Required for expert verification and the platform verified badge.';
   const [saving, setSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState<{
     type: 'success' | 'error';
@@ -182,7 +199,7 @@ const AccountForm = ({
     setSaveMessage(null);
     try {
       let avatarUrl: string | null | undefined;
-      if (authUser.role === 'expert') {
+      if (allowsAvatarUpload) {
         if (avatarRemoved) {
           avatarUrl = null;
         } else if (avatarFile) {
@@ -421,14 +438,13 @@ const AccountForm = ({
           </div>
         </div>
 
-        {authUser.role === 'expert' && (
+        {allowsAvatarUpload && (
           <div className="profile-screen-field">
             <label className="profile-screen-label">
               {(labels as { avatarLabel?: string }).avatarLabel ?? 'Profile picture'}
             </label>
             <p className="profile-screen-hint">
-              {(labels as { avatarHint?: string }).avatarHint ??
-                'Required for expert verification and the platform verified badge.'}
+              {(labels as { avatarHint?: string }).avatarHint ?? avatarHint}
             </p>
             {avatarPreviewUrl && !avatarRemoved && (
               <div className="profile-screen-image-preview">
@@ -492,6 +508,7 @@ export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
   const router = useRouter();
   const { authUser, accessToken, isAuthenticated, isReady, authGuard, updateAuthUser } = useAuth();
   const [expertProfile, setExpertProfile] = useState<ExpertProfile | null>(null);
+  const [craftsmanProfile, setCraftsmanProfile] = useState<CraftsmanProfile | null>(null);
   const [businessProfile, setBusinessProfile] = useState<BusinessProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -522,9 +539,17 @@ export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
 
   const role = authUser?.role;
   const isExpert = role === 'expert';
+  const isCraftsman = role === 'craftsman';
   const isBusiness = role === 'business';
-  const hasRoleProfile = isExpert || isBusiness;
-  const expertImageMissing = isExpert && !authUser?.avatarUrl;
+  const roleProfileKind: RoleProfileKind | null = isExpert
+    ? 'expert'
+    : isCraftsman
+      ? 'craftsman'
+      : isBusiness
+        ? 'business'
+        : null;
+  const hasRoleProfile = roleProfileKind !== null;
+  const expertImageMissing = (isExpert || isCraftsman) && !authUser?.avatarUrl;
   const businessImageMissing = isBusiness && !businessProfile?.logoUrl;
 
   useEffect(() => {
@@ -537,6 +562,7 @@ export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
     if (!accessToken) return;
     if (!hasRoleProfile) {
       setExpertProfile(null);
+      setCraftsmanProfile(null);
       setBusinessProfile(null);
       setLoading(false);
       return;
@@ -547,17 +573,27 @@ export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
       if (isExpert) {
         const profile = await profilesApiClient.getExpertProfile(accessToken);
         setExpertProfile(profile);
+        setCraftsmanProfile(null);
+        setBusinessProfile(null);
+      } else if (isCraftsman) {
+        const profile = await profilesApiClient.getCraftsmanProfile(accessToken);
+        setCraftsmanProfile(profile);
+        setExpertProfile(null);
+        setBusinessProfile(null);
       } else if (isBusiness) {
         const profile = await profilesApiClient.getBusinessProfile(accessToken);
         setBusinessProfile(profile);
+        setExpertProfile(null);
+        setCraftsmanProfile(null);
       }
     } catch {
       setExpertProfile(null);
+      setCraftsmanProfile(null);
       setBusinessProfile(null);
     } finally {
       setLoading(false);
     }
-  }, [accessToken, hasRoleProfile, isExpert, isBusiness]);
+  }, [accessToken, hasRoleProfile, isCraftsman, isExpert, isBusiness]);
 
   useEffect(() => {
     if (!isReady || !isAuthenticated || !authUser) {
@@ -571,8 +607,20 @@ export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
     void loadProfile();
   }, [isReady, isAuthenticated, authUser, authGuard.emailVerified, locale, router, loadProfile]);
 
-  const targetUserId = isExpert ? expertProfile?.userId : isBusiness ? businessProfile?.userId : null;
-  const targetType = isExpert ? 'expert' : isBusiness ? 'business' : null;
+  const targetUserId = isExpert
+    ? expertProfile?.userId
+    : isCraftsman
+      ? craftsmanProfile?.userId
+      : isBusiness
+        ? businessProfile?.userId
+        : null;
+  const targetType = isExpert
+    ? 'expert'
+    : isCraftsman
+      ? 'craftsman'
+      : isBusiness
+        ? 'business'
+        : null;
   const loadReviews = useCallback(async () => {
     if (!accessToken || !targetUserId || !targetType) return;
     setReviewsLoading(true);
@@ -606,9 +654,13 @@ export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
     if (!accessToken || !hasRoleProfile) return;
     setDocumentsLoading(true);
     try {
+      const idsPromise = profilesApiClient.getIdentityDocuments(accessToken);
+      const acadsPromise = isExpert
+        ? profilesApiClient.getAcademicRecords(accessToken)
+        : Promise.resolve<AcademicRecord[]>([]);
       const [ids, acads] = await Promise.all([
-        profilesApiClient.getIdentityDocuments(accessToken),
-        profilesApiClient.getAcademicRecords(accessToken),
+        idsPromise,
+        acadsPromise,
       ]);
       setIdentityDocuments(Array.isArray(ids) ? ids : []);
       setAcademicRecords(Array.isArray(acads) ? acads : []);
@@ -618,7 +670,7 @@ export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
     } finally {
       setDocumentsLoading(false);
     }
-  }, [accessToken, hasRoleProfile]);
+  }, [accessToken, hasRoleProfile, isExpert]);
 
   useEffect(() => {
     if (hasRoleProfile) {
@@ -639,7 +691,7 @@ export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
       const form = e.currentTarget;
       const getVal = (name: string) =>
         (form.elements.namedItem(name) as HTMLInputElement | HTMLSelectElement)?.value?.trim();
-      const body = {
+      const body = pickDefined({
         recordType: getVal('recordType') as AcademicRecord['recordType'],
         title: getVal('title') ?? editAcademicRecord.title,
         institution: getVal('institution') ?? editAcademicRecord.institution,
@@ -649,13 +701,17 @@ export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
           return Number.isFinite(y) ? y : undefined;
         })(),
         grade: getVal('grade') || undefined,
-      };
+      });
       try {
-        await profilesApiClient.updateAcademicRecord(accessToken, editAcademicRecord.id, body);
+        await profilesApiClient.updateAcademicRecord(
+          accessToken,
+          editAcademicRecord.id,
+          body as Partial<AcademicRecordBody>,
+        );
         setEditAcademicRecord(null);
         void loadDocuments();
       } catch (err) {
-        setAcademicEditError(formatApiError(err, (dictionary.profile as { saveError?: string }).saveError));
+        setAcademicEditError(formatApiError(err, dictionary.profile.saveError));
       } finally {
         setAcademicEditSaving(false);
       }
@@ -745,6 +801,55 @@ export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
     }
   };
 
+  const handleSaveCraftsman = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (!accessToken || !craftsmanProfile) return;
+    const form = e.currentTarget;
+    const val = (name: string) =>
+      nonEmpty((form.elements.namedItem(name) as HTMLInputElement | HTMLTextAreaElement)?.value);
+    const numVal = (name: string) => {
+      const n = parseFloat((form.elements.namedItem(name) as HTMLInputElement)?.value || '');
+      return Number.isFinite(n) && n > 0 ? n : undefined;
+    };
+    const titleVal = val('title');
+    const tradeVal = val('trade');
+    const body = pickDefined({
+      trade: tradeVal,
+      title: titleVal,
+      headline: titleVal,
+      bio: val('bio'),
+      specializations: (
+        (form.elements.namedItem('specializations') as HTMLInputElement)?.value || ''
+      )
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean),
+      yearsOfExperience: numVal('yearsOfExperience'),
+      hourlyRate: numVal('hourlyRate'),
+      city: val('city'),
+      country: val('country'),
+      availabilityStatus: nonEmpty(
+        (form.elements.namedItem('availabilityStatus') as HTMLSelectElement)?.value,
+      ) as 'available' | 'busy' | 'offline' | undefined,
+      workshopName: val('workshopName'),
+      workshopAddress: val('workshopAddress'),
+    });
+    setSaving(true);
+    setSaveMessage(null);
+    try {
+      const updated = await profilesApiClient.updateCraftsmanProfile(
+        accessToken,
+        body as UpdateCraftsmanProfileBody,
+      );
+      setCraftsmanProfile(updated);
+      setSaveMessage({ type: 'success', text: dictionary.profile.saveSuccess });
+    } catch (err) {
+      setSaveMessage({ type: 'error', text: formatApiError(err, dictionary.profile.saveError) });
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const handleSaveBusiness = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!accessToken || !businessProfile) return;
@@ -817,10 +922,12 @@ export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
     );
   }
 
-  const pf = dictionary.onboarding.expert.profileForm;
-  const cf = dictionary.onboarding.business.companyForm;
+  const expertForm = dictionary.onboarding.expert.profileForm;
+  const craftsmanForm = dictionary.onboarding.craftsman.profileForm;
+  const businessForm = dictionary.onboarding.business.companyForm;
   const verLabels = dictionary.verification.statusLabels;
   const visibleSections = getVisibleProfileSections(role);
+  const onboardingPath = getOnboardingPath(roleProfileKind);
 
   return (
     <main className="profile-screen-main">
@@ -836,7 +943,7 @@ export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
               href={`#${section.anchorId}`}
               className="profile-screen-jump-link"
             >
-              {getSectionLabel(section.id, dictionary, isExpert)}
+              {getSectionLabel(section.id, dictionary, roleProfileKind)}
             </a>
           ))}
         </nav>
@@ -854,7 +961,7 @@ export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
         {hasRoleProfile && loading && (
           <section id="profile-settings" className="profile-screen-card profile-screen-section-card">
             <h2 className="profile-screen-sectionTitle">
-              {getSectionLabel('profile', dictionary, isExpert)}
+              {getSectionLabel('profile', dictionary, roleProfileKind)}
             </h2>
             <div className="profile-screen-skeleton">
               <SkeletonForm fields={5} />
@@ -865,7 +972,7 @@ export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
         {hasRoleProfile && !loading && isExpert && !expertProfile && (
           <section id="profile-settings" className="profile-screen-card profile-screen-section-card">
             <h2 className="profile-screen-sectionTitle">
-              {getSectionLabel('profile', dictionary, isExpert)}
+              {getSectionLabel('profile', dictionary, roleProfileKind)}
             </h2>
             <p className="profile-screen-no-profile">
               Expert profile not found. Please complete onboarding first.
@@ -876,7 +983,7 @@ export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
         {!loading && isExpert && expertProfile && (
           <section id="profile-settings" className="profile-screen-card profile-screen-section-card">
             <h2 className="profile-screen-sectionTitle">
-              {getSectionLabel('profile', dictionary, isExpert)}
+              {getSectionLabel('profile', dictionary, roleProfileKind)}
             </h2>
             <span
               className={`profile-screen-badge profile-screen-badge_${expertProfile.verificationStatus}`}
@@ -912,16 +1019,16 @@ export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
             )}
             <form onSubmit={(e) => void handleSaveExpert(e)} className="profile-screen-form">
               <div className="profile-screen-field">
-                <label className="profile-screen-label">{pf.titleLabel}</label>
+                <label className="profile-screen-label">{expertForm.titleLabel}</label>
                 <input
                   name="title"
                   className="profile-screen-input"
                   defaultValue={expertProfile.title ?? ''}
-                  placeholder={pf.titlePlaceholder}
+                  placeholder={expertForm.titlePlaceholder}
                 />
               </div>
               <div className="profile-screen-field">
-                <label className="profile-screen-label">{pf.bioLabel}</label>
+                <label className="profile-screen-label">{expertForm.bioLabel}</label>
                 <textarea
                   name="bio"
                   className="profile-screen-textarea"
@@ -930,17 +1037,17 @@ export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
                 />
               </div>
               <div className="profile-screen-field">
-                <label className="profile-screen-label">{pf.specializationsLabel}</label>
+                <label className="profile-screen-label">{expertForm.specializationsLabel}</label>
                 <input
                   name="specializations"
                   className="profile-screen-input"
                   defaultValue={expertProfile.specializations?.join(', ') ?? ''}
-                  placeholder={pf.specializationsHint}
+                  placeholder={expertForm.specializationsHint}
                 />
               </div>
               <div className="profile-screen-row">
                 <div className="profile-screen-field">
-                  <label className="profile-screen-label">{pf.yearsOfExperienceLabel}</label>
+                  <label className="profile-screen-label">{expertForm.yearsOfExperienceLabel}</label>
                   <input
                     name="yearsOfExperience"
                     type="number"
@@ -950,7 +1057,7 @@ export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
                   />
                 </div>
                 <div className="profile-screen-field">
-                  <label className="profile-screen-label">{pf.hourlyRateLabel}</label>
+                  <label className="profile-screen-label">{expertForm.hourlyRateLabel}</label>
                   <input
                     name="hourlyRate"
                     type="number"
@@ -980,8 +1087,8 @@ export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
                 name="city"
                 countryName="country"
                 locale={locale}
-                cityLabel={pf.cityLabel}
-                countryLabel={pf.countryLabel}
+                cityLabel={expertForm.cityLabel}
+                countryLabel={expertForm.countryLabel}
                 className="profile-screen-field"
                 selectClassName="profile-screen-select"
                 defaultValue={expertProfile.city ?? ''}
@@ -989,7 +1096,7 @@ export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
               />
               <div className="profile-screen-row">
                 <div className="profile-screen-field">
-                  <label className="profile-screen-label">{pf.employerLabel}</label>
+                  <label className="profile-screen-label">{expertForm.employerLabel}</label>
                   <input
                     name="employer"
                     className="profile-screen-input"
@@ -997,7 +1104,7 @@ export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
                   />
                 </div>
                 <div className="profile-screen-field">
-                  <label className="profile-screen-label">{pf.jobTitleLabel}</label>
+                  <label className="profile-screen-label">{expertForm.jobTitleLabel}</label>
                   <input
                     name="jobTitle"
                     className="profile-screen-input"
@@ -1007,7 +1114,7 @@ export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
               </div>
               <div className="profile-screen-row">
                 <div className="profile-screen-field">
-                  <label className="profile-screen-label">{pf.linkedinLabel}</label>
+                  <label className="profile-screen-label">{expertForm.linkedinLabel}</label>
                   <input
                     name="linkedinUrl"
                     type="text"
@@ -1016,7 +1123,7 @@ export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
                   />
                 </div>
                 <div className="profile-screen-field">
-                  <label className="profile-screen-label">{pf.portfolioLabel}</label>
+                  <label className="profile-screen-label">{expertForm.portfolioLabel}</label>
                   <input
                     name="portfolioUrl"
                     type="text"
@@ -1026,7 +1133,7 @@ export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
                 </div>
               </div>
               <div className="profile-screen-field">
-                <label className="profile-screen-label">{pf.languagesLabel}</label>
+                <label className="profile-screen-label">{expertForm.languagesLabel}</label>
                 <LanguagesCheckboxes
                   name="languages"
                   locale={locale}
@@ -1035,7 +1142,7 @@ export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
                 />
               </div>
               <div className="profile-screen-field">
-                <label className="profile-screen-label">{pf.educationSummaryLabel}</label>
+                <label className="profile-screen-label">{expertForm.educationSummaryLabel}</label>
                 <textarea
                   name="educationSummary"
                   className="profile-screen-textarea"
@@ -1161,10 +1268,342 @@ export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
           </section>
         )}
 
+        {hasRoleProfile && !loading && isCraftsman && !craftsmanProfile && (
+          <section id="profile-settings" className="profile-screen-card profile-screen-section-card">
+            <h2 className="profile-screen-sectionTitle">
+              {getSectionLabel('profile', dictionary, roleProfileKind)}
+            </h2>
+            <p className="profile-screen-no-profile">
+              Craftsman profile not found. Please complete onboarding first.
+            </p>
+          </section>
+        )}
+
+        {!loading && isCraftsman && craftsmanProfile && (
+          <section id="profile-settings" className="profile-screen-card profile-screen-section-card">
+            <h2 className="profile-screen-sectionTitle">
+              {getSectionLabel('profile', dictionary, roleProfileKind)}
+            </h2>
+            <span
+              className={`profile-screen-badge profile-screen-badge_${craftsmanProfile.verificationStatus}`}
+            >
+              {verLabels[craftsmanProfile.verificationStatus as keyof typeof verLabels] ??
+                craftsmanProfile.verificationStatus}
+            </span>
+            {dictionary.verification?.verificationTimeNote && (
+              <p className="profile-screen-verification-note">
+                {dictionary.verification.verificationTimeNote}
+              </p>
+            )}
+            {expertImageMissing && (
+              <p className="profile-screen-save-error">
+                {(dictionary.profile.account as { avatarRequiredHint?: string }).avatarRequiredHint ??
+                  'Add a profile picture in settings before you can complete verification or earn the badge.'}
+              </p>
+            )}
+            {craftsmanProfile.verificationBadgeEarned && (
+              <span
+                className="profile-screen-badge profile-screen-badge_verified"
+                title="Complete profile and 1000 USD total deposits."
+              >
+                Platform verified
+              </span>
+            )}
+            {(craftsmanProfile.averageRating != null || (craftsmanProfile.reviewCount ?? 0) > 0) && (
+              <p className="profile-screen-rating-row">
+                <span
+                  className="profile-screen-stars"
+                  aria-label={
+                    (dictionary.profile as { reviews?: { averageRating?: string } }).reviews
+                      ?.averageRating ?? 'Average rating'
+                  }
+                >
+                  {'â˜…'.repeat(Math.round(craftsmanProfile.averageRating ?? 0))}
+                  {'â˜†'.repeat(5 - Math.round(craftsmanProfile.averageRating ?? 0))}
+                </span>
+                <span className="profile-screen-review-count">
+                  {craftsmanProfile.averageRating != null &&
+                    `${Number(craftsmanProfile.averageRating).toFixed(1)} Â· `}
+                  {(craftsmanProfile.reviewCount ?? 0)}{' '}
+                  {(dictionary.profile as { reviews?: { reviewCount?: string } }).reviews
+                    ?.reviewCount ?? 'reviews'}
+                </span>
+              </p>
+            )}
+            <form onSubmit={(e) => void handleSaveCraftsman(e)} className="profile-screen-form">
+              <div className="profile-screen-row">
+                <div className="profile-screen-field">
+                  <label className="profile-screen-label">{craftsmanForm.tradeLabel}</label>
+                  <input
+                    name="trade"
+                    className="profile-screen-input"
+                    defaultValue={craftsmanProfile.trade ?? ''}
+                    placeholder={craftsmanForm.tradePlaceholder}
+                  />
+                </div>
+                <div className="profile-screen-field">
+                  <label className="profile-screen-label">{craftsmanForm.titleLabel}</label>
+                  <input
+                    name="title"
+                    className="profile-screen-input"
+                    defaultValue={craftsmanProfile.title ?? ''}
+                    placeholder={craftsmanForm.titlePlaceholder}
+                  />
+                </div>
+              </div>
+              <div className="profile-screen-field">
+                <label className="profile-screen-label">{craftsmanForm.bioLabel}</label>
+                <textarea
+                  name="bio"
+                  className="profile-screen-textarea"
+                  rows={4}
+                  defaultValue={craftsmanProfile.bio ?? ''}
+                />
+              </div>
+              <div className="profile-screen-field">
+                <label className="profile-screen-label">
+                  {craftsmanForm.specializationsLabel}
+                </label>
+                <input
+                  name="specializations"
+                  className="profile-screen-input"
+                  defaultValue={craftsmanProfile.specializations?.join(', ') ?? ''}
+                  placeholder={craftsmanForm.specializationsHint}
+                />
+              </div>
+              <div className="profile-screen-row">
+                <div className="profile-screen-field">
+                  <label className="profile-screen-label">
+                    {craftsmanForm.yearsOfExperienceLabel}
+                  </label>
+                  <input
+                    name="yearsOfExperience"
+                    type="number"
+                    className="profile-screen-input"
+                    defaultValue={craftsmanProfile.yearsOfExperience ?? ''}
+                    min={0}
+                  />
+                </div>
+                <div className="profile-screen-field">
+                  <label className="profile-screen-label">{craftsmanForm.hourlyRateLabel}</label>
+                  <input
+                    name="hourlyRate"
+                    type="number"
+                    className="profile-screen-input"
+                    defaultValue={craftsmanProfile.hourlyRate ?? ''}
+                    min={0}
+                    step="0.01"
+                  />
+                </div>
+              </div>
+              <div className="profile-screen-field">
+                <label className="profile-screen-label">
+                  {craftsmanForm.availabilityLabel}
+                </label>
+                <select
+                  name="availabilityStatus"
+                  className="profile-screen-select"
+                  defaultValue={craftsmanProfile.availabilityStatus ?? 'available'}
+                >
+                  <option value="available">Available</option>
+                  <option value="busy">Busy</option>
+                  <option value="offline">Offline</option>
+                </select>
+              </div>
+              <CityCountrySelect
+                name="city"
+                countryName="country"
+                locale={locale}
+                cityLabel={craftsmanForm.cityLabel}
+                countryLabel={craftsmanForm.countryLabel}
+                className="profile-screen-field"
+                selectClassName="profile-screen-select"
+                defaultValue={craftsmanProfile.city ?? ''}
+                defaultCountry={craftsmanProfile.country ?? ''}
+              />
+              <div className="profile-screen-row">
+                <div className="profile-screen-field">
+                  <label className="profile-screen-label">{craftsmanForm.workshopNameLabel}</label>
+                  <input
+                    name="workshopName"
+                    className="profile-screen-input"
+                    defaultValue={craftsmanProfile.workshopName ?? ''}
+                  />
+                </div>
+                <div className="profile-screen-field">
+                  <label className="profile-screen-label">
+                    {craftsmanForm.workshopAddressLabel}
+                  </label>
+                  <input
+                    name="workshopAddress"
+                    className="profile-screen-input"
+                    defaultValue={craftsmanProfile.workshopAddress ?? ''}
+                    placeholder={craftsmanForm.workshopAddressHint}
+                  />
+                </div>
+              </div>
+              {saveMessage && (
+                <p
+                  className={
+                    saveMessage.type === 'success'
+                      ? 'profile-screen-save-success'
+                      : 'profile-screen-save-error'
+                  }
+                >
+                  {saveMessage.text}
+                </p>
+              )}
+              <button type="submit" className="profile-screen-submit-button" disabled={saving}>
+                {saving ? dictionary.common.continue : dictionary.common.save}
+              </button>
+            </form>
+            {hasRoleProfile && (
+              <div className="profile-screen-reviews-section">
+                <h3 className="profile-screen-reviews-title">
+                  {(dictionary.profile as { reviews?: { sectionTitle?: string } }).reviews
+                    ?.sectionTitle ?? 'Reviews'}
+                </h3>
+                {reviewsLoading ? (
+                  <p className="profile-screen-muted">
+                    {(dictionary.profile as { loading?: string }).loading ?? 'Loading...'}
+                  </p>
+                ) : reviews.length === 0 ? (
+                  <p className="profile-screen-muted">
+                    {(dictionary.profile as { reviews?: { noReviews?: string } }).reviews
+                      ?.noReviews ?? 'No reviews yet.'}
+                  </p>
+                ) : (
+                  <ul className="profile-screen-reviews-list">
+                    {reviews.map((r) => (
+                      <li key={r.id} className="profile-screen-review-item">
+                        <span className="profile-screen-stars small">
+                          {'â˜…'.repeat(r.rating)}
+                          {'â˜†'.repeat(5 - r.rating)}
+                        </span>
+                        {r.comment && <p className="profile-screen-review-comment">{r.comment}</p>}
+                        <p className="profile-screen-review-meta">
+                          {r.reviewerName ?? 'Anonymous'} Â·{' '}
+                          {new Date(r.createdAt).toLocaleDateString(locale)}
+                        </p>
+                        <div className="profile-screen-review-actions">
+                          {r.reviewerId !== authUser?.id && (
+                            <>
+                              {reportModalReviewId !== r.id ? (
+                                <button
+                                  type="button"
+                                  className="profile-screen-review-action-btn"
+                                  onClick={() => setReportModalReviewId(r.id)}
+                                >
+                                  Report
+                                </button>
+                              ) : (
+                                <div className="profile-screen-report-form">
+                                  <select
+                                    value={reportReason}
+                                    onChange={(e) =>
+                                      setReportReason(
+                                        e.target.value as 'inappropriate' | 'fake' | 'spam' | 'other',
+                                      )
+                                    }
+                                    className="profile-screen-select"
+                                  >
+                                    <option value="inappropriate">Inappropriate</option>
+                                    <option value="fake">Fake</option>
+                                    <option value="spam">Spam</option>
+                                    <option value="other">Other</option>
+                                  </select>
+                                  <input
+                                    type="text"
+                                    className="profile-screen-input"
+                                    placeholder={
+                                      (dictionary.profile as {
+                                        reviews?: { commentPlaceholder?: string };
+                                      }).reviews?.commentPlaceholder ?? 'Optional comment'
+                                    }
+                                    value={reportComment}
+                                    onChange={(e) => setReportComment(e.target.value)}
+                                  />
+                                  <div className="profile-screen-review-form-actions">
+                                    <button
+                                      type="button"
+                                      className="profile-screen-cancel-btn"
+                                      onClick={() => {
+                                        setReportModalReviewId(null);
+                                        setReportComment('');
+                                      }}
+                                    >
+                                      Cancel
+                                    </button>
+                                    <button
+                                      type="button"
+                                      className="profile-screen-submit-button"
+                                      disabled={reportSubmitting}
+                                      onClick={() => void submitReport()}
+                                    >
+                                      {reportSubmitting ? '...' : 'Submit'}
+                                    </button>
+                                  </div>
+                                </div>
+                              )}
+                            </>
+                          )}
+                          {r.targetUserId === authUser?.id && (
+                            <>
+                              {disputeModalReviewId !== r.id ? (
+                                <button
+                                  type="button"
+                                  className="profile-screen-review-action-btn"
+                                  onClick={() => setDisputeModalReviewId(r.id)}
+                                >
+                                  Dispute
+                                </button>
+                              ) : (
+                                <div className="profile-screen-report-form">
+                                  <textarea
+                                    className="profile-screen-textarea"
+                                    rows={2}
+                                    placeholder="Reason for disputing"
+                                    value={disputeReason}
+                                    onChange={(e) => setDisputeReason(e.target.value)}
+                                  />
+                                  <div className="profile-screen-review-form-actions">
+                                    <button
+                                      type="button"
+                                      className="profile-screen-cancel-btn"
+                                      onClick={() => {
+                                        setDisputeModalReviewId(null);
+                                        setDisputeReason('');
+                                      }}
+                                    >
+                                      Cancel
+                                    </button>
+                                    <button
+                                      type="button"
+                                      className="profile-screen-submit-button"
+                                      disabled={disputeSubmitting || !disputeReason.trim()}
+                                      onClick={() => void submitDispute()}
+                                    >
+                                      {disputeSubmitting ? '...' : 'Submit'}
+                                    </button>
+                                  </div>
+                                </div>
+                              )}
+                            </>
+                          )}
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            )}
+          </section>
+        )}
+
         {hasRoleProfile && !loading && isBusiness && !businessProfile && (
           <section id="profile-settings" className="profile-screen-card profile-screen-section-card">
             <h2 className="profile-screen-sectionTitle">
-              {getSectionLabel('profile', dictionary, isExpert)}
+              {getSectionLabel('profile', dictionary, roleProfileKind)}
             </h2>
             <p className="profile-screen-no-profile">
               Business profile not found. Please complete onboarding first.
@@ -1175,7 +1614,7 @@ export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
         {!loading && isBusiness && businessProfile && (
           <section id="profile-settings" className="profile-screen-card profile-screen-section-card">
             <h2 className="profile-screen-sectionTitle">
-              {getSectionLabel('profile', dictionary, isExpert)}
+              {getSectionLabel('profile', dictionary, roleProfileKind)}
             </h2>
             <span
               className={`profile-screen-badge profile-screen-badge_${businessProfile.verificationStatus}`}
@@ -1211,7 +1650,7 @@ export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
             )}
             <form onSubmit={(e) => void handleSaveBusiness(e)} className="profile-screen-form">
               <div className="profile-screen-field">
-                <label className="profile-screen-label">{cf.companyNameLabel}</label>
+                <label className="profile-screen-label">{businessForm.companyNameLabel}</label>
                 <input
                   name="companyName"
                   className="profile-screen-input"
@@ -1221,7 +1660,7 @@ export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
               </div>
               <div className="profile-screen-row">
                 <div className="profile-screen-field">
-                  <label className="profile-screen-label">{cf.tradeLicenseLabel}</label>
+                  <label className="profile-screen-label">{businessForm.tradeLicenseLabel}</label>
                   <input
                     name="tradeLicenseNumber"
                     className="profile-screen-input"
@@ -1229,7 +1668,7 @@ export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
                   />
                 </div>
                 <div className="profile-screen-field">
-                  <label className="profile-screen-label">{cf.taxIdLabel}</label>
+                  <label className="profile-screen-label">{businessForm.taxIdLabel}</label>
                   <input
                     name="taxId"
                     className="profile-screen-input"
@@ -1238,7 +1677,7 @@ export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
                 </div>
               </div>
               <div className="profile-screen-field">
-                <label className="profile-screen-label">{cf.commercialRegisterLabel}</label>
+                <label className="profile-screen-label">{businessForm.commercialRegisterLabel}</label>
                 <input
                   name="commercialRegister"
                   className="profile-screen-input"
@@ -1247,7 +1686,7 @@ export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
               </div>
               <div className="profile-screen-row">
                 <div className="profile-screen-field">
-                  <label className="profile-screen-label">{cf.industryLabel}</label>
+                  <label className="profile-screen-label">{businessForm.industryLabel}</label>
                   <IndustrySelect
                     locale={locale}
                     name="industry"
@@ -1257,7 +1696,7 @@ export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
                   />
                 </div>
                 <div className="profile-screen-field">
-                  <label className="profile-screen-label">{cf.companySizeLabel}</label>
+                  <label className="profile-screen-label">{businessForm.companySizeLabel}</label>
                   <select
                     name="companySize"
                     className="profile-screen-select"
@@ -1274,7 +1713,7 @@ export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
               </div>
               <div className="profile-screen-row">
                 <div className="profile-screen-field">
-                  <label className="profile-screen-label">{cf.websiteLabel}</label>
+                  <label className="profile-screen-label">{businessForm.websiteLabel}</label>
                   <input
                     name="website"
                     type="text"
@@ -1284,7 +1723,7 @@ export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
                   />
                 </div>
                 <div className="profile-screen-field">
-                  <label className="profile-screen-label">{cf.companyEmailLabel}</label>
+                  <label className="profile-screen-label">{businessForm.companyEmailLabel}</label>
                   <input
                     name="companyEmail"
                     type="email"
@@ -1294,7 +1733,7 @@ export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
                 </div>
               </div>
               <div className="profile-screen-field">
-                <label className="profile-screen-label">{cf.companyPhoneLabel}</label>
+                <label className="profile-screen-label">{businessForm.companyPhoneLabel}</label>
                 <input
                   name="companyPhone"
                   className="profile-screen-input"
@@ -1304,10 +1743,10 @@ export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
               </div>
               <div className="profile-screen-field">
                 <label className="profile-screen-label">
-                  {(cf as { logoLabel?: string }).logoLabel ?? 'Company logo'}
+                  {(businessForm as { logoLabel?: string }).logoLabel ?? 'Company logo'}
                 </label>
                 <p className="profile-screen-hint">
-                  {(cf as { logoHint?: string }).logoHint ??
+                  {(businessForm as { logoHint?: string }).logoHint ??
                     'Required for business verification and the platform verified badge.'}
                 </p>
                 {businessLogoPreviewUrl && !businessLogoRemoved && (
@@ -1315,13 +1754,13 @@ export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
                       src={businessLogoPreviewUrl}
-                      alt={(cf as { logoLabel?: string }).logoLabel ?? 'Company logo'}
+                      alt={(businessForm as { logoLabel?: string }).logoLabel ?? 'Company logo'}
                       className="profile-screen-image-preview-img"
                     />
                   </div>
                 )}
                 <ImageUploadOrCapture
-                  label={(cf as { logoUploadLabel?: string }).logoUploadLabel ?? 'Upload company logo'}
+                  label={(businessForm as { logoUploadLabel?: string }).logoUploadLabel ?? 'Upload company logo'}
                   onImage={(file) => {
                     void (async () => {
                       setBusinessLogoFile(file);
@@ -1346,12 +1785,12 @@ export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
                       setBusinessLogoRemoved(true);
                     }}
                   >
-                    {(cf as { logoRemoveButton?: string }).logoRemoveButton ?? 'Remove logo'}
+                    {(businessForm as { logoRemoveButton?: string }).logoRemoveButton ?? 'Remove logo'}
                   </button>
                 )}
               </div>
               <div className="profile-screen-field">
-                <label className="profile-screen-label">{cf.addressLabel}</label>
+                <label className="profile-screen-label">{businessForm.addressLabel}</label>
                 <textarea
                   name="address"
                   className="profile-screen-textarea"
@@ -1364,15 +1803,15 @@ export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
                 name="city"
                 countryName="country"
                 locale={locale}
-                cityLabel={cf.cityLabel}
-                countryLabel={cf.countryLabel}
+                cityLabel={businessForm.cityLabel}
+                countryLabel={businessForm.countryLabel}
                 className="profile-screen-field"
                 selectClassName="profile-screen-select"
                 defaultValue={businessProfile.city ?? ''}
                 defaultCountry={businessProfile.country ?? ''}
               />
               <div className="profile-screen-field">
-                <label className="profile-screen-label">{cf.descriptionLabel}</label>
+                <label className="profile-screen-label">{businessForm.descriptionLabel}</label>
                 <textarea
                   name="description"
                   className="profile-screen-textarea"
@@ -1383,7 +1822,7 @@ export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
               <h3 className="profile-screen-sectionTitle">Owner</h3>
               <div className="profile-screen-row">
                 <div className="profile-screen-field">
-                  <label className="profile-screen-label">{cf.ownerNameLabel}</label>
+                  <label className="profile-screen-label">{businessForm.ownerNameLabel}</label>
                   <input
                     name="ownerFullName"
                     className="profile-screen-input"
@@ -1391,7 +1830,7 @@ export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
                   />
                 </div>
                 <div className="profile-screen-field">
-                  <label className="profile-screen-label">{cf.ownerTitleLabel}</label>
+                  <label className="profile-screen-label">{businessForm.ownerTitleLabel}</label>
                   <input
                     name="ownerTitle"
                     className="profile-screen-input"
@@ -1401,7 +1840,7 @@ export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
               </div>
               <div className="profile-screen-row">
                 <div className="profile-screen-field">
-                  <label className="profile-screen-label">{cf.ownerEmailLabel}</label>
+                  <label className="profile-screen-label">{businessForm.ownerEmailLabel}</label>
                   <input
                     name="ownerEmail"
                     type="email"
@@ -1410,7 +1849,7 @@ export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
                   />
                 </div>
                 <div className="profile-screen-field">
-                  <label className="profile-screen-label">{cf.ownerPhoneLabel}</label>
+                  <label className="profile-screen-label">{businessForm.ownerPhoneLabel}</label>
                   <input
                     name="ownerPhone"
                     className="profile-screen-input"
@@ -1420,7 +1859,7 @@ export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
                 </div>
               </div>
               <div className="profile-screen-field">
-                <label className="profile-screen-label">{cf.foundedYearLabel}</label>
+                <label className="profile-screen-label">{businessForm.foundedYearLabel}</label>
                 <input
                   name="foundedYear"
                   type="number"
@@ -1517,7 +1956,7 @@ export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
             className="profile-screen-card profile-screen-documents-card profile-screen-section-card"
           >
             <h2 className="profile-screen-sectionTitle">
-              {getSectionLabel('verification', dictionary, isExpert)}
+              {getSectionLabel('verification', dictionary, roleProfileKind)}
             </h2>
             {documentsLoading ? (
               <div className="profile-screen-skeleton">
@@ -1531,7 +1970,7 @@ export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
                 <p className="profile-screen-hint">
                   {dictionary.profile.documents.identityDescription}
                 </p>
-                {isExpert && expertImageMissing && (
+                {(isExpert || isCraftsman) && expertImageMissing && (
                   <p className="profile-screen-save-error">
                     {(dictionary.profile.account as { avatarRequiredHint?: string }).avatarRequiredHint ??
                       'Add a profile picture in settings before you can complete verification or earn the badge.'}
@@ -1600,9 +2039,9 @@ export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
                     <p className="profile-screen-noDocuments">
                       {dictionary.profile.documents.noDocuments}
                     </p>
-                    {isExpert && (
+                    {hasRoleProfile && (
                       <Link
-                        href={buildLocalePath(locale, '/onboarding/expert')}
+                        href={buildLocalePath(locale, onboardingPath)}
                         className="profile-screen-cta-link"
                       >
                         {dictionary.profile.documents.addIdentityDocument ?? 'Add identity document'}
@@ -1649,7 +2088,7 @@ export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
                         )}
                         {doc.status === 'rejected' && (
                           <Link
-                            href={buildLocalePath(locale, isExpert ? '/onboarding/expert' : '/onboarding/business')}
+                            href={buildLocalePath(locale, onboardingPath)}
                             className="profile-screen-doc-resubmit"
                           >
                             {dictionary.profile.documents.resubmit}
@@ -1660,100 +2099,99 @@ export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
                   </ul>
                 )}
 
-                <h3 className="profile-screen-sectionTitle" style={{ marginTop: '1.5rem' }}>
-                  {dictionary.profile.documents.academicTitle}
-                </h3>
-                <p className="profile-screen-hint">
-                  {dictionary.profile.documents.academicDescription}
-                </p>
-                {academicRecords.length === 0 ? (
+                {isExpert && (
                   <>
-                    <p className="profile-screen-noDocuments">
-                      {dictionary.profile.documents.noDocuments}
+                    <h3 className="profile-screen-sectionTitle" style={{ marginTop: '1.5rem' }}>
+                      {dictionary.profile.documents.academicTitle}
+                    </h3>
+                    <p className="profile-screen-hint">
+                      {dictionary.profile.documents.academicDescription}
                     </p>
-                    {isExpert && (
-                      <Link
-                        href={buildLocalePath(locale, '/onboarding/expert')}
-                        className="profile-screen-cta-link"
-                      >
-                        {dictionary.profile.documents.addAcademicRecord ?? 'Add academic record'}
-                      </Link>
-                    )}
-                  </>
-                ) : (
-                  <>
-                    <ul className="profile-screen-doc-list" aria-label="Academic records">
-                      {academicRecords.map((rec) => (
-                        <li key={rec.id} className="profile-screen-doc-item profile-screen-doc-item--with-actions">
-                          <span className="profile-screen-doc-type">
-                            {rec.title} — {rec.institution}
-                          </span>
-                          <span
-                            className={`profile-screen-doc-status profile-screen-doc-status--${rec.status}`}
-                          >
-                            {dictionary.profile.documents.status}:{' '}
-                            {rec.status === 'pending'
-                              ? 'Pending'
-                              : rec.status === 'under_review'
-                                ? 'Under review'
-                                : rec.status === 'approved'
-                                  ? 'Approved'
-                                  : 'Rejected'}
-                          </span>
-                          {rec.reviewedAt && (
-                            <span className="profile-screen-doc-meta">
-                              {dictionary.profile.documents.reviewedAt}:{' '}
-                              {new Date(rec.reviewedAt).toLocaleDateString(undefined, {
-                                year: 'numeric',
-                                month: 'short',
-                                day: 'numeric',
-                              })}
-                            </span>
-                          )}
-                          {rec.rejectionReason && (
-                            <p className="profile-screen-doc-rejection">
-                              {dictionary.profile.documents.rejectionReason}: {rec.rejectionReason}
-                            </p>
-                          )}
-                          {isExpert && (
-                            <div className="profile-screen-doc-actions">
-                              <button
-                                type="button"
-                                className="profile-screen-doc-edit-btn"
-                                onClick={() => setEditAcademicRecord(rec)}
+                    {academicRecords.length === 0 ? (
+                      <>
+                        <p className="profile-screen-noDocuments">
+                          {dictionary.profile.documents.noDocuments}
+                        </p>
+                        <Link
+                          href={buildLocalePath(locale, '/onboarding/expert')}
+                          className="profile-screen-cta-link"
+                        >
+                          {dictionary.profile.documents.addAcademicRecord ?? 'Add academic record'}
+                        </Link>
+                      </>
+                    ) : (
+                      <>
+                        <ul className="profile-screen-doc-list" aria-label="Academic records">
+                          {academicRecords.map((rec) => (
+                            <li
+                              key={rec.id}
+                              className="profile-screen-doc-item profile-screen-doc-item--with-actions"
+                            >
+                              <span className="profile-screen-doc-type">
+                                {rec.title} — {rec.institution}
+                              </span>
+                              <span
+                                className={`profile-screen-doc-status profile-screen-doc-status--${rec.status}`}
                               >
-                                {dictionary.profile.documents.editAcademicRecord ?? 'Edit'}
-                              </button>
-                              {rec.status === 'rejected' && (
-                                <Link
-                                  href={buildLocalePath(locale, '/onboarding/expert')}
-                                  className="profile-screen-doc-resubmit"
-                                >
-                                  {dictionary.profile.documents.resubmit}
-                                </Link>
+                                {dictionary.profile.documents.status}:{' '}
+                                {rec.status === 'pending'
+                                  ? 'Pending'
+                                  : rec.status === 'under_review'
+                                    ? 'Under review'
+                                    : rec.status === 'approved'
+                                      ? 'Approved'
+                                      : 'Rejected'}
+                              </span>
+                              {rec.reviewedAt && (
+                                <span className="profile-screen-doc-meta">
+                                  {dictionary.profile.documents.reviewedAt}:{' '}
+                                  {new Date(rec.reviewedAt).toLocaleDateString(undefined, {
+                                    year: 'numeric',
+                                    month: 'short',
+                                    day: 'numeric',
+                                  })}
+                                </span>
                               )}
-                            </div>
-                          )}
-                        </li>
-                      ))}
-                    </ul>
-                    {isExpert && (
-                      <Link
-                        href={buildLocalePath(locale, '/onboarding/expert')}
-                        className="profile-screen-cta-link profile-screen-cta-link--secondary"
-                      >
-                        {dictionary.profile.documents.addAnotherAcademicRecord ?? 'Add another academic record'}
-                      </Link>
+                              {rec.rejectionReason && (
+                                <p className="profile-screen-doc-rejection">
+                                  {dictionary.profile.documents.rejectionReason}: {rec.rejectionReason}
+                                </p>
+                              )}
+                              <div className="profile-screen-doc-actions">
+                                <button
+                                  type="button"
+                                  className="profile-screen-doc-edit-btn"
+                                  onClick={() => setEditAcademicRecord(rec)}
+                                >
+                                  {dictionary.profile.documents.editAcademicRecord ?? 'Edit'}
+                                </button>
+                                {rec.status === 'rejected' && (
+                                  <Link
+                                    href={buildLocalePath(locale, '/onboarding/expert')}
+                                    className="profile-screen-doc-resubmit"
+                                  >
+                                    {dictionary.profile.documents.resubmit}
+                                  </Link>
+                                )}
+                              </div>
+                            </li>
+                          ))}
+                        </ul>
+                        <Link
+                          href={buildLocalePath(locale, '/onboarding/expert')}
+                          className="profile-screen-cta-link profile-screen-cta-link--secondary"
+                        >
+                          {dictionary.profile.documents.addAnotherAcademicRecord ??
+                            'Add another academic record'}
+                        </Link>
+                      </>
                     )}
                   </>
                 )}
 
-                {identityDocuments.length === 0 && academicRecords.length === 0 && (
+                {identityDocuments.length === 0 && (!isExpert || academicRecords.length === 0) && (
                   <Link
-                    href={buildLocalePath(
-                      locale,
-                      isExpert ? '/onboarding/expert' : '/onboarding/business',
-                    )}
+                    href={buildLocalePath(locale, onboardingPath)}
                     className="profile-screen-cta-link"
                   >
                     {dictionary.profile.documents.goToVerification}

@@ -391,6 +391,7 @@ export const AuthForm = ({
       ? {
           customer: dictionary.register.customerTitle,
           expert: dictionary.register.expertTitle,
+          craftsman: dictionary.register.craftsmanTitle,
           business: dictionary.register.businessTitle,
         }[role]
       : dictionary.login.title;
@@ -400,6 +401,7 @@ export const AuthForm = ({
       ? {
           customer: dictionary.register.customerSubtitle,
           expert: dictionary.register.expertSubtitle,
+          craftsman: dictionary.register.craftsmanSubtitle,
           business: dictionary.register.businessSubtitle,
         }[role]
       : dictionary.login.subtitle;
@@ -407,16 +409,24 @@ export const AuthForm = ({
   const displayNameLabel = {
     customer: dictionary.register.displayNameCustomerLabel,
     expert: dictionary.register.displayNameExpertLabel,
+    craftsman: dictionary.register.displayNameCraftsmanLabel,
     business: dictionary.register.displayNameBusinessLabel,
   }[role];
 
   const dobLabel = {
     customer: dictionary.register.dateOfBirthLabel,
     expert: dictionary.register.dateOfBirthLabel,
+    craftsman: dictionary.register.dateOfBirthLabel,
     business: dictionary.register.dateOfBirthBusinessLabel,
   }[role];
 
-  const dobHint = role === 'expert' ? dictionary.register.dateOfBirthExpertHint : null;
+  const dobHint =
+    role === 'expert'
+      ? dictionary.register.dateOfBirthExpertHint
+      : role === 'craftsman'
+        ? (dictionary.register.dateOfBirthCraftsmanHint ??
+          dictionary.register.dateOfBirthExpertHint)
+        : null;
 
   const phoneLabel =
     role === 'business' ? dictionary.register.phoneBusinessLabel : dictionary.register.phoneLabel;

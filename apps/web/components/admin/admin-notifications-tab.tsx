@@ -109,6 +109,7 @@ export const AdminNotificationsTab = ({ dictionary, accessToken, refreshSession 
             >
               <option value="customer">Customer</option>
               <option value="expert">Expert</option>
+              <option value="craftsman">Craftsman</option>
               <option value="business">Business</option>
             </select>
           </div>

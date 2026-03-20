@@ -1,16 +1,12 @@
 // ---------------------------------------------------------------------------
-// Profile types — shared between API and frontend
+// Profile types shared between API and frontend
 // ---------------------------------------------------------------------------
 
 import type { VerificationStatus } from './verification.js';
 
-// ── Document / record statuses ───────────────────────────────────────────
-
 export type DocumentStatus = 'pending' | 'under_review' | 'approved' | 'rejected' | 'expired';
 export type AcademicRecordStatus = 'pending' | 'under_review' | 'approved' | 'rejected';
 export type AdminReviewType = 'identity' | 'academic' | 'business_docs';
-
-// ── Identity document types ──────────────────────────────────────────────
 
 export type IdentityDocumentType = 'national_id' | 'driving_license' | 'passport';
 
@@ -44,8 +40,6 @@ export type IdentityDocument = {
   createdAt: string;
 };
 
-// ── Academic record types ────────────────────────────────────────────────
-
 export type AcademicRecordType = 'degree' | 'diploma' | 'certificate' | 'license';
 
 export type AcademicRecordBody = {
@@ -76,8 +70,6 @@ export type AcademicRecord = {
   createdAt: string;
 };
 
-// ── Customer profile types ────────────────────────────────────────────────
-
 export type CustomerProfile = {
   userId: string;
   city: string | null;
@@ -90,8 +82,6 @@ export type UpdateCustomerProfileBody = {
   country?: string | null;
   contactPreference?: string | null;
 };
-
-// ── Expert profile types ─────────────────────────────────────────────────
 
 export type AvailabilityStatus = 'available' | 'busy' | 'offline';
 
@@ -117,17 +107,14 @@ export type ExpertProfile = {
   verificationStatus: VerificationStatus;
   identityVerified: boolean;
   academicVerified: boolean;
-  /** How identity was verified: 'didit' = external KYC (e.g. Didit), 'manual' = admin-reviewed identity document */
   identityVerificationMethod: 'didit' | 'manual' | null;
   payoutCurrency: string | null;
   payoutAddress: string | null;
   payoutExtraId: string | null;
   payoutUpdatedAt: string | null;
   createdAt: string;
-  /** Set by API when profile is fetched for display */
   averageRating?: number | null;
   reviewCount?: number;
-  /** Earned when profile is complete and user has deposited >= 1000 USD */
   verificationBadgeEarned?: boolean;
   platformVerifiedAt?: string | null;
 };
@@ -150,7 +137,53 @@ export type UpdateExpertProfileBody = {
   educationSummary?: string;
 };
 
-// ── Business profile types ───────────────────────────────────────────────
+export type CraftsmanProfile = {
+  id: string;
+  userId: string;
+  trade: string | null;
+  title: string | null;
+  headline: string | null;
+  bio: string | null;
+  specializations: string[];
+  yearsOfExperience: number | null;
+  hourlyRate: number | null;
+  city: string | null;
+  country: string;
+  availabilityStatus: AvailabilityStatus;
+  workshopName: string | null;
+  workshopAddress: string | null;
+  workshopLatitude: number | null;
+  workshopLongitude: number | null;
+  verificationStatus: VerificationStatus;
+  identityVerified: boolean;
+  identityVerificationMethod: 'didit' | 'manual' | null;
+  payoutCurrency: string | null;
+  payoutAddress: string | null;
+  payoutExtraId: string | null;
+  payoutUpdatedAt: string | null;
+  createdAt: string;
+  averageRating?: number | null;
+  reviewCount?: number;
+  verificationBadgeEarned?: boolean;
+  platformVerifiedAt?: string | null;
+};
+
+export type UpdateCraftsmanProfileBody = {
+  trade?: string;
+  title?: string;
+  headline?: string;
+  bio?: string;
+  specializations?: string[];
+  yearsOfExperience?: number;
+  hourlyRate?: number;
+  city?: string;
+  country?: string;
+  availabilityStatus?: AvailabilityStatus;
+  workshopName?: string;
+  workshopAddress?: string;
+  workshopLatitude?: number;
+  workshopLongitude?: number;
+};
 
 export type CompanySize = '1-10' | '11-50' | '51-200' | '201-500' | '500+';
 
@@ -184,7 +217,6 @@ export type BusinessProfile = {
   identityVerified: boolean;
   businessVerified: boolean;
   createdAt: string;
-  /** Set by API when profile is fetched for display */
   averageRating?: number | null;
   reviewCount?: number;
   verificationBadgeEarned?: boolean;
@@ -217,8 +249,6 @@ export type UpdateBusinessProfileBody = {
   foundedYear?: number;
 };
 
-// ── Admin review types ───────────────────────────────────────────────────
-
 export type AdminReviewDecision = 'approved' | 'rejected';
 
 export type AdminReviewBody = {
@@ -238,8 +268,6 @@ export type AdminReview = {
   createdAt: string;
 };
 
-// ── Admin: pending applications view ─────────────────────────────────────
-
 export type PendingVerificationItem = {
   userId: string;
   displayName: string;
@@ -249,9 +277,8 @@ export type PendingVerificationItem = {
   academicRecords: AcademicRecord[];
   expertProfile: ExpertProfile | null;
   businessProfile: BusinessProfile | null;
+  craftsmanProfile: CraftsmanProfile | null;
 };
-
-// ── Public profile types (for viewing another user's profile) ──────────────
 
 export type PublicExpertProfile = {
   title: string | null;
@@ -267,6 +294,23 @@ export type PublicExpertProfile = {
   languages: string[];
   educationSummary: string | null;
   certificationsCount: number;
+  verificationStatus: VerificationStatus;
+  verificationBadgeEarned?: boolean;
+  averageRating: number | null;
+  reviewCount: number;
+};
+
+export type PublicCraftsmanProfile = {
+  trade: string | null;
+  title: string | null;
+  headline: string | null;
+  bio: string | null;
+  specializations: string[];
+  yearsOfExperience: number | null;
+  hourlyRate: number | null;
+  city: string | null;
+  country: string;
+  workshopName: string | null;
   verificationStatus: VerificationStatus;
   verificationBadgeEarned?: boolean;
   averageRating: number | null;
@@ -293,7 +337,7 @@ export type PublicCustomerProfile = {
   country: string | null;
 };
 
-export type PublicUserProfileRole = 'customer' | 'expert' | 'business';
+export type PublicUserProfileRole = 'customer' | 'expert' | 'business' | 'craftsman';
 
 export type PublicUserProfile = {
   userId: string;
@@ -302,5 +346,6 @@ export type PublicUserProfile = {
   avatarUrl: string | null;
   expertProfile?: PublicExpertProfile | null;
   businessProfile?: PublicBusinessProfile | null;
+  craftsmanProfile?: PublicCraftsmanProfile | null;
   customerProfile?: PublicCustomerProfile | null;
 };

@@ -93,7 +93,11 @@ export const CalendarScreen = (_props: Props) => {
       router.replace(buildLocalePath(locale, '/verify-email'));
       return;
     }
-    if (authUser.role !== 'expert' && authUser.role !== 'business') {
+    if (
+      authUser.role !== 'expert' &&
+      authUser.role !== 'craftsman' &&
+      authUser.role !== 'business'
+    ) {
       router.replace(buildLocalePath(locale, '/app/bookings'));
     }
   }, [isReady, isAuthenticated, authUser, authGuard.emailVerified, locale, router]);

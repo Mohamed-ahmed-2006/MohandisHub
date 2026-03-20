@@ -1,8 +1,8 @@
 'use client';
 
 import type { AdminUserListItem, PaginatedResponse } from '@mohandishub/shared';
-import { useCallback, useEffect, useState } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { useCallback, useEffect, useState } from 'react';
 
 import { AdminUserDetailModal } from './admin-user-detail-modal';
 
@@ -93,6 +93,7 @@ export const AdminUsersTab = ({ dictionary, accessToken, refreshSession, adminPe
           <option value="">{d.allRoles}</option>
           <option value="customer">Customer</option>
           <option value="expert">Expert</option>
+          <option value="craftsman">Craftsman</option>
           <option value="business">Business</option>
           <option value="admin">Admin</option>
         </select>

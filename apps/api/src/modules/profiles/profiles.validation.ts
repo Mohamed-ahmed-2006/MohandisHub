@@ -94,6 +94,23 @@ export const updateExpertProfileSchema = z.object({
   educationSummary: z.string().max(2000).optional(),
 });
 
+export const updateCraftsmanProfileSchema = z.object({
+  trade: z.string().min(2).max(150).optional(),
+  title: z.string().min(2).max(200).optional(),
+  headline: z.string().min(2).max(300).optional(),
+  bio: z.string().max(2000).optional(),
+  specializations: z.array(z.string().max(100)).max(20).optional(),
+  yearsOfExperience: z.number().int().min(0).max(60).optional(),
+  hourlyRate: z.number().min(0).max(100000).optional(),
+  city: z.string().max(100).optional(),
+  country: z.string().max(100).optional(),
+  availabilityStatus: z.enum(['available', 'busy', 'offline']).optional(),
+  workshopName: z.string().max(200).optional(),
+  workshopAddress: z.string().max(500).optional(),
+  workshopLatitude: z.number().min(-90).max(90).optional(),
+  workshopLongitude: z.number().min(-180).max(180).optional(),
+});
+
 // ── Business profile update ──────────────────────────────────────────────
 
 export const updateCustomerProfileSchema = z.object({

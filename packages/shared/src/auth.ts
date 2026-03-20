@@ -2,7 +2,7 @@
 // Auth-related shared types — DTOs exchanged between API and frontend
 // ---------------------------------------------------------------------------
 
-import type { UserRole } from './roles.js';
+import type { RegisterableRole, UserRole } from './roles.js';
 import type { VerificationStatus } from './verification.js';
 
 /** Payload sent when registering a new user. */
@@ -10,7 +10,7 @@ export type RegisterBody = {
   email: string;
   password: string;
   displayName: string;
-  role: UserRole;
+  role: RegisterableRole;
   phone?: string;
   phoneCode?: string;
   nationality?: string;

@@ -374,7 +374,11 @@ export class WalletService {
     }
   }
 
-  async createWithdrawalRequest(userId: string, input: CreateWithdrawalInput): Promise<WithdrawalRequest> {
+  async createWithdrawalRequest(
+    userId: string,
+    role: 'expert' | 'craftsman',
+    input: CreateWithdrawalInput,
+  ): Promise<WithdrawalRequest> {
     const status = await this.settingsService.getAppStatus();
     if (status.moneyMovementsPaused) {
       throw new HttpError({
@@ -400,7 +404,7 @@ export class WalletService {
       });
     }
 
-    const payoutSettings = await this.repo.getExpertPayoutSettings(userId);
+    const payoutSettings = await this.repo.getIndividualProviderPayoutSettings(userId, role);
     const payoutCurrency = (
       input.currency ||
       payoutSettings?.payout_currency ||
@@ -417,7 +421,7 @@ export class WalletService {
     }
 
     if (input.saveAddress === true) {
-      const updated = await this.repo.updateExpertPayoutSettings(userId, {
+      const updated = await this.repo.updateIndividualProviderPayoutSettings(userId, role, {
         payoutCurrency,
         payoutAddress,
         payoutExtraId: input.extraId ?? payoutSettings?.payout_extra_id ?? null,
@@ -426,7 +430,7 @@ export class WalletService {
         throw new HttpError({
           statusCode: 404,
           code: 'PROFILE_NOT_FOUND',
-          message: 'Expert profile not found.',
+          message: 'Provider profile not found.',
         });
       }
     }

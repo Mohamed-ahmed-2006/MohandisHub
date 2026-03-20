@@ -3,6 +3,7 @@
 // ---------------------------------------------------------------------------
 
 import type { ApiSuccessBody, ProviderAnalytics } from '@mohandishub/shared';
+import { canAccessProviderAnalytics } from '@mohandishub/shared';
 
 import { asyncHandler } from '../../utils/async-handler.js';
 import { HttpError } from '../../utils/http-error.js';
@@ -17,11 +18,11 @@ function requireProvider(req: { user?: { id: string; role?: string } }): { id: s
     throw new HttpError({ statusCode: 401, code: 'UNAUTHORIZED', message: 'Authentication required.' });
   }
   const role = user.role ?? 'customer';
-  if (role !== 'expert' && role !== 'business') {
+  if (!canAccessProviderAnalytics(role)) {
     throw new HttpError({
       statusCode: 403,
       code: 'FORBIDDEN',
-      message: 'Analytics are available only for experts and businesses.',
+      message: 'Analytics are available only for provider accounts.',
     });
   }
   return { id: user.id, role };

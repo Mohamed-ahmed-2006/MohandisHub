@@ -10,6 +10,7 @@ import type {
   AcademicRecordRow,
   AdminReviewRow,
   BusinessProfileRow,
+  CraftsmanProfileRow,
   CustomerProfileRow,
   ExpertProfileRow,
   IdentityDocumentRow,
@@ -56,6 +57,7 @@ export class ProfilesRepository {
       portfolio_url: string;
       languages: string[];
       education_summary: string;
+      certifications_count: number;
     }>,
   ): Promise<ExpertProfileRow | null> {
     const entries = Object.entries(fields).filter(([, v]) => v !== undefined);
@@ -66,6 +68,46 @@ export class ProfilesRepository {
 
     const { rows } = await this.db.query<ExpertProfileRow>(
       `UPDATE expert_profiles SET ${setClauses.join(', ')} WHERE user_id = $1 RETURNING *`,
+      [userId, ...values],
+    );
+    return rows[0] ?? null;
+  }
+
+  async findCraftsmanProfile(userId: string): Promise<CraftsmanProfileRow | null> {
+    const { rows } = await this.db.query<CraftsmanProfileRow>(
+      'SELECT * FROM craftsman_profiles WHERE user_id = $1 LIMIT 1',
+      [userId],
+    );
+    return rows[0] ?? null;
+  }
+
+  async updateCraftsmanProfile(
+    userId: string,
+    fields: Partial<{
+      trade: string;
+      title: string;
+      headline: string;
+      bio: string;
+      specializations: string[];
+      years_of_experience: number;
+      hourly_rate: number;
+      city: string;
+      country: string;
+      availability_status: string;
+      workshop_name: string;
+      workshop_address: string;
+      workshop_latitude: number;
+      workshop_longitude: number;
+    }>,
+  ): Promise<CraftsmanProfileRow | null> {
+    const entries = Object.entries(fields).filter(([, v]) => v !== undefined);
+    if (entries.length === 0) return this.findCraftsmanProfile(userId);
+
+    const setClauses = entries.map(([key], i) => `${key} = $${i + 2}`);
+    const values = entries.map(([, v]) => v);
+
+    const { rows } = await this.db.query<CraftsmanProfileRow>(
+      `UPDATE craftsman_profiles SET ${setClauses.join(', ')} WHERE user_id = $1 RETURNING *`,
       [userId, ...values],
     );
     return rows[0] ?? null;
@@ -145,6 +187,13 @@ export class ProfilesRepository {
   async setBusinessOnboardingCompletedAt(userId: string): Promise<void> {
     await this.db.query(
       `UPDATE business_profiles SET onboarding_completed_at = COALESCE(onboarding_completed_at, now()) WHERE user_id = $1`,
+      [userId],
+    );
+  }
+
+  async setCraftsmanOnboardingCompletedAt(userId: string): Promise<void> {
+    await this.db.query(
+      `UPDATE craftsman_profiles SET onboarding_completed_at = COALESCE(onboarding_completed_at, now()) WHERE user_id = $1`,
       [userId],
     );
   }
@@ -327,14 +376,14 @@ export class ProfilesRepository {
     recordId: string,
     userId: string,
     params: {
-      recordType?: string;
-      title?: string;
-      institution?: string;
-      fieldOfStudy?: string | null;
-      graduationYear?: number | null;
-      grade?: string | null;
-      certificateImageUrl?: string | null;
-      transcriptImageUrl?: string | null;
+      recordType?: string | undefined;
+      title?: string | undefined;
+      institution?: string | undefined;
+      fieldOfStudy?: string | null | undefined;
+      graduationYear?: number | null | undefined;
+      grade?: string | null | undefined;
+      certificateImageUrl?: string | null | undefined;
+      transcriptImageUrl?: string | null | undefined;
     },
   ): Promise<AcademicRecordRow | null> {
     const setClauses: string[] = [];
@@ -414,6 +463,23 @@ export class ProfilesRepository {
     ]);
   }
 
+  async setCraftsmanIdentityVerified(userId: string, verified: boolean): Promise<void> {
+    await this.db.query(
+      'UPDATE craftsman_profiles SET identity_verified = $1 WHERE user_id = $2',
+      [verified, userId],
+    );
+  }
+
+  async setCraftsmanIdentityVerificationMethod(
+    userId: string,
+    method: 'didit' | 'manual',
+  ): Promise<void> {
+    await this.db.query(
+      'UPDATE craftsman_profiles SET identity_verification_method = $1 WHERE user_id = $2',
+      [method, userId],
+    );
+  }
+
   async setBusinessIdentityVerified(userId: string, verified: boolean): Promise<void> {
     await this.db.query('UPDATE business_profiles SET identity_verified = $1 WHERE user_id = $2', [
       verified,
@@ -448,20 +514,39 @@ export class ProfilesRepository {
     );
   }
 
+  async updateCraftsmanOverallStatus(userId: string, status: string): Promise<void> {
+    const verifiedAt = status === 'verified' ? 'now()' : 'NULL';
+    await this.db.query(
+      `UPDATE craftsman_profiles SET verification_status = $1, verified_at = ${verifiedAt} WHERE user_id = $2`,
+      [status, userId],
+    );
+  }
+
   /**
    * Sync verified_at for profiles that were manually set to verified in the DB.
    * Sets verified_at = now() where verification_status = 'verified' AND verified_at IS NULL.
    */
-  async syncVerifiedAtForManuallyVerified(): Promise<{ experts: number; businesses: number }> {
-    const [expertRes, businessRes] = await Promise.all([
+  async syncVerifiedAtForManuallyVerified(): Promise<{
+    experts: number;
+    businesses: number;
+    craftsmen: number;
+  }> {
+    const [expertRes, businessRes, craftsmanRes] = await Promise.all([
       this.db.query(
         `UPDATE expert_profiles SET verified_at = now() WHERE verification_status = 'verified' AND verified_at IS NULL RETURNING user_id`,
       ),
       this.db.query(
         `UPDATE business_profiles SET verified_at = now() WHERE verification_status = 'verified' AND verified_at IS NULL RETURNING user_id`,
       ),
+      this.db.query(
+        `UPDATE craftsman_profiles SET verified_at = now() WHERE verification_status = 'verified' AND verified_at IS NULL RETURNING user_id`,
+      ),
     ]);
-    return { experts: expertRes.rowCount ?? 0, businesses: businessRes.rowCount ?? 0 };
+    return {
+      experts: expertRes.rowCount ?? 0,
+      businesses: businessRes.rowCount ?? 0,
+      craftsmen: craftsmanRes.rowCount ?? 0,
+    };
   }
 
   /**
@@ -641,5 +726,55 @@ export class ProfilesRepository {
       industry: r.industry,
       city: r.city,
     }));
+  }
+
+  async findTopCraftsmen(limit: number = 6): Promise<
+    Array<{
+      userId: string;
+      displayName: string;
+      avatarUrl: string | null;
+      trade: string | null;
+      headline: string | null;
+      specializations: string[];
+      city: string | null;
+    }>
+  > {
+    try {
+      const { rows } = await this.db.query<{
+        user_id: string;
+        display_name: string;
+        avatar_url: string | null;
+        trade: string | null;
+        headline: string | null;
+        specializations: string[];
+        city: string | null;
+      }>(
+        `SELECT u.id AS user_id, u.display_name, u.avatar_url, c.trade, c.headline, c.specializations, c.city
+         FROM craftsman_profiles c
+         JOIN users u ON u.id = c.user_id
+         WHERE c.verification_status = 'verified' AND u.is_active = true AND u.avatar_url IS NOT NULL
+         ORDER BY c.verified_at DESC NULLS LAST, c.created_at DESC
+         LIMIT $1::int`,
+        [limit],
+      );
+      return rows.map((r) => ({
+        userId: r.user_id,
+        displayName: r.display_name,
+        avatarUrl: r.avatar_url,
+        trade: r.trade,
+        headline: r.headline,
+        specializations: r.specializations ?? [],
+        city: r.city,
+      }));
+    } catch (error) {
+      const code =
+        typeof error === 'object' && error && 'code' in error ? String(error.code) : null;
+
+      if (code === '42P01') {
+        return [];
+      }
+
+      throw error;
+    }
   }
 }

@@ -29,7 +29,7 @@ export const VERIFICATION_STATUS_LABELS: Record<VerificationStatus, string> = {
 };
 
 /** Roles that require verification before they can offer services. */
-export const ROLES_REQUIRING_VERIFICATION = ['expert', 'business'] as const;
+export const ROLES_REQUIRING_VERIFICATION = ['expert', 'business', 'craftsman'] as const;
 
 export type VerifiableRole = (typeof ROLES_REQUIRING_VERIFICATION)[number];
 

@@ -81,7 +81,7 @@ export type ServiceSearchParams = {
   categoryId?: string;
   city?: string;
   area?: string;
-  providerType?: 'expert' | 'business';
+  providerType?: 'expert' | 'business' | 'craftsman';
   query?: string;
   minRating?: number;
   minPrice?: number;

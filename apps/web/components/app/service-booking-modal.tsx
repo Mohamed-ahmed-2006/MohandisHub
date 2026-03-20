@@ -4,10 +4,10 @@ import type { ReservationProfile, ReservationSlot, ServiceSearchResult } from '@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 
+import { useProfileModal } from './profile-modal-context';
+
 import type { Dictionary, Locale } from '@/lib/i18n/types';
 import { reservationsApiClient } from '@/lib/reservations/client';
-
-import { useProfileModal } from './profile-modal-context';
 
 type Props = {
   open: boolean;

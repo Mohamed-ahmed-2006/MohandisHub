@@ -44,6 +44,16 @@ const canJoinApplicationRoom = async (applicationId: string, userId: string): Pr
   return participants.expert_id === userId || participants.business_id === userId;
 };
 
+const canJoinConversationRoom = async (conversationId: string, userId: string): Promise<boolean> => {
+  const { rows } = await getPool().query<{ participant_a: string; participant_b: string }>(
+    `SELECT participant_a, participant_b FROM conversations WHERE id = $1 LIMIT 1`,
+    [conversationId],
+  );
+  const conversation = rows[0];
+  if (!conversation) return false;
+  return conversation.participant_a === userId || conversation.participant_b === userId;
+};
+
 export const registerChatSocket = (io: SocketServer): void => {
   setSocketServer(io);
   io.use((socket, next) => {
@@ -114,10 +124,21 @@ export const registerChatSocket = (io: SocketServer): void => {
         void socket.leave(`application:${appId}`);
       }
     });
-    socket.on('join_conversation', (payload: { conversationId?: string }) => {
+    socket.on('join_conversation', async (payload: { conversationId?: string }) => {
       const convId = payload?.conversationId;
-      if (convId && typeof convId === 'string') {
+      if (!convId || typeof convId !== 'string') {
+        emitSocketError(socket, 'INVALID_INPUT', 'conversationId is required.');
+        return;
+      }
+      try {
+        const allowed = await canJoinConversationRoom(convId, authUser.id);
+        if (!allowed) {
+          emitSocketError(socket, 'FORBIDDEN_ROOM_JOIN', 'Not authorized for this conversation.');
+          return;
+        }
         void socket.join(`conversation:${convId}`);
+      } catch {
+        emitSocketError(socket, 'ROOM_JOIN_FAILED', 'Could not join conversation room.');
       }
     });
 

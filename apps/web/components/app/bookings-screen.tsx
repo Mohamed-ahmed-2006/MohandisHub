@@ -227,7 +227,7 @@ export const BookingsScreen = (_props: Props) => {
     setError(null);
     try {
       const requests =
-        authUser?.role === 'expert'
+        authUser?.role === 'expert' || authUser?.role === 'craftsman'
           ? [
               reservationsApiClient.listMyReservations(accessToken, {
                 role: 'provider',
@@ -771,7 +771,9 @@ export const BookingsScreen = (_props: Props) => {
                       className="reservation-other-party-btn"
                       onClick={() =>
                         openProfileModal(selectedReservation.customerId, {
-                          displayName: selectedReservation.customerName ?? undefined,
+                          ...(selectedReservation.customerName
+                            ? { displayName: selectedReservation.customerName }
+                            : {}),
                         })
                       }
                     >
@@ -787,7 +789,9 @@ export const BookingsScreen = (_props: Props) => {
                       className="reservation-other-party-btn"
                       onClick={() =>
                         openProfileModal(selectedReservation.providerId, {
-                          displayName: selectedReservation.providerName ?? undefined,
+                          ...(selectedReservation.providerName
+                            ? { displayName: selectedReservation.providerName }
+                            : {}),
                         })
                       }
                     >

@@ -11,10 +11,10 @@ const reservationsRouter = Router();
 
 reservationsRouter.use(authenticate, requireEmailVerified);
 
-reservationsRouter.get('/profile/me', requireRole('expert', 'business'), reservationsController.getMyProfile);
+reservationsRouter.get('/profile/me', requireRole('expert', 'business', 'craftsman'), reservationsController.getMyProfile);
 reservationsRouter.patch(
   '/profile/me',
-  requireRole('expert', 'business'),
+  requireRole('expert', 'business', 'craftsman'),
   requireVerified,
   reservationsController.upsertMyProfile,
 );
@@ -23,19 +23,19 @@ reservationsRouter.get('/profile/:providerId', reservationsController.getProvide
 reservationsRouter.get('/slots', reservationsController.listSlots);
 reservationsRouter.post(
   '/slots',
-  requireRole('expert', 'business'),
+  requireRole('expert', 'business', 'craftsman'),
   requireVerified,
   reservationsController.createSlot,
 );
 reservationsRouter.patch(
   '/slots/:slotId',
-  requireRole('expert', 'business'),
+  requireRole('expert', 'business', 'craftsman'),
   requireVerified,
   reservationsController.updateSlot,
 );
 reservationsRouter.delete(
   '/slots/:slotId',
-  requireRole('expert', 'business'),
+  requireRole('expert', 'business', 'craftsman'),
   requireVerified,
   reservationsController.deleteSlot,
 );
@@ -68,7 +68,7 @@ reservationsRouter.get('/:reservationId', reservationsController.getReservationB
 reservationsRouter.get('/:reservationId/timeline', reservationsController.listReservationTimeline);
 reservationsRouter.post(
   '/:reservationId/decision',
-  requireRole('expert', 'business'),
+  requireRole('expert', 'business', 'craftsman'),
   reservationsController.decideReservation,
 );
 reservationsRouter.post('/:reservationId/cancel', reservationsController.cancelReservation);

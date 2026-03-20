@@ -5,9 +5,11 @@
 import type {
   AcademicRecord,
   BusinessProfile,
+  CraftsmanProfile,
   ExpertProfile,
   IdentityDocument,
   UpdateBusinessProfileBody,
+  UpdateCraftsmanProfileBody,
   UpdateExpertProfileBody,
 } from './profiles.js';
 import type { UserRole } from './roles.js';
@@ -226,6 +228,7 @@ export type AdminUserOverview = {
   user: AdminUserDetail;
   expertProfile: ExpertProfile | null;
   businessProfile: BusinessProfile | null;
+  craftsmanProfile: CraftsmanProfile | null;
   identityDocuments: IdentityDocument[];
   academicRecords: AcademicRecord[];
   activityCounts: AdminUserActivityCounts;
@@ -234,3 +237,4 @@ export type AdminUserOverview = {
 
 export type AdminUpdateExpertProfileBody = UpdateExpertProfileBody;
 export type AdminUpdateBusinessProfileBody = UpdateBusinessProfileBody;
+export type AdminUpdateCraftsmanProfileBody = UpdateCraftsmanProfileBody;

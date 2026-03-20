@@ -39,22 +39,6 @@ export const errorHandler: ErrorRequestHandler = (error, req, res, next) => {
         ...(req.user?.id && { userId: req.user.id }),
       });
     }
-    if (error.statusCode === 503) {
-      // #region agent log
-      fetch('http://127.0.0.1:7325/ingest/ebd08bf8-7d73-450c-ad4d-4436a6c2225b', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '3da021' },
-        body: JSON.stringify({
-          sessionId: '3da021',
-          location: 'error-handler.ts',
-          message: 'HttpError 503',
-          data: { code: error.code, message: error.message },
-          timestamp: Date.now(),
-          hypothesisId: 'H1-H2',
-        }),
-      }).catch(() => {});
-      // #endregion
-    }
     const body: ApiErrorBody = {
       ok: false,
       error: {
@@ -87,20 +71,6 @@ export const errorHandler: ErrorRequestHandler = (error, req, res, next) => {
       pgMessage.includes('reservation_slots') ||
       pgMessage.includes('reservation_'));
   if (isReservationSchemaError) {
-    // #region agent log
-    fetch('http://127.0.0.1:7325/ingest/ebd08bf8-7d73-450c-ad4d-4436a6c2225b', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '3da021' },
-      body: JSON.stringify({
-        sessionId: '3da021',
-        location: 'error-handler.ts',
-        message: 'Error handler sending 503',
-        data: { code: 'SCHEMA_OUTDATED', reason: 'reservation' },
-        timestamp: Date.now(),
-        hypothesisId: 'H5',
-      }),
-    }).catch(() => {});
-    // #endregion
     const body: ApiErrorBody = {
       ok: false,
       error: {
@@ -117,20 +87,6 @@ export const errorHandler: ErrorRequestHandler = (error, req, res, next) => {
   const isNotificationsSchemaError =
     pgLikeError.code === '42P01' && pgMessage.includes('notifications');
   if (isNotificationsSchemaError) {
-    // #region agent log
-    fetch('http://127.0.0.1:7325/ingest/ebd08bf8-7d73-450c-ad4d-4436a6c2225b', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '3da021' },
-      body: JSON.stringify({
-        sessionId: '3da021',
-        location: 'error-handler.ts',
-        message: 'Error handler sending 503',
-        data: { code: 'SCHEMA_OUTDATED', reason: 'notifications' },
-        timestamp: Date.now(),
-        hypothesisId: 'H5',
-      }),
-    }).catch(() => {});
-    // #endregion
     const body: ApiErrorBody = {
       ok: false,
       error: {

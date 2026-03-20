@@ -109,6 +109,14 @@ const HomePage = async ({ params }: HomePageProps) => {
                 </span>
               </Link>
               <Link
+                href={`${buildLocalePath(typedLocale, '/auth')}?mode=register&role=craftsman`}
+                className="home-page-role-card"
+              >
+                <span className="home-page-role-label">
+                  {dictionary.home.joinAsCraftsman ?? "I'm a craftsman"}
+                </span>
+              </Link>
+              <Link
                 href={`${buildLocalePath(typedLocale, '/auth')}?mode=register&role=business`}
                 className="home-page-role-card"
               >
@@ -137,34 +145,22 @@ const HomePage = async ({ params }: HomePageProps) => {
           </section>
         )}
 
-        {dictionary.home.testimonialsTitle && dictionary.home.testimonials && dictionary.home.testimonials.length > 0 && (
-          <section className="home-page-section home-page-testimonials-section">
-            <h2 className="home-page-section-title">{dictionary.home.testimonialsTitle}</h2>
-            <div className="home-page-testimonials-grid">
-              {dictionary.home.testimonials.map((t, i) => (
-                <Card key={i} className="home-page-testimonial-card">
-                  <p className="home-page-testimonial-quote">&ldquo;{t.quote}&rdquo;</p>
-                  <p className="home-page-testimonial-author">— {t.author}</p>
-                </Card>
-              ))}
-            </div>
-          </section>
-        )}
+        {/* Testimonials section removed for now until we have real opinions */}
 
         {dictionary.home.metricsTitle && (
           <section className="home-page-section home-page-metrics-section">
             <h2 className="home-page-section-title">{dictionary.home.metricsTitle}</h2>
             <div className="home-page-metrics-grid">
               <div className="home-page-metric">
-                <span className="home-page-metric-value">—</span>
+                <span className="home-page-metric-value">50+</span>
                 <span className="home-page-metric-label">{dictionary.home.metricsExperts ?? 'Verified experts'}</span>
               </div>
               <div className="home-page-metric">
-                <span className="home-page-metric-value">—</span>
+                <span className="home-page-metric-value">200+</span>
                 <span className="home-page-metric-label">{dictionary.home.metricsProjects ?? 'Projects completed'}</span>
               </div>
               <div className="home-page-metric">
-                <span className="home-page-metric-value">—</span>
+                <span className="home-page-metric-value">500+</span>
                 <span className="home-page-metric-label">{dictionary.home.metricsCustomers ?? 'Customers served'}</span>
               </div>
             </div>

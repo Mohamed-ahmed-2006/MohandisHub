@@ -33,14 +33,19 @@ const resolveMode = (value: string | null): AuthMode => {
 };
 
 const resolveRole = (value: string | null): RegisterRole => {
-  if (value === 'expert' || value === 'business' || value === 'customer') {
+  if (
+    value === 'expert' ||
+    value === 'craftsman' ||
+    value === 'business' ||
+    value === 'customer'
+  ) {
     return value;
   }
 
   return 'customer';
 };
 
-const roleOptions: RegisterRole[] = ['customer', 'expert', 'business'];
+const roleOptions: RegisterRole[] = ['customer', 'expert', 'craftsman', 'business'];
 
 export const AuthFormScreen = ({
   locale,

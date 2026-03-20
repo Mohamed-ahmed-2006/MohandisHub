@@ -2,6 +2,8 @@
 // Reviews service — business logic
 // ---------------------------------------------------------------------------
 
+import type { ReviewTargetType } from '@mohandishub/shared';
+
 import { getPool } from '../../db/pool.js';
 import { HttpError } from '../../utils/http-error.js';
 import { NeedsRepository } from '../needs/needs.repository.js';
@@ -23,7 +25,7 @@ function toReview(row: ReviewRow) {
     id: row.id,
     reviewerId: row.reviewer_id,
     targetUserId: row.target_user_id,
-    targetType: row.target_type as 'expert' | 'business' | 'customer',
+    targetType: row.target_type as ReviewTargetType,
     reservationId: row.reservation_id,
     bookingId: row.booking_id,
     needId: row.need_id,
@@ -35,13 +37,15 @@ function toReview(row: ReviewRow) {
 }
 
 export class ReviewsService {
-  private async getProviderRole(userId: string): Promise<'expert' | 'business'> {
+  private async getProviderRole(userId: string): Promise<'expert' | 'business' | 'craftsman'> {
     const { rows } = await getPool().query<{ primary_role: string }>(
       `SELECT primary_role FROM users WHERE id = $1`,
       [userId],
     );
     const role = rows[0]?.primary_role;
-    return role === 'business' ? 'business' : 'expert';
+    if (role === 'business') return 'business';
+    if (role === 'craftsman') return 'craftsman';
+    return 'expert';
   }
 
   constructor(
@@ -143,7 +147,7 @@ export class ReviewsService {
         });
       }
       targetUserId = bid.expert_id;
-      targetType = 'expert';
+      targetType = await this.getProviderRole(targetUserId);
       const existing = await this.repo.findByNeed(input.needId);
       if (existing) {
         throw new HttpError({
@@ -176,7 +180,7 @@ export class ReviewsService {
 
   async listByTarget(
     targetUserId: string,
-    targetType: 'expert' | 'business' | 'customer',
+    targetType: ReviewTargetType,
     page: number,
     limit: number,
   ) {

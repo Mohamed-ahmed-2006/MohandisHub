@@ -7,6 +7,7 @@ import { AuthProvider } from '@/components/auth/auth-provider';
 import { MaintenanceGate } from '@/components/maintenance-gate';
 import SpeedInsightsClient from '@/components/speed-insights-client';
 import { ThemeProvider, themeInitScript } from '@/components/theme-provider';
+import { getIconVersion } from '@/lib/icon-version';
 
 import './globals.css';
 
@@ -20,17 +21,19 @@ const sora = Sora({
   subsets: ['latin'],
 });
 
+const iconVersion = getIconVersion();
+
 export const metadata: Metadata = {
   title: 'MohandisHub',
   description: 'Engineering services marketplace connecting customers, experts, and businesses.',
-  manifest: '/manifest.json',
+  manifest: '/manifest',
   icons: {
     icon: [
-      { url: '/icon', type: 'image/png', sizes: '32x32' },
-      { url: '/icons/favicon-light.png', media: '(prefers-color-scheme: light)' },
-      { url: '/icons/favicon-dark.png', media: '(prefers-color-scheme: dark)' },
+      { url: `/icon?v=${iconVersion}`, type: 'image/png', sizes: '32x32' },
+      { url: `/icons/favicon-light.png?v=${iconVersion}`, media: '(prefers-color-scheme: light)' },
+      { url: `/icons/favicon-dark.png?v=${iconVersion}`, media: '(prefers-color-scheme: dark)' },
     ],
-    apple: [{ url: '/icon', type: 'image/png', sizes: '32x32' }],
+    apple: [{ url: `/icon?v=${iconVersion}`, type: 'image/png', sizes: '32x32' }],
   },
 };
 

@@ -20,14 +20,17 @@
     "typecheck": "npm run build -w @mohandishub/shared && npm run typecheck -w @mohandishub/shared && npm run typecheck -w @mohandishub/api && npm run typecheck -w @mohandishub/web",
     "lint": "npm run lint -w @mohandishub/api && npm run lint -w @mohandishub/web",
     "test": "npm run build -w @mohandishub/shared && npm run test -w @mohandishub/shared && npm run test -w @mohandishub/api && npm run test -w @mohandishub/web",
+    "test:coverage": "npm run test:coverage -w @mohandishub/api && npm run test:coverage -w @mohandishub/web",
     "e2e": "npm run e2e -w @mohandishub/e2e",
     "ship": "node scripts/ship.mjs",
+    "validate:i18n": "node scripts/validate-i18n.mjs",
     "format": "prettier . --write",
     "format:check": "prettier . --check"
   },
   "devDependencies": {
     "@eslint/js": "^9.22.0",
     "@next/eslint-plugin-next": "^15.2.0",
+    "@vitest/coverage-v8": "^3.2.4",
     "concurrently": "^9.1.2",
     "eslint": "^9.22.0",
     "eslint-plugin-import": "^2.31.0",

@@ -19,6 +19,7 @@ import type {
   AdminUserOverview,
   AdminWalletFreezeResponse,
   BusinessProfile,
+  CraftsmanProfile,
   ExpertProfile,
   PaginatedResponse,
   Plan,
@@ -54,6 +55,7 @@ import type {
   CreatePlanInput,
   UpdateBusinessProfileByAdminInput,
   UpdateCategoryInput,
+  UpdateCraftsmanProfileByAdminInput,
   UpdateExpertProfileByAdminInput,
   UpdatePlanInput,
   UpdateServiceInput,
@@ -81,6 +83,7 @@ export class AdminService {
         customer: parseInt(row.role_customer, 10),
         expert: parseInt(row.role_expert, 10),
         business: parseInt(row.role_business, 10),
+        craftsman: parseInt(row.role_craftsman, 10),
         admin: parseInt(row.role_admin, 10),
       },
       totalTransactions: parseInt(row.total_transactions, 10),
@@ -237,11 +240,13 @@ export class AdminService {
 
     let expertProfile: AdminUserOverview['expertProfile'] = null;
     let businessProfile: AdminUserOverview['businessProfile'] = null;
+    let craftsmanProfile: AdminUserOverview['craftsmanProfile'] = null;
     let identityDocuments: AdminUserOverview['identityDocuments'] = [];
     let academicRecords: AdminUserOverview['academicRecords'] = [];
 
     expertProfile = await this.profilesService.getExpertProfile(userId).catch(() => null);
     businessProfile = await this.profilesService.getBusinessProfile(userId).catch(() => null);
+    craftsmanProfile = await this.profilesService.getCraftsmanProfile(userId).catch(() => null);
 
     if (includeVerification) {
       identityDocuments = await this.profilesService.getIdentityDocuments(userId);
@@ -261,6 +266,7 @@ export class AdminService {
       user: this.toUserDetail(row),
       expertProfile,
       businessProfile,
+      craftsmanProfile,
       identityDocuments,
       academicRecords,
       activityCounts,
@@ -408,6 +414,24 @@ export class AdminService {
       });
     }
     return this.profilesService.updateBusinessProfile(userId, input);
+  }
+
+  async updateCraftsmanProfileAsAdmin(
+    userId: string,
+    input: UpdateCraftsmanProfileByAdminInput,
+  ): Promise<CraftsmanProfile> {
+    const user = await this.repo.getUserById(userId);
+    if (!user) {
+      throw new HttpError({ statusCode: 404, code: 'USER_NOT_FOUND', message: 'User not found.' });
+    }
+    if (user.primary_role !== 'craftsman') {
+      throw new HttpError({
+        statusCode: 404,
+        code: 'PROFILE_NOT_FOUND',
+        message: 'Craftsman profile not found for this user role.',
+      });
+    }
+    return this.profilesService.updateCraftsmanProfile(userId, input);
   }
 
   async freezeUserWallet(userId: string): Promise<AdminWalletFreezeResponse> {

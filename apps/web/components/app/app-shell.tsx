@@ -58,17 +58,24 @@ const AppShellInner = ({ children }: AppShellProps) => {
   useEffect(() => {
     if (!isReady || !authUser || !accessToken) return;
     const role = authUser.role;
-    if (role !== 'expert' && role !== 'business') return;
+    if (role !== 'expert' && role !== 'craftsman' && role !== 'business') return;
     const verificationStatus = authUser.verificationStatus;
-    const onboardingPath = role === 'expert' ? '/onboarding/expert' : '/onboarding/business';
+    const onboardingPath =
+      role === 'expert'
+        ? '/onboarding/expert'
+        : role === 'craftsman'
+          ? '/onboarding/craftsman'
+          : '/onboarding/business';
     void (async () => {
       try {
         if (role === 'expert') {
           await profilesApiClient.getExpertProfile(accessToken);
+        } else if (role === 'craftsman') {
+          await profilesApiClient.getCraftsmanProfile(accessToken);
         } else {
           await profilesApiClient.getBusinessProfile(accessToken);
         }
-        if (verificationStatus && verificationStatus !== 'verified') {
+        if (verificationStatus !== 'verified') {
           router.replace(buildLocalePath(locale, onboardingPath));
           return;
         }
@@ -81,19 +88,19 @@ const AppShellInner = ({ children }: AppShellProps) => {
   useEffect(() => {
     if (!isReady || !authUser || !accessToken) return;
     let cancelled = false;
+    let activeSocket: Awaited<ReturnType<typeof getChatSocket>> | null = null;
+    const onNotification = (data: AppNotification) => {
+      addToast(data.title, data.message);
+    };
     void getChatSocket(accessToken).then((sock) => {
       if (cancelled || !sock) return;
+      activeSocket = sock;
       sock.emit('join_user', { userId: authUser.id });
-      const onNotification = (data: AppNotification) => {
-        addToast(data.title, data.message);
-      };
       sock.on('notification', onNotification);
     });
     return () => {
       cancelled = true;
-      void getChatSocket(accessToken).then((sock) => {
-        if (sock) sock.off('notification');
-      });
+      if (activeSocket) activeSocket.off('notification', onNotification);
     };
   }, [isReady, authUser, accessToken, addToast]);
 
@@ -186,7 +193,7 @@ const AppShellInner = ({ children }: AppShellProps) => {
                       type="button"
                       className="app-topbar-balance-link app-topbar-balance-main"
                       onClick={() => router.push(buildLocalePath(locale, '/app/settings/wallet'))}
-                      aria-label="Open wallet settings"
+                      aria-label={dictionary.nav.settings}
                     >
                       <span className="app-topbar-balance-label">{dictionary.wallet.balance}</span>
                       <span className="app-topbar-balance-amount">
@@ -238,9 +245,8 @@ const AppShellInner = ({ children }: AppShellProps) => {
             role="alert"
           >
             {depositMessage === 'success'
-              ? (dictionary.wallet?.depositSuccess ??
-                'Deposit successful. Your balance will update after confirmation.')
-              : (dictionary.wallet?.depositCancelled ?? 'Deposit was cancelled.')}
+              ? (dictionary.wallet?.depositSuccess ?? dictionary.wallet.deposit)
+              : (dictionary.wallet?.depositCancelled ?? dictionary.common.cancel)}
             <button
               type="button"
               style={{
@@ -252,7 +258,7 @@ const AppShellInner = ({ children }: AppShellProps) => {
                 fontWeight: 'bold',
               }}
               onClick={() => setDepositMessage(null)}
-              aria-label="Dismiss"
+              aria-label={dictionary.common.close ?? dictionary.common.cancel}
             >
               x
             </button>

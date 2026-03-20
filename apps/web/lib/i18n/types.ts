@@ -11,6 +11,7 @@ export type Dictionary = {
     backToHome: string;
     submit: string;
     save: string;
+    saving?: string;
     skip: string;
     next: string;
     back: string;
@@ -38,6 +39,7 @@ export type Dictionary = {
     message?: string;
     messages?: string;
     reply?: string;
+    close?: string;
   };
   theme: {
     switchToLight: string;
@@ -65,6 +67,7 @@ export type Dictionary = {
     joinAsTitle?: string;
     joinAsCustomer?: string;
     joinAsExpert?: string;
+    joinAsCraftsman?: string;
     joinAsBusiness?: string;
     trustTitle?: string;
     trustVerified?: string;
@@ -97,6 +100,10 @@ export type Dictionary = {
           description: string;
         };
         business: {
+          title: string;
+          description: string;
+        };
+        craftsman: {
           title: string;
           description: string;
         };
@@ -185,6 +192,70 @@ export type Dictionary = {
       pendingReviewMessage: string;
       identityRejectedResubmit: string;
       documentRejectedResubmit: string;
+    };
+    craftsman: {
+      title: string;
+      description: string;
+      steps: {
+        emailVerification: string;
+        profileDetails: string;
+        workshopDetails: string;
+        identityVerification: string;
+      };
+      profileForm: {
+        tradeLabel: string;
+        tradePlaceholder: string;
+        titleLabel: string;
+        titlePlaceholder: string;
+        headlineLabel: string;
+        bioLabel: string;
+        specializationsLabel: string;
+        specializationsHint: string;
+        yearsOfExperienceLabel: string;
+        hourlyRateLabel: string;
+        cityLabel: string;
+        countryLabel: string;
+        availabilityLabel: string;
+        workshopNameLabel: string;
+        workshopAddressLabel: string;
+        workshopAddressHint: string;
+        profilePhotoLabel?: string;
+        profilePhotoHint?: string;
+        uploadProfilePhoto?: string;
+      };
+      documentsForm: {
+        identityTitle: string;
+        identityDescription: string;
+        documentTypeLabel: string;
+        fullNameOnDocLabel: string;
+        documentNumberLabel: string;
+        nationalityLabel: string;
+        frontImageLabel: string;
+        backImageLabel: string;
+        selfieImageLabel: string;
+        backImageHint?: string;
+        liveSelfieHint?: string;
+        identityDescriptionSuffix?: string;
+      };
+      availabilityOptions?: {
+        available: string;
+        busy: string;
+        offline: string;
+      };
+      kycTitle: string;
+      kycDescription: string;
+      kycButton: string;
+      kycManualButton: string;
+      kycPending: string;
+      kycVerified: string;
+      kycRejected: string;
+      pendingReviewMessage: string;
+      identityRejectedResubmit: string;
+      goToDashboard?: string;
+      profilePhotoRequiredError?: string;
+      manualKycMissingFilesError?: string;
+      kycRequirementsHint?: string;
+      kycDividerOr?: string;
     };
     business: {
       title: string;
@@ -332,6 +403,7 @@ export type Dictionary = {
     verified: string;
     roleExpert?: string;
     roleBusiness?: string;
+    roleCraftsman?: string;
     roleCustomer?: string;
   };
   chatPage?: {
@@ -349,6 +421,13 @@ export type Dictionary = {
     typeMessage: string;
     pasteLinkUrl: string;
     optionalCaption: string;
+    loadingConversations?: string;
+    noConversations?: string;
+    newBadge?: string;
+    closedBadge?: string;
+    selectConversation?: string;
+    conversationClosed?: string;
+    send?: string;
   };
   appHome: {
     loading: string;
@@ -374,6 +453,7 @@ export type Dictionary = {
     roleDescriptions: {
       customer: string;
       expert: string;
+      craftsman: string;
       business: string;
       admin: string;
     };
@@ -384,6 +464,11 @@ export type Dictionary = {
         ctaLabel: string;
       };
       expert: {
+        title: string;
+        items: string[];
+        ctaLabel: string;
+      };
+      craftsman: {
         title: string;
         items: string[];
         ctaLabel: string;
@@ -803,6 +888,7 @@ export type Dictionary = {
     areaPlaceholder: string;
     providerType: string;
     expert: string;
+    craftsman: string;
     businessProvider: string;
     anyProvider: string;
     any: string;
@@ -822,6 +908,7 @@ export type Dictionary = {
     noResults: string;
     topRated: string;
     topExperts: string;
+    topCraftsmen: string;
     topBusinesses: string;
     results: string;
     viewDetails: string;
@@ -830,6 +917,7 @@ export type Dictionary = {
     title: string;
     accountTab: string;
     expertTab: string;
+    craftsmanTab: string;
     businessTab: string;
     documentsTab: string;
     verificationSection?: string;
@@ -913,6 +1001,7 @@ export type Dictionary = {
       admin: string;
       customer: string;
       expert: string;
+      craftsman: string;
       business: string;
     };
     login: {
@@ -966,16 +1055,20 @@ export type Dictionary = {
       customerSubtitle: string;
       expertTitle: string;
       expertSubtitle: string;
+      craftsmanTitle: string;
+      craftsmanSubtitle: string;
       businessTitle: string;
       businessSubtitle: string;
       // Per-role displayName
       displayNameCustomerLabel: string;
       displayNameExpertLabel: string;
+      displayNameCraftsmanLabel: string;
       displayNameBusinessLabel: string;
       displayNameBusinessHint: string;
       // Per-role DOB
       dateOfBirthBusinessLabel: string;
       dateOfBirthExpertHint: string;
+      dateOfBirthCraftsmanHint?: string;
       // Company name (business only)
       companyNameLabel: string;
       companyNamePlaceholder: string;

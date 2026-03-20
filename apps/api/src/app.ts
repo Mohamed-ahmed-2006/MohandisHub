@@ -66,6 +66,9 @@ export const createApp = () => {
   app.use(express.json({ limit: '1mb' }));
   app.use(cookieParser());
 
+  app.use('/uploads/private', (_req, res) => {
+    res.status(404).json({ ok: false, error: { code: 'NOT_FOUND', message: 'Not found.' } });
+  });
   app.use('/uploads', express.static(path.resolve(process.cwd(), 'uploads')));
   app.use('/health', healthRouter);
   app.use('/api', apiRouter);

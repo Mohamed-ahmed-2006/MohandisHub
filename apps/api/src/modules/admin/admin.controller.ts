@@ -14,6 +14,7 @@ import type {
   ApiSuccessBody,
   AppSettings,
   BusinessProfile,
+  CraftsmanProfile,
   ExpertProfile,
   PaginatedResponse,
   Plan,
@@ -39,6 +40,7 @@ import type {
   RejectServiceInput,
   UpdateBusinessProfileByAdminInput,
   UpdateCategoryInput,
+  UpdateCraftsmanProfileByAdminInput,
   UpdateExpertProfileByAdminInput,
   UpdatePlanInput,
   UpdateServiceInput,
@@ -54,6 +56,7 @@ import {
   userActivityTypeSchema,
   updateBusinessProfileSchema,
   updateCategorySchema,
+  updateCraftsmanProfileSchema,
   updateExpertProfileSchema,
   sendNotificationSchema,
   updatePlanSchema,
@@ -266,6 +269,16 @@ const updateUserBusinessProfile = asyncHandler(async (req, res) => {
   );
   const profile = await adminService.updateBusinessProfileAsAdmin(req.params.id!, input);
   const response: ApiSuccessBody<BusinessProfile> = { ok: true, data: profile };
+  res.json(response);
+});
+
+const updateUserCraftsmanProfile = asyncHandler(async (req, res) => {
+  const input = parseValidation<UpdateCraftsmanProfileByAdminInput>(
+    updateCraftsmanProfileSchema,
+    req.body,
+  );
+  const profile = await adminService.updateCraftsmanProfileAsAdmin(req.params.id!, input);
+  const response: ApiSuccessBody<CraftsmanProfile> = { ok: true, data: profile };
   res.json(response);
 });
 
@@ -563,6 +576,7 @@ export const adminController = {
   updateUser,
   updateUserExpertProfile,
   updateUserBusinessProfile,
+  updateUserCraftsmanProfile,
   deleteUser,
   activateUser,
   deactivateUser,

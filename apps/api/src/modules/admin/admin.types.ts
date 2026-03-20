@@ -187,6 +187,7 @@ export type DashboardStatsRow = {
   role_customer: string;
   role_expert: string;
   role_business: string;
+  role_craftsman: string;
   role_admin: string;
   total_transactions: string;
   total_revenue: string;

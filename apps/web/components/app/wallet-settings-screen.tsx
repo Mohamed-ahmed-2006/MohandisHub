@@ -64,7 +64,8 @@ export const WalletSettingsScreen = (_props: WalletSettingsScreenProps) => {
   const [withdrawError, setWithdrawError] = useState<string | null>(null);
   const [withdrawSuccess, setWithdrawSuccess] = useState<string | null>(null);
 
-  const isExpert = authUser?.role === 'expert';
+  const isIndividualProvider =
+    authUser?.role === 'expert' || authUser?.role === 'craftsman';
 
   const depositResult = useMemo(() => {
     const value = searchParams.get('deposit');
@@ -79,7 +80,7 @@ export const WalletSettingsScreen = (_props: WalletSettingsScreenProps) => {
       const nextWallet = await walletApiClient.getMyWallet(accessToken);
       setWallet(nextWallet);
 
-      if (isExpert) {
+      if (isIndividualProvider) {
         const rows = await walletApiClient.listWithdrawals(accessToken);
         setWithdrawals(rows);
         const pending = rows.find((item) => item.status === 'pending_verification');
@@ -92,7 +93,7 @@ export const WalletSettingsScreen = (_props: WalletSettingsScreenProps) => {
     } finally {
       setLoading(false);
     }
-  }, [accessToken, isExpert]);
+  }, [accessToken, isIndividualProvider]);
 
   useEffect(() => {
     if (!isReady) return;
@@ -233,7 +234,7 @@ export const WalletSettingsScreen = (_props: WalletSettingsScreenProps) => {
           {loadingError && <p className="wallet-settings-message wallet-settings-message-error">{loadingError}</p>}
         </section>
 
-        {isExpert && (
+        {isIndividualProvider && (
           <section className="wallet-settings-card">
             <h2 className="wallet-settings-section-title">Withdraw</h2>
             <p className="wallet-settings-hint">
@@ -332,7 +333,7 @@ export const WalletSettingsScreen = (_props: WalletSettingsScreenProps) => {
           </section>
         )}
 
-        {isExpert && (
+        {isIndividualProvider && (
           <section className="wallet-settings-card">
             <h2 className="wallet-settings-section-title">Withdrawal history</h2>
             {withdrawals.length === 0 ? (

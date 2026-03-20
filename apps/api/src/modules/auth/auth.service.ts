@@ -110,6 +110,9 @@ export class AuthService {
           input.companyName ?? 'Unnamed Company',
         );
         break;
+      case 'craftsman':
+        await this.authRepository.createCraftsmanProfile(userRow.id);
+        break;
     }
 
     // Build tokens
@@ -346,6 +349,11 @@ export class AuthService {
 
     if (user.primary_role === 'business') {
       const profile = await this.authRepository.getBusinessVerification(user.id);
+      return profile?.verification_status ?? 'unverified';
+    }
+
+    if (user.primary_role === 'craftsman') {
+      const profile = await this.authRepository.getCraftsmanVerification(user.id);
       return profile?.verification_status ?? 'unverified';
     }
 

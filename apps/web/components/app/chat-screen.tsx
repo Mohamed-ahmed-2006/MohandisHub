@@ -1,17 +1,18 @@
 'use client';
 
+import { Link2 } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+
+import { useProfileModal } from './profile-modal-context';
 
 import { useAuth } from '@/components/auth/auth-provider';
 import { Container } from '@/components/ui/container';
-import { useProfileModal } from './profile-modal-context';
 import type { Conversation, Message } from '@/lib/chat/client';
 import { chatApiClient } from '@/lib/chat/client';
 import { getChatSocket } from '@/lib/chat/socket';
 import { buildLocalePath } from '@/lib/i18n/path';
 import type { Dictionary, Locale } from '@/lib/i18n/types';
-import { Link2 } from 'lucide-react';
 
 import './chat-screen.css';
 
@@ -19,9 +20,24 @@ type Props = { locale: Locale; dictionary: Dictionary };
 
 type MessageType = 'text' | 'image' | 'voice' | 'link' | 'location';
 
-function linkify(text: string): string {
+function renderTextWithLinks(text: string): ReactNode[] {
   const urlRe = /(https?:\/\/[^\s]+)/g;
-  return text.replace(urlRe, (url) => `<a href="${url}" target="_blank" rel="noopener noreferrer" class="chat-msg-link">${url}</a>`);
+  const parts = text.split(urlRe);
+  return parts.map((part, index) => {
+    const isUrl = /^https?:\/\/[^\s]+$/.test(part);
+    if (!isUrl) return <span key={`text-${index}`}>{part}</span>;
+    return (
+      <a
+        key={`url-${index}`}
+        href={part}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="chat-msg-link"
+      >
+        {part}
+      </a>
+    );
+  });
 }
 
 function formatLocationUrl(lat: number | string, lng: number | string): string {
@@ -240,9 +256,9 @@ export const ChatScreen = ({ locale, dictionary }: Props) => {
         <div className="chat-layout">
           <aside className="chat-sidebar">
             {loading ? (
-              <p className="chat-loading">{dictionary.admin?.loading ?? 'Loading...'}</p>
+              <p className="chat-loading">{t.loadingConversations ?? dictionary.common.loading}</p>
             ) : conversations.length === 0 ? (
-              <p className="chat-empty">No conversations yet.</p>
+              <p className="chat-empty">{t.noConversations ?? 'No conversations yet.'}</p>
             ) : (
               conversations.map((conv) => (
                 <div
@@ -273,8 +289,8 @@ export const ChatScreen = ({ locale, dictionary }: Props) => {
                       {conv.last_message_body}
                     </span>
                   )}
-                  {conv.has_unread && <span className="chat-conv-badge" style={{ background: 'hsl(var(--destructive))', color: '#fff' }}>New</span>}
-                  {conv.status === 'closed' && <span className="chat-conv-badge">Closed</span>}
+                  {conv.has_unread && <span className="chat-conv-badge" style={{ background: 'hsl(var(--destructive))', color: '#fff' }}>{t.newBadge ?? 'New'}</span>}
+                  {conv.status === 'closed' && <span className="chat-conv-badge">{t.closedBadge ?? 'Closed'}</span>}
                 </div>
               ))
             )}
@@ -282,7 +298,7 @@ export const ChatScreen = ({ locale, dictionary }: Props) => {
 
           <section className="chat-messages-area">
             {!activeConvId ? (
-              <p className="chat-no-conv">Select a conversation to start chatting.</p>
+              <p className="chat-no-conv">{t.selectConversation ?? 'Select a conversation to start chatting.'}</p>
             ) : (
               <>
                 {activeConv && (
@@ -298,7 +314,7 @@ export const ChatScreen = ({ locale, dictionary }: Props) => {
                     >
                       {activeConv.other_display_name}
                     </button>
-                    {isClosed && <span className="chat-closed-badge">Closed</span>}
+                    {isClosed && <span className="chat-closed-badge">{t.closedBadge ?? 'Closed'}</span>}
                   </div>
                 )}
                 <div className="chat-messages-list">
@@ -350,12 +366,7 @@ export const ChatScreen = ({ locale, dictionary }: Props) => {
                         {type === 'link' && m.link_url && (
                           <>
                             {body.trim() && (
-                              <span
-                                className="chat-msg-body"
-                                dangerouslySetInnerHTML={{
-                                  __html: linkify(body.trim()),
-                                }}
-                              />
+                              <span className="chat-msg-body">{renderTextWithLinks(body.trim())}</span>
                             )}
                             <a
                               href={m.link_url}
@@ -400,24 +411,15 @@ export const ChatScreen = ({ locale, dictionary }: Props) => {
                               <audio controls src={m.attachment_url} className="chat-msg-voice" />
                             )}
                             {body.trim() && (
-                              <span
-                                className="chat-msg-body"
-                                dangerouslySetInnerHTML={{ __html: linkify(body) }}
-                              />
+                              <span className="chat-msg-body">{renderTextWithLinks(body)}</span>
                             )}
                           </>
                         )}
                         {type === 'text' && body.trim() && (
-                          <span
-                            className="chat-msg-body"
-                            dangerouslySetInnerHTML={{ __html: linkify(body) }}
-                          />
+                          <span className="chat-msg-body">{renderTextWithLinks(body)}</span>
                         )}
                         {type === 'link' && !m.link_url && body.trim() && (
-                          <span
-                            className="chat-msg-body"
-                            dangerouslySetInnerHTML={{ __html: linkify(body) }}
-                          />
+                          <span className="chat-msg-body">{renderTextWithLinks(body)}</span>
                         )}
                         <span className="chat-msg-time">
                           {new Date(m.created_at).toLocaleTimeString(locale, {
@@ -488,7 +490,7 @@ export const ChatScreen = ({ locale, dictionary }: Props) => {
                   );
                 })()}
                 {isClosed ? (
-                  <div className="chat-closed-notice">This conversation is closed.</div>
+                  <div className="chat-closed-notice">{t.conversationClosed ?? 'This conversation is closed.'}</div>
                 ) : (
                   <>
                     {replyingTo && (
@@ -523,7 +525,7 @@ export const ChatScreen = ({ locale, dictionary }: Props) => {
                           className="dashboard-btn dashboard-btn--secondary"
                           onClick={() => setShareLinkOpen(false)}
                         >
-                          {dictionary.common?.back ?? 'Cancel'}
+                          {dictionary.common?.cancel ?? dictionary.common?.back ?? 'Cancel'}
                         </button>
                         <button
                           type="button"
@@ -627,7 +629,7 @@ export const ChatScreen = ({ locale, dictionary }: Props) => {
                         className="chat-send-btn"
                         disabled={sending || !msgText.trim()}
                       >
-                        Send
+                        {t.send ?? dictionary.common.submit}
                       </button>
                     </form>
                   </>

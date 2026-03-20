@@ -55,7 +55,11 @@ export const ServicesScreen = ({ locale, dictionary }: Props) => {
       router.replace(buildLocalePath(locale, '/verify-email'));
       return;
     }
-    if (authUser.role !== 'expert' && authUser.role !== 'business') {
+    if (
+      authUser.role !== 'expert' &&
+      authUser.role !== 'craftsman' &&
+      authUser.role !== 'business'
+    ) {
       router.replace(buildLocalePath(locale, '/app'));
       return;
     }

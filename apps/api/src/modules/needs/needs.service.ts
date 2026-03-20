@@ -112,6 +112,9 @@ export class NeedsService {
     if (need.customer_id !== userId) {
       throw new HttpError({ statusCode: 403, code: 'FORBIDDEN', message: 'Not your need.' });
     }
+    if (input.status) {
+      this.assertNeedStatusTransition(need.status, input.status);
+    }
     const fields: Record<string, unknown> = {};
     if (input.status) fields.status = input.status;
     if (input.title) fields.title = input.title;
@@ -512,5 +515,23 @@ export class NeedsService {
 
   private hasBidPaymentStarted(bid: BidRow): boolean {
     return bid.paid_at != null || bid.payment_transaction_id != null;
+  }
+
+  private assertNeedStatusTransition(from: string, to: string): void {
+    if (from === to) return;
+    const allowed: Record<string, string[]> = {
+      open: ['awarded', 'closed'],
+      awarded: ['in_progress', 'completed', 'closed'],
+      in_progress: ['completed', 'closed'],
+      completed: [],
+      closed: [],
+    };
+    if (!(allowed[from] ?? []).includes(to)) {
+      throw new HttpError({
+        statusCode: 400,
+        code: 'INVALID_NEED_STATUS_TRANSITION',
+        message: `Cannot transition need status from ${from} to ${to}.`,
+      });
+    }
   }
 }

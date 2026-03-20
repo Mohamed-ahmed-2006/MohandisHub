@@ -142,7 +142,7 @@ export class JobsService {
 
     const profileSnapshot =
       input.submissionType === 'profile_snapshot'
-        ? await this.profilesService.getExpertProfile(expertId)
+        ? await this.getIndividualProviderProfileSnapshot(expertId)
         : null;
     const applicationFeeAmount = toNumber(job.application_fee_amount);
     const settings = await this.settingsService.getAppStatus();
@@ -162,7 +162,7 @@ export class JobsService {
         throw new HttpError({
           statusCode: 402,
           code: 'INSUFFICIENT_BALANCE',
-          message: 'Expert wallet is required to submit this application.',
+          message: 'A provider wallet is required to submit this application.',
         });
       }
       await this.walletRepo.createForUser(job.business_id);
@@ -244,7 +244,7 @@ export class JobsService {
       await this.notificationsService.createForUser(job.business_id, {
         type: 'job_application',
         title: 'New hiring application',
-        message: 'A new expert submitted a paid application to your hiring post.',
+        message: 'A new provider submitted a paid application to your hiring post.',
         payload: { jobId: job.id },
       });
       return this.toApplication(app);
@@ -353,6 +353,7 @@ export class JobsService {
           [app.job_id, applicationId],
         );
       } else {
+        this.assertApplicationStatusTransition(app.status as JobApplication['status'], status);
         if (app.status === 'accepted') {
           const started = await this.hasApplicationWorkStarted(client, app.id);
           if (started) {
@@ -568,11 +569,11 @@ export class JobsService {
   ): Promise<Reservation> {
     const app = await this.repo.getApplicationById(applicationId);
     if (!app || app.expert_id !== expertId) {
-      throw new HttpError({
-        statusCode: 403,
-        code: 'FORBIDDEN',
-        message: 'You are not the expert for this application',
-      });
+        throw new HttpError({
+          statusCode: 403,
+          code: 'FORBIDDEN',
+          message: 'You are not the applicant for this application',
+        });
     }
     if (app.status !== 'interview_invited') {
       throw new HttpError({
@@ -664,7 +665,7 @@ export class JobsService {
     }
     const app = await this.repo.getApplicationById(milestone.job_application_id);
     if (!app || app.expert_id !== expertId) {
-      throw new HttpError({ statusCode: 403, code: 'FORBIDDEN', message: 'You are not the expert for this application' });
+      throw new HttpError({ statusCode: 403, code: 'FORBIDDEN', message: 'You are not the applicant for this application' });
     }
     if (milestone.status !== 'pending' && milestone.status !== 'active' && milestone.status !== 'rejected') {
       throw new HttpError({ statusCode: 400, code: 'BAD_REQUEST', message: 'Milestone is not in a submittable state' });
@@ -837,6 +838,29 @@ export class JobsService {
     return rows[0]?.started === true;
   }
 
+  private assertApplicationStatusTransition(
+    from: JobApplication['status'],
+    to: JobApplication['status'],
+  ): void {
+    if (from === to) return;
+    const allowed: Record<JobApplication['status'], JobApplication['status'][]> = {
+      pending: ['reviewed', 'interview_invited', 'accepted', 'rejected'],
+      reviewed: ['interview_invited', 'accepted', 'rejected'],
+      interview_invited: ['interview_booked', 'accepted', 'rejected'],
+      interview_booked: ['interview_completed', 'accepted', 'rejected'],
+      interview_completed: ['accepted', 'rejected'],
+      accepted: ['rejected'],
+      rejected: [],
+    };
+    if (!allowed[from].includes(to)) {
+      throw new HttpError({
+        statusCode: 400,
+        code: 'INVALID_APPLICATION_STATUS_TRANSITION',
+        message: `Cannot transition application status from ${from} to ${to}.`,
+      });
+    }
+  }
+
   private toJob(row: JobRow): Job {
     return {
       id: row.id,
@@ -909,5 +933,11 @@ export class JobsService {
       createdAt: row.created_at,
       ...(row.sender_name ? { senderName: row.sender_name } : {}),
     };
+  }
+
+  private async getIndividualProviderProfileSnapshot(expertId: string): Promise<unknown> {
+    const craftsmanProfile = await this.profilesService.getCraftsmanProfile(expertId).catch(() => null);
+    if (craftsmanProfile) return craftsmanProfile;
+    return this.profilesService.getExpertProfile(expertId);
   }
 }

@@ -10,6 +10,7 @@ import type {
   Wallet,
   WithdrawalRequest,
 } from '@mohandishub/shared';
+import { canRequestWithdrawal } from '@mohandishub/shared';
 import type { NextFunction, Request, Response } from 'express';
 
 import { asyncHandler } from '../../utils/async-handler.js';
@@ -227,11 +228,11 @@ const confirmLegacyStripeSession = asyncHandler((_req, res) => {
 
 const createWithdrawal = asyncHandler(async (req, res) => {
   const user = getUser(req);
-  if (user.role !== 'expert') {
+  if (!canRequestWithdrawal(user.role)) {
     throw new HttpError({
       statusCode: 403,
       code: 'FORBIDDEN',
-      message: 'Only experts can request withdrawals.',
+      message: 'Only individual providers can request withdrawals.',
     });
   }
 
@@ -244,18 +245,18 @@ const createWithdrawal = asyncHandler(async (req, res) => {
     });
   }
 
-  const result = await walletService.createWithdrawalRequest(user.id, payload);
+  const result = await walletService.createWithdrawalRequest(user.id, user.role, payload);
   const response: ApiSuccessBody<WithdrawalRequest> = { ok: true, data: result };
   res.status(201).json(response);
 });
 
 const verifyWithdrawal = asyncHandler(async (req, res) => {
   const user = getUser(req);
-  if (user.role !== 'expert') {
+  if (!canRequestWithdrawal(user.role)) {
     throw new HttpError({
       statusCode: 403,
       code: 'FORBIDDEN',
-      message: 'Only experts can verify withdrawals.',
+      message: 'Only individual providers can verify withdrawals.',
     });
   }
 

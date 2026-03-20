@@ -12,7 +12,7 @@ import type { Locale } from '@/lib/i18n/types';
 /** Roles a user can self-select during onboarding (admin is never selectable). */
 type SelectableRole = Exclude<UserRole, 'admin'>;
 
-const roles: SelectableRole[] = ['customer', 'expert', 'business'];
+const roles: SelectableRole[] = ['customer', 'expert', 'craftsman', 'business'];
 
 type RoleSelectionPageProps = {
   params: Promise<{
@@ -33,12 +33,14 @@ const RoleSelectionPage = async ({ params }: RoleSelectionPageProps) => {
   const rolePathMap: Record<SelectableRole, string> = {
     customer: `${buildLocalePath(typedLocale, '/auth')}?mode=register&role=customer`,
     expert: `${buildLocalePath(typedLocale, '/auth')}?mode=register&role=expert`,
+    craftsman: `${buildLocalePath(typedLocale, '/auth')}?mode=register&role=craftsman`,
     business: `${buildLocalePath(typedLocale, '/auth')}?mode=register&role=business`,
   };
 
   const roleContentMap = {
     customer: dictionary.onboarding.role.cards.customer,
     expert: dictionary.onboarding.role.cards.expert,
+    craftsman: dictionary.onboarding.role.cards.craftsman,
     business: dictionary.onboarding.role.cards.business,
   } as const;
 

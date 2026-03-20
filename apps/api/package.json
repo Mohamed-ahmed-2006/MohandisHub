@@ -12,6 +12,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "lint": "eslint src --max-warnings=0",
     "test": "vitest --run",
+    "test:coverage": "vitest --run --coverage",
     "migrate:expert-verification": "tsx scripts/run-expert-verification-migration.ts"
   },
   "dependencies": {

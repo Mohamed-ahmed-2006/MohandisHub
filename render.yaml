@@ -12,7 +12,7 @@ services:
     buildCommand: npm ci && npm run build -w @mohandishub/shared && npm run build -w @mohandishub/api
     startCommand: node apps/api/dist/server.js
 
-    healthCheckPath: /health
+    healthCheckPath: /health/ready
 
     envVars:
       - key: NODE_ENV
@@ -41,6 +41,12 @@ services:
         sync: false
       - key: DIDIT_WORKFLOW_ID
         sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: SENTRY_DSN
+        sync: false
       - key: OTP_EMAIL_PROVIDER
         value: brevo
       - key: BREVO_API_KEY
@@ -56,6 +62,10 @@ services:
       - key: AGORA_APP_ID
         sync: false
       - key: AGORA_APP_CERTIFICATE
+        sync: false
+      - key: STRIPE_SECRET_KEY
+        sync: false
+      - key: STRIPE_WEBHOOK_SECRET
         sync: false
 
   - type: worker

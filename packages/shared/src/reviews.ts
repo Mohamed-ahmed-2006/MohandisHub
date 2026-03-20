@@ -2,11 +2,13 @@
 // Review types — shared between API and frontend
 // ---------------------------------------------------------------------------
 
+export type ReviewTargetType = 'expert' | 'business' | 'craftsman' | 'customer';
+
 export type Review = {
   id: string;
   reviewerId: string;
   targetUserId: string;
-  targetType: 'expert' | 'business' | 'customer';
+  targetType: ReviewTargetType;
   reservationId: string | null;
   bookingId: string | null;
   needId: string | null;

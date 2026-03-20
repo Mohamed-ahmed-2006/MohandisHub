@@ -12,6 +12,7 @@ import { createOtpSender } from '../otp/otp.provider.js';
 import { ProfilesRepository } from '../profiles/profiles.repository.js';
 import {
   getEffectiveBusinessVerificationStatus,
+  getEffectiveCraftsmanVerificationStatus,
   getEffectiveExpertVerificationStatus,
   syncVerificationStatusForRequiredImage,
 } from '../profiles/verification-image-requirements.js';
@@ -73,11 +74,14 @@ export class UsersService {
       });
     }
 
-    if (input.avatarUrl !== undefined && updated.primary_role === 'expert') {
+    if (
+      input.avatarUrl !== undefined &&
+      (updated.primary_role === 'expert' || updated.primary_role === 'craftsman')
+    ) {
       await syncVerificationStatusForRequiredImage(
         this.profilesRepository,
         userId,
-        'expert',
+        updated.primary_role,
       );
     }
 
@@ -189,6 +193,11 @@ export class UsersService {
       ]);
       if (!profile) return 'unverified';
       return getEffectiveBusinessVerificationStatus(profile, Boolean(logoUrl?.trim()));
+    }
+    if (user.primary_role === 'craftsman') {
+      const profile = await this.authRepository.getCraftsmanVerification(user.id);
+      if (!profile) return 'unverified';
+      return getEffectiveCraftsmanVerificationStatus(profile, Boolean(user.avatar_url?.trim()));
     }
     return null;
   }

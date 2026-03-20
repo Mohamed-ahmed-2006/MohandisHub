@@ -4,13 +4,14 @@
 
 import { randomUUID } from 'node:crypto';
 
-import type { UserRole } from '@mohandishub/shared';
+import type { RegisterableRole } from '@mohandishub/shared';
 import type { Pool } from 'pg';
 
 import { getPool } from '../../db/pool.js';
 
 import type {
   BusinessVerificationRow,
+  CraftsmanVerificationRow,
   ExpertVerificationRow,
   RefreshTokenRow,
   UserRow,
@@ -61,7 +62,7 @@ export class AuthRepository {
     email: string;
     passwordHash: string;
     displayName: string;
-    role: UserRole;
+    role: RegisterableRole;
     phone?: string | undefined;
     phoneCode?: string | undefined;
     nationality?: string | undefined;
@@ -268,6 +269,10 @@ export class AuthRepository {
     ]);
   }
 
+  async createCraftsmanProfile(userId: string): Promise<void> {
+    await this.db.query('INSERT INTO craftsman_profiles (user_id) VALUES ($1)', [userId]);
+  }
+
   // ── Verification status lookup ─────────────────────────────────────────
 
   async getExpertVerification(userId: string): Promise<ExpertVerificationRow | null> {
@@ -285,6 +290,17 @@ export class AuthRepository {
     const { rows } = await this.db.query<BusinessVerificationRow>(
       `SELECT verification_status, identity_verified, business_verified
        FROM business_profiles
+       WHERE user_id = $1
+       LIMIT 1`,
+      [userId],
+    );
+    return rows[0] ?? null;
+  }
+
+  async getCraftsmanVerification(userId: string): Promise<CraftsmanVerificationRow | null> {
+    const { rows } = await this.db.query<CraftsmanVerificationRow>(
+      `SELECT verification_status, identity_verified
+       FROM craftsman_profiles
        WHERE user_id = $1
        LIMIT 1`,
       [userId],
