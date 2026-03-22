@@ -40,6 +40,11 @@ export type AppSettingsRow = {
   reservation_video_minute_rate?: string;
   reservation_min_prejoin_minutes?: number;
   job_interview_fee_amount?: string;
+  wallet_egp_per_usdt_deposit?: string | null;
+  wallet_egp_per_usdt_withdrawal?: string | null;
+  platform_instapay_display?: Record<string, unknown> | null;
+  wallet_usd_to_egp_migration_rate?: string | null;
+  wallet_migration_usd_to_egp_applied?: boolean;
 };
 
 export type AppSettingsUpdate = Partial<{
@@ -74,6 +79,10 @@ export type AppSettingsUpdate = Partial<{
   reservation_video_minute_rate: number;
   reservation_min_prejoin_minutes: number;
   job_interview_fee_amount: number;
+  walletEgpPerUsdtDeposit: number | null;
+  walletEgpPerUsdtWithdrawal: number | null;
+  platformInstapayDisplay: Record<string, unknown> | null;
+  walletUsdToEgpMigrationRate: number | null;
 }>;
 
 export class SettingsRepository {
@@ -117,8 +126,12 @@ export class SettingsRepository {
     reservationVoiceMinuteRate: 'reservation_voice_minute_rate',
     reservationVideoMinuteRate: 'reservation_video_minute_rate',
     reservationMinPrejoinMinutes: 'reservation_min_prejoin_minutes',
-    jobInterviewFeeAmount: 'job_interview_fee_amount',
-  };
+  jobInterviewFeeAmount: 'job_interview_fee_amount',
+  walletEgpPerUsdtDeposit: 'wallet_egp_per_usdt_deposit',
+  walletEgpPerUsdtWithdrawal: 'wallet_egp_per_usdt_withdrawal',
+  platformInstapayDisplay: 'platform_instapay_display',
+  walletUsdToEgpMigrationRate: 'wallet_usd_to_egp_migration_rate',
+};
 
   async update(partial: AppSettingsUpdate): Promise<AppSettingsRow | null> {
     const entries = Object.entries(partial).filter(([, v]) => v !== undefined);

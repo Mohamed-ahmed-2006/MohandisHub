@@ -1,6 +1,7 @@
 'use client';
 
 import type { Wallet, WithdrawalRequest } from '@mohandishub/shared';
+import { canRequestWithdrawal } from '@mohandishub/shared';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -26,6 +27,8 @@ const formatStatus = (status: WithdrawalRequest['status']): string => {
       return 'Pending verification';
     case 'processing':
       return 'Processing';
+    case 'awaiting_transfer':
+      return 'Awaiting transfer';
     case 'finished':
       return 'Completed';
     case 'failed':
@@ -58,14 +61,17 @@ export const WalletSettingsScreen = (_props: WalletSettingsScreenProps) => {
   const [withdrawAddress, setWithdrawAddress] = useState('');
   const [withdrawExtraId, setWithdrawExtraId] = useState('');
   const [withdrawSaveAddress, setWithdrawSaveAddress] = useState(true);
+  const [withdrawMethod, setWithdrawMethod] = useState<'crypto' | 'instapay'>('crypto');
+  const [instapayRecipient, setInstapayRecipient] = useState('');
+  const [withdrawSaveInstapay, setWithdrawSaveInstapay] = useState(true);
+  const [cryptoQuote, setCryptoQuote] = useState<{ crypto: number; currency: string } | null>(null);
   const [withdrawCode, setWithdrawCode] = useState('');
   const [activeWithdrawalId, setActiveWithdrawalId] = useState<string | null>(null);
   const [withdrawBusy, setWithdrawBusy] = useState(false);
   const [withdrawError, setWithdrawError] = useState<string | null>(null);
   const [withdrawSuccess, setWithdrawSuccess] = useState<string | null>(null);
 
-  const isIndividualProvider =
-    authUser?.role === 'expert' || authUser?.role === 'craftsman';
+  const canWithdraw = authUser?.role ? canRequestWithdrawal(authUser.role) : false;
 
   const depositResult = useMemo(() => {
     const value = searchParams.get('deposit');
@@ -80,10 +86,15 @@ export const WalletSettingsScreen = (_props: WalletSettingsScreenProps) => {
       const nextWallet = await walletApiClient.getMyWallet(accessToken);
       setWallet(nextWallet);
 
-      if (isIndividualProvider) {
+      if (canWithdraw) {
         const rows = await walletApiClient.listWithdrawals(accessToken);
         setWithdrawals(rows);
-        const pending = rows.find((item) => item.status === 'pending_verification');
+        const pending = rows.find(
+          (item) =>
+            item.method === 'crypto' &&
+            item.verificationRequired &&
+            item.status === 'pending_verification',
+        );
         setActiveWithdrawalId(pending?.id ?? null);
       } else {
         setWithdrawals([]);
@@ -93,7 +104,7 @@ export const WalletSettingsScreen = (_props: WalletSettingsScreenProps) => {
     } finally {
       setLoading(false);
     }
-  }, [accessToken, isIndividualProvider]);
+  }, [accessToken, canWithdraw]);
 
   useEffect(() => {
     if (!isReady) return;
@@ -126,8 +137,12 @@ export const WalletSettingsScreen = (_props: WalletSettingsScreenProps) => {
       setWithdrawError(`Minimum withdrawal amount is ${MIN_WITHDRAWAL_AMOUNT}.`);
       return;
     }
-    if (!withdrawAddress.trim()) {
+    if (withdrawMethod === 'crypto' && !withdrawAddress.trim()) {
       setWithdrawError('Withdrawal address is required.');
+      return;
+    }
+    if (withdrawMethod === 'instapay' && !instapayRecipient.trim()) {
+      setWithdrawError('InstaPay recipient phone or account is required.');
       return;
     }
 
@@ -136,11 +151,19 @@ export const WalletSettingsScreen = (_props: WalletSettingsScreenProps) => {
     setWithdrawSuccess(null);
     try {
       const created = await walletApiClient.createWithdrawal(accessToken, {
-        amount,
-        currency: withdrawCurrency.trim().toUpperCase(),
-        address: withdrawAddress.trim(),
-        ...(withdrawExtraId.trim() ? { extraId: withdrawExtraId.trim() } : {}),
-        saveAddress: withdrawSaveAddress,
+        method: withdrawMethod,
+        amountEgp: amount,
+        ...(withdrawMethod === 'crypto'
+          ? {
+              currency: withdrawCurrency.trim().toUpperCase(),
+              address: withdrawAddress.trim(),
+              ...(withdrawExtraId.trim() ? { extraId: withdrawExtraId.trim() } : {}),
+              saveAddress: withdrawSaveAddress,
+            }
+          : {
+              instapayRecipient: instapayRecipient.trim(),
+              saveInstapayRecipient: withdrawSaveInstapay,
+            }),
       });
       setActiveWithdrawalId(created.id);
       setWithdrawCode('');
@@ -234,67 +257,161 @@ export const WalletSettingsScreen = (_props: WalletSettingsScreenProps) => {
           {loadingError && <p className="wallet-settings-message wallet-settings-message-error">{loadingError}</p>}
         </section>
 
-        {isIndividualProvider && (
+        {canWithdraw && (
           <section className="wallet-settings-card">
             <h2 className="wallet-settings-section-title">Withdraw</h2>
             <p className="wallet-settings-hint">
-              Withdraw earnings to your crypto wallet. Minimum amount is {MIN_WITHDRAWAL_AMOUNT}.
+              Withdraw in EGP from your balance. Minimum {MIN_WITHDRAWAL_AMOUNT} EGP. Crypto payouts are sent
+              in the selected network currency; InstaPay is processed manually by the team.
             </p>
+
+            <div className="wallet-settings-form" style={{ marginBottom: 12 }}>
+              <label className="wallet-settings-form-label">
+                Method
+                <select
+                  className="wallet-settings-input"
+                  value={withdrawMethod}
+                  onChange={(e) => {
+                    setWithdrawMethod(e.target.value as 'crypto' | 'instapay');
+                    setCryptoQuote(null);
+                    setWithdrawError(null);
+                  }}
+                >
+                  <option value="crypto">Crypto (NOWPayments)</option>
+                  <option value="instapay">InstaPay (manual)</option>
+                </select>
+              </label>
+            </div>
 
             <form className="wallet-settings-form" onSubmit={(event) => void handleCreateWithdrawal(event)}>
               <label className="wallet-settings-form-label">
-                Amount
+                Amount (EGP)
                 <input
                   type="number"
                   min={MIN_WITHDRAWAL_AMOUNT}
                   step="0.01"
                   className="wallet-settings-input"
                   value={withdrawAmount}
-                  onChange={(event) => setWithdrawAmount(event.target.value)}
+                  onChange={(event) => {
+                    setWithdrawAmount(event.target.value);
+                    setCryptoQuote(null);
+                  }}
                   required
                 />
               </label>
 
-              <label className="wallet-settings-form-label">
-                Currency
-                <input
-                  type="text"
-                  className="wallet-settings-input"
-                  value={withdrawCurrency}
-                  onChange={(event) => setWithdrawCurrency(event.target.value)}
-                  required
-                />
-              </label>
+              {withdrawMethod === 'crypto' && (
+                <>
+                  <label className="wallet-settings-form-label">
+                    Payout currency
+                    <input
+                      type="text"
+                      className="wallet-settings-input"
+                      value={withdrawCurrency}
+                      onChange={(event) => {
+                        setWithdrawCurrency(event.target.value);
+                        setCryptoQuote(null);
+                      }}
+                      required
+                    />
+                  </label>
 
-              <label className="wallet-settings-form-label">
-                Wallet address
-                <input
-                  type="text"
-                  className="wallet-settings-input"
-                  value={withdrawAddress}
-                  onChange={(event) => setWithdrawAddress(event.target.value)}
-                  required
-                />
-              </label>
+                  <label className="wallet-settings-form-label">
+                    Wallet address
+                    <input
+                      type="text"
+                      className="wallet-settings-input"
+                      value={withdrawAddress}
+                      onChange={(event) => setWithdrawAddress(event.target.value)}
+                      required
+                    />
+                  </label>
 
-              <label className="wallet-settings-form-label">
-                Extra ID / memo (optional)
-                <input
-                  type="text"
-                  className="wallet-settings-input"
-                  value={withdrawExtraId}
-                  onChange={(event) => setWithdrawExtraId(event.target.value)}
-                />
-              </label>
+                  <label className="wallet-settings-form-label">
+                    Extra ID / memo (optional)
+                    <input
+                      type="text"
+                      className="wallet-settings-input"
+                      value={withdrawExtraId}
+                      onChange={(event) => setWithdrawExtraId(event.target.value)}
+                    />
+                  </label>
 
-              <label className="wallet-settings-checkbox">
-                <input
-                  type="checkbox"
-                  checked={withdrawSaveAddress}
-                  onChange={(event) => setWithdrawSaveAddress(event.target.checked)}
-                />
-                Save payout details
-              </label>
+                  <label className="wallet-settings-checkbox">
+                    <input
+                      type="checkbox"
+                      checked={withdrawSaveAddress}
+                      onChange={(event) => setWithdrawSaveAddress(event.target.checked)}
+                    />
+                    Save payout details
+                  </label>
+
+                  <button
+                    type="button"
+                    className="wallet-settings-secondary"
+                    disabled={withdrawBusy || !accessToken}
+                    onClick={() => {
+                      void (async () => {
+                        if (!accessToken) return;
+                        const amt = Number.parseFloat(withdrawAmount);
+                        if (!Number.isFinite(amt) || amt < MIN_WITHDRAWAL_AMOUNT) {
+                          setWithdrawError(`Enter at least ${MIN_WITHDRAWAL_AMOUNT} EGP to preview.`);
+                          return;
+                        }
+                        setWithdrawBusy(true);
+                        setWithdrawError(null);
+                        try {
+                          const q = await walletApiClient.getWithdrawalQuote(
+                            accessToken,
+                            amt,
+                            withdrawCurrency.trim().toUpperCase(),
+                          );
+                          setCryptoQuote({
+                            crypto: q.quotedCryptoAmount,
+                            currency: q.payoutCurrency,
+                          });
+                        } catch (error) {
+                          setWithdrawError(
+                            isApiClientError(error) ? error.message : 'Could not load quote.',
+                          );
+                        } finally {
+                          setWithdrawBusy(false);
+                        }
+                      })();
+                    }}
+                  >
+                    Preview crypto quote
+                  </button>
+                  {cryptoQuote && (
+                    <p className="wallet-settings-hint">
+                      ≈ {cryptoQuote.crypto} {cryptoQuote.currency} (estimate; final amount set at submit)
+                    </p>
+                  )}
+                </>
+              )}
+
+              {withdrawMethod === 'instapay' && (
+                <>
+                  <label className="wallet-settings-form-label">
+                    Recipient InstaPay phone / account
+                    <input
+                      type="text"
+                      className="wallet-settings-input"
+                      value={instapayRecipient}
+                      onChange={(event) => setInstapayRecipient(event.target.value)}
+                      required
+                    />
+                  </label>
+                  <label className="wallet-settings-checkbox">
+                    <input
+                      type="checkbox"
+                      checked={withdrawSaveInstapay}
+                      onChange={(event) => setWithdrawSaveInstapay(event.target.checked)}
+                    />
+                    Save InstaPay recipient
+                  </label>
+                </>
+              )}
 
               <button type="submit" className="wallet-settings-primary" disabled={withdrawBusy}>
                 {withdrawBusy ? 'Submitting...' : 'Create withdrawal'}
@@ -333,7 +450,7 @@ export const WalletSettingsScreen = (_props: WalletSettingsScreenProps) => {
           </section>
         )}
 
-        {isIndividualProvider && (
+        {canWithdraw && (
           <section className="wallet-settings-card">
             <h2 className="wallet-settings-section-title">Withdrawal history</h2>
             {withdrawals.length === 0 ? (
@@ -344,11 +461,37 @@ export const WalletSettingsScreen = (_props: WalletSettingsScreenProps) => {
                   <div key={item.id} className="wallet-settings-history-item">
                     <div>
                       <p className="wallet-settings-history-amount">
-                        {item.amount.toFixed(2)} {item.currency}
+                        {item.sourceAmountEgp.toFixed(2)} EGP
+                        {item.method === 'crypto' && item.destinationCryptoAmount != null
+                          ? ` → ~${item.destinationCryptoAmount} ${item.destinationCurrency}`
+                          : item.method === 'instapay'
+                            ? ' → InstaPay'
+                            : ''}
                       </p>
                       <p className="wallet-settings-history-meta">
                         {new Date(item.createdAt).toLocaleString(locale)}
                       </p>
+                      {item.method === 'instapay' && item.status === 'awaiting_transfer' && accessToken && (
+                        <button
+                          type="button"
+                          className="wallet-settings-secondary"
+                          style={{ marginTop: 8 }}
+                          onClick={() => {
+                            void (async () => {
+                              try {
+                                await walletApiClient.cancelWithdrawal(accessToken, item.id);
+                                await loadData();
+                              } catch (error) {
+                                setWithdrawError(
+                                  isApiClientError(error) ? error.message : 'Cancel failed.',
+                                );
+                              }
+                            })();
+                          }}
+                        >
+                          Cancel request
+                        </button>
+                      )}
                     </div>
                     <span className={`wallet-settings-status wallet-settings-status-${item.status}`}>
                       {formatStatus(item.status)}

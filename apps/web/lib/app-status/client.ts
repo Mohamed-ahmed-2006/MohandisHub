@@ -49,5 +49,10 @@ function getDefaultAppStatus(): AppStatus {
     reservationVideoMinuteRate: 2,
     reservationMinPrejoinMinutes: 5,
     jobInterviewFeeAmount: 0,
+    walletEgpPerUsdtDeposit: null,
+    walletEgpPerUsdtWithdrawal: null,
+    platformInstapayDisplay: null,
+    walletUsdToEgpMigrationRate: null,
+    walletMigrationUsdToEgpApplied: false,
   };
 }

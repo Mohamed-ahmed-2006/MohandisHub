@@ -1,10 +1,11 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 
 import { useAppStatus } from '@/components/app-status-provider';
 import { isApiClientError } from '@/lib/auth/client';
 import type { Dictionary } from '@/lib/i18n/types';
+import { uploadPrivateFile } from '@/lib/upload/client';
 import { walletApiClient } from '@/lib/wallet/client';
 
 type WalletDepositModalProps = {
@@ -27,10 +28,16 @@ export const WalletDepositModal = ({
   const cryptoDisabled = status?.disableCryptoDeposits === true;
   const fiatEnabled = process.env.NEXT_PUBLIC_NOWPAYMENTS_FIAT_ENABLED === 'true';
   const cardDisabled = status?.disableCardDeposits === true || !fiatEnabled;
-  const canDeposit = !depositsPaused && (cryptoDisabled === false || cardDisabled === false);
+  const instapayConfigured =
+    status?.platformInstapayDisplay != null &&
+    typeof status.platformInstapayDisplay === 'object' &&
+    Object.keys(status.platformInstapayDisplay as object).length > 0;
+  const canDeposit =
+    !depositsPaused &&
+    (cryptoDisabled === false || cardDisabled === false || instapayConfigured);
 
-  const [step, setStep] = useState<'choose' | 'amount'>('choose');
-  const [method, setMethod] = useState<'crypto' | 'card'>('crypto');
+  const [step, setStep] = useState<'choose' | 'amount' | 'instapay'>('choose');
+  const [method, setMethod] = useState<'crypto' | 'card' | 'instapay'>('crypto');
   const [amount, setAmount] = useState('');
   const [payCurrency, setPayCurrency] = useState('USDTTRC20');
   const [availableCurrencies, setAvailableCurrencies] = useState<string[]>(['USDTTRC20']);
@@ -70,7 +77,7 @@ export const WalletDepositModal = ({
     const timer = setTimeout(() => {
       setEstimating(true);
       void walletApiClient
-        .getDepositEstimate(accessToken, numericAmount, 'USD', payCurrency)
+        .getDepositEstimate(accessToken, numericAmount, 'EGP', payCurrency)
         .then((result) => {
           setEstimatedPayAmount(result.estimatedAmount);
         })
@@ -85,13 +92,13 @@ export const WalletDepositModal = ({
     return () => clearTimeout(timer);
   }, [accessToken, method, step, amount, payCurrency]);
 
-  const handleMethodClick = (nextMethod: 'crypto' | 'card') => {
+  const handleMethodClick = (nextMethod: 'crypto' | 'card' | 'instapay') => {
     setMethod(nextMethod);
-    setStep('amount');
+    setStep(nextMethod === 'instapay' ? 'instapay' : 'amount');
     setError(null);
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!accessToken) return;
 
@@ -110,8 +117,8 @@ export const WalletDepositModal = ({
           : undefined;
       const result = await walletApiClient.createDepositCheckout(accessToken, {
         amount: num,
-        currency: 'USD',
-        method,
+        currency: 'EGP',
+        method: method as 'crypto' | 'card',
         ...(method === 'crypto' ? { payCurrency } : {}),
         ...(returnUrl ? { returnUrl } : {}),
       });
@@ -138,6 +145,44 @@ export const WalletDepositModal = ({
     setStep('choose');
     setAmount('');
     setError(null);
+  };
+
+  const handleInstapaySubmit = async (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (!accessToken) return;
+    const num = parseFloat(amount.replace(/,/g, '.'));
+    if (!Number.isFinite(num) || num <= 0) {
+      setError(d.depositError);
+      return;
+    }
+    const input = e.currentTarget.querySelector<HTMLInputElement>('input[type=file]');
+    const file = input?.files?.[0];
+    if (!file) {
+      setError(d.instapayProofRequired);
+      return;
+    }
+    setLoading(true);
+    setError(null);
+    try {
+      const uploaded = await uploadPrivateFile(accessToken, file);
+      const proofUploadId = uploaded.filename;
+      await walletApiClient.submitInstapayDeposit(accessToken, {
+        amountEgp: num,
+        proofUploadId,
+      });
+      onDepositCreated?.();
+      onClose();
+    } catch (err) {
+      if (isApiClientError(err) && err.code === 'INSTAPAY_NOT_CONFIGURED') {
+        setError(d.instapayNotConfigured);
+      } else if (isApiClientError(err)) {
+        setError(err.message);
+      } else {
+        setError(d.depositError);
+      }
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -178,8 +223,52 @@ export const WalletDepositModal = ({
                   <span className="deposit-option-action">{d.depositPayWithCard}</span>
                 </button>
               )}
+              {instapayConfigured && (
+                <button
+                  type="button"
+                  className="deposit-option-card"
+                  onClick={() => handleMethodClick('instapay')}
+                >
+                  <span className="deposit-option-label">{d.instapayOptionLabel}</span>
+                  <span className="deposit-option-action">{d.instapayOptionHint}</span>
+                </button>
+              )}
             </div>
           </>
+        ) : step === 'instapay' ? (
+          <form onSubmit={(e) => void handleInstapaySubmit(e)} className="deposit-form">
+            <p className="deposit-modal-subtitle">{d.instapayInstructions}</p>
+            <pre
+              className="deposit-modal-subtitle"
+              style={{ whiteSpace: 'pre-wrap', fontSize: '0.85rem', maxHeight: 120, overflow: 'auto' }}
+            >
+              {JSON.stringify(status?.platformInstapayDisplay ?? {}, null, 2)}
+            </pre>
+            <label className="deposit-form-label">{d.instapayAmountLabel}</label>
+            <input
+              type="number"
+              step="any"
+              min="1"
+              placeholder="0"
+              className="deposit-form-input"
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+              disabled={loading}
+            />
+            <label className="deposit-form-label" style={{ marginTop: '0.75rem' }}>
+              {d.instapayProofLabel}
+            </label>
+            <input type="file" accept="image/*" disabled={loading} />
+            {error && <p className="deposit-form-error">{error}</p>}
+            <div className="deposit-form-actions">
+              <button type="button" className="deposit-form-back" onClick={handleBack} disabled={loading}>
+                {dictionary.common.back}
+              </button>
+              <button type="submit" className="deposit-form-submit" disabled={loading}>
+                {loading ? d.instapaySubmitting : d.instapaySubmit}
+              </button>
+            </div>
+          </form>
         ) : (
           <form onSubmit={(e) => void handleSubmit(e)} className="deposit-form">
             <label className="deposit-form-label">
@@ -199,13 +288,13 @@ export const WalletDepositModal = ({
               <>
                 <p className="deposit-modal-subtitle" style={{ marginTop: '0.4rem', marginBottom: '0.4rem' }}>
                   {estimating
-                    ? 'Estimating conversion...'
+                    ? d.depositEstimating
                     : estimatedPayAmount != null
-                      ? `Estimated to pay: ${estimatedPayAmount.toFixed(6)} ${payCurrency}`
-                      : 'Enter amount in USD to see USDT estimate'}
+                      ? `${d.depositEstimatedToPay} ${estimatedPayAmount.toFixed(6)} ${payCurrency}`
+                      : d.depositEnterEgpForEstimate}
                 </p>
                 <label className="deposit-form-label" style={{ marginTop: '0.75rem' }}>
-                  Pay currency
+                  {d.depositPayCurrencyLabel}
                 </label>
                 <select
                   className="deposit-form-input"

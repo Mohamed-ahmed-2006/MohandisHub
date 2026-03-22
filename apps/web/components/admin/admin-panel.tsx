@@ -14,6 +14,7 @@ import { AdminSupportTab } from './admin-support-tab';
 import { AdminTransactionsTab } from './admin-transactions-tab';
 import { AdminUsersTab } from './admin-users-tab';
 import { AdminVerificationsTab } from './admin-verifications-tab';
+import { AdminWalletRailsTab } from './admin-wallet-rails-tab';
 
 import { useAuth } from '@/components/auth/auth-provider';
 import { Container } from '@/components/ui/container';
@@ -33,6 +34,7 @@ type TabId =
   | 'users'
   | 'plans'
   | 'transactions'
+  | 'walletRails'
   | 'services'
   | 'categories'
   | 'verifications'
@@ -67,6 +69,7 @@ export const AdminPanel = ({ locale, dictionary }: AdminPanelProps) => {
     { id: 'users', label: dictionary.admin.tabs.users, permission: 'manage_users' },
     { id: 'plans', label: dictionary.admin.tabs.plans, permission: 'manage_plans' },
     { id: 'transactions', label: dictionary.admin.tabs.transactions, permission: 'manage_transactions' },
+    { id: 'walletRails', label: dictionary.admin.tabs.walletRails, permission: 'manage_transactions' },
     { id: 'services', label: dictionary.admin.tabs.services, permission: 'manage_services' },
     { id: 'categories', label: dictionary.admin.tabs.categories, permission: 'manage_services' },
     { id: 'verifications', label: dictionary.admin.tabs.verifications, permission: 'manage_verifications' },
@@ -148,6 +151,13 @@ export const AdminPanel = ({ locale, dictionary }: AdminPanelProps) => {
         )}
         {activeTab === 'transactions' && (
           <AdminTransactionsTab dictionary={dictionary} accessToken={accessToken} />
+        )}
+        {activeTab === 'walletRails' && (
+          <AdminWalletRailsTab
+            dictionary={dictionary}
+            accessToken={accessToken}
+            refreshSession={refreshSession}
+          />
         )}
         {activeTab === 'services' && (
           <AdminServicesTab dictionary={dictionary} accessToken={accessToken} />

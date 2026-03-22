@@ -128,6 +128,28 @@ export const AdminSettingsTab = ({ dictionary, accessToken, refreshSession }: Pr
     [update],
   );
 
+  const handleInstapayJsonBlur = useCallback(
+    (raw: string) => {
+      setError(null);
+      try {
+        const trimmed = raw.trim();
+        if (trimmed === '') {
+          void update({ platformInstapayDisplay: null });
+          return;
+        }
+        const parsed: unknown = JSON.parse(trimmed);
+        if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+          setError('Platform InstaPay must be a JSON object.');
+          return;
+        }
+        void update({ platformInstapayDisplay: parsed as Record<string, unknown> });
+      } catch {
+        setError('Invalid JSON for platform InstaPay.');
+      }
+    },
+    [update],
+  );
+
   if (loading || !settings) {
     return <p className="admin-empty">{dictionary.admin.loading}</p>;
   }
@@ -241,6 +263,92 @@ export const AdminSettingsTab = ({ dictionary, accessToken, refreshSession }: Pr
               )
             }
           />
+        </div>
+        <div className="admin-settings-row">
+          <div className="admin-settings-label-wrap">
+            <label className="admin-settings-label">{d.walletEgpPerUsdtDeposit}</label>
+            <span className="admin-settings-desc">{d.walletEgpPerUsdtDepositDesc}</span>
+          </div>
+          <input
+            type="number"
+            min={0}
+            step={0.01}
+            className="admin-settings-input admin-settings-input--number"
+            defaultValue={settings.walletEgpPerUsdtDeposit ?? ''}
+            onBlur={(e) => {
+              const raw = e.target.value.trim();
+              if (raw === '') {
+                void update({ walletEgpPerUsdtDeposit: null });
+                return;
+              }
+              const n = parseFloat(raw);
+              if (!Number.isFinite(n) || n <= 0) {
+                setError('Deposit FX rate must be a positive number or empty.');
+                return;
+              }
+              void update({ walletEgpPerUsdtDeposit: n });
+            }}
+          />
+        </div>
+        <div className="admin-settings-row">
+          <div className="admin-settings-label-wrap">
+            <label className="admin-settings-label">{d.walletEgpPerUsdtWithdrawal}</label>
+            <span className="admin-settings-desc">{d.walletEgpPerUsdtWithdrawalDesc}</span>
+          </div>
+          <input
+            type="number"
+            min={0}
+            step={0.01}
+            className="admin-settings-input admin-settings-input--number"
+            defaultValue={settings.walletEgpPerUsdtWithdrawal ?? ''}
+            onBlur={(e) => {
+              const raw = e.target.value.trim();
+              if (raw === '') {
+                void update({ walletEgpPerUsdtWithdrawal: null });
+                return;
+              }
+              const n = parseFloat(raw);
+              if (!Number.isFinite(n) || n <= 0) {
+                setError('Withdrawal FX rate must be a positive number or empty.');
+                return;
+              }
+              void update({ walletEgpPerUsdtWithdrawal: n });
+            }}
+          />
+        </div>
+        <div className="admin-settings-row">
+          <div className="admin-settings-label-wrap">
+            <label className="admin-settings-label">{d.platformInstapayDisplayJson}</label>
+            <span className="admin-settings-desc">{d.platformInstapayDisplayDesc}</span>
+          </div>
+          <textarea
+            key={`instapay-json-${settings.updatedAt}`}
+            className="admin-form-textarea"
+            rows={6}
+            defaultValue={JSON.stringify(settings.platformInstapayDisplay ?? {}, null, 2)}
+            onBlur={(e) => handleInstapayJsonBlur(e.target.value)}
+            disabled={saving}
+          />
+        </div>
+        <div className="admin-settings-row">
+          <div className="admin-settings-label-wrap">
+            <label className="admin-settings-label">{d.walletMigrationRateLabel}</label>
+            <span className="admin-settings-desc">
+              {settings.walletUsdToEgpMigrationRate != null
+                ? String(settings.walletUsdToEgpMigrationRate)
+                : '—'}
+            </span>
+          </div>
+        </div>
+        <div className="admin-settings-row">
+          <div className="admin-settings-label-wrap">
+            <label className="admin-settings-label">{d.walletMigrationAppliedLabel}</label>
+            <span className="admin-settings-desc">
+              {settings.walletMigrationUsdToEgpApplied
+                ? dictionary.admin.users.userDetail.yes
+                : dictionary.admin.users.userDetail.no}
+            </span>
+          </div>
         </div>
       </section>
 

@@ -7,7 +7,9 @@ import type {
   CreateDepositCheckoutBody,
   CreateWithdrawalRequestBody,
   DepositCheckoutResponse,
+  ManualDepositRequest,
   Wallet,
+  WithdrawalQuoteResponse,
   WithdrawalRequest,
 } from '@mohandishub/shared';
 import { canRequestWithdrawal } from '@mohandishub/shared';
@@ -47,6 +49,13 @@ function parseDepositBody(body: unknown): CreateDepositCheckoutBody {
         ? parseFloat(amountRaw)
         : NaN;
   const method = source.method;
+  if (method === 'instapay') {
+    throw new HttpError({
+      statusCode: 400,
+      code: 'USE_INSTAPAY_DEPOSIT_ENDPOINT',
+      message: 'Use POST /api/wallet/deposits/instapay for InstaPay deposits.',
+    });
+  }
   if (method !== 'crypto' && method !== 'card') {
     throw new HttpError({
       statusCode: 400,
@@ -67,8 +76,10 @@ function parseDepositBody(body: unknown): CreateDepositCheckoutBody {
 
 function parseWithdrawalBody(body: unknown): CreateWithdrawalRequestBody {
   const source = body && typeof body === 'object' ? (body as Record<string, unknown>) : {};
-  const amountRaw = source.amount;
-  const amount =
+  const methodRaw = source.method;
+  const method = methodRaw === 'instapay' ? 'instapay' : 'crypto';
+  const amountRaw = source.amountEgp ?? source.amount;
+  const amountEgp =
     typeof amountRaw === 'number'
       ? amountRaw
       : typeof amountRaw === 'string'
@@ -76,11 +87,18 @@ function parseWithdrawalBody(body: unknown): CreateWithdrawalRequestBody {
         : NaN;
 
   return {
-    amount,
+    method,
+    amountEgp,
     ...(typeof source.currency === 'string' ? { currency: source.currency } : {}),
     ...(typeof source.address === 'string' ? { address: source.address } : {}),
     ...(typeof source.extraId === 'string' ? { extraId: source.extraId } : {}),
     ...(typeof source.saveAddress === 'boolean' ? { saveAddress: source.saveAddress } : {}),
+    ...(typeof source.instapayRecipient === 'string'
+      ? { instapayRecipient: source.instapayRecipient }
+      : {}),
+    ...(typeof source.saveInstapayRecipient === 'boolean'
+      ? { saveInstapayRecipient: source.saveInstapayRecipient }
+      : {}),
   };
 }
 
@@ -204,7 +222,7 @@ const createLegacyCardDeposit = asyncHandler(async (req, res) => {
       : typeof amountRaw === 'string'
         ? parseFloat(amountRaw)
         : NaN;
-  const currency = typeof source.currency === 'string' ? source.currency : 'USD';
+  const currency = typeof source.currency === 'string' ? source.currency : 'EGP';
   const returnUrl = typeof source.returnUrl === 'string' ? source.returnUrl : undefined;
   if (!Number.isFinite(amount) || amount <= 0) {
     throw new HttpError({
@@ -226,18 +244,75 @@ const confirmLegacyStripeSession = asyncHandler((_req, res) => {
   res.json({ ok: true, data: { credited: false } });
 });
 
+const getWithdrawalQuote = asyncHandler(async (req, res) => {
+  const amountRaw = req.query.amountEgp;
+  const amountEgp =
+    typeof amountRaw === 'string'
+      ? parseFloat(amountRaw)
+      : typeof amountRaw === 'number'
+        ? amountRaw
+        : NaN;
+  const payoutCurrency =
+    typeof req.query.payoutCurrency === 'string'
+      ? req.query.payoutCurrency
+      : undefined;
+  if (!payoutCurrency) {
+    throw new HttpError({
+      statusCode: 400,
+      code: 'INVALID_REQUEST',
+      message: 'payoutCurrency is required.',
+    });
+  }
+  const quote = await walletService.estimateWithdrawalQuote(amountEgp, payoutCurrency);
+  const response: ApiSuccessBody<WithdrawalQuoteResponse> = { ok: true, data: quote };
+  res.json(response);
+});
+
+const getInstapayDepositInfo = asyncHandler(async (_req, res) => {
+  const data = await walletService.getInstapayDepositContext();
+  res.json({ ok: true, data });
+});
+
+const submitInstapayDeposit = asyncHandler(async (req, res) => {
+  const user = getUser(req);
+  const body = req.body as Record<string, unknown> | undefined;
+  const amountRaw = body?.amountEgp ?? body?.amount;
+  const amountEgp =
+    typeof amountRaw === 'number'
+      ? amountRaw
+      : typeof amountRaw === 'string'
+        ? parseFloat(amountRaw)
+        : NaN;
+  const proofUploadId =
+    typeof body?.proofUploadId === 'string' ? body.proofUploadId.trim() : '';
+  if (!proofUploadId) {
+    throw new HttpError({
+      statusCode: 400,
+      code: 'INVALID_REQUEST',
+      message: 'proofUploadId is required.',
+    });
+  }
+  const result = await walletService.submitInstapayManualDeposit({
+    userId: user.id,
+    amountEgp,
+    proofUploadId,
+  });
+  const response: ApiSuccessBody<ManualDepositRequest> = { ok: true, data: result };
+  res.status(201).json(response);
+});
+
 const createWithdrawal = asyncHandler(async (req, res) => {
   const user = getUser(req);
   if (!canRequestWithdrawal(user.role)) {
     throw new HttpError({
       statusCode: 403,
       code: 'FORBIDDEN',
-      message: 'Only individual providers can request withdrawals.',
+      message: 'Only providers can request withdrawals.',
     });
   }
 
   const payload = parseWithdrawalBody(req.body);
-  if (!Number.isFinite(payload.amount) || payload.amount <= 0) {
+  if (!Number.isFinite(payload.amountEgp) || payload.amountEgp <= 0) {
     throw new HttpError({
       statusCode: 400,
       code: 'INVALID_AMOUNT',
@@ -245,9 +320,37 @@ const createWithdrawal = asyncHandler(async (req, res) => {
     });
   }
 
-  const result = await walletService.createWithdrawalRequest(user.id, user.role, payload);
+  const role = user.role as 'expert' | 'craftsman' | 'business';
+  const result = await walletService.createWithdrawalRequest(user.id, role, {
+    method: payload.method,
+    amountEgp: payload.amountEgp,
+    ...(payload.currency !== undefined ? { currency: payload.currency } : {}),
+    ...(payload.address !== undefined ? { address: payload.address } : {}),
+    ...(payload.extraId !== undefined ? { extraId: payload.extraId } : {}),
+    ...(payload.saveAddress !== undefined ? { saveAddress: payload.saveAddress } : {}),
+    ...(payload.instapayRecipient !== undefined
+      ? { instapayRecipient: payload.instapayRecipient }
+      : {}),
+    ...(payload.saveInstapayRecipient !== undefined
+      ? { saveInstapayRecipient: payload.saveInstapayRecipient }
+      : {}),
+  });
   const response: ApiSuccessBody<WithdrawalRequest> = { ok: true, data: result };
   res.status(201).json(response);
+});
+
+const cancelWithdrawal = asyncHandler(async (req, res) => {
+  const user = getUser(req);
+  if (!canRequestWithdrawal(user.role)) {
+    throw new HttpError({ statusCode: 403, code: 'FORBIDDEN', message: 'Forbidden.' });
+  }
+  const withdrawalId = (req.params.withdrawalId ?? '').trim();
+  if (!withdrawalId) {
+    throw new HttpError({ statusCode: 400, code: 'INVALID_REQUEST', message: 'withdrawalId required.' });
+  }
+  const result = await walletService.cancelInstapayWithdrawal(user.id, withdrawalId);
+  const response: ApiSuccessBody<WithdrawalRequest> = { ok: true, data: result };
+  res.json(response);
 });
 
 const verifyWithdrawal = asyncHandler(async (req, res) => {
@@ -256,7 +359,7 @@ const verifyWithdrawal = asyncHandler(async (req, res) => {
     throw new HttpError({
       statusCode: 403,
       code: 'FORBIDDEN',
-      message: 'Only individual providers can verify withdrawals.',
+      message: 'Only providers can verify withdrawals.',
     });
   }
 
@@ -342,11 +445,15 @@ export const walletController = {
   getReceipt,
   getDepositCurrencies,
   getDepositEstimate,
+  getWithdrawalQuote,
+  getInstapayDepositInfo,
+  submitInstapayDeposit,
   createDepositCheckout,
   createLegacyCryptoDeposit,
   createLegacyCardDeposit,
   confirmLegacyStripeSession,
   createWithdrawal,
+  cancelWithdrawal,
   verifyWithdrawal,
   listWithdrawals,
   nowPaymentsIpn,

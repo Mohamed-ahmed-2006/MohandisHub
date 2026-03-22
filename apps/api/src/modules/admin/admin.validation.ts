@@ -156,6 +156,26 @@ export const updateSettingsSchema = z.object({
   reservationVideoMinuteRate: z.number().min(0).optional(),
   reservationMinPrejoinMinutes: z.number().int().min(1).max(180).optional(),
   jobInterviewFeeAmount: z.number().min(0).optional(),
+  walletEgpPerUsdtDeposit: z.number().positive().nullable().optional(),
+  walletEgpPerUsdtWithdrawal: z.number().positive().nullable().optional(),
+  platformInstapayDisplay: z.record(z.string(), z.unknown()).nullable().optional(),
+  walletUsdToEgpMigrationRate: z.number().positive().nullable().optional(),
+});
+
+export const approveManualInstapayDepositSchema = z.object({
+  creditedAmountEgp: z.number().positive().optional(),
+});
+
+export const rejectManualInstapayDepositSchema = z.object({
+  reason: z.string().min(1).max(2000),
+});
+
+export const completeManualInstapayWithdrawalSchema = z.object({
+  proofUploadId: z.string().uuid(),
+});
+
+export const rejectManualInstapayWithdrawalSchema = z.object({
+  reason: z.string().min(1).max(2000),
 });
 
 export type UpdateUserInput = z.infer<typeof updateUserSchema>;
@@ -172,3 +192,7 @@ export type UpdateCategoryInput = z.infer<typeof updateCategorySchema>;
 export type UpdateServiceInput = z.infer<typeof updateServiceSchema>;
 export type RejectServiceInput = z.infer<typeof rejectServiceSchema>;
 export type UpdateSettingsInput = z.infer<typeof updateSettingsSchema>;
+export type ApproveManualInstapayDepositInput = z.infer<typeof approveManualInstapayDepositSchema>;
+export type RejectManualInstapayDepositInput = z.infer<typeof rejectManualInstapayDepositSchema>;
+export type CompleteManualInstapayWithdrawalInput = z.infer<typeof completeManualInstapayWithdrawalSchema>;
+export type RejectManualInstapayWithdrawalInput = z.infer<typeof rejectManualInstapayWithdrawalSchema>;

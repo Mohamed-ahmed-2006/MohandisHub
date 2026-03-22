@@ -37,6 +37,11 @@ export type AppSettings = {
   reservationVideoMinuteRate: number;
   reservationMinPrejoinMinutes: number;
   jobInterviewFeeAmount: number;
+  walletEgpPerUsdtDeposit: number | null;
+  walletEgpPerUsdtWithdrawal: number | null;
+  platformInstapayDisplay: Record<string, unknown> | null;
+  walletUsdToEgpMigrationRate: number | null;
+  walletMigrationUsdToEgpApplied: boolean;
 };
 
 /** Public app status returned by GET /api/app/status — subset needed by frontend */
@@ -71,6 +76,11 @@ export type AppStatus = {
   reservationVideoMinuteRate: number;
   reservationMinPrejoinMinutes: number;
   jobInterviewFeeAmount: number;
+  walletEgpPerUsdtDeposit: number | null;
+  walletEgpPerUsdtWithdrawal: number | null;
+  platformInstapayDisplay: Record<string, unknown> | null;
+  walletUsdToEgpMigrationRate: number | null;
+  walletMigrationUsdToEgpApplied: boolean;
 };
 
 export type UpdateAppSettingsBody = Partial<{
@@ -104,4 +114,8 @@ export type UpdateAppSettingsBody = Partial<{
   reservationVideoMinuteRate: number;
   reservationMinPrejoinMinutes: number;
   jobInterviewFeeAmount: number;
+  walletEgpPerUsdtDeposit: number | null;
+  walletEgpPerUsdtWithdrawal: number | null;
+  platformInstapayDisplay: Record<string, unknown> | null;
+  walletUsdToEgpMigrationRate: number | null;
 }>;

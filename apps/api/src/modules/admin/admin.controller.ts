@@ -34,9 +34,13 @@ import { SupportService } from '../support/support.service.js';
 import { AdminService } from './admin.service.js';
 import type {
   AdjustBalanceInput,
+  ApproveManualInstapayDepositInput,
   ChangeUserEmailInput,
+  CompleteManualInstapayWithdrawalInput,
   CreateCategoryInput,
   CreatePlanInput,
+  RejectManualInstapayDepositInput,
+  RejectManualInstapayWithdrawalInput,
   RejectServiceInput,
   UpdateBusinessProfileByAdminInput,
   UpdateCategoryInput,
@@ -49,9 +53,13 @@ import type {
 } from './admin.validation.js';
 import {
   adjustBalanceSchema,
+  approveManualInstapayDepositSchema,
   changeUserEmailSchema,
+  completeManualInstapayWithdrawalSchema,
   createCategorySchema,
   createPlanSchema,
+  rejectManualInstapayDepositSchema,
+  rejectManualInstapayWithdrawalSchema,
   rejectServiceSchema,
   userActivityTypeSchema,
   updateBusinessProfileSchema,
@@ -383,6 +391,70 @@ const adjustBalance = asyncHandler(async (req, res) => {
   res.status(201).json(response);
 });
 
+const listManualInstapayDeposits = asyncHandler(async (req, res) => {
+  const page = parseInt(req.query.page as string, 10) || 1;
+  const limit = Math.min(parseInt(req.query.limit as string, 10) || 20, 100);
+  const status = typeof req.query.status === 'string' ? req.query.status : undefined;
+  const result = await adminService.listManualInstapayDeposits({
+    page,
+    limit,
+    ...(status ? { status } : {}),
+  });
+  res.json({ ok: true, data: result });
+});
+
+const approveManualInstapayDeposit = asyncHandler(async (req, res) => {
+  const adminId = getAdminId(req);
+  const input = parseValidation<ApproveManualInstapayDepositInput>(
+    approveManualInstapayDepositSchema,
+    req.body,
+  );
+  const row = await adminService.approveManualInstapayDeposit(req.params.id!, adminId, input);
+  res.json({ ok: true, data: row });
+});
+
+const rejectManualInstapayDeposit = asyncHandler(async (req, res) => {
+  const adminId = getAdminId(req);
+  const input = parseValidation<RejectManualInstapayDepositInput>(
+    rejectManualInstapayDepositSchema,
+    req.body,
+  );
+  const row = await adminService.rejectManualInstapayDeposit(req.params.id!, adminId, input);
+  res.json({ ok: true, data: row });
+});
+
+const listManualInstapayWithdrawals = asyncHandler(async (req, res) => {
+  const page = parseInt(req.query.page as string, 10) || 1;
+  const limit = Math.min(parseInt(req.query.limit as string, 10) || 20, 100);
+  const status = typeof req.query.status === 'string' ? req.query.status : undefined;
+  const result = await adminService.listManualInstapayWithdrawals({
+    page,
+    limit,
+    ...(status ? { status } : {}),
+  });
+  res.json({ ok: true, data: result });
+});
+
+const completeManualInstapayWithdrawal = asyncHandler(async (req, res) => {
+  const adminId = getAdminId(req);
+  const input = parseValidation<CompleteManualInstapayWithdrawalInput>(
+    completeManualInstapayWithdrawalSchema,
+    req.body,
+  );
+  const row = await adminService.completeManualInstapayWithdrawal(req.params.id!, adminId, input);
+  res.json({ ok: true, data: row });
+});
+
+const rejectManualInstapayWithdrawal = asyncHandler(async (req, res) => {
+  const adminId = getAdminId(req);
+  const input = parseValidation<RejectManualInstapayWithdrawalInput>(
+    rejectManualInstapayWithdrawalSchema,
+    req.body,
+  );
+  const row = await adminService.rejectManualInstapayWithdrawal(req.params.id!, adminId, input);
+  res.json({ ok: true, data: row });
+});
+
 const reverseTransaction = asyncHandler(async (req, res) => {
   const adminId = getAdminId(req);
   const txn = await adminService.reverseTransaction(req.params.id!, adminId);
@@ -593,6 +665,12 @@ export const adminController = {
   listTransactions,
   getTransactionDetail,
   adjustBalance,
+  listManualInstapayDeposits,
+  approveManualInstapayDeposit,
+  rejectManualInstapayDeposit,
+  listManualInstapayWithdrawals,
+  completeManualInstapayWithdrawal,
+  rejectManualInstapayWithdrawal,
   reverseTransaction,
   listServices,
   updateService: updateServiceHandler,

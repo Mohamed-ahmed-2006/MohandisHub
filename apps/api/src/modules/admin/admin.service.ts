@@ -21,10 +21,12 @@ import type {
   BusinessProfile,
   CraftsmanProfile,
   ExpertProfile,
+  ManualDepositRequest,
   PaginatedResponse,
   Plan,
   ServiceCategory,
   Transaction,
+  WithdrawalRequest,
 } from '@mohandishub/shared';
 
 import { HttpError } from '../../utils/http-error.js';
@@ -32,6 +34,7 @@ import { AuthRepository } from '../auth/auth.repository.js';
 import { OtpService } from '../otp/otp.service.js';
 import { ProfilesService } from '../profiles/profiles.service.js';
 import { SettingsService } from '../settings/settings.service.js';
+import { WalletService } from '../wallet/wallet.service.js';
 
 import { AdminRepository } from './admin.repository.js';
 import type {
@@ -51,8 +54,12 @@ import type {
 import type {
   AdjustBalanceInput,
   ChangeUserEmailInput,
+  CompleteManualInstapayWithdrawalInput,
   CreateCategoryInput,
   CreatePlanInput,
+  RejectManualInstapayDepositInput,
+  RejectManualInstapayWithdrawalInput,
+  ApproveManualInstapayDepositInput,
   UpdateBusinessProfileByAdminInput,
   UpdateCategoryInput,
   UpdateCraftsmanProfileByAdminInput,
@@ -70,6 +77,7 @@ export class AdminService {
     private readonly settingsService: SettingsService = new SettingsService(),
     private readonly authRepository: AuthRepository = new AuthRepository(),
     private readonly profilesService: ProfilesService = new ProfilesService(),
+    private readonly walletService: WalletService = new WalletService(),
   ) {}
 
   // ── Dashboard ───────────────────────────────────────────────────────────
@@ -1046,6 +1054,74 @@ export class AdminService {
       slotEndAt: row.slot_end_at,
       createdAt: row.created_at,
     };
+  }
+
+  async listManualInstapayDeposits(params: {
+    status?: string;
+    page: number;
+    limit: number;
+  }): Promise<{ items: ManualDepositRequest[]; total: number }> {
+    const limit = Math.min(params.limit, 100);
+    const offset = (params.page - 1) * limit;
+    return this.walletService.listManualDepositsForAdmin({
+      limit,
+      offset,
+      ...(params.status ? { status: params.status } : {}),
+    });
+  }
+
+  async approveManualInstapayDeposit(
+    depositId: string,
+    adminId: string,
+    input: ApproveManualInstapayDepositInput,
+  ): Promise<ManualDepositRequest> {
+    return this.walletService.approveManualInstapayDepositAdmin(
+      depositId,
+      adminId,
+      input.creditedAmountEgp,
+    );
+  }
+
+  async rejectManualInstapayDeposit(
+    depositId: string,
+    adminId: string,
+    input: RejectManualInstapayDepositInput,
+  ): Promise<ManualDepositRequest> {
+    return this.walletService.rejectManualInstapayDepositAdmin(depositId, adminId, input.reason);
+  }
+
+  async listManualInstapayWithdrawals(params: {
+    status?: string;
+    page: number;
+    limit: number;
+  }): Promise<{ items: WithdrawalRequest[]; total: number }> {
+    const limit = Math.min(params.limit, 100);
+    const offset = (params.page - 1) * limit;
+    return this.walletService.listManualWithdrawalsForAdmin({
+      limit,
+      offset,
+      ...(params.status ? { status: params.status } : {}),
+    });
+  }
+
+  async completeManualInstapayWithdrawal(
+    withdrawalId: string,
+    adminId: string,
+    input: CompleteManualInstapayWithdrawalInput,
+  ): Promise<WithdrawalRequest> {
+    return this.walletService.completeInstapayWithdrawalAdmin(
+      withdrawalId,
+      adminId,
+      input.proofUploadId,
+    );
+  }
+
+  async rejectManualInstapayWithdrawal(
+    withdrawalId: string,
+    adminId: string,
+    input: RejectManualInstapayWithdrawalInput,
+  ): Promise<WithdrawalRequest> {
+    return this.walletService.rejectInstapayWithdrawalAdmin(withdrawalId, adminId, input.reason);
   }
 
   private isMissingSchemaError(error: unknown): boolean {

@@ -21,6 +21,7 @@ import type {
   AdminWalletFreezeResponse,
   AdminUserListItem,
   AdjustBalanceBody,
+  ManualDepositRequest,
   ApiErrorBody,
   ApiSuccessBody,
   AppSettings,
@@ -39,6 +40,7 @@ import type {
   UpdateAppSettingsBody,
   UpdateCategoryBody,
   UpdatePlanBody,
+  WithdrawalRequest,
 } from '@mohandishub/shared';
 
 import { ApiClientRequestError, isApiClientError } from '../auth/client';
@@ -467,6 +469,98 @@ export const adminApiClient = {
       method: 'POST',
       path: `/api/admin/transactions/${txnId}/reverse`,
       accessToken,
+    }),
+
+  listManualInstapayDeposits: (
+    accessToken: string,
+    params?: { page?: number; limit?: number; status?: string },
+    options?: AdminClientOptions,
+  ) => {
+    const query = new URLSearchParams();
+    if (params?.page) query.set('page', String(params.page));
+    if (params?.limit) query.set('limit', String(params.limit));
+    if (params?.status) query.set('status', params.status);
+    const qs = query.toString();
+    return apiRequest<{ items: ManualDepositRequest[]; total: number }>({
+      method: 'GET',
+      path: `/api/admin/wallet/manual-deposits${qs ? `?${qs}` : ''}`,
+      accessToken,
+      ...(options?.refreshSession ? { refreshSession: options.refreshSession } : {}),
+    });
+  },
+
+  approveManualInstapayDeposit: (
+    accessToken: string,
+    depositId: string,
+    body?: { creditedAmountEgp?: number },
+    options?: AdminClientOptions,
+  ) =>
+    apiRequest<ManualDepositRequest>({
+      method: 'POST',
+      path: `/api/admin/wallet/manual-deposits/${encodeURIComponent(depositId)}/approve`,
+      body: body ?? {},
+      accessToken,
+      ...(options?.refreshSession ? { refreshSession: options.refreshSession } : {}),
+    }),
+
+  rejectManualInstapayDeposit: (
+    accessToken: string,
+    depositId: string,
+    body: { reason: string },
+    options?: AdminClientOptions,
+  ) =>
+    apiRequest<ManualDepositRequest>({
+      method: 'POST',
+      path: `/api/admin/wallet/manual-deposits/${encodeURIComponent(depositId)}/reject`,
+      body,
+      accessToken,
+      ...(options?.refreshSession ? { refreshSession: options.refreshSession } : {}),
+    }),
+
+  listManualInstapayWithdrawals: (
+    accessToken: string,
+    params?: { page?: number; limit?: number; status?: string },
+    options?: AdminClientOptions,
+  ) => {
+    const query = new URLSearchParams();
+    if (params?.page) query.set('page', String(params.page));
+    if (params?.limit) query.set('limit', String(params.limit));
+    if (params?.status) query.set('status', params.status);
+    const qs = query.toString();
+    return apiRequest<{ items: WithdrawalRequest[]; total: number }>({
+      method: 'GET',
+      path: `/api/admin/wallet/manual-withdrawals${qs ? `?${qs}` : ''}`,
+      accessToken,
+      ...(options?.refreshSession ? { refreshSession: options.refreshSession } : {}),
+    });
+  },
+
+  completeManualInstapayWithdrawal: (
+    accessToken: string,
+    withdrawalId: string,
+    body: { proofUploadId: string },
+    options?: AdminClientOptions,
+  ) =>
+    apiRequest<WithdrawalRequest>({
+      method: 'POST',
+      path: `/api/admin/wallet/manual-withdrawals/${encodeURIComponent(withdrawalId)}/complete`,
+      body,
+      accessToken,
+      ...(options?.refreshSession ? { refreshSession: options.refreshSession } : {}),
+    }),
+
+  rejectManualInstapayWithdrawal: (
+    accessToken: string,
+    withdrawalId: string,
+    body: { reason: string },
+    options?: AdminClientOptions,
+  ) =>
+    apiRequest<WithdrawalRequest>({
+      method: 'POST',
+      path: `/api/admin/wallet/manual-withdrawals/${encodeURIComponent(withdrawalId)}/reject`,
+      body,
+      accessToken,
+      ...(options?.refreshSession ? { refreshSession: options.refreshSession } : {}),
     }),
 
   // Services

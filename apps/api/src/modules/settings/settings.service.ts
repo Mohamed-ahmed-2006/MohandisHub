@@ -10,6 +10,11 @@ import type { AppSettingsRow } from './settings.repository.js';
 export class SettingsService {
   constructor(private readonly repo: SettingsRepository = new SettingsRepository()) {}
 
+  /** Full DB row for wallet FX / InstaPay (internal use). */
+  async getRawRow(): Promise<AppSettingsRow | null> {
+    return this.repo.get();
+  }
+
   async getSettings(): Promise<AppSettings | null> {
     const row = await this.repo.get();
     return row ? this.toAppSettings(row) : null;
@@ -52,6 +57,21 @@ export class SettingsService {
       reservationVideoMinuteRate: parseFloat(row.reservation_video_minute_rate ?? '2'),
       reservationMinPrejoinMinutes: row.reservation_min_prejoin_minutes ?? 5,
       jobInterviewFeeAmount: parseFloat(row.job_interview_fee_amount ?? '0'),
+      walletEgpPerUsdtDeposit:
+        row.wallet_egp_per_usdt_deposit != null
+          ? parseFloat(row.wallet_egp_per_usdt_deposit)
+          : null,
+      walletEgpPerUsdtWithdrawal:
+        row.wallet_egp_per_usdt_withdrawal != null
+          ? parseFloat(row.wallet_egp_per_usdt_withdrawal)
+          : null,
+      platformInstapayDisplay:
+        (row.platform_instapay_display as Record<string, unknown> | null) ?? null,
+      walletUsdToEgpMigrationRate:
+        row.wallet_usd_to_egp_migration_rate != null
+          ? parseFloat(row.wallet_usd_to_egp_migration_rate)
+          : null,
+      walletMigrationUsdToEgpApplied: row.wallet_migration_usd_to_egp_applied ?? false,
     };
   }
 
@@ -94,6 +114,14 @@ export class SettingsService {
       dbPartial.reservation_min_prejoin_minutes = partial.reservationMinPrejoinMinutes;
     if (partial.jobInterviewFeeAmount !== undefined)
       dbPartial.job_interview_fee_amount = partial.jobInterviewFeeAmount;
+    if (partial.walletEgpPerUsdtDeposit !== undefined)
+      dbPartial.walletEgpPerUsdtDeposit = partial.walletEgpPerUsdtDeposit;
+    if (partial.walletEgpPerUsdtWithdrawal !== undefined)
+      dbPartial.walletEgpPerUsdtWithdrawal = partial.walletEgpPerUsdtWithdrawal;
+    if (partial.platformInstapayDisplay !== undefined)
+      dbPartial.platformInstapayDisplay = partial.platformInstapayDisplay;
+    if (partial.walletUsdToEgpMigrationRate !== undefined)
+      dbPartial.walletUsdToEgpMigrationRate = partial.walletUsdToEgpMigrationRate;
 
     const row = await this.repo.update(dbPartial);
     return row ? this.toAppSettings(row) : null;
@@ -135,6 +163,21 @@ export class SettingsService {
       reservationVideoMinuteRate: parseFloat(row.reservation_video_minute_rate ?? '2'),
       reservationMinPrejoinMinutes: row.reservation_min_prejoin_minutes ?? 5,
       jobInterviewFeeAmount: parseFloat(row.job_interview_fee_amount ?? '0'),
+      walletEgpPerUsdtDeposit:
+        row.wallet_egp_per_usdt_deposit != null
+          ? parseFloat(row.wallet_egp_per_usdt_deposit)
+          : null,
+      walletEgpPerUsdtWithdrawal:
+        row.wallet_egp_per_usdt_withdrawal != null
+          ? parseFloat(row.wallet_egp_per_usdt_withdrawal)
+          : null,
+      platformInstapayDisplay:
+        (row.platform_instapay_display as Record<string, unknown> | null) ?? null,
+      walletUsdToEgpMigrationRate:
+        row.wallet_usd_to_egp_migration_rate != null
+          ? parseFloat(row.wallet_usd_to_egp_migration_rate)
+          : null,
+      walletMigrationUsdToEgpApplied: row.wallet_migration_usd_to_egp_applied ?? false,
     };
   }
 
@@ -170,6 +213,11 @@ export class SettingsService {
       reservationVideoMinuteRate: 2,
       reservationMinPrejoinMinutes: 5,
       jobInterviewFeeAmount: 0,
+      walletEgpPerUsdtDeposit: null,
+      walletEgpPerUsdtWithdrawal: null,
+      platformInstapayDisplay: null,
+      walletUsdToEgpMigrationRate: null,
+      walletMigrationUsdToEgpApplied: false,
     };
   }
 }

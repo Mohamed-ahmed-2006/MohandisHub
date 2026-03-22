@@ -4,7 +4,9 @@ import type {
   CreateDepositCheckoutBody,
   CreateWithdrawalRequestBody,
   DepositCheckoutResponse,
+  ManualDepositRequest,
   Wallet,
+  WithdrawalQuoteResponse,
   WithdrawalRequest,
 } from '@mohandishub/shared';
 
@@ -108,7 +110,7 @@ export const walletApiClient = {
   ): Promise<{ paymentUrl: string; orderId: string }> => {
     const result = await walletApiClient.createDepositCheckout(accessToken, {
       amount,
-      currency: 'USD',
+      currency: 'EGP',
       method: 'crypto',
       payCurrency,
     });
@@ -123,7 +125,7 @@ export const walletApiClient = {
   ): Promise<{ checkoutUrl: string; sessionId: string }> => {
     const result = await walletApiClient.createDepositCheckout(accessToken, {
       amount,
-      currency,
+      currency: currency === 'USD' ? 'EGP' : currency,
       method: 'card',
       ...(returnUrl ? { returnUrl } : {}),
     });
@@ -155,4 +157,40 @@ export const walletApiClient = {
 
   listWithdrawals: async (accessToken: string): Promise<WithdrawalRequest[]> =>
     requestJson<WithdrawalRequest[]>({ accessToken, path: '/api/wallet/withdrawals' }),
+
+  getWithdrawalQuote: async (
+    accessToken: string,
+    amountEgp: number,
+    payoutCurrency: string,
+  ): Promise<WithdrawalQuoteResponse> =>
+    requestJson<WithdrawalQuoteResponse>({
+      accessToken,
+      path: `/api/wallet/withdrawals/quote?amountEgp=${encodeURIComponent(String(amountEgp))}&payoutCurrency=${encodeURIComponent(payoutCurrency)}`,
+    }),
+
+  getInstapayDepositInfo: async (
+    accessToken: string,
+  ): Promise<{ platformInstapayDisplay: Record<string, unknown> }> =>
+    requestJson<{ platformInstapayDisplay: Record<string, unknown> }>({
+      accessToken,
+      path: '/api/wallet/deposit/instapay/info',
+    }),
+
+  submitInstapayDeposit: async (
+    accessToken: string,
+    body: { amountEgp: number; proofUploadId: string },
+  ): Promise<ManualDepositRequest> =>
+    requestJson<ManualDepositRequest>({
+      accessToken,
+      path: '/api/wallet/deposits/instapay',
+      method: 'POST',
+      body,
+    }),
+
+  cancelWithdrawal: async (accessToken: string, withdrawalId: string): Promise<WithdrawalRequest> =>
+    requestJson<WithdrawalRequest>({
+      accessToken,
+      path: `/api/wallet/withdrawals/${encodeURIComponent(withdrawalId)}/cancel`,
+      method: 'POST',
+    }),
 };

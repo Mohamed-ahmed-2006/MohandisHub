@@ -517,6 +517,7 @@ export type Dictionary = {
       support?: string;
       notifications?: string;
       settings: string;
+      walletRails: string;
     };
     dashboard: {
       totalUsers: string;
@@ -684,6 +685,31 @@ export type Dictionary = {
       adjustAmount: string;
       adjustDescription: string;
     };
+    walletRails: {
+      title: string;
+      depositsTitle: string;
+      withdrawalsTitle: string;
+      filterStatus: string;
+      allStatuses: string;
+      userId: string;
+      amountEgp: string;
+      status: string;
+      created: string;
+      viewProof: string;
+      approve: string;
+      reject: string;
+      markSent: string;
+      recipient: string;
+      noItems: string;
+      approveTitle: string;
+      creditedAmountHint: string;
+      creditedAmountPlaceholder: string;
+      rejectTitle: string;
+      reason: string;
+      completeTitle: string;
+      proofFile: string;
+      confirmReject: string;
+    };
     servicesMgmt: {
       title: string;
       filterStatus: string;
@@ -746,6 +772,14 @@ export type Dictionary = {
       globalAnnouncementPlaceholder: string;
       minDepositAmount: string;
       maxDepositAmount: string;
+      walletEgpPerUsdtDeposit: string;
+      walletEgpPerUsdtDepositDesc: string;
+      walletEgpPerUsdtWithdrawal: string;
+      walletEgpPerUsdtWithdrawalDesc: string;
+      platformInstapayDisplayJson: string;
+      platformInstapayDisplayDesc: string;
+      walletMigrationRateLabel: string;
+      walletMigrationAppliedLabel: string;
       commissionPercent: string;
       commissionPercentDesc: string;
       commissionMinEgp: string;
@@ -786,6 +820,19 @@ export type Dictionary = {
     depositPayWithCard: string;
     depositRedirecting: string;
     depositError: string;
+    instapayOptionLabel: string;
+    instapayOptionHint: string;
+    instapayInstructions: string;
+    instapayAmountLabel: string;
+    instapayProofLabel: string;
+    instapaySubmit: string;
+    instapaySubmitting: string;
+    instapayProofRequired: string;
+    instapayNotConfigured: string;
+    depositEstimating: string;
+    depositEstimatedToPay: string;
+    depositEnterEgpForEstimate: string;
+    depositPayCurrencyLabel: string;
     depositMinAmount?: string;
     depositCardUnavailable?: string;
     depositSuccess?: string;

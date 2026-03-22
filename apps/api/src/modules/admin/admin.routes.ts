@@ -58,6 +58,37 @@ adminRouter.get('/transactions/:id', requireAdminPermission('manage_transactions
 adminRouter.post('/transactions/adjust', requireAdminPermission('manage_transactions'), adminController.adjustBalance);
 adminRouter.post('/transactions/:id/reverse', requireAdminPermission('manage_transactions'), adminController.reverseTransaction);
 
+adminRouter.get(
+  '/wallet/manual-deposits',
+  requireAdminPermission('manage_transactions'),
+  adminController.listManualInstapayDeposits,
+);
+adminRouter.post(
+  '/wallet/manual-deposits/:id/approve',
+  requireAdminPermission('manage_transactions'),
+  adminController.approveManualInstapayDeposit,
+);
+adminRouter.post(
+  '/wallet/manual-deposits/:id/reject',
+  requireAdminPermission('manage_transactions'),
+  adminController.rejectManualInstapayDeposit,
+);
+adminRouter.get(
+  '/wallet/manual-withdrawals',
+  requireAdminPermission('manage_transactions'),
+  adminController.listManualInstapayWithdrawals,
+);
+adminRouter.post(
+  '/wallet/manual-withdrawals/:id/complete',
+  requireAdminPermission('manage_transactions'),
+  adminController.completeManualInstapayWithdrawal,
+);
+adminRouter.post(
+  '/wallet/manual-withdrawals/:id/reject',
+  requireAdminPermission('manage_transactions'),
+  adminController.rejectManualInstapayWithdrawal,
+);
+
 // Services
 adminRouter.get('/services', requireAdminPermission('manage_services'), adminController.listServices);
 adminRouter.patch('/services/:id', requireAdminPermission('manage_services'), adminController.updateService);

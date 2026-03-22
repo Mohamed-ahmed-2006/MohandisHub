@@ -66,12 +66,13 @@ export type WalletHold = {
   capturedAt: string | null;
 };
 
-export type DepositMethod = 'crypto' | 'card';
+/** Checkout-only; InstaPay uses POST /api/wallet/deposits/instapay */
+export type DepositMethod = 'crypto' | 'card' | 'instapay';
 
 export type CreateDepositCheckoutBody = {
   amount: number;
   currency?: string;
-  method: DepositMethod;
+  method: 'crypto' | 'card';
   payCurrency?: string;
   returnUrl?: string;
 };
@@ -79,28 +80,71 @@ export type CreateDepositCheckoutBody = {
 export type DepositCheckoutResponse = {
   checkoutUrl: string;
   orderId: string;
-  method: DepositMethod;
+  method: 'crypto' | 'card';
   provider: 'nowpayments';
+};
+
+export type SubmitInstapayDepositBody = {
+  amountEgp: number;
+  proofUploadId: string;
+};
+
+export type ManualDepositRequestStatus =
+  | 'pending'
+  | 'pending_review'
+  | 'paid'
+  | 'rejected'
+  | 'expired'
+  | 'failed'
+  | 'cancelled';
+
+export type ManualDepositRequest = {
+  id: string;
+  userId: string;
+  amountEgp: number;
+  currency: string;
+  orderId: string;
+  status: ManualDepositRequestStatus;
+  provider: string;
+  proofUploadId: string | null;
+  destinationAccountSnapshot: Record<string, unknown>;
+  reviewedAt: string | null;
+  rejectionReason: string | null;
+  creditedAmountEgp: number | null;
+  rateSnapshot: Record<string, unknown>;
+  createdAt: string;
+  updatedAt: string;
 };
 
 export type WithdrawalRequestStatus =
   | 'pending_verification'
   | 'processing'
+  | 'awaiting_transfer'
   | 'finished'
   | 'failed'
   | 'rejected'
   | 'cancelled'
   | 'blocked';
 
+export type WithdrawalMethod = 'crypto' | 'instapay';
+
 export type WithdrawalRequest = {
   id: string;
   userId: string;
   walletId: string;
   holdId: string | null;
-  amount: number;
-  currency: string;
+  /** EGP deducted from wallet (hold) */
+  sourceAmountEgp: number;
+  sourceCurrency: string;
+  method: WithdrawalMethod;
+  /** Crypto payout ticker when method is crypto */
+  destinationCurrency: string;
+  destinationCryptoAmount: number | null;
   payoutAddress: string | null;
   payoutExtraId: string | null;
+  instapayRecipient: string | null;
+  adminProofUploadId: string | null;
+  rateSnapshot: Record<string, unknown>;
   status: WithdrawalRequestStatus;
   provider: string;
   providerBatchWithdrawalId: string | null;
@@ -111,14 +155,28 @@ export type WithdrawalRequest = {
   verifiedAt: string | null;
   processedAt: string | null;
   failedAt: string | null;
+  rejectionReason: string | null;
   createdAt: string;
   updatedAt: string;
 };
 
 export type CreateWithdrawalRequestBody = {
-  amount: number;
+  method: WithdrawalMethod;
+  /** EGP amount to withdraw from wallet */
+  amountEgp: number;
+  /** Crypto method: payout currency (e.g. USDTTRC20) */
   currency?: string;
   address?: string;
   extraId?: string;
   saveAddress?: boolean;
+  /** InstaPay method: recipient phone/account */
+  instapayRecipient?: string;
+  saveInstapayRecipient?: boolean;
+};
+
+export type WithdrawalQuoteResponse = {
+  amountEgp: number;
+  payoutCurrency: string;
+  quotedCryptoAmount: number;
+  rateSnapshot: Record<string, unknown>;
 };

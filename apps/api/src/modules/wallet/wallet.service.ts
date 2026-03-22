@@ -4,9 +4,10 @@
 
 import type {
   DepositCheckoutResponse,
-  DepositMethod,
+  ManualDepositRequest,
   Transaction,
   Wallet,
+  WithdrawalQuoteResponse,
   WithdrawalRequest,
 } from '@mohandishub/shared';
 
@@ -25,11 +26,13 @@ import {
 import { HttpError } from '../../utils/http-error.js';
 import { SettingsService } from '../settings/settings.service.js';
 
-import { WalletRepository } from './wallet.repository.js';
-import type {
-  TransactionRow,
-  WalletRow,
-  WithdrawalRequestRow,
+import { WalletFxService } from './wallet-fx.service.js';
+import {
+  WalletRepository,
+  type DepositRequestRow,
+  type TransactionRow,
+  type WalletRow,
+  type WithdrawalRequestRow,
 } from './wallet.repository.js';
 
 const FAILED_DEPOSIT_STATUSES = new Set([
@@ -42,7 +45,7 @@ const FAILED_DEPOSIT_STATUSES = new Set([
 
 type CreateDepositCheckoutInput = {
   amount: number;
-  method: DepositMethod;
+  method: 'crypto' | 'card';
   currency?: string;
   payCurrency?: string;
   returnUrl?: string;
@@ -55,20 +58,31 @@ type EstimateDepositInput = {
 };
 
 type CreateWithdrawalInput = {
-  amount: number;
+  method: 'crypto' | 'instapay';
+  amountEgp: number;
   currency?: string;
   address?: string;
   extraId?: string;
   saveAddress?: boolean;
+  instapayRecipient?: string;
+  saveInstapayRecipient?: boolean;
 };
+
+type UserPayoutPreferences = Awaited<ReturnType<WalletRepository['getUserPayoutPreferences']>>;
+type IndividualProviderPayoutSettings = Awaited<
+  ReturnType<WalletRepository['getIndividualProviderPayoutSettings']>
+>;
 
 export class WalletService {
   private payoutAuthCache: { token: string; expiresAt: number } | null = null;
+  private readonly fx: WalletFxService;
 
   constructor(
     private readonly repo: WalletRepository = new WalletRepository(),
     private readonly settingsService: SettingsService = new SettingsService(),
-  ) {}
+  ) {
+    this.fx = new WalletFxService(this.settingsService);
+  }
 
   async getOrCreateWallet(userId: string): Promise<Wallet> {
     let row = await this.repo.findByUserId(userId);
@@ -225,7 +239,7 @@ export class WalletService {
 
     const wallet = await this.getOrCreateWallet(userId);
     const orderId = `np_dep_${wallet.id.replace(/-/g, '')}_${Date.now()}`.slice(0, 128);
-    const priceCurrency = (input.currency || 'USD').toUpperCase();
+    const priceCurrency = (input.currency || 'EGP').toUpperCase();
     const requestedPayCurrency = input.payCurrency ? input.payCurrency.toUpperCase() : undefined;
     const defaultPayCurrency = env.NOWPAYMENTS_WITHDRAWAL_DEFAULT_CURRENCY.toUpperCase();
     const payCurrency =
@@ -338,6 +352,14 @@ export class WalletService {
     const providerPayload = payload;
 
     if (providerStatus === 'finished' && !providerParentPaymentId) {
+      const dep = await this.repo.findDepositRequestByOrderId(orderId);
+      const invoiceAmount = dep ? parseFloat(dep.amount) : 0;
+      const invoiceCurrency = dep?.currency ?? 'EGP';
+      const { egp, snapshot } = await this.fx.computeDepositCreditEgp({
+        providerPayload,
+        invoicePriceAmount: invoiceAmount,
+        invoicePriceCurrency: invoiceCurrency,
+      });
       await this.repo.creditDepositIfPendingByOrderId({
         orderId,
         providerStatus,
@@ -349,6 +371,8 @@ export class WalletService {
         providerPurchaseId,
         providerParentPaymentId,
         providerPayload,
+        creditAmountEgp: egp,
+        rateSnapshot: snapshot,
       });
       return;
     }
@@ -374,9 +398,37 @@ export class WalletService {
     }
   }
 
+  async estimateWithdrawalQuote(
+    amountEgp: number,
+    payoutCurrency: string,
+  ): Promise<WithdrawalQuoteResponse> {
+    if (!Number.isFinite(amountEgp) || amountEgp <= 0) {
+      throw new HttpError({
+        statusCode: 400,
+        code: 'INVALID_AMOUNT',
+        message: 'Valid EGP amount is required.',
+      });
+    }
+    const cur = payoutCurrency.toUpperCase();
+    const { cryptoAmount, snapshot } = await this.fx.quoteCryptoPayoutFromEgp(amountEgp, cur);
+    if (cryptoAmount <= 0) {
+      throw new HttpError({
+        statusCode: 400,
+        code: 'QUOTE_FAILED',
+        message: 'Could not quote crypto amount for this withdrawal.',
+      });
+    }
+    return {
+      amountEgp,
+      payoutCurrency: cur,
+      quotedCryptoAmount: cryptoAmount,
+      rateSnapshot: snapshot,
+    };
+  }
+
   async createWithdrawalRequest(
     userId: string,
-    role: 'expert' | 'craftsman',
+    role: 'expert' | 'craftsman' | 'business',
     input: CreateWithdrawalInput,
   ): Promise<WithdrawalRequest> {
     const status = await this.settingsService.getAppStatus();
@@ -388,7 +440,7 @@ export class WalletService {
       });
     }
 
-    if (!Number.isFinite(input.amount) || input.amount <= 0) {
+    if (!Number.isFinite(input.amountEgp) || input.amountEgp <= 0) {
       throw new HttpError({
         statusCode: 400,
         code: 'INVALID_AMOUNT',
@@ -396,76 +448,130 @@ export class WalletService {
       });
     }
 
-    if (input.amount < env.NOWPAYMENTS_WITHDRAWAL_MIN_AMOUNT) {
+    if (input.amountEgp < env.NOWPAYMENTS_WITHDRAWAL_MIN_AMOUNT) {
       throw new HttpError({
         statusCode: 400,
         code: 'AMOUNT_TOO_LOW',
-        message: `Minimum withdrawal amount is ${env.NOWPAYMENTS_WITHDRAWAL_MIN_AMOUNT}.`,
+        message: `Minimum withdrawal amount is ${env.NOWPAYMENTS_WITHDRAWAL_MIN_AMOUNT} EGP.`,
       });
     }
 
-    const payoutSettings = await this.repo.getIndividualProviderPayoutSettings(userId, role);
+    const prefs = await this.repo.getUserPayoutPreferences(userId);
+    const profilePayout =
+      role === 'business'
+        ? null
+        : await this.repo.getIndividualProviderPayoutSettings(
+            userId,
+            role === 'craftsman' ? 'craftsman' : 'expert',
+          );
+
+    if (input.method === 'instapay') {
+      const recipient = (input.instapayRecipient || prefs?.instapay_phone || '').trim();
+      if (!recipient) {
+        throw new HttpError({
+          statusCode: 400,
+          code: 'MISSING_INSTAPAY_RECIPIENT',
+          message: 'InstaPay recipient phone or account is required.',
+        });
+      }
+
+      if (input.saveInstapayRecipient === true) {
+        await this.persistPayoutPrefs(userId, role, {
+          instapay_phone: recipient,
+          prefs,
+          profilePayout,
+        });
+      }
+
+      let created: WithdrawalRequestRow;
+      try {
+        created = await this.repo.createWithdrawalRequestWithHold({
+          userId,
+          amountEgp: input.amountEgp,
+          payoutCurrency: 'EGP',
+          payoutAddress: null,
+          payoutExtraId: null,
+          payoutCryptoAmount: null,
+          verificationRequired: false,
+          provider: 'instapay_manual',
+          withdrawalMethod: 'instapay',
+          instapayRecipient: recipient,
+          initialStatus: 'awaiting_transfer',
+          rateSnapshot: {},
+          providerPayload: { created_via: 'wallet_withdrawal_instapay' },
+        });
+      } catch (error) {
+        this.rethrowWalletCreateErrors(error);
+      }
+      return this.toWithdrawalRequest(created);
+    }
+
     const payoutCurrency = (
       input.currency ||
-      payoutSettings?.payout_currency ||
+      prefs?.crypto_payout_currency ||
+      profilePayout?.payout_currency ||
       env.NOWPAYMENTS_WITHDRAWAL_DEFAULT_CURRENCY
     ).toUpperCase();
-    const payoutAddress = (input.address || payoutSettings?.payout_address || '').trim();
+    const payoutAddress = (
+      input.address ||
+      prefs?.crypto_payout_address ||
+      profilePayout?.payout_address ||
+      ''
+    ).trim();
+    const payoutExtraId =
+      input.extraId ?? prefs?.crypto_payout_extra_id ?? profilePayout?.payout_extra_id ?? null;
 
     if (!payoutAddress) {
       throw new HttpError({
         statusCode: 400,
         code: 'MISSING_PAYOUT_ADDRESS',
-        message: 'Payout address is required for withdrawals.',
+        message: 'Payout address is required for crypto withdrawals.',
+      });
+    }
+
+    const { cryptoAmount, snapshot } = await this.fx.quoteCryptoPayoutFromEgp(
+      input.amountEgp,
+      payoutCurrency,
+    );
+    if (cryptoAmount <= 0) {
+      throw new HttpError({
+        statusCode: 400,
+        code: 'AMOUNT_TOO_LOW',
+        message: 'Withdrawal amount is too low for the selected payout currency.',
       });
     }
 
     if (input.saveAddress === true) {
-      const updated = await this.repo.updateIndividualProviderPayoutSettings(userId, role, {
-        payoutCurrency,
-        payoutAddress,
-        payoutExtraId: input.extraId ?? payoutSettings?.payout_extra_id ?? null,
+      await this.persistPayoutPrefs(userId, role, {
+        crypto_currency: payoutCurrency,
+        crypto_address: payoutAddress,
+        crypto_extra_id: payoutExtraId,
+        prefs,
+        profilePayout,
       });
-      if (!updated) {
-        throw new HttpError({
-          statusCode: 404,
-          code: 'PROFILE_NOT_FOUND',
-          message: 'Provider profile not found.',
-        });
-      }
     }
 
     let created: WithdrawalRequestRow;
     try {
       created = await this.repo.createWithdrawalRequestWithHold({
         userId,
-        amount: input.amount,
-        currency: payoutCurrency,
+        amountEgp: input.amountEgp,
+        payoutCurrency,
         payoutAddress,
-        payoutExtraId: input.extraId ?? payoutSettings?.payout_extra_id ?? null,
+        payoutExtraId,
+        payoutCryptoAmount: cryptoAmount,
         verificationRequired: env.NOWPAYMENTS_MANUAL_PAYOUT_VERIFY,
+        provider: 'nowpayments',
+        withdrawalMethod: 'crypto',
+        initialStatus: env.NOWPAYMENTS_MANUAL_PAYOUT_VERIFY ? 'pending_verification' : 'processing',
+        rateSnapshot: snapshot,
         providerPayload: {
-          created_via: 'wallet_withdrawal',
+          created_via: 'wallet_withdrawal_crypto',
           custody_enabled: env.NOWPAYMENTS_CUSTODY_ENABLED,
         },
       });
     } catch (error) {
-      const message = error instanceof Error ? error.message : '';
-      if (message === 'INSUFFICIENT_BALANCE') {
-        throw new HttpError({
-          statusCode: 400,
-          code: 'INSUFFICIENT_BALANCE',
-          message: 'Insufficient wallet balance.',
-        });
-      }
-      if (message === 'WALLET_NOT_FOUND') {
-        throw new HttpError({
-          statusCode: 404,
-          code: 'WALLET_NOT_FOUND',
-          message: 'Wallet not found.',
-        });
-      }
-      throw error;
+      this.rethrowWalletCreateErrors(error);
     }
 
     if (!env.NOWPAYMENTS_WITHDRAWALS_ENABLED || !env.NOWPAYMENTS_MASS_PAYOUTS_ENABLED) {
@@ -481,6 +587,279 @@ export class WalletService {
     return this.toWithdrawalRequest(started);
   }
 
+  private rethrowWalletCreateErrors(error: unknown): never {
+    const message = error instanceof Error ? error.message : '';
+    if (message === 'INSUFFICIENT_BALANCE') {
+      throw new HttpError({
+        statusCode: 400,
+        code: 'INSUFFICIENT_BALANCE',
+        message: 'Insufficient wallet balance.',
+      });
+    }
+    if (message === 'WALLET_NOT_FOUND') {
+      throw new HttpError({
+        statusCode: 404,
+        code: 'WALLET_NOT_FOUND',
+        message: 'Wallet not found.',
+      });
+    }
+    if (message === 'WALLET_FROZEN') {
+      throw new HttpError({
+        statusCode: 403,
+        code: 'WALLET_FROZEN',
+        message: 'Wallet is frozen.',
+      });
+    }
+    throw error;
+  }
+
+  private async persistPayoutPrefs(
+    userId: string,
+    role: 'expert' | 'craftsman' | 'business',
+    patch: {
+      instapay_phone?: string;
+      crypto_currency?: string;
+      crypto_address?: string;
+      crypto_extra_id?: string | null;
+      prefs: UserPayoutPreferences;
+      profilePayout: IndividualProviderPayoutSettings;
+    },
+  ): Promise<void> {
+    const p = patch.prefs;
+    await this.repo.upsertUserPayoutPreferencesFull({
+      userId,
+      instapay_phone: patch.instapay_phone ?? p?.instapay_phone ?? null,
+      crypto_payout_currency: patch.crypto_currency ?? p?.crypto_payout_currency ?? null,
+      crypto_payout_address: patch.crypto_address ?? p?.crypto_payout_address ?? null,
+      crypto_payout_extra_id:
+        patch.crypto_extra_id !== undefined
+          ? patch.crypto_extra_id
+          : (p?.crypto_payout_extra_id ?? null),
+    });
+
+    if (role !== 'business' && patch.crypto_currency && patch.crypto_address) {
+      const updated = await this.repo.updateIndividualProviderPayoutSettings(userId, role, {
+        payoutCurrency: patch.crypto_currency,
+        payoutAddress: patch.crypto_address,
+        payoutExtraId: patch.crypto_extra_id ?? patch.profilePayout?.payout_extra_id ?? null,
+      });
+      if (!updated) {
+        throw new HttpError({
+          statusCode: 404,
+          code: 'PROFILE_NOT_FOUND',
+          message: 'Provider profile not found.',
+        });
+      }
+    }
+  }
+
+  async submitInstapayManualDeposit(params: {
+    userId: string;
+    amountEgp: number;
+    proofUploadId: string;
+  }): Promise<ManualDepositRequest> {
+    const status = await this.settingsService.getAppStatus();
+    if (status.depositsPaused) {
+      throw new HttpError({
+        statusCode: 503,
+        code: 'DEPOSITS_PAUSED',
+        message: 'Deposits are temporarily disabled.',
+      });
+    }
+    const settings = await this.settingsService.getAppStatus();
+    const display = settings.platformInstapayDisplay;
+    if (!display || Object.keys(display).length === 0) {
+      throw new HttpError({
+        statusCode: 503,
+        code: 'INSTAPAY_NOT_CONFIGURED',
+        message: 'InstaPay deposits are not configured.',
+      });
+    }
+    if (!Number.isFinite(params.amountEgp) || params.amountEgp <= 0) {
+      throw new HttpError({
+        statusCode: 400,
+        code: 'INVALID_AMOUNT',
+        message: 'Valid EGP amount is required.',
+      });
+    }
+    if (status.minDepositAmount != null && params.amountEgp < status.minDepositAmount) {
+      throw new HttpError({
+        statusCode: 400,
+        code: 'AMOUNT_TOO_LOW',
+        message: `Minimum deposit is ${status.minDepositAmount}.`,
+      });
+    }
+    if (status.maxDepositAmount != null && params.amountEgp > status.maxDepositAmount) {
+      throw new HttpError({
+        statusCode: 400,
+        code: 'AMOUNT_TOO_HIGH',
+        message: `Maximum deposit is ${status.maxDepositAmount}.`,
+      });
+    }
+
+    const pending = await this.repo.countPendingInstapayReviewDepositsForUser(params.userId);
+    if (pending > 0) {
+      throw new HttpError({
+        statusCode: 409,
+        code: 'PENDING_INSTAPAY_DEPOSIT',
+        message: 'You already have a pending InstaPay deposit request.',
+      });
+    }
+
+    const wallet = await this.getOrCreateWallet(params.userId);
+    const orderId = `ip_dep_${wallet.id.replace(/-/g, '')}_${Date.now()}`.slice(0, 128);
+    const row = await this.repo.createInstapayManualDepositRequest({
+      userId: params.userId,
+      walletId: wallet.id,
+      amountEgp: params.amountEgp,
+      orderId,
+      proofUploadId: params.proofUploadId,
+      destinationAccountSnapshot: display,
+    });
+    return this.toManualDepositRequest(row);
+  }
+
+  async getInstapayDepositContext(): Promise<{ platformInstapayDisplay: Record<string, unknown> }> {
+    const status = await this.settingsService.getAppStatus();
+    const display = status.platformInstapayDisplay ?? {};
+    return { platformInstapayDisplay: display };
+  }
+
+  async cancelInstapayWithdrawal(userId: string, withdrawalId: string): Promise<WithdrawalRequest> {
+    const row = await this.repo.cancelInstapayWithdrawalByUser(withdrawalId, userId);
+    if (!row) {
+      throw new HttpError({
+        statusCode: 400,
+        code: 'WITHDRAWAL_NOT_CANCELLABLE',
+        message: 'Withdrawal cannot be cancelled.',
+      });
+    }
+    return this.toWithdrawalRequest(row);
+  }
+
+  async listManualDepositsForAdmin(params: {
+    status?: string;
+    limit: number;
+    offset: number;
+  }): Promise<{ items: ManualDepositRequest[]; total: number }> {
+    const { rows, total } = await this.repo.listManualDepositsForAdmin(params);
+    return { items: rows.map((r) => this.toManualDepositRequest(r)), total };
+  }
+
+  async approveManualInstapayDepositAdmin(
+    depositId: string,
+    adminId: string,
+    creditedAmountEgp?: number,
+  ): Promise<ManualDepositRequest> {
+    const dep = await this.repo.findDepositRequestById(depositId);
+    if (!dep) {
+      throw new HttpError({ statusCode: 404, code: 'NOT_FOUND', message: 'Deposit request not found.' });
+    }
+    const credit =
+      creditedAmountEgp != null && Number.isFinite(creditedAmountEgp)
+        ? creditedAmountEgp
+        : parseFloat(dep.amount);
+    const { ok, row } = await this.repo.approveManualDepositById({
+      depositId,
+      adminId,
+      creditedAmountEgp: credit,
+    });
+    if (!ok || !row) {
+      throw new HttpError({
+        statusCode: 400,
+        code: 'DEPOSIT_NOT_APPROVABLE',
+        message: 'Deposit cannot be approved (wrong status or already processed).',
+      });
+    }
+    return this.toManualDepositRequest(row);
+  }
+
+  async rejectManualInstapayDepositAdmin(
+    depositId: string,
+    adminId: string,
+    reason: string,
+  ): Promise<ManualDepositRequest> {
+    const row = await this.repo.rejectManualDepositById({ depositId, adminId, reason });
+    if (!row) {
+      throw new HttpError({
+        statusCode: 400,
+        code: 'DEPOSIT_NOT_REJECTABLE',
+        message: 'Deposit cannot be rejected.',
+      });
+    }
+    return this.toManualDepositRequest(row);
+  }
+
+  async listManualWithdrawalsForAdmin(params: {
+    status?: string;
+    limit: number;
+    offset: number;
+  }): Promise<{ items: WithdrawalRequest[]; total: number }> {
+    const { rows, total } = await this.repo.listManualWithdrawalsForAdmin(params);
+    return { items: rows.map((r) => this.toWithdrawalRequest(r)), total };
+  }
+
+  async completeInstapayWithdrawalAdmin(
+    withdrawalId: string,
+    adminId: string,
+    proofUploadId: string,
+  ): Promise<WithdrawalRequest> {
+    const row = await this.repo.completeInstapayWithdrawalByAdmin({
+      withdrawalId,
+      adminId,
+      proofUploadId,
+    });
+    if (!row) {
+      throw new HttpError({
+        statusCode: 400,
+        code: 'WITHDRAWAL_NOT_COMPLETABLE',
+        message: 'Withdrawal cannot be completed.',
+      });
+    }
+    return this.toWithdrawalRequest(row);
+  }
+
+  async rejectInstapayWithdrawalAdmin(
+    withdrawalId: string,
+    adminId: string,
+    reason: string,
+  ): Promise<WithdrawalRequest> {
+    const row = await this.repo.rejectInstapayWithdrawalByAdmin({
+      withdrawalId,
+      adminId,
+      reason,
+    });
+    if (!row) {
+      throw new HttpError({
+        statusCode: 400,
+        code: 'WITHDRAWAL_NOT_REJECTABLE',
+        message: 'Withdrawal cannot be rejected.',
+      });
+    }
+    return this.toWithdrawalRequest(row);
+  }
+
+  private toManualDepositRequest(row: DepositRequestRow): ManualDepositRequest {
+    return {
+      id: row.id,
+      userId: row.user_id,
+      amountEgp: parseFloat(row.amount),
+      currency: row.currency,
+      orderId: row.order_id,
+      status: row.status as ManualDepositRequest['status'],
+      provider: row.provider,
+      proofUploadId: row.proof_upload_id,
+      destinationAccountSnapshot: row.destination_account_snapshot,
+      reviewedAt: row.reviewed_at,
+      rejectionReason: row.rejection_reason,
+      creditedAmountEgp:
+        row.credited_amount_egp != null ? parseFloat(row.credited_amount_egp) : null,
+      rateSnapshot: row.rate_snapshot,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    };
+  }
+
   async verifyWithdrawal(
     userId: string,
     withdrawalId: string,
@@ -493,6 +872,19 @@ export class WalletService {
         code: 'WITHDRAWAL_NOT_FOUND',
         message: 'Withdrawal request not found.',
       });
+    }
+
+    if (row.withdrawal_method === 'instapay') {
+      throw new HttpError({
+        statusCode: 400,
+        code: 'WITHDRAWAL_NOT_VERIFIABLE',
+        message: 'InstaPay withdrawals do not use payout verification.',
+      });
+    }
+
+    if ((!env.NOWPAYMENTS_MANUAL_PAYOUT_VERIFY || !row.verification_required) &&
+      (row.status === 'processing' || row.status === 'finished')) {
+      return this.toWithdrawalRequest(row);
     }
 
     if (row.status !== 'pending_verification') {
@@ -661,7 +1053,10 @@ export class WalletService {
           {
             address: row.payout_address,
             currency: row.currency,
-            amount: parseFloat(row.amount),
+            amount:
+              row.payout_crypto_amount != null && String(row.payout_crypto_amount).length > 0
+                ? parseFloat(row.payout_crypto_amount)
+                : parseFloat(row.amount),
             ...(row.payout_extra_id ? { extra_id: row.payout_extra_id } : {}),
           },
         ],
@@ -772,12 +1167,11 @@ export class WalletService {
   }
 
   private toWallet(row: WalletRow): Wallet {
-    const normalizedCurrency = row.currency.toUpperCase() === 'EGP' ? 'USD' : row.currency;
     return {
       id: row.id,
       userId: row.user_id,
       balance: parseFloat(row.balance),
-      currency: normalizedCurrency,
+      currency: 'EGP',
       isFrozen: row.is_frozen,
       createdAt: row.created_at,
       updatedAt: row.updated_at,
@@ -803,15 +1197,26 @@ export class WalletService {
   }
 
   private toWithdrawalRequest(row: WithdrawalRequestRow): WithdrawalRequest {
+    const sourceEgp = parseFloat(row.source_amount_egp ?? row.amount);
+    const destCrypto =
+      row.payout_crypto_amount != null && String(row.payout_crypto_amount).length > 0
+        ? parseFloat(row.payout_crypto_amount)
+        : null;
     return {
       id: row.id,
       userId: row.user_id,
       walletId: row.wallet_id,
       holdId: row.hold_id,
-      amount: parseFloat(row.amount),
-      currency: row.currency,
+      sourceAmountEgp: sourceEgp,
+      sourceCurrency: 'EGP',
+      method: (row.withdrawal_method === 'instapay' ? 'instapay' : 'crypto') as WithdrawalRequest['method'],
+      destinationCurrency: row.currency,
+      destinationCryptoAmount: destCrypto,
       payoutAddress: row.payout_address,
       payoutExtraId: row.payout_extra_id,
+      instapayRecipient: row.instapay_recipient,
+      adminProofUploadId: row.admin_proof_upload_id,
+      rateSnapshot: row.rate_snapshot,
       status: row.status as WithdrawalRequest['status'],
       provider: row.provider,
       providerBatchWithdrawalId: row.provider_batch_withdrawal_id,
@@ -822,6 +1227,7 @@ export class WalletService {
       verifiedAt: row.verified_at,
       processedAt: row.processed_at,
       failedAt: row.failed_at,
+      rejectionReason: row.rejection_reason,
       createdAt: row.created_at,
       updatedAt: row.updated_at,
     };
