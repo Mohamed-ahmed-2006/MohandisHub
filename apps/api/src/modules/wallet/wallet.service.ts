@@ -42,6 +42,7 @@ const FAILED_DEPOSIT_STATUSES = new Set([
   'canceled',
   'refunded',
 ]);
+const MIN_CRYPTO_DEPOSIT_PROVIDER_USD = 10;
 
 type CreateDepositCheckoutInput = {
   amount: number;
@@ -161,9 +162,22 @@ export class WalletService {
       });
     }
 
-    const currencyFrom = (input.currencyFrom || 'USD').toUpperCase();
+    const requestedCurrencyFrom = (input.currencyFrom || 'USD').toUpperCase();
     const currencyTo = (input.currencyTo || env.NOWPAYMENTS_WITHDRAWAL_DEFAULT_CURRENCY).toUpperCase();
-    const estimate = await estimatePrice(env.NOWPAYMENTS_API_KEY, amount, currencyFrom, currencyTo);
+    let amountForProvider = amount;
+    let currencyFromForProvider = requestedCurrencyFrom;
+    if (requestedCurrencyFrom === 'EGP') {
+      const egpPerUsd = await this.fx.getEgpPerUsd();
+      amountForProvider = amount / egpPerUsd;
+      currencyFromForProvider = 'USD';
+    }
+
+    const estimate = await estimatePrice(
+      env.NOWPAYMENTS_API_KEY,
+      amountForProvider,
+      currencyFromForProvider,
+      currencyTo,
+    );
     const estimatedAmount = Number(estimate.estimated_amount);
     const rate = estimate.rate != null ? Number(estimate.rate) : null;
 
@@ -177,7 +191,7 @@ export class WalletService {
 
     return {
       amountFrom: amount,
-      currencyFrom,
+      currencyFrom: requestedCurrencyFrom,
       currencyTo,
       estimatedAmount,
       rate: rate != null && Number.isFinite(rate) ? rate : null,
@@ -239,7 +253,27 @@ export class WalletService {
 
     const wallet = await this.getOrCreateWallet(userId);
     const orderId = `np_dep_${wallet.id.replace(/-/g, '')}_${Date.now()}`.slice(0, 128);
-    const priceCurrency = (input.currency || 'EGP').toUpperCase();
+    const requestedPriceCurrency = (input.currency || 'EGP').toUpperCase();
+    let invoicePriceAmount = input.amount;
+    let invoicePriceCurrency = requestedPriceCurrency;
+    // NOWPayments does not always accept EGP as invoice currency.
+    // For crypto checkout we convert requested EGP to USD for provider pricing.
+    if (input.method === 'crypto' && requestedPriceCurrency === 'EGP') {
+      const egpPerUsd = await this.fx.getEgpPerUsd();
+      invoicePriceAmount = Math.round((input.amount / egpPerUsd) * 100) / 100;
+      invoicePriceCurrency = 'USD';
+    }
+    if (
+      input.method === 'crypto' &&
+      invoicePriceCurrency === 'USD' &&
+      invoicePriceAmount < MIN_CRYPTO_DEPOSIT_PROVIDER_USD
+    ) {
+      throw new HttpError({
+        statusCode: 400,
+        code: 'CRYPTO_AMOUNT_TOO_LOW',
+        message: `Crypto deposit must be at least ${MIN_CRYPTO_DEPOSIT_PROVIDER_USD} USD (USDT equivalent).`,
+      });
+    }
     const requestedPayCurrency = input.payCurrency ? input.payCurrency.toUpperCase() : undefined;
     const defaultPayCurrency = env.NOWPAYMENTS_WITHDRAWAL_DEFAULT_CURRENCY.toUpperCase();
     const payCurrency =
@@ -266,11 +300,11 @@ export class WalletService {
     const cancelUrl = this.withQueryParams(webBase, { deposit: 'cancelled', order_id: orderId });
 
     const invoice = await createInvoice(env.NOWPAYMENTS_API_KEY, {
-      price_amount: input.amount,
-      price_currency: priceCurrency,
+      price_amount: invoicePriceAmount,
+      price_currency: invoicePriceCurrency,
       ...(payCurrency ? { pay_currency: payCurrency } : {}),
       order_id: orderId,
-      order_description: `Wallet deposit ${input.amount.toFixed(2)} ${priceCurrency}`,
+      order_description: `Wallet deposit ${input.amount.toFixed(2)} ${requestedPriceCurrency}`,
       ipn_callback_url: `${apiBase}/api/wallet/nowpayments/ipn`,
       success_url: successUrl,
       cancel_url: cancelUrl,
@@ -280,13 +314,17 @@ export class WalletService {
     await this.repo.createDepositRequest(
       userId,
       wallet.id,
-      input.amount,
-      priceCurrency,
+      invoicePriceAmount,
+      invoicePriceCurrency,
       orderId,
       'nowpayments',
       this.toStringOrNull(invoice.id),
       {
         method: input.method,
+        requested_price_amount: input.amount,
+        requested_price_currency: requestedPriceCurrency,
+        provider_price_amount: invoicePriceAmount,
+        provider_price_currency: invoicePriceCurrency,
         pay_currency: payCurrency ?? null,
       },
     );

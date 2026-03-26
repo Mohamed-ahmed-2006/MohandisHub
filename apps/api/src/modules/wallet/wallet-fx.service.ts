@@ -11,20 +11,40 @@ export type RateSnapshot = Record<string, unknown>;
 export class WalletFxService {
   constructor(private readonly settingsService: SettingsService) {}
 
+  async getEgpPerUsd(): Promise<number> {
+    const liveUsdRate = await this.fetchLiveEgpPerUsdRate();
+    if (liveUsdRate != null) {
+      return liveUsdRate;
+    }
+    return await this.getEgpPerUsdtDeposit();
+  }
+
   async getEgpPerUsdtDeposit(): Promise<number> {
-    const row = await this.settingsService.getRawRow();
-    const v = row?.wallet_egp_per_usdt_deposit;
-    if (v != null && Number.isFinite(parseFloat(String(v))) && parseFloat(String(v)) > 0) {
-      return parseFloat(String(v));
+    const liveRate = await this.fetchLiveEgpPerUsdtRate();
+    if (liveRate != null) {
+      return liveRate;
+    }
+
+    // Fallback when live lookup fails (network/provider issue)
+    const configuredRate = await this.getConfiguredDepositRate();
+    if (configuredRate != null) {
+      return configuredRate;
     }
     return 48.5;
   }
 
   async getEgpPerUsdtWithdrawal(): Promise<number> {
+    const liveRate = await this.fetchLiveEgpPerUsdtRate();
+    if (liveRate != null) {
+      return liveRate;
+    }
+
+    // Fallback when live lookup fails (network/provider issue)
     const row = await this.settingsService.getRawRow();
     const v = row?.wallet_egp_per_usdt_withdrawal;
-    if (v != null && Number.isFinite(parseFloat(String(v))) && parseFloat(String(v)) > 0) {
-      return parseFloat(String(v));
+    const parsed = this.parseNum(v);
+    if (parsed != null && parsed > 0) {
+      return parsed;
     }
     return await this.getEgpPerUsdtDeposit();
   }
@@ -143,5 +163,46 @@ export class WalletFxService {
       return String(value).toUpperCase().trim();
     }
     return '';
+  }
+
+  private async fetchLiveEgpPerUsdtRate(): Promise<number | null> {
+    try {
+      const res = await fetch(
+        'https://api.coingecko.com/api/v3/simple/price?ids=tether&vs_currencies=egp',
+        {
+          method: 'GET',
+          headers: { Accept: 'application/json' },
+        },
+      );
+      if (!res.ok) return null;
+      const payload = (await res.json()) as { tether?: { egp?: unknown } };
+      const rate = this.parseNum(payload?.tether?.egp);
+      return rate != null && rate > 0 ? rate : null;
+    } catch {
+      return null;
+    }
+  }
+
+  private async fetchLiveEgpPerUsdRate(): Promise<number | null> {
+    try {
+      const res = await fetch('https://open.er-api.com/v6/latest/USD', {
+        method: 'GET',
+        headers: { Accept: 'application/json' },
+      });
+      if (!res.ok) return null;
+      const payload = (await res.json()) as { rates?: { EGP?: unknown }; result?: unknown };
+      if (payload.result === 'error') return null;
+      const rate = this.parseNum(payload?.rates?.EGP);
+      return rate != null && rate > 0 ? rate : null;
+    } catch {
+      return null;
+    }
+  }
+
+  private async getConfiguredDepositRate(): Promise<number | null> {
+    const row = await this.settingsService.getRawRow();
+    const v = row?.wallet_egp_per_usdt_deposit;
+    const parsed = this.parseNum(v);
+    return parsed != null && parsed > 0 ? parsed : null;
   }
 }

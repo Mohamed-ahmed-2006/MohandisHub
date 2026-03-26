@@ -131,6 +131,8 @@ export const WalletDepositModal = ({
           ? 'Deposits are temporarily paused.'
           : isApiClientError(err) && err.code === 'AMOUNT_TOO_LOW'
             ? err.message
+            : isApiClientError(err) && err.code === 'CRYPTO_AMOUNT_TOO_LOW'
+              ? err.message
             : isApiClientError(err) &&
                 (err.code === 'CARD_DEPOSITS_DISABLED' || err.code === 'CRYPTO_DEPOSITS_DISABLED')
               ? err.message
