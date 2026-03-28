@@ -69,7 +69,7 @@ export const walletApiClient = {
   getDepositEstimate: async (
     accessToken: string,
     amount: number,
-    currencyFrom: string = 'USD',
+    currencyFrom: string = 'EGP',
     currencyTo: string = 'USDTTRC20',
   ): Promise<{
     amountFrom: number;
@@ -120,7 +120,7 @@ export const walletApiClient = {
   createStripeCheckout: async (
     accessToken: string,
     amount: number,
-    currency: string = 'USD',
+    currency: string = 'EGP',
     returnUrl?: string,
   ): Promise<{ checkoutUrl: string; sessionId: string }> => {
     const result = await walletApiClient.createDepositCheckout(accessToken, {

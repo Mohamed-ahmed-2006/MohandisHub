@@ -9,7 +9,7 @@ export const createNeedSchema = z.object({
     .transform((v) => (v === '' || v == null ? undefined : v)),
   budgetType: z.enum(['fixed', 'hourly']),
   budgetAmount: z.coerce.number().min(1).max(1000000),
-  currency: z.string().max(10).default('USD'),
+  currency: z.string().max(10).default('EGP'),
   timelineDays: z
     .union([z.literal(''), z.undefined(), z.coerce.number().int().min(1).max(365)])
     .optional()

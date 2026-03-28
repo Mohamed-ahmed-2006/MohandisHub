@@ -190,7 +190,7 @@ export const MyPlanScreen = ({ locale, dictionary }: Props) => {
           </span>
           {wallet && (
             <span className="plan-screen-balance">
-              {dictionary.wallet.balance}: {wallet.balance.toFixed(2)} {wallet.currency ?? 'USD'}
+              {dictionary.wallet.balance}: {wallet.balance.toFixed(2)} {wallet.currency ?? 'EGP'}
             </span>
           )}
           {subscriptionEndsAt && (
@@ -245,7 +245,7 @@ export const MyPlanScreen = ({ locale, dictionary }: Props) => {
                   {plan.description && <p className="plan-card-desc">{plan.description}</p>}
                   <div className="plan-card-price-wrap">
                     <span className="plan-card-price">
-                      {plan.price} {plan.currency ?? 'USD'}
+                      {plan.price} {plan.currency ?? 'EGP'}
                     </span>
                     <span className="plan-card-cycle">
                       /{plan.billingCycle === 'monthly' ? (d.monthly ?? 'mo') : plan.billingCycle}
@@ -292,8 +292,8 @@ export const MyPlanScreen = ({ locale, dictionary }: Props) => {
                   ? d.confirmText
                       .replace('{name}', confirmPlan.name)
                       .replace('{price}', String(confirmPlan.price))
-                      .replace('{currency}', confirmPlan.currency ?? 'USD')
-                  : `Subscribe to ${confirmPlan.name} for ${confirmPlan.price} ${confirmPlan.currency ?? 'USD'}? This will be deducted from your wallet balance.`}
+                      .replace('{currency}', confirmPlan.currency ?? 'EGP')
+                  : `Subscribe to ${confirmPlan.name} for ${confirmPlan.price} ${confirmPlan.currency ?? 'EGP'}? This will be deducted from your wallet balance.`}
               </p>
               <div className="plan-modal-actions">
                 <button

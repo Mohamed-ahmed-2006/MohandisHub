@@ -970,6 +970,7 @@ export class AdminService {
       categoryNameEn: row.category_name_en,
       categoryNameAr: row.category_name_ar,
       price: row.price ? parseFloat(row.price) : null,
+      currency: row.currency ?? 'EGP',
       priceType: row.price_type,
       status: row.status,
       isFeatured: row.is_featured,

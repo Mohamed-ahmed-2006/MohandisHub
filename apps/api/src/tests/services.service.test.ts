@@ -11,7 +11,7 @@ const makeServiceRow = (overrides: Record<string, unknown> = {}) => ({
   price: '150',
   price_type: 'fixed',
   is_negotiable: false,
-  currency: 'USD',
+  currency: 'EGP',
   delivery_time_days: 5,
   status: 'draft',
   rejection_reason: null,

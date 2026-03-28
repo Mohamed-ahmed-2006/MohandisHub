@@ -51,6 +51,19 @@ const hasPermission = (permissions: string[], permission: string): boolean => {
   return permissions.includes(permission);
 };
 
+/** API may return ISO datetimes; <input type="date"> and admin PATCH expect yyyy-MM-dd. */
+const toAdminDateOfBirthString = (value: string | null | undefined): string => {
+  if (!value) return '';
+  const trimmed = value.trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed;
+  const ymdPrefix = trimmed.slice(0, 10);
+  if (/^\d{4}-\d{2}-\d{2}$/.test(ymdPrefix)) return ymdPrefix;
+  const t = Date.parse(trimmed);
+  if (Number.isNaN(t)) return '';
+  const d = new Date(t);
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`;
+};
+
 const formatDate = (value: string | null): string => {
   if (!value) return '-';
   return new Date(value).toLocaleDateString();
@@ -167,7 +180,7 @@ export const AdminUserDetailModal = ({
         phone: overviewData.user.phone ?? '',
         phoneCode: overviewData.user.phoneCode ?? '',
         nationality: overviewData.user.nationality ?? '',
-        dateOfBirth: overviewData.user.dateOfBirth ?? '',
+        dateOfBirth: toAdminDateOfBirthString(overviewData.user.dateOfBirth),
         primaryRole:
           overviewData.user.primaryRole === 'admin' ? 'customer' : overviewData.user.primaryRole,
         isAdmin: overviewData.user.isAdmin,
@@ -239,7 +252,7 @@ export const AdminUserDetailModal = ({
         phone: account.phone.trim() || null,
         phoneCode: account.phoneCode.trim() || null,
         nationality: account.nationality.trim() || null,
-        dateOfBirth: account.dateOfBirth.trim() || null,
+        dateOfBirth: toAdminDateOfBirthString(account.dateOfBirth) || null,
         primaryRole: account.primaryRole,
         isAdmin: account.isAdmin,
         adminPermissions: account.isAdmin ? account.adminPermissions : [],
@@ -559,7 +572,7 @@ export const AdminUserDetailModal = ({
                       <div className="admin-user-field"><span className="admin-user-field-label">{ud.lastLogin}</span><span className="admin-user-field-value">{formatDateTime(user.lastLoginAt)}</span></div>
                       <div className="admin-user-field"><span className="admin-user-field-label">{ud.createdAt}</span><span className="admin-user-field-value">{formatDate(user.createdAt)}</span></div>
                       <div className="admin-user-field"><span className="admin-user-field-label">{d.plan}</span><span className="admin-user-field-value">{user.planName ?? '-'}</span></div>
-            <div className="admin-user-field"><span className="admin-user-field-label">{ud.wallet}</span><span className="admin-user-field-value">{user.walletBalance != null ? `${user.walletBalance.toFixed(2)} ${user.walletCurrency ?? 'USD'}` : '-'}</span></div>
+            <div className="admin-user-field"><span className="admin-user-field-label">{ud.wallet}</span><span className="admin-user-field-value">{user.walletBalance != null ? `${user.walletBalance.toFixed(2)} ${user.walletCurrency ?? 'EGP'}` : '-'}</span></div>
                     </div>
                   </section>
 

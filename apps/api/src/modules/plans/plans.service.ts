@@ -211,7 +211,7 @@ export class PlansService {
       throw new HttpError({
         statusCode: 400,
         code: 'INSUFFICIENT_BALANCE',
-        message: `Insufficient balance. Required: ${price} USD, Available: ${balance}.`,
+        message: `Insufficient balance. Required: ${price} EGP, Available: ${balance}.`,
       });
     }
 
@@ -283,7 +283,7 @@ export class PlansService {
       name: typeof name === 'string' ? name : 'Free',
       description: (row.description as string) ?? null,
       price: Number.isFinite(price) ? price : 0,
-      currency: typeof currency === 'string' ? currency : 'USD',
+      currency: typeof currency === 'string' ? currency : 'EGP',
       billingCycle: (row.billing_cycle as Plan['billingCycle']) ?? 'monthly',
       durationDays: (row.duration_days as number) ?? null,
       trialDays: (row.trial_days as number) ?? 0,

@@ -61,7 +61,7 @@ export class WalletFxService {
     const actuallyPaid = this.parseNum(
       params.providerPayload.actually_paid ?? params.providerPayload.pay_amount,
     );
-    const priceCurrency = (params.invoicePriceCurrency || 'USD').toUpperCase();
+    const priceCurrency = (params.invoicePriceCurrency || 'EGP').toUpperCase();
     const egpPerUsdt = await this.getEgpPerUsdtDeposit();
 
     let egp: number;

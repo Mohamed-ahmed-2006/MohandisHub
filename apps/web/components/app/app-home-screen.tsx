@@ -875,7 +875,7 @@ export const AppHomeScreen = ({ locale, dictionary }: AppHomeScreenProps) => {
                               </p>
                               {r.price != null && (
                                 <p className="home-result-price">
-                    {r.price} USD{r.priceType === 'hourly' ? '/hr' : ''}
+                    {r.price} {r.currency ?? 'EGP'}{r.priceType === 'hourly' ? '/hr' : ''}
                                 </p>
                               )}
                             </div>
@@ -1157,7 +1157,7 @@ export const AppHomeScreen = ({ locale, dictionary }: AppHomeScreenProps) => {
                           </p>
                           {r.price != null && (
                             <p className="home-result-price">
-                    {r.price} USD{r.priceType === 'hourly' ? '/hr' : ''}
+                    {r.price} {r.currency ?? 'EGP'}{r.priceType === 'hourly' ? '/hr' : ''}
                             </p>
                           )}
                         </div>
@@ -1233,7 +1233,7 @@ export const AppHomeScreen = ({ locale, dictionary }: AppHomeScreenProps) => {
               <p className="home-drawer-role">{selectedResult.providerRole}</p>
               {selectedResult.price != null && (
                 <p className="home-drawer-price">
-                          {selectedResult.price} USD{' '}
+                          {selectedResult.price} {selectedResult.currency ?? 'EGP'}{' '}
                   {selectedResult.priceType === 'hourly'
                     ? '/ hour'
                     : selectedResult.isNegotiable

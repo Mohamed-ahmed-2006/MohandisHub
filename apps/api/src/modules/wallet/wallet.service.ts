@@ -162,7 +162,7 @@ export class WalletService {
       });
     }
 
-    const requestedCurrencyFrom = (input.currencyFrom || 'USD').toUpperCase();
+    const requestedCurrencyFrom = (input.currencyFrom || 'EGP').toUpperCase();
     const currencyTo = (input.currencyTo || env.NOWPAYMENTS_WITHDRAWAL_DEFAULT_CURRENCY).toUpperCase();
     let amountForProvider = amount;
     let currencyFromForProvider = requestedCurrencyFrom;

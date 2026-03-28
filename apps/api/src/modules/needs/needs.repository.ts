@@ -72,7 +72,7 @@ export class NeedsRepository {
         input.categoryId ?? null,
         input.budgetType,
         input.budgetAmount,
-      input.currency ?? 'USD',
+      input.currency ?? 'EGP',
         input.timelineDays ?? null,
         input.city ?? null,
         input.country ?? null,

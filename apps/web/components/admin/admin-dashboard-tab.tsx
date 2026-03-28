@@ -41,14 +41,14 @@ export const AdminDashboardTab = ({ dictionary, accessToken, refreshSession }: P
   const cards = [
     { label: d.totalUsers, value: stats.totalUsers },
     { label: d.activeUsers, value: stats.activeUsers },
-      { label: d.totalRevenue, value: `${stats.totalRevenue.toFixed(2)} USD` },
+      { label: d.totalRevenue, value: `${stats.totalRevenue.toFixed(2)} EGP` },
     { label: d.totalTransactions, value: stats.totalTransactions },
-      { label: 'Total Transaction Volume', value: `${stats.transactionVolume.toFixed(2)} USD` },
-      { label: 'Total Commission Volume', value: `${stats.platformCommissionVolume.toFixed(2)} USD` },
+      { label: 'Total Transaction Volume', value: `${stats.transactionVolume.toFixed(2)} EGP` },
+      { label: 'Total Commission Volume', value: `${stats.platformCommissionVolume.toFixed(2)} EGP` },
     { label: d.pendingVerifications, value: stats.pendingVerifications },
     { label: d.activeServices, value: stats.activeServices },
     { label: d.totalPlans, value: stats.totalPlans },
-      { label: d.platformWallet ?? 'Platform commission balance', value: `${stats.platformWalletBalance.toFixed(2)} USD` },
+      { label: d.platformWallet ?? 'Platform commission balance', value: `${stats.platformWalletBalance.toFixed(2)} EGP` },
   ];
 
   return (

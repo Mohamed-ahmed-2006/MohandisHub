@@ -54,7 +54,7 @@ function formatDateTime(d: string): string {
 }
 
 function formatMoney(value: number): string {
-  return `${value.toFixed(2)} USD`;
+  return `${value.toFixed(2)} EGP`;
 }
 
 function isInterviewReservation(reservation: Reservation): boolean {

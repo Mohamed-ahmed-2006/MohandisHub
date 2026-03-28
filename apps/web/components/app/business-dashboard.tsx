@@ -189,7 +189,7 @@ export const BusinessDashboard = ({
                     })}
                   </p>
                   <p className="dashboard-card-meta">
-                    {r.expertPriceAmount?.toFixed(2)} {r.currency ?? 'USD'}
+                    {r.expertPriceAmount?.toFixed(2)} {r.currency ?? 'EGP'}
                   </p>
                   <Link
                     href={buildLocalePath(locale, `/app/bookings?reservation=${r.id}`)}

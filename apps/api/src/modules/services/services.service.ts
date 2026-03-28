@@ -279,6 +279,7 @@ export class ServicesService {
       categoryNameEn: row.category_name_en,
       categoryNameAr: row.category_name_ar,
       price: row.price ? parseFloat(row.price) : null,
+      currency: row.currency ?? 'EGP',
       priceType: row.price_type as ServiceSearchResult['priceType'],
       isNegotiable: row.is_negotiable,
       city: row.city,

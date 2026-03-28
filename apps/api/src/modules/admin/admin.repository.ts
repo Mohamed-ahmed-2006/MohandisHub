@@ -244,7 +244,7 @@ export class AdminRepository {
 
   async setWalletFrozen(userId: string, isFrozen: boolean): Promise<UserDetailRow | null> {
     await this.db.query(
-      `INSERT INTO wallets (user_id, currency) VALUES ($1, 'USD')
+      `INSERT INTO wallets (user_id, currency) VALUES ($1, 'EGP')
        ON CONFLICT (user_id) DO UPDATE SET user_id = wallets.user_id`,
       [userId],
     );
@@ -548,7 +548,7 @@ export class AdminRepository {
 
   async createWalletIfNotExists(userId: string): Promise<{ id: string; balance: string }> {
     const { rows } = await this.db.query<{ id: string; balance: string }>(
-      `INSERT INTO wallets (user_id, currency) VALUES ($1, 'USD')
+      `INSERT INTO wallets (user_id, currency) VALUES ($1, 'EGP')
        ON CONFLICT (user_id) DO UPDATE SET user_id = wallets.user_id
        RETURNING id, balance::text`,
       [userId],
@@ -699,7 +699,7 @@ export class AdminRepository {
     const { rows } = await this.db.query<ServiceListRow>(
       `SELECT s.id, s.title, s.provider_id, u.display_name AS provider_name, u.email AS provider_email,
               u.primary_role AS provider_role, c.name_en AS category_name_en, c.name_ar AS category_name_ar,
-              s.price::text, s.price_type, s.status, s.is_featured, s.city, s.created_at
+              s.price::text, s.currency, s.price_type, s.status, s.is_featured, s.city, s.created_at
        FROM services s
        JOIN users u ON u.id = s.provider_id
        LEFT JOIN service_categories c ON c.id = s.category_id
@@ -729,7 +729,7 @@ export class AdminRepository {
     const { rows } = await this.db.query<ServiceListRow>(
       `SELECT s.id, s.title, s.provider_id, u.display_name AS provider_name, u.email AS provider_email,
               u.primary_role AS provider_role, c.name_en AS category_name_en, c.name_ar AS category_name_ar,
-              s.price::text, s.price_type, s.status, s.is_featured, s.city, s.created_at
+              s.price::text, s.currency, s.price_type, s.status, s.is_featured, s.city, s.created_at
        FROM services s
        JOIN users u ON u.id = s.provider_id
        LEFT JOIN service_categories c ON c.id = s.category_id

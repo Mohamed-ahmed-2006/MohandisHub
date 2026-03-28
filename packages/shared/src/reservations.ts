@@ -53,7 +53,7 @@ export type ReservationProfile = {
   currency: string;
   createdAt: string;
   updatedAt: string;
-  /** Platform verified (profile complete + 1000 USD deposited) */
+  /** Platform verified (profile complete + 1000 EGP deposited) */
   verificationBadgeEarned?: boolean;
 };
 

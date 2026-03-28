@@ -248,13 +248,13 @@ export const ServiceBookingModal = ({
             <span
               className="profile-screen-badge profile-screen-badge_verified"
               style={{ marginLeft: '0.5rem' }}
-              title="Complete profile and 1000 USD total deposits."
+              title="Complete profile and 1000 EGP total deposits."
             >
               Platform verified
             </span>
           )}
         </p>
-        {service.price != null && <p className="service-booking-price">{service.price} USD</p>}
+        {service.price != null && <p className="service-booking-price">{service.price} {service.currency ?? 'EGP'}</p>}
 
         <div style={{ marginBottom: '0.75rem', display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
           {modeReady ? (
@@ -300,7 +300,7 @@ export const ServiceBookingModal = ({
         </div>
         {modePrice != null && (
           <p className="service-booking-price" style={{ marginTop: '-0.5rem' }}>
-            Reservation price: {modePrice.toFixed(2)} USD
+            Reservation price: {modePrice.toFixed(2)} EGP
           </p>
         )}
         <div className="reservation-note-box" style={{ marginBottom: '0.75rem' }}>

@@ -205,7 +205,7 @@ const createLegacyCryptoDeposit = asyncHandler(async (req, res) => {
   const result = await walletService.createDepositCheckout(user.id, {
     amount,
     method: 'crypto',
-    currency: 'USD',
+    currency: 'EGP',
     payCurrency,
     ...(returnUrl ? { returnUrl } : {}),
   });

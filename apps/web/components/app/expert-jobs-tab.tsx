@@ -91,7 +91,7 @@ export const ExpertJobsTab = ({ accessToken }: { accessToken: string }) => {
           <div className="plan-modal" onClick={(e) => e.stopPropagation()}>
             <h3 className="plan-modal-title">Apply for {applyJob.title}</h3>
             <p className="dashboard-card-meta">
-              You will be charged {applyJob.applicationFeeAmount.toFixed(2)} USD when this
+              You will be charged {applyJob.applicationFeeAmount.toFixed(2)} EGP when this
               application is submitted.
             </p>
             {applyJob.interviewEnabled && applyJob.interviewInstructions && (
@@ -138,7 +138,7 @@ export const ExpertJobsTab = ({ accessToken }: { accessToken: string }) => {
                   Cancel
                 </button>
                 <button type="submit" className="dashboard-primary-btn" disabled={applying}>
-                  {applying ? '...' : `Pay ${applyJob.applicationFeeAmount.toFixed(2)} USD and submit`}
+                  {applying ? '...' : `Pay ${applyJob.applicationFeeAmount.toFixed(2)} EGP and submit`}
                 </button>
               </div>
             </form>

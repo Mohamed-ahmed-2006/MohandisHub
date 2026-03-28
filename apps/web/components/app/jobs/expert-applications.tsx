@@ -13,7 +13,7 @@ import { reservationsApiClient } from '@/lib/reservations/client';
 import { getPrivateFileOpenableUrl } from '@/lib/upload/client';
 
 function formatMoney(value: number): string {
-  return `${value.toFixed(2)} USD`;
+  return `${value.toFixed(2)} EGP`;
 }
 
 function formatDateTime(value: string): string {
@@ -220,7 +220,7 @@ export const ExpertApplications = ({ accessToken }: { accessToken: string }) => 
                               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
                                 <strong>{milestone.title}</strong>
                                 <span>
-                                  {milestone.amount} USD | {milestone.status}
+                                  {milestone.amount} EGP | {milestone.status}
                                 </span>
                               </div>
                               {['pending', 'active', 'rejected'].includes(milestone.status) && (

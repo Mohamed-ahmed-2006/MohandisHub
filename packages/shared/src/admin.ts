@@ -142,6 +142,7 @@ export type AdminServiceListItem = {
   categoryNameEn: string | null;
   categoryNameAr: string | null;
   price: number | null;
+  currency: string;
   priceType: string;
   status: string;
   isFeatured: boolean;

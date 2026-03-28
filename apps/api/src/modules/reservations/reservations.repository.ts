@@ -207,7 +207,7 @@ export class ReservationsRepository {
   ): Promise<ReservationProfileRow> {
     const { rows } = await getPool().query<ReservationProfileRow>(
       `INSERT INTO reservation_profiles (provider_id, auto_accept, online_voice_price, online_video_price, offline_price, currency)
-        VALUES ($1, COALESCE($2, false), COALESCE($3, 0), COALESCE($4, 0), COALESCE($5, 0), COALESCE($6, 'USD'))
+        VALUES ($1, COALESCE($2, false), COALESCE($3, 0), COALESCE($4, 0), COALESCE($5, 0), COALESCE($6, 'EGP'))
        ON CONFLICT (provider_id)
        DO UPDATE SET
          auto_accept = COALESCE($2, reservation_profiles.auto_accept),

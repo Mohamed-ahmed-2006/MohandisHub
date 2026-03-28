@@ -195,7 +195,7 @@ export function UserProfileModal({
                   )}
                   {(profile.expertProfile.city || profile.expertProfile.hourlyRate != null) && (
                     <p className="user-profile-modal-meta">
-                      {[profile.expertProfile.city, profile.expertProfile.hourlyRate != null && `${profile.expertProfile.hourlyRate} USD/hr`]
+                      {[profile.expertProfile.city, profile.expertProfile.hourlyRate != null && `${profile.expertProfile.hourlyRate} EGP/hr`]
                         .filter(Boolean)
                         .join(' · ')}
                     </p>
@@ -257,7 +257,7 @@ export function UserProfileModal({
                         profile.craftsmanProfile.city,
                         profile.craftsmanProfile.workshopName,
                         profile.craftsmanProfile.hourlyRate != null &&
-                          `${profile.craftsmanProfile.hourlyRate} USD/hr`,
+                          `${profile.craftsmanProfile.hourlyRate} EGP/hr`,
                       ]
                         .filter(Boolean)
                         .join(' · ')}

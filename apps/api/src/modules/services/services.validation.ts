@@ -10,7 +10,7 @@ export const createServiceSchema = z.object({
   price: z.coerce.number().min(0).max(1000000).optional(),
   priceType: z.enum(['fixed', 'hourly']).optional(),
   isNegotiable: z.boolean().optional(),
-  currency: z.string().max(3).default('USD').optional(),
+  currency: z.string().max(3).default('EGP').optional(),
   deliveryTimeDays: z
     .union([z.literal(''), z.undefined(), z.coerce.number().int().min(1).max(365)])
     .optional()

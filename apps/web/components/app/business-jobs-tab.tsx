@@ -212,9 +212,9 @@ export const BusinessJobsTab = ({ accessToken }: { accessToken: string }) => {
                           {app.status} | {app.submissionType === 'cv_upload' ? 'CV uploaded' : 'Profile snapshot'}
                         </p>
                         <p className="dashboard-card-meta">
-                          Paid {app.applicationFeeAmount.toFixed(2)} USD | Business gets{' '}
-                          {app.businessPayoutAmount.toFixed(2)} USD | Platform gets{' '}
-                          {app.applicationCommissionAmount.toFixed(2)} USD
+                          Paid {app.applicationFeeAmount.toFixed(2)} EGP | Business gets{' '}
+                          {app.businessPayoutAmount.toFixed(2)} EGP | Platform gets{' '}
+                          {app.applicationCommissionAmount.toFixed(2)} EGP
                         </p>
                         {app.coverLetter && <p style={{ marginTop: '0.75rem' }}>{app.coverLetter}</p>}
                         {app.cvFileUrl ? (
@@ -413,7 +413,7 @@ export const BusinessJobsTab = ({ accessToken }: { accessToken: string }) => {
                 min="0"
                 step="0.01"
                 className="dashboard-input"
-                placeholder="Application fee (USD)"
+                placeholder="Application fee (EGP)"
                 required
               />
               <label style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>

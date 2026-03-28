@@ -21,7 +21,7 @@ export class AnalyticsRepository {
     const pool = getPool();
     const { rows } = await pool.query<ProviderEarningsRow>(
       `SELECT COALESCE(SUM(t.amount), 0)::text AS total_earnings,
-              COALESCE((SELECT w.currency FROM wallets w WHERE w.user_id = $1 LIMIT 1), 'USD') AS currency
+              COALESCE((SELECT w.currency FROM wallets w WHERE w.user_id = $1 LIMIT 1), 'EGP') AS currency
        FROM transactions t
        WHERE t.user_id = $1 AND t.type IN ('payment', 'release') AND t.status = 'completed'`,
       [providerId],
@@ -29,7 +29,7 @@ export class AnalyticsRepository {
     const row = rows[0];
     return {
       totalEarnings: row ? parseFloat(row.total_earnings) : 0,
-      currency: row?.currency ?? 'USD',
+      currency: row?.currency ?? 'EGP',
     };
   }
 

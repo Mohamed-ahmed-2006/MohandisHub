@@ -110,7 +110,7 @@ export const AdminServicesTab = ({ dictionary, accessToken }: Props) => {
                       </span>
                     </td>
                     <td>{svc.categoryNameEn ?? '—'}</td>
-                      <td>{svc.price != null ? `${svc.price} USD` : '—'}</td>
+                      <td>{svc.price != null ? `${svc.price} ${svc.currency ?? 'EGP'}` : '—'}</td>
                     <td>
                       <span
                         className={`admin-badge admin-badge--${svc.status === 'active' ? 'active' : svc.status === 'rejected' ? 'rejected' : 'pending'}`}

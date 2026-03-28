@@ -1001,7 +1001,7 @@ export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
               </p>
             )}
             {expertProfile.verificationBadgeEarned && (
-                <span className="profile-screen-badge profile-screen-badge_verified" title="Complete profile and 1000 USD total deposits.">
+                <span className="profile-screen-badge profile-screen-badge_verified" title="Complete profile and 1000 EGP total deposits.">
                 Platform verified
               </span>
             )}
@@ -1304,7 +1304,7 @@ export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
             {craftsmanProfile.verificationBadgeEarned && (
               <span
                 className="profile-screen-badge profile-screen-badge_verified"
-                title="Complete profile and 1000 USD total deposits."
+                title="Complete profile and 1000 EGP total deposits."
               >
                 Platform verified
               </span>
@@ -1632,7 +1632,7 @@ export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
               </p>
             )}
             {businessProfile.verificationBadgeEarned && (
-                <span className="profile-screen-badge profile-screen-badge_verified" title="Complete profile and 1000 USD total deposits.">
+                <span className="profile-screen-badge profile-screen-badge_verified" title="Complete profile and 1000 EGP total deposits.">
                 Platform verified
               </span>
             )}

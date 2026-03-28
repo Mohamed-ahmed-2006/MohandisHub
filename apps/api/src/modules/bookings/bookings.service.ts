@@ -126,7 +126,7 @@ export class BookingsService {
           service.provider_id,
           input.serviceId,
           amount,
-      service.currency ?? 'USD',
+      service.currency ?? 'EGP',
           commission,
           providerAmount,
           slotStart,

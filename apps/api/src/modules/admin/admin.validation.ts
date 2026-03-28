@@ -60,7 +60,7 @@ export const createPlanSchema = z.object({
   name: z.string().min(1).max(100),
   description: z.string().max(1000).optional(),
   price: z.number().min(0),
-  currency: z.string().length(3).default('USD'),
+  currency: z.string().length(3).default('EGP'),
   billingCycle: z.enum(['monthly', 'quarterly', 'yearly', 'one_time']).default('monthly'),
   durationDays: z.number().int().positive().optional(),
   trialDays: z.number().int().min(0).default(0),

@@ -21,7 +21,7 @@ const makeReservationRow = (overrides: Partial<ReservationRow> = {}): Reservatio
   requested_start_at: new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString(),
   requested_end_at: new Date(Date.now() + 49 * 60 * 60 * 1000).toISOString(),
   expert_price_amount: '50',
-  currency: 'USD',
+  currency: 'EGP',
   admin_acceptance_fee: '5',
   admin_minute_rate: '0',
   policy_snapshot: {

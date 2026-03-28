@@ -33,6 +33,7 @@ type ServiceSearchRow = {
   category_name_en: string | null;
   category_name_ar: string | null;
   price: string | null;
+  currency: string;
   price_type: string;
   is_negotiable: boolean;
   city: string | null;
@@ -165,7 +166,7 @@ export class ServicesRepository {
               u.primary_role AS provider_role, u.avatar_url AS provider_avatar,
               (u.platform_verified_at IS NOT NULL) AS provider_verified,
               c.slug AS category_slug, c.name_en AS category_name_en, c.name_ar AS category_name_ar,
-              s.price::text, s.price_type, s.is_negotiable, s.city, s.area, s.avg_rating::text, s.is_featured
+              s.price::text, s.currency, s.price_type, s.is_negotiable, s.city, s.area, s.avg_rating::text, s.is_featured
        FROM services s
        JOIN users u ON u.id = s.provider_id
        LEFT JOIN service_categories c ON c.id = s.category_id
@@ -193,7 +194,7 @@ export class ServicesRepository {
               u.primary_role AS provider_role, u.avatar_url AS provider_avatar,
               (u.platform_verified_at IS NOT NULL) AS provider_verified,
               c.slug AS category_slug, c.name_en AS category_name_en, c.name_ar AS category_name_ar,
-              s.price::text, s.price_type, s.is_negotiable, s.city, s.area, s.avg_rating::text, s.is_featured
+              s.price::text, s.currency, s.price_type, s.is_negotiable, s.city, s.area, s.avg_rating::text, s.is_featured
        FROM services s
        JOIN users u ON u.id = s.provider_id
        LEFT JOIN service_categories c ON c.id = s.category_id

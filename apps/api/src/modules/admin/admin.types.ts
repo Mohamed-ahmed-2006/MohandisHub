@@ -159,6 +159,7 @@ export type ServiceListRow = {
   category_name_en: string | null;
   category_name_ar: string | null;
   price: string | null;
+  currency: string;
   price_type: string;
   status: string;
   is_featured: boolean;

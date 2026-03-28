@@ -136,6 +136,7 @@ export type ServiceSearchResult = {
   categoryNameEn: string | null;
   categoryNameAr: string | null;
   price: number | null;
+  currency: string;
   priceType: PriceType;
   isNegotiable: boolean;
   city: string | null;
