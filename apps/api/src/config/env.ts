@@ -13,6 +13,14 @@ const envSchema = z.object({
   API_PUBLIC_URL: z.string().url().optional(),
   WEB_PUBLIC_URL: z.string().url().optional(),
 
+  // Behind one reverse-proxy hop (Render, nginx, etc.): set TRUST_PROXY=1 so rate limits use the real client IP.
+  TRUST_PROXY: z.string().optional(),
+  // Optional overrides for express-rate-limit (per IP). Defaults match apps/api/src/middleware/rate-limit.ts.
+  API_RATE_LIMIT_MAX: z.coerce.number().int().positive().optional(),
+  API_RATE_LIMIT_WINDOW_MS: z.coerce.number().int().positive().optional(),
+  AUTH_RATE_LIMIT_MAX: z.coerce.number().int().positive().optional(),
+  AUTH_RATE_LIMIT_WINDOW_MS: z.coerce.number().int().positive().optional(),
+
   // Auth / JWT
   JWT_SECRET: z.string().min(32, 'JWT_SECRET must be at least 32 characters'),
   JWT_REFRESH_SECRET: z.string().min(32, 'JWT_REFRESH_SECRET must be at least 32 characters'),

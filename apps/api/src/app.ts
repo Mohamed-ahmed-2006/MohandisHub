@@ -18,6 +18,11 @@ import { apiRouter } from './routes/index.js';
 export const createApp = () => {
   const app = express();
 
+  // So express-rate-limit (and req.ip) see the caller behind a single reverse-proxy hop.
+  if (env.TRUST_PROXY === '1' || env.TRUST_PROXY === 'true') {
+    app.set('trust proxy', 1);
+  }
+
   app.disable('x-powered-by');
   app.use(requestIdMiddleware);
   app.use(requestLoggingMiddleware);
