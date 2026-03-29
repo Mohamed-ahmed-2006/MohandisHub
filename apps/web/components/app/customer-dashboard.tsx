@@ -5,6 +5,7 @@ import Image from 'next/image';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { useToast } from '@/components/app/toast';
+import { resolvePublicAssetUrl, toAbsoluteAssetUrl } from '@/lib/asset-url';
 import { getApiBaseUrl } from '@/lib/env';
 import { pickLocalized } from '@/lib/i18n/api';
 import type { Dictionary, Locale } from '@/lib/i18n/types';
@@ -237,12 +238,9 @@ export const CustomerDashboard = ({
     if (timelineDays != null) data.timelineDays = timelineDays;
     if (locationVal) data.city = locationVal;
     if (countryVal) data.country = countryVal;
-    const base = (getApiBaseUrl() || '').replace(/\/$/, '');
-    const toFullUrl = (url: string) =>
-      url.startsWith('http') ? url : `${base}${url.startsWith('/') ? '' : '/'}${url}`;
     if (uploadedFiles.length > 0) {
       const refUrls = uploadedFiles
-        .map((f) => toFullUrl(f.url))
+        .map((f) => toAbsoluteAssetUrl(f.url))
         .filter((u) => /^https?:\/\//i.test(u));
       if (refUrls.length > 0) data.referenceUrls = refUrls;
     } else if (pastedLinkUrl && /^https?:\/\//i.test(pastedLinkUrl)) {
@@ -658,9 +656,7 @@ export const CustomerDashboard = ({
         <div className="dashboard-cards dashboard-cards--needs">
           {myNeeds.map((need) => {
             const mediaUrls = getNeedMediaUrls(need.reference_url);
-            const base = (getApiBaseUrl() || '').replace(/\/$/, '');
-            const toFull = (u: string) =>
-              u.startsWith('http') ? u : `${base}${u.startsWith('/') ? '' : '/'}${u}`;
+            const toFull = (u: string) => resolvePublicAssetUrl(u) ?? u;
             const imageUrls = mediaUrls.filter(
               (u) => /\.(jpe?g|png|webp|gif)$/i.test(u) || u.includes('/uploads/'),
             );

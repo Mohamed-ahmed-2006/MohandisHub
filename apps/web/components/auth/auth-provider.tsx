@@ -31,7 +31,9 @@ type AuthContextValue = {
 };
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
-const AUTH_SESSION_HINT_KEY = 'mohandishub-has-session';
+
+/** localStorage key: set when user has logged in; used to attempt refresh on reload. */
+export const AUTH_SESSION_HINT_KEY = 'mohandishub-has-session';
 
 type AuthProviderProps = {
   children: React.ReactNode;

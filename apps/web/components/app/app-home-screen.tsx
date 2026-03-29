@@ -14,6 +14,7 @@ import { ServiceBookingModal } from './service-booking-modal';
 import { useAuth } from '@/components/auth/auth-provider';
 import { Container } from '@/components/ui/container';
 import { Skeleton, SkeletonCard, SkeletonText } from '@/components/ui/skeleton';
+import { resolvePublicAssetUrl } from '@/lib/asset-url';
 import { EGYPTIAN_CITIES } from '@/lib/data/egyptian-cities';
 import { buildLocalePath } from '@/lib/i18n/path';
 import type { Dictionary, Locale } from '@/lib/i18n/types';
@@ -426,7 +427,7 @@ export const AppHomeScreen = ({ locale, dictionary }: AppHomeScreenProps) => {
                         <div className="home-top-avatar home-top-avatar--large">
                           {expert.avatarUrl ? (
                             <Image
-                              src={expert.avatarUrl}
+                              src={resolvePublicAssetUrl(expert.avatarUrl) ?? expert.avatarUrl}
                               alt=""
                               width={64}
                               height={64}
@@ -484,7 +485,7 @@ export const AppHomeScreen = ({ locale, dictionary }: AppHomeScreenProps) => {
                         <div className="home-top-avatar home-top-avatar--large">
                           {craftsman.avatarUrl ? (
                             <Image
-                              src={craftsman.avatarUrl}
+                              src={resolvePublicAssetUrl(craftsman.avatarUrl) ?? craftsman.avatarUrl}
                               alt=""
                               width={64}
                               height={64}
@@ -542,7 +543,7 @@ export const AppHomeScreen = ({ locale, dictionary }: AppHomeScreenProps) => {
                         <div className="home-top-avatar home-top-avatar--large">
                           {biz.avatarUrl ? (
                             <Image
-                              src={biz.avatarUrl}
+                              src={resolvePublicAssetUrl(biz.avatarUrl) ?? biz.avatarUrl}
                               alt=""
                               width={64}
                               height={64}
@@ -844,7 +845,7 @@ export const AppHomeScreen = ({ locale, dictionary }: AppHomeScreenProps) => {
                             >
                               {r.providerAvatar ? (
                                 <Image
-                                  src={r.providerAvatar}
+                                  src={resolvePublicAssetUrl(r.providerAvatar) ?? r.providerAvatar}
                                   alt=""
                                   className="home-result-avatar-img"
                                   width={48}
@@ -1126,7 +1127,7 @@ export const AppHomeScreen = ({ locale, dictionary }: AppHomeScreenProps) => {
                         <div className="home-result-avatar">
                           {r.providerAvatar ? (
                             <Image
-                              src={r.providerAvatar}
+                              src={resolvePublicAssetUrl(r.providerAvatar) ?? r.providerAvatar}
                               alt=""
                               className="home-result-avatar-img"
                               width={48}
@@ -1203,7 +1204,7 @@ export const AppHomeScreen = ({ locale, dictionary }: AppHomeScreenProps) => {
                 <div className="home-drawer-avatar">
                   {selectedResult.providerAvatar ? (
                     <Image
-                      src={selectedResult.providerAvatar}
+                      src={resolvePublicAssetUrl(selectedResult.providerAvatar) ?? selectedResult.providerAvatar}
                       alt=""
                       className="home-drawer-avatar-img"
                       width={80}

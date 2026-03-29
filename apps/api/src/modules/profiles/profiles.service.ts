@@ -23,6 +23,7 @@ import { sendTransactionalEmail } from '../../utils/send-transactional-email.js'
 import { AdminRepository } from '../admin/admin.repository.js';
 import { ReviewsRepository } from '../reviews/reviews.repository.js';
 import { SettingsService } from '../settings/settings.service.js';
+import { VerificationRepository } from '../verification/verification.repository.js';
 import { WalletRepository } from '../wallet/wallet.repository.js';
 
 import { ProfilesRepository } from './profiles.repository.js';
@@ -49,6 +50,7 @@ export class ProfilesService {
     private readonly adminRepo: AdminRepository = new AdminRepository(),
     private readonly reviewsRepo: ReviewsRepository = new ReviewsRepository(),
     private readonly walletRepo: WalletRepository = new WalletRepository(),
+    private readonly verificationRepo: VerificationRepository = new VerificationRepository(),
   ) {}
 
   // ── Expert profile ─────────────────────────────────────────────────────
@@ -443,6 +445,18 @@ export class ProfilesService {
 
     await assertRequiredVerificationImage(this.repo, userId, role);
 
+    const existingDocs = await this.repo.findIdentityDocuments(userId);
+    if (
+      existingDocs.some((d) => d.status === 'pending' || d.status === 'under_review')
+    ) {
+      throw new HttpError({
+        statusCode: 409,
+        code: 'IDENTITY_SUBMISSION_ALREADY_PENDING',
+        message:
+          'You already have an identity submission under review. Remove it before submitting a new one.',
+      });
+    }
+
     const row = await this.repo.createIdentityDocument({
       userId,
       ...input,
@@ -464,6 +478,59 @@ export class ProfilesService {
   async getIdentityDocuments(userId: string): Promise<IdentityDocument[]> {
     const rows = await this.repo.findIdentityDocuments(userId);
     return rows.map((r) => this.toIdentityDocument(r));
+  }
+
+  async withdrawPendingIdentityDocument(
+    userId: string,
+    role: 'expert' | 'business' | 'craftsman',
+    docId: string,
+  ): Promise<void> {
+    const deleted = await this.repo.deleteIdentityDocumentIfPending(userId, docId);
+    if (!deleted) {
+      throw new HttpError({
+        statusCode: 404,
+        code: 'IDENTITY_DOCUMENT_NOT_WITHDRAWABLE',
+        message:
+          'That document was not found or cannot be withdrawn. Only pending or under-review submissions can be removed.',
+      });
+    }
+    await this.reconcileProfileAfterIdentityWithdraw(userId, role);
+  }
+
+  private async reconcileProfileAfterIdentityWithdraw(
+    userId: string,
+    role: 'expert' | 'business' | 'craftsman',
+  ): Promise<void> {
+    const docs = await this.repo.findIdentityDocuments(userId);
+    if (docs.some((d) => d.status === 'pending' || d.status === 'under_review')) {
+      return;
+    }
+
+    const latestReq = await this.verificationRepo.findLatestByUserId(userId);
+    if (latestReq && (latestReq.status === 'initiated' || latestReq.status === 'submitted')) {
+      return;
+    }
+
+    const row =
+      role === 'expert'
+        ? await this.repo.findExpertProfile(userId)
+        : role === 'craftsman'
+          ? await this.repo.findCraftsmanProfile(userId)
+          : await this.repo.findBusinessProfile(userId);
+    const rawStatus = row?.verification_status;
+    if (rawStatus !== 'pending' && rawStatus !== 'under_review') {
+      return;
+    }
+
+    if (role === 'business') {
+      await this.repo.updateBusinessOverallStatus(userId, 'unverified');
+    } else if (role === 'craftsman') {
+      await this.repo.updateCraftsmanOverallStatus(userId, 'unverified');
+    } else {
+      await this.repo.updateExpertOverallStatus(userId, 'unverified');
+    }
+
+    await syncVerificationStatusForRequiredImage(this.repo, userId, role);
   }
 
   // ── Academic records ───────────────────────────────────────────────────

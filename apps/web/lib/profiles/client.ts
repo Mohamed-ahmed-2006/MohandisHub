@@ -21,7 +21,7 @@ import { ApiClientRequestError } from '../auth/client';
 import { getApiBaseUrl } from '@/lib/env';
 
 type ApiRequestOptions = {
-  method: 'GET' | 'POST' | 'PATCH';
+  method: 'GET' | 'POST' | 'PATCH' | 'DELETE';
   path: string;
   body?: unknown;
   accessToken: string;
@@ -211,6 +211,13 @@ export const profilesApiClient = {
       method: 'POST',
       path: '/api/profiles/identity-documents',
       body,
+      accessToken,
+    }),
+
+  withdrawIdentityDocument: (accessToken: string, docId: string) =>
+    apiRequest<null>({
+      method: 'DELETE',
+      path: `/api/profiles/identity-documents/${encodeURIComponent(docId)}`,
       accessToken,
     }),
 

@@ -3,6 +3,7 @@
 import Image from 'next/image';
 import { useEffect, useState } from 'react';
 
+import { resolvePublicAssetUrl } from '@/lib/asset-url';
 import { getApiBaseUrl } from '@/lib/env';
 
 type ImagePreviewModalProps = {
@@ -22,7 +23,7 @@ export function ImagePreviewModal({
   accessToken,
 }: ImagePreviewModalProps) {
   const [resolvedUrl, setResolvedUrl] = useState<string | null>(() =>
-    !isPrivateUploadUrl(imageUrl) ? imageUrl : null,
+    !isPrivateUploadUrl(imageUrl) ? (resolvePublicAssetUrl(imageUrl) ?? imageUrl) : null,
   );
   const [loading, setLoading] = useState(() => isPrivateUploadUrl(imageUrl) && !!accessToken);
   const [error, setError] = useState<string | null>(null);
@@ -37,7 +38,7 @@ export function ImagePreviewModal({
 
   useEffect(() => {
     if (!isPrivateUploadUrl(imageUrl) || !accessToken) {
-      setResolvedUrl(imageUrl);
+      setResolvedUrl(resolvePublicAssetUrl(imageUrl) ?? imageUrl);
       setLoading(false);
       setError(null);
       return () => {};
@@ -47,8 +48,9 @@ export function ImagePreviewModal({
     setLoading(true);
     setError(null);
     setResolvedUrl(null);
-    const fullUrl =
-      imageUrl.startsWith('http') ? imageUrl : `${(getApiBaseUrl() || '').replace(/\/$/, '')}${imageUrl.startsWith('/') ? '' : '/'}${imageUrl}`;
+    const fullUrl = resolvePublicAssetUrl(imageUrl) ?? (imageUrl.startsWith('http')
+      ? imageUrl
+      : `${(getApiBaseUrl() || '').replace(/\/$/, '')}${imageUrl.startsWith('/') ? '' : '/'}${imageUrl}`);
     fetch(fullUrl, {
       headers: {
         Authorization: `Bearer ${accessToken}`,

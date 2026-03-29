@@ -17,6 +17,7 @@ import { CityCountrySelect } from '@/components/ui/city-country-select';
 import { Container } from '@/components/ui/container';
 import { ImageUploadOrCapture } from '@/components/ui/image-upload-or-capture';
 import { LiveCapture } from '@/components/ui/live-capture';
+import { toAbsoluteAssetUrl } from '@/lib/asset-url';
 import { getApiBaseUrl } from '@/lib/env';
 import { buildLocalePath } from '@/lib/i18n/path';
 import type { Dictionary, Locale } from '@/lib/i18n/types';
@@ -43,12 +44,6 @@ function pickDefined(obj: Record<string, unknown>): Record<string, unknown> {
   return result;
 }
 
-function toAbsoluteAssetUrl(url: string): string {
-  if (url.startsWith('http')) return url;
-  const base = (getApiBaseUrl() || '').replace(/\/$/, '');
-  return base ? `${base}${url.startsWith('/') ? '' : '/'}${url}` : url;
-}
-
 function readFilePreview(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -73,6 +68,7 @@ export const CraftsmanOnboardingScreen = ({ locale, dictionary }: Props) => {
   const [manualSelfieFile, setManualSelfieFile] = useState<File | null>(null);
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [avatarPreviewUrl, setAvatarPreviewUrl] = useState<string | null>(null);
+  const [withdrawableManualDocId, setWithdrawableManualDocId] = useState<string | null>(null);
 
   const dict = dictionary.onboarding.craftsman;
   const stepLabels = [
@@ -105,6 +101,48 @@ export const CraftsmanOnboardingScreen = ({ locale, dictionary }: Props) => {
   useEffect(() => {
     void loadKycStatus();
   }, [loadKycStatus]);
+
+  useEffect(() => {
+    if (
+      step !== 'kyc' ||
+      kycStatus !== 'pending' ||
+      !accessToken ||
+      authUser?.verificationStatus === 'rejected'
+    ) {
+      setWithdrawableManualDocId(null);
+      return;
+    }
+    let cancelled = false;
+    void profilesApiClient
+      .getIdentityDocuments(accessToken)
+      .then((docs) => {
+        if (cancelled) return;
+        const active = docs.find((d) => d.status === 'pending' || d.status === 'under_review');
+        setWithdrawableManualDocId(active?.id ?? null);
+      })
+      .catch(() => {
+        if (!cancelled) setWithdrawableManualDocId(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [step, kycStatus, accessToken, authUser?.verificationStatus]);
+
+  const handleWithdrawManualSubmission = useCallback(async () => {
+    if (!accessToken || !withdrawableManualDocId) return;
+    setSaving(true);
+    setError(null);
+    try {
+      await profilesApiClient.withdrawIdentityDocument(accessToken, withdrawableManualDocId);
+      setWithdrawableManualDocId(null);
+      await loadKycStatus();
+      await updateAuthUser();
+    } catch (err) {
+      setError(formatApiError(err, dictionary.profile.saveError));
+    } finally {
+      setSaving(false);
+    }
+  }, [accessToken, withdrawableManualDocId, loadKycStatus, updateAuthUser, dictionary.profile.saveError]);
 
   useEffect(() => {
     if ((step !== 'complete' && kycStatus !== 'pending') || !accessToken) return;
@@ -576,6 +614,20 @@ export const CraftsmanOnboardingScreen = ({ locale, dictionary }: Props) => {
               {kycStatus === 'pending' && authUser.verificationStatus !== 'rejected' && (
                 <div className="onboarding-info">{dict.kycPending}</div>
               )}
+              {kycStatus === 'pending' &&
+                authUser.verificationStatus !== 'rejected' &&
+                withdrawableManualDocId && (
+                  <div className="onboarding-nav-row" style={{ marginTop: '0.75rem' }}>
+                    <button
+                      type="button"
+                      className="onboarding-secondary-button"
+                      onClick={() => void handleWithdrawManualSubmission()}
+                      disabled={saving}
+                    >
+                      {dict.withdrawIdentitySubmission ?? 'Remove submission and start over'}
+                    </button>
+                  </div>
+                )}
               {kycStatus === 'rejected' && authUser.verificationStatus !== 'rejected' && (
                 <div className="onboarding-error">{dict.kycRejected}</div>
               )}

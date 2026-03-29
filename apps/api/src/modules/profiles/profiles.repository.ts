@@ -289,6 +289,17 @@ export class ProfilesRepository {
     return rows[0] ?? null;
   }
 
+  /** Removes a user-owned submission only while it is still pending review (not approved/rejected). */
+  async deleteIdentityDocumentIfPending(userId: string, docId: string): Promise<IdentityDocumentRow | null> {
+    const { rows } = await this.db.query<IdentityDocumentRow>(
+      `DELETE FROM identity_documents
+       WHERE id = $1 AND user_id = $2 AND status IN ('pending', 'under_review')
+       RETURNING *`,
+      [docId, userId],
+    );
+    return rows[0] ?? null;
+  }
+
   async updateIdentityDocumentStatus(
     docId: string,
     status: string,

@@ -8,6 +8,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ProfileModalInitialData } from './profile-modal-context';
 
 import { useAuth } from '@/components/auth/auth-provider';
+import { resolvePublicAssetUrl } from '@/lib/asset-url';
 import { chatApiClient } from '@/lib/chat/client';
 import { buildLocalePath } from '@/lib/i18n/path';
 import type { Dictionary, Locale } from '@/lib/i18n/types';
@@ -153,7 +154,7 @@ export function UserProfileModal({
               <div className="user-profile-modal-avatar-wrap">
                 {profile.avatarUrl ? (
                   <Image
-                    src={profile.avatarUrl}
+                    src={resolvePublicAssetUrl(profile.avatarUrl) ?? profile.avatarUrl}
                     alt=""
                     width={96}
                     height={96}

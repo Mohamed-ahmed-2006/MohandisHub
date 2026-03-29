@@ -2,9 +2,13 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 
 import { ApiHealthBadge } from '@/components/api-health-badge';
+import {
+  HomePageHeroCta,
+  HomePageJoinSectionGate,
+  HomePageNavAuth,
+} from '@/components/home-page-auth-aware';
 import { HomePageFloatingControls } from '@/components/home-page-floating-controls';
 import { SiteLogo } from '@/components/site-logo';
-import { ButtonLink } from '@/components/ui/button-link';
 import { Card } from '@/components/ui/card';
 import { Container } from '@/components/ui/container';
 import { isSupportedLocale } from '@/lib/i18n/config';
@@ -36,30 +40,14 @@ const HomePage = async ({ params }: HomePageProps) => {
           <Link href={buildLocalePath(typedLocale, '/')} className="home-page-brand">
             <SiteLogo />
           </Link>
-          <nav className="home-page-nav-actions">
-            <ButtonLink
-              href={`${buildLocalePath(typedLocale, '/auth')}?mode=login`}
-              label={dictionary.common.login}
-              variant="secondary"
-            />
-            <ButtonLink
-              href={`${buildLocalePath(typedLocale, '/auth')}?mode=register`}
-              label={dictionary.common.signUp}
-            />
-          </nav>
+          <HomePageNavAuth locale={typedLocale} dictionary={dictionary} />
         </header>
 
         <section className="home-page-hero-section">
           <ApiHealthBadge />
           <h1 className="home-page-hero-title">{dictionary.home.headline}</h1>
           <p className="home-page-hero-description">{dictionary.home.description}</p>
-          <div className="home-page-hero-actions">
-            <ButtonLink
-              href={`${buildLocalePath(typedLocale, '/auth')}?mode=register`}
-              label={dictionary.common.getStarted}
-              className="home-page-hero-cta-button"
-            />
-          </div>
+          <HomePageHeroCta locale={typedLocale} dictionary={dictionary} />
         </section>
 
         <section className="home-page-section">
@@ -89,43 +77,45 @@ const HomePage = async ({ params }: HomePageProps) => {
         </section>
 
         {dictionary.home.joinAsTitle && (
-          <section className="home-page-section home-page-join-section">
-            <h2 className="home-page-section-title">{dictionary.home.joinAsTitle}</h2>
-            <div className="home-page-role-grid">
-              <Link
-                href={`${buildLocalePath(typedLocale, '/auth')}?mode=register&role=customer`}
-                className="home-page-role-card"
-              >
-                <span className="home-page-role-label">
-                  {dictionary.home.joinAsCustomer ?? 'I need help'}
-                </span>
-              </Link>
-              <Link
-                href={`${buildLocalePath(typedLocale, '/auth')}?mode=register&role=expert`}
-                className="home-page-role-card"
-              >
-                <span className="home-page-role-label">
-                  {dictionary.home.joinAsExpert ?? "I'm an expert"}
-                </span>
-              </Link>
-              <Link
-                href={`${buildLocalePath(typedLocale, '/auth')}?mode=register&role=craftsman`}
-                className="home-page-role-card"
-              >
-                <span className="home-page-role-label">
-                  {dictionary.home.joinAsCraftsman ?? "I'm a craftsman"}
-                </span>
-              </Link>
-              <Link
-                href={`${buildLocalePath(typedLocale, '/auth')}?mode=register&role=business`}
-                className="home-page-role-card"
-              >
-                <span className="home-page-role-label">
-                  {dictionary.home.joinAsBusiness ?? "I'm a business"}
-                </span>
-              </Link>
-            </div>
-          </section>
+          <HomePageJoinSectionGate>
+            <section className="home-page-section home-page-join-section">
+              <h2 className="home-page-section-title">{dictionary.home.joinAsTitle}</h2>
+              <div className="home-page-role-grid">
+                <Link
+                  href={`${buildLocalePath(typedLocale, '/auth')}?mode=register&role=customer`}
+                  className="home-page-role-card"
+                >
+                  <span className="home-page-role-label">
+                    {dictionary.home.joinAsCustomer ?? 'I need help'}
+                  </span>
+                </Link>
+                <Link
+                  href={`${buildLocalePath(typedLocale, '/auth')}?mode=register&role=expert`}
+                  className="home-page-role-card"
+                >
+                  <span className="home-page-role-label">
+                    {dictionary.home.joinAsExpert ?? "I'm an expert"}
+                  </span>
+                </Link>
+                <Link
+                  href={`${buildLocalePath(typedLocale, '/auth')}?mode=register&role=craftsman`}
+                  className="home-page-role-card"
+                >
+                  <span className="home-page-role-label">
+                    {dictionary.home.joinAsCraftsman ?? "I'm a craftsman"}
+                  </span>
+                </Link>
+                <Link
+                  href={`${buildLocalePath(typedLocale, '/auth')}?mode=register&role=business`}
+                  className="home-page-role-card"
+                >
+                  <span className="home-page-role-label">
+                    {dictionary.home.joinAsBusiness ?? "I'm a business"}
+                  </span>
+                </Link>
+              </div>
+            </section>
+          </HomePageJoinSectionGate>
         )}
 
         {dictionary.home.trustTitle && (

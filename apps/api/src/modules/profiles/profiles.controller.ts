@@ -216,6 +216,28 @@ const getIdentityDocuments = asyncHandler(async (req, res) => {
   res.json(response);
 });
 
+const withdrawIdentityDocument = asyncHandler(async (req, res) => {
+  const user = requireAuth(req);
+  if (user.role !== 'expert' && user.role !== 'business' && user.role !== 'craftsman') {
+    throw new HttpError({
+      statusCode: 403,
+      code: 'FORBIDDEN',
+      message: 'Only providers with identity verification can withdraw identity submissions.',
+    });
+  }
+  const docId = (req.params.docId ?? '').trim();
+  if (!docId) {
+    throw new HttpError({
+      statusCode: 400,
+      code: 'INVALID_REQUEST',
+      message: 'Document id is required.',
+    });
+  }
+  await profilesService.withdrawPendingIdentityDocument(user.id, user.role, docId);
+  const response: ApiSuccessBody<null> = { ok: true, data: null };
+  res.json(response);
+});
+
 // ═════════════════════════════════════════════════════════════════════════
 // ACADEMIC RECORDS
 // ═════════════════════════════════════════════════════════════════════════
@@ -403,6 +425,7 @@ export const profilesController = {
   completeBusinessOnboarding,
   submitIdentityDocument,
   getIdentityDocuments,
+  withdrawIdentityDocument,
   submitAcademicRecord,
   getAcademicRecords,
   updateAcademicRecord,

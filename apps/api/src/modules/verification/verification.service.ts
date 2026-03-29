@@ -55,6 +55,18 @@ export class VerificationService {
 
     await assertRequiredVerificationImage(this.profilesRepo, params.userId, params.role);
 
+    const identityDocs = await this.profilesRepo.findIdentityDocuments(params.userId);
+    if (
+      identityDocs.some((d) => d.status === 'pending' || d.status === 'under_review')
+    ) {
+      throw new HttpError({
+        statusCode: 409,
+        code: 'IDENTITY_SUBMISSION_BLOCKS_KYC',
+        message:
+          'You have a manual identity submission in review. Remove it before starting online verification.',
+      });
+    }
+
     // Check if there's already a pending/under_review verification
     const existing = await this.verificationRepo.findLatestByUserId(params.userId);
     if (existing && (existing.status === 'initiated' || existing.status === 'submitted')) {

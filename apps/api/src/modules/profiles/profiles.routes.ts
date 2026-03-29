@@ -100,6 +100,12 @@ profilesRouter.get(
   requireEmailVerified,
   profilesController.getIdentityDocuments,
 );
+profilesRouter.delete(
+  '/identity-documents/:docId',
+  authenticate,
+  requireEmailVerified,
+  profilesController.withdrawIdentityDocument,
+);
 
 // Academic records (expert only) — no requireVerified so onboarding users can submit
 profilesRouter.post(

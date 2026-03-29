@@ -25,10 +25,18 @@ import { verificationRouter } from '../modules/verification/verification.routes.
 import { walletRouter } from '../modules/wallet/wallet.routes.js';
 import { asyncHandler } from '../utils/async-handler.js';
 
+/** Paths under `/api` that use `authRateLimiter` only — avoid counting them against the global API bucket (login was 429 after normal browsing). */
+function isAuthOrOtpPath(path: string) {
+  return path === '/auth' || path.startsWith('/auth/') || path === '/otp' || path.startsWith('/otp/');
+}
+
 const apiRouter = Router();
 
 apiRouter.use(asyncHandler(maintenanceMode));
-apiRouter.use(apiRateLimiter);
+apiRouter.use((req, res, next) => {
+  if (isAuthOrOtpPath(req.path)) return next();
+  return apiRateLimiter(req, res, next);
+});
 apiRouter.use('/app', appRouter);
 apiRouter.use('/auth', authRateLimiter, authRouter);
 apiRouter.use('/otp', authRateLimiter, otpRouter);

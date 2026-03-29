@@ -28,8 +28,8 @@ import { ImageUploadOrCapture } from '@/components/ui/image-upload-or-capture';
 import { IndustrySelect } from '@/components/ui/industry-select';
 import { LanguagesCheckboxes } from '@/components/ui/languages-checkboxes';
 import { SkeletonForm } from '@/components/ui/skeleton';
+import { resolvePublicAssetUrl, toAbsoluteAssetUrl } from '@/lib/asset-url';
 import { COUNTRIES } from '@/lib/data/countries';
-import { getApiBaseUrl } from '@/lib/env';
 import { buildLocalePath } from '@/lib/i18n/path';
 import type { Dictionary, Locale } from '@/lib/i18n/types';
 import { profilesApiClient } from '@/lib/profiles/client';
@@ -52,10 +52,9 @@ function pickDefined(obj: Record<string, unknown>): Record<string, unknown> {
   return result;
 }
 
-function toAbsoluteAssetUrl(url: string): string {
-  if (url.startsWith('http')) return url;
-  const base = (getApiBaseUrl() || '').replace(/\/$/, '');
-  return base ? `${base}${url.startsWith('/') ? '' : '/'}${url}` : url;
+function profileImageDisplaySrc(url: string): string {
+  if (url.startsWith('blob:') || url.startsWith('data:')) return url;
+  return resolvePublicAssetUrl(url) ?? url;
 }
 
 function readFilePreview(file: File): Promise<string> {
@@ -450,7 +449,7 @@ const AccountForm = ({
               <div className="profile-screen-image-preview">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
-                  src={avatarPreviewUrl}
+                  src={profileImageDisplaySrc(avatarPreviewUrl)}
                   alt={(labels as { avatarLabel?: string }).avatarLabel ?? 'Profile picture'}
                   className="profile-screen-image-preview-img"
                 />
@@ -530,6 +529,7 @@ export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
   const [identityDocuments, setIdentityDocuments] = useState<IdentityDocument[]>([]);
   const [academicRecords, setAcademicRecords] = useState<AcademicRecord[]>([]);
   const [documentsLoading, setDocumentsLoading] = useState(false);
+  const [withdrawingDocId, setWithdrawingDocId] = useState<string | null>(null);
   const [editAcademicRecord, setEditAcademicRecord] = useState<AcademicRecord | null>(null);
   const [academicEditSaving, setAcademicEditSaving] = useState(false);
   const [academicEditError, setAcademicEditError] = useState<string | null>(null);
@@ -681,6 +681,34 @@ export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
     setIdentityDocuments([]);
     setAcademicRecords([]);
   }, [hasRoleProfile, loadDocuments]);
+
+  const handleWithdrawIdentityDocument = useCallback(
+    async (docId: string) => {
+      if (!accessToken) return;
+      setWithdrawingDocId(docId);
+      setSaveMessage(null);
+      try {
+        await profilesApiClient.withdrawIdentityDocument(accessToken, docId);
+        await loadDocuments();
+        await loadProfile();
+        await updateAuthUser();
+        setSaveMessage({
+          type: 'success',
+          text:
+            dictionary.profile.documents.withdrawSuccess ??
+            'Submission removed. You can send a new verification when you are ready.',
+        });
+      } catch (err) {
+        setSaveMessage({
+          type: 'error',
+          text: formatApiError(err, dictionary.profile.saveError),
+        });
+      } finally {
+        setWithdrawingDocId(null);
+      }
+    },
+    [accessToken, dictionary.profile, loadDocuments, loadProfile, updateAuthUser],
+  );
 
   const handleSaveAcademicEdit = useCallback(
     async (e: React.FormEvent<HTMLFormElement>) => {
@@ -1753,7 +1781,7 @@ export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
                   <div className="profile-screen-image-preview">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
-                      src={businessLogoPreviewUrl}
+                      src={profileImageDisplaySrc(businessLogoPreviewUrl)}
                       alt={(businessForm as { logoLabel?: string }).logoLabel ?? 'Company logo'}
                       className="profile-screen-image-preview-img"
                     />
@@ -2085,6 +2113,21 @@ export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
                           <p className="profile-screen-doc-rejection">
                             {dictionary.profile.documents.rejectionReason}: {doc.rejectionReason}
                           </p>
+                        )}
+                        {(doc.status === 'pending' || doc.status === 'under_review') && (
+                          <div className="profile-screen-doc-actions">
+                            <button
+                              type="button"
+                              className="profile-screen-doc-edit-btn"
+                              disabled={withdrawingDocId === doc.id || documentsLoading}
+                              onClick={() => void handleWithdrawIdentityDocument(doc.id)}
+                            >
+                              {withdrawingDocId === doc.id
+                                ? dictionary.auth.common.loading
+                                : dictionary.profile.documents.withdrawPendingIdentity ??
+                                  'Remove submission'}
+                            </button>
+                          </div>
                         )}
                         {doc.status === 'rejected' && (
                           <Link

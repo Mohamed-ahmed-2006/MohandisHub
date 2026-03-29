@@ -61,6 +61,16 @@
   flex-direction: row-reverse;
 }
 
+.home-page-session-restoring {
+  font-size: 0.9rem;
+  color: hsl(var(--muted-foreground));
+  white-space: nowrap;
+}
+
+.home-page-hero-restoring {
+  margin: 0;
+}
+
 .home-page-hero-section {
   padding-top: 5rem;
 }

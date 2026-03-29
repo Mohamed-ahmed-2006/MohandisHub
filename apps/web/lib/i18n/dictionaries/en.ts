@@ -8,6 +8,7 @@ export const enDictionary: Dictionary = {
     login: 'Log in',
     signUp: 'Sign up',
     getStarted: 'Get started',
+    goToDashboard: 'Go to dashboard',
     backToHome: 'Back to home',
     submit: 'Submit',
     save: 'Save',
@@ -226,6 +227,7 @@ export const enDictionary: Dictionary = {
         'Your identity document was rejected. Please resubmit your identity document below.',
       documentRejectedResubmit:
         'Your certificate or document was rejected. Please upload a new document below.',
+      withdrawIdentitySubmission: 'Remove submission and start over',
     },
     craftsman: {
       title: 'Craftsman onboarding',
@@ -288,6 +290,7 @@ export const enDictionary: Dictionary = {
         'Your identity documents are under review. We will notify you when your account is verified.',
       identityRejectedResubmit:
         'Your identity document was rejected. Please resubmit your identity verification below.',
+      withdrawIdentitySubmission: 'Remove submission and start over',
       goToDashboard: 'Go to dashboard',
       profilePhotoRequiredError: 'Upload a profile picture before continuing.',
       manualKycMissingFilesError:
@@ -353,6 +356,7 @@ export const enDictionary: Dictionary = {
       kycPending: 'Your KYC verification is being processed. Please wait.',
       kycVerified: 'Identity has been verified successfully!',
       kycRejected: 'Your KYC verification was rejected. Please try again or contact support.',
+      withdrawIdentitySubmission: 'Remove submission and start over',
     },
   },
   emailVerification: {
@@ -1086,6 +1090,9 @@ export const enDictionary: Dictionary = {
       reviewedAt: 'Reviewed',
       resubmit: 'Resubmit',
       goToVerification: 'Complete verification',
+      withdrawPendingIdentity: 'Remove submission',
+      withdrawSuccess:
+        'Submission removed. You can send a new verification when you are ready.',
       companyDetailsTitle: 'Company details',
       companyDetailsHint: 'Registration details submitted with your business profile. Admin may use these for verification.',
       tradeLicense: 'Trade license',

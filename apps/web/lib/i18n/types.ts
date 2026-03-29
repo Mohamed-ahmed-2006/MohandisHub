@@ -8,6 +8,8 @@ export type Dictionary = {
     login: string;
     signUp: string;
     getStarted: string;
+    /** Marketing home CTA when already signed in */
+    goToDashboard: string;
     backToHome: string;
     submit: string;
     save: string;
@@ -192,6 +194,7 @@ export type Dictionary = {
       pendingReviewMessage: string;
       identityRejectedResubmit: string;
       documentRejectedResubmit: string;
+      withdrawIdentitySubmission?: string;
     };
     craftsman: {
       title: string;
@@ -251,6 +254,7 @@ export type Dictionary = {
       kycRejected: string;
       pendingReviewMessage: string;
       identityRejectedResubmit: string;
+      withdrawIdentitySubmission?: string;
       goToDashboard?: string;
       profilePhotoRequiredError?: string;
       manualKycMissingFilesError?: string;
@@ -312,6 +316,7 @@ export type Dictionary = {
       kycPending: string;
       kycVerified: string;
       kycRejected: string;
+      withdrawIdentitySubmission?: string;
     };
   };
   emailVerification: {
@@ -1018,6 +1023,8 @@ export type Dictionary = {
       notSubmitted?: string;
       companyUploadNote?: string;
       companyUploadComingSoon?: string;
+      withdrawPendingIdentity?: string;
+      withdrawSuccess?: string;
     };
     reviews?: {
       sectionTitle: string;
