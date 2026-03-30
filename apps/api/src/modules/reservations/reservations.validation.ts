@@ -17,6 +17,12 @@ export const createReservationSlotSchema = z
   })
   .refine((d) => new Date(d.endAt) > new Date(d.startAt), {
     message: 'endAt must be after startAt',
+  })
+  .refine((d) => {
+    const durationMs = new Date(d.endAt).getTime() - new Date(d.startAt).getTime();
+    return Number.isFinite(durationMs) && durationMs <= 24 * 60 * 60 * 1000;
+  }, {
+    message: 'Slot duration must be 24 hours or less.',
   });
 
 export const updateReservationSlotSchema = z.object({

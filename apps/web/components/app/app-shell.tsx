@@ -48,7 +48,7 @@ const AppShellInner = ({ children }: AppShellProps) => {
   const searchParams = useSearchParams();
   const { profileModalUserId, profileModalInitialData, closeProfileModal } = useProfileModal();
 
-  const { authUser, accessToken, logout, isReady } = useAuth();
+  const { authUser, accessToken, logout, isReady, refreshSession } = useAuth();
   const { wallet, mutate: mutateWallet } = useWallet(isReady && accessToken ? accessToken : null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [showDepositModal, setShowDepositModal] = useState(false);
@@ -107,11 +107,17 @@ const AppShellInner = ({ children }: AppShellProps) => {
   useEffect(() => {
     if (!isReady || !accessToken) return;
     const onVisibilityChange = () => {
-      if (document.visibilityState === 'visible') void mutateWallet();
+      if (document.visibilityState === 'visible') {
+        void (async () => {
+          const refreshedToken = await refreshSession();
+          if (!refreshedToken) return;
+          // Let SWR revalidate with the new token key after auth state updates.
+        })();
+      }
     };
     document.addEventListener('visibilitychange', onVisibilityChange);
     return () => document.removeEventListener('visibilitychange', onVisibilityChange);
-  }, [isReady, accessToken, mutateWallet]);
+  }, [isReady, accessToken, mutateWallet, refreshSession]);
 
   useEffect(() => {
     const timer = setTimeout(() => {

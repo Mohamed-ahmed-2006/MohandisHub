@@ -332,10 +332,12 @@ export class ReservationsService {
     input: CreateReservationSlotInput,
   ): Promise<ReservationSlot> {
     this.ensureProviderRole(role);
+    const startAt = new Date(input.startAt);
+    const endAt = new Date(input.endAt);
     try {
       const slot = await this.repo.createSlot(userId, {
-        startAt: new Date(input.startAt),
-        endAt: new Date(input.endAt),
+        startAt,
+        endAt,
         supportsOnline: input.supportsOnline ?? true,
         supportsOffline: input.supportsOffline ?? true,
         purpose: 'service',
@@ -343,6 +345,28 @@ export class ReservationsService {
       return mapSlot(slot);
     } catch (error) {
       if (this.isSlotOverlapError(error)) {
+        const overlappingSlots = await this.repo.listSlots(userId, startAt, endAt, false, {
+          purpose: 'service',
+        });
+        const maxLegacyDurationMs = 30 * 24 * 60 * 60 * 1000;
+        const legacyCorruptedOverlaps = overlappingSlots.filter((slot) => {
+          if (slot.status !== 'available') return false;
+          const durationMs = new Date(slot.end_at).getTime() - new Date(slot.start_at).getTime();
+          return Number.isFinite(durationMs) && durationMs > maxLegacyDurationMs;
+        });
+        if (legacyCorruptedOverlaps.length > 0) {
+          for (const legacySlot of legacyCorruptedOverlaps) {
+            await this.repo.updateSlot(legacySlot.id, { status: 'blocked' });
+          }
+          const retriedSlot = await this.repo.createSlot(userId, {
+            startAt,
+            endAt,
+            supportsOnline: input.supportsOnline ?? true,
+            supportsOffline: input.supportsOffline ?? true,
+            purpose: 'service',
+          });
+          return mapSlot(retriedSlot);
+        }
         throw new HttpError({
           statusCode: 409,
           code: 'SLOT_OVERLAP',

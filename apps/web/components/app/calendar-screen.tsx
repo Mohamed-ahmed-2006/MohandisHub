@@ -181,9 +181,11 @@ export const CalendarScreen = (_props: Props) => {
       setSaving(true);
       setError(null);
       try {
+        const normalizedStartAt = new Date(startAt).toISOString();
+        const normalizedEndAt = new Date(endAt).toISOString();
         await reservationsApiClient.createSlot(accessToken, {
-          startAt: new Date(startAt).toISOString(),
-          endAt: new Date(endAt).toISOString(),
+          startAt: normalizedStartAt,
+          endAt: normalizedEndAt,
           supportsOnline,
           supportsOffline,
         });
