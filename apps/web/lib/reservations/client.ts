@@ -1,4 +1,5 @@
 import type {
+  ApiErrorBody,
   ApiSuccessBody,
   CallExtensionBody,
   CallHeartbeatBody,
@@ -23,6 +24,7 @@ import type {
   UpdateReservationSlotBody,
 } from '@mohandishub/shared';
 
+import { ApiClientRequestError } from '@/lib/auth/client';
 import { getApiBaseUrl } from '@/lib/env';
 
 const createIdempotencyKey = () =>
@@ -38,8 +40,23 @@ async function apiReq<T>(path: string, token: string, opts?: RequestInit): Promi
     },
   });
   if (!res.ok) {
-    const body = (await res.json().catch(() => ({}))) as { error?: { message?: string } };
-    throw new Error(body?.error?.message ?? 'Request failed');
+    const rawErrorBody: unknown = await res.json().catch(() => null);
+    const maybeError = rawErrorBody as ApiErrorBody | null;
+
+    if (maybeError?.error) {
+      throw new ApiClientRequestError({
+        code: maybeError.error.code,
+        message: maybeError.error.message,
+        status: res.status,
+        details: maybeError.error.details,
+      });
+    }
+
+    throw new ApiClientRequestError({
+      code: 'HTTP_ERROR',
+      message: `Request failed with status ${res.status}`,
+      status: res.status,
+    });
   }
   const json = (await res.json()) as ApiSuccessBody<T>;
   return json.data;

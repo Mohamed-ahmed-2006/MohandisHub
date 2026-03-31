@@ -15,8 +15,12 @@ export function resolvePublicAssetUrl(url: string | null | undefined): string | 
   if (trimmed.startsWith('blob:') || trimmed.startsWith('data:')) return trimmed;
 
   const base = (getApiBaseUrl() || '').replace(/\/$/, '');
+  const shouldRewriteLocalHost = process.env.NODE_ENV === 'production';
 
   if (LOCAL_API_HOST_RE.test(trimmed)) {
+    if (!shouldRewriteLocalHost) {
+      return trimmed;
+    }
     try {
       const parsed = new URL(trimmed);
       return base ? `${base}${parsed.pathname}${parsed.search}${parsed.hash}` : trimmed;

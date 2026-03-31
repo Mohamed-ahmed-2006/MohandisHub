@@ -53,8 +53,11 @@ function formatDateTime(d: string): string {
   });
 }
 
-function formatMoney(value: number): string {
-  return `${value.toFixed(2)} EGP`;
+function formatMoney(value: number | null | undefined): string {
+  if (value == null) return '0.00 EGP';
+  const numeric = typeof value === 'number' ? value : Number(value);
+  if (!Number.isFinite(numeric)) return '0.00 EGP';
+  return `${numeric.toFixed(2)} EGP`;
 }
 
 function isInterviewReservation(reservation: Reservation): boolean {
@@ -96,6 +99,15 @@ function reachedStep(currentStatus: string, step: string): boolean {
 
 function canCancelReservation(reservation: Reservation): boolean {
   return ['pending', 'accepted', 'awaiting_start'].includes(reservation.status);
+}
+
+function getReservationTimingState(reservation: Reservation): 'too_early' | 'in_window' | 'past' {
+  const now = Date.now();
+  const start = new Date(reservation.requestedStartAt).getTime();
+  const end = new Date(reservation.requestedEndAt).getTime();
+  if (Number.isFinite(end) && now > end) return 'past';
+  if (Number.isFinite(start) && now < start) return 'too_early';
+  return 'in_window';
 }
 
 function describeSettlement(reservation: Reservation): string {
@@ -254,17 +266,16 @@ export const BookingsScreen = (_props: Props) => {
         .sort((a, b) => new Date(b.requestedStartAt).getTime() - new Date(a.requestedStartAt).getTime());
 
       setReservations(merged);
-      if (selectedReservation) {
-        const refreshed = merged.find((item) => item.id === selectedReservation.id) ?? null;
-        setSelectedReservation(refreshed);
-      }
+      setSelectedReservation((prev) =>
+        prev ? (merged.find((item) => item.id === prev.id) ?? null) : prev,
+      );
     } catch (e) {
       setReservations([]);
       setError(e instanceof Error ? e.message : 'Failed to load reservations');
     } finally {
       setLoading(false);
     }
-  }, [accessToken, authUser?.role, selectedReservation]);
+  }, [accessToken, authUser?.role]);
 
   useEffect(() => {
     void load();
@@ -606,7 +617,18 @@ export const BookingsScreen = (_props: Props) => {
           <p className="dashboard-empty">{noBookings}</p>
         ) : (
           <ul className="calendar-booking-list">
-            {filteredReservations.map((r) => (
+            {filteredReservations.map((r) => {
+              const timingState = getReservationTimingState(r);
+              const canShowJoin =
+                r.mode === 'online' && ['accepted', 'in_session', 'awaiting_start'].includes(r.status);
+              const joinDisabled = canShowJoin && timingState !== 'in_window';
+              const joinLabel =
+                timingState === 'too_early'
+                  ? `Starts at ${formatDateTime(r.requestedStartAt)}`
+                  : timingState === 'past'
+                    ? 'Reservation time is over'
+                    : '';
+              return (
               <li key={r.id} className="calendar-booking-item reservation-card">
                 <div className="reservation-card-main">
                   <div className="calendar-booking-info">
@@ -738,18 +760,25 @@ export const BookingsScreen = (_props: Props) => {
                       </button>
                     </>
                   )}
-                  {r.mode === 'online' && ['accepted', 'in_session', 'awaiting_start'].includes(r.status) && (
+                  {canShowJoin && (
                     <button
                       type="button"
                       className="dashboard-btn dashboard-btn--small dashboard-btn--primary"
+                      title={joinDisabled ? joinLabel : undefined}
+                      aria-disabled={joinDisabled}
+                      disabled={joinDisabled}
                       onClick={() => setCallReservation(r)}
                     >
                       {isInterviewReservation(r) ? 'Join Interview' : 'Join Call'}
                     </button>
                   )}
+                  {canShowJoin && joinDisabled && (
+                    <span className="dashboard-card-meta">{joinLabel}</span>
+                  )}
                 </div>
               </li>
-            ))}
+              );
+            })}
           </ul>
         )}
       </Container>
@@ -888,6 +917,18 @@ export const BookingsScreen = (_props: Props) => {
 
                 {selectedReservation.mode === 'online' && (
                   <div className="reservation-section-box">
+                    {(() => {
+                      const timingState = getReservationTimingState(selectedReservation);
+                      const canShowJoin = ['accepted', 'in_session', 'awaiting_start'].includes(selectedReservation.status);
+                      const joinDisabled = canShowJoin && timingState !== 'in_window';
+                      const joinLabel =
+                        timingState === 'too_early'
+                          ? `Call is not available yet. Starts at ${formatDateTime(selectedReservation.requestedStartAt)}.`
+                          : timingState === 'past'
+                            ? 'This reservation time has ended.'
+                            : '';
+                      return (
+                        <>
                     <h4>{isInterviewReservation(selectedReservation) ? (bp.onlineInterview ?? 'Online Interview') : (bp.onlineSession ?? 'Online Session')}</h4>
                     {callSnapshot ? (
                       <>
@@ -903,15 +944,24 @@ export const BookingsScreen = (_props: Props) => {
                     ) : (
                       <p className="dashboard-card-meta">{bp.callDetailsWhenStart ?? 'Call details will appear when the session starts.'}</p>
                     )}
-                    {['accepted', 'in_session', 'awaiting_start'].includes(selectedReservation.status) && (
+                    {canShowJoin && (
                       <button
                         type="button"
                         className="dashboard-btn dashboard-btn--small dashboard-btn--primary"
+                        title={joinDisabled ? joinLabel : undefined}
+                        aria-disabled={joinDisabled}
+                        disabled={joinDisabled}
                         onClick={() => setCallReservation(selectedReservation)}
                       >
                         {isInterviewReservation(selectedReservation) ? (bp.joinInterview ?? 'Join Interview') : (bp.joinCall ?? 'Join Call')}
                       </button>
                     )}
+                    {canShowJoin && joinDisabled && (
+                      <p className="dashboard-card-meta">{joinLabel}</p>
+                    )}
+                        </>
+                      );
+                    })()}
                   </div>
                 )}
 
@@ -1147,7 +1197,7 @@ export const BookingsScreen = (_props: Props) => {
                 onClick={(e) => {
                   e.stopPropagation();
                   e.preventDefault();
-                  setTimeout(closeDetails, 0);
+                  closeDetails();
                 }}
               >
                 Close

@@ -40,7 +40,11 @@ reservationsRouter.delete(
   reservationsController.deleteSlot,
 );
 
-reservationsRouter.post('/', requireRole('customer'), reservationsController.createReservation);
+reservationsRouter.post(
+  '/',
+  requireRole('customer', 'expert', 'business', 'craftsman'),
+  reservationsController.createReservation,
+);
 reservationsRouter.get('/my', reservationsController.listMyReservations);
 reservationsRouter.get('/disputes', requireRole('admin'), reservationsController.listDisputes);
 reservationsRouter.get(

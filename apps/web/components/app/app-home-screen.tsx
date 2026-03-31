@@ -1,7 +1,6 @@
 'use client';
 
 import type { ServiceCategory, ServiceSearchResult } from '@mohandishub/shared';
-import Image from 'next/image';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 
@@ -12,9 +11,9 @@ import { useProfileModal } from './profile-modal-context';
 import { ServiceBookingModal } from './service-booking-modal';
 
 import { useAuth } from '@/components/auth/auth-provider';
+import { AvatarImage } from '@/components/ui/avatar-image';
 import { Container } from '@/components/ui/container';
 import { Skeleton, SkeletonCard, SkeletonText } from '@/components/ui/skeleton';
-import { resolvePublicAssetUrl } from '@/lib/asset-url';
 import { EGYPTIAN_CITIES } from '@/lib/data/egyptian-cities';
 import { buildLocalePath } from '@/lib/i18n/path';
 import type { Dictionary, Locale } from '@/lib/i18n/types';
@@ -418,26 +417,32 @@ export const AppHomeScreen = ({ locale, dictionary }: AppHomeScreenProps) => {
               <div className="home-top-cards-grid home-top-cards-grid--scroll">
                 {topExperts.length > 0
                   ? topExperts.map((expert) => (
-                      <button
+                      <div
                         key={expert.userId}
-                        type="button"
+                        role="button"
+                        tabIndex={0}
                         className="home-top-card home-top-card--large home-top-card--clickable"
                         onClick={() => openProfileModal(expert.userId, { displayName: expert.displayName, avatarUrl: expert.avatarUrl, role: 'expert' })}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault();
+                            openProfileModal(expert.userId, {
+                              displayName: expert.displayName,
+                              avatarUrl: expert.avatarUrl,
+                              role: 'expert',
+                            });
+                          }
+                        }}
                       >
                         <div className="home-top-avatar home-top-avatar--large">
-                          {expert.avatarUrl ? (
-                            <Image
-                              src={resolvePublicAssetUrl(expert.avatarUrl) ?? expert.avatarUrl}
-                              alt=""
-                              width={64}
-                              height={64}
-                              className="home-top-avatar-img"
-                            />
-                          ) : (
-                            <span className="home-top-avatar-fallback">
-                              {expert.displayName.charAt(0)}
-                            </span>
-                          )}
+                          <AvatarImage
+                            src={expert.avatarUrl}
+                            displayName={expert.displayName}
+                            width={64}
+                            height={64}
+                            imageClassName="home-top-avatar-img"
+                            fallbackClassName="home-top-avatar-fallback"
+                          />
                         </div>
                         <p className="home-top-name">{expert.displayName}</p>
                         <p className="home-top-meta">
@@ -447,7 +452,7 @@ export const AppHomeScreen = ({ locale, dictionary }: AppHomeScreenProps) => {
                             : ''}
                           {expert.city ? ` · ${expert.city}` : ''}
                         </p>
-                      </button>
+                      </div>
                     ))
                   : [1, 2, 3].map((i) => (
                       <div
@@ -470,9 +475,10 @@ export const AppHomeScreen = ({ locale, dictionary }: AppHomeScreenProps) => {
               <div className="home-top-cards-grid home-top-cards-grid--scroll">
                 {topCraftsmen.length > 0
                   ? topCraftsmen.map((craftsman) => (
-                      <button
+                      <div
                         key={craftsman.userId}
-                        type="button"
+                        role="button"
+                        tabIndex={0}
                         className="home-top-card home-top-card--large home-top-card--clickable"
                         onClick={() =>
                           openProfileModal(craftsman.userId, {
@@ -481,21 +487,26 @@ export const AppHomeScreen = ({ locale, dictionary }: AppHomeScreenProps) => {
                             role: 'craftsman',
                           })
                         }
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault();
+                            openProfileModal(craftsman.userId, {
+                              displayName: craftsman.displayName,
+                              avatarUrl: craftsman.avatarUrl,
+                              role: 'craftsman',
+                            });
+                          }
+                        }}
                       >
                         <div className="home-top-avatar home-top-avatar--large">
-                          {craftsman.avatarUrl ? (
-                            <Image
-                              src={resolvePublicAssetUrl(craftsman.avatarUrl) ?? craftsman.avatarUrl}
-                              alt=""
-                              width={64}
-                              height={64}
-                              className="home-top-avatar-img"
-                            />
-                          ) : (
-                            <span className="home-top-avatar-fallback">
-                              {craftsman.displayName.charAt(0)}
-                            </span>
-                          )}
+                          <AvatarImage
+                            src={craftsman.avatarUrl}
+                            displayName={craftsman.displayName}
+                            width={64}
+                            height={64}
+                            imageClassName="home-top-avatar-img"
+                            fallbackClassName="home-top-avatar-fallback"
+                          />
                         </div>
                         <p className="home-top-name">{craftsman.displayName}</p>
                         <p className="home-top-meta">
@@ -505,7 +516,7 @@ export const AppHomeScreen = ({ locale, dictionary }: AppHomeScreenProps) => {
                             : ''}
                           {craftsman.city ? ` · ${craftsman.city}` : ''}
                         </p>
-                      </button>
+                      </div>
                     ))
                   : [1, 2, 3].map((i) => (
                       <div
@@ -528,9 +539,10 @@ export const AppHomeScreen = ({ locale, dictionary }: AppHomeScreenProps) => {
               <div className="home-top-cards-grid home-top-cards-grid--scroll">
                 {topBusinesses.length > 0
                   ? topBusinesses.map((biz) => (
-                      <button
+                      <div
                         key={biz.userId}
-                        type="button"
+                        role="button"
+                        tabIndex={0}
                         className="home-top-card home-top-card--large home-top-card--clickable"
                         onClick={() =>
                           openProfileModal(biz.userId, {
@@ -539,28 +551,33 @@ export const AppHomeScreen = ({ locale, dictionary }: AppHomeScreenProps) => {
                             role: 'business',
                           })
                         }
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault();
+                            openProfileModal(biz.userId, {
+                              displayName: biz.companyName,
+                              avatarUrl: biz.avatarUrl,
+                              role: 'business',
+                            });
+                          }
+                        }}
                       >
                         <div className="home-top-avatar home-top-avatar--large">
-                          {biz.avatarUrl ? (
-                            <Image
-                              src={resolvePublicAssetUrl(biz.avatarUrl) ?? biz.avatarUrl}
-                              alt=""
-                              width={64}
-                              height={64}
-                              className="home-top-avatar-img"
-                            />
-                          ) : (
-                            <span className="home-top-avatar-fallback">
-                              {biz.companyName.charAt(0)}
-                            </span>
-                          )}
+                          <AvatarImage
+                            src={biz.avatarUrl}
+                            displayName={biz.companyName}
+                            width={64}
+                            height={64}
+                            imageClassName="home-top-avatar-img"
+                            fallbackClassName="home-top-avatar-fallback"
+                          />
                         </div>
                         <p className="home-top-name">{biz.companyName}</p>
                         <p className="home-top-meta">
                           {biz.industry ?? '—'}
                           {biz.city ? ` · ${biz.city}` : ''}
                         </p>
-                      </button>
+                      </div>
                     ))
                   : [1, 2, 3].map((i) => (
                       <div
@@ -813,16 +830,21 @@ export const AppHomeScreen = ({ locale, dictionary }: AppHomeScreenProps) => {
                     ) : (
                       <div className="home-results-grid">
                         {results.map((r) => (
-                          <button
-                            type="button"
+                          <div
                             key={r.id}
+                            role="button"
+                            tabIndex={0}
                             className="home-result-card"
                             onClick={() => setSelectedResult(r)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter' || e.key === ' ') {
+                                e.preventDefault();
+                                setSelectedResult(r);
+                              }
+                            }}
                           >
-                            <div
+                            <span
                               className="home-result-avatar home-result-avatar--clickable"
-                              role="button"
-                              tabIndex={0}
                               onClick={(e) => {
                                 e.stopPropagation();
                                 openProfileModal(r.providerId, {
@@ -831,32 +853,16 @@ export const AppHomeScreen = ({ locale, dictionary }: AppHomeScreenProps) => {
                                   role: r.providerRole,
                                 });
                               }}
-                              onKeyDown={(e) => {
-                                if (e.key === 'Enter' || e.key === ' ') {
-                                  e.preventDefault();
-                                  e.stopPropagation();
-                                  openProfileModal(r.providerId, {
-                                    displayName: r.providerName,
-                                    avatarUrl: r.providerAvatar ?? null,
-                                    role: r.providerRole,
-                                  });
-                                }
-                              }}
                             >
-                              {r.providerAvatar ? (
-                                <Image
-                                  src={resolvePublicAssetUrl(r.providerAvatar) ?? r.providerAvatar}
-                                  alt=""
-                                  className="home-result-avatar-img"
-                                  width={48}
-                                  height={48}
-                                />
-                              ) : (
-                                <span className="home-result-avatar-fallback">
-                                  {r.providerName.charAt(0)}
-                                </span>
-                              )}
-                            </div>
+                              <AvatarImage
+                                src={r.providerAvatar}
+                                displayName={r.providerName}
+                                width={48}
+                                height={48}
+                                imageClassName="home-result-avatar-img"
+                                fallbackClassName="home-result-avatar-fallback"
+                              />
+                            </span>
                             <div className="home-result-info">
                               <p className="home-result-title">{r.title}</p>
                               <p className="home-result-provider">
@@ -881,7 +887,7 @@ export const AppHomeScreen = ({ locale, dictionary }: AppHomeScreenProps) => {
                               )}
                             </div>
                             {r.isFeatured && <span className="home-result-featured">★</span>}
-                          </button>
+                          </div>
                         ))}
                       </div>
                     )}
@@ -1118,26 +1124,28 @@ export const AppHomeScreen = ({ locale, dictionary }: AppHomeScreenProps) => {
                 ) : (
                   <div className="home-results-grid">
                     {results.map((r) => (
-                      <button
-                        type="button"
+                      <div
                         key={r.id}
+                        role="button"
+                        tabIndex={0}
                         className="home-result-card"
                         onClick={() => setSelectedResult(r)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault();
+                            setSelectedResult(r);
+                          }
+                        }}
                       >
                         <div className="home-result-avatar">
-                          {r.providerAvatar ? (
-                            <Image
-                              src={resolvePublicAssetUrl(r.providerAvatar) ?? r.providerAvatar}
-                              alt=""
-                              className="home-result-avatar-img"
-                              width={48}
-                              height={48}
-                            />
-                          ) : (
-                            <span className="home-result-avatar-fallback">
-                              {r.providerName.charAt(0)}
-                            </span>
-                          )}
+                          <AvatarImage
+                            src={r.providerAvatar}
+                            displayName={r.providerName}
+                            width={48}
+                            height={48}
+                            imageClassName="home-result-avatar-img"
+                            fallbackClassName="home-result-avatar-fallback"
+                          />
                         </div>
                         <div className="home-result-info">
                           <p className="home-result-title">{r.title}</p>
@@ -1163,7 +1171,7 @@ export const AppHomeScreen = ({ locale, dictionary }: AppHomeScreenProps) => {
                           )}
                         </div>
                         {r.isFeatured && <span className="home-result-featured">★</span>}
-                      </button>
+                      </div>
                     ))}
                   </div>
                 )}
@@ -1201,21 +1209,16 @@ export const AppHomeScreen = ({ locale, dictionary }: AppHomeScreenProps) => {
                     })
                 }
               >
-                <div className="home-drawer-avatar">
-                  {selectedResult.providerAvatar ? (
-                    <Image
-                      src={resolvePublicAssetUrl(selectedResult.providerAvatar) ?? selectedResult.providerAvatar}
-                      alt=""
-                      className="home-drawer-avatar-img"
-                      width={80}
-                      height={80}
-                    />
-                  ) : (
-                    <span className="home-drawer-avatar-fallback">
-                      {selectedResult.providerName.charAt(0)}
-                    </span>
-                  )}
-                </div>
+                <span className="home-drawer-avatar">
+                  <AvatarImage
+                    src={selectedResult.providerAvatar}
+                    displayName={selectedResult.providerName}
+                    width={80}
+                    height={80}
+                    imageClassName="home-drawer-avatar-img"
+                    fallbackClassName="home-drawer-avatar-fallback"
+                  />
+                </span>
               </button>
               <h2 className="home-drawer-title">{selectedResult.title}</h2>
               <button

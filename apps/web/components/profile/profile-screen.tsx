@@ -175,16 +175,19 @@ const AccountForm = ({
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [avatarPreviewUrl, setAvatarPreviewUrl] = useState<string | null>(authUser.avatarUrl);
   const [avatarRemoved, setAvatarRemoved] = useState(false);
+  const [avatarPreviewFailed, setAvatarPreviewFailed] = useState(false);
 
   useEffect(() => {
     setAvatarPreviewUrl(authUser.avatarUrl);
     setAvatarFile(null);
     setAvatarRemoved(false);
+    setAvatarPreviewFailed(false);
   }, [authUser.avatarUrl]);
 
   const handleAvatarSelected = useCallback(async (file: File) => {
     setAvatarFile(file);
     setAvatarRemoved(false);
+    setAvatarPreviewFailed(false);
     setAvatarPreviewUrl(await readFilePreview(file));
   }, []);
 
@@ -447,12 +450,21 @@ const AccountForm = ({
             </p>
             {avatarPreviewUrl && !avatarRemoved && (
               <div className="profile-screen-image-preview">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={profileImageDisplaySrc(avatarPreviewUrl)}
-                  alt={(labels as { avatarLabel?: string }).avatarLabel ?? 'Profile picture'}
-                  className="profile-screen-image-preview-img"
-                />
+                {avatarPreviewFailed ? (
+                  <div className="profile-screen-image-preview-img profile-screen-image-preview-fallback">
+                    {authUser.displayName.charAt(0).toUpperCase()}
+                  </div>
+                ) : (
+                  <>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={profileImageDisplaySrc(avatarPreviewUrl)}
+                      alt={(labels as { avatarLabel?: string }).avatarLabel ?? 'Profile picture'}
+                      className="profile-screen-image-preview-img"
+                      onError={() => setAvatarPreviewFailed(true)}
+                    />
+                  </>
+                )}
               </div>
             )}
             <ImageUploadOrCapture
@@ -461,6 +473,7 @@ const AccountForm = ({
               onClear={() => {
                 setAvatarFile(null);
                 setAvatarPreviewUrl(authUser.avatarUrl);
+                setAvatarPreviewFailed(false);
               }}
               onError={(message) => setSaveMessage({ type: 'error', text: message })}
               disabled={saving}

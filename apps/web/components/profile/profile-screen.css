@@ -309,6 +309,15 @@
   object-fit: cover;
 }
 
+.profile-screen-image-preview-fallback {
+  display: grid;
+  place-items: center;
+  background: color-mix(in srgb, hsl(var(--brand)) 16%, transparent);
+  color: hsl(var(--brand));
+  font-weight: 700;
+  font-size: 1.5rem;
+}
+
 .profile-screen-save-success {
   margin: 0;
   font-size: 0.9rem;

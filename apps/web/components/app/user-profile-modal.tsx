@@ -1,14 +1,13 @@
 'use client';
 
 import type { PublicUserProfile } from '@mohandishub/shared';
-import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import type { ProfileModalInitialData } from './profile-modal-context';
 
 import { useAuth } from '@/components/auth/auth-provider';
-import { resolvePublicAssetUrl } from '@/lib/asset-url';
+import { AvatarImage } from '@/components/ui/avatar-image';
 import { chatApiClient } from '@/lib/chat/client';
 import { buildLocalePath } from '@/lib/i18n/path';
 import type { Dictionary, Locale } from '@/lib/i18n/types';
@@ -152,19 +151,14 @@ export function UserProfileModal({
             <div className="user-profile-modal-cover" />
             <div className="user-profile-modal-body">
               <div className="user-profile-modal-avatar-wrap">
-                {profile.avatarUrl ? (
-                  <Image
-                    src={resolvePublicAssetUrl(profile.avatarUrl) ?? profile.avatarUrl}
-                    alt=""
-                    width={96}
-                    height={96}
-                    className="user-profile-modal-avatar"
-                  />
-                ) : (
-                  <span className="user-profile-modal-avatar-fallback">
-                    {profile.displayName.charAt(0).toUpperCase()}
-                  </span>
-                )}
+                <AvatarImage
+                  src={profile.avatarUrl}
+                  displayName={profile.displayName}
+                  width={96}
+                  height={96}
+                  imageClassName="user-profile-modal-avatar"
+                  fallbackClassName="user-profile-modal-avatar-fallback"
+                />
               </div>
               <h2 id="user-profile-modal-title" className="user-profile-modal-name">
                 {profile.displayName}

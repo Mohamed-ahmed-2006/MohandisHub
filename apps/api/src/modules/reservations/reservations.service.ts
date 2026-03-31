@@ -23,6 +23,7 @@ import { buildAgoraRtcToken } from '../../lib/agora-token.js';
 import { HttpError } from '../../utils/http-error.js';
 import { ChatRepository } from '../chat/chat.repository.js';
 import { JobsRepository } from '../jobs/jobs.repository.js';
+import { ServicesRepository } from '../services/services.repository.js';
 import { SettingsService } from '../settings/settings.service.js';
 import { WalletRepository } from '../wallet/wallet.repository.js';
 
@@ -82,6 +83,7 @@ const toNumber = (value: string | number | null | undefined): number => {
   const parsed = Number.parseFloat(value);
   return Number.isFinite(parsed) ? parsed : 0;
 };
+const toMoney = (value: number): number => Number(value.toFixed(2));
 
 const asDate = (value: string | Date | null | undefined): Date | null => {
   if (!value) return null;
@@ -276,6 +278,7 @@ export class ReservationsService {
     private readonly walletRepo: WalletRepository = new WalletRepository(),
     private readonly chatRepo: ChatRepository = new ChatRepository(),
     private readonly jobsRepo: JobsRepository = new JobsRepository(),
+    private readonly servicesRepo: ServicesRepository = new ServicesRepository(),
   ) {}
 
   async getMyProfile(userId: string, role: string): Promise<ReservationProfile> {
@@ -501,7 +504,29 @@ export class ReservationsService {
       profile = await this.repo.upsertProfile(input.providerId, {});
     }
 
-    const expertPrice = this.getExpertPriceByType(profile, input.mode, input.onlineType);
+    let expertPrice = this.getExpertPriceByType(profile, input.mode, input.onlineType);
+    let reservationCurrency = profile.currency || 'EGP';
+    if (input.serviceId) {
+      const service = await this.servicesRepo.getActiveServiceById(input.serviceId);
+      if (!service) {
+        throw new HttpError({
+          statusCode: 404,
+          code: 'SERVICE_NOT_FOUND',
+          message: 'Selected service is not available.',
+        });
+      }
+      if (service.provider_id !== input.providerId) {
+        throw new HttpError({
+          statusCode: 400,
+          code: 'SERVICE_PROVIDER_MISMATCH',
+          message: 'Selected service does not belong to this provider.',
+        });
+      }
+      if (service.price != null) {
+        expertPrice = toNumber(service.price);
+      }
+      reservationCurrency = service.currency || reservationCurrency;
+    }
     const adminMinuteRate =
       input.mode === 'online'
         ? input.onlineType === 'video'
@@ -521,7 +546,7 @@ export class ReservationsService {
       requestedStartAt: new Date(slot.start_at),
       requestedEndAt: new Date(slot.end_at),
       expertPriceAmount: expertPrice,
-      currency: profile.currency || 'EGP',
+      currency: reservationCurrency,
       adminAcceptanceFee: status.reservationAcceptanceFee,
       adminMinuteRate,
       policySnapshot,
@@ -1245,6 +1270,23 @@ export class ReservationsService {
         statusCode: 400,
         code: 'MEDIA_TYPE_MISMATCH',
         message: 'Join type does not match reservation online type.',
+      });
+    }
+    const nowMs = Date.now();
+    const startMs = new Date(reservation.requested_start_at).getTime();
+    const endMs = new Date(reservation.requested_end_at).getTime();
+    if (Number.isFinite(startMs) && nowMs < startMs) {
+      throw new HttpError({
+        statusCode: 409,
+        code: 'CALL_NOT_STARTED',
+        message: 'Reservation time has not started yet.',
+      });
+    }
+    if (Number.isFinite(endMs) && nowMs > endMs) {
+      throw new HttpError({
+        statusCode: 409,
+        code: 'CALL_WINDOW_PASSED',
+        message: 'Reservation time is over.',
       });
     }
 
@@ -2622,7 +2664,10 @@ export class ReservationsService {
     const compact = userId.replace(/-/g, '');
     const slice = compact.slice(-9);
     const numeric = Number.parseInt(slice, 16);
-    if (Number.isFinite(numeric) && numeric > 0) return numeric;
+    if (Number.isFinite(numeric) && numeric > 0) {
+      const maxInt32 = 2_147_483_647;
+      return (numeric % maxInt32) || 1;
+    }
     return randomInt(1, 2_147_483_647);
   }
 
@@ -2879,6 +2924,21 @@ export class ReservationsService {
         message: 'Customer wallet is required to pay reservation acceptance fee.',
       });
     }
+    const available = toNumber(customerWallet.balance);
+    if (available < fee) {
+      throw new HttpError({
+        statusCode: 402,
+        code: 'INSUFFICIENT_BALANCE',
+        message: `Insufficient balance for reservation acceptance fee. Required ${toMoney(fee)} EGP, available ${toMoney(available)} EGP.`,
+        details: {
+          requiredEgp: toMoney(fee),
+          availableEgp: toMoney(available),
+          component: 'acceptance_fee',
+          customerId: reservation.customer_id,
+          walletId: customerWallet.id,
+        },
+      });
+    }
 
     const receiverId = await this.getCommissionReceiverId();
 
@@ -2923,17 +2983,48 @@ export class ReservationsService {
         message: 'Customer wallet not found for reservation hold.',
       });
     }
+    const available = toNumber(wallet.balance);
+    if (available < holdAmount) {
+      throw new HttpError({
+        statusCode: 402,
+        code: 'INSUFFICIENT_BALANCE',
+        message: `Insufficient balance to hold reservation amount. Required ${toMoney(holdAmount)} EGP, available ${toMoney(available)} EGP.`,
+        details: {
+          requiredEgp: toMoney(holdAmount),
+          availableEgp: toMoney(available),
+          component: 'fixed_price_hold',
+          customerId: reservation.customer_id,
+          walletId: wallet.id,
+        },
+      });
+    }
 
-    const hold = await this.walletRepo.createHoldInTransaction(
-      client,
-      wallet.id,
-      reservation.customer_id,
-      holdAmount,
-      reservation.currency,
-      'reservation',
-      reservation.id,
-      { reservationId: reservation.id, purpose: 'fixed_price' },
-    );
+    let hold;
+    try {
+      hold = await this.walletRepo.createHoldInTransaction(
+        client,
+        wallet.id,
+        reservation.customer_id,
+        holdAmount,
+        reservation.currency,
+        'reservation',
+        reservation.id,
+        { reservationId: reservation.id, purpose: 'fixed_price' },
+      );
+    } catch (error) {
+      if (error instanceof Error && error.message === 'INSUFFICIENT_BALANCE') {
+        throw new HttpError({
+          statusCode: 402,
+          code: 'INSUFFICIENT_BALANCE',
+          message: `Insufficient balance to hold reservation amount. Required ${toMoney(holdAmount)} EGP.`,
+          details: {
+            requiredEgp: toMoney(holdAmount),
+            component: 'fixed_price_hold',
+          },
+        });
+      }
+      throw error;
+    }
     await this.repo.updateReservation(
       reservation.id,
       { fixedPriceHoldId: hold.id },

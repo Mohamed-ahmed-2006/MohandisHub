@@ -415,6 +415,11 @@
   box-shadow: var(--shadow-soft), 0 0 0 2px hsl(var(--primary) / 0.2);
 }
 
+.home-top-card--clickable:focus-visible {
+  outline: 2px solid hsl(var(--primary));
+  outline-offset: 2px;
+}
+
 .home-top-avatar--large {
   width: 64px;
   height: 64px;
@@ -491,6 +496,11 @@
   border-color: hsl(var(--primary) / 0.4);
   background-color: hsl(var(--primary) / 0.03);
   transform: translateY(-1px);
+}
+
+.home-result-card:focus-visible {
+  outline: 2px solid hsl(var(--primary));
+  outline-offset: 2px;
 }
 
 .home-result-avatar {
