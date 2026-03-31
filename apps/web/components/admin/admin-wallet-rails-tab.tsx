@@ -6,7 +6,7 @@ import { useCallback, useEffect, useState } from 'react';
 
 import { adminApiClient } from '@/lib/admin/client';
 import type { Dictionary } from '@/lib/i18n/types';
-import { getPrivateFileUrl, uploadPrivateFile } from '@/lib/upload/client';
+import { getPrivateFileOpenableUrl, uploadPrivateFile } from '@/lib/upload/client';
 
 const LIMIT = 15;
 
@@ -98,7 +98,7 @@ export const AdminWalletRailsTab = ({ dictionary, accessToken, refreshSession }:
   const openProof = async (uploadId: string | null) => {
     if (!uploadId) return;
     try {
-      const url = await getPrivateFileUrl(accessToken, uploadId);
+      const url = await getPrivateFileOpenableUrl(accessToken, uploadId);
       window.open(url, '_blank', 'noopener,noreferrer');
     } catch {
       /* empty */
@@ -245,6 +245,7 @@ export const AdminWalletRailsTab = ({ dictionary, accessToken, refreshSession }:
                   <tr>
                     <th>{d.userId}</th>
                     <th>{d.amountEgp}</th>
+                    <th>Sender account</th>
                     <th>{d.status}</th>
                     <th>{d.created}</th>
                     <th>{txnLabels.actions}</th>
@@ -255,6 +256,7 @@ export const AdminWalletRailsTab = ({ dictionary, accessToken, refreshSession }:
                     <tr key={row.id}>
                       <td style={{ fontSize: '0.8rem', wordBreak: 'break-all' }}>{row.userId}</td>
                       <td>{row.amountEgp.toFixed(2)}</td>
+                      <td>{row.senderAccount ?? '—'}</td>
                       <td>
                         <span className="admin-badge">{row.status}</span>
                       </td>

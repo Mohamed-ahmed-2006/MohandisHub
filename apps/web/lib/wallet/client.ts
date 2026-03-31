@@ -178,7 +178,7 @@ export const walletApiClient = {
 
   submitInstapayDeposit: async (
     accessToken: string,
-    body: { amountEgp: number; proofUploadId: string },
+    body: { amountEgp: number; proofUploadId: string; senderAccount: string },
   ): Promise<ManualDepositRequest> =>
     requestJson<ManualDepositRequest>({
       accessToken,

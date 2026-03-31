@@ -39,6 +39,7 @@ export const WalletDepositModal = ({
   const [step, setStep] = useState<'choose' | 'amount' | 'instapay'>('choose');
   const [method, setMethod] = useState<'crypto' | 'card' | 'instapay'>('crypto');
   const [amount, setAmount] = useState('');
+  const [senderAccount, setSenderAccount] = useState('');
   const [payCurrency, setPayCurrency] = useState('USDTTRC20');
   const [availableCurrencies, setAvailableCurrencies] = useState<string[]>(['USDTTRC20']);
   const [estimatedPayAmount, setEstimatedPayAmount] = useState<number | null>(null);
@@ -146,6 +147,7 @@ export const WalletDepositModal = ({
   const handleBack = () => {
     setStep('choose');
     setAmount('');
+    setSenderAccount('');
     setError(null);
   };
 
@@ -163,6 +165,11 @@ export const WalletDepositModal = ({
       setError(d.instapayProofRequired);
       return;
     }
+    const sender = senderAccount.trim();
+    if (!sender) {
+      setError('Sender InstaPay number/account is required.');
+      return;
+    }
     setLoading(true);
     setError(null);
     try {
@@ -171,6 +178,7 @@ export const WalletDepositModal = ({
       await walletApiClient.submitInstapayDeposit(accessToken, {
         amountEgp: num,
         proofUploadId,
+        senderAccount: sender,
       });
       onDepositCreated?.();
       onClose();
@@ -255,6 +263,17 @@ export const WalletDepositModal = ({
               className="deposit-form-input"
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
+              disabled={loading}
+            />
+            <label className="deposit-form-label" style={{ marginTop: '0.75rem' }}>
+              Sender InstaPay number / account
+            </label>
+            <input
+              type="text"
+              className="deposit-form-input"
+              placeholder="e.g. +2010xxxxxxx or wallet account"
+              value={senderAccount}
+              onChange={(e) => setSenderAccount(e.target.value)}
               disabled={loading}
             />
             <label className="deposit-form-label" style={{ marginTop: '0.75rem' }}>

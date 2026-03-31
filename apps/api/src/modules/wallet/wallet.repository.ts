@@ -319,6 +319,7 @@ export class WalletRepository {
     orderId: string;
     proofUploadId: string;
     destinationAccountSnapshot: Record<string, unknown>;
+    providerPayload?: Record<string, unknown>;
   }): Promise<DepositRequestRow> {
     const { rows } = await this.db.query<DepositRequestRow>(
       `INSERT INTO deposit_requests (
@@ -326,7 +327,7 @@ export class WalletRepository {
         proof_upload_id, destination_account_snapshot, provider_payload
       )
       VALUES ($1, $2, $3, 'EGP', $4, 'instapay_manual', 'pending_review',
-        $5, $6::jsonb, '{}'::jsonb)
+        $5, $6::jsonb, $7::jsonb)
       RETURNING ${this.depositSelectColumns}`,
       [
         params.userId,
@@ -335,6 +336,7 @@ export class WalletRepository {
         params.orderId,
         params.proofUploadId,
         JSON.stringify(params.destinationAccountSnapshot),
+        JSON.stringify(params.providerPayload ?? {}),
       ],
     );
     return rows[0]!;

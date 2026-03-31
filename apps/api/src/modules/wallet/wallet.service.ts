@@ -24,6 +24,7 @@ import {
   verifyPayout,
 } from '../../lib/nowpayments.client.js';
 import { HttpError } from '../../utils/http-error.js';
+import { NotificationsService } from '../notifications/notifications.service.js';
 import { SettingsService } from '../settings/settings.service.js';
 
 import { WalletFxService } from './wallet-fx.service.js';
@@ -81,6 +82,7 @@ export class WalletService {
   constructor(
     private readonly repo: WalletRepository = new WalletRepository(),
     private readonly settingsService: SettingsService = new SettingsService(),
+    private readonly notificationsService: NotificationsService = new NotificationsService(),
   ) {
     this.fx = new WalletFxService(this.settingsService);
   }
@@ -695,6 +697,7 @@ export class WalletService {
     userId: string;
     amountEgp: number;
     proofUploadId: string;
+    senderAccount: string;
   }): Promise<ManualDepositRequest> {
     const status = await this.settingsService.getAppStatus();
     if (status.depositsPaused) {
@@ -753,6 +756,9 @@ export class WalletService {
       orderId,
       proofUploadId: params.proofUploadId,
       destinationAccountSnapshot: display,
+      providerPayload: {
+        sender_account: params.senderAccount,
+      },
     });
     return this.toManualDepositRequest(row);
   }
@@ -809,7 +815,14 @@ export class WalletService {
         message: 'Deposit cannot be approved (wrong status or already processed).',
       });
     }
-    return this.toManualDepositRequest(row);
+    const mapped = this.toManualDepositRequest(row);
+    await this.notificationsService.createForUser(mapped.userId, {
+      type: 'wallet_deposit_approved',
+      title: 'InstaPay deposit approved',
+      message: `Your InstaPay deposit request for ${mapped.amountEgp.toFixed(2)} EGP was approved.`,
+      payload: { depositId: mapped.id, creditedAmountEgp: mapped.creditedAmountEgp },
+    });
+    return mapped;
   }
 
   async rejectManualInstapayDepositAdmin(
@@ -825,7 +838,14 @@ export class WalletService {
         message: 'Deposit cannot be rejected.',
       });
     }
-    return this.toManualDepositRequest(row);
+    const mapped = this.toManualDepositRequest(row);
+    await this.notificationsService.createForUser(mapped.userId, {
+      type: 'wallet_deposit_rejected',
+      title: 'InstaPay deposit rejected',
+      message: `Your InstaPay deposit request was rejected. Reason: ${reason}`,
+      payload: { depositId: mapped.id, reason },
+    });
+    return mapped;
   }
 
   async listManualWithdrawalsForAdmin(params: {
@@ -878,6 +898,8 @@ export class WalletService {
   }
 
   private toManualDepositRequest(row: DepositRequestRow): ManualDepositRequest {
+    const senderAccountRaw = row.provider_payload?.sender_account;
+    const senderAccount = typeof senderAccountRaw === 'string' ? senderAccountRaw : null;
     return {
       id: row.id,
       userId: row.user_id,
@@ -887,6 +909,7 @@ export class WalletService {
       status: row.status as ManualDepositRequest['status'],
       provider: row.provider,
       proofUploadId: row.proof_upload_id,
+      senderAccount,
       destinationAccountSnapshot: row.destination_account_snapshot,
       reviewedAt: row.reviewed_at,
       rejectionReason: row.rejection_reason,

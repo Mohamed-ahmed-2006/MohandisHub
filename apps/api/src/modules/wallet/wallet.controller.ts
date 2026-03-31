@@ -285,6 +285,8 @@ const submitInstapayDeposit = asyncHandler(async (req, res) => {
         : NaN;
   const proofUploadId =
     typeof body?.proofUploadId === 'string' ? body.proofUploadId.trim() : '';
+  const senderAccount =
+    typeof body?.senderAccount === 'string' ? body.senderAccount.trim() : '';
   if (!proofUploadId) {
     throw new HttpError({
       statusCode: 400,
@@ -292,10 +294,18 @@ const submitInstapayDeposit = asyncHandler(async (req, res) => {
       message: 'proofUploadId is required.',
     });
   }
+  if (!senderAccount) {
+    throw new HttpError({
+      statusCode: 400,
+      code: 'INVALID_REQUEST',
+      message: 'senderAccount is required.',
+    });
+  }
   const result = await walletService.submitInstapayManualDeposit({
     userId: user.id,
     amountEgp,
     proofUploadId,
+    senderAccount,
   });
   const response: ApiSuccessBody<ManualDepositRequest> = { ok: true, data: result };
   res.status(201).json(response);

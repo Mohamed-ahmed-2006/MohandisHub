@@ -87,6 +87,7 @@ export type DepositCheckoutResponse = {
 export type SubmitInstapayDepositBody = {
   amountEgp: number;
   proofUploadId: string;
+  senderAccount: string;
 };
 
 export type ManualDepositRequestStatus =
@@ -107,6 +108,7 @@ export type ManualDepositRequest = {
   status: ManualDepositRequestStatus;
   provider: string;
   proofUploadId: string | null;
+  senderAccount: string | null;
   destinationAccountSnapshot: Record<string, unknown>;
   reviewedAt: string | null;
   rejectionReason: string | null;
