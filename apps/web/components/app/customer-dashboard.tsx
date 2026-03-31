@@ -5,6 +5,7 @@ import Image from 'next/image';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { useToast } from '@/components/app/toast';
+import { useAppStatus } from '@/components/app-status-provider';
 import { resolvePublicAssetUrl, toAbsoluteAssetUrl } from '@/lib/asset-url';
 import { getApiBaseUrl } from '@/lib/env';
 import { pickLocalized } from '@/lib/i18n/api';
@@ -79,12 +80,15 @@ export const CustomerDashboard = ({
   const [previewImage, setPreviewImage] = useState<{ url: string; urls: string[] } | null>(null);
   const [markingCompleted, setMarkingCompleted] = useState<string | null>(null);
   const { addToast } = useToast();
+  const { status } = useAppStatus();
+  const needsFeatureEnabled = status?.featureNeedsEnabled !== false;
 
   const isVideoFile = (file: File) => file.type.startsWith('video/');
   const maxImages = 5;
   const maxVideos = 1;
 
   const d = (dictionary.needs ?? {}) as Record<string, string>;
+  const tr = (en: string, ar: string) => (locale === 'ar' ? ar : en);
   const needStatusLabels: Record<string, string> = {
     open: d.needStatusOpen ?? 'Open',
     awarded: d.needStatusAwarded ?? 'Awarded',
@@ -109,15 +113,15 @@ export const CustomerDashboard = ({
   };
 
   const fieldLabel: Record<string, string> = {
-    title: d.titlePlaceholder ?? 'Title',
-    description: d.descPlaceholder ?? 'Description',
-    categoryId: d.anyCategory ?? 'Category',
-    budgetType: d.budgetType ?? 'Budget type',
-    budgetAmount: d.budgetPlaceholder ?? 'Budget amount',
-    timelineDays: d.timelinePlaceholder ?? 'Timeline (days)',
-    city: d.locationType ?? 'Location',
-    referenceUrl: d.linkOrScreenshotPlaceholder ?? 'Link',
-    referenceUrls: dictionary.common.upload ?? 'Uploads',
+    title: d.titlePlaceholder ?? tr('Title', 'العنوان'),
+    description: d.descPlaceholder ?? tr('Description', 'الوصف'),
+    categoryId: d.anyCategory ?? tr('Category', 'الفئة'),
+    budgetType: d.budgetType ?? tr('Budget type', 'نوع الميزانية'),
+    budgetAmount: d.budgetPlaceholder ?? tr('Budget amount', 'مبلغ الميزانية'),
+    timelineDays: d.timelinePlaceholder ?? tr('Timeline (days)', 'المدة (أيام)'),
+    city: d.locationType ?? tr('Location', 'الموقع'),
+    referenceUrl: d.linkOrScreenshotPlaceholder ?? tr('Link', 'الرابط'),
+    referenceUrls: dictionary.common.upload ?? tr('Uploads', 'المرفقات'),
   };
 
   const loadNeeds = useCallback(async () => {
@@ -199,25 +203,33 @@ export const CustomerDashboard = ({
         : undefined;
 
     if (title.length < 3) {
-      setError('Please enter a title with at least 3 characters.');
+      setError(tr('Please enter a title with at least 3 characters.', 'يرجى إدخال عنوان لا يقل عن 3 أحرف.'));
       setSaving(false);
       return;
     }
 
     if (description.length < 10) {
-      setError('Please enter a description with at least 10 characters.');
+      setError(
+        tr('Please enter a description with at least 10 characters.', 'يرجى إدخال وصف لا يقل عن 10 أحرف.'),
+      );
       setSaving(false);
       return;
     }
 
     if (budgetAmount < 1) {
-      setError(d.budgetPlaceholder ?? 'Please enter a valid budget amount (at least 1).');
+      setError(
+        d.budgetPlaceholder ??
+          tr(
+            'Please enter a valid budget amount (at least 1).',
+            'يرجى إدخال مبلغ ميزانية صحيح (1 على الأقل).',
+          ),
+      );
       setSaving(false);
       return;
     }
 
     if (timelineDaysValue && timelineDays == null) {
-      setError('Please enter a timeline between 1 and 365 days.');
+      setError(tr('Please enter a timeline between 1 and 365 days.', 'يرجى إدخال مدة بين 1 و 365 يومًا.'));
       setSaving(false);
       return;
     }
@@ -349,18 +361,32 @@ export const CustomerDashboard = ({
     <section className="dashboard-section" ref={sectionRef}>
       <div className="dashboard-section-header">
         <h2 className="dashboard-section-title">{d.myNeeds ?? 'My Needs'}</h2>
-        <button type="button" className="dashboard-primary-btn" onClick={() => setShowForm(true)}>
+        <button
+          type="button"
+          className="dashboard-primary-btn"
+          onClick={() => setShowForm(true)}
+          disabled={!needsFeatureEnabled}
+          title={!needsFeatureEnabled ? 'Needs feature is disabled by admin' : undefined}
+        >
           {d.postNeed ?? 'Post a Need'}
         </button>
       </div>
+      {!needsFeatureEnabled && (
+        <p className="dashboard-empty" role="status">
+          Needs are currently disabled by admin.
+        </p>
+      )}
 
-      {showForm && (
+      {showForm && needsFeatureEnabled && (
         <div className="plan-modal-overlay" onClick={() => setShowForm(false)}>
           <div className="plan-modal plan-modal--post-need" onClick={(e) => e.stopPropagation()}>
             <div className="dashboard-need-modal-head">
               <h3 className="plan-modal-title">{d.postNeed ?? 'Post a Need'}</h3>
               <p className="dashboard-need-modal-subtitle">
-                Share scope, budget, and references so experts can bid accurately.
+                {tr(
+                  'Share scope, budget, and references so experts can bid accurately.',
+                  'شارك النطاق والميزانية والمراجع ليتمكن الخبراء من تقديم عروض دقيقة.',
+                )}
               </p>
             </div>
             <form
@@ -381,11 +407,10 @@ export const CustomerDashboard = ({
                   )}
                 </div>
               )}
-              <div className="dashboard-need-form-layout">
-                <div className="dashboard-need-main">
-                  <section className="dashboard-need-card">
-                    <h4 className="dashboard-need-card-title">Need details</h4>
-                    <div className="dashboard-form-grid">
+              <div className="dashboard-need-main">
+                <section className="dashboard-need-card">
+                  <h4 className="dashboard-need-card-title">{tr('Need details', 'تفاصيل الحاجة')}</h4>
+                  <div className="dashboard-form-grid">
                       <div className="dashboard-form-field dashboard-form-field--full">
                         <label className="dashboard-form-label">
                           {d.titlePlaceholder ?? 'Title'}
@@ -428,16 +453,14 @@ export const CustomerDashboard = ({
                       </div>
                       <div className="dashboard-form-field">
                         <label className="dashboard-form-label">
-                          {d.locationType ?? 'Location'}
+                          {d.locationType ?? tr('Location', 'الموقع')}
                         </label>
                         <select
                           name="location"
                           className="dashboard-select dashboard-select--modal"
                         >
-                          <option value="">{d.chooseLocation ?? 'Choose...'}</option>
-                          <option value="Online">
-                            {d.locationOnlineRemote ?? 'Online / Remote'}
-                          </option>
+                          <option value="">{d.chooseLocation ?? tr('Choose...', 'اختر...')}</option>
+                          <option value="Online">{d.locationOnlineRemote ?? tr('Online / Remote', 'أونلاين / عن بعد')}</option>
                           {cities
                             .filter((c) => c !== 'Online' && c !== 'Remote')
                             .map((c) => (
@@ -448,17 +471,17 @@ export const CustomerDashboard = ({
                         </select>
                       </div>
                       <div className="dashboard-form-field dashboard-form-field--full">
-                        <label className="dashboard-form-label">Country</label>
+                        <label className="dashboard-form-label">{tr('Country', 'الدولة')}</label>
                         <input
                           name="country"
                           className="dashboard-input"
-                          placeholder="Country (optional)"
+                          placeholder={tr('Country (optional)', 'الدولة (اختياري)')}
                           defaultValue=""
                         />
                       </div>
                       <div className="dashboard-form-field">
                         <label className="dashboard-form-label">
-                          {d.budgetType ?? 'Budget type'}
+                          {d.budgetType ?? tr('Budget type', 'نوع الميزانية')}
                         </label>
                         <select
                           name="budgetType"
@@ -502,7 +525,10 @@ export const CustomerDashboard = ({
                           {d.linkOrScreenshotPlaceholder ?? 'Link (optional)'}
                         </label>
                         <p className="dashboard-form-hint dashboard-form-hint--spaced">
-                          Up to 5 images or 1 video. You can remove any from the list below.
+                          {tr(
+                            'Up to 5 images or 1 video. You can remove any from the list below.',
+                            'حتى 5 صور أو فيديو واحد. يمكنك إزالة أي ملف من القائمة أدناه.',
+                          )}
                         </p>
                         <div className="dashboard-form-upload-row">
                           <input
@@ -517,23 +543,33 @@ export const CustomerDashboard = ({
                               const hasVideo = uploadedFiles.some((f) => f.isVideo);
                               if (fileIsVideo && uploadedFiles.length > 0) {
                                 setError(
-                                  'Remove existing files first. Only 1 video or up to 5 images allowed.',
+                                  tr(
+                                    'Remove existing files first. Only 1 video or up to 5 images allowed.',
+                                    'احذف الملفات الحالية أولاً. مسموح فيديو واحد فقط أو حتى 5 صور.',
+                                  ),
                                 );
                                 e.target.value = '';
                                 return;
                               }
                               if (fileIsVideo && uploadedFiles.length >= maxVideos) {
-                                setError('Only 1 video allowed.');
+                                setError(tr('Only 1 video allowed.', 'مسموح فيديو واحد فقط.'));
                                 e.target.value = '';
                                 return;
                               }
                               if (!fileIsVideo && hasVideo) {
-                                setError('Only 1 video allowed. Remove the video to add images.');
+                                setError(
+                                  tr(
+                                    'Only 1 video allowed. Remove the video to add images.',
+                                    'مسموح فيديو واحد فقط. احذف الفيديو لإضافة صور.',
+                                  ),
+                                );
                                 e.target.value = '';
                                 return;
                               }
                               if (!fileIsVideo && uploadedFiles.length >= maxImages) {
-                                setError(`Maximum ${maxImages} images.`);
+                                setError(
+                                  tr(`Maximum ${maxImages} images.`, `الحد الأقصى ${maxImages} صور.`),
+                                );
                                 e.target.value = '';
                                 return;
                               }
@@ -547,7 +583,8 @@ export const CustomerDashboard = ({
                                   : base
                                     ? `${base}${url.startsWith('/') ? '' : '/'}${url}`
                                     : url;
-                                const displayName = originalName || url.split('/').pop() || 'File';
+                                const displayName =
+                                  originalName || url.split('/').pop() || tr('File', 'ملف');
                                 const item = { url: fullUrl, displayName, isVideo: fileIsVideo };
                                 if (fileIsVideo) {
                                   setUploadedFiles([item]);
@@ -555,7 +592,7 @@ export const CustomerDashboard = ({
                                   setUploadedFiles((prev) => [...prev, item].slice(-maxImages));
                                 }
                               } catch (err) {
-                                setError(err instanceof Error ? err.message : 'Upload failed');
+                                setError(err instanceof Error ? err.message : tr('Upload failed', 'فشل رفع الملف'));
                               } finally {
                                 setUploading(false);
                                 e.target.value = '';
@@ -569,7 +606,7 @@ export const CustomerDashboard = ({
                             type="url"
                             className="dashboard-input"
                             placeholder={
-                              d.linkOrScreenshotPlaceholder ?? 'Or paste link (optional)'
+                              d.linkOrScreenshotPlaceholder ?? tr('Or paste link (optional)', 'أو الصق رابطًا (اختياري)')
                             }
                             defaultValue=""
                           />
@@ -599,17 +636,28 @@ export const CustomerDashboard = ({
                       </div>
                     </div>
                   </section>
-                </div>
-                <aside className="dashboard-need-side">
-                  <section className="dashboard-need-card dashboard-need-card--summary">
-                    <h4 className="dashboard-need-card-title">{d.beforePublishing ?? 'Before publishing'}</h4>
-                    <ul className="dashboard-need-checklist">
-                      <li>{d.checklistItem1 ?? 'State deliverables and constraints clearly.'}</li>
-                      <li>{d.checklistItem2 ?? 'Set realistic budget and timeline to attract better bids.'}</li>
-                      <li>{d.checklistItem3 ?? 'Attach screenshots or links for faster expert understanding.'}</li>
-                    </ul>
-                  </section>
-                </aside>
+                <section className="dashboard-need-card dashboard-need-card--summary">
+                  <h4 className="dashboard-need-card-title">
+                    {d.beforePublishing ?? tr('Before publishing', 'قبل النشر')}
+                  </h4>
+                  <ul className="dashboard-need-checklist">
+                    <li>{d.checklistItem1 ?? tr('State deliverables and constraints clearly.', 'حدد المخرجات والقيود بوضوح.')}</li>
+                    <li>
+                      {d.checklistItem2 ??
+                        tr(
+                          'Set realistic budget and timeline to attract better bids.',
+                          'حدد ميزانية ووقتاً واقعيين لجذب عروض أفضل.',
+                        )}
+                    </li>
+                    <li>
+                      {d.checklistItem3 ??
+                        tr(
+                          'Attach screenshots or links for faster expert understanding.',
+                          'أرفق لقطات شاشة أو روابط لتسريع فهم الخبير.',
+                        )}
+                    </li>
+                  </ul>
+                </section>
               </div>
               <div className="dashboard-form-actions dashboard-form-actions--sticky">
                 <button
@@ -647,6 +695,8 @@ export const CustomerDashboard = ({
               type="button"
               className="dashboard-primary-btn"
               onClick={() => setShowForm(true)}
+              disabled={!needsFeatureEnabled}
+              title={!needsFeatureEnabled ? 'Needs feature is disabled by admin' : undefined}
             >
               {d.postNeed ?? 'Post a Need'}
             </button>

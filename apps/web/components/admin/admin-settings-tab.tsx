@@ -59,12 +59,15 @@ export const AdminSettingsTab = ({ dictionary, accessToken, refreshSession }: Pr
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [factoryResetModalOpen, setFactoryResetModalOpen] = useState(false);
   const [factoryResetConfirmPhrase, setFactoryResetConfirmPhrase] = useState('');
   const [factoryResetLoading, setFactoryResetLoading] = useState(false);
   const [factoryResetError, setFactoryResetError] = useState<string | null>(null);
 
   const d = dictionary.admin.settingsMgmt;
+  const isArabic = /[\u0600-\u06FF]/.test(dictionary.admin.title);
+  const tr = (en: string, ar: string) => (isArabic ? ar : en);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -97,7 +100,10 @@ export const AdminSettingsTab = ({ dictionary, accessToken, refreshSession }: Pr
         setSettings(updated);
         setSuccessMessage(d.saveSuccess);
         setSuccess(true);
+        setToastMessage(d.saveSuccess);
+        window.dispatchEvent(new CustomEvent('app-status-updated'));
         setTimeout(() => { setSuccess(false); setSuccessMessage(null); }, 2000);
+        setTimeout(() => setToastMessage(null), 2200);
       } catch (err: unknown) {
         setError(getErrorMessage(err, dictionary));
       } finally {
@@ -139,12 +145,12 @@ export const AdminSettingsTab = ({ dictionary, accessToken, refreshSession }: Pr
         }
         const parsed: unknown = JSON.parse(trimmed);
         if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
-          setError('Platform InstaPay must be a JSON object.');
+          setError(tr('Platform InstaPay must be a JSON object.', 'يجب أن تكون بيانات إنستاباي كائن JSON.'));
           return;
         }
         void update({ platformInstapayDisplay: parsed as Record<string, unknown> });
       } catch {
-        setError('Invalid JSON for platform InstaPay.');
+        setError(tr('Invalid JSON for platform InstaPay.', 'صيغة JSON غير صحيحة لبيانات إنستاباي.'));
       }
     },
     [update],
@@ -161,6 +167,11 @@ export const AdminSettingsTab = ({ dictionary, accessToken, refreshSession }: Pr
       {error && <p className="admin-settings-error">{error}</p>}
       {success && successMessage && (
         <p className="admin-settings-success">{successMessage}</p>
+      )}
+      {toastMessage && (
+        <div className="admin-settings-toast" role="status" aria-live="polite">
+          {toastMessage}
+        </div>
       )}
 
       <section className="admin-settings-section">
@@ -283,7 +294,12 @@ export const AdminSettingsTab = ({ dictionary, accessToken, refreshSession }: Pr
               }
               const n = parseFloat(raw);
               if (!Number.isFinite(n) || n <= 0) {
-                setError('Deposit FX rate must be a positive number or empty.');
+                setError(
+                  tr(
+                    'Deposit FX rate must be a positive number or empty.',
+                    'سعر تحويل الإيداع يجب أن يكون رقمًا موجبًا أو فارغًا.',
+                  ),
+                );
                 return;
               }
               void update({ walletEgpPerUsdtDeposit: n });
@@ -309,7 +325,12 @@ export const AdminSettingsTab = ({ dictionary, accessToken, refreshSession }: Pr
               }
               const n = parseFloat(raw);
               if (!Number.isFinite(n) || n <= 0) {
-                setError('Withdrawal FX rate must be a positive number or empty.');
+                setError(
+                  tr(
+                    'Withdrawal FX rate must be a positive number or empty.',
+                    'سعر تحويل السحب يجب أن يكون رقمًا موجبًا أو فارغًا.',
+                  ),
+                );
                 return;
               }
               void update({ walletEgpPerUsdtWithdrawal: n });
@@ -393,15 +414,38 @@ export const AdminSettingsTab = ({ dictionary, accessToken, refreshSession }: Pr
             }
           />
         </div>
+        <div className="admin-settings-row">
+          <div className="admin-settings-label-wrap">
+            <label className="admin-settings-label">Commission receiver user ID</label>
+            <span className="admin-settings-desc">
+              {tr(
+                'Optional user ID that receives platform commission.',
+                'معرّف مستخدم اختياري يستلم عمولة المنصة.',
+              )}
+            </span>
+          </div>
+          <input
+            type="text"
+            className="admin-settings-input"
+            defaultValue={settings.commissionReceiverId ?? ''}
+            onBlur={(e) =>
+              handleTextChange('commissionReceiverId', e.target.value.trim() || null)
+            }
+            disabled={saving}
+          />
+        </div>
       </section>
 
       <section className="admin-settings-section">
-        <h3 className="admin-settings-section-title">Reservations</h3>
+        <h3 className="admin-settings-section-title">{tr('Reservations', 'الحجوزات')}</h3>
         <div className="admin-settings-row">
           <div className="admin-settings-label-wrap">
-                <label className="admin-settings-label">Acceptance fee (EGP)</label>
+                <label className="admin-settings-label">{tr('Acceptance fee (EGP)', 'رسوم القبول (ج.م)')}</label>
             <span className="admin-settings-desc">
-              Charged to customer when provider accepts a reservation.
+              {tr(
+                'Charged to customer when provider accepts a reservation.',
+                'تُخصم من العميل عند قبول مقدم الخدمة للحجز.',
+              )}
             </span>
           </div>
           <input
@@ -420,9 +464,12 @@ export const AdminSettingsTab = ({ dictionary, accessToken, refreshSession }: Pr
         </div>
         <div className="admin-settings-row">
           <div className="admin-settings-label-wrap">
-                <label className="admin-settings-label">Voice minute fee (EGP)</label>
+                <label className="admin-settings-label">{tr('Voice minute fee (EGP)', 'رسوم الدقيقة الصوتية (ج.م)')}</label>
             <span className="admin-settings-desc">
-              Global online voice minute fee (split equally customer/provider).
+              {tr(
+                'Global online voice minute fee (split equally customer/provider).',
+                'رسوم دقيقة صوتية عامة أونلاين (تقسيم متساوٍ بين العميل ومقدم الخدمة).',
+              )}
             </span>
           </div>
           <input
@@ -441,9 +488,12 @@ export const AdminSettingsTab = ({ dictionary, accessToken, refreshSession }: Pr
         </div>
         <div className="admin-settings-row">
           <div className="admin-settings-label-wrap">
-                <label className="admin-settings-label">Video minute fee (EGP)</label>
+                <label className="admin-settings-label">{tr('Video minute fee (EGP)', 'رسوم الدقيقة المرئية (ج.م)')}</label>
             <span className="admin-settings-desc">
-              Global online video minute fee (split equally customer/provider).
+              {tr(
+                'Global online video minute fee (split equally customer/provider).',
+                'رسوم دقيقة مرئية عامة أونلاين (تقسيم متساوٍ بين العميل ومقدم الخدمة).',
+              )}
             </span>
           </div>
           <input
@@ -462,9 +512,12 @@ export const AdminSettingsTab = ({ dictionary, accessToken, refreshSession }: Pr
         </div>
         <div className="admin-settings-row">
           <div className="admin-settings-label-wrap">
-            <label className="admin-settings-label">Minimum prejoin minutes</label>
+            <label className="admin-settings-label">{tr('Minimum prejoin minutes', 'الحد الأدنى لدقائق ما قبل الانضمام')}</label>
             <span className="admin-settings-desc">
-              Required wallet coverage before users can join online sessions.
+              {tr(
+                'Required wallet coverage before users can join online sessions.',
+                'الحد الأدنى لتغطية المحفظة قبل السماح بالانضمام للجلسات الأونلاين.',
+              )}
             </span>
           </div>
           <input
@@ -483,9 +536,12 @@ export const AdminSettingsTab = ({ dictionary, accessToken, refreshSession }: Pr
         </div>
         <div className="admin-settings-row">
           <div className="admin-settings-label-wrap">
-            <label className="admin-settings-label">Job interview fee (EGP)</label>
+            <label className="admin-settings-label">{tr('Job interview fee (EGP)', 'رسوم مقابلة الوظيفة (ج.م)')}</label>
             <span className="admin-settings-desc">
-              Global fee charged to experts when they reserve an interview slot with a business.
+              {tr(
+                'Global fee charged to experts when they reserve an interview slot with a business.',
+                'رسوم عامة تُفرض على الخبراء عند حجز موعد مقابلة مع شركة.',
+              )}
             </span>
           </div>
           <input

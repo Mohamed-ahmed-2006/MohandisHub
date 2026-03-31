@@ -645,9 +645,9 @@
 }
 
 .plan-modal--post-need {
-  max-width: 980px;
+  max-width: 760px;
   width: 100%;
-  padding: 2rem 2.5rem;
+  padding: 1.5rem 1.5rem;
   max-height: 92vh;
 }
 
@@ -678,21 +678,11 @@
   font-size: 0.9rem;
 }
 
-.dashboard-need-form-layout {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 260px;
-  gap: 1rem;
-}
-
 .dashboard-need-main {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 1rem;
-}
-
-.dashboard-need-side {
-  min-width: 0;
+  gap: 0.9rem;
 }
 
 .dashboard-need-card {
@@ -709,8 +699,7 @@
 }
 
 .dashboard-need-card--summary {
-  position: sticky;
-  top: 0;
+  border-style: dashed;
 }
 
 .dashboard-need-checklist {
@@ -726,8 +715,8 @@
 
 .dashboard-form-grid {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 1rem 1.25rem;
+  grid-template-columns: 1fr;
+  gap: 0.9rem;
   margin-bottom: 0;
 }
 
@@ -776,11 +765,9 @@
 }
 
 .dashboard-form-actions--sticky {
-  position: sticky;
-  bottom: 0;
-  background: hsl(var(--card));
-  padding-bottom: 0.25rem;
-  z-index: 1;
+  position: static;
+  background: transparent;
+  padding-bottom: 0;
 }
 
 .dashboard-upload-list {
@@ -808,14 +795,6 @@
 }
 
 @media (max-width: 640px) {
-  .dashboard-need-form-layout {
-    grid-template-columns: 1fr;
-  }
-
-  .dashboard-need-card--summary {
-    position: static;
-  }
-
   .dashboard-form-grid {
     grid-template-columns: 1fr;
   }
@@ -1375,6 +1354,17 @@
   gap: 0.5rem;
   max-height: 200px;
   overflow-y: auto;
+}
+
+.service-booking-filter-select {
+  color: hsl(var(--foreground));
+  background: hsl(var(--card));
+  border-color: hsl(var(--border));
+}
+
+.service-booking-filter-select option {
+  color: hsl(var(--foreground));
+  background: hsl(var(--card));
 }
 .service-booking-slot-btn {
   padding: 0.5rem 1rem;

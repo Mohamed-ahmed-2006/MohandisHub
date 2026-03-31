@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
 
+import { useAppStatus } from '@/components/app-status-provider';
 import { SiteLogo } from '@/components/site-logo';
 import { getChatSocket } from '@/lib/chat/socket';
 import { buildLocalePath } from '@/lib/i18n/path';
@@ -35,6 +36,7 @@ export const AppSidebar = ({
   onClose,
 }: AppSidebarProps) => {
   const pathname = usePathname();
+  const { status } = useAppStatus();
   const [hasUnreadChat, setHasUnreadChat] = useState(false);
   const [hasUnreadJobs, setHasUnreadJobs] = useState(false);
 
@@ -78,6 +80,7 @@ export const AppSidebar = ({
   ];
 
   const visibleItems = navItems.filter((item) => {
+    if (item.href === '/app/plan' && status?.featurePlansEnabled === false) return false;
     if (!item.roles) return true;
     if (item.roles.includes('admin')) return isAdmin;
     return item.roles.some((r) => r === userRole);

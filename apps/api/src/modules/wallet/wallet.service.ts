@@ -87,7 +87,19 @@ export class WalletService {
     this.fx = new WalletFxService(this.settingsService);
   }
 
+  private async assertWalletFeatureEnabled(): Promise<void> {
+    const status = await this.settingsService.getAppStatus();
+    if (!status.featureWalletEnabled) {
+      throw new HttpError({
+        statusCode: 503,
+        code: 'FEATURE_DISABLED',
+        message: 'Wallet is currently disabled.',
+      });
+    }
+  }
+
   async getOrCreateWallet(userId: string): Promise<Wallet> {
+    await this.assertWalletFeatureEnabled();
     let row = await this.repo.findByUserId(userId);
     if (!row) {
       row = await this.repo.createForUser(userId);
@@ -106,6 +118,7 @@ export class WalletService {
     limit: number;
     totalPages: number;
   }> {
+    await this.assertWalletFeatureEnabled();
     const { rows, total } = await this.repo.listTransactions(userId, page, limit);
     return {
       items: rows.map((r) => this.toTransaction(r)),
@@ -118,11 +131,13 @@ export class WalletService {
 
   /** Get a single transaction as receipt (for invoicing/export). */
   async getReceipt(userId: string, transactionId: string): Promise<Transaction | null> {
+    await this.assertWalletFeatureEnabled();
     const row = await this.repo.getTransactionById(userId, transactionId);
     return row ? this.toTransaction(row) : null;
   }
 
   async getDepositCurrencies(): Promise<string[]> {
+    await this.assertWalletFeatureEnabled();
     if (!env.NOWPAYMENTS_API_KEY) {
       return [];
     }
@@ -147,6 +162,7 @@ export class WalletService {
     estimatedAmount: number;
     rate: number | null;
   }> {
+    await this.assertWalletFeatureEnabled();
     if (!env.NOWPAYMENTS_API_KEY) {
       throw new HttpError({
         statusCode: 503,
@@ -204,6 +220,7 @@ export class WalletService {
     userId: string,
     input: CreateDepositCheckoutInput,
   ): Promise<DepositCheckoutResponse> {
+    await this.assertWalletFeatureEnabled();
     const status = await this.settingsService.getAppStatus();
     if (status.depositsPaused) {
       throw new HttpError({
@@ -442,6 +459,7 @@ export class WalletService {
     amountEgp: number,
     payoutCurrency: string,
   ): Promise<WithdrawalQuoteResponse> {
+    await this.assertWalletFeatureEnabled();
     if (!Number.isFinite(amountEgp) || amountEgp <= 0) {
       throw new HttpError({
         statusCode: 400,
@@ -471,6 +489,7 @@ export class WalletService {
     role: 'expert' | 'craftsman' | 'business',
     input: CreateWithdrawalInput,
   ): Promise<WithdrawalRequest> {
+    await this.assertWalletFeatureEnabled();
     const status = await this.settingsService.getAppStatus();
     if (status.moneyMovementsPaused) {
       throw new HttpError({
@@ -699,6 +718,7 @@ export class WalletService {
     proofUploadId: string;
     senderAccount: string;
   }): Promise<ManualDepositRequest> {
+    await this.assertWalletFeatureEnabled();
     const status = await this.settingsService.getAppStatus();
     if (status.depositsPaused) {
       throw new HttpError({
@@ -764,12 +784,14 @@ export class WalletService {
   }
 
   async getInstapayDepositContext(): Promise<{ platformInstapayDisplay: Record<string, unknown> }> {
+    await this.assertWalletFeatureEnabled();
     const status = await this.settingsService.getAppStatus();
     const display = status.platformInstapayDisplay ?? {};
     return { platformInstapayDisplay: display };
   }
 
   async cancelInstapayWithdrawal(userId: string, withdrawalId: string): Promise<WithdrawalRequest> {
+    await this.assertWalletFeatureEnabled();
     const row = await this.repo.cancelInstapayWithdrawalByUser(withdrawalId, userId);
     if (!row) {
       throw new HttpError({
@@ -926,6 +948,7 @@ export class WalletService {
     withdrawalId: string,
     verificationCode: string,
   ): Promise<WithdrawalRequest> {
+    await this.assertWalletFeatureEnabled();
     const row = await this.repo.findWithdrawalRequestByIdForUser(withdrawalId, userId);
     if (!row) {
       throw new HttpError({
@@ -1016,6 +1039,7 @@ export class WalletService {
   }
 
   async listWithdrawals(userId: string): Promise<WithdrawalRequest[]> {
+    await this.assertWalletFeatureEnabled();
     const rows = await this.repo.listWithdrawalRequestsByUserId(userId);
     return rows.map((row) => this.toWithdrawalRequest(row));
   }

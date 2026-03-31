@@ -11,6 +11,7 @@ import { ToastProvider, useToast } from './toast';
 import { UserProfileModal } from './user-profile-modal';
 import { WalletDepositModal } from './wallet-deposit-modal';
 
+import { useAppStatus } from '@/components/app-status-provider';
 import { useAuth } from '@/components/auth/auth-provider';
 import { SkeletonAvatar } from '@/components/ui/skeleton';
 import { getChatSocket } from '@/lib/chat/socket';
@@ -47,6 +48,7 @@ const AppShellInner = ({ children }: AppShellProps) => {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { profileModalUserId, profileModalInitialData, closeProfileModal } = useProfileModal();
+  const { status } = useAppStatus();
 
   const { authUser, accessToken, logout, isReady, refreshSession } = useAuth();
   const { wallet, mutate: mutateWallet } = useWallet(isReady && accessToken ? accessToken : null);
@@ -68,19 +70,29 @@ const AppShellInner = ({ children }: AppShellProps) => {
           : '/onboarding/business';
     void (async () => {
       try {
+        let profileVerificationStatus: string | null = null;
         if (role === 'expert') {
-          await profilesApiClient.getExpertProfile(accessToken);
+          const profile = await profilesApiClient.getExpertProfile(accessToken);
+          profileVerificationStatus = profile.verificationStatus ?? null;
         } else if (role === 'craftsman') {
-          await profilesApiClient.getCraftsmanProfile(accessToken);
+          const profile = await profilesApiClient.getCraftsmanProfile(accessToken);
+          profileVerificationStatus = profile.verificationStatus ?? null;
         } else {
-          await profilesApiClient.getBusinessProfile(accessToken);
+          const profile = await profilesApiClient.getBusinessProfile(accessToken);
+          profileVerificationStatus = profile.verificationStatus ?? null;
         }
-        if (verificationStatus !== 'verified') {
+
+        const isVerified =
+          verificationStatus === 'verified' || profileVerificationStatus === 'verified';
+        if (!isVerified) {
           router.replace(buildLocalePath(locale, onboardingPath));
           return;
         }
       } catch {
-        router.replace(buildLocalePath(locale, onboardingPath));
+        // Avoid forcing verified users back into onboarding on transient API errors.
+        if (verificationStatus !== 'verified') {
+          router.replace(buildLocalePath(locale, onboardingPath));
+        }
       }
     })();
   }, [isReady, authUser, accessToken, locale, router]);
@@ -162,6 +174,7 @@ const AppShellInner = ({ children }: AppShellProps) => {
 
   const role: string = authUser?.role ?? 'customer';
   const isAdmin: boolean = authUser?.isAdmin === true;
+  const walletFeatureEnabled = status?.featureWalletEnabled !== false;
 
   return (
     <div className="app-shell">
@@ -193,7 +206,7 @@ const AppShellInner = ({ children }: AppShellProps) => {
             {isReady && authUser && accessToken ? (
               <>
                 <NotificationCenter accessToken={accessToken} dictionary={dictionary} />
-                {(wallet != null || accessToken) && (
+                {(wallet != null || accessToken) && walletFeatureEnabled && (
                   <div className="app-topbar-balance">
                     <button
                       type="button"
@@ -215,6 +228,18 @@ const AppShellInner = ({ children }: AppShellProps) => {
                       }}
                     >
                       +
+                    </button>
+                  </div>
+                )}
+                {(wallet != null || accessToken) && !walletFeatureEnabled && (
+                  <div className="app-topbar-balance" title="Wallet feature disabled by admin">
+                    <button
+                      type="button"
+                      className="app-topbar-balance-link app-topbar-balance-main"
+                      disabled
+                    >
+                      <span className="app-topbar-balance-label">{dictionary.wallet.balance}</span>
+                      <span className="app-topbar-balance-amount">Feature disabled</span>
                     </button>
                   </div>
                 )}

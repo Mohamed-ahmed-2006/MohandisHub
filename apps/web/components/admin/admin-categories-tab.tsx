@@ -242,7 +242,7 @@ export const AdminCategoriesTab = ({ dictionary, accessToken }: Props) => {
             </div>
             <div className="admin-modal-actions">
               <button type="button" className="admin-btn" onClick={() => setShowForm(false)}>
-                Cancel
+                {dictionary.common.cancel}
               </button>
               <button
                 type="button"

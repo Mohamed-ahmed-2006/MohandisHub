@@ -42,14 +42,10 @@ export const ForgotPasswordForm = ({ locale, dictionary }: ForgotPasswordFormPro
 
     try {
       const response = await authApiClient.forgotPassword({ email: trimmedEmail });
-      setStatusMessage(response.message || dictionary.forgotPassword.successMessage);
+      setStatusMessage(dictionary.forgotPassword.successMessage);
       if (response.devResetLink) {
         setDevResetLink(response.devResetLink);
-        setStatusVariant(
-          response.message?.includes('not sent') || response.message?.includes('not configured')
-            ? 'info'
-            : 'success',
-        );
+        setStatusVariant('info');
       } else {
         setDevResetLink(null);
         setStatusVariant('success');
@@ -58,7 +54,7 @@ export const ForgotPasswordForm = ({ locale, dictionary }: ForgotPasswordFormPro
       setStatusVariant('error');
       setDevResetLink(null);
       if (isApiClientError(error)) {
-        setStatusMessage(error.message);
+        setStatusMessage(dictionary.errors.generic);
       } else {
         setStatusMessage(dictionary.errors.networkError);
       }
@@ -77,9 +73,12 @@ export const ForgotPasswordForm = ({ locale, dictionary }: ForgotPasswordFormPro
       {statusMessage ? <AuthStatusBanner variant={statusVariant} message={statusMessage} /> : null}
       {devResetLink ? (
         <p className="auth-form-dev-link">
-          <strong>Development:</strong> No email was sent. Use this link to reset your password:{' '}
+          <strong>{locale === 'ar' ? 'وضع التطوير:' : 'Development:'}</strong>{' '}
+          {locale === 'ar'
+            ? 'لم يتم إرسال بريد فعلي. استخدم هذا الرابط لإعادة تعيين كلمة المرور:'
+            : 'No email was sent. Use this link to reset your password:'}{' '}
           <a href={devResetLink} target="_blank" rel="noopener noreferrer">
-            Reset password
+            {locale === 'ar' ? 'إعادة تعيين كلمة المرور' : 'Reset password'}
           </a>
         </p>
       ) : null}

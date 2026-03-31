@@ -18,6 +18,17 @@ export const AdminServicesTab = ({ dictionary, accessToken }: Props) => {
   const [rejectReason, setRejectReason] = useState('');
 
   const d = dictionary.admin.servicesMgmt;
+  const isArabic = /[\u0600-\u06FF]/.test(dictionary.admin.title);
+  const tr = (en: string, ar: string) => (isArabic ? ar : en);
+  const statusLabel = (status: string) =>
+    ({
+      draft: tr('Draft', 'مسودة'),
+      pending_review: tr('Pending Review', 'بانتظار المراجعة'),
+      active: tr('Active', 'نشط'),
+      paused: tr('Paused', 'موقوف'),
+      rejected: tr('Rejected', 'مرفوض'),
+      archived: tr('Archived', 'مؤرشف'),
+    })[status] ?? status;
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -70,12 +81,12 @@ export const AdminServicesTab = ({ dictionary, accessToken }: Props) => {
           }}
         >
           <option value="">{d.allStatuses}</option>
-          <option value="draft">Draft</option>
-          <option value="pending_review">Pending Review</option>
-          <option value="active">Active</option>
-          <option value="paused">Paused</option>
-          <option value="rejected">Rejected</option>
-          <option value="archived">Archived</option>
+          <option value="draft">{statusLabel('draft')}</option>
+          <option value="pending_review">{statusLabel('pending_review')}</option>
+          <option value="active">{statusLabel('active')}</option>
+          <option value="paused">{statusLabel('paused')}</option>
+          <option value="rejected">{statusLabel('rejected')}</option>
+          <option value="archived">{statusLabel('archived')}</option>
         </select>
       </div>
 
@@ -89,7 +100,7 @@ export const AdminServicesTab = ({ dictionary, accessToken }: Props) => {
             <table className="admin-table">
               <thead>
                 <tr>
-                  <th>Title</th>
+                  <th>{tr('Title', 'العنوان')}</th>
                   <th>{d.provider}</th>
                   <th>{d.category}</th>
                   <th>{d.price}</th>
@@ -115,7 +126,7 @@ export const AdminServicesTab = ({ dictionary, accessToken }: Props) => {
                       <span
                         className={`admin-badge admin-badge--${svc.status === 'active' ? 'active' : svc.status === 'rejected' ? 'rejected' : 'pending'}`}
                       >
-                        {svc.status}
+                        {statusLabel(svc.status)}
                       </span>
                     </td>
                     <td>{svc.isFeatured ? <Star size={16} aria-hidden style={{ verticalAlign: 'middle' }} /> : '—'}</td>
@@ -154,7 +165,7 @@ export const AdminServicesTab = ({ dictionary, accessToken }: Props) => {
                 className="admin-btn admin-btn--small"
                 disabled={page <= 1}
                 onClick={() => setPage(page - 1)}
-                aria-label="Previous page"
+                aria-label={tr('Previous page', 'الصفحة السابقة')}
               >
                 <ChevronLeft size={16} aria-hidden />
               </button>
@@ -166,7 +177,7 @@ export const AdminServicesTab = ({ dictionary, accessToken }: Props) => {
                 className="admin-btn admin-btn--small"
                 disabled={page >= data.totalPages}
                 onClick={() => setPage(page + 1)}
-                aria-label="Next page"
+                aria-label={tr('Next page', 'الصفحة التالية')}
               >
                 <ChevronRight size={16} aria-hidden />
               </button>
@@ -189,7 +200,7 @@ export const AdminServicesTab = ({ dictionary, accessToken }: Props) => {
             </div>
             <div className="admin-modal-actions">
               <button type="button" className="admin-btn" onClick={() => setRejectId(null)}>
-                Cancel
+                {dictionary.common.cancel}
               </button>
               <button
                 type="button"

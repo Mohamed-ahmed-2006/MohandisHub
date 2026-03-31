@@ -1,9 +1,10 @@
 import type { Metadata } from 'next';
-import { Manrope, Sora } from 'next/font/google';
+import { Cairo, Manrope, Sora, Tajawal } from 'next/font/google';
 import Script from 'next/script';
 
 import { AppStatusProvider } from '@/components/app-status-provider';
 import { AuthProvider } from '@/components/auth/auth-provider';
+import { GlobalAnnouncementBanner } from '@/components/global-announcement-banner';
 import { MaintenanceGate } from '@/components/maintenance-gate';
 import SpeedInsightsClient from '@/components/speed-insights-client';
 import { ThemeProvider, themeInitScript } from '@/components/theme-provider';
@@ -19,6 +20,17 @@ const manrope = Manrope({
 const sora = Sora({
   variable: '--font-sora',
   subsets: ['latin'],
+});
+
+const cairo = Cairo({
+  variable: '--font-cairo',
+  subsets: ['arabic', 'latin'],
+});
+
+const tajawal = Tajawal({
+  variable: '--font-tajawal',
+  weight: ['400', '700'],
+  subsets: ['arabic', 'latin'],
 });
 
 const iconVersion = getIconVersion();
@@ -49,10 +61,11 @@ const RootLayout = ({ children }: RootLayoutProps) => {
           {themeInitScript}
         </Script>
       </head>
-      <body className={`${manrope.variable} ${sora.variable}`}>
+      <body className={`${manrope.variable} ${sora.variable} ${cairo.variable} ${tajawal.variable}`}>
         <ThemeProvider>
           <AuthProvider>
             <AppStatusProvider>
+              <GlobalAnnouncementBanner />
               <MaintenanceGate>{children}</MaintenanceGate>
             </AppStatusProvider>
           </AuthProvider>

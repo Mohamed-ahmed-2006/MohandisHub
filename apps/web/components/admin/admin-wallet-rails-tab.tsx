@@ -19,6 +19,18 @@ type Props = {
 export const AdminWalletRailsTab = ({ dictionary, accessToken, refreshSession }: Props) => {
   const d = dictionary.admin.walletRails;
   const txnLabels = dictionary.admin.txns;
+  const isArabic = /[\u0600-\u06FF]/.test(dictionary.admin.title);
+  const tr = (en: string, ar: string) => (isArabic ? ar : en);
+  const statusLabel = (status: string) =>
+    ({
+      pending_review: tr('Pending review', 'قيد المراجعة'),
+      paid: tr('Paid', 'مدفوع'),
+      rejected: tr('Rejected', 'مرفوض'),
+      awaiting_transfer: tr('Awaiting transfer', 'بانتظار التحويل'),
+      finished: tr('Finished', 'مكتمل'),
+      failed: tr('Failed', 'فشل'),
+      cancelled: tr('Cancelled', 'ملغي'),
+    })[status] ?? status;
 
   const [depPage, setDepPage] = useState(1);
   const [depStatus, setDepStatus] = useState('');
@@ -131,7 +143,7 @@ export const AdminWalletRailsTab = ({ dictionary, accessToken, refreshSession }:
       closeModal();
       void loadDeposits();
     } catch (e: unknown) {
-      setActionError(e instanceof Error ? e.message : 'Failed');
+      setActionError(e instanceof Error ? e.message : tr('Failed', 'فشلت العملية'));
     } finally {
       setModalBusy(false);
     }
@@ -156,7 +168,7 @@ export const AdminWalletRailsTab = ({ dictionary, accessToken, refreshSession }:
       closeModal();
       void loadDeposits();
     } catch (e: unknown) {
-      setActionError(e instanceof Error ? e.message : 'Failed');
+      setActionError(e instanceof Error ? e.message : tr('Failed', 'فشلت العملية'));
     } finally {
       setModalBusy(false);
     }
@@ -181,7 +193,7 @@ export const AdminWalletRailsTab = ({ dictionary, accessToken, refreshSession }:
       closeModal();
       void loadWithdrawals();
     } catch (e: unknown) {
-      setActionError(e instanceof Error ? e.message : 'Failed');
+      setActionError(e instanceof Error ? e.message : tr('Failed', 'فشلت العملية'));
     } finally {
       setModalBusy(false);
     }
@@ -206,7 +218,7 @@ export const AdminWalletRailsTab = ({ dictionary, accessToken, refreshSession }:
       closeModal();
       void loadWithdrawals();
     } catch (e: unknown) {
-      setActionError(e instanceof Error ? e.message : 'Failed');
+      setActionError(e instanceof Error ? e.message : tr('Failed', 'فشلت العملية'));
     } finally {
       setModalBusy(false);
     }
@@ -228,9 +240,9 @@ export const AdminWalletRailsTab = ({ dictionary, accessToken, refreshSession }:
             }}
           >
             <option value="">{d.allStatuses}</option>
-            <option value="pending_review">pending_review</option>
-            <option value="paid">paid</option>
-            <option value="rejected">rejected</option>
+            <option value="pending_review">{statusLabel('pending_review')}</option>
+            <option value="paid">{statusLabel('paid')}</option>
+            <option value="rejected">{statusLabel('rejected')}</option>
           </select>
         </div>
         {depLoading ? (
@@ -245,7 +257,7 @@ export const AdminWalletRailsTab = ({ dictionary, accessToken, refreshSession }:
                   <tr>
                     <th>{d.userId}</th>
                     <th>{d.amountEgp}</th>
-                    <th>Sender account</th>
+                    <th>{tr('Sender account', 'حساب المُرسل')}</th>
                     <th>{d.status}</th>
                     <th>{d.created}</th>
                     <th>{txnLabels.actions}</th>
@@ -257,9 +269,7 @@ export const AdminWalletRailsTab = ({ dictionary, accessToken, refreshSession }:
                       <td style={{ fontSize: '0.8rem', wordBreak: 'break-all' }}>{row.userId}</td>
                       <td>{row.amountEgp.toFixed(2)}</td>
                       <td>{row.senderAccount ?? '—'}</td>
-                      <td>
-                        <span className="admin-badge">{row.status}</span>
-                      </td>
+                      <td><span className="admin-badge">{statusLabel(row.status)}</span></td>
                       <td>{new Date(row.createdAt).toLocaleString()}</td>
                       <td>
                         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem' }}>
@@ -310,7 +320,7 @@ export const AdminWalletRailsTab = ({ dictionary, accessToken, refreshSession }:
                   className="admin-btn admin-btn--small"
                   disabled={depPage <= 1}
                   onClick={() => setDepPage((p) => p - 1)}
-                  aria-label="Previous page"
+                  aria-label={tr('Previous page', 'الصفحة السابقة')}
                 >
                   <ChevronLeft size={16} aria-hidden />
                 </button>
@@ -322,7 +332,7 @@ export const AdminWalletRailsTab = ({ dictionary, accessToken, refreshSession }:
                   className="admin-btn admin-btn--small"
                   disabled={depPage >= depTotalPages}
                   onClick={() => setDepPage((p) => p + 1)}
-                  aria-label="Next page"
+                  aria-label={tr('Next page', 'الصفحة التالية')}
                 >
                   <ChevronRight size={16} aria-hidden />
                 </button>
@@ -344,11 +354,11 @@ export const AdminWalletRailsTab = ({ dictionary, accessToken, refreshSession }:
             }}
           >
             <option value="">{d.allStatuses}</option>
-            <option value="awaiting_transfer">awaiting_transfer</option>
-            <option value="finished">finished</option>
-            <option value="rejected">rejected</option>
-            <option value="failed">failed</option>
-            <option value="cancelled">cancelled</option>
+            <option value="awaiting_transfer">{statusLabel('awaiting_transfer')}</option>
+            <option value="finished">{statusLabel('finished')}</option>
+            <option value="rejected">{statusLabel('rejected')}</option>
+            <option value="failed">{statusLabel('failed')}</option>
+            <option value="cancelled">{statusLabel('cancelled')}</option>
           </select>
         </div>
         {wLoading ? (
@@ -375,9 +385,7 @@ export const AdminWalletRailsTab = ({ dictionary, accessToken, refreshSession }:
                       <td style={{ fontSize: '0.8rem', wordBreak: 'break-all' }}>{row.userId}</td>
                       <td>{row.sourceAmountEgp.toFixed(2)}</td>
                       <td>{row.instapayRecipient ?? '—'}</td>
-                      <td>
-                        <span className="admin-badge">{row.status}</span>
-                      </td>
+                      <td><span className="admin-badge">{statusLabel(row.status)}</span></td>
                       <td>{new Date(row.createdAt).toLocaleString()}</td>
                       <td>
                         {row.status === 'awaiting_transfer' && (
@@ -423,7 +431,7 @@ export const AdminWalletRailsTab = ({ dictionary, accessToken, refreshSession }:
                   className="admin-btn admin-btn--small"
                   disabled={wPage <= 1}
                   onClick={() => setWPage((p) => p - 1)}
-                  aria-label="Previous page"
+                  aria-label={tr('Previous page', 'الصفحة السابقة')}
                 >
                   <ChevronLeft size={16} aria-hidden />
                 </button>
@@ -435,7 +443,7 @@ export const AdminWalletRailsTab = ({ dictionary, accessToken, refreshSession }:
                   className="admin-btn admin-btn--small"
                   disabled={wPage >= wTotalPages}
                   onClick={() => setWPage((p) => p + 1)}
-                  aria-label="Next page"
+                  aria-label={tr('Next page', 'الصفحة التالية')}
                 >
                   <ChevronRight size={16} aria-hidden />
                 </button>

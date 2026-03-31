@@ -33,6 +33,30 @@ export function AppStatusProvider({ children }: { children: React.ReactNode }) {
     void refetch();
   }, [refetch]);
 
+  useEffect(() => {
+    const intervalId = window.setInterval(() => {
+      void refetch();
+    }, 20000);
+    return () => window.clearInterval(intervalId);
+  }, [refetch]);
+
+  useEffect(() => {
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        void refetch();
+      }
+    };
+    const handleRealtimeRefresh = () => {
+      void refetch();
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+    window.addEventListener('app-status-updated', handleRealtimeRefresh);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibility);
+      window.removeEventListener('app-status-updated', handleRealtimeRefresh);
+    };
+  }, [refetch]);
+
   return (
     <AppStatusContext.Provider value={{ status, loading, refetch }}>
       {children}

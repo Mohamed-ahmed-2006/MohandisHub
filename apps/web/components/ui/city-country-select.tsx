@@ -19,6 +19,7 @@ type Props = {
   defaultValue?: string;
   defaultCountry?: string;
   required?: boolean;
+  forceIpCountry?: boolean;
 };
 
 /**
@@ -36,6 +37,7 @@ export function CityCountrySelect({
   defaultValue = '',
   defaultCountry = '',
   required = false,
+  forceIpCountry = false,
 }: Props) {
   const nameKey = locale === 'ar' ? 'nameAr' : 'nameEn';
 
@@ -47,7 +49,9 @@ export function CityCountrySelect({
     return byCode ? byCode.code : '';
   }, [defaultCountry, nameKey]);
 
-  const [countryCode, setCountryCode] = useState(resolveInitialCountryCode);
+  const [countryCode, setCountryCode] = useState(() =>
+    forceIpCountry ? '' : resolveInitialCountryCode(),
+  );
   const [cityCode, setCityCode] = useState('');
   const [ipLoading, setIpLoading] = useState(true);
   const [mounted, setMounted] = useState(false);
@@ -60,7 +64,7 @@ export function CityCountrySelect({
   }, []);
 
   useEffect(() => {
-    if (!mounted || defaultCountry) {
+    if (!mounted || (!forceIpCountry && defaultCountry)) {
       setIpLoading(false);
       return;
     }
@@ -71,7 +75,7 @@ export function CityCountrySelect({
         }
       })
       .finally(() => setIpLoading(false));
-  }, [mounted, defaultCountry]);
+  }, [mounted, defaultCountry, forceIpCountry]);
 
   useEffect(() => {
     if (!defaultValue || !defaultCountry) return;

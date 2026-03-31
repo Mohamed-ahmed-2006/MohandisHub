@@ -16,6 +16,7 @@ import { formatApiError } from '@/lib/utils/format-api-error';
 type Props = { locale: Locale; dictionary: Dictionary };
 
 export const CustomerOnboardingScreen = ({ locale, dictionary }: Props) => {
+  const tr = (en: string, ar: string) => (locale === 'ar' ? ar : en);
   const router = useRouter();
   const { authUser, accessToken, isAuthenticated, isReady, authGuard, updateAuthUser } = useAuth();
   const [step, setStep] = useState<'welcome' | 'profile' | 'done'>('welcome');
@@ -42,7 +43,13 @@ export const CustomerOnboardingScreen = ({ locale, dictionary }: Props) => {
     const city = (form.elements.namedItem('city') as HTMLInputElement)?.value?.trim() || null;
     const contactPreference = (form.elements.namedItem('contactPreference') as HTMLSelectElement)?.value?.trim() || null;
     if (!displayName || displayName.length < 2) {
-      setError(dictionary.onboarding.customer.profileDisplayNameRequired ?? 'Display name is required (at least 2 characters).');
+      setError(
+        dictionary.onboarding.customer.profileDisplayNameRequired ??
+          tr(
+            'Display name is required (at least 2 characters).',
+            'الاسم الظاهر مطلوب (على الأقل حرفان).',
+          ),
+      );
       return;
     }
     setSaving(true);
@@ -100,7 +107,9 @@ export const CustomerOnboardingScreen = ({ locale, dictionary }: Props) => {
 
           {step === 'profile' && (
             <>
-              <h1 className="onboarding-title">{dictionary.onboarding.customer.profileTitle ?? 'Profile setup'}</h1>
+              <h1 className="onboarding-title">
+                {dictionary.onboarding.customer.profileTitle ?? tr('Profile setup', 'إعداد الملف الشخصي')}
+              </h1>
               <p className="onboarding-description">
                 {dictionary.onboarding.customer.profileDescription ?? 'Add a few details so providers can recognize you.'}
               </p>
@@ -131,7 +140,8 @@ export const CustomerOnboardingScreen = ({ locale, dictionary }: Props) => {
                     name="phone"
                     type="tel"
                     className="onboarding-input"
-                    placeholder="+1 234 567 8900"
+                    defaultValue={authUser.phone ?? ''}
+                    placeholder={tr('+1 234 567 8900', '+20 100 000 0000')}
                   />
                 </div>
                 <div className="onboarding-field">
@@ -156,8 +166,8 @@ export const CustomerOnboardingScreen = ({ locale, dictionary }: Props) => {
                     className="onboarding-input"
                   >
                     <option value="">{dictionary.onboarding.customer.profileContactPrefOptional ?? 'Any'}</option>
-                    <option value="email">Email</option>
-                    <option value="phone">Phone</option>
+                    <option value="email">{tr('Email', 'البريد الإلكتروني')}</option>
+                    <option value="phone">{tr('Phone', 'الهاتف')}</option>
                   </select>
                 </div>
                 <div className="onboarding-nav-row">
@@ -169,7 +179,9 @@ export const CustomerOnboardingScreen = ({ locale, dictionary }: Props) => {
                     {dictionary.common.back}
                   </button>
                   <button type="submit" className="onboarding-cta-button" disabled={saving}>
-                    {saving ? dictionary.auth?.common?.loading ?? 'Saving...' : dictionary.common.continue}
+                    {saving
+                      ? dictionary.auth?.common?.loading ?? tr('Saving...', 'جارٍ الحفظ...')
+                      : dictionary.common.continue}
                   </button>
                 </div>
               </form>
@@ -178,7 +190,9 @@ export const CustomerOnboardingScreen = ({ locale, dictionary }: Props) => {
 
           {step === 'done' && (
             <>
-              <h1 className="onboarding-title">{dictionary.onboarding.customer.profileCompleteTitle ?? "You're all set"}</h1>
+              <h1 className="onboarding-title">
+                {dictionary.onboarding.customer.profileCompleteTitle ?? tr("You're all set", 'أنت جاهز الآن')}
+              </h1>
               <p className="onboarding-description">
                 {dictionary.onboarding.customer.profileCompleteDescription ?? 'Your profile is ready. Head to the dashboard to post needs or browse services.'}
               </p>

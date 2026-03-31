@@ -37,19 +37,19 @@ const getStartOfToday = (): Date => {
 const isUpcomingSlot = (slot: ReservationSlot, now: Date): boolean =>
   new Date(slot.startAt).getTime() >= now.getTime();
 
-function formatSlot(slot: ReservationSlot): string {
+function formatSlot(slot: ReservationSlot, localeTag?: string): string {
   const start = new Date(slot.startAt);
   const end = new Date(slot.endAt);
   return (
-    start.toLocaleDateString(undefined, {
+    start.toLocaleDateString(localeTag, {
       weekday: 'short',
       month: 'short',
       day: 'numeric',
     }) +
     ' ' +
-    start.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' }) +
+    start.toLocaleTimeString(localeTag, { hour: '2-digit', minute: '2-digit' }) +
     ' - ' +
-    end.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })
+    end.toLocaleTimeString(localeTag, { hour: '2-digit', minute: '2-digit' })
   );
 }
 
@@ -58,6 +58,7 @@ export const ServiceBookingModal = ({
   onClose,
   service,
   accessToken,
+  locale = 'en',
   dictionary,
   onSuccess,
 }: Props) => {
@@ -74,6 +75,8 @@ export const ServiceBookingModal = ({
   );
   const [modeReady, setModeReady] = useState(false);
   const { openProfileModal } = useProfileModal();
+  const tr = (en: string, ar: string) => (locale === 'ar' ? ar : en);
+  const localeTag = locale === 'ar' ? 'ar-EG' : undefined;
 
   const loadSlots = useCallback(async () => {
     setLoading(true);
@@ -112,7 +115,7 @@ export const ServiceBookingModal = ({
 
       setModeReady(true);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to load slots');
+      setError(e instanceof Error ? e.message : tr('Failed to load slots', 'فشل تحميل المواعيد'));
       setSlots([]);
       setProfile(null);
       setModeReady(true);
@@ -194,7 +197,7 @@ export const ServiceBookingModal = ({
       onSuccess?.();
       onClose();
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Booking failed');
+      setError(e instanceof Error ? e.message : tr('Booking failed', 'فشل الحجز'));
     } finally {
       setBooking(false);
     }
@@ -209,9 +212,14 @@ export const ServiceBookingModal = ({
     }
   ).serviceBooking;
   const noSlots =
-    serviceBookingCopy?.noSlots ?? 'This expert has no available upcoming slots right now.';
+    serviceBookingCopy?.noSlots ??
+    tr(
+      'This expert has no available upcoming slots right now.',
+      'لا توجد مواعيد متاحة قادمة لهذا الخبير حالياً.',
+    );
   const noFilteredSlots =
-    serviceBookingCopy?.noFilteredSlots ?? 'No available slots match the selected filter.';
+    serviceBookingCopy?.noFilteredSlots ??
+    tr('No available slots match the selected filter.', 'لا توجد مواعيد متاحة تطابق الفلتر المحدد.');
   const modePrice =
     mode === 'offline'
       ? profile?.offlinePrice ?? null
@@ -250,7 +258,7 @@ export const ServiceBookingModal = ({
               style={{ marginLeft: '0.5rem' }}
               title="Complete profile and 1000 EGP total deposits."
             >
-              Platform verified
+              {tr('Platform verified', 'موثّق من المنصة')}
             </span>
           )}
         </p>
@@ -264,14 +272,14 @@ export const ServiceBookingModal = ({
                 className={`dashboard-btn ${mode === 'online' ? 'dashboard-btn--primary' : 'dashboard-btn--secondary'}`}
                 onClick={() => setMode('online')}
               >
-                Online
+                {tr('Online', 'أونلاين')}
               </button>
               <button
                 type="button"
                 className={`dashboard-btn ${mode === 'offline' ? 'dashboard-btn--primary' : 'dashboard-btn--secondary'}`}
                 onClick={() => setMode('offline')}
               >
-                Offline
+                {tr('Offline', 'حضوري')}
               </button>
               {mode === 'online' && (
                 <>
@@ -280,43 +288,58 @@ export const ServiceBookingModal = ({
                     className={`dashboard-btn ${onlineType === 'voice' ? 'dashboard-btn--primary' : 'dashboard-btn--secondary'}`}
                     onClick={() => setOnlineType('voice')}
                   >
-                    Voice
+                    {tr('Voice', 'صوتي')}
                   </button>
                   <button
                     type="button"
                     className={`dashboard-btn ${onlineType === 'video' ? 'dashboard-btn--primary' : 'dashboard-btn--secondary'}`}
                     onClick={() => setOnlineType('video')}
                   >
-                    Video
+                    {tr('Video', 'فيديو')}
                   </button>
                 </>
               )}
             </>
           ) : (
             <span style={{ color: 'hsl(var(--muted-foreground))', fontSize: '0.9rem' }}>
-              {common.continue ?? 'Loading...'}
+              {common.continue ?? tr('Loading...', 'جاري التحميل...')}
             </span>
           )}
         </div>
         {modePrice != null && (
           <p className="service-booking-price" style={{ marginTop: '-0.5rem' }}>
-            Reservation price: {modePrice.toFixed(2)} EGP
+            {tr('Reservation price', 'سعر الحجز')}: {modePrice.toFixed(2)} EGP
           </p>
         )}
         <div className="reservation-note-box" style={{ marginBottom: '0.75rem' }}>
-          <p>Cancellation policy snapshot is locked at booking time.</p>
-          <p>Customer cancellation more than 24 hours before start refunds the fixed reservation hold.</p>
-          <p>Provider cancellation inside 2 hours of start may trigger a penalty.</p>
+          <p>
+            {tr(
+              'Cancellation policy snapshot is locked at booking time.',
+              'يتم تثبيت نسخة سياسة الإلغاء وقت الحجز.',
+            )}
+          </p>
+          <p>
+            {tr(
+              'Customer cancellation more than 24 hours before start refunds the fixed reservation hold.',
+              'إلغاء العميل قبل أكثر من 24 ساعة من البداية يعيد مبلغ الحجز الثابت.',
+            )}
+          </p>
+          <p>
+            {tr(
+              'Provider cancellation inside 2 hours of start may trigger a penalty.',
+              'إلغاء مقدم الخدمة خلال ساعتين من وقت البداية قد يترتب عليه غرامة.',
+            )}
+          </p>
         </div>
 
         <div className="service-booking-slots">
           <div style={{ marginBottom: '0.75rem', display: 'grid', gap: '0.35rem' }}>
             <label htmlFor="service-booking-filter" style={{ fontSize: '0.9rem', fontWeight: 600 }}>
-              Filter slots
+              {tr('Filter slots', 'تصفية المواعيد')}
             </label>
             <select
               id="service-booking-filter"
-              className="dashboard-select"
+              className="dashboard-select service-booking-filter-select"
               value={slotFilter}
               onChange={(e) =>
                 setSlotFilter(
@@ -324,18 +347,18 @@ export const ServiceBookingModal = ({
                 )
               }
             >
-              <option value="today">Today</option>
-              <option value="next7Days">Next 7 days</option>
-              <option value="thisMonth">This month</option>
-              <option value="allUpcoming">All upcoming</option>
+              <option value="today">{tr('Today', 'اليوم')}</option>
+              <option value="next7Days">{tr('Next 7 days', 'الـ 7 أيام القادمة')}</option>
+              <option value="thisMonth">{tr('This month', 'هذا الشهر')}</option>
+              <option value="allUpcoming">{tr('All upcoming', 'كل المواعيد القادمة')}</option>
             </select>
             <p style={{ margin: 0, fontSize: '0.85rem', color: 'hsl(var(--muted-foreground))' }}>
-              Showing only slots from {startOfToday.toLocaleDateString()} onward.
+              {tr('Showing only slots from', 'عرض المواعيد ابتداءً من')} {startOfToday.toLocaleDateString(localeTag)}.
             </p>
           </div>
 
           {loading ? (
-            <p>{common.continue ?? 'Loading...'}</p>
+            <p>{common.continue ?? tr('Loading...', 'جاري التحميل...')}</p>
           ) : slots.length === 0 ? (
             <p className="service-booking-empty">{noSlots}</p>
           ) : filteredSlots.length === 0 ? (
@@ -349,7 +372,7 @@ export const ServiceBookingModal = ({
                   className={`service-booking-slot-btn ${selectedSlot?.id === slot.id ? 'service-booking-slot-btn--selected' : ''}`}
                   onClick={() => setSelectedSlot(slot)}
                 >
-                  {formatSlot(slot)}
+                  {formatSlot(slot, localeTag)}
                 </button>
               ))}
             </div>

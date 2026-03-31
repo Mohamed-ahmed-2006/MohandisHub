@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 
 import { useAuth } from '@/components/auth/auth-provider';
+import { useAppStatus } from '@/components/app-status-provider';
 import { Container } from '@/components/ui/container';
 import { buildLocalePath } from '@/lib/i18n/path';
 import type { Dictionary, Locale } from '@/lib/i18n/types';
@@ -19,6 +20,7 @@ type Props = { locale: Locale; dictionary: Dictionary };
 export const MyPlanScreen = ({ locale, dictionary }: Props) => {
   const router = useRouter();
   const { authUser, accessToken, isAuthenticated, isReady, authGuard, updateAuthUser } = useAuth();
+  const { status } = useAppStatus();
 
   const [plans, setPlans] = useState<Plan[]>([]);
   const [wallet, setWallet] = useState<Wallet | null>(null);
@@ -27,6 +29,7 @@ export const MyPlanScreen = ({ locale, dictionary }: Props) => {
   const [confirmPlan, setConfirmPlan] = useState<Plan | null>(null);
   const [subscribing, setSubscribing] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const plansFeatureEnabled = status?.featurePlansEnabled !== false;
 
   const d = dictionary.plan ?? ({} as Record<string, string>);
 
@@ -42,6 +45,13 @@ export const MyPlanScreen = ({ locale, dictionary }: Props) => {
   }, [isReady, isAuthenticated, authUser, authGuard.emailVerified, locale, router]);
 
   const load = useCallback(async () => {
+    if (!plansFeatureEnabled) {
+      setPlans([]);
+      setWallet(null);
+      setSubscriptionEndsAt(null);
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     try {
       const [planList, w, subscription] = await Promise.all([
@@ -57,7 +67,7 @@ export const MyPlanScreen = ({ locale, dictionary }: Props) => {
     } finally {
       setLoading(false);
     }
-  }, [accessToken]);
+  }, [accessToken, plansFeatureEnabled]);
 
   useEffect(() => {
     void load();
@@ -210,8 +220,13 @@ export const MyPlanScreen = ({ locale, dictionary }: Props) => {
             {message.text}
           </div>
         )}
+        {!plansFeatureEnabled && (
+          <div className="plan-screen-msg plan-screen-msg--error" role="status">
+            Plans are currently disabled by admin.
+          </div>
+        )}
 
-        {loading ? (
+        {plansFeatureEnabled && loading ? (
           <div className="plan-screen-grid plan-screen-grid--loading">
             {[1, 2, 3].map((i) => (
               <div key={i} className="plan-card plan-card--skeleton">
@@ -222,14 +237,14 @@ export const MyPlanScreen = ({ locale, dictionary }: Props) => {
               </div>
             ))}
           </div>
-        ) : plans.length === 0 ? (
+        ) : plansFeatureEnabled && plans.length === 0 ? (
           <div className="plan-screen-empty">
             <div className="plan-screen-empty-icon" aria-hidden>
               <ClipboardList size={32} aria-hidden />
             </div>
             <p>{d.noPlans ?? 'No plans available yet.'}</p>
           </div>
-        ) : (
+        ) : plansFeatureEnabled ? (
           <div className="plan-screen-grid">
             {plans.map((plan) => {
               const isCurrent = currentPlan === plan.slug;
@@ -281,7 +296,7 @@ export const MyPlanScreen = ({ locale, dictionary }: Props) => {
               );
             })}
           </div>
-        )}
+        ) : null}
 
         {confirmPlan && (
           <div className="plan-modal-overlay" onClick={() => setConfirmPlan(null)}>

@@ -22,6 +22,14 @@ export class PlansService {
     private readonly walletRepo: WalletRepository = new WalletRepository(),
   ) {}
   async listActivePlans(): Promise<Plan[]> {
+    const status = await this.settingsService.getAppStatus();
+    if (!status.featurePlansEnabled) {
+      throw new HttpError({
+        statusCode: 503,
+        code: 'FEATURE_DISABLED',
+        message: 'Plans are currently disabled.',
+      });
+    }
     const { rows } = await getPool().query(
       `SELECT * FROM plans WHERE COALESCE(is_active, true) = true ORDER BY COALESCE(sort_order, 0) ASC, COALESCE(price, 0) ASC`,
     );
@@ -175,6 +183,13 @@ export class PlansService {
 
   async subscribeToPlan(userId: string, planId: string): Promise<SubscribeToPlanResponse> {
     const status = await this.settingsService.getAppStatus();
+    if (!status.featurePlansEnabled) {
+      throw new HttpError({
+        statusCode: 503,
+        code: 'FEATURE_DISABLED',
+        message: 'Plans are currently disabled.',
+      });
+    }
     if (status.moneyMovementsPaused || status.pausePlanSubscriptions) {
       throw new HttpError({
         statusCode: 503,

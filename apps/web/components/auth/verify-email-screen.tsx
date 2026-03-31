@@ -164,25 +164,24 @@ export const VerifyEmailScreen = ({ locale, dictionary }: VerifyEmailScreenProps
 
   return (
     <main className="auth-page-main" suppressHydrationWarning>
-      <div className="auth-page-floating-controls">
-        <LanguageToggle
-          locale={locale}
-          targetLabel={dictionary.language.target}
-          ariaLabel={dictionary.language.switchLabel}
-        />
-        <ThemeToggle
-          switchToLightLabel={dictionary.theme.switchToLight}
-          switchToDarkLabel={dictionary.theme.switchToDark}
-          darkLabel={dictionary.theme.darkLabel}
-          lightLabel={dictionary.theme.lightLabel}
-        />
-      </div>
-
       <Container className="auth-page-container">
         <header className="auth-page-header">
           <Link href={buildLocalePath(locale, '/')} className="auth-page-brand-link">
             <SiteLogo />
           </Link>
+          <div className="auth-page-header-actions">
+            <LanguageToggle
+              locale={locale}
+              targetLabel={dictionary.language.target}
+              ariaLabel={dictionary.language.switchLabel}
+            />
+            <ThemeToggle
+              switchToLightLabel={dictionary.theme.switchToLight}
+              switchToDarkLabel={dictionary.theme.switchToDark}
+              darkLabel={dictionary.theme.darkLabel}
+              lightLabel={dictionary.theme.lightLabel}
+            />
+          </div>
         </header>
 
         <section className="auth-form-shell verify-email-shell" aria-live="polite">

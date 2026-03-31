@@ -20,7 +20,19 @@ export class NeedsService {
     private readonly plansService: PlansService = new PlansService(),
   ) {}
 
+  private async assertNeedsFeatureEnabled(): Promise<void> {
+    const status = await this.settingsService.getAppStatus();
+    if (!status.featureNeedsEnabled) {
+      throw new HttpError({
+        statusCode: 503,
+        code: 'FEATURE_DISABLED',
+        message: 'Needs are currently disabled.',
+      });
+    }
+  }
+
   async createNeed(customerId: string, input: CreateNeedInput) {
+    await this.assertNeedsFeatureEnabled();
     const status = await this.settingsService.getAppStatus();
     if (status.pauseNeeds) {
       throw new HttpError({
@@ -59,14 +71,17 @@ export class NeedsService {
   }
 
   async listMyNeeds(customerId: string, page: number, limit: number) {
+    await this.assertNeedsFeatureEnabled();
     return this.repo.listNeedsByCustomer(customerId, page, limit);
   }
 
   async listOpenNeeds(page: number, limit: number, categoryId?: string) {
+    await this.assertNeedsFeatureEnabled();
     return this.repo.listOpenNeeds(page, limit, categoryId);
   }
 
   async getNeed(needId: string) {
+    await this.assertNeedsFeatureEnabled();
     const need = await this.repo.getNeedById(needId);
     if (!need)
       throw new HttpError({ statusCode: 404, code: 'NEED_NOT_FOUND', message: 'Need not found.' });
@@ -74,6 +89,7 @@ export class NeedsService {
   }
 
   async updateBid(needId: string, bidId: string, expertId: string, input: UpdateBidInput) {
+    await this.assertNeedsFeatureEnabled();
     const bid = await this.repo.getBidById(bidId);
     if (!bid || bid.need_id !== needId) {
       throw new HttpError({ statusCode: 404, code: 'BID_NOT_FOUND', message: 'Bid not found.' });
@@ -94,6 +110,7 @@ export class NeedsService {
   }
 
   async deleteBid(needId: string, bidId: string, expertId: string) {
+    await this.assertNeedsFeatureEnabled();
     const bid = await this.repo.getBidById(bidId);
     if (!bid || bid.need_id !== needId) {
       throw new HttpError({ statusCode: 404, code: 'BID_NOT_FOUND', message: 'Bid not found.' });
@@ -108,6 +125,7 @@ export class NeedsService {
   }
 
   async updateNeed(needId: string, userId: string, input: UpdateNeedInput) {
+    await this.assertNeedsFeatureEnabled();
     const need = await this.getNeed(needId);
     if (need.customer_id !== userId) {
       throw new HttpError({ statusCode: 403, code: 'FORBIDDEN', message: 'Not your need.' });
@@ -123,6 +141,7 @@ export class NeedsService {
   }
 
   async createBid(needId: string, expertId: string, input: CreateBidInput) {
+    await this.assertNeedsFeatureEnabled();
     const status = await this.settingsService.getAppStatus();
     if (status.pauseBids) {
       throw new HttpError({
@@ -163,6 +182,7 @@ export class NeedsService {
   }
 
   async listBidsForNeed(needId: string, userId: string) {
+    await this.assertNeedsFeatureEnabled();
     const need = await this.getNeed(needId);
     if (need.customer_id !== userId) {
       throw new HttpError({
@@ -209,6 +229,7 @@ export class NeedsService {
   }
 
   async listMyBids(expertId: string, page: number, limit: number) {
+    await this.assertNeedsFeatureEnabled();
     try {
       return await this.repo.listBidsByExpert(expertId, page, limit);
     } catch (err: unknown) {
@@ -225,6 +246,7 @@ export class NeedsService {
   }
 
   async awardBid(needId: string, bidId: string, userId: string) {
+    await this.assertNeedsFeatureEnabled();
     const status = await this.settingsService.getAppStatus();
     if (status.pauseAwardBids) {
       throw new HttpError({
@@ -325,6 +347,7 @@ export class NeedsService {
   }
 
   async payBid(needId: string, bidId: string, userId: string) {
+    await this.assertNeedsFeatureEnabled();
     const status = await this.settingsService.getAppStatus();
     if (status.moneyMovementsPaused) {
       throw new HttpError({
@@ -465,6 +488,7 @@ export class NeedsService {
   }
 
   async listBidMessages(needId: string, bidId: string, userId: string) {
+    await this.assertNeedsFeatureEnabled();
     const need = await this.getNeed(needId);
     const bid = await this.repo.getBidById(bidId);
     if (!bid || bid.need_id !== needId) {
@@ -478,6 +502,7 @@ export class NeedsService {
   }
 
   async createBidMessage(needId: string, bidId: string, userId: string, content: string) {
+    await this.assertNeedsFeatureEnabled();
     const need = await this.getNeed(needId);
     const bid = await this.repo.getBidById(bidId);
     if (!bid || bid.need_id !== needId) {

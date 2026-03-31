@@ -52,6 +52,7 @@ function readFilePreview(file: File): Promise<string> {
 }
 
 export const ExpertOnboardingScreen = ({ locale, dictionary }: Props) => {
+  const tr = (en: string, ar: string) => (locale === 'ar' ? ar : en);
   const router = useRouter();
   const { authUser, accessToken, isAuthenticated, isReady, authGuard, updateAuthUser } = useAuth();
   const [step, setStep] = useState<Step>('profile');
@@ -70,6 +71,7 @@ export const ExpertOnboardingScreen = ({ locale, dictionary }: Props) => {
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [avatarPreviewUrl, setAvatarPreviewUrl] = useState<string | null>(null);
   const [withdrawableManualDocId, setWithdrawableManualDocId] = useState<string | null>(null);
+  const [hasActiveIdentitySubmission, setHasActiveIdentitySubmission] = useState(false);
 
   const dict = dictionary.onboarding.expert;
   const stepLabels = [dict.steps.profileDetails, dict.steps.kyc, dict.steps.documents];
@@ -142,6 +144,7 @@ export const ExpertOnboardingScreen = ({ locale, dictionary }: Props) => {
     try {
       await profilesApiClient.withdrawIdentityDocument(accessToken, withdrawableManualDocId);
       setWithdrawableManualDocId(null);
+      setHasActiveIdentitySubmission(false);
       await loadKycStatus();
       await updateAuthUser();
     } catch (err) {
@@ -156,10 +159,11 @@ export const ExpertOnboardingScreen = ({ locale, dictionary }: Props) => {
     let cancelled = false;
     void (async () => {
       try {
-        const [profile, verification, academicRecords] = await Promise.all([
+        const [profile, verification, academicRecords, identityDocs] = await Promise.all([
           profilesApiClient.getExpertProfile(accessToken),
           verificationApiClient.getStatus(accessToken).catch(() => ({ verificationStatus: 'unverified' as const })),
           profilesApiClient.getAcademicRecords(accessToken).catch(() => []),
+          profilesApiClient.getIdentityDocuments(accessToken).catch(() => []),
         ]);
         if (cancelled) return;
         setKycStatus(verification.verificationStatus);
@@ -170,7 +174,12 @@ export const ExpertOnboardingScreen = ({ locale, dictionary }: Props) => {
         const profileComplete = Boolean(
           profile?.title?.trim() && profile?.languages?.length && authUser?.avatarUrl,
         );
-        const identityDone = verification.verificationStatus === 'verified' || verification.verificationStatus === 'pending';
+        const hasPendingIdentitySubmission =
+          Array.isArray(identityDocs) &&
+          identityDocs.some((doc) => doc.status === 'pending' || doc.status === 'under_review');
+        setHasActiveIdentitySubmission(hasPendingIdentitySubmission);
+        const identityDone =
+          verification.verificationStatus === 'verified' || hasPendingIdentitySubmission;
         const hasApprovedAcademicRecord = Array.isArray(academicRecords) && academicRecords.some((r) => r.status === 'approved');
         const hasRejectedAcademic = Array.isArray(academicRecords) && academicRecords.some((r) => r.status === 'rejected');
         setDocumentRejectedResubmit(Boolean(hasRejectedAcademic && !hasApprovedAcademicRecord));
@@ -306,7 +315,12 @@ export const ExpertOnboardingScreen = ({ locale, dictionary }: Props) => {
 
     const needsBack = docType === 'national_id' || docType === 'driving_license';
     if (!manualFrontFile || !manualSelfieFile || (needsBack && !manualBackFile)) {
-      setError('Please capture/upload all required images: document front, document back (if applicable), and a live selfie.');
+      setError(
+        tr(
+          'Please capture/upload all required images: document front, document back (if applicable), and a live selfie.',
+          'يرجى التقاط/رفع جميع الصور المطلوبة: واجهة الهوية، الخلفية (إن لزم)، وصورة سيلفي مباشرة.',
+        ),
+      );
       return;
     }
 
@@ -331,6 +345,7 @@ export const ExpertOnboardingScreen = ({ locale, dictionary }: Props) => {
         ...(backRes && { backImageUrl: toFullUrl(backRes.url) }),
       });
       setKycStatus('pending');
+      setHasActiveIdentitySubmission(true);
       setKycMode(null);
       setManualFrontFile(null);
       setManualBackFile(null);
@@ -347,8 +362,8 @@ export const ExpertOnboardingScreen = ({ locale, dictionary }: Props) => {
     if (!accessToken) return;
     if (!certificateFile) {
       setError(dict.documentsForm.certificateImageLabel
-        ? `${dict.documentsForm.certificateImageLabel} is required.`
-        : 'Please upload your certificate or degree document.');
+        ? `${dict.documentsForm.certificateImageLabel} ${tr('is required.', 'مطلوب.')}`
+        : tr('Please upload your certificate or degree document.', 'يرجى رفع الشهادة أو وثيقة الدرجة العلمية.'));
       return;
     }
     setSaving(true);
@@ -360,7 +375,9 @@ export const ExpertOnboardingScreen = ({ locale, dictionary }: Props) => {
     const institution = (form.elements.namedItem('institution') as HTMLInputElement)?.value?.trim() || '';
 
     if (!title || !institution) {
-      setError(dictionary.profile.saveError || 'Please select degree and institution.');
+      setError(
+        dictionary.profile.saveError || tr('Please select degree and institution.', 'يرجى اختيار الدرجة والمؤسسة.'),
+      );
       setSaving(false);
       return;
     }
@@ -445,24 +462,34 @@ export const ExpertOnboardingScreen = ({ locale, dictionary }: Props) => {
               </div>
               <div className="onboarding-field">
                 <label className="onboarding-label">
-                  {(dict.profileForm as { avatarLabel?: string }).avatarLabel ?? 'Profile picture'}
+                  {(dict.profileForm as { avatarLabel?: string }).avatarLabel ??
+                    tr('Profile picture', 'الصورة الشخصية')}
                 </label>
                 <p className="onboarding-description">
                   {(dict.profileForm as { avatarHint?: string }).avatarHint ??
-                    'Required for expert verification and the platform verified badge.'}
+                    tr(
+                      'Required for expert verification and the platform verified badge.',
+                      'مطلوب للتحقق كخبير والحصول على شارة التوثيق من المنصة.',
+                    )}
                 </p>
                 {avatarPreviewUrl && (
                   <div style={{ maxWidth: '12rem', borderRadius: '1rem', overflow: 'hidden', border: '1px solid hsl(var(--border))' }}>
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
                       src={avatarPreviewUrl}
-                      alt={(dict.profileForm as { avatarLabel?: string }).avatarLabel ?? 'Profile picture'}
+                      alt={
+                        (dict.profileForm as { avatarLabel?: string }).avatarLabel ??
+                        tr('Profile picture', 'الصورة الشخصية')
+                      }
                       style={{ display: 'block', width: '100%', maxHeight: '12rem', objectFit: 'cover' }}
                     />
                   </div>
                 )}
                 <ImageUploadOrCapture
-                  label={(dict.profileForm as { avatarUploadLabel?: string }).avatarUploadLabel ?? 'Upload profile picture'}
+                  label={
+                    (dict.profileForm as { avatarUploadLabel?: string }).avatarUploadLabel ??
+                    tr('Upload profile picture', 'رفع الصورة الشخصية')
+                  }
                   onImage={(file) => {
                     void (async () => {
                       setAvatarFile(file);
@@ -593,7 +620,8 @@ export const ExpertOnboardingScreen = ({ locale, dictionary }: Props) => {
                       onClick={() => void handleWithdrawManualSubmission()}
                       disabled={saving}
                     >
-                      {dict.withdrawIdentitySubmission ?? 'Remove submission and start over'}
+                      {dict.withdrawIdentitySubmission ??
+                        tr('Remove submission and start over', 'حذف الطلب والبدء من جديد')}
                     </button>
                   </div>
                 )}
@@ -614,7 +642,7 @@ export const ExpertOnboardingScreen = ({ locale, dictionary }: Props) => {
                       >
                         {saving ? dictionary.auth.common.loading : dict.kycButton}
                       </button>
-                      <p className="onboarding-kyc-divider">— or —</p>
+                      <p className="onboarding-kyc-divider">{tr('— or —', '— أو —')}</p>
                       <button
                         type="button"
                         className="onboarding-secondary-button"
@@ -627,7 +655,11 @@ export const ExpertOnboardingScreen = ({ locale, dictionary }: Props) => {
                   ) : (
                 <form className="onboarding-form" onSubmit={(e) => void handleManualKyc(e)}>
                   <p className="onboarding-description">
-                    {dict.documentsForm.identityDescription} You must take a live photo of yourself and a photo of your ID (National ID, passport, or driving license). Upload or take live pictures.
+                    {dict.documentsForm.identityDescription}{' '}
+                    {tr(
+                      'You must take a live photo of yourself and a photo of your ID (National ID, passport, or driving license). Upload or take live pictures.',
+                      'يجب التقاط صورة مباشرة لك وصورة لبطاقة الهوية (بطاقة رقم قومي أو جواز سفر أو رخصة قيادة). يمكنك الرفع أو الالتقاط المباشر.',
+                    )}
                   </p>
                   {dictionary.verification?.verificationTimeNote && (
                     <p className="onboarding-description onboarding-verification-note">
@@ -676,7 +708,10 @@ export const ExpertOnboardingScreen = ({ locale, dictionary }: Props) => {
                       disabled={saving}
                     />
                     <p className="onboarding-description" style={{ marginTop: '0.25rem', fontSize: '0.8rem' }}>
-                      Required for National ID and Driving License. Skip for passport.
+                      {tr(
+                        'Required for National ID and Driving License. Skip for passport.',
+                        'مطلوب للبطاقة القومية ورخصة القيادة. يمكن تجاوزه في حالة جواز السفر.',
+                      )}
                     </p>
                   </div>
                   <div className="onboarding-field">
@@ -690,7 +725,10 @@ export const ExpertOnboardingScreen = ({ locale, dictionary }: Props) => {
                       disabled={saving}
                     />
                     <p className="onboarding-description" style={{ marginTop: '0.25rem', fontSize: '0.8rem' }}>
-                      You must take a live photo of yourself now. No uploads allowed for selfie.
+                      {tr(
+                        'You must take a live photo of yourself now. No uploads allowed for selfie.',
+                        'يجب التقاط صورة مباشرة لك الآن. لا يُسمح برفع ملف سيلفي.',
+                      )}
                     </p>
                   </div>
                   <button type="submit" className="onboarding-cta-button" disabled={saving}>
@@ -720,14 +758,19 @@ export const ExpertOnboardingScreen = ({ locale, dictionary }: Props) => {
                   type="button"
                   className="onboarding-cta-button"
                   onClick={() => setStep('documents')}
-                  disabled={kycStatus !== 'verified' && kycStatus !== 'pending'}
+                  disabled={kycStatus !== 'verified' && !hasActiveIdentitySubmission}
                 >
                   {dictionary.common.next}
                 </button>
               </div>
-              {kycStatus !== 'verified' && kycStatus !== 'pending' && authUser?.verificationStatus !== 'rejected' && (
+              {kycStatus !== 'verified' &&
+                !hasActiveIdentitySubmission &&
+                authUser?.verificationStatus !== 'rejected' && (
                 <p className="onboarding-hint">
-                  Complete identity verification or submit for manual review before continuing.
+                  {tr(
+                    'Complete identity verification or submit for manual review before continuing.',
+                    'أكمل التحقق من الهوية أو قدّم للمراجعة اليدوية قبل المتابعة.',
+                  )}
                 </p>
               )}
             </div>

@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
+import Image from 'next/image';
 
 import { ApiHealthBadge } from '@/components/api-health-badge';
 import {
@@ -7,8 +8,9 @@ import {
   HomePageJoinSectionGate,
   HomePageNavAuth,
 } from '@/components/home-page-auth-aware';
-import { HomePageFloatingControls } from '@/components/home-page-floating-controls';
+import { LanguageToggle } from '@/components/language-toggle';
 import { SiteLogo } from '@/components/site-logo';
+import { ThemeToggle } from '@/components/theme-toggle';
 import { Card } from '@/components/ui/card';
 import { Container } from '@/components/ui/container';
 import { isSupportedLocale } from '@/lib/i18n/config';
@@ -34,20 +36,48 @@ const HomePage = async ({ params }: HomePageProps) => {
 
   return (
     <main className="home-page-main">
-      <HomePageFloatingControls locale={typedLocale} dictionary={dictionary} />
       <Container className="home-page-container">
         <header className="home-page-navbar">
           <Link href={buildLocalePath(typedLocale, '/')} className="home-page-brand">
             <SiteLogo />
           </Link>
-          <HomePageNavAuth locale={typedLocale} dictionary={dictionary} />
+          <div className="home-page-navbar-right">
+            <div className="home-page-header-controls">
+              <LanguageToggle
+                locale={typedLocale}
+                targetLabel={dictionary.language.target}
+                ariaLabel={dictionary.language.switchLabel}
+              />
+              <ThemeToggle
+                switchToLightLabel={dictionary.theme.switchToLight}
+                switchToDarkLabel={dictionary.theme.switchToDark}
+                darkLabel={dictionary.theme.darkLabel}
+                lightLabel={dictionary.theme.lightLabel}
+              />
+            </div>
+            <HomePageNavAuth locale={typedLocale} dictionary={dictionary} />
+          </div>
         </header>
 
         <section className="home-page-hero-section">
-          <ApiHealthBadge />
-          <h1 className="home-page-hero-title">{dictionary.home.headline}</h1>
-          <p className="home-page-hero-description">{dictionary.home.description}</p>
-          <HomePageHeroCta locale={typedLocale} dictionary={dictionary} />
+          <div className="home-page-hero-layout">
+            <div className="home-page-hero-copy">
+              <ApiHealthBadge />
+              <h1 className="home-page-hero-title">{dictionary.home.headline}</h1>
+              <p className="home-page-hero-description">{dictionary.home.description}</p>
+              <HomePageHeroCta locale={typedLocale} dictionary={dictionary} />
+            </div>
+            <aside className="home-page-hero-banner" aria-hidden="true">
+              <Image
+                src="/assets/herosection.png"
+                alt=""
+                width={900}
+                height={700}
+                className="home-page-hero-banner-image"
+                priority
+              />
+            </aside>
+          </div>
         </section>
 
         <section className="home-page-section">
@@ -118,56 +148,87 @@ const HomePage = async ({ params }: HomePageProps) => {
           </HomePageJoinSectionGate>
         )}
 
-        {dictionary.home.trustTitle && (
-          <section className="home-page-section home-page-trust-section">
-            <h2 className="home-page-section-title">{dictionary.home.trustTitle}</h2>
-            <ul className="home-page-trust-list">
-              {dictionary.home.trustVerified && (
-                <li className="home-page-trust-item">{dictionary.home.trustVerified}</li>
-              )}
-              {dictionary.home.trustPayments && (
-                <li className="home-page-trust-item">{dictionary.home.trustPayments}</li>
-              )}
-              {dictionary.home.trustCancellation && (
-                <li className="home-page-trust-item">{dictionary.home.trustCancellation}</li>
-              )}
-            </ul>
-          </section>
-        )}
+        {(dictionary.home.trustTitle || dictionary.home.metricsTitle || dictionary.home.faqTitle) && (
+          <section className="home-page-section home-page-trust-faq-section">
+            <div className="home-page-trust-faq-layout">
+              <aside className="home-page-trust-visual">
+                <Image
+                  src="/assets/trustus.png"
+                  alt=""
+                  width={900}
+                  height={700}
+                  className="home-page-trust-illustration-image"
+                />
+                {dictionary.home.metricsTitle && (
+                  <>
+                    <h3 className="home-page-trust-visual-title">{dictionary.home.metricsTitle}</h3>
+                    <div className="home-page-metrics-cards">
+                      <Card className="home-page-metric-card">
+                        <span className="home-page-metric-value">50+</span>
+                        <span className="home-page-metric-label">
+                          {dictionary.home.metricsExperts ?? 'Verified experts'}
+                        </span>
+                      </Card>
+                      <Card className="home-page-metric-card">
+                        <span className="home-page-metric-value">200+</span>
+                        <span className="home-page-metric-label">
+                          {dictionary.home.metricsProjects ?? 'Projects completed'}
+                        </span>
+                      </Card>
+                      <Card className="home-page-metric-card">
+                        <span className="home-page-metric-value">500+</span>
+                        <span className="home-page-metric-label">
+                          {dictionary.home.metricsCustomers ?? 'Customers served'}
+                        </span>
+                      </Card>
+                    </div>
+                  </>
+                )}
+                <div className="home-page-trust-cta-wrap">
+                  <Link
+                    href={`${buildLocalePath(typedLocale, '/auth')}?mode=register`}
+                    className="home-page-role-card home-page-trust-cta"
+                  >
+                    {dictionary.common.getStarted}
+                  </Link>
+                </div>
+              </aside>
 
-        {/* Testimonials section removed for now until we have real opinions */}
+              <div className="home-page-trust-content">
+                {dictionary.home.trustTitle && (
+                  <>
+                    <h2 className="home-page-section-title">{dictionary.home.trustTitle}</h2>
+                    <ul className="home-page-trust-list">
+                      {dictionary.home.trustVerified && (
+                        <li className="home-page-trust-item">{dictionary.home.trustVerified}</li>
+                      )}
+                      {dictionary.home.trustPayments && (
+                        <li className="home-page-trust-item">{dictionary.home.trustPayments}</li>
+                      )}
+                      {dictionary.home.trustCancellation && (
+                        <li className="home-page-trust-item">{dictionary.home.trustCancellation}</li>
+                      )}
+                    </ul>
+                  </>
+                )}
 
-        {dictionary.home.metricsTitle && (
-          <section className="home-page-section home-page-metrics-section">
-            <h2 className="home-page-section-title">{dictionary.home.metricsTitle}</h2>
-            <div className="home-page-metrics-grid">
-              <div className="home-page-metric">
-                <span className="home-page-metric-value">50+</span>
-                <span className="home-page-metric-label">{dictionary.home.metricsExperts ?? 'Verified experts'}</span>
-              </div>
-              <div className="home-page-metric">
-                <span className="home-page-metric-value">200+</span>
-                <span className="home-page-metric-label">{dictionary.home.metricsProjects ?? 'Projects completed'}</span>
-              </div>
-              <div className="home-page-metric">
-                <span className="home-page-metric-value">500+</span>
-                <span className="home-page-metric-label">{dictionary.home.metricsCustomers ?? 'Customers served'}</span>
+                {dictionary.home.faqTitle &&
+                  dictionary.home.faqItems &&
+                  dictionary.home.faqItems.length > 0 && (
+                    <div className="home-page-faq-block">
+                      <h2 className="home-page-section-title">{dictionary.home.faqTitle}</h2>
+                      <ul className="home-page-faq-list">
+                        {dictionary.home.faqItems.map((item, i) => (
+                          <li key={i} className="home-page-faq-item">
+                            <strong className="home-page-faq-question">{item.question}</strong>
+                            <p className="home-page-faq-answer">{item.answer}</p>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
               </div>
             </div>
-          </section>
-        )}
-
-        {dictionary.home.faqTitle && dictionary.home.faqItems && dictionary.home.faqItems.length > 0 && (
-          <section className="home-page-section home-page-faq-section">
-            <h2 className="home-page-section-title">{dictionary.home.faqTitle}</h2>
-            <ul className="home-page-faq-list">
-              {dictionary.home.faqItems.map((item, i) => (
-                <li key={i} className="home-page-faq-item">
-                  <strong className="home-page-faq-question">{item.question}</strong>
-                  <p className="home-page-faq-answer">{item.answer}</p>
-                </li>
-              ))}
-            </ul>
           </section>
         )}
 

@@ -18,7 +18,7 @@ const nextConfig: NextConfig = {
   rewrites() {
     return Promise.resolve([
       {
-        source: '/api/:path*',
+        source: '/api/:path((?!proxy/).*)',
         destination: `${apiTarget}/api/:path*`,
       },
       {

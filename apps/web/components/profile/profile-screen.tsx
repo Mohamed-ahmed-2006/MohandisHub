@@ -7,6 +7,7 @@ import type {
   BusinessProfile,
   CraftsmanProfile,
   ExpertProfile,
+  IdentityDocumentType,
   IdentityDocument,
   Review,
   UpdateBusinessProfileBody,
@@ -30,11 +31,12 @@ import { LanguagesCheckboxes } from '@/components/ui/languages-checkboxes';
 import { SkeletonForm } from '@/components/ui/skeleton';
 import { resolvePublicAssetUrl, toAbsoluteAssetUrl } from '@/lib/asset-url';
 import { COUNTRIES } from '@/lib/data/countries';
+import { getApiBaseUrl } from '@/lib/env';
 import { buildLocalePath } from '@/lib/i18n/path';
 import type { Dictionary, Locale } from '@/lib/i18n/types';
 import { profilesApiClient } from '@/lib/profiles/client';
 import { reviewsApiClient } from '@/lib/reviews/client';
-import { uploadFile } from '@/lib/upload/client';
+import { uploadFile, uploadPrivateFile } from '@/lib/upload/client';
 import { usersApiClient } from '@/lib/users/client';
 import { formatApiError } from '@/lib/utils/format-api-error';
 
@@ -125,12 +127,6 @@ function getSectionLabel(
   }
 
   return dictionary.profile.verificationSection ?? 'Verification';
-}
-
-function getOnboardingPath(roleProfileKind: RoleProfileKind | null): string {
-  if (roleProfileKind === 'business') return '/onboarding/business';
-  if (roleProfileKind === 'craftsman') return '/onboarding/craftsman';
-  return '/onboarding/expert';
 }
 
 // ── Account Form (all roles) ─────────────────────────────────────────────
@@ -544,6 +540,27 @@ export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
   const [documentsLoading, setDocumentsLoading] = useState(false);
   const [withdrawingDocId, setWithdrawingDocId] = useState<string | null>(null);
   const [editAcademicRecord, setEditAcademicRecord] = useState<AcademicRecord | null>(null);
+  const [addIdentityOpen, setAddIdentityOpen] = useState(false);
+  const [addAcademicOpen, setAddAcademicOpen] = useState(false);
+  const [identitySubmitting, setIdentitySubmitting] = useState(false);
+  const [academicSubmitting, setAcademicSubmitting] = useState(false);
+  const [identitySubmitError, setIdentitySubmitError] = useState<string | null>(null);
+  const [academicSubmitError, setAcademicSubmitError] = useState<string | null>(null);
+  const [identityDocType, setIdentityDocType] = useState<IdentityDocumentType>('national_id');
+  const [identityFullNameOnDoc, setIdentityFullNameOnDoc] = useState('');
+  const [identityFrontFile, setIdentityFrontFile] = useState<File | null>(null);
+  const [identityBackFile, setIdentityBackFile] = useState<File | null>(null);
+  const [identitySelfieFile, setIdentitySelfieFile] = useState<File | null>(null);
+  const [academicRecordType, setAcademicRecordType] = useState<
+    'degree' | 'diploma' | 'certificate' | 'license'
+  >('degree');
+  const [academicTitle, setAcademicTitle] = useState('');
+  const [academicInstitution, setAcademicInstitution] = useState('');
+  const [academicFieldOfStudy, setAcademicFieldOfStudy] = useState('');
+  const [academicGraduationYear, setAcademicGraduationYear] = useState('');
+  const [academicGrade, setAcademicGrade] = useState('');
+  const [academicCertificateFile, setAcademicCertificateFile] = useState<File | null>(null);
+  const [academicTranscriptFile, setAcademicTranscriptFile] = useState<File | null>(null);
   const [academicEditSaving, setAcademicEditSaving] = useState(false);
   const [academicEditError, setAcademicEditError] = useState<string | null>(null);
   const [businessLogoFile, setBusinessLogoFile] = useState<File | null>(null);
@@ -685,6 +702,12 @@ export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
     }
   }, [accessToken, hasRoleProfile, isExpert]);
 
+  const toFullUploadUrl = useCallback((url: string) => {
+    if (url.startsWith('http')) return url;
+    const base = (getApiBaseUrl() || '').replace(/\/$/, '');
+    return base ? `${base}${url.startsWith('/') ? '' : '/'}${url}` : url;
+  }, []);
+
   useEffect(() => {
     if (hasRoleProfile) {
       void loadDocuments();
@@ -759,6 +782,124 @@ export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
     },
     [accessToken, editAcademicRecord, dictionary.profile, loadDocuments],
   );
+
+  const handleAddIdentityDocument = useCallback(async () => {
+    if (!accessToken) return;
+    const needsBack = identityDocType === 'national_id' || identityDocType === 'driving_license';
+    if (!identityFullNameOnDoc.trim() || !identityFrontFile || !identitySelfieFile || (needsBack && !identityBackFile)) {
+      setIdentitySubmitError('Please provide full name, document front, live selfie, and back image when required.');
+      return;
+    }
+
+    setIdentitySubmitting(true);
+    setIdentitySubmitError(null);
+    setSaveMessage(null);
+    try {
+      const [frontRes, backRes, selfieRes] = await Promise.all([
+        uploadPrivateFile(accessToken, identityFrontFile),
+        identityBackFile ? uploadPrivateFile(accessToken, identityBackFile) : Promise.resolve(null),
+        uploadPrivateFile(accessToken, identitySelfieFile),
+      ]);
+
+      await profilesApiClient.submitIdentityDocument(accessToken, {
+        documentType: identityDocType,
+        fullNameOnDoc: identityFullNameOnDoc.trim(),
+        frontImageUrl: toFullUploadUrl(frontRes.url),
+        selfieImageUrl: toFullUploadUrl(selfieRes.url),
+        ...(backRes && { backImageUrl: toFullUploadUrl(backRes.url) }),
+      });
+
+      setAddIdentityOpen(false);
+      setIdentityFullNameOnDoc('');
+      setIdentityFrontFile(null);
+      setIdentityBackFile(null);
+      setIdentitySelfieFile(null);
+      await loadDocuments();
+      setSaveMessage({
+        type: 'success',
+        text: dictionary.profile.documents.identitySubmitSuccess ?? 'Identity document submitted successfully.',
+      });
+    } catch (err) {
+      setIdentitySubmitError(formatApiError(err, dictionary.profile.saveError));
+    } finally {
+      setIdentitySubmitting(false);
+    }
+  }, [
+    accessToken,
+    identityDocType,
+    identityFullNameOnDoc,
+    identityFrontFile,
+    identitySelfieFile,
+    identityBackFile,
+    toFullUploadUrl,
+    loadDocuments,
+    dictionary.profile.documents.identitySubmitSuccess,
+    dictionary.profile.saveError,
+  ]);
+
+  const handleAddAcademicRecord = useCallback(async () => {
+    if (!accessToken) return;
+    if (!academicTitle.trim() || !academicInstitution.trim() || !academicCertificateFile) {
+      setAcademicSubmitError('Title, institution, and certificate image are required.');
+      return;
+    }
+
+    setAcademicSubmitting(true);
+    setAcademicSubmitError(null);
+    setSaveMessage(null);
+    try {
+      const [certRes, transcriptRes] = await Promise.all([
+        uploadPrivateFile(accessToken, academicCertificateFile),
+        academicTranscriptFile ? uploadPrivateFile(accessToken, academicTranscriptFile) : Promise.resolve(null),
+      ]);
+
+      await profilesApiClient.submitAcademicRecord(accessToken, {
+        recordType: academicRecordType,
+        title: academicTitle.trim(),
+        institution: academicInstitution.trim(),
+        certificateImageUrl: toFullUploadUrl(certRes.url),
+        ...(academicTranscriptFile ? { transcriptImageUrl: toFullUploadUrl(transcriptRes!.url) } : {}),
+        ...(academicFieldOfStudy.trim() ? { fieldOfStudy: academicFieldOfStudy.trim() } : {}),
+        ...(academicGraduationYear.trim()
+          ? { graduationYear: Number.parseInt(academicGraduationYear, 10) }
+          : {}),
+        ...(academicGrade.trim() ? { grade: academicGrade.trim() } : {}),
+      });
+
+      setAddAcademicOpen(false);
+      setAcademicRecordType('degree');
+      setAcademicTitle('');
+      setAcademicInstitution('');
+      setAcademicFieldOfStudy('');
+      setAcademicGraduationYear('');
+      setAcademicGrade('');
+      setAcademicCertificateFile(null);
+      setAcademicTranscriptFile(null);
+      await loadDocuments();
+      setSaveMessage({
+        type: 'success',
+        text: dictionary.profile.documents.academicSubmitSuccess ?? 'Academic record submitted successfully.',
+      });
+    } catch (err) {
+      setAcademicSubmitError(formatApiError(err, dictionary.profile.saveError));
+    } finally {
+      setAcademicSubmitting(false);
+    }
+  }, [
+    accessToken,
+    academicTitle,
+    academicInstitution,
+    academicCertificateFile,
+    academicTranscriptFile,
+    academicRecordType,
+    academicFieldOfStudy,
+    academicGraduationYear,
+    academicGrade,
+    toFullUploadUrl,
+    loadDocuments,
+    dictionary.profile.documents.academicSubmitSuccess,
+    dictionary.profile.saveError,
+  ]);
 
   const submitReport = useCallback(async () => {
     if (!accessToken || !reportModalReviewId || reportSubmitting) return;
@@ -967,8 +1108,20 @@ export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
   const craftsmanForm = dictionary.onboarding.craftsman.profileForm;
   const businessForm = dictionary.onboarding.business.companyForm;
   const verLabels = dictionary.verification.statusLabels;
+  const roleVerificationStatus =
+    (isExpert
+      ? expertProfile?.verificationStatus
+      : isCraftsman
+        ? craftsmanProfile?.verificationStatus
+        : isBusiness
+          ? businessProfile?.verificationStatus
+          : authUser.verificationStatus) ?? 'unverified';
+  const verificationCompletedOrInReview =
+    roleVerificationStatus === 'verified' ||
+    roleVerificationStatus === 'pending' ||
+    roleVerificationStatus === 'under_review' ||
+    roleVerificationStatus === 'approved';
   const visibleSections = getVisibleProfileSections(role);
-  const onboardingPath = getOnboardingPath(roleProfileKind);
 
   return (
     <main className="profile-screen-main">
@@ -2080,14 +2233,23 @@ export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
                     <p className="profile-screen-noDocuments">
                       {dictionary.profile.documents.noDocuments}
                     </p>
-                    {hasRoleProfile && (
-                      <Link
-                        href={buildLocalePath(locale, onboardingPath)}
+                    {verificationCompletedOrInReview ? (
+                      <span
+                        className={`profile-screen-doc-status profile-screen-doc-status--${roleVerificationStatus}`}
+                      >
+                        {dictionary.profile.documents.status}:{' '}
+                        {verLabels[roleVerificationStatus as keyof typeof verLabels] ??
+                          roleVerificationStatus}
+                      </span>
+                    ) : hasRoleProfile ? (
+                      <button
+                        type="button"
+                        onClick={() => setAddIdentityOpen(true)}
                         className="profile-screen-cta-link"
                       >
                         {dictionary.profile.documents.addIdentityDocument ?? 'Add identity document'}
-                      </Link>
-                    )}
+                      </button>
+                    ) : null}
                   </>
                 ) : (
                   <ul className="profile-screen-doc-list" aria-label="Identity documents">
@@ -2143,12 +2305,13 @@ export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
                           </div>
                         )}
                         {doc.status === 'rejected' && (
-                          <Link
-                            href={buildLocalePath(locale, onboardingPath)}
+                          <button
+                            type="button"
+                            onClick={() => setAddIdentityOpen(true)}
                             className="profile-screen-doc-resubmit"
                           >
                             {dictionary.profile.documents.resubmit}
-                          </Link>
+                          </button>
                         )}
                       </li>
                     ))}
@@ -2168,12 +2331,13 @@ export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
                         <p className="profile-screen-noDocuments">
                           {dictionary.profile.documents.noDocuments}
                         </p>
-                        <Link
-                          href={buildLocalePath(locale, '/onboarding/expert')}
+                        <button
+                          type="button"
+                          onClick={() => setAddAcademicOpen(true)}
                           className="profile-screen-cta-link"
                         >
                           {dictionary.profile.documents.addAcademicRecord ?? 'Add academic record'}
-                        </Link>
+                        </button>
                       </>
                     ) : (
                       <>
@@ -2222,40 +2386,235 @@ export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
                                   {dictionary.profile.documents.editAcademicRecord ?? 'Edit'}
                                 </button>
                                 {rec.status === 'rejected' && (
-                                  <Link
-                                    href={buildLocalePath(locale, '/onboarding/expert')}
+                                  <button
+                                    type="button"
+                                    onClick={() => setAddAcademicOpen(true)}
                                     className="profile-screen-doc-resubmit"
                                   >
                                     {dictionary.profile.documents.resubmit}
-                                  </Link>
+                                  </button>
                                 )}
                               </div>
                             </li>
                           ))}
                         </ul>
-                        <Link
-                          href={buildLocalePath(locale, '/onboarding/expert')}
+                        <button
+                          type="button"
+                          onClick={() => setAddAcademicOpen(true)}
                           className="profile-screen-cta-link profile-screen-cta-link--secondary"
                         >
                           {dictionary.profile.documents.addAnotherAcademicRecord ??
                             'Add another academic record'}
-                        </Link>
+                        </button>
                       </>
                     )}
                   </>
                 )}
 
-                {identityDocuments.length === 0 && (!isExpert || academicRecords.length === 0) && (
-                  <Link
-                    href={buildLocalePath(locale, onboardingPath)}
+                {identityDocuments.length === 0 &&
+                  (!isExpert || academicRecords.length === 0) &&
+                  !verificationCompletedOrInReview && (
+                  <button
+                    type="button"
+                    onClick={() => setAddIdentityOpen(true)}
                     className="profile-screen-cta-link"
                   >
                     {dictionary.profile.documents.goToVerification}
-                  </Link>
-                )}
+                  </button>
+                  )}
               </>
             )}
           </section>
+        )}
+
+        {addIdentityOpen && (
+          <div
+            className="profile-screen-modal-backdrop"
+            role="dialog"
+            aria-modal="true"
+            onClick={(e) => e.target === e.currentTarget && setAddIdentityOpen(false)}
+          >
+            <div className="profile-screen-modal" onClick={(e) => e.stopPropagation()}>
+              <h2 className="profile-screen-sectionTitle">
+                {dictionary.profile.documents.addIdentityDocument ?? 'Add identity document'}
+              </h2>
+              {identitySubmitError && <p className="profile-screen-save-error">{identitySubmitError}</p>}
+              <div className="profile-screen-form">
+                <div className="profile-screen-field">
+                  <label className="profile-screen-label">Document type</label>
+                  <select
+                    className="profile-screen-input"
+                    value={identityDocType}
+                    onChange={(e) => setIdentityDocType(e.target.value as IdentityDocumentType)}
+                  >
+                    <option value="national_id">National ID</option>
+                    <option value="passport">Passport</option>
+                    <option value="driving_license">Driving License</option>
+                  </select>
+                </div>
+                <div className="profile-screen-field">
+                  <label className="profile-screen-label">Full name on document</label>
+                  <input
+                    className="profile-screen-input"
+                    value={identityFullNameOnDoc}
+                    onChange={(e) => setIdentityFullNameOnDoc(e.target.value)}
+                  />
+                </div>
+                <ImageUploadOrCapture
+                  label="Document front"
+                  onImage={(f) => setIdentityFrontFile(f)}
+                  onClear={() => setIdentityFrontFile(null)}
+                  onError={setIdentitySubmitError}
+                  required
+                  disabled={identitySubmitting}
+                />
+                <ImageUploadOrCapture
+                  label="Document back (required for National ID/Driving License)"
+                  onImage={(f) => setIdentityBackFile(f)}
+                  onClear={() => setIdentityBackFile(null)}
+                  onError={setIdentitySubmitError}
+                  required={false}
+                  disabled={identitySubmitting}
+                />
+                <ImageUploadOrCapture
+                  label="Live selfie"
+                  onImage={(f) => setIdentitySelfieFile(f)}
+                  onClear={() => setIdentitySelfieFile(null)}
+                  onError={setIdentitySubmitError}
+                  required
+                  disabled={identitySubmitting}
+                />
+                <div className="profile-screen-actions">
+                  <button
+                    type="button"
+                    className="profile-screen-cancel-btn"
+                    onClick={() => setAddIdentityOpen(false)}
+                    disabled={identitySubmitting}
+                  >
+                    {dictionary.common.cancel}
+                  </button>
+                  <button
+                    type="button"
+                    className="profile-screen-submit-button"
+                    onClick={() => void handleAddIdentityDocument()}
+                    disabled={identitySubmitting}
+                  >
+                    {identitySubmitting ? dictionary.auth.common.loading : dictionary.common.submit}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {addAcademicOpen && (
+          <div
+            className="profile-screen-modal-backdrop"
+            role="dialog"
+            aria-modal="true"
+            onClick={(e) => e.target === e.currentTarget && setAddAcademicOpen(false)}
+          >
+            <div className="profile-screen-modal" onClick={(e) => e.stopPropagation()}>
+              <h2 className="profile-screen-sectionTitle">
+                {dictionary.profile.documents.addAcademicRecord ?? 'Add academic record'}
+              </h2>
+              {academicSubmitError && <p className="profile-screen-save-error">{academicSubmitError}</p>}
+              <div className="profile-screen-form">
+                <div className="profile-screen-field">
+                  <label className="profile-screen-label">Record type</label>
+                  <select
+                    className="profile-screen-input"
+                    value={academicRecordType}
+                    onChange={(e) =>
+                      setAcademicRecordType(
+                        e.target.value as 'degree' | 'diploma' | 'certificate' | 'license',
+                      )
+                    }
+                  >
+                    <option value="degree">Degree</option>
+                    <option value="diploma">Diploma</option>
+                    <option value="certificate">Certificate</option>
+                    <option value="license">License</option>
+                  </select>
+                </div>
+                <div className="profile-screen-field">
+                  <label className="profile-screen-label">Title</label>
+                  <input
+                    className="profile-screen-input"
+                    value={academicTitle}
+                    onChange={(e) => setAcademicTitle(e.target.value)}
+                  />
+                </div>
+                <div className="profile-screen-field">
+                  <label className="profile-screen-label">Institution</label>
+                  <input
+                    className="profile-screen-input"
+                    value={academicInstitution}
+                    onChange={(e) => setAcademicInstitution(e.target.value)}
+                  />
+                </div>
+                <div className="profile-screen-field">
+                  <label className="profile-screen-label">Field of study (optional)</label>
+                  <input
+                    className="profile-screen-input"
+                    value={academicFieldOfStudy}
+                    onChange={(e) => setAcademicFieldOfStudy(e.target.value)}
+                  />
+                </div>
+                <div className="profile-screen-field">
+                  <label className="profile-screen-label">Graduation year (optional)</label>
+                  <input
+                    className="profile-screen-input"
+                    type="number"
+                    value={academicGraduationYear}
+                    onChange={(e) => setAcademicGraduationYear(e.target.value)}
+                  />
+                </div>
+                <div className="profile-screen-field">
+                  <label className="profile-screen-label">Grade (optional)</label>
+                  <input
+                    className="profile-screen-input"
+                    value={academicGrade}
+                    onChange={(e) => setAcademicGrade(e.target.value)}
+                  />
+                </div>
+                <ImageUploadOrCapture
+                  label="Certificate image"
+                  onImage={(f) => setAcademicCertificateFile(f)}
+                  onClear={() => setAcademicCertificateFile(null)}
+                  onError={setAcademicSubmitError}
+                  required
+                  disabled={academicSubmitting}
+                />
+                <ImageUploadOrCapture
+                  label="Transcript image (optional)"
+                  onImage={(f) => setAcademicTranscriptFile(f)}
+                  onClear={() => setAcademicTranscriptFile(null)}
+                  onError={setAcademicSubmitError}
+                  required={false}
+                  disabled={academicSubmitting}
+                />
+                <div className="profile-screen-actions">
+                  <button
+                    type="button"
+                    className="profile-screen-cancel-btn"
+                    onClick={() => setAddAcademicOpen(false)}
+                    disabled={academicSubmitting}
+                  >
+                    {dictionary.common.cancel}
+                  </button>
+                  <button
+                    type="button"
+                    className="profile-screen-submit-button"
+                    onClick={() => void handleAddAcademicRecord()}
+                    disabled={academicSubmitting}
+                  >
+                    {academicSubmitting ? dictionary.auth.common.loading : dictionary.common.submit}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
         )}
 
         {editAcademicRecord && (

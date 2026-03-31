@@ -73,9 +73,9 @@ export const AdminPanel = ({ locale, dictionary }: AdminPanelProps) => {
     { id: 'services', label: dictionary.admin.tabs.services, permission: 'manage_services' },
     { id: 'categories', label: dictionary.admin.tabs.categories, permission: 'manage_services' },
     { id: 'verifications', label: dictionary.admin.tabs.verifications, permission: 'manage_verifications' },
-    { id: 'reviewReports', label: dictionary.admin.tabs.reviewReports ?? 'Review reports', permission: 'manage_verifications' },
-    { id: 'support', label: dictionary.admin.tabs.support ?? 'Support', permission: 'manage_users' },
-    { id: 'notifications', label: dictionary.admin.tabs.notifications ?? 'Notifications', permission: 'manage_notifications' },
+    { id: 'reviewReports', label: dictionary.admin.tabs.reviewReports ?? '', permission: 'manage_verifications' },
+    { id: 'support', label: dictionary.admin.tabs.support ?? '', permission: 'manage_users' },
+    { id: 'notifications', label: dictionary.admin.tabs.notifications ?? '', permission: 'manage_notifications' },
     { id: 'settings', label: dictionary.admin.tabs.settings, permission: 'manage_settings' },
   ];
 

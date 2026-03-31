@@ -4,7 +4,6 @@ import Image from 'next/image';
 import { useEffect, useState } from 'react';
 
 import { resolvePublicAssetUrl } from '@/lib/asset-url';
-import { getApiBaseUrl } from '@/lib/env';
 
 type ImagePreviewModalProps = {
   imageUrl: string;
@@ -15,6 +14,18 @@ type ImagePreviewModalProps = {
 };
 
 const isPrivateUploadUrl = (url: string): boolean => url.includes('/api/upload/private/');
+
+const extractPrivatePath = (url: string): string => {
+  if (url.startsWith('http://') || url.startsWith('https://')) {
+    try {
+      const parsed = new URL(url);
+      return `${parsed.pathname}${parsed.search}`;
+    } catch {
+      return url;
+    }
+  }
+  return url;
+};
 
 export function ImagePreviewModal({
   imageUrl,
@@ -48,15 +59,13 @@ export function ImagePreviewModal({
     setLoading(true);
     setError(null);
     setResolvedUrl(null);
-    const fullUrl = resolvePublicAssetUrl(imageUrl) ?? (imageUrl.startsWith('http')
-      ? imageUrl
-      : `${(getApiBaseUrl() || '').replace(/\/$/, '')}${imageUrl.startsWith('/') ? '' : '/'}${imageUrl}`);
-    fetch(fullUrl, {
+    const privatePath = extractPrivatePath(resolvePublicAssetUrl(imageUrl) ?? imageUrl);
+    const proxyUrl = `/api/proxy/private-upload?path=${encodeURIComponent(privatePath)}`;
+    fetch(proxyUrl, {
       headers: {
         Authorization: `Bearer ${accessToken}`,
         Accept: 'image/*, application/pdf, video/*, */*',
       },
-      credentials: 'include',
     })
       .then((res) => {
         if (!res.ok) throw new Error(`Failed to load image: ${res.status}`);

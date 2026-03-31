@@ -49,6 +49,7 @@ function readFilePreview(file: File): Promise<string> {
 }
 
 export const BusinessOnboardingScreen = ({ locale, dictionary }: Props) => {
+  const tr = (en: string, ar: string) => (locale === 'ar' ? ar : en);
   const router = useRouter();
   const { authUser, accessToken, isAuthenticated, isReady, authGuard, updateAuthUser } = useAuth();
   const [step, setStep] = useState<Step>('company');
@@ -63,6 +64,7 @@ export const BusinessOnboardingScreen = ({ locale, dictionary }: Props) => {
   const [logoFile, setLogoFile] = useState<File | null>(null);
   const [logoPreviewUrl, setLogoPreviewUrl] = useState<string | null>(null);
   const [withdrawableManualDocId, setWithdrawableManualDocId] = useState<string | null>(null);
+  const [hasActiveIdentitySubmission, setHasActiveIdentitySubmission] = useState(false);
 
   const dict = dictionary.onboarding.business;
   const stepLabels = [dict.steps.companyDetails, dict.steps.kyc, dict.steps.documents];
@@ -120,6 +122,7 @@ export const BusinessOnboardingScreen = ({ locale, dictionary }: Props) => {
     try {
       await profilesApiClient.withdrawIdentityDocument(accessToken, withdrawableManualDocId);
       setWithdrawableManualDocId(null);
+      setHasActiveIdentitySubmission(false);
       await loadKycStatus();
       await updateAuthUser();
     } catch (err) {
@@ -157,9 +160,13 @@ export const BusinessOnboardingScreen = ({ locale, dictionary }: Props) => {
         // Use profile/API status; authUser.verificationStatus reflects GET /me (profile) so include for consistency after refresh
         const effectiveVerified =
           verification.verificationStatus === 'verified' || authUser?.verificationStatus === 'verified';
+        const hasPendingIdentitySubmission =
+          Array.isArray(identityDocs) &&
+          identityDocs.some((doc) => doc.status === 'pending' || doc.status === 'under_review');
+        setHasActiveIdentitySubmission(hasPendingIdentitySubmission);
         const identityDone =
           verification.verificationStatus === 'verified' ||
-          verification.verificationStatus === 'pending' ||
+          hasPendingIdentitySubmission ||
           authUser?.verificationStatus === 'verified';
         const hasSubmittedDocs = Array.isArray(identityDocs) && identityDocs.length > 0;
         const fullyVerified = effectiveVerified;
@@ -297,7 +304,10 @@ export const BusinessOnboardingScreen = ({ locale, dictionary }: Props) => {
     const needsBack = docType === 'national_id' || docType === 'driving_license';
     if (!manualFrontFile || !manualSelfieFile || (needsBack && !manualBackFile)) {
       setError(
-        'Please capture/upload all required images: document front, document back (if applicable), and a live selfie.',
+        tr(
+          'Please capture/upload all required images: document front, document back (if applicable), and a live selfie.',
+          'يرجى التقاط/رفع جميع الصور المطلوبة: واجهة الهوية، الخلفية (إن لزم)، وصورة سيلفي مباشرة.',
+        ),
       );
       return;
     }
@@ -323,6 +333,7 @@ export const BusinessOnboardingScreen = ({ locale, dictionary }: Props) => {
         ...(backRes && { backImageUrl: toFullUrl(backRes.url) }),
       });
       setKycStatus('pending');
+      setHasActiveIdentitySubmission(true);
       setKycMode(null);
       setManualFrontFile(null);
       setManualBackFile(null);
@@ -343,7 +354,12 @@ export const BusinessOnboardingScreen = ({ locale, dictionary }: Props) => {
       await profilesApiClient.completeBusinessOnboarding(accessToken);
       setStep('complete');
     } catch (err) {
-      setError(formatApiError(err, dictionary.profile?.saveError ?? 'Failed to complete onboarding'));
+      setError(
+        formatApiError(
+          err,
+          dictionary.profile?.saveError ?? tr('Failed to complete onboarding', 'فشل إكمال الإعداد'),
+        ),
+      );
     } finally {
       setSaving(false);
     }
@@ -409,7 +425,12 @@ export const BusinessOnboardingScreen = ({ locale, dictionary }: Props) => {
               <div className="onboarding-row">
                 <div className="onboarding-field">
                   <label className="onboarding-label">{dict.companyForm.websiteLabel}</label>
-                  <input type="text" name="website" className="onboarding-input" placeholder="example.com or full URL" />
+                  <input
+                    type="text"
+                    name="website"
+                    className="onboarding-input"
+                    placeholder={tr('example.com or full URL', 'example.com أو رابط كامل')}
+                  />
                 </div>
                 <div className="onboarding-field">
                   <label className="onboarding-label">{dict.companyForm.companyEmailLabel}</label>
@@ -422,24 +443,33 @@ export const BusinessOnboardingScreen = ({ locale, dictionary }: Props) => {
               </div>
               <div className="onboarding-field">
                 <label className="onboarding-label">
-                  {(dict.companyForm as { logoLabel?: string }).logoLabel ?? 'Company logo'}
+                  {(dict.companyForm as { logoLabel?: string }).logoLabel ?? tr('Company logo', 'شعار الشركة')}
                 </label>
                 <p className="onboarding-description">
                   {(dict.companyForm as { logoHint?: string }).logoHint ??
-                    'Required for business verification and the platform verified badge.'}
+                    tr(
+                      'Required for business verification and the platform verified badge.',
+                      'مطلوب للتحقق من الشركة والحصول على شارة التوثيق من المنصة.',
+                    )}
                 </p>
                 {logoPreviewUrl && (
                   <div style={{ maxWidth: '12rem', borderRadius: '1rem', overflow: 'hidden', border: '1px solid hsl(var(--border))' }}>
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
                       src={logoPreviewUrl}
-                      alt={(dict.companyForm as { logoLabel?: string }).logoLabel ?? 'Company logo'}
+                      alt={
+                        (dict.companyForm as { logoLabel?: string }).logoLabel ??
+                        tr('Company logo', 'شعار الشركة')
+                      }
                       style={{ display: 'block', width: '100%', maxHeight: '12rem', objectFit: 'cover' }}
                     />
                   </div>
                 )}
                 <ImageUploadOrCapture
-                  label={(dict.companyForm as { logoUploadLabel?: string }).logoUploadLabel ?? 'Upload company logo'}
+                  label={
+                    (dict.companyForm as { logoUploadLabel?: string }).logoUploadLabel ??
+                    tr('Upload company logo', 'رفع شعار الشركة')
+                  }
                   onImage={(file) => {
                     void (async () => {
                       setLogoFile(file);
@@ -481,7 +511,7 @@ export const BusinessOnboardingScreen = ({ locale, dictionary }: Props) => {
                   name="address"
                   className="onboarding-input onboarding-textarea"
                   rows={2}
-                  placeholder="Paste a Google Maps link or enter address"
+                  placeholder={tr('Paste a Google Maps link or enter address', 'ألصق رابط خرائط Google أو أدخل العنوان')}
                 />
               </div>
               <div className="onboarding-field">
@@ -554,7 +584,8 @@ export const BusinessOnboardingScreen = ({ locale, dictionary }: Props) => {
                     onClick={() => void handleWithdrawManualSubmission()}
                     disabled={saving}
                   >
-                    {dict.withdrawIdentitySubmission ?? 'Remove submission and start over'}
+                    {dict.withdrawIdentitySubmission ??
+                      tr('Remove submission and start over', 'حذف الطلب والبدء من جديد')}
                   </button>
                 </div>
               )}
@@ -574,7 +605,7 @@ export const BusinessOnboardingScreen = ({ locale, dictionary }: Props) => {
                       >
                         {saving ? dictionary.auth.common.loading : dict.kycButton}
                       </button>
-                      <p className="onboarding-kyc-divider">— or —</p>
+                      <p className="onboarding-kyc-divider">{tr('— or —', '— أو —')}</p>
                       <button
                         type="button"
                         className="onboarding-secondary-button"
@@ -587,7 +618,11 @@ export const BusinessOnboardingScreen = ({ locale, dictionary }: Props) => {
                   ) : (
                 <form className="onboarding-form" onSubmit={(e) => void handleManualKyc(e)}>
                   <p className="onboarding-description">
-                    {dict.documentsForm.identityDescription} You must take a live photo of yourself and a photo of your ID. Upload or take live pictures.
+                    {dict.documentsForm.identityDescription}{' '}
+                    {tr(
+                      'You must take a live photo of yourself and a photo of your ID. Upload or take live pictures.',
+                      'يجب التقاط صورة مباشرة لك وصورة لبطاقة الهوية. يمكنك الرفع أو الالتقاط المباشر.',
+                    )}
                   </p>
                   <div className="onboarding-field">
                     <label className="onboarding-label">
@@ -631,7 +666,10 @@ export const BusinessOnboardingScreen = ({ locale, dictionary }: Props) => {
                       disabled={saving}
                     />
                     <p className="onboarding-description" style={{ marginTop: '0.25rem', fontSize: '0.8rem' }}>
-                      Required for National ID and Driving License. Skip for passport.
+                      {tr(
+                        'Required for National ID and Driving License. Skip for passport.',
+                        'مطلوب للبطاقة القومية ورخصة القيادة. يمكن تجاوزه في حالة جواز السفر.',
+                      )}
                     </p>
                   </div>
                   <div className="onboarding-field">
@@ -645,7 +683,10 @@ export const BusinessOnboardingScreen = ({ locale, dictionary }: Props) => {
                       disabled={saving}
                     />
                     <p className="onboarding-description" style={{ marginTop: '0.25rem', fontSize: '0.8rem' }}>
-                      You must take a live photo of yourself now. No uploads allowed for selfie.
+                      {tr(
+                        'You must take a live photo of yourself now. No uploads allowed for selfie.',
+                        'يجب التقاط صورة مباشرة لك الآن. لا يُسمح برفع ملف سيلفي.',
+                      )}
                     </p>
                   </div>
                   <button type="submit" className="onboarding-cta-button" disabled={saving}>
@@ -675,14 +716,17 @@ export const BusinessOnboardingScreen = ({ locale, dictionary }: Props) => {
                   type="button"
                   className="onboarding-cta-button"
                   onClick={() => setStep('documents')}
-                  disabled={kycStatus !== 'verified' && kycStatus !== 'pending'}
+                  disabled={kycStatus !== 'verified' && !hasActiveIdentitySubmission}
                 >
                   {dictionary.common.next}
                 </button>
               </div>
-              {kycStatus !== 'verified' && kycStatus !== 'pending' && (
+              {kycStatus !== 'verified' && !hasActiveIdentitySubmission && (
                 <p className="onboarding-hint">
-                  Complete identity verification or submit for manual review before continuing.
+                  {tr(
+                    'Complete identity verification or submit for manual review before continuing.',
+                    'أكمل التحقق من الهوية أو قدّم للمراجعة اليدوية قبل المتابعة.',
+                  )}
                 </p>
               )}
             </div>
@@ -695,10 +739,18 @@ export const BusinessOnboardingScreen = ({ locale, dictionary }: Props) => {
                 {dict.documentsForm.businessDocsDescription}
               </p>
               <p className="onboarding-description">
-                {dict.documentsForm.businessDocsCompanyInfo ?? 'Your company details (trade license, tax ID, commercial register) have been submitted with your profile. Our team will review your business verification. No additional document upload is required at this time.'}
+                {dict.documentsForm.businessDocsCompanyInfo ??
+                  tr(
+                    'Your company details (trade license, tax ID, commercial register) have been submitted with your profile. Our team will review your business verification. No additional document upload is required at this time.',
+                    'تم إرسال بيانات شركتك (السجل التجاري، الرقم الضريبي، ورقم الرخصة التجارية) ضمن الملف الشخصي. سيقوم فريقنا بمراجعة توثيق الشركة، ولا يلزم رفع مستندات إضافية الآن.',
+                  )}
               </p>
               <p className="onboarding-description onboarding-description--muted">
-                {dict.documentsForm.companyUploadComingSoon ?? 'Upload of company document files (e.g. trade license scan) will be available in Profile → Documents after you complete onboarding.'}
+                {dict.documentsForm.companyUploadComingSoon ??
+                  tr(
+                    'Upload of company document files (e.g. trade license scan) will be available in Profile → Documents after you complete onboarding.',
+                    'سيكون رفع مستندات الشركة (مثل صورة الرخصة التجارية) متاحًا في الملف الشخصي ← المستندات بعد إكمال الإعداد.',
+                  )}
               </p>
               <div className="onboarding-nav-row">
                 <button
@@ -714,7 +766,9 @@ export const BusinessOnboardingScreen = ({ locale, dictionary }: Props) => {
                   onClick={() => void handleBusinessDocsContinue()}
                   disabled={saving}
                 >
-                  {saving ? (dictionary.auth?.common?.loading ?? 'Saving...') : dictionary.common.continue}
+                  {saving
+                    ? (dictionary.auth?.common?.loading ?? tr('Saving...', 'جارٍ الحفظ...'))
+                    : dictionary.common.continue}
                 </button>
               </div>
             </div>

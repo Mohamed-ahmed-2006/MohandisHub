@@ -30,11 +30,21 @@ function isAuthOrOtpPath(path: string) {
   return path === '/auth' || path.startsWith('/auth/') || path === '/otp' || path.startsWith('/otp/');
 }
 
+/**
+ * High-frequency read endpoints used by normal UI polling/focus refresh.
+ * Keep them outside the strict global bucket to avoid false-positive 429s
+ * during regular app usage (especially with multiple open tabs/sessions).
+ */
+function isApiRateLimitExemptPath(path: string) {
+  return path === '/app/status' || path === '/wallet/me';
+}
+
 const apiRouter = Router();
 
 apiRouter.use(asyncHandler(maintenanceMode));
 apiRouter.use((req, res, next) => {
   if (isAuthOrOtpPath(req.path)) return next();
+  if (isApiRateLimitExemptPath(req.path)) return next();
   return apiRateLimiter(req, res, next);
 });
 apiRouter.use('/app', appRouter);

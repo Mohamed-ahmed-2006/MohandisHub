@@ -54,6 +54,7 @@ function readFilePreview(file: File): Promise<string> {
 }
 
 export const CraftsmanOnboardingScreen = ({ locale, dictionary }: Props) => {
+  const tr = (en: string, ar: string) => (locale === 'ar' ? ar : en);
   const router = useRouter();
   const { authUser, accessToken, isAuthenticated, isReady, authGuard, updateAuthUser } = useAuth();
   const [craftsmanProfile, setCraftsmanProfile] = useState<CraftsmanProfile | null>(null);
@@ -69,6 +70,7 @@ export const CraftsmanOnboardingScreen = ({ locale, dictionary }: Props) => {
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [avatarPreviewUrl, setAvatarPreviewUrl] = useState<string | null>(null);
   const [withdrawableManualDocId, setWithdrawableManualDocId] = useState<string | null>(null);
+  const [hasActiveIdentitySubmission, setHasActiveIdentitySubmission] = useState(false);
 
   const dict = dictionary.onboarding.craftsman;
   const stepLabels = [
@@ -135,6 +137,7 @@ export const CraftsmanOnboardingScreen = ({ locale, dictionary }: Props) => {
     try {
       await profilesApiClient.withdrawIdentityDocument(accessToken, withdrawableManualDocId);
       setWithdrawableManualDocId(null);
+      setHasActiveIdentitySubmission(false);
       await loadKycStatus();
       await updateAuthUser();
     } catch (err) {
@@ -160,11 +163,12 @@ export const CraftsmanOnboardingScreen = ({ locale, dictionary }: Props) => {
     let cancelled = false;
     void (async () => {
       try {
-        const [profile, verification] = await Promise.all([
+        const [profile, verification, identityDocs] = await Promise.all([
           profilesApiClient.getCraftsmanProfile(accessToken),
           verificationApiClient
             .getStatus(accessToken)
             .catch(() => ({ verificationStatus: 'unverified' as const })),
+          profilesApiClient.getIdentityDocuments(accessToken).catch(() => []),
         ]);
         if (cancelled) return;
         setCraftsmanProfile(profile);
@@ -179,9 +183,12 @@ export const CraftsmanOnboardingScreen = ({ locale, dictionary }: Props) => {
             profile?.workshopName?.trim() &&
             profile?.workshopAddress?.trim(),
         );
+        const hasPendingIdentitySubmission =
+          Array.isArray(identityDocs) &&
+          identityDocs.some((doc) => doc.status === 'pending' || doc.status === 'under_review');
+        setHasActiveIdentitySubmission(hasPendingIdentitySubmission);
         const identityDone =
-          verification.verificationStatus === 'verified' ||
-          verification.verificationStatus === 'pending';
+          verification.verificationStatus === 'verified' || hasPendingIdentitySubmission;
 
         if (authUser?.verificationStatus === 'rejected') {
           setStep('kyc');
@@ -370,6 +377,7 @@ export const CraftsmanOnboardingScreen = ({ locale, dictionary }: Props) => {
         ...(backRes && { backImageUrl: toFullUrl(backRes.url) }),
       });
       setKycStatus('pending');
+      setHasActiveIdentitySubmission(true);
       setKycMode(null);
       setManualFrontFile(null);
       setManualBackFile(null);
@@ -453,11 +461,14 @@ export const CraftsmanOnboardingScreen = ({ locale, dictionary }: Props) => {
               </div>
               <div className="onboarding-field">
                 <label className="onboarding-label">
-                  {dict.profileForm.profilePhotoLabel ?? 'Profile picture'}
+                  {dict.profileForm.profilePhotoLabel ?? tr('Profile picture', 'الصورة الشخصية')}
                 </label>
                 <p className="onboarding-description">
                   {dict.profileForm.profilePhotoHint ??
-                    'Required for craftsman verification and verified badge.'}
+                    tr(
+                      'Required for craftsman verification and verified badge.',
+                      'مطلوب للتحقق كحرفي والحصول على شارة التوثيق.',
+                    )}
                 </p>
                 {avatarPreviewUrl && (
                   <div
@@ -471,13 +482,15 @@ export const CraftsmanOnboardingScreen = ({ locale, dictionary }: Props) => {
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
                       src={avatarPreviewUrl}
-                      alt={dict.profileForm.profilePhotoLabel ?? 'Profile picture'}
+                      alt={dict.profileForm.profilePhotoLabel ?? tr('Profile picture', 'الصورة الشخصية')}
                       style={{ display: 'block', width: '100%', maxHeight: '12rem', objectFit: 'cover' }}
                     />
                   </div>
                 )}
                 <ImageUploadOrCapture
-                  label={dict.profileForm.uploadProfilePhoto ?? 'Upload profile picture'}
+                  label={
+                    dict.profileForm.uploadProfilePhoto ?? tr('Upload profile picture', 'رفع الصورة الشخصية')
+                  }
                   onImage={(file) => {
                     void (async () => {
                       setAvatarFile(file);
@@ -547,7 +560,7 @@ export const CraftsmanOnboardingScreen = ({ locale, dictionary }: Props) => {
                 className="onboarding-field"
                 selectClassName="onboarding-input"
                 defaultValue={craftsmanProfile?.city ?? ''}
-                defaultCountry={craftsmanProfile?.country ?? ''}
+                forceIpCountry
                 required
               />
               <div className="onboarding-field">
@@ -624,7 +637,8 @@ export const CraftsmanOnboardingScreen = ({ locale, dictionary }: Props) => {
                       onClick={() => void handleWithdrawManualSubmission()}
                       disabled={saving}
                     >
-                      {dict.withdrawIdentitySubmission ?? 'Remove submission and start over'}
+                    {dict.withdrawIdentitySubmission ??
+                      tr('Remove submission and start over', 'حذف الطلب والبدء من جديد')}
                     </button>
                   </div>
                 )}
@@ -646,7 +660,9 @@ export const CraftsmanOnboardingScreen = ({ locale, dictionary }: Props) => {
                       >
                         {saving ? dictionary.auth.common.loading : dict.kycButton}
                       </button>
-                      <p className="onboarding-kyc-divider">- {dict.kycDividerOr ?? 'or'} -</p>
+                      <p className="onboarding-kyc-divider">
+                        - {dict.kycDividerOr ?? tr('or', 'أو')} -
+                      </p>
                       <button
                         type="button"
                         className="onboarding-secondary-button"
@@ -661,7 +677,10 @@ export const CraftsmanOnboardingScreen = ({ locale, dictionary }: Props) => {
                       <p className="onboarding-description">
                         {dict.documentsForm.identityDescription}{' '}
                         {dict.documentsForm.identityDescriptionSuffix ??
-                          'You must provide a live selfie and clear photos of your ID.'}
+                          tr(
+                            'You must provide a live selfie and clear photos of your ID.',
+                            'يجب تقديم سيلفي مباشر وصور واضحة لبطاقة الهوية.',
+                          )}
                       </p>
                       {dictionary.verification?.verificationTimeNote && (
                         <p className="onboarding-description onboarding-verification-note">
@@ -718,7 +737,10 @@ export const CraftsmanOnboardingScreen = ({ locale, dictionary }: Props) => {
                           style={{ marginTop: '0.25rem', fontSize: '0.8rem' }}
                         >
                           {dict.documentsForm.backImageHint ??
-                            'Required for National ID and Driving License. Skip for passport.'}
+                            tr(
+                              'Required for National ID and Driving License. Skip for passport.',
+                              'مطلوب للبطاقة القومية ورخصة القيادة. يمكن تجاوزه في حالة جواز السفر.',
+                            )}
                         </p>
                       </div>
                       <div className="onboarding-field">
@@ -736,7 +758,10 @@ export const CraftsmanOnboardingScreen = ({ locale, dictionary }: Props) => {
                           style={{ marginTop: '0.25rem', fontSize: '0.8rem' }}
                         >
                           {dict.documentsForm.liveSelfieHint ??
-                            'Take a live selfie now. Uploading a selfie file is not allowed.'}
+                            tr(
+                              'Take a live selfie now. Uploading a selfie file is not allowed.',
+                              'التقط سيلفي مباشر الآن. لا يُسمح برفع ملف سيلفي.',
+                            )}
                         </p>
                       </div>
                       <button type="submit" className="onboarding-cta-button" disabled={saving}>
@@ -766,15 +791,18 @@ export const CraftsmanOnboardingScreen = ({ locale, dictionary }: Props) => {
                   type="button"
                   className="onboarding-cta-button"
                   onClick={() => setStep('complete')}
-                  disabled={kycStatus !== 'verified' && kycStatus !== 'pending'}
+                  disabled={kycStatus !== 'verified' && !hasActiveIdentitySubmission}
                 >
                   {dictionary.common.next}
                 </button>
               </div>
-              {kycStatus !== 'verified' && kycStatus !== 'pending' && (
+              {kycStatus !== 'verified' && !hasActiveIdentitySubmission && (
                 <p className="onboarding-hint">
                   {dict.kycRequirementsHint ??
-                    'Complete identity verification or submit manual review before continuing.'}
+                    tr(
+                      'Complete identity verification or submit manual review before continuing.',
+                      'أكمل التحقق من الهوية أو قدّم للمراجعة اليدوية قبل المتابعة.',
+                    )}
                 </p>
               )}
             </div>

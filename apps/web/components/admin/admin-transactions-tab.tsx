@@ -24,6 +24,25 @@ export const AdminTransactionsTab = ({ dictionary, accessToken }: Props) => {
   });
 
   const d = dictionary.admin.txns;
+  const isArabic = /[\u0600-\u06FF]/.test(dictionary.admin.title);
+  const tr = (en: string, ar: string) => (isArabic ? ar : en);
+  const typeLabel = (type: string) =>
+    ({
+      deposit: tr('Deposit', 'إيداع'),
+      withdrawal: tr('Withdrawal', 'سحب'),
+      payment: tr('Payment', 'دفع'),
+      refund: tr('Refund', 'استرداد'),
+      adjustment: tr('Adjustment', 'تسوية'),
+      bonus: tr('Bonus', 'مكافأة'),
+      commission: tr('Commission', 'عمولة'),
+    })[type] ?? type;
+  const statusLabel = (status: string) =>
+    ({
+      pending: tr('Pending', 'قيد الانتظار'),
+      completed: tr('Completed', 'مكتمل'),
+      failed: tr('Failed', 'فشل'),
+      reversed: tr('Reversed', 'معكوس'),
+    })[status] ?? status;
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -91,13 +110,13 @@ export const AdminTransactionsTab = ({ dictionary, accessToken }: Props) => {
           }}
         >
           <option value="">{d.allTypes}</option>
-          <option value="deposit">Deposit</option>
-          <option value="withdrawal">Withdrawal</option>
-          <option value="payment">Payment</option>
-          <option value="refund">Refund</option>
-          <option value="adjustment">Adjustment</option>
-          <option value="bonus">Bonus</option>
-          <option value="commission">Commission</option>
+          <option value="deposit">{typeLabel('deposit')}</option>
+          <option value="withdrawal">{typeLabel('withdrawal')}</option>
+          <option value="payment">{typeLabel('payment')}</option>
+          <option value="refund">{typeLabel('refund')}</option>
+          <option value="adjustment">{typeLabel('adjustment')}</option>
+          <option value="bonus">{typeLabel('bonus')}</option>
+          <option value="commission">{typeLabel('commission')}</option>
         </select>
         <select
           className="admin-toolbar-select"
@@ -108,10 +127,10 @@ export const AdminTransactionsTab = ({ dictionary, accessToken }: Props) => {
           }}
         >
           <option value="">{d.allStatuses}</option>
-          <option value="pending">Pending</option>
-          <option value="completed">Completed</option>
-          <option value="failed">Failed</option>
-          <option value="reversed">Reversed</option>
+          <option value="pending">{statusLabel('pending')}</option>
+          <option value="completed">{statusLabel('completed')}</option>
+          <option value="failed">{statusLabel('failed')}</option>
+          <option value="reversed">{statusLabel('reversed')}</option>
         </select>
         <button
           type="button"
@@ -147,12 +166,12 @@ export const AdminTransactionsTab = ({ dictionary, accessToken }: Props) => {
                   <tr key={txn.id}>
                     <td>{txn.userDisplayName}</td>
                     <td>
-                      <span className="admin-badge">{txn.type}</span>
+                      <span className="admin-badge">{typeLabel(txn.type)}</span>
                     </td>
                     <td>{txn.amount.toFixed(2)}</td>
                     <td>{txn.balanceAfter.toFixed(2)}</td>
                     <td>
-                      <span className={`admin-badge admin-badge--${txn.status}`}>{txn.status}</span>
+                      <span className={`admin-badge admin-badge--${txn.status}`}>{statusLabel(txn.status)}</span>
                     </td>
                     <td>{txn.description ?? '—'}</td>
                     <td>{new Date(txn.createdAt).toLocaleDateString()}</td>
@@ -180,7 +199,7 @@ export const AdminTransactionsTab = ({ dictionary, accessToken }: Props) => {
                 className="admin-btn admin-btn--small"
                 disabled={page <= 1}
                 onClick={() => setPage(page - 1)}
-                aria-label="Previous page"
+                aria-label={tr('Previous page', 'الصفحة السابقة')}
               >
                 <ChevronLeft size={16} aria-hidden />
               </button>
@@ -192,7 +211,7 @@ export const AdminTransactionsTab = ({ dictionary, accessToken }: Props) => {
                 className="admin-btn admin-btn--small"
                 disabled={page >= data.totalPages}
                 onClick={() => setPage(page + 1)}
-                aria-label="Next page"
+                aria-label={tr('Next page', 'الصفحة التالية')}
               >
                 <ChevronRight size={16} aria-hidden />
               </button>
@@ -211,7 +230,7 @@ export const AdminTransactionsTab = ({ dictionary, accessToken }: Props) => {
                 className="admin-form-input"
                 value={adjustForm.userId}
                 onChange={(e) => setAdjustForm({ ...adjustForm, userId: e.target.value })}
-                placeholder="UUID"
+                placeholder={tr('UUID', 'معرّف المستخدم')}
               />
             </div>
             <div className="admin-form-group">
@@ -221,11 +240,11 @@ export const AdminTransactionsTab = ({ dictionary, accessToken }: Props) => {
                 value={adjustForm.type}
                 onChange={(e) => setAdjustForm({ ...adjustForm, type: e.target.value })}
               >
-                <option value="deposit">Deposit</option>
-                <option value="withdrawal">Withdrawal</option>
-                <option value="adjustment">Adjustment</option>
-                <option value="bonus">Bonus</option>
-                <option value="commission">Commission</option>
+                <option value="deposit">{typeLabel('deposit')}</option>
+                <option value="withdrawal">{typeLabel('withdrawal')}</option>
+                <option value="adjustment">{typeLabel('adjustment')}</option>
+                <option value="bonus">{typeLabel('bonus')}</option>
+                <option value="commission">{typeLabel('commission')}</option>
               </select>
             </div>
             <div className="admin-form-group">
@@ -249,7 +268,7 @@ export const AdminTransactionsTab = ({ dictionary, accessToken }: Props) => {
             </div>
             <div className="admin-modal-actions">
               <button type="button" className="admin-btn" onClick={() => setShowAdjust(false)}>
-                Cancel
+                {dictionary.common.cancel}
               </button>
               <button
                 type="button"

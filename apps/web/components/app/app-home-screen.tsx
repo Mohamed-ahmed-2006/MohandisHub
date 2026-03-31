@@ -1276,6 +1276,7 @@ export const AppHomeScreen = ({ locale, dictionary }: AppHomeScreenProps) => {
             onClose={() => setShowBookingModal(false)}
             service={selectedResult}
             accessToken={accessToken ?? ''}
+            locale={locale}
             dictionary={dictionary}
             onSuccess={() => {
               setShowBookingModal(false);

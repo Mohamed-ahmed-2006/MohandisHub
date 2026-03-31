@@ -336,6 +336,21 @@
   font-size: 0.85rem;
 }
 
+.admin-settings-toast {
+  position: fixed;
+  right: 1rem;
+  bottom: 1rem;
+  z-index: 1200;
+  padding: 0.65rem 0.9rem;
+  border-radius: 0.7rem;
+  border: 1px solid hsl(142 52% 45% / 0.35);
+  background: hsl(142 70% 95%);
+  color: hsl(142 55% 28%);
+  font-size: 0.82rem;
+  font-weight: 600;
+  box-shadow: var(--shadow-soft);
+}
+
 .admin-settings-section {
   padding: 1.25rem;
   border-radius: 1rem;
@@ -830,6 +845,30 @@
 
   .admin-toolbar-search {
     min-width: 100%;
+  }
+
+  .admin-settings-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .admin-settings-label-wrap {
+    width: 100%;
+  }
+
+  .admin-settings-input,
+  .admin-settings-input--number,
+  .admin-form-input,
+  .admin-form-select,
+  .admin-form-textarea {
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    box-sizing: border-box;
+  }
+
+  .admin-settings-toggle {
+    align-self: flex-end;
   }
 
   .admin-modal--profile {

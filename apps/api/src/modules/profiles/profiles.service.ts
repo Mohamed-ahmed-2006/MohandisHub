@@ -446,6 +446,14 @@ export class ProfilesService {
     await assertRequiredVerificationImage(this.repo, userId, role);
 
     const existingDocs = await this.repo.findIdentityDocuments(userId);
+    if (role === 'business' && existingDocs.some((d) => d.status === 'approved')) {
+      throw new HttpError({
+        statusCode: 409,
+        code: 'IDENTITY_ALREADY_VERIFIED',
+        message:
+          'Your identity has already been verified. A new submission is only allowed after a rejection.',
+      });
+    }
     if (
       existingDocs.some((d) => d.status === 'pending' || d.status === 'under_review')
     ) {
