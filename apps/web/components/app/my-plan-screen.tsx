@@ -5,8 +5,8 @@ import { ClipboardList } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 
-import { useAuth } from '@/components/auth/auth-provider';
 import { useAppStatus } from '@/components/app-status-provider';
+import { useAuth } from '@/components/auth/auth-provider';
 import { Container } from '@/components/ui/container';
 import { buildLocalePath } from '@/lib/i18n/path';
 import type { Dictionary, Locale } from '@/lib/i18n/types';

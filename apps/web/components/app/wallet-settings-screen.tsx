@@ -58,6 +58,7 @@ export const WalletSettingsScreen = (_props: WalletSettingsScreenProps) => {
   const [withdrawals, setWithdrawals] = useState<WithdrawalRequest[]>([]);
   const [withdrawAmount, setWithdrawAmount] = useState('');
   const [withdrawCurrency, setWithdrawCurrency] = useState('USDTTRC20');
+  const [withdrawCurrencies, setWithdrawCurrencies] = useState<string[]>(['USDTTRC20']);
   const [withdrawAddress, setWithdrawAddress] = useState('');
   const [withdrawExtraId, setWithdrawExtraId] = useState('');
   const [withdrawSaveAddress, setWithdrawSaveAddress] = useState(true);
@@ -127,6 +128,23 @@ export const WalletSettingsScreen = (_props: WalletSettingsScreenProps) => {
     window.addEventListener('wallet-updated', handler);
     return () => window.removeEventListener('wallet-updated', handler);
   }, [accessToken, loadData]);
+
+  useEffect(() => {
+    if (!accessToken) return;
+    void walletApiClient
+      .getDepositCurrencies(accessToken)
+      .then((currencies) => {
+        if (currencies.length > 0) {
+          setWithdrawCurrencies(currencies);
+          if (!currencies.includes(withdrawCurrency)) {
+            setWithdrawCurrency(currencies[0]!);
+          }
+        }
+      })
+      .catch(() => {
+        // Keep fallback currency if the list cannot be loaded.
+      });
+  }, [accessToken, withdrawCurrency]);
 
   const handleCreateWithdrawal = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -261,8 +279,9 @@ export const WalletSettingsScreen = (_props: WalletSettingsScreenProps) => {
           <section className="wallet-settings-card">
             <h2 className="wallet-settings-section-title">Withdraw</h2>
             <p className="wallet-settings-hint">
-              Withdraw in EGP from your balance. Minimum {MIN_WITHDRAWAL_AMOUNT} EGP. Crypto payouts are sent
-              in the selected network currency; InstaPay is processed manually by the team.
+              Withdraw from your wallet in EGP. Minimum {MIN_WITHDRAWAL_AMOUNT} EGP. Crypto withdrawals are
+              sent to your wallet address in the selected payout currency. InstaPay withdrawals are reviewed
+              manually and usually take 1-5 business days to complete.
             </p>
 
             <div className="wallet-settings-form" style={{ marginBottom: 12 }}>
@@ -278,7 +297,7 @@ export const WalletSettingsScreen = (_props: WalletSettingsScreenProps) => {
                   }}
                 >
                   <option value="crypto">Crypto (NOWPayments)</option>
-                  <option value="instapay">InstaPay (manual)</option>
+                  <option value="instapay">InstaPay (manual, 1-5 business days)</option>
                 </select>
               </label>
             </div>
@@ -304,8 +323,7 @@ export const WalletSettingsScreen = (_props: WalletSettingsScreenProps) => {
                 <>
                   <label className="wallet-settings-form-label">
                     Payout currency
-                    <input
-                      type="text"
+                    <select
                       className="wallet-settings-input"
                       value={withdrawCurrency}
                       onChange={(event) => {
@@ -313,7 +331,13 @@ export const WalletSettingsScreen = (_props: WalletSettingsScreenProps) => {
                         setCryptoQuote(null);
                       }}
                       required
-                    />
+                    >
+                      {withdrawCurrencies.map((currency) => (
+                        <option key={currency} value={currency}>
+                          {currency}
+                        </option>
+                      ))}
+                    </select>
                   </label>
 
                   <label className="wallet-settings-form-label">
@@ -392,6 +416,10 @@ export const WalletSettingsScreen = (_props: WalletSettingsScreenProps) => {
 
               {withdrawMethod === 'instapay' && (
                 <>
+                  <p className="wallet-settings-hint">
+                    InstaPay deposits and withdrawals are processed manually and usually take 1-5 business days
+                    to complete.
+                  </p>
                   <label className="wallet-settings-form-label">
                     Recipient InstaPay phone / account
                     <input

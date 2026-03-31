@@ -118,7 +118,11 @@ export class WalletFxService {
     if (this.isLikelyUsdtFamily(cur)) {
       cryptoAmount = Math.floor((amountEgp / egpPerUsdt) * 1e8) / 1e8;
     } else if (env.NOWPAYMENTS_API_KEY) {
-      const est = await estimatePrice(env.NOWPAYMENTS_API_KEY, amountEgp, 'EGP', cur);
+      // NOWPayments estimate endpoint does not reliably support EGP as source currency.
+      // Convert EGP -> USD first, then ask provider for USD -> payout currency estimate.
+      const egpPerUsd = await this.getEgpPerUsd();
+      const amountUsd = amountEgp / egpPerUsd;
+      const est = await estimatePrice(env.NOWPAYMENTS_API_KEY, amountUsd, 'USD', cur);
       const v = Number(est.estimated_amount);
       cryptoAmount = Number.isFinite(v) && v > 0 ? Math.floor(v * 1e8) / 1e8 : 0;
     } else {

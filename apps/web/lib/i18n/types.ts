@@ -1005,6 +1005,8 @@ export type Dictionary = {
       identityDescription: string;
       academicTitle: string;
       academicDescription: string;
+      identitySubmitSuccess?: string;
+      academicSubmitSuccess?: string;
       noDocuments: string;
       addIdentityDocument?: string;
       addAcademicRecord?: string;

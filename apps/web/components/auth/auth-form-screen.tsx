@@ -10,7 +10,6 @@ import { AuthForm } from '@/components/auth/auth-form';
 import type { AuthMode } from '@/components/auth/auth-mode-switch';
 import { AuthModeSwitch } from '@/components/auth/auth-mode-switch';
 import { LanguageToggle } from '@/components/language-toggle';
-import { OnboardingStepper } from '@/components/onboarding/onboarding-stepper';
 import { SiteLogo } from '@/components/site-logo';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { Container } from '@/components/ui/container';

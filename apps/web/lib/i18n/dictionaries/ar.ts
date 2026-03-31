@@ -1084,6 +1084,8 @@ export const arDictionary: Dictionary = {
         '\u0627\u0644\u0633\u062c\u0644\u0627\u062a \u0627\u0644\u0623\u0643\u0627\u062f\u064a\u0645\u064a\u0629',
       academicDescription:
         '\u0627\u0644\u0634\u0647\u0627\u062f\u0627\u062a \u0648\u0627\u0644\u062f\u0628\u0644\u0648\u0645\u0627\u062a \u0648\u0627\u0644\u0645\u0624\u0647\u0644\u0627\u062a.',
+      identitySubmitSuccess: 'تم إرسال مستند الهوية بنجاح.',
+      academicSubmitSuccess: 'تم إرسال السجل الأكاديمي بنجاح.',
       noDocuments:
         '\u0644\u0645 \u064a\u062a\u0645 \u0631\u0641\u0639 \u0623\u064a \u0645\u0633\u062a\u0646\u062f\u0627\u062a \u0628\u0639\u062f.',
       addIdentityDocument: '\u0625\u0636\u0627\u0641\u0629 \u0645\u0633\u062a\u0646\u062f \u0627\u0644\u0647\u0648\u064a\u0629',

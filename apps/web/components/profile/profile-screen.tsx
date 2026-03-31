@@ -14,7 +14,6 @@ import type {
   UpdateCraftsmanProfileBody,
   UpdateExpertProfileBody,
 } from '@mohandishub/shared';
-import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 
@@ -1119,8 +1118,7 @@ export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
   const verificationCompletedOrInReview =
     roleVerificationStatus === 'verified' ||
     roleVerificationStatus === 'pending' ||
-    roleVerificationStatus === 'under_review' ||
-    roleVerificationStatus === 'approved';
+    roleVerificationStatus === 'under_review';
   const visibleSections = getVisibleProfileSections(role);
 
   return (
