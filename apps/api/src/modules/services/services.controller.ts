@@ -136,6 +136,12 @@ const activateService = asyncHandler(async (req, res) => {
   res.json({ ok: true, data: service });
 });
 
+const deleteService = asyncHandler(async (req, res) => {
+  const user = requireUser(req);
+  const result = await servicesService.deleteService(req.params.id!, user.id);
+  res.json({ ok: true, data: result });
+});
+
 export const servicesController = {
   listCategories,
   getRecommendations,
@@ -144,6 +150,7 @@ export const servicesController = {
   createService,
   listMyServices,
   updateService,
+  deleteService,
   submitService,
   pauseService,
   activateService,

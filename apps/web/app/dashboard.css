@@ -1297,11 +1297,31 @@
 /* Service booking modal */
 .service-booking-modal {
   background: hsl(var(--background));
-  border-radius: var(--radius-lg, 0.75rem);
+  border-radius: 0;
   padding: 1.5rem;
-  max-width: 420px;
-  max-height: 90vh;
+  max-width: 650px !important;
+  width: min(100vw, 650px);
+  height: 100vh;
+  max-height: 100vh;
   overflow-y: auto;
+}
+.service-booking-mode-row {
+  margin-bottom: 0.75rem;
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.service-booking-mode-group {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+.service-booking-mode-separator {
+  width: 1px;
+  height: 2rem;
+  background: hsl(var(--border));
+  margin-inline: 0.1rem;
 }
 .service-booking-title {
   font-size: 1.25rem;

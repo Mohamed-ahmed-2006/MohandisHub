@@ -109,12 +109,9 @@ export const ServicesScreen = ({ locale, dictionary }: Props) => {
       const description = (form.elements.namedItem('description') as HTMLTextAreaElement)?.value?.trim();
       const city = (form.elements.namedItem('city') as HTMLSelectElement)?.value?.trim();
       const country = (form.elements.namedItem('country') as HTMLInputElement)?.value?.trim();
-      const submitForReview = (form.elements.namedItem('submitForReview') as HTMLInputElement)
-        ?.checked;
-
       const body: Parameters<typeof servicesApiClient.createService>[1] = {
         title,
-        submitForReview: !!submitForReview,
+        submitForReview: true,
       };
       if (description?.trim()) body.description = description.trim();
       if (categoryId) body.categoryId = categoryId;
@@ -146,6 +143,37 @@ export const ServicesScreen = ({ locale, dictionary }: Props) => {
       void load();
     } catch {
       // ignore
+    }
+  };
+
+  const handleEdit = async (service: Service) => {
+    if (!accessToken) return;
+    const title = window.prompt('Service title', service.title)?.trim();
+    if (!title || title.length < 3) return;
+    const description = window.prompt('Description (optional)', service.description ?? '') ?? '';
+    const priceRaw = window.prompt('Price (optional)', service.price != null ? String(service.price) : '');
+    const price = priceRaw?.trim() ? parseFloat(priceRaw.trim()) : undefined;
+    try {
+      await servicesApiClient.updateService(accessToken, service.id, {
+        title,
+        ...(description.trim() ? { description: description.trim() } : {}),
+        ...(typeof price === 'number' && Number.isFinite(price) ? { price } : {}),
+      });
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to update service');
+    }
+  };
+
+  const handleDelete = async (service: Service) => {
+    if (!accessToken) return;
+    const ok = window.confirm(`Delete "${service.title}"?`);
+    if (!ok) return;
+    try {
+      await servicesApiClient.deleteService(accessToken, service.id);
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to delete service');
     }
   };
 
@@ -205,6 +233,20 @@ export const ServicesScreen = ({ locale, dictionary }: Props) => {
                   {getStatusLabel(s.status, sp as Record<string, string>)}
                 </span>
                 <div className="dashboard-card-actions" style={{ marginTop: '0.5rem' }}>
+                  <button
+                    type="button"
+                    className="dashboard-link-btn"
+                    onClick={() => void handleEdit(s)}
+                  >
+                    Edit
+                  </button>
+                  <button
+                    type="button"
+                    className="dashboard-link-btn"
+                    onClick={() => void handleDelete(s)}
+                  >
+                    Delete
+                  </button>
                   {s.status === 'draft' && (
                     <button
                       type="button"
@@ -336,10 +378,6 @@ export const ServicesScreen = ({ locale, dictionary }: Props) => {
                     />
                   </div>
 
-                  <label className="service-create-checkbox service-create-field service-create-field--full" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                    <input name="submitForReview" type="checkbox" defaultChecked />
-                    <span>Publish immediately</span>
-                  </label>
                 </div>
 
                 <div className="service-create-actions">
@@ -351,7 +389,7 @@ export const ServicesScreen = ({ locale, dictionary }: Props) => {
                     {dictionary.common?.back ?? 'Back'}
                   </button>
                   <button type="submit" className="dashboard-primary-btn" disabled={creating}>
-                    {creating ? '...' : (sp.saveDraft ?? 'Save')}
+                    {creating ? '...' : 'Publish'}
                   </button>
                 </div>
               </form>

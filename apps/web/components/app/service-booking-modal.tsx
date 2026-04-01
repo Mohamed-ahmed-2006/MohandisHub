@@ -6,6 +6,7 @@ import { createPortal } from 'react-dom';
 
 import { useProfileModal } from './profile-modal-context';
 
+import { useAppStatus } from '@/components/app-status-provider';
 import type { Dictionary, Locale } from '@/lib/i18n/types';
 import { reservationsApiClient } from '@/lib/reservations/client';
 
@@ -34,8 +35,8 @@ const getStartOfToday = (): Date => {
   return date;
 };
 
-const isUpcomingSlot = (slot: ReservationSlot, now: Date): boolean =>
-  new Date(slot.startAt).getTime() >= now.getTime();
+const isSameDay = (a: Date, b: Date): boolean =>
+  a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
 
 function formatSlot(slot: ReservationSlot, localeTag?: string): string {
   const start = new Date(slot.startAt);
@@ -75,6 +76,7 @@ export const ServiceBookingModal = ({
   );
   const [modeReady, setModeReady] = useState(false);
   const { openProfileModal } = useProfileModal();
+  const { status } = useAppStatus();
   const tr = (en: string, ar: string) => (locale === 'ar' ? ar : en);
   const localeTag = locale === 'ar' ? 'ar-EG' : undefined;
 
@@ -96,9 +98,7 @@ export const ServiceBookingModal = ({
         reservationsApiClient.getProviderProfile(accessToken, service.providerId),
       ]);
 
-      const now = new Date();
       const upcomingSlots = dedupeSlotsById(slotsRes.items)
-        .filter((slot) => isUpcomingSlot(slot, now))
         .sort((a, b) => new Date(a.startAt).getTime() - new Date(b.startAt).getTime());
 
       setSlots(upcomingSlots);
@@ -152,7 +152,6 @@ export const ServiceBookingModal = ({
   const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
 
   const filteredSlots = slots.filter((slot) => {
-    if (!isUpcomingSlot(slot, now)) return false;
     if (mode === 'online' && !slot.supportsOnline) return false;
     if (mode === 'offline' && !slot.supportsOffline) return false;
 
@@ -160,7 +159,7 @@ export const ServiceBookingModal = ({
 
     switch (slotFilter) {
       case 'today':
-        return slotStart >= now && slotStart < endOfToday;
+        return isSameDay(slotStart, now);
       case 'next7Days':
         return slotStart >= now && slotStart < next7Days;
       case 'thisMonth':
@@ -194,6 +193,7 @@ export const ServiceBookingModal = ({
         },
         idempotencyKey,
       );
+      window.dispatchEvent(new CustomEvent('wallet-updated'));
       onSuccess?.();
       onClose();
     } catch (e) {
@@ -226,6 +226,9 @@ export const ServiceBookingModal = ({
       : onlineType === 'video'
         ? profile?.onlineVideoPrice ?? null
         : profile?.onlineVoicePrice ?? null;
+  const platformFee = Math.max(0, status?.reservationAcceptanceFee ?? 0);
+  const servicePrice = service.price ?? 0;
+  const totalPrice = modePrice != null ? servicePrice + modePrice + platformFee : null;
 
   if (!open) return null;
 
@@ -264,39 +267,44 @@ export const ServiceBookingModal = ({
         </p>
         {service.price != null && <p className="service-booking-price">{service.price} {service.currency ?? 'EGP'}</p>}
 
-        <div style={{ marginBottom: '0.75rem', display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+        <div className="service-booking-mode-row">
           {modeReady ? (
             <>
-              <button
-                type="button"
-                className={`dashboard-btn ${mode === 'online' ? 'dashboard-btn--primary' : 'dashboard-btn--secondary'}`}
-                onClick={() => setMode('online')}
-              >
-                {tr('Online', 'أونلاين')}
-              </button>
-              <button
-                type="button"
-                className={`dashboard-btn ${mode === 'offline' ? 'dashboard-btn--primary' : 'dashboard-btn--secondary'}`}
-                onClick={() => setMode('offline')}
-              >
-                {tr('Offline', 'حضوري')}
-              </button>
+              <div className="service-booking-mode-group">
+                <button
+                  type="button"
+                  className={`dashboard-btn ${mode === 'online' ? 'dashboard-btn--primary' : 'dashboard-btn--secondary'}`}
+                  onClick={() => setMode('online')}
+                >
+                  {tr('Online', 'أونلاين')}
+                </button>
+                <button
+                  type="button"
+                  className={`dashboard-btn ${mode === 'offline' ? 'dashboard-btn--primary' : 'dashboard-btn--secondary'}`}
+                  onClick={() => setMode('offline')}
+                >
+                  {tr('Offline', 'حضوري')}
+                </button>
+              </div>
               {mode === 'online' && (
                 <>
-                  <button
-                    type="button"
-                    className={`dashboard-btn ${onlineType === 'voice' ? 'dashboard-btn--primary' : 'dashboard-btn--secondary'}`}
-                    onClick={() => setOnlineType('voice')}
-                  >
-                    {tr('Voice', 'صوتي')}
-                  </button>
-                  <button
-                    type="button"
-                    className={`dashboard-btn ${onlineType === 'video' ? 'dashboard-btn--primary' : 'dashboard-btn--secondary'}`}
-                    onClick={() => setOnlineType('video')}
-                  >
-                    {tr('Video', 'فيديو')}
-                  </button>
+                  <span className="service-booking-mode-separator" aria-hidden="true" />
+                  <div className="service-booking-mode-group">
+                    <button
+                      type="button"
+                      className={`dashboard-btn ${onlineType === 'voice' ? 'dashboard-btn--primary' : 'dashboard-btn--secondary'}`}
+                      onClick={() => setOnlineType('voice')}
+                    >
+                      {tr('Voice', 'صوتي')}
+                    </button>
+                    <button
+                      type="button"
+                      className={`dashboard-btn ${onlineType === 'video' ? 'dashboard-btn--primary' : 'dashboard-btn--secondary'}`}
+                      onClick={() => setOnlineType('video')}
+                    >
+                      {tr('Video', 'فيديو')}
+                    </button>
+                  </div>
                 </>
               )}
             </>
@@ -310,6 +318,16 @@ export const ServiceBookingModal = ({
           <p className="service-booking-price" style={{ marginTop: '-0.5rem' }}>
             {tr('Reservation price', 'سعر الحجز')}: {modePrice.toFixed(2)} EGP
           </p>
+        )}
+        {totalPrice != null && (
+          <div className="reservation-note-box" style={{ marginBottom: '0.75rem' }}>
+            <p>{tr('Service price', 'سعر الخدمة')}: {servicePrice.toFixed(2)} EGP</p>
+            <p>{tr('Reservation type price', 'سعر نوع الحجز')}: {modePrice!.toFixed(2)} EGP</p>
+            <p>{tr('Platform fee', 'رسوم المنصة')}: {platformFee.toFixed(2)} EGP</p>
+            <p>
+              <strong>{tr('Total', 'الإجمالي')}: {totalPrice.toFixed(2)} EGP</strong>
+            </p>
+          </div>
         )}
         <div className="reservation-note-box" style={{ marginBottom: '0.75rem' }}>
           <p>
@@ -353,7 +371,9 @@ export const ServiceBookingModal = ({
               <option value="allUpcoming">{tr('All upcoming', 'كل المواعيد القادمة')}</option>
             </select>
             <p style={{ margin: 0, fontSize: '0.85rem', color: 'hsl(var(--muted-foreground))' }}>
-              {tr('Showing only slots from', 'عرض المواعيد ابتداءً من')} {startOfToday.toLocaleDateString(localeTag)}.
+              {slotFilter === 'allUpcoming'
+                ? tr('Showing upcoming slots from now.', 'عرض المواعيد القادمة من الآن.')
+                : tr('Showing available slots for the selected range.', 'عرض المواعيد المتاحة للنطاق المحدد.')}
             </p>
           </div>
 

@@ -362,6 +362,7 @@ export const BookingsScreen = (_props: Props) => {
           decision,
           ...(decision === 'reject' ? { rejectionReason: rejectionReason?.trim() || 'Rejected by provider' } : {}),
         });
+        window.dispatchEvent(new CustomEvent('wallet-updated'));
         await load();
         if (selectedReservation?.id === id) await refreshSelected();
       } catch (e) {
@@ -390,6 +391,7 @@ export const BookingsScreen = (_props: Props) => {
       await reservationsApiClient.cancelReservation(accessToken, selectedReservation.id, {
         reasonCode,
       });
+      window.dispatchEvent(new CustomEvent('wallet-updated'));
       await load();
       await refreshSelected();
     } catch (e) {
@@ -409,6 +411,7 @@ export const BookingsScreen = (_props: Props) => {
           action,
           ...(action === 'report' ? { reportReason: 'Reported by customer' } : {}),
         });
+        window.dispatchEvent(new CustomEvent('wallet-updated'));
         await load();
         if (selectedReservation?.id === id) await refreshSelected();
       } catch (e) {
@@ -481,6 +484,7 @@ export const BookingsScreen = (_props: Props) => {
       const result = await reservationsApiClient.confirmOfflineCheckin(accessToken, selectedReservation.id, {
         counterpartyCode: counterpartyCode.trim(),
       });
+      window.dispatchEvent(new CustomEvent('wallet-updated'));
       setCounterpartyCode('');
       setCheckinInfo((prev) =>
         prev == null
@@ -848,6 +852,19 @@ export const BookingsScreen = (_props: Props) => {
 
                 <div className="reservation-billing-box">
                   <h4>{isInterviewReservation(selectedReservation) ? 'Interview Billing' : 'Billing Summary'}</h4>
+                  {selectedReservation.pricingBreakdown ? (
+                    <>
+                      <p>Service price: {formatMoney(selectedReservation.pricingBreakdown.servicePriceAmount)}</p>
+                      <p>
+                        Reservation ({getReservationModeLabel(selectedReservation)}) price:{' '}
+                        {formatMoney(selectedReservation.pricingBreakdown.reservationPriceAmount)}
+                      </p>
+                      <p>
+                        <strong>Total amount: {formatMoney(selectedReservation.pricingBreakdown.totalAmount)}</strong>
+                      </p>
+                      <p className="dashboard-card-meta">{selectedReservation.pricingBreakdown.explanation}</p>
+                    </>
+                  ) : null}
                   <p>Acceptance fee: {formatMoney(selectedReservation.adminAcceptanceFee)}</p>
                   <p>
                     {isInterviewReservation(selectedReservation) ? 'Fixed interview price' : 'Fixed reservation price'}:{' '}
@@ -861,6 +878,9 @@ export const BookingsScreen = (_props: Props) => {
                   )}
                   {selectedReservation.fixedPriceHoldId && (
                     <p>Fixed price hold: Active</p>
+                  )}
+                  {!selectedReservation.fixedPriceHoldId && selectedReservation.pricingBreakdown && (
+                    <p>Deduction status: Pending hold (will be held on Reserve).</p>
                   )}
                   <p>Settlement: {describeSettlement(selectedReservation)}</p>
                   {(selectedReservation.refundAmount > 0 || selectedReservation.capturedAmount > 0 || selectedReservation.penaltyAmount > 0) && (

@@ -102,6 +102,11 @@ export const servicesApiClient = {
       body: JSON.stringify(body),
     }),
 
+  deleteService: (token: string, id: string) =>
+    apiReq<{ deleted: boolean }>(`/api/services/${id}`, token, {
+      method: 'DELETE',
+    }),
+
   submitService: (token: string, id: string) =>
     apiReq<Service>(`/api/services/${id}/submit`, token, { method: 'POST' }),
 

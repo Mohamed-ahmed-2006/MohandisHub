@@ -24,6 +24,7 @@ const providerVerifiedMw = [...providerMw, requireVerified];
 servicesRouter.get('/my', ...providerMw, servicesController.listMyServices);
 servicesRouter.post('/', ...providerVerifiedMw, servicesController.createService);
 servicesRouter.patch('/:id', ...providerMw, servicesController.updateService);
+servicesRouter.delete('/:id', ...providerMw, servicesController.deleteService);
 servicesRouter.post('/:id/submit', ...providerVerifiedMw, servicesController.submitService);
 servicesRouter.post('/:id/pause', ...providerVerifiedMw, servicesController.pauseService);
 servicesRouter.post('/:id/activate', ...providerVerifiedMw, servicesController.activateService);

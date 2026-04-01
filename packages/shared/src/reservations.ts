@@ -89,6 +89,7 @@ export type Reservation = {
   currency: string;
   adminAcceptanceFee: number;
   adminMinuteRate: number;
+  pricingBreakdown: ReservationPricingBreakdown | null;
   policySnapshot: ReservationPolicySnapshot | null;
   fixedPriceHoldId: string | null;
   rejectionReason: string | null;
@@ -122,12 +123,23 @@ export type Reservation = {
   serviceTitle?: string | null;
 };
 
+export type ReservationPricingBreakdown = {
+  servicePriceAmount: number;
+  reservationPriceAmount: number;
+  totalAmount: number;
+  currency: string;
+  deductionTiming: 'on_reserve_hold';
+  releaseTiming: 'on_completion_or_policy';
+  explanation: string;
+};
+
 export type ReservationPolicySnapshot = {
   customerFreeCancelHours: number;
   providerPenaltyCancelHours: number;
   customerLateCancelPayoutPercent: number;
   providerLateCancelPenaltyAmount: number;
   interviewBusinessFailureRefundOnly: boolean;
+  pricingBreakdown?: ReservationPricingBreakdown | null;
 };
 
 export type ReservationTimelineEventType =

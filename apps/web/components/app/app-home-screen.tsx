@@ -316,13 +316,14 @@ export const AppHomeScreen = ({ locale, dictionary }: AppHomeScreenProps) => {
       if (verifiedOnly) params.verifiedOnly = true;
       if (sort) params.sort = sort;
       const data = await servicesApiClient.searchServices(params);
-      setResults(dedupeById(data.items));
+      const visibleItems = authUser ? data.items.filter((item) => item.providerId !== authUser.id) : data.items;
+      setResults(dedupeById(visibleItems));
     } catch {
       setResults([]);
     } finally {
       setSearching(false);
     }
-  }, [categoryId, city, area, providerType, searchQuery, minRating, minPrice, maxPrice, verifiedOnly, sort]);
+  }, [authUser, categoryId, city, area, providerType, searchQuery, minRating, minPrice, maxPrice, verifiedOnly, sort]);
 
   const isSearchTabActive =
     (authUser?.role === 'customer' && customerTab === 'browse') ||

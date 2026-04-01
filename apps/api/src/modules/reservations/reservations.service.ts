@@ -9,6 +9,7 @@ import type {
   ReservationCallSession,
   ReservationDispute,
   ReservationLocationProposal,
+  ReservationPricingBreakdown,
   ReservationProfile,
   ReservationPolicySnapshot,
   ReservationSlot,
@@ -126,6 +127,7 @@ const mapSlot = (row: ReservationSlotRow): ReservationSlot => ({
 });
 
 const mapReservation = (row: ReservationRow): Reservation => {
+  const policySnapshot = (row.policy_snapshot as ReservationPolicySnapshot | null) ?? null;
   const mapped: Reservation = {
     id: row.id,
     customerId: row.customer_id,
@@ -144,7 +146,8 @@ const mapReservation = (row: ReservationRow): Reservation => {
     currency: row.currency,
     adminAcceptanceFee: toNumber(row.admin_acceptance_fee),
     adminMinuteRate: toNumber(row.admin_minute_rate),
-    policySnapshot: (row.policy_snapshot as ReservationPolicySnapshot | null) ?? null,
+    pricingBreakdown: policySnapshot?.pricingBreakdown ?? null,
+    policySnapshot,
     fixedPriceHoldId: row.fixed_price_hold_id,
     rejectionReason: row.rejection_reason,
     autoRejected: row.auto_rejected,
@@ -323,7 +326,12 @@ export class ReservationsService {
     availableOnly: boolean;
   }): Promise<{ items: ReservationSlot[] }> {
     const providerId = this.resolveProviderIdForSlots(params.userId, params.role, params.providerId);
-    const rows = await this.repo.listSlots(providerId, params.from, params.to, params.availableOnly, {
+    const role = params.role ?? 'customer';
+    const isSelfProviderView =
+      (role === 'expert' || role === 'craftsman' || role === 'business') &&
+      providerId === params.userId;
+    const availableOnly = isSelfProviderView ? params.availableOnly : true;
+    const rows = await this.repo.listSlots(providerId, params.from, params.to, availableOnly, {
       purpose: 'service',
     });
     return { items: rows.map(mapSlot) };
@@ -458,6 +466,13 @@ export class ReservationsService {
         message: 'Reservations are temporarily unavailable.',
       });
     }
+    if (input.providerId === customerId) {
+      throw new HttpError({
+        statusCode: 400,
+        code: 'CANNOT_RESERVE_OWN_SERVICE',
+        message: 'You cannot reserve your own service.',
+      });
+    }
 
     const slot = await this.repo.findSlotById(input.slotId);
     if (!slot || slot.provider_id !== input.providerId) {
@@ -504,7 +519,8 @@ export class ReservationsService {
       profile = await this.repo.upsertProfile(input.providerId, {});
     }
 
-    let expertPrice = this.getExpertPriceByType(profile, input.mode, input.onlineType);
+    const reservationModePrice = this.getExpertPriceByType(profile, input.mode, input.onlineType);
+    let servicePrice = 0;
     let reservationCurrency = profile.currency || 'EGP';
     if (input.serviceId) {
       const service = await this.servicesRepo.getActiveServiceById(input.serviceId);
@@ -523,10 +539,11 @@ export class ReservationsService {
         });
       }
       if (service.price != null) {
-        expertPrice = toNumber(service.price);
+        servicePrice = toNumber(service.price);
       }
       reservationCurrency = service.currency || reservationCurrency;
     }
+    const expertPrice = Math.max(0, toMoney(servicePrice + reservationModePrice));
     const adminMinuteRate =
       input.mode === 'online'
         ? input.onlineType === 'video'
@@ -536,6 +553,16 @@ export class ReservationsService {
     const policySnapshot = this.buildPolicySnapshot({
       purpose: 'service',
       adminAcceptanceFee: status.reservationAcceptanceFee,
+      pricingBreakdown: {
+        servicePriceAmount: toMoney(servicePrice),
+        reservationPriceAmount: toMoney(reservationModePrice),
+        totalAmount: toMoney(servicePrice + reservationModePrice),
+        currency: reservationCurrency,
+        deductionTiming: 'on_reserve_hold',
+        releaseTiming: 'on_completion_or_policy',
+        explanation:
+          'Total amount (service + reservation mode price) is held when you click Reserve. It is released based on completion/cancellation policy.',
+      },
     });
 
     const createInput: Parameters<ReservationsRepository['createReservation']>[0] = {
@@ -2415,6 +2442,7 @@ export class ReservationsService {
   private buildPolicySnapshot(input: {
     purpose: Reservation['purpose'];
     adminAcceptanceFee: number;
+    pricingBreakdown?: ReservationPricingBreakdown | null;
   }): ReservationPolicySnapshot {
     return {
       customerFreeCancelHours: CUSTOMER_FREE_CANCEL_HOURS,
@@ -2423,6 +2451,7 @@ export class ReservationsService {
       providerLateCancelPenaltyAmount:
         input.purpose === 'service' ? Math.max(0, input.adminAcceptanceFee) : 0,
       interviewBusinessFailureRefundOnly: input.purpose === 'job_interview',
+      pricingBreakdown: input.pricingBreakdown ?? null,
     };
   }
 

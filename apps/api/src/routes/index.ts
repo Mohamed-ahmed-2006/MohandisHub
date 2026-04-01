@@ -36,7 +36,12 @@ function isAuthOrOtpPath(path: string) {
  * during regular app usage (especially with multiple open tabs/sessions).
  */
 function isApiRateLimitExemptPath(path: string) {
-  return path === '/app/status' || path === '/wallet/me';
+  return (
+    path === '/app/status' ||
+    path === '/wallet/me' ||
+    path === '/reservations/profile/me' ||
+    path.startsWith('/reservations/profile/')
+  );
 }
 
 const apiRouter = Router();

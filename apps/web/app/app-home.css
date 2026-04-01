@@ -611,7 +611,7 @@
 
 .home-drawer {
   width: 100%;
-  max-width: 400px;
+  max-width: 650px;
   height: 100%;
   overflow-y: auto;
   background-color: hsl(var(--card));

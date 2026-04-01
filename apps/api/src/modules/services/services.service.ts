@@ -150,11 +150,11 @@ export class ServicesService {
         message: 'Service not found.',
       });
     }
-    if (row.status !== 'draft' && row.status !== 'paused') {
+    if (row.status === 'pending_review') {
       throw new HttpError({
         statusCode: 400,
         code: 'SERVICE_NOT_EDITABLE',
-        message: 'Only draft or paused services can be edited.',
+        message: 'Service is currently under review and cannot be edited.',
       });
     }
     const dbInput: {
@@ -187,6 +187,19 @@ export class ServicesService {
     if (input.country !== undefined) dbInput.country = input.country;
     const updated = await this.repo.updateService(serviceId, providerId, dbInput);
     return this.toService(updated!);
+  }
+
+  async deleteService(serviceId: string, providerId: string): Promise<{ deleted: boolean }> {
+    const row = await this.repo.getServiceByIdAndProvider(serviceId, providerId);
+    if (!row) {
+      throw new HttpError({
+        statusCode: 404,
+        code: 'SERVICE_NOT_FOUND',
+        message: 'Service not found.',
+      });
+    }
+    const deleted = await this.repo.deleteService(serviceId, providerId);
+    return { deleted };
   }
 
   async submitService(serviceId: string, providerId: string): Promise<Service> {

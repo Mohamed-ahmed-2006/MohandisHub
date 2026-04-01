@@ -408,6 +408,14 @@ export class ServicesRepository {
     );
     return rows[0] ?? null;
   }
+
+  async deleteService(serviceId: string, providerId: string): Promise<boolean> {
+    const { rowCount } = await this.db.query(`DELETE FROM services WHERE id = $1 AND provider_id = $2`, [
+      serviceId,
+      providerId,
+    ]);
+    return (rowCount ?? 0) > 0;
+  }
 }
 
 export type { CategoryRow, ServiceSearchRow, ServiceDetailRow };
