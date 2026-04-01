@@ -23,6 +23,10 @@ export const OnlineCallModal = ({ open, reservation, accessToken, onClose, onEnd
   const [loading, setLoading] = useState(false);
   const [ending, setEnding] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [micMuted, setMicMuted] = useState(false);
+  const [camMuted, setCamMuted] = useState(false);
+  const [connected, setConnected] = useState(false);
+  const [callSeconds, setCallSeconds] = useState(0);
 
   const localVideoRef = useRef<HTMLDivElement | null>(null);
   const remoteVideoRef = useRef<HTMLDivElement | null>(null);
@@ -35,6 +39,7 @@ export const OnlineCallModal = ({ open, reservation, accessToken, onClose, onEnd
   const cleanupPromiseRef = useRef<Promise<void> | null>(null);
   const renewPromiseRef = useRef<Promise<void> | null>(null);
   const renewFailureCountRef = useRef(0);
+  const callTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const cleanup = useCallback(async (notifyDisconnect: boolean) => {
     if (cleanupPromiseRef.current) {
@@ -47,6 +52,10 @@ export const OnlineCallModal = ({ open, reservation, accessToken, onClose, onEnd
     if (heartbeatRef.current) {
       clearInterval(heartbeatRef.current);
       heartbeatRef.current = null;
+    }
+    if (callTimerRef.current) {
+      clearInterval(callTimerRef.current);
+      callTimerRef.current = null;
     }
 
     if (notifyDisconnect && reservationId) {
@@ -70,6 +79,10 @@ export const OnlineCallModal = ({ open, reservation, accessToken, onClose, onEnd
     reservationIdRef.current = null;
     renewPromiseRef.current = null;
     renewFailureCountRef.current = 0;
+    setConnected(false);
+    setMicMuted(false);
+    setCamMuted(false);
+    setCallSeconds(0);
 
     if (localVideoRef.current) localVideoRef.current.innerHTML = '';
     if (remoteVideoRef.current) remoteVideoRef.current.innerHTML = '';
@@ -81,6 +94,19 @@ export const OnlineCallModal = ({ open, reservation, accessToken, onClose, onEnd
       cleanupPromiseRef.current = null;
     }
   }, [accessToken]);
+
+  useEffect(() => {
+    if (!connected) return;
+    callTimerRef.current = setInterval(() => {
+      setCallSeconds((prev) => prev + 1);
+    }, 1_000);
+    return () => {
+      if (callTimerRef.current) {
+        clearInterval(callTimerRef.current);
+        callTimerRef.current = null;
+      }
+    };
+  }, [connected]);
 
   const renewAgoraToken = useCallback(async () => {
     const reservationId = reservationIdRef.current;
@@ -162,17 +188,24 @@ export const OnlineCallModal = ({ open, reservation, accessToken, onClose, onEnd
 
         await client.join(join.appId, join.channel, join.token, join.uid);
 
-        const tracks = await AgoraRTC.createMicrophoneAndCameraTracks();
-        micTrackRef.current = tracks[0];
-        camTrackRef.current = mediaType === 'video' ? tracks[1] : null;
+        let publishTracks: ILocalTrack[] = [];
+        if (mediaType === 'video') {
+          const tracks = await AgoraRTC.createMicrophoneAndCameraTracks();
+          micTrackRef.current = tracks[0];
+          camTrackRef.current = tracks[1];
+          publishTracks = [tracks[0], tracks[1]];
+        } else {
+          const micTrack: IMicrophoneAudioTrack = await AgoraRTC.createMicrophoneAudioTrack();
+          micTrackRef.current = micTrack;
+          camTrackRef.current = null;
+          publishTracks = [micTrack];
+        }
 
         if (mediaType === 'video' && localVideoRef.current && camTrackRef.current) {
           camTrackRef.current.play(localVideoRef.current);
         }
-
-        const publishTracks: ILocalTrack[] = [tracks[0]];
-        if (mediaType === 'video' && tracks[1]) publishTracks.push(tracks[1]);
         await client.publish(publishTracks);
+        setConnected(true);
 
         heartbeatRef.current = setInterval(() => {
           void reservationsApiClient
@@ -215,6 +248,34 @@ export const OnlineCallModal = ({ open, reservation, accessToken, onClose, onEnd
     onClose();
   };
 
+  const toggleMic = async () => {
+    if (!micTrackRef.current) return;
+    const nextMuted = !micMuted;
+    try {
+      await micTrackRef.current.setEnabled(!nextMuted);
+      setMicMuted(nextMuted);
+    } catch {
+      setError('Could not update microphone state.');
+    }
+  };
+
+  const toggleCamera = async () => {
+    if (reservation?.onlineType !== 'video' || !camTrackRef.current) return;
+    const nextMuted = !camMuted;
+    try {
+      await camTrackRef.current.setEnabled(!nextMuted);
+      setCamMuted(nextMuted);
+    } catch {
+      setError('Could not update camera state.');
+    }
+  };
+
+  const formatCallDuration = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+  };
+
   if (!open || !reservation) return null;
 
   return (
@@ -223,6 +284,9 @@ export const OnlineCallModal = ({ open, reservation, accessToken, onClose, onEnd
         <h3 className="plan-modal-title">
           {reservation.onlineType === 'video' ? 'Video Call' : 'Voice Call'}
         </h3>
+        <p style={{ marginTop: '-0.5rem', marginBottom: '0.75rem', color: '#6b7280', fontSize: '0.9rem' }}>
+          {connected ? `Connected • ${formatCallDuration(callSeconds)}` : 'Connecting...'}
+        </p>
         {error && <p className="dashboard-error">{error}</p>}
         {loading && <p className="dashboard-loading">Joining call...</p>}
 
@@ -237,9 +301,25 @@ export const OnlineCallModal = ({ open, reservation, accessToken, onClose, onEnd
           </div>
         </div>
 
+        <div className="dashboard-form-row" style={{ marginTop: '1rem', gap: '0.5rem', flexWrap: 'wrap' }}>
+          <button type="button" className="dashboard-btn dashboard-btn--secondary" onClick={() => void toggleMic()} disabled={!connected}>
+            {micMuted ? 'Unmute Mic' : 'Mute Mic'}
+          </button>
+          {reservation.onlineType === 'video' && (
+            <button
+              type="button"
+              className="dashboard-btn dashboard-btn--secondary"
+              onClick={() => void toggleCamera()}
+              disabled={!connected}
+            >
+              {camMuted ? 'Turn Camera On' : 'Turn Camera Off'}
+            </button>
+          )}
+        </div>
+
         <div className="dashboard-form-row" style={{ marginTop: '1rem' }}>
           <button type="button" className="plan-modal-cancel" onClick={close}>
-            Leave
+            Hang Up
           </button>
           <button
             type="button"
