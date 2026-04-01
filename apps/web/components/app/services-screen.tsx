@@ -4,6 +4,7 @@ import type { Service, ServiceCategory } from '@mohandishub/shared';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 
+import { useAppStatus } from '@/components/app-status-provider';
 import { useAuth } from '@/components/auth/auth-provider';
 import { Container } from '@/components/ui/container';
 import { EGYPTIAN_CITIES } from '@/lib/data/egyptian-cities';
@@ -44,6 +45,8 @@ export const ServicesScreen = ({ locale, dictionary }: Props) => {
   const [error, setError] = useState<string | null>(null);
 
   const sp = dictionary.servicesPage ?? ({} as Record<string, string>);
+  const { status } = useAppStatus();
+  const hourlyPricingEnabled = status?.featureHourlyPricingEnabled === true;
 
   useEffect(() => {
     if (!isReady) return;
@@ -103,8 +106,9 @@ export const ServicesScreen = ({ locale, dictionary }: Props) => {
       const categoryId = (form.elements.namedItem('categoryId') as HTMLSelectElement)?.value;
       const priceRaw = (form.elements.namedItem('price') as HTMLInputElement)?.value;
       const price = priceRaw ? parseFloat(priceRaw) : undefined;
-      const priceType = (form.elements.namedItem('priceType') as HTMLSelectElement)
-        ?.value as 'fixed' | 'hourly';
+      const priceType = hourlyPricingEnabled
+        ? ((form.elements.namedItem('priceType') as HTMLSelectElement)?.value as 'fixed' | 'hourly')
+        : 'fixed';
       const isNegotiable = (form.elements.namedItem('isNegotiable') as HTMLInputElement)?.checked;
       const description = (form.elements.namedItem('description') as HTMLTextAreaElement)?.value?.trim();
       const city = (form.elements.namedItem('city') as HTMLSelectElement)?.value?.trim();
@@ -116,7 +120,8 @@ export const ServicesScreen = ({ locale, dictionary }: Props) => {
       if (description?.trim()) body.description = description.trim();
       if (categoryId) body.categoryId = categoryId;
       if (price != null && Number.isFinite(price)) body.price = price;
-      if (priceType) body.priceType = priceType;
+      if (hourlyPricingEnabled && priceType) body.priceType = priceType;
+      else body.priceType = 'fixed';
       body.isNegotiable = !!isNegotiable;
       if (city?.trim()) body.city = city.trim();
       if (country?.trim()) body.country = country.trim();
@@ -223,7 +228,7 @@ export const ServicesScreen = ({ locale, dictionary }: Props) => {
                 )}
                 <p className="dashboard-card-meta">
                   {s.price != null
-                    ? `${s.price} ${s.currency}${s.priceType === 'hourly' ? '/hr' : ''}`
+                    ? `${s.price} ${s.currency}${hourlyPricingEnabled && s.priceType === 'hourly' ? '/hr' : ''}`
                     : s.isNegotiable
                       ? 'Negotiable'
                       : '-'}
@@ -341,13 +346,15 @@ export const ServicesScreen = ({ locale, dictionary }: Props) => {
                     />
                   </div>
 
-                  <div className="service-create-field">
-                    <label className="service-create-label">Type</label>
-                    <select name="priceType" className="dashboard-select service-create-input">
-                      <option value="fixed">{sp.priceTypeFixed ?? 'Fixed'}</option>
-                      <option value="hourly">{sp.priceTypeHourly ?? 'Hourly'}</option>
-                    </select>
-                  </div>
+                  {hourlyPricingEnabled ? (
+                    <div className="service-create-field">
+                      <label className="service-create-label">Type</label>
+                      <select name="priceType" className="dashboard-select service-create-input">
+                        <option value="fixed">{sp.priceTypeFixed ?? 'Fixed'}</option>
+                        <option value="hourly">{sp.priceTypeHourly ?? 'Hourly'}</option>
+                      </select>
+                    </div>
+                  ) : null}
 
                   <label className="service-create-checkbox service-create-field service-create-field--full" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                     <input name="isNegotiable" type="checkbox" />

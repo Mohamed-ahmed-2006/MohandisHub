@@ -34,6 +34,13 @@ export class NeedsService {
   async createNeed(customerId: string, input: CreateNeedInput) {
     await this.assertNeedsFeatureEnabled();
     const status = await this.settingsService.getAppStatus();
+    if (status.featureHourlyPricingEnabled === false && input.budgetType === 'hourly') {
+      throw new HttpError({
+        statusCode: 400,
+        code: 'HOURLY_PRICING_DISABLED',
+        message: 'Hourly pricing is disabled.',
+      });
+    }
     if (status.pauseNeeds) {
       throw new HttpError({
         statusCode: 503,

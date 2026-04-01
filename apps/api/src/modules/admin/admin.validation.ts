@@ -147,6 +147,7 @@ export const updateSettingsSchema = z.object({
   featureNeedsEnabled: z.boolean().optional(),
   featurePlansEnabled: z.boolean().optional(),
   featureWalletEnabled: z.boolean().optional(),
+  featureHourlyPricingEnabled: z.boolean().optional(),
   globalAnnouncement: z.string().max(1000).nullable().optional(),
   commissionPercent: z.number().min(0).max(100).optional(),
   commissionMinEgp: z.number().min(0).optional(),

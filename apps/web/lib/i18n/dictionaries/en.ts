@@ -748,6 +748,9 @@ export const enDictionary: Dictionary = {
       featureNeedsEnabled: 'Needs section enabled',
       featurePlansEnabled: 'Plans section enabled',
       featureWalletEnabled: 'Wallet section enabled',
+      featureHourlyPricingEnabled: 'Hourly pricing enabled',
+      featureHourlyPricingEnabledDesc:
+        'Services /hr, profile hourly rate, and hourly need budgets. Turn off to hide until time-based billing is ready.',
       globalAnnouncement: 'Global announcement',
       globalAnnouncementPlaceholder: 'Banner message for all users',
       minDepositAmount: 'Min deposit amount',

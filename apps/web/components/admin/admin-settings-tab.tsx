@@ -655,6 +655,13 @@ export const AdminSettingsTab = ({ dictionary, accessToken, refreshSession }: Pr
           onChange={(v) => handleToggle('featureWalletEnabled', v)}
           disabled={saving}
         />
+        <Toggle
+          label={d.featureHourlyPricingEnabled}
+          desc={d.featureHourlyPricingEnabledDesc}
+          checked={settings.featureHourlyPricingEnabled}
+          onChange={(v) => handleToggle('featureHourlyPricingEnabled', v)}
+          disabled={saving}
+        />
         <div className="admin-settings-row">
           <label className="admin-settings-label">{d.globalAnnouncement}</label>
           <input

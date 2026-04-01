@@ -82,6 +82,7 @@ export const CustomerDashboard = ({
   const { addToast } = useToast();
   const { status } = useAppStatus();
   const needsFeatureEnabled = status?.featureNeedsEnabled !== false;
+  const hourlyPricingEnabled = status?.featureHourlyPricingEnabled === true;
 
   const isVideoFile = (file: File) => file.type.startsWith('video/');
   const maxImages = 5;
@@ -177,9 +178,9 @@ export const CustomerDashboard = ({
     const description = (
       form.elements.namedItem('description') as HTMLTextAreaElement
     ).value.trim();
-    const budgetType = (form.elements.namedItem('budgetType') as HTMLSelectElement).value as
-      | 'fixed'
-      | 'hourly';
+    const budgetType = hourlyPricingEnabled
+      ? ((form.elements.namedItem('budgetType') as HTMLSelectElement).value as 'fixed' | 'hourly')
+      : 'fixed';
     const budgetAmountRaw = parseFloat(
       (form.elements.namedItem('budgetAmount') as HTMLInputElement).value,
     );
@@ -479,19 +480,23 @@ export const CustomerDashboard = ({
                           defaultValue=""
                         />
                       </div>
-                      <div className="dashboard-form-field">
-                        <label className="dashboard-form-label">
-                          {d.budgetType ?? tr('Budget type', 'نوع الميزانية')}
-                        </label>
-                        <select
-                          name="budgetType"
-                          className="dashboard-select dashboard-select--modal"
-                          required
-                        >
-                          <option value="fixed">{d.fixed ?? 'Fixed'}</option>
-                          <option value="hourly">{d.hourly ?? 'Hourly'}</option>
-                        </select>
-                      </div>
+                      {hourlyPricingEnabled ? (
+                        <div className="dashboard-form-field">
+                          <label className="dashboard-form-label">
+                            {d.budgetType ?? tr('Budget type', 'نوع الميزانية')}
+                          </label>
+                          <select
+                            name="budgetType"
+                            className="dashboard-select dashboard-select--modal"
+                            required
+                          >
+                            <option value="fixed">{d.fixed ?? 'Fixed'}</option>
+                            <option value="hourly">{d.hourly ?? 'Hourly'}</option>
+                          </select>
+                        </div>
+                      ) : (
+                        <input type="hidden" name="budgetType" value="fixed" />
+                      )}
                       <div className="dashboard-form-field">
                         <label className="dashboard-form-label">
                           {d.budgetPlaceholder ?? 'Budget amount'}
@@ -763,7 +768,11 @@ export const CustomerDashboard = ({
                   )}
                   <span>
                     <strong>
-                      {need.budget_type === 'fixed' ? (d.fixed ?? 'Fixed') : (d.hourly ?? 'Hourly')}
+                      {hourlyPricingEnabled
+                        ? need.budget_type === 'fixed'
+                          ? (d.fixed ?? 'Fixed')
+                          : (d.hourly ?? 'Hourly')
+                        : tr('Budget', 'الميزانية')}
                       :
                     </strong>{' '}
                     {parseFloat(need.budget_amount).toFixed(2)} {need.currency}

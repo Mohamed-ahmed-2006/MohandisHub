@@ -773,6 +773,8 @@ export type Dictionary = {
       featureNeedsEnabled: string;
       featurePlansEnabled: string;
       featureWalletEnabled: string;
+      featureHourlyPricingEnabled: string;
+      featureHourlyPricingEnabledDesc: string;
       globalAnnouncement: string;
       globalAnnouncementPlaceholder: string;
       minDepositAmount: string;

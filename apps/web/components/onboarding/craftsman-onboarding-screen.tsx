@@ -10,6 +10,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 
+import { useAppStatus } from '@/components/app-status-provider';
 import { useAuth } from '@/components/auth/auth-provider';
 import { OnboardingStepper } from '@/components/onboarding/onboarding-stepper';
 import { SiteLogo } from '@/components/site-logo';
@@ -57,6 +58,8 @@ export const CraftsmanOnboardingScreen = ({ locale, dictionary }: Props) => {
   const tr = (en: string, ar: string) => (locale === 'ar' ? ar : en);
   const router = useRouter();
   const { authUser, accessToken, isAuthenticated, isReady, authGuard, updateAuthUser } = useAuth();
+  const { status } = useAppStatus();
+  const hourlyPricingEnabled = status?.featureHourlyPricingEnabled === true;
   const [craftsmanProfile, setCraftsmanProfile] = useState<CraftsmanProfile | null>(null);
   const [step, setStep] = useState<Step>('profile');
   const [stepResolved, setStepResolved] = useState(false);
@@ -532,17 +535,19 @@ export const CraftsmanOnboardingScreen = ({ locale, dictionary }: Props) => {
                   />
                 </div>
               </div>
-              <div className="onboarding-field">
-                <label className="onboarding-label">{dict.profileForm.hourlyRateLabel}</label>
-                <input
-                  type="number"
-                  name="hourlyRate"
-                  className="onboarding-input"
-                  min="0"
-                  step="0.01"
-                  defaultValue={craftsmanProfile?.hourlyRate ?? ''}
-                />
-              </div>
+              {hourlyPricingEnabled ? (
+                <div className="onboarding-field">
+                  <label className="onboarding-label">{dict.profileForm.hourlyRateLabel}</label>
+                  <input
+                    type="number"
+                    name="hourlyRate"
+                    className="onboarding-input"
+                    min="0"
+                    step="0.01"
+                    defaultValue={craftsmanProfile?.hourlyRate ?? ''}
+                  />
+                </div>
+              ) : null}
               <button type="submit" className="onboarding-cta-button" disabled={saving}>
                 {saving ? dictionary.auth.common.loading : dictionary.common.next}
               </button>

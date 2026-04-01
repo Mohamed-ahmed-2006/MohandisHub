@@ -9,7 +9,18 @@ import type {
 } from 'agora-rtc-sdk-ng';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
+import { isApiClientError } from '@/lib/auth/client';
 import { reservationsApiClient } from '@/lib/reservations/client';
+
+const withTimeout = <T,>(promise: Promise<T>, ms: number, message: string): Promise<T> => {
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    timeoutId = setTimeout(() => reject(new Error(message)), ms);
+  });
+  return Promise.race([promise, timeoutPromise]).finally(() => {
+    if (timeoutId !== undefined) clearTimeout(timeoutId);
+  });
+};
 
 type Props = {
   open: boolean;
@@ -40,6 +51,8 @@ export const OnlineCallModal = ({ open, reservation, accessToken, onClose, onEnd
   const renewPromiseRef = useRef<Promise<void> | null>(null);
   const renewFailureCountRef = useRef(0);
   const callTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  /** True after local publish succeeds; used to ignore late WebRTC failures during teardown. */
+  const callEstablishedRef = useRef(false);
 
   const cleanup = useCallback(async (notifyDisconnect: boolean) => {
     if (cleanupPromiseRef.current) {
@@ -79,6 +92,7 @@ export const OnlineCallModal = ({ open, reservation, accessToken, onClose, onEnd
     reservationIdRef.current = null;
     renewPromiseRef.current = null;
     renewFailureCountRef.current = 0;
+    callEstablishedRef.current = false;
     setConnected(false);
     setMicMuted(false);
     setCamMuted(false);
@@ -161,6 +175,16 @@ export const OnlineCallModal = ({ open, reservation, accessToken, onClose, onEnd
         const client = AgoraRTC.createClient({ mode: 'rtc', codec: 'vp8' });
         clientRef.current = client;
 
+        client.on('peerconnection-state-change', (curState) => {
+          if (!mounted || callEstablishedRef.current) return;
+          if (curState === 'failed') {
+            setError(
+              'The call could not connect (network or firewall blocked WebRTC). Try another network or disable VPN.',
+            );
+            void cleanup(false);
+          }
+        });
+
         client.on('user-published', (user, userMediaType) => {
           void (async () => {
             await client.subscribe(user, userMediaType);
@@ -186,16 +210,28 @@ export const OnlineCallModal = ({ open, reservation, accessToken, onClose, onEnd
           void renewAgoraToken();
         });
 
-        await client.join(join.appId, join.channel, join.token, join.uid);
+        await withTimeout(
+          client.join(join.appId, join.channel, join.token, join.uid),
+          45_000,
+          'Timed out connecting to the call. Check your network, firewall, or VPN.',
+        );
 
         let publishTracks: ILocalTrack[] = [];
         if (mediaType === 'video') {
-          const tracks = await AgoraRTC.createMicrophoneAndCameraTracks();
+          const tracks = await withTimeout(
+            AgoraRTC.createMicrophoneAndCameraTracks(),
+            60_000,
+            'Camera or microphone access timed out. Allow permissions in your browser, then try again.',
+          );
           micTrackRef.current = tracks[0];
           camTrackRef.current = tracks[1];
           publishTracks = [tracks[0], tracks[1]];
         } else {
-          const micTrack: IMicrophoneAudioTrack = await AgoraRTC.createMicrophoneAudioTrack();
+          const micTrack: IMicrophoneAudioTrack = await withTimeout(
+            AgoraRTC.createMicrophoneAudioTrack(),
+            60_000,
+            'Microphone access is required. Allow the browser prompt or site permission, then try again.',
+          );
           micTrackRef.current = micTrack;
           camTrackRef.current = null;
           publishTracks = [micTrack];
@@ -204,7 +240,12 @@ export const OnlineCallModal = ({ open, reservation, accessToken, onClose, onEnd
         if (mediaType === 'video' && localVideoRef.current && camTrackRef.current) {
           camTrackRef.current.play(localVideoRef.current);
         }
-        await client.publish(publishTracks);
+        await withTimeout(
+          client.publish(publishTracks),
+          30_000,
+          'Timed out starting your media. Close the dialog and try again.',
+        );
+        callEstablishedRef.current = true;
         setConnected(true);
 
         heartbeatRef.current = setInterval(() => {
@@ -213,7 +254,20 @@ export const OnlineCallModal = ({ open, reservation, accessToken, onClose, onEnd
             .catch(() => {});
         }, 10_000);
       } catch (e) {
-        setError(e instanceof Error ? e.message : 'Could not join call');
+        if (isApiClientError(e)) {
+          if (e.code === 'AGORA_NOT_CONFIGURED' || e.code === 'AGORA_TOKEN_FAILED') {
+            setError(
+              e.code === 'AGORA_TOKEN_FAILED'
+                ? e.message
+                : 'Calls are not available right now (service not configured).',
+            );
+          } else {
+            setError(e.message);
+          }
+        } else {
+          setError(e instanceof Error ? e.message : 'Could not join call');
+        }
+        await cleanup(false);
       } finally {
         if (mounted) setLoading(false);
       }
@@ -296,9 +350,41 @@ export const OnlineCallModal = ({ open, reservation, accessToken, onClose, onEnd
               <div ref={localVideoRef} style={{ width: '100%', height: '100%' }} />
             </div>
           )}
-          <div style={{ minHeight: 220, borderRadius: 8, border: '1px solid rgba(0,0,0,0.1)', overflow: 'hidden' }}>
-            <div ref={remoteVideoRef} style={{ width: '100%', height: '100%' }} />
-          </div>
+          {reservation.onlineType === 'voice' ? (
+            <div
+              style={{
+                minHeight: 220,
+                borderRadius: 8,
+                border: '1px solid rgba(0,0,0,0.1)',
+                overflow: 'hidden',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                padding: '1rem',
+                background: 'rgba(0,0,0,0.02)',
+              }}
+            >
+              <div ref={remoteVideoRef} style={{ width: '100%', flex: 1, minHeight: 80 }} />
+              <p
+                style={{
+                  margin: '0.75rem 0 0',
+                  fontSize: '0.875rem',
+                  color: '#6b7280',
+                  textAlign: 'center',
+                  maxWidth: 320,
+                }}
+              >
+                {connected
+                  ? 'Voice only — you will hear the other person when they join. No video is shown for audio calls.'
+                  : 'Voice call — allow microphone access when the browser asks.'}
+              </p>
+            </div>
+          ) : (
+            <div style={{ minHeight: 220, borderRadius: 8, border: '1px solid rgba(0,0,0,0.1)', overflow: 'hidden' }}>
+              <div ref={remoteVideoRef} style={{ width: '100%', height: '100%' }} />
+            </div>
+          )}
         </div>
 
         <div className="dashboard-form-row" style={{ marginTop: '1rem', gap: '0.5rem', flexWrap: 'wrap' }}>

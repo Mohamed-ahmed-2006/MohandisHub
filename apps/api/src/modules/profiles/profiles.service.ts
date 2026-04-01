@@ -114,6 +114,14 @@ export class ProfilesService {
       educationSummary?: string | undefined;
     },
   ): Promise<ExpertProfile> {
+    const appStatus = await this.settingsService.getAppStatus();
+    if (appStatus.featureHourlyPricingEnabled === false && input.hourlyRate !== undefined) {
+      throw new HttpError({
+        statusCode: 400,
+        code: 'HOURLY_PRICING_DISABLED',
+        message: 'Hourly pricing is disabled.',
+      });
+    }
     // Map camelCase to snake_case for DB
     const dbFields: Record<string, unknown> = {};
     if (input.title !== undefined) dbFields.title = input.title;
@@ -208,6 +216,14 @@ export class ProfilesService {
       workshopLongitude?: number | undefined;
     },
   ): Promise<CraftsmanProfile> {
+    const appStatus = await this.settingsService.getAppStatus();
+    if (appStatus.featureHourlyPricingEnabled === false && input.hourlyRate !== undefined) {
+      throw new HttpError({
+        statusCode: 400,
+        code: 'HOURLY_PRICING_DISABLED',
+        message: 'Hourly pricing is disabled.',
+      });
+    }
     const dbFields: Record<string, unknown> = {};
     if (input.trade !== undefined) dbFields.trade = input.trade;
     if (input.title !== undefined) dbFields.title = input.title;

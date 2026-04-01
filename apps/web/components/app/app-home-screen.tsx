@@ -10,6 +10,7 @@ import { ExpertDashboard } from './expert-dashboard';
 import { useProfileModal } from './profile-modal-context';
 import { ServiceBookingModal } from './service-booking-modal';
 
+import { useAppStatus } from '@/components/app-status-provider';
 import { useAuth } from '@/components/auth/auth-provider';
 import { AvatarImage } from '@/components/ui/avatar-image';
 import { Container } from '@/components/ui/container';
@@ -203,6 +204,8 @@ export const AppHomeScreen = ({ locale, dictionary }: AppHomeScreenProps) => {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { authUser, accessToken, isAuthenticated, isReady, authGuard } = useAuth();
+  const { status } = useAppStatus();
+  const hourlyPricingEnabled = status?.featureHourlyPricingEnabled === true;
   const { openProfileModal } = useProfileModal();
   const [categories, setCategories] = useState<ServiceCategory[]>([]);
   const [categoryId, setCategoryId] = useState('');
@@ -883,7 +886,8 @@ export const AppHomeScreen = ({ locale, dictionary }: AppHomeScreenProps) => {
                               </p>
                               {r.price != null && (
                                 <p className="home-result-price">
-                    {r.price} {r.currency ?? 'EGP'}{r.priceType === 'hourly' ? '/hr' : ''}
+                    {r.price} {r.currency ?? 'EGP'}
+                    {hourlyPricingEnabled && r.priceType === 'hourly' ? '/hr' : ''}
                                 </p>
                               )}
                             </div>
@@ -1167,7 +1171,8 @@ export const AppHomeScreen = ({ locale, dictionary }: AppHomeScreenProps) => {
                           </p>
                           {r.price != null && (
                             <p className="home-result-price">
-                    {r.price} {r.currency ?? 'EGP'}{r.priceType === 'hourly' ? '/hr' : ''}
+                    {r.price} {r.currency ?? 'EGP'}
+                    {hourlyPricingEnabled && r.priceType === 'hourly' ? '/hr' : ''}
                             </p>
                           )}
                         </div>
@@ -1239,7 +1244,7 @@ export const AppHomeScreen = ({ locale, dictionary }: AppHomeScreenProps) => {
               {selectedResult.price != null && (
                 <p className="home-drawer-price">
                           {selectedResult.price} {selectedResult.currency ?? 'EGP'}{' '}
-                  {selectedResult.priceType === 'hourly'
+                  {hourlyPricingEnabled && selectedResult.priceType === 'hourly'
                     ? '/ hour'
                     : selectedResult.isNegotiable
                       ? '(negotiable)'

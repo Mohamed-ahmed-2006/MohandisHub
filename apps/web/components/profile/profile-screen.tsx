@@ -19,6 +19,7 @@ import { useCallback, useEffect, useState } from 'react';
 
 import { getVisibleProfileSections, type ProfileSectionId } from './profile-screen-sections';
 
+import { useAppStatus } from '@/components/app-status-provider';
 import { useAuth } from '@/components/auth/auth-provider';
 import { LanguageToggle } from '@/components/language-toggle';
 import { ThemeToggle } from '@/components/theme-toggle';
@@ -514,6 +515,8 @@ const AccountForm = ({
 export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
   const router = useRouter();
   const { authUser, accessToken, isAuthenticated, isReady, authGuard, updateAuthUser } = useAuth();
+  const { status } = useAppStatus();
+  const hourlyPricingEnabled = status?.featureHourlyPricingEnabled === true;
   const [expertProfile, setExpertProfile] = useState<ExpertProfile | null>(null);
   const [craftsmanProfile, setCraftsmanProfile] = useState<CraftsmanProfile | null>(null);
   const [businessProfile, setBusinessProfile] = useState<BusinessProfile | null>(null);
@@ -1248,17 +1251,19 @@ export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
                     min={0}
                   />
                 </div>
-                <div className="profile-screen-field">
-                  <label className="profile-screen-label">{expertForm.hourlyRateLabel}</label>
-                  <input
-                    name="hourlyRate"
-                    type="number"
-                    className="profile-screen-input"
-                    defaultValue={expertProfile.hourlyRate ?? ''}
-                    min={0}
-                    step="0.01"
-                  />
-                </div>
+                {hourlyPricingEnabled ? (
+                  <div className="profile-screen-field">
+                    <label className="profile-screen-label">{expertForm.hourlyRateLabel}</label>
+                    <input
+                      name="hourlyRate"
+                      type="number"
+                      className="profile-screen-input"
+                      defaultValue={expertProfile.hourlyRate ?? ''}
+                      min={0}
+                      step="0.01"
+                    />
+                  </div>
+                ) : null}
               </div>
               <div className="profile-screen-field">
                 <label className="profile-screen-label">
@@ -1576,17 +1581,19 @@ export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
                     min={0}
                   />
                 </div>
-                <div className="profile-screen-field">
-                  <label className="profile-screen-label">{craftsmanForm.hourlyRateLabel}</label>
-                  <input
-                    name="hourlyRate"
-                    type="number"
-                    className="profile-screen-input"
-                    defaultValue={craftsmanProfile.hourlyRate ?? ''}
-                    min={0}
-                    step="0.01"
-                  />
-                </div>
+                {hourlyPricingEnabled ? (
+                  <div className="profile-screen-field">
+                    <label className="profile-screen-label">{craftsmanForm.hourlyRateLabel}</label>
+                    <input
+                      name="hourlyRate"
+                      type="number"
+                      className="profile-screen-input"
+                      defaultValue={craftsmanProfile.hourlyRate ?? ''}
+                      min={0}
+                      step="0.01"
+                    />
+                  </div>
+                ) : null}
               </div>
               <div className="profile-screen-field">
                 <label className="profile-screen-label">

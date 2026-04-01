@@ -76,6 +76,13 @@ export class ServicesService {
 
   async createService(providerId: string, input: CreateServiceInput): Promise<Service> {
     const appStatus = await this.settingsService.getAppStatus();
+    if (appStatus.featureHourlyPricingEnabled === false && input.priceType === 'hourly') {
+      throw new HttpError({
+        statusCode: 400,
+        code: 'HOURLY_PRICING_DISABLED',
+        message: 'Hourly pricing is disabled.',
+      });
+    }
     if (appStatus.featurePlansEnabled) {
       const limits = await this.plansService.getEffectivePlanLimits(providerId);
       if (limits.maxServices != null) {
@@ -155,6 +162,14 @@ export class ServicesService {
         statusCode: 400,
         code: 'SERVICE_NOT_EDITABLE',
         message: 'Service is currently under review and cannot be edited.',
+      });
+    }
+    const appStatus = await this.settingsService.getAppStatus();
+    if (appStatus.featureHourlyPricingEnabled === false && input.priceType === 'hourly') {
+      throw new HttpError({
+        statusCode: 400,
+        code: 'HOURLY_PRICING_DISABLED',
+        message: 'Hourly pricing is disabled.',
       });
     }
     const dbInput: {

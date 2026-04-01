@@ -1329,6 +1329,7 @@ export class ReservationsService {
 
     const pool = getPool();
     const client = await pool.connect();
+    let transactionCommitted = false;
     try {
       await client.query('BEGIN');
       const sessionForUpdate = await this.findCallSessionForUpdate(client, session.id);
@@ -1341,8 +1342,8 @@ export class ReservationsService {
         });
       }
 
-      await this.repo.upsertCallParticipant(session.id, userId, uid, true);
-      const participants = await this.repo.listCallParticipants(session.id);
+      await this.repo.upsertCallParticipant(session.id, userId, uid, true, client);
+      const participants = await this.repo.listCallParticipants(session.id, client);
       const connectedParticipants = participants.filter((p) => p.is_connected);
       const bothConnected =
         connectedParticipants.some((p) => p.user_id === reservationForUpdate.customer_id) &&
@@ -1386,6 +1387,7 @@ export class ReservationsService {
       }
 
       await client.query('COMMIT');
+      transactionCommitted = true;
 
       if (bothConnected) {
         await this.sendReservationMessage(
@@ -1396,13 +1398,23 @@ export class ReservationsService {
       }
 
       const snapshot = await this.getCallSnapshot(userId, reservationId);
-      const token = buildAgoraRtcToken({
-        appId: env.AGORA_APP_ID,
-        appCertificate: env.AGORA_APP_CERTIFICATE,
-        channelName: channel,
-        uid,
-        expiresInSeconds: AGORA_TOKEN_EXPIRY_SECONDS,
-      });
+      let token: string;
+      try {
+        token = buildAgoraRtcToken({
+          appId: env.AGORA_APP_ID,
+          appCertificate: env.AGORA_APP_CERTIFICATE,
+          channelName: channel,
+          uid,
+          expiresInSeconds: AGORA_TOKEN_EXPIRY_SECONDS,
+        });
+      } catch {
+        throw new HttpError({
+          statusCode: 503,
+          code: 'AGORA_TOKEN_FAILED',
+          message:
+            'Could not issue call credentials. Verify AGORA_APP_ID and AGORA_APP_CERTIFICATE on the API match your Agora project.',
+        });
+      }
       const tokenExpiresAt = Math.floor(Date.now() / 1000) + AGORA_TOKEN_EXPIRY_SECONDS;
 
       return {
@@ -1414,18 +1426,24 @@ export class ReservationsService {
         snapshot,
       };
     } catch (error) {
-      await client.query('ROLLBACK');
-      await this.recordReservationActionFailure({
-        reservationId,
-        actionType: 'call_join',
-        actorId: userId,
-        errorCode: error instanceof Error ? error.name : 'UNKNOWN',
-        errorMessage: error instanceof Error ? error.message : 'Failed to join call.',
-        metadata: { mediaType: input.mediaType },
-      });
-      await this.recordReservationEvent(reservationId, 'call_join_failed', userId, {
-        mediaType: input.mediaType,
-      });
+      if (!transactionCommitted) {
+        await client.query('ROLLBACK').catch(() => {});
+      }
+      try {
+        await this.recordReservationActionFailure({
+          reservationId,
+          actionType: 'call_join',
+          actorId: userId,
+          errorCode: error instanceof Error ? error.name : 'UNKNOWN',
+          errorMessage: error instanceof Error ? error.message : 'Failed to join call.',
+          metadata: { mediaType: input.mediaType },
+        });
+        await this.recordReservationEvent(reservationId, 'call_join_failed', userId, {
+          mediaType: input.mediaType,
+        });
+      } catch {
+        // Do not mask the original join error if audit logging fails.
+      }
       throw error;
     } finally {
       client.release();
@@ -1540,6 +1558,7 @@ export class ReservationsService {
         userId,
         this.computeAgoraUid(userId),
         input.connected,
+        client,
       );
 
       let activeSession = sessionForUpdate;
@@ -1576,8 +1595,8 @@ export class ReservationsService {
         slotBoundaryPrompted = true;
       }
 
-      const participants = await this.repo.listCallParticipants(session.id);
-      const connectedParticipants = participants.filter((p) => p.is_connected);
+      const participantsAfterBoundary = await this.repo.listCallParticipants(session.id, client);
+      const connectedParticipants = participantsAfterBoundary.filter((p) => p.is_connected);
       const bothConnected =
         connectedParticipants.some((p) => p.user_id === reservationForUpdate.customer_id) &&
         connectedParticipants.some((p) => p.user_id === reservationForUpdate.provider_id);

@@ -47,6 +47,7 @@ export class SettingsService {
       featureNeedsEnabled: row.feature_needs_enabled,
       featurePlansEnabled: row.feature_plans_enabled,
       featureWalletEnabled: row.feature_wallet_enabled,
+      featureHourlyPricingEnabled: row.feature_hourly_pricing_enabled ?? true,
       globalAnnouncement: row.global_announcement,
       commissionPercent: parseFloat(row.commission_percent ?? '10'),
       commissionMinEgp: parseFloat(row.commission_min_egp ?? '0'),
@@ -99,6 +100,8 @@ export class SettingsService {
     if (partial.featureNeedsEnabled !== undefined) dbPartial.feature_needs_enabled = partial.featureNeedsEnabled;
     if (partial.featurePlansEnabled !== undefined) dbPartial.feature_plans_enabled = partial.featurePlansEnabled;
     if (partial.featureWalletEnabled !== undefined) dbPartial.feature_wallet_enabled = partial.featureWalletEnabled;
+    if (partial.featureHourlyPricingEnabled !== undefined)
+      dbPartial.feature_hourly_pricing_enabled = partial.featureHourlyPricingEnabled;
     if (partial.globalAnnouncement !== undefined) dbPartial.global_announcement = partial.globalAnnouncement;
     if (partial.commissionPercent !== undefined) dbPartial.commission_percent = partial.commissionPercent;
     if (partial.commissionMinEgp !== undefined) dbPartial.commission_min_egp = partial.commissionMinEgp;
@@ -153,6 +156,7 @@ export class SettingsService {
       featureNeedsEnabled: row.feature_needs_enabled,
       featurePlansEnabled: row.feature_plans_enabled,
       featureWalletEnabled: row.feature_wallet_enabled,
+      featureHourlyPricingEnabled: row.feature_hourly_pricing_enabled ?? true,
       globalAnnouncement: row.global_announcement,
       commissionPercent: parseFloat(row.commission_percent ?? '10'),
       commissionMinEgp: parseFloat(row.commission_min_egp ?? '0'),
@@ -204,6 +208,7 @@ export class SettingsService {
       featureNeedsEnabled: true,
       featurePlansEnabled: true,
       featureWalletEnabled: true,
+      featureHourlyPricingEnabled: true,
       globalAnnouncement: null,
       commissionPercent: 10,
       commissionMinEgp: 0,

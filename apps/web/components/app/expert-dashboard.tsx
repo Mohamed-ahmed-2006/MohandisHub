@@ -7,6 +7,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { ExpertJobsTab } from './expert-jobs-tab';
 
 import { useToast } from '@/components/app/toast';
+import { useAppStatus } from '@/components/app-status-provider';
 import { buildLocalePath } from '@/lib/i18n/path';
 import type { Dictionary, Locale } from '@/lib/i18n/types';
 import type { Bid, BidMessage, Need } from '@/lib/needs/client';
@@ -29,6 +30,8 @@ export const ExpertDashboard = ({
   providerRole = 'expert',
 }: Props) => {
   const { addToast } = useToast();
+  const { status } = useAppStatus();
+  const hourlyPricingEnabled = status?.featureHourlyPricingEnabled === true;
   const [openNeeds, setOpenNeeds] = useState<Need[]>([]);
   const [myBids, setMyBids] = useState<Bid[]>([]);
   const [loading, setLoading] = useState(true);
@@ -77,6 +80,7 @@ export const ExpertDashboard = ({
   };
 
   const d = dictionary.needs ?? ({} as Record<string, string>);
+  const tr = (en: string, ar: string) => (locale === 'ar' ? ar : en);
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -222,7 +226,12 @@ export const ExpertDashboard = ({
                     {need.description.length > 120 ? '...' : ''}
                   </p>
                   <p className="dashboard-card-meta">
-                    {need.budget_type === 'fixed' ? (d.fixed ?? 'Fixed') : (d.hourly ?? 'Hourly')}:{' '}
+                    {hourlyPricingEnabled
+                      ? need.budget_type === 'fixed'
+                        ? (d.fixed ?? 'Fixed')
+                        : (d.hourly ?? 'Hourly')
+                      : tr('Budget', 'الميزانية')}
+                    :{' '}
                     {parseFloat(need.budget_amount).toFixed(2)} {need.currency}
                     {need.timeline_days && ` — ${need.timeline_days} days`}
                   </p>
@@ -369,7 +378,11 @@ export const ExpertDashboard = ({
                   max="168"
                   className="dashboard-input"
                   defaultValue={editingBid?.estimated_hours ?? ''}
-                  placeholder="Estimated hours per week"
+                  placeholder={
+                    hourlyPricingEnabled
+                      ? 'Estimated hours per week'
+                      : tr('Estimated hours', 'الساعات المقدرة')
+                  }
                   required
                 />
               )}

@@ -31,6 +31,7 @@ export type AppSettingsRow = {
   feature_needs_enabled: boolean;
   feature_plans_enabled: boolean;
   feature_wallet_enabled: boolean;
+  feature_hourly_pricing_enabled?: boolean;
   global_announcement: string | null;
   commission_percent?: string;
   commission_min_egp?: string;
@@ -70,6 +71,7 @@ export type AppSettingsUpdate = Partial<{
   feature_needs_enabled: boolean;
   feature_plans_enabled: boolean;
   feature_wallet_enabled: boolean;
+  feature_hourly_pricing_enabled: boolean;
   global_announcement: string | null;
   commission_percent: number;
   commission_min_egp: number;
@@ -118,6 +120,7 @@ export class SettingsRepository {
     featureNeedsEnabled: 'feature_needs_enabled',
     featurePlansEnabled: 'feature_plans_enabled',
     featureWalletEnabled: 'feature_wallet_enabled',
+    featureHourlyPricingEnabled: 'feature_hourly_pricing_enabled',
     globalAnnouncement: 'global_announcement',
     commissionPercent: 'commission_percent',
     commissionMinEgp: 'commission_min_egp',

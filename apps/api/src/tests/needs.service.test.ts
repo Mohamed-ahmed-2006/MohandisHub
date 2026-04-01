@@ -36,6 +36,12 @@ const makeNeed = (overrides: Partial<NeedRow> = {}): NeedRow => ({
   ...overrides,
 });
 
+const enabledNeedsStatus = {
+  featureNeedsEnabled: true,
+  pauseAwardBids: false,
+  moneyMovementsPaused: false,
+};
+
 const makeBid = (overrides: Partial<BidRow> = {}): BidRow => ({
   id: 'bid-1',
   need_id: 'need-1',
@@ -75,7 +81,7 @@ describe('NeedsService hardening', () => {
       .mockResolvedValueOnce({}); // ROLLBACK
 
     const settingsService = {
-      getAppStatus: vi.fn().mockResolvedValue({ pauseAwardBids: false }),
+      getAppStatus: vi.fn().mockResolvedValue({ ...enabledNeedsStatus, pauseAwardBids: false }),
     };
     const walletRepo = {};
     const repo = {};
@@ -96,7 +102,7 @@ describe('NeedsService hardening', () => {
       .mockResolvedValueOnce({}); // COMMIT
 
     const settingsService = {
-      getAppStatus: vi.fn().mockResolvedValue({ moneyMovementsPaused: false }),
+      getAppStatus: vi.fn().mockResolvedValue({ ...enabledNeedsStatus, moneyMovementsPaused: false }),
     };
     const walletRepo = {
       findByUserId: vi.fn(),
@@ -118,7 +124,10 @@ describe('NeedsService hardening', () => {
       getNeedById: vi.fn().mockResolvedValue(makeNeed({ status: 'open' })),
       updateNeed: vi.fn(),
     };
-    const service = new NeedsService(repo as never, {} as never, {} as never);
+    const settingsService = {
+      getAppStatus: vi.fn().mockResolvedValue(enabledNeedsStatus),
+    };
+    const service = new NeedsService(repo as never, settingsService as never, {} as never);
 
     await expect(
       service.updateNeed('need-1', 'customer-1', { status: 'completed' }),

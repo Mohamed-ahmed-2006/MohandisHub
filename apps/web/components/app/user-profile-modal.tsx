@@ -6,6 +6,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 import type { ProfileModalInitialData } from './profile-modal-context';
 
+import { useAppStatus } from '@/components/app-status-provider';
 import { useAuth } from '@/components/auth/auth-provider';
 import { AvatarImage } from '@/components/ui/avatar-image';
 import { chatApiClient } from '@/lib/chat/client';
@@ -39,6 +40,8 @@ export function UserProfileModal({
 }: UserProfileModalProps) {
   const router = useRouter();
   const { accessToken, isAuthenticated, authUser } = useAuth();
+  const { status } = useAppStatus();
+  const hourlyPricingEnabled = status?.featureHourlyPricingEnabled === true;
   const [profile, setProfile] = useState<PublicUserProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -188,9 +191,15 @@ export function UserProfileModal({
                       {profile.expertProfile.specializations.slice(0, 5).join(' · ')}
                     </p>
                   )}
-                  {(profile.expertProfile.city || profile.expertProfile.hourlyRate != null) && (
+                  {(profile.expertProfile.city ||
+                    (hourlyPricingEnabled && profile.expertProfile.hourlyRate != null)) && (
                     <p className="user-profile-modal-meta">
-                      {[profile.expertProfile.city, profile.expertProfile.hourlyRate != null && `${profile.expertProfile.hourlyRate} EGP/hr`]
+                      {[
+                        profile.expertProfile.city,
+                        hourlyPricingEnabled &&
+                          profile.expertProfile.hourlyRate != null &&
+                          `${profile.expertProfile.hourlyRate} EGP/hr`,
+                      ]
                         .filter(Boolean)
                         .join(' · ')}
                     </p>
@@ -246,12 +255,13 @@ export function UserProfileModal({
                   )}
                   {(profile.craftsmanProfile.city ||
                     profile.craftsmanProfile.workshopName ||
-                    profile.craftsmanProfile.hourlyRate != null) && (
+                    (hourlyPricingEnabled && profile.craftsmanProfile.hourlyRate != null)) && (
                     <p className="user-profile-modal-meta">
                       {[
                         profile.craftsmanProfile.city,
                         profile.craftsmanProfile.workshopName,
-                        profile.craftsmanProfile.hourlyRate != null &&
+                        hourlyPricingEnabled &&
+                          profile.craftsmanProfile.hourlyRate != null &&
                           `${profile.craftsmanProfile.hourlyRate} EGP/hr`,
                       ]
                         .filter(Boolean)

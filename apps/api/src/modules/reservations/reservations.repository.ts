@@ -834,8 +834,10 @@ export class ReservationsRepository {
     userId: string,
     agoraUid: number,
     connected: boolean,
+    client?: PoolClient,
   ): Promise<ReservationCallParticipantRow> {
-    const { rows } = await getPool().query<ReservationCallParticipantRow>(
+    const db = client ?? getPool();
+    const { rows } = await db.query<ReservationCallParticipantRow>(
       `INSERT INTO reservation_call_participants (
          call_session_id, user_id, agora_uid, joined_at, is_connected, last_seen_at
        )
@@ -857,8 +859,12 @@ export class ReservationsRepository {
     return rows[0]!;
   }
 
-  async listCallParticipants(callSessionId: string): Promise<ReservationCallParticipantRow[]> {
-    const { rows } = await getPool().query<ReservationCallParticipantRow>(
+  async listCallParticipants(
+    callSessionId: string,
+    client?: PoolClient,
+  ): Promise<ReservationCallParticipantRow[]> {
+    const db = client ?? getPool();
+    const { rows } = await db.query<ReservationCallParticipantRow>(
       `SELECT * FROM reservation_call_participants WHERE call_session_id = $1`,
       [callSessionId],
     );

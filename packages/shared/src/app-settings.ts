@@ -28,6 +28,7 @@ export type AppSettings = {
   featureNeedsEnabled: boolean;
   featurePlansEnabled: boolean;
   featureWalletEnabled: boolean;
+  featureHourlyPricingEnabled: boolean;
   globalAnnouncement: string | null;
   commissionPercent: number;
   commissionMinEgp: number;
@@ -67,6 +68,7 @@ export type AppStatus = {
   featureNeedsEnabled: boolean;
   featurePlansEnabled: boolean;
   featureWalletEnabled: boolean;
+  featureHourlyPricingEnabled: boolean;
   globalAnnouncement: string | null;
   commissionPercent: number;
   commissionMinEgp: number;
@@ -105,6 +107,7 @@ export type UpdateAppSettingsBody = Partial<{
   featureNeedsEnabled: boolean;
   featurePlansEnabled: boolean;
   featureWalletEnabled: boolean;
+  featureHourlyPricingEnabled: boolean;
   globalAnnouncement: string | null;
   commissionPercent: number;
   commissionMinEgp: number;

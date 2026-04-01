@@ -737,6 +737,9 @@ export const arDictionary: Dictionary = {
       featureNeedsEnabled: 'قسم الاحتياجات مفعل',
       featurePlansEnabled: 'قسم الخطط مفعل',
       featureWalletEnabled: 'قسم المحفظة مفعل',
+      featureHourlyPricingEnabled: 'تسعير بالساعة مفعّل',
+      featureHourlyPricingEnabledDesc:
+        'عرض السعر بالساعة للخدمات، وسعر الساعة في الملف، وميزانيات الاحتياجات بالساعة. عطّله لإخفاء الميزة حتى يكتمل تتبع الوقت.',
       globalAnnouncement: 'إعلان عام',
       globalAnnouncementPlaceholder: 'رسالة شريط للمستخدمين',
       minDepositAmount: 'الحد الأدنى للإيداع',
