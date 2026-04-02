@@ -6,6 +6,7 @@ import type { Request } from 'express';
 import { Router } from 'express';
 import multer from 'multer';
 
+import { env } from '../../config/env.js';
 import {
   createPrivateSignedUrl,
   isSupabaseStorageConfigured,
@@ -84,6 +85,19 @@ const upload = multer({
 
 const uploadRouter = Router();
 
+/** In production, disk uploads are wiped on redeploy (e.g. Render). Require object storage. */
+const requireDurableStorageInProduction = asyncHandler(async (_req, _res, next) => {
+  if (env.NODE_ENV === 'production' && !isSupabaseStorageConfigured()) {
+    throw new HttpError({
+      statusCode: 503,
+      code: 'STORAGE_NOT_CONFIGURED',
+      message:
+        'File uploads require Supabase Storage in production (SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY). Without them, logos and other files are lost on every deploy.',
+    });
+  }
+  next();
+});
+
 uploadRouter.post(
   '/',
   authenticate,
@@ -99,6 +113,7 @@ uploadRouter.post(
     }
     next();
   }),
+  requireDurableStorageInProduction,
   upload.single('file'),
   asyncHandler(async (req, res) => {
     if (!req.file) {
@@ -148,6 +163,7 @@ uploadRouter.post(
     }
     next();
   }),
+  requireDurableStorageInProduction,
   upload.single('file'),
   asyncHandler(async (req, res) => {
     if (!req.file) {
