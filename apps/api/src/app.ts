@@ -1,5 +1,4 @@
 import 'express-async-errors';
-import path from 'node:path';
 
 import compression from 'compression';
 import cookieParser from 'cookie-parser';
@@ -9,6 +8,7 @@ import express from 'express';
 import { env } from './config/env.js';
 import { errorHandler } from './middleware/error-handler.js';
 import { notFoundHandler } from './middleware/not-found.js';
+import { publicUploadsHandler } from './middleware/public-uploads.js';
 import { requestIdMiddleware } from './middleware/request-id.js';
 import { requestLoggingMiddleware } from './middleware/request-logging.js';
 import { walletController } from './modules/wallet/wallet.controller.js';
@@ -84,7 +84,8 @@ export const createApp = () => {
   app.use('/uploads/private', (_req, res) => {
     res.status(404).json({ ok: false, error: { code: 'NOT_FOUND', message: 'Not found.' } });
   });
-  app.use('/uploads', express.static(path.resolve(process.cwd(), 'uploads')));
+  // Local disk and/or Supabase `uploads` bucket (see middleware/public-uploads.ts).
+  app.get('/uploads/:filename', publicUploadsHandler);
   app.use('/health', healthRouter);
   app.use('/api', apiRouter);
 
