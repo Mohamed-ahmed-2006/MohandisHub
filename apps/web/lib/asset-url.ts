@@ -1,6 +1,6 @@
 import { getApiBaseUrl } from '@/lib/env';
 
-/** Stored URLs from dev often point here; production must use the real API host. */
+/** Stored URLs often point here; rewrite to your configured API host. */
 const LOCAL_API_HOST_RE = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?/i;
 
 /**
@@ -15,15 +15,48 @@ export function resolvePublicAssetUrl(url: string | null | undefined): string | 
   if (trimmed.startsWith('blob:') || trimmed.startsWith('data:')) return trimmed;
 
   const base = (getApiBaseUrl() || '').replace(/\/$/, '');
-  const shouldRewriteLocalHost = process.env.NODE_ENV === 'production';
 
-  if (LOCAL_API_HOST_RE.test(trimmed)) {
-    if (!shouldRewriteLocalHost) {
-      return trimmed;
-    }
+  // Rewrite localhost / 127.0.0.1 uploads to your configured API host.
+  // This covers:
+  // - `http://localhost:4000/uploads/...`
+  // - `https://127.0.0.1:4000/uploads/...`
+  // - `//localhost:4000/uploads/...` (scheme-less URLs sometimes stored by backends)
+  if (LOCAL_API_HOST_RE.test(trimmed) || trimmed.startsWith('//')) {
     try {
-      const parsed = new URL(trimmed);
-      return base ? `${base}${parsed.pathname}${parsed.search}${parsed.hash}` : trimmed;
+      const parsed =
+        trimmed.startsWith('//') ? new URL(`http:${trimmed}`) : new URL(trimmed);
+      const isLocal = parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1';
+      if (!isLocal) return trimmed;
+
+      const rewritten = base ? `${base}${parsed.pathname}${parsed.search}${parsed.hash}` : trimmed;
+      // Runtime evidence for this bug (visible in devtools).
+      // eslint-disable-next-line no-console
+      console.warn('[asset-url] rewrite local upload', { input: trimmed, apiBaseUrl: base, output: rewritten });
+
+      // #region agent log
+      fetch('http://127.0.0.1:7325/ingest/ebd08bf8-7d73-450c-ad4d-4436a6c2225b', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Debug-Session-Id': 'b33485',
+        },
+        body: JSON.stringify({
+          sessionId: 'b33485',
+          runId: 'post-fix',
+          hypothesisId: 'H_localhost_rewrite_scheme_less_handled',
+          location: 'asset-url.ts:resolvePublicAssetUrl:rewrite',
+          message: 'Rewriting local upload URL to API host (incl. scheme-less)',
+          data: {
+            apiBaseUrlPresent: Boolean(base),
+            input: trimmed.slice(0, 120),
+            rewritten: rewritten.slice(0, 120),
+          },
+          timestamp: Date.now(),
+        }),
+      }).catch(() => {});
+      // #endregion
+
+      return rewritten;
     } catch {
       return trimmed;
     }

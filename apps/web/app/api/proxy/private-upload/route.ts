@@ -96,15 +96,15 @@ export async function GET(request: NextRequest) {
     if (upstream.ok && upstream.body) {
       const contentType = upstream.headers.get('content-type') ?? 'application/octet-stream';
       const contentDisposition = upstream.headers.get('content-disposition');
-      const contentLength = upstream.headers.get('content-length');
+      const bytes = await upstream.arrayBuffer();
 
       const headers = new Headers();
       headers.set('content-type', contentType);
       if (contentDisposition) headers.set('content-disposition', contentDisposition);
-      if (contentLength) headers.set('content-length', contentLength);
+      headers.set('content-length', String(bytes.byteLength));
       headers.set('cache-control', 'no-store');
 
-      return new Response(upstream.body, {
+      return new Response(bytes, {
         status: 200,
         headers,
       });

@@ -170,6 +170,38 @@ export const AdminUserDetailModal = ({
           : Promise.resolve([] as Plan[]),
       ]);
 
+      // #region agent log
+      fetch('http://127.0.0.1:7325/ingest/ebd08bf8-7d73-450c-ad4d-4436a6c2225b', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Debug-Session-Id': 'b33485',
+        },
+        body: JSON.stringify({
+          sessionId: 'b33485',
+          runId: 'pre-debug',
+          hypothesisId: 'H2_admin_user_detail_images_presence',
+          location: 'admin-user-detail-modal.tsx:loadOverview-afterFetch',
+          message: 'Admin user overview fetched (logo + identity image URL presence summary)',
+          data: {
+            businessLogoPresent: Boolean(overviewData.businessProfile?.logoUrl),
+            businessLogoStartsWithHttp: (overviewData.businessProfile?.logoUrl ?? '').startsWith('http'),
+            businessLogoIncludesPrivatePrefix: (overviewData.businessProfile?.logoUrl ?? '').includes('/api/upload/private/'),
+            identityDocsCount: overviewData.identityDocuments.length,
+            identityDocsWithAnyImageUrlCount: overviewData.identityDocuments.filter(
+              (d) => Boolean(d.frontImageUrl || d.backImageUrl || d.selfieImageUrl),
+            ).length,
+            identityDocsSample: overviewData.identityDocuments.slice(0, 3).map((d) => ({
+              id: d.id,
+              hasFront: Boolean(d.frontImageUrl),
+              hasBack: Boolean(d.backImageUrl),
+              hasSelfie: Boolean(d.selfieImageUrl),
+            })),
+          },
+          timestamp: Date.now(),
+        }),
+      }).catch(() => {});
+      // #endregion
       setOverview(overviewData);
       setPlans(plansData);
 

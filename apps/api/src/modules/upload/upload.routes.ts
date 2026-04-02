@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import type { ApiSuccessBody } from '@mohandishub/shared';
+import type { Request } from 'express';
 import { Router } from 'express';
 import multer from 'multer';
 
@@ -197,6 +198,23 @@ uploadRouter.post(
 
 const SIGNED_URL_EXPIRY_SECONDS = 900; // 15 min
 
+/**
+ * Return `{ url }` JSON only when the client explicitly requests JSON (signed-URL API).
+ * `req.accepts('application/json')` is true for broad Accept wildcards, which made the
+ * Next.js private-upload proxy receive JSON instead of bytes/redirect — previews broke.
+ */
+function wantsPrivateUploadJson(req: Request): boolean {
+  const accept = req.get('Accept') ?? '';
+  const lower = accept.toLowerCase();
+  const types = accept
+    .split(',')
+    .map((part) => part.trim().split(';')[0]?.trim().toLowerCase() ?? '');
+  const hasExplicitJson = types.some((t) => t === 'application/json' || t === 'text/json');
+  const wantsInlineMedia =
+    /\bimage\//i.test(lower) || /\bapplication\/pdf\b/i.test(lower) || /\bvideo\//i.test(lower);
+  return hasExplicitJson && !wantsInlineMedia;
+}
+
 uploadRouter.get(
   '/private/:id',
   authenticate,
@@ -212,7 +230,7 @@ uploadRouter.get(
         throw new HttpError({ statusCode: 403, code: 'FORBIDDEN', message: 'Access denied.' });
       }
     }
-    const wantsJson = req.accepts('application/json');
+    const wantsJson = wantsPrivateUploadJson(req);
     if (row.bucket === PRIVATE_BUCKET_LOCAL) {
       const localPath = path.resolve(UPLOAD_DIR, row.storage_path);
       if (!localPath.startsWith(UPLOAD_DIR) || !fs.existsSync(localPath)) {

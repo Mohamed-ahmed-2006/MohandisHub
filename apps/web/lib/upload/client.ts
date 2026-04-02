@@ -79,6 +79,33 @@ export async function getPrivateFileOpenableUrl(
   // IMPORTANT: fetch private uploads through Next.js proxy (same-origin)
   // to avoid browser CORS issues when the API host is different.
   const proxyUrl = `/api/proxy/private-upload?path=${encodeURIComponent(privatePathOrId)}`;
+  // eslint-disable-next-line no-console
+  console.warn('[getPrivateFileOpenableUrl] start', {
+    proxyUrl,
+    privatePathOrIdPrefix: privatePathOrId.slice(0, 60),
+  });
+  // #region agent log
+  fetch('http://127.0.0.1:7325/ingest/ebd08bf8-7d73-450c-ad4d-4436a6c2225b', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Debug-Session-Id': 'b33485',
+    },
+    body: JSON.stringify({
+      sessionId: 'b33485',
+      runId: 'pre-debug',
+      hypothesisId: 'H5_proxy_private_upload_resolution_inputs',
+      location: 'upload/client.ts:getPrivateFileOpenableUrl:start',
+      message: 'Resolving private upload via proxy',
+      data: {
+        privatePathOrIdStartsWithHttp: privatePathOrId.startsWith('http'),
+        privatePathOrIdIncludesPrivatePrefix: privatePathOrId.includes('/api/upload/private/'),
+        proxyUrlLength: proxyUrl.length,
+      },
+      timestamp: Date.now(),
+    }),
+  }).catch(() => {});
+  // #endregion
   const fetchWithToken = async (token: string): Promise<Response> => {
     return fetch(proxyUrl, {
       headers: {
@@ -90,10 +117,36 @@ export async function getPrivateFileOpenableUrl(
   };
 
   let res = await fetchWithToken(accessToken);
+  // eslint-disable-next-line no-console
+  console.warn('[getPrivateFileOpenableUrl] proxy response initial', {
+    status: res.status,
+  });
+  // #region agent log
+  fetch('http://127.0.0.1:7325/ingest/ebd08bf8-7d73-450c-ad4d-4436a6c2225b', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Debug-Session-Id': 'b33485',
+    },
+    body: JSON.stringify({
+      sessionId: 'b33485',
+      runId: 'pre-debug',
+      hypothesisId: 'H5_proxy_private_upload_resolution_status_initial',
+      location: 'upload/client.ts:getPrivateFileOpenableUrl:initialStatus',
+      message: 'Private upload proxy initial response',
+      data: {
+        status: res.status,
+      },
+      timestamp: Date.now(),
+    }),
+  }).catch(() => {});
+  // #endregion
 
   if (res.status === 401) {
     // Access token may expire while admin is open; try refreshing once.
     try {
+      // eslint-disable-next-line no-console
+      console.warn('[getPrivateFileOpenableUrl] proxy 401 -> refreshing token once');
       const refreshed = await authApiClient.refresh();
       const newToken = refreshed.tokens.accessToken;
       res = await fetchWithToken(newToken);
@@ -102,11 +155,37 @@ export async function getPrivateFileOpenableUrl(
     }
   }
 
+  // eslint-disable-next-line no-console
+  console.warn('[getPrivateFileOpenableUrl] proxy response final', { status: res.status });
+
+  // #region agent log
+  fetch('http://127.0.0.1:7325/ingest/ebd08bf8-7d73-450c-ad4d-4436a6c2225b', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Debug-Session-Id': 'b33485',
+    },
+    body: JSON.stringify({
+      sessionId: 'b33485',
+      runId: 'pre-debug',
+      hypothesisId: 'H5_proxy_private_upload_resolution_status_afterRefresh',
+      location: 'upload/client.ts:getPrivateFileOpenableUrl:afterRefresh',
+      message: 'Private upload proxy response after refresh (if needed)',
+      data: {
+        finalStatus: res.status,
+      },
+      timestamp: Date.now(),
+    }),
+  }).catch(() => {});
+  // #endregion
+
   if (res.status === 401) {
     throw new Error('Session expired. Please log out and log in again.');
   }
 
   if (!res.ok) {
+    // eslint-disable-next-line no-console
+    console.warn('[getPrivateFileOpenableUrl] proxy fetch not ok', { status: res.status });
     const body = (await res.json().catch(() => ({}))) as { error?: { message?: string } } | Record<string, unknown>;
     const message =
       typeof body === 'object' &&
@@ -119,7 +198,20 @@ export async function getPrivateFileOpenableUrl(
   }
 
   const blob = await res.blob();
+  // eslint-disable-next-line no-console
+  console.warn('[getPrivateFileOpenableUrl] blob meta', {
+    proxyUrl,
+    finalStatus: res.status,
+    responseContentType: res.headers.get('content-type'),
+    responseContentLength: res.headers.get('content-length'),
+    blobType: blob.type,
+    blobSize: blob.size,
+  });
   const blobUrl = URL.createObjectURL(blob);
+  // eslint-disable-next-line no-console
+  console.warn('[getPrivateFileOpenableUrl] created blob url', {
+    blobUrlPrefix: blobUrl.slice(0, 20),
+  });
   setTimeout(() => URL.revokeObjectURL(blobUrl), 5 * 60 * 1000);
   return blobUrl;
 }

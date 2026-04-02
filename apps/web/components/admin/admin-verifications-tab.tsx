@@ -37,6 +37,48 @@ export const AdminVerificationsTab = ({ dictionary, accessToken, refreshSession 
     setError(null);
     try {
       const data = await adminApiClient.getPendingVerifications(accessToken, { refreshSession });
+      // #region agent log
+      fetch('http://127.0.0.1:7325/ingest/ebd08bf8-7d73-450c-ad4d-4436a6c2225b', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Debug-Session-Id': 'b33485',
+        },
+        body: JSON.stringify({
+          sessionId: 'b33485',
+          runId: 'pre-debug',
+          hypothesisId: 'H2_admin_pending_identity_images_presence',
+          location: 'admin-verifications-tab.tsx:load-afterFetch',
+          message: 'Admin pending verifications fetched (image URL presence summary)',
+          data: {
+            pendingIdentityDocsCount: data.flatMap((i) =>
+              i.identityDocuments.filter((d) => d.status === 'pending' || d.status === 'under_review'),
+            ).length,
+            identityDocsWithAnyImageUrlCount: data
+              .flatMap((i) => i.identityDocuments)
+              .filter((d) => d.status === 'pending' || d.status === 'under_review')
+              .filter((d) => Boolean(d.frontImageUrl || d.backImageUrl || d.selfieImageUrl)).length,
+            identityDocsSample: data
+              .flatMap((i) => i.identityDocuments)
+              .filter((d) => d.status === 'pending' || d.status === 'under_review')
+              .slice(0, 3)
+              .map((d) => ({
+                id: d.id,
+                hasFront: Boolean(d.frontImageUrl),
+                hasBack: Boolean(d.backImageUrl),
+                hasSelfie: Boolean(d.selfieImageUrl),
+              })),
+            pendingBusinessesWithLogoCount: data.filter(
+              (i) =>
+                i.businessProfile &&
+                (i.businessProfile.verificationStatus === 'pending' || i.businessProfile.verificationStatus === 'under_review') &&
+                Boolean(i.businessProfile.logoUrl),
+            ).length,
+          },
+          timestamp: Date.now(),
+        }),
+      }).catch(() => {});
+      // #endregion
       setItems(data);
     } catch (err: unknown) {
       setItems([]);
