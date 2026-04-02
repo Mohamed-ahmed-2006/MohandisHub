@@ -14,6 +14,9 @@ type Props = {
   refreshSession: () => Promise<string | null>;
 };
 
+type RoleTabId = 'customer' | 'expert' | 'business' | 'craftsman';
+type CategoryTabId = 'identity' | 'academic' | 'business';
+
 const getErrorMessage = (error: unknown, dictionary: Dictionary): string => {
   if (isApiClientError(error)) return error.message;
   return dictionary.auth.errors.generic;
@@ -25,9 +28,8 @@ export const AdminVerificationsTab = ({ dictionary, accessToken, refreshSession 
   const [reviewing, setReviewing] = useState<string | null>(null);
   const [syncing, setSyncing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [activeSubTab, setActiveSubTab] = useState<'identity' | 'academic' | 'business'>(
-    'identity',
-  );
+  const [activeRoleTab, setActiveRoleTab] = useState<RoleTabId>('expert');
+  const [activeCategoryTab, setActiveCategoryTab] = useState<CategoryTabId>('identity');
   const [previewImage, setPreviewImage] = useState<{ url: string; title: string } | null>(null);
 
   const load = useCallback(async () => {
@@ -145,9 +147,309 @@ export const AdminVerificationsTab = ({ dictionary, accessToken, refreshSession 
         i.businessProfile.verificationStatus === 'under_review'),
   );
 
+  const roleLabel: Record<RoleTabId, string> = {
+    customer: dictionary.profileModal?.roleCustomer ?? 'Customer',
+    expert: dictionary.profileModal?.roleExpert ?? 'Expert',
+    business: dictionary.profileModal?.roleBusiness ?? 'Business',
+    craftsman: dictionary.profileModal?.roleCraftsman ?? 'Craftsman',
+  };
+
+  const identityCount = identityDocs.reduce<Record<RoleTabId, number>>(
+    (acc, doc) => {
+      const role = doc.userRole as RoleTabId;
+      if (role === 'customer' || role === 'expert' || role === 'business' || role === 'craftsman') {
+        acc[role] += 1;
+      }
+      return acc;
+    },
+    { customer: 0, expert: 0, business: 0, craftsman: 0 },
+  );
+  const academicCount = academicRecs.reduce<Record<RoleTabId, number>>(
+    (acc, rec) => {
+      const role = rec.userRole as RoleTabId;
+      if (role === 'customer' || role === 'expert' || role === 'business' || role === 'craftsman') {
+        acc[role] += 1;
+      }
+      return acc;
+    },
+    { customer: 0, expert: 0, business: 0, craftsman: 0 },
+  );
+  const businessCount = businessUsers.reduce<Record<RoleTabId, number>>(
+    (acc, u) => {
+      const role = u.role as RoleTabId;
+      if (role === 'customer' || role === 'expert' || role === 'business' || role === 'craftsman') {
+        acc[role] += 1;
+      }
+      return acc;
+    },
+    { customer: 0, expert: 0, business: 0, craftsman: 0 },
+  );
+
+  const categoryCountForActiveRole: Record<CategoryTabId, number> = {
+    identity: identityCount[activeRoleTab],
+    academic: academicCount[activeRoleTab],
+    business: businessCount[activeRoleTab],
+  };
+
+  const totalCountForRole: Record<RoleTabId, number> = {
+    customer: identityCount.customer + academicCount.customer + businessCount.customer,
+    expert: identityCount.expert + academicCount.expert + businessCount.expert,
+    business: identityCount.business + academicCount.business + businessCount.business,
+    craftsman: identityCount.craftsman + academicCount.craftsman + businessCount.craftsman,
+  };
+
+  useEffect(() => {
+    // If we move to Business, ensure the selected category is also business.
+    setActiveCategoryTab((prev) => (activeRoleTab === 'business' ? 'business' : prev === 'business' ? 'identity' : prev));
+  }, [activeRoleTab]);
+
   if (loading) {
     return <p className="admin-empty">{dictionary.admin.loading}</p>;
   }
+
+  const filteredIdentityDocs = identityDocs.filter((doc) => doc.userRole === activeRoleTab);
+  const filteredAcademicRecs = academicRecs.filter((rec) => rec.userRole === activeRoleTab);
+  const filteredBusinessUsers = businessUsers.filter((u) => u.role === activeRoleTab);
+
+  const roleIdentityTable =
+    filteredIdentityDocs.length === 0 ? (
+      <p className="admin-empty">{dictionary.admin.noPending}</p>
+    ) : (
+      <div className="admin-table-wrapper">
+        <table className="admin-table">
+          <thead>
+            <tr>
+              <th>Document</th>
+              <th>{dictionary.admin.user}</th>
+              <th>Type</th>
+              <th>Images</th>
+              <th>{dictionary.admin.role}</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filteredIdentityDocs.map((doc) => (
+              <tr key={doc.id}>
+                <td>{doc.fullNameOnDoc}</td>
+                <td>
+                  {doc.userDisplayName}
+                  <br />
+                  <span style={{ fontSize: '0.75rem', color: 'hsl(var(--text-soft))' }}>
+                    {doc.userEmail}
+                  </span>
+                </td>
+                <td>{doc.documentType}</td>
+                <td>
+                  <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                    {doc.frontImageUrl && (
+                      <button
+                        type="button"
+                        className="admin-btn admin-btn--small"
+                        onClick={() => setPreviewImage({ url: doc.frontImageUrl!, title: 'Document front' })}
+                      >
+                        View front
+                      </button>
+                    )}
+                    {doc.backImageUrl && (
+                      <button
+                        type="button"
+                        className="admin-btn admin-btn--small"
+                        onClick={() => setPreviewImage({ url: doc.backImageUrl!, title: 'Document back' })}
+                      >
+                        View back
+                      </button>
+                    )}
+                    {doc.selfieImageUrl && (
+                      <button
+                        type="button"
+                        className="admin-btn admin-btn--small"
+                        onClick={() => setPreviewImage({ url: doc.selfieImageUrl!, title: 'Selfie' })}
+                      >
+                        View selfie
+                      </button>
+                    )}
+                    {!doc.frontImageUrl && !doc.backImageUrl && !doc.selfieImageUrl && (
+                      <span style={{ color: 'hsl(var(--text-soft))' }}>—</span>
+                    )}
+                  </div>
+                </td>
+                <td>
+                  <span className="admin-badge">{doc.userRole}</span>
+                </td>
+                <td>
+                  <div className="admin-actions-row">
+                    <button
+                      type="button"
+                      className="admin-btn admin-btn--small admin-btn--success"
+                      disabled={reviewing === doc.id}
+                      onClick={() => void handleReviewIdentity(doc.id, 'approved')}
+                    >
+                      {dictionary.admin.approve}
+                    </button>
+                    <button
+                      type="button"
+                      className="admin-btn admin-btn--small admin-btn--danger"
+                      disabled={reviewing === doc.id}
+                      onClick={() => void handleReviewIdentity(doc.id, 'rejected')}
+                    >
+                      {dictionary.admin.reject}
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    );
+
+  const roleAcademicTable =
+    filteredAcademicRecs.length === 0 ? (
+      <p className="admin-empty">{dictionary.admin.noPending}</p>
+    ) : (
+      <div className="admin-table-wrapper">
+        <table className="admin-table">
+          <thead>
+            <tr>
+              <th>Title</th>
+              <th>Institution</th>
+              <th>Documents</th>
+              <th>{dictionary.admin.user}</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filteredAcademicRecs.map((rec) => (
+              <tr key={rec.id}>
+                <td>{rec.title}</td>
+                <td>{rec.institution}</td>
+                <td>
+                  <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                    {rec.certificateImageUrl && (
+                      <button
+                        type="button"
+                        className="admin-btn admin-btn--small"
+                        onClick={() => setPreviewImage({ url: rec.certificateImageUrl!, title: 'Certificate' })}
+                      >
+                        View certificate
+                      </button>
+                    )}
+                    {rec.transcriptImageUrl && (
+                      <button
+                        type="button"
+                        className="admin-btn admin-btn--small"
+                        onClick={() => setPreviewImage({ url: rec.transcriptImageUrl!, title: 'Transcript' })}
+                      >
+                        View transcript
+                      </button>
+                    )}
+                    {!rec.certificateImageUrl && !rec.transcriptImageUrl && (
+                      <span style={{ color: 'hsl(var(--text-soft))' }}>—</span>
+                    )}
+                  </div>
+                </td>
+                <td>
+                  {rec.userDisplayName}
+                  <br />
+                  <span style={{ fontSize: '0.75rem', color: 'hsl(var(--text-soft))' }}>
+                    {rec.userEmail}
+                  </span>
+                </td>
+                <td>
+                  <div className="admin-actions-row">
+                    <button
+                      type="button"
+                      className="admin-btn admin-btn--small admin-btn--success"
+                      disabled={reviewing === rec.id}
+                      onClick={() => void handleReviewAcademic(rec.id, 'approved')}
+                    >
+                      {dictionary.admin.approve}
+                    </button>
+                    <button
+                      type="button"
+                      className="admin-btn admin-btn--small admin-btn--danger"
+                      disabled={reviewing === rec.id}
+                      onClick={() => void handleReviewAcademic(rec.id, 'rejected')}
+                    >
+                      {dictionary.admin.reject}
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    );
+
+  const roleBusinessTable =
+    filteredBusinessUsers.length === 0 ? (
+      <p className="admin-empty">{dictionary.admin.noPending}</p>
+    ) : (
+      <div className="admin-table-wrapper">
+        <table className="admin-table">
+          <thead>
+            <tr>
+              <th>Company</th>
+              <th>{dictionary.admin.user}</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filteredBusinessUsers.map((item) => (
+              <tr key={item.userId}>
+                <td>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                    <span>{item.businessProfile!.companyName}</span>
+                    {item.businessProfile!.logoUrl && (
+                      <button
+                        type="button"
+                        className="admin-btn admin-btn--small"
+                        onClick={() => setPreviewImage({ url: item.businessProfile!.logoUrl!, title: 'Company logo' })}
+                      >
+                        View logo
+                      </button>
+                    )}
+                    <span style={{ fontSize: '0.75rem', color: 'hsl(var(--text-soft))' }}>
+                      {item.businessProfile!.tradeLicenseNumber
+                        ? `Trade license: ${item.businessProfile!.tradeLicenseNumber}`
+                        : 'Trade license: —'}
+                    </span>
+                  </div>
+                </td>
+                <td>
+                  {item.displayName}
+                  <br />
+                  <span style={{ fontSize: '0.75rem', color: 'hsl(var(--text-soft))' }}>
+                    {item.email}
+                  </span>
+                </td>
+                <td>
+                  <div className="admin-actions-row">
+                    <button
+                      type="button"
+                      className="admin-btn admin-btn--small admin-btn--success"
+                      disabled={reviewing === item.userId}
+                      onClick={() => void handleReviewBusiness(item.userId, 'approved')}
+                    >
+                      {dictionary.admin.approve}
+                    </button>
+                    <button
+                      type="button"
+                      className="admin-btn admin-btn--small admin-btn--danger"
+                      disabled={reviewing === item.userId}
+                      onClick={() => void handleReviewBusiness(item.userId, 'rejected')}
+                    >
+                      {dictionary.admin.reject}
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    );
 
   return (
     <>
@@ -160,7 +462,7 @@ export const AdminVerificationsTab = ({ dictionary, accessToken, refreshSession 
         />
       )}
       {error && <p className="admin-error-banner">{error}</p>}
-      <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem', flexWrap: 'wrap', alignItems: 'center' }}>
+      <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.75rem', flexWrap: 'wrap', alignItems: 'center' }}>
         <button
           type="button"
           className="admin-btn"
@@ -172,264 +474,61 @@ export const AdminVerificationsTab = ({ dictionary, accessToken, refreshSession 
         </button>
         <button
           type="button"
-          className={`admin-btn ${activeSubTab === 'identity' ? 'admin-btn--primary' : ''}`}
-          onClick={() => setActiveSubTab('identity')}
+          className={`admin-btn ${activeRoleTab === 'customer' ? 'admin-btn--primary' : ''}`}
+          onClick={() => setActiveRoleTab('customer')}
         >
-          {dictionary.admin.identity} ({identityDocs.length})
+          {roleLabel.customer} ({totalCountForRole.customer})
         </button>
         <button
           type="button"
-          className={`admin-btn ${activeSubTab === 'academic' ? 'admin-btn--primary' : ''}`}
-          onClick={() => setActiveSubTab('academic')}
+          className={`admin-btn ${activeRoleTab === 'expert' ? 'admin-btn--primary' : ''}`}
+          onClick={() => setActiveRoleTab('expert')}
         >
-          {dictionary.admin.academic} ({academicRecs.length})
+          {roleLabel.expert} ({totalCountForRole.expert})
         </button>
         <button
           type="button"
-          className={`admin-btn ${activeSubTab === 'business' ? 'admin-btn--primary' : ''}`}
-          onClick={() => setActiveSubTab('business')}
+          className={`admin-btn ${activeRoleTab === 'business' ? 'admin-btn--primary' : ''}`}
+          onClick={() => setActiveRoleTab('business')}
         >
-          {dictionary.admin.business} ({businessUsers.length})
+          {roleLabel.business} ({totalCountForRole.business})
+        </button>
+        <button
+          type="button"
+          className={`admin-btn ${activeRoleTab === 'craftsman' ? 'admin-btn--primary' : ''}`}
+          onClick={() => setActiveRoleTab('craftsman')}
+        >
+          {roleLabel.craftsman} ({totalCountForRole.craftsman})
         </button>
       </div>
 
-      {activeSubTab === 'identity' &&
-        (identityDocs.length === 0 ? (
-          <p className="admin-empty">{dictionary.admin.noPending}</p>
-        ) : (
-          <div className="admin-table-wrapper">
-            <table className="admin-table">
-              <thead>
-                <tr>
-                  <th>Document</th>
-                  <th>{dictionary.admin.user}</th>
-                  <th>Type</th>
-                  <th>Images</th>
-                  <th>{dictionary.admin.role}</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {identityDocs.map((doc) => (
-                  <tr key={doc.id}>
-                    <td>{doc.fullNameOnDoc}</td>
-                    <td>
-                      {doc.userDisplayName}
-                      <br />
-                      <span style={{ fontSize: '0.75rem', color: 'hsl(var(--text-soft))' }}>
-                        {doc.userEmail}
-                      </span>
-                    </td>
-                    <td>{doc.documentType}</td>
-                    <td>
-                      <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-                        {doc.frontImageUrl && (
-                          <button
-                            type="button"
-                            className="admin-btn admin-btn--small"
-                            onClick={() =>
-                              setPreviewImage({ url: doc.frontImageUrl!, title: 'Document front' })
-                            }
-                          >
-                            View front
-                          </button>
-                        )}
-                        {doc.backImageUrl && (
-                          <button
-                            type="button"
-                            className="admin-btn admin-btn--small"
-                            onClick={() =>
-                              setPreviewImage({ url: doc.backImageUrl!, title: 'Document back' })
-                            }
-                          >
-                            View back
-                          </button>
-                        )}
-                        {doc.selfieImageUrl && (
-                          <button
-                            type="button"
-                            className="admin-btn admin-btn--small"
-                            onClick={() =>
-                              setPreviewImage({ url: doc.selfieImageUrl!, title: 'Selfie' })
-                            }
-                          >
-                            View selfie
-                          </button>
-                        )}
-                        {!doc.frontImageUrl && !doc.backImageUrl && !doc.selfieImageUrl && (
-                          <span style={{ color: 'hsl(var(--text-soft))' }}>—</span>
-                        )}
-                      </div>
-                    </td>
-                    <td>
-                      <span className="admin-badge">{doc.userRole}</span>
-                    </td>
-                    <td>
-                      <div className="admin-actions-row">
-                        <button
-                          type="button"
-                          className="admin-btn admin-btn--small admin-btn--success"
-                          disabled={reviewing === doc.id}
-                          onClick={() => void handleReviewIdentity(doc.id, 'approved')}
-                        >
-                          {dictionary.admin.approve}
-                        </button>
-                        <button
-                          type="button"
-                          className="admin-btn admin-btn--small admin-btn--danger"
-                          disabled={reviewing === doc.id}
-                          onClick={() => void handleReviewIdentity(doc.id, 'rejected')}
-                        >
-                          {dictionary.admin.reject}
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        ))}
+      <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem', flexWrap: 'wrap', alignItems: 'center' }}>
+        <button
+          type="button"
+          className={`admin-btn ${activeCategoryTab === 'identity' ? 'admin-btn--primary' : ''}`}
+          onClick={() => setActiveCategoryTab('identity')}
+        >
+          {dictionary.admin.identity} ({categoryCountForActiveRole.identity})
+        </button>
+        <button
+          type="button"
+          className={`admin-btn ${activeCategoryTab === 'academic' ? 'admin-btn--primary' : ''}`}
+          onClick={() => setActiveCategoryTab('academic')}
+        >
+          {dictionary.admin.academic} ({categoryCountForActiveRole.academic})
+        </button>
+        <button
+          type="button"
+          className={`admin-btn ${activeCategoryTab === 'business' ? 'admin-btn--primary' : ''}`}
+          onClick={() => setActiveCategoryTab('business')}
+        >
+          {dictionary.admin.business} ({categoryCountForActiveRole.business})
+        </button>
+      </div>
 
-      {activeSubTab === 'academic' &&
-        (academicRecs.length === 0 ? (
-          <p className="admin-empty">{dictionary.admin.noPending}</p>
-        ) : (
-          <div className="admin-table-wrapper">
-            <table className="admin-table">
-              <thead>
-                <tr>
-                  <th>Title</th>
-                  <th>Institution</th>
-                  <th>Documents</th>
-                  <th>{dictionary.admin.user}</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {academicRecs.map((rec) => (
-                  <tr key={rec.id}>
-                    <td>{rec.title}</td>
-                    <td>{rec.institution}</td>
-                    <td>
-                      <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-                        {rec.certificateImageUrl && (
-                          <button
-                            type="button"
-                            className="admin-btn admin-btn--small"
-                            onClick={() =>
-                              setPreviewImage({
-                                url: rec.certificateImageUrl!,
-                                title: 'Certificate',
-                              })
-                            }
-                          >
-                            View certificate
-                          </button>
-                        )}
-                        {rec.transcriptImageUrl && (
-                          <button
-                            type="button"
-                            className="admin-btn admin-btn--small"
-                            onClick={() =>
-                              setPreviewImage({
-                                url: rec.transcriptImageUrl!,
-                                title: 'Transcript',
-                              })
-                            }
-                          >
-                            View transcript
-                          </button>
-                        )}
-                        {!rec.certificateImageUrl && !rec.transcriptImageUrl && (
-                          <span style={{ color: 'hsl(var(--text-soft))' }}>—</span>
-                        )}
-                      </div>
-                    </td>
-                    <td>
-                      {rec.userDisplayName}
-                      <br />
-                      <span style={{ fontSize: '0.75rem', color: 'hsl(var(--text-soft))' }}>
-                        {rec.userEmail}
-                      </span>
-                    </td>
-                    <td>
-                      <div className="admin-actions-row">
-                        <button
-                          type="button"
-                          className="admin-btn admin-btn--small admin-btn--success"
-                          disabled={reviewing === rec.id}
-                          onClick={() => void handleReviewAcademic(rec.id, 'approved')}
-                        >
-                          {dictionary.admin.approve}
-                        </button>
-                        <button
-                          type="button"
-                          className="admin-btn admin-btn--small admin-btn--danger"
-                          disabled={reviewing === rec.id}
-                          onClick={() => void handleReviewAcademic(rec.id, 'rejected')}
-                        >
-                          {dictionary.admin.reject}
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        ))}
-
-      {activeSubTab === 'business' &&
-        (businessUsers.length === 0 ? (
-          <p className="admin-empty">{dictionary.admin.noPending}</p>
-        ) : (
-          <div className="admin-table-wrapper">
-            <table className="admin-table">
-              <thead>
-                <tr>
-                  <th>Company</th>
-                  <th>{dictionary.admin.user}</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {businessUsers.map((item) => (
-                  <tr key={item.userId}>
-                    <td>{item.businessProfile!.companyName}</td>
-                    <td>
-                      {item.displayName}
-                      <br />
-                      <span style={{ fontSize: '0.75rem', color: 'hsl(var(--text-soft))' }}>
-                        {item.email}
-                      </span>
-                    </td>
-                    <td>
-                      <div className="admin-actions-row">
-                        <button
-                          type="button"
-                          className="admin-btn admin-btn--small admin-btn--success"
-                          disabled={reviewing === item.userId}
-                          onClick={() => void handleReviewBusiness(item.userId, 'approved')}
-                        >
-                          {dictionary.admin.approve}
-                        </button>
-                        <button
-                          type="button"
-                          className="admin-btn admin-btn--small admin-btn--danger"
-                          disabled={reviewing === item.userId}
-                          onClick={() => void handleReviewBusiness(item.userId, 'rejected')}
-                        >
-                          {dictionary.admin.reject}
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        ))}
+      {activeCategoryTab === 'identity' && roleIdentityTable}
+      {activeCategoryTab === 'academic' && roleAcademicTable}
+      {activeCategoryTab === 'business' && roleBusinessTable}
     </>
   );
 };

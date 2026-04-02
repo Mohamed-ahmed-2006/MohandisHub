@@ -4,6 +4,7 @@ import Image from 'next/image';
 import { useEffect, useState } from 'react';
 
 import { resolvePublicAssetUrl } from '@/lib/asset-url';
+import { getPrivateFileOpenableUrl } from '@/lib/upload/client';
 
 type ImagePreviewModalProps = {
   imageUrl: string;
@@ -14,18 +15,6 @@ type ImagePreviewModalProps = {
 };
 
 const isPrivateUploadUrl = (url: string): boolean => url.includes('/api/upload/private/');
-
-const extractPrivatePath = (url: string): string => {
-  if (url.startsWith('http://') || url.startsWith('https://')) {
-    try {
-      const parsed = new URL(url);
-      return `${parsed.pathname}${parsed.search}`;
-    } catch {
-      return url;
-    }
-  }
-  return url;
-};
 
 export function ImagePreviewModal({
   imageUrl,
@@ -54,38 +43,24 @@ export function ImagePreviewModal({
       setError(null);
       return () => {};
     }
-    let revoked = false;
-    let blobUrl: string | null = null;
+
+    let cancelled = false;
     setLoading(true);
     setError(null);
     setResolvedUrl(null);
-    const privatePath = extractPrivatePath(resolvePublicAssetUrl(imageUrl) ?? imageUrl);
-    const proxyUrl = `/api/proxy/private-upload?path=${encodeURIComponent(privatePath)}`;
-    fetch(proxyUrl, {
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        Accept: 'image/*, application/pdf, video/*, */*',
-      },
-    })
-      .then((res) => {
-        if (!res.ok) throw new Error(`Failed to load image: ${res.status}`);
-        return res.blob();
-      })
-      .then((blob) => {
-        if (revoked) return;
-        blobUrl = URL.createObjectURL(blob);
+    void getPrivateFileOpenableUrl(accessToken, resolvePublicAssetUrl(imageUrl) ?? imageUrl)
+      .then((blobUrl) => {
+        if (cancelled) return;
         setResolvedUrl(blobUrl);
         setLoading(false);
       })
       .catch((err) => {
-        if (!revoked) {
-          setError(err instanceof Error ? err.message : 'Failed to load image');
-          setLoading(false);
-        }
+        if (cancelled) return;
+        setError(err instanceof Error ? err.message : 'Failed to load image');
+        setLoading(false);
       });
     return () => {
-      revoked = true;
-      if (blobUrl) URL.revokeObjectURL(blobUrl);
+      cancelled = true;
       setResolvedUrl(null);
     };
   }, [imageUrl, accessToken]);

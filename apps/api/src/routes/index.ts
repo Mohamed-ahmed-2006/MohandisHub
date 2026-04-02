@@ -9,6 +9,7 @@ import { authRouter } from '../modules/auth/auth.routes.js';
 import { businessTeamsRouter } from '../modules/business-teams/business-teams.routes.js';
 import { chatRouter } from '../modules/chat/chat.routes.js';
 import { favoritesRouter } from '../modules/favorites/favorites.routes.js';
+import { geoRouter } from '../modules/geo/geo.routes.js';
 import { jobsRouter } from '../modules/jobs/jobs.routes.js';
 import { needsRouter, bidsRouter } from '../modules/needs/needs.routes.js';
 import { notificationsRouter } from '../modules/notifications/notifications.routes.js';
@@ -74,5 +75,6 @@ apiRouter.use('/reservations', reservationsRouter);
 apiRouter.use('/reviews', reviewsRouter);
 apiRouter.use('/jobs', jobsRouter);
 apiRouter.use('/notifications', notificationsRouter);
+apiRouter.use('/geo', geoRouter);
 
 export { apiRouter };

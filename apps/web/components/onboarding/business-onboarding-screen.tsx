@@ -58,6 +58,7 @@ export const BusinessOnboardingScreen = ({ locale, dictionary }: Props) => {
   const [error, setError] = useState<string | null>(null);
   const [kycStatus, setKycStatus] = useState<string>('unverified');
   const [kycMode, setKycMode] = useState<'didit' | 'manual' | null>(null);
+  const [onboardingCompleted, setOnboardingCompleted] = useState(false);
   const [manualFrontFile, setManualFrontFile] = useState<File | null>(null);
   const [manualBackFile, setManualBackFile] = useState<File | null>(null);
   const [manualSelfieFile, setManualSelfieFile] = useState<File | null>(null);
@@ -158,26 +159,25 @@ export const BusinessOnboardingScreen = ({ locale, dictionary }: Props) => {
         setKycStatus(verification.verificationStatus);
         const companyComplete = Boolean(profile?.companyName?.trim() && profile?.logoUrl?.trim());
         // Use profile/API status; authUser.verificationStatus reflects GET /me (profile) so include for consistency after refresh
-        const effectiveVerified =
-          verification.verificationStatus === 'verified' || authUser?.verificationStatus === 'verified';
+        const effectiveVerified = verification.verificationStatus === 'verified';
         const hasPendingIdentitySubmission =
           Array.isArray(identityDocs) &&
           identityDocs.some((doc) => doc.status === 'pending' || doc.status === 'under_review');
         setHasActiveIdentitySubmission(hasPendingIdentitySubmission);
-        const identityDone =
-          verification.verificationStatus === 'verified' ||
-          hasPendingIdentitySubmission ||
-          authUser?.verificationStatus === 'verified';
         const hasSubmittedDocs = Array.isArray(identityDocs) && identityDocs.length > 0;
-        const fullyVerified = effectiveVerified;
-        if (!companyComplete) {
-          setStep('company');
-        } else if (!identityDone) {
+        if (effectiveVerified) {
+          setStep(onboardingCompleted ? 'complete' : 'documents');
+        } else if (hasPendingIdentitySubmission) {
+          // If user already submitted for manual review, keep them in KYC step.
           setStep('kyc');
-        } else if (!fullyVerified && !hasSubmittedDocs) {
+        } else if (hasSubmittedDocs) {
+          // Docs exist but not pending -> they are in documents/review stage.
           setStep('documents');
+        } else if (!companyComplete) {
+          setStep('company');
         } else {
-          setStep('complete');
+          // Company is complete but no KYC submission exists yet.
+          setStep('kyc');
         }
       } catch {
         if (!cancelled) setStep('company');
@@ -188,7 +188,7 @@ export const BusinessOnboardingScreen = ({ locale, dictionary }: Props) => {
     return () => {
       cancelled = true;
     };
-  }, [accessToken, authUser?.verificationStatus]);
+  }, [accessToken, authUser?.verificationStatus, onboardingCompleted]);
 
   useEffect(() => {
     if (!accessToken) return;
@@ -201,6 +201,16 @@ export const BusinessOnboardingScreen = ({ locale, dictionary }: Props) => {
       }
     })();
   }, [accessToken]);
+
+  // When KYC is verified, there are no extra business documents to upload during onboarding.
+  // So we automatically mark onboarding completed and move to the final step.
+  useEffect(() => {
+    if (!accessToken) return;
+    if (kycStatus !== 'verified') return;
+    if (step !== 'documents') return;
+    if (onboardingCompleted) return;
+    void handleBusinessDocsContinue();
+  }, [accessToken, kycStatus, step, onboardingCompleted]);
 
   const handleSaveCompany = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -352,6 +362,7 @@ export const BusinessOnboardingScreen = ({ locale, dictionary }: Props) => {
     setError(null);
     try {
       await profilesApiClient.completeBusinessOnboarding(accessToken);
+      setOnboardingCompleted(true);
       setStep('complete');
     } catch (err) {
       setError(
@@ -716,7 +727,7 @@ export const BusinessOnboardingScreen = ({ locale, dictionary }: Props) => {
                   type="button"
                   className="onboarding-cta-button"
                   onClick={() => setStep('documents')}
-                  disabled={kycStatus !== 'verified' && !hasActiveIdentitySubmission}
+                  disabled={kycStatus !== 'verified'}
                 >
                   {dictionary.common.next}
                 </button>
@@ -764,7 +775,7 @@ export const BusinessOnboardingScreen = ({ locale, dictionary }: Props) => {
                   type="button"
                   className="onboarding-cta-button"
                   onClick={() => void handleBusinessDocsContinue()}
-                  disabled={saving}
+                  disabled={saving || kycStatus !== 'verified'}
                 >
                   {saving
                     ? (dictionary.auth?.common?.loading ?? tr('Saving...', 'جارٍ الحفظ...'))
@@ -778,9 +789,11 @@ export const BusinessOnboardingScreen = ({ locale, dictionary }: Props) => {
             <div className="onboarding-complete">
               <p className="onboarding-description">{dict.description}</p>
               {kycStatus === 'pending' && <div className="onboarding-info">{dict.kycPending}</div>}
-              <Link href={buildLocalePath(locale, '/app')} className="onboarding-cta-button">
-                {dictionary.onboarding.customer.goToDashboard}
-              </Link>
+              {kycStatus === 'verified' ? (
+                <Link href={buildLocalePath(locale, '/app')} className="onboarding-cta-button">
+                  {dictionary.onboarding.customer.goToDashboard}
+                </Link>
+              ) : null}
             </div>
           )}
         </section>

@@ -728,6 +728,44 @@ export const AdminUserDetailModal = ({
                     {!currentOverview.businessProfile ? <p className="admin-empty">{u360?.verification?.businessMissing ?? 'No business profile.'}</p> : (
                       <>
                         <p className="admin-user360-item-meta">{u360?.verification?.status ?? 'Status'}: {currentOverview.businessProfile.verificationStatus}</p>
+                        {currentOverview.businessProfile.logoUrl && (
+                          <div className="admin-user360-links" style={{ marginBottom: '0.75rem' }}>
+                            <button
+                              type="button"
+                              className="admin-link-btn"
+                              onClick={() => setPreviewImage({ url: currentOverview.businessProfile!.logoUrl!, title: 'Company logo' })}
+                            >
+                              {(u360?.verification as { companyLogo?: string } | undefined)?.companyLogo ??
+                                'View company logo'}
+                            </button>
+                          </div>
+                        )}
+                        <div className="admin-user-field-grid" style={{ marginBottom: '0.75rem' }}>
+                          <div className="admin-user-field">
+                            <span className="admin-user-field-label">Company</span>
+                            <span className="admin-user-field-value">{currentOverview.businessProfile.companyName ?? '-'}</span>
+                          </div>
+                          <div className="admin-user-field">
+                            <span className="admin-user-field-label">Trade license</span>
+                            <span className="admin-user-field-value">{currentOverview.businessProfile.tradeLicenseNumber ?? '-'}</span>
+                          </div>
+                          <div className="admin-user-field">
+                            <span className="admin-user-field-label">Tax ID</span>
+                            <span className="admin-user-field-value">{currentOverview.businessProfile.taxId ?? '-'}</span>
+                          </div>
+                          <div className="admin-user-field">
+                            <span className="admin-user-field-label">Commercial register</span>
+                            <span className="admin-user-field-value">{currentOverview.businessProfile.commercialRegister ?? '-'}</span>
+                          </div>
+                          <div className="admin-user-field">
+                            <span className="admin-user-field-label">City</span>
+                            <span className="admin-user-field-value">{currentOverview.businessProfile.city ?? '-'}</span>
+                          </div>
+                          <div className="admin-user-field">
+                            <span className="admin-user-field-label">Country</span>
+                            <span className="admin-user-field-value">{currentOverview.businessProfile.country ?? '-'}</span>
+                          </div>
+                        </div>
                         {canManageVerifications && <div className="admin-actions-row"><button type="button" className="admin-btn admin-btn--small admin-btn--success" disabled={actionLoading === 'business-review'} onClick={() => void reviewBusiness('approved')}>{dictionary.admin.approve}</button><button type="button" className="admin-btn admin-btn--small admin-btn--danger" disabled={actionLoading === 'business-review'} onClick={() => void reviewBusiness('rejected')}>{dictionary.admin.reject}</button></div>}
                       </>
                     )}

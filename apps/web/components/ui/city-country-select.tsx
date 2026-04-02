@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 
 import { CITIES, getCitiesByCountry } from '@/lib/data/cities';
-import { COUNTRIES, findCountryByCode } from '@/lib/data/countries';
+import { COUNTRIES, findCountryByCode, findCountryByName } from '@/lib/data/countries';
 import { getCountryFromIp } from '@/lib/geo/ip-geo';
 
 type Locale = 'ar' | 'en';
@@ -40,6 +40,7 @@ export function CityCountrySelect({
   forceIpCountry = false,
 }: Props) {
   const nameKey = locale === 'ar' ? 'nameAr' : 'nameEn';
+  const [userSelectedCountry, setUserSelectedCountry] = useState(false);
 
   const resolveInitialCountryCode = useCallback(() => {
     if (!defaultCountry) return '';
@@ -68,6 +69,10 @@ export function CityCountrySelect({
       setIpLoading(false);
       return;
     }
+    if (!forceIpCountry && userSelectedCountry) {
+      setIpLoading(false);
+      return;
+    }
     void getCountryFromIp()
       .then((code) => {
         if (code && COUNTRIES.some((c) => c.code === code)) {
@@ -75,7 +80,7 @@ export function CityCountrySelect({
         }
       })
       .finally(() => setIpLoading(false));
-  }, [mounted, defaultCountry, forceIpCountry]);
+  }, [mounted, defaultCountry, forceIpCountry, userSelectedCountry]);
 
   useEffect(() => {
     if (!defaultValue || !defaultCountry) return;
@@ -100,16 +105,33 @@ export function CityCountrySelect({
       <div className="profile-screen-row" style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
         <div className="profile-screen-field" style={{ flex: 1, minWidth: '140px' }}>
           <label className="profile-screen-label">{countryLabel}</label>
-          <input
-            type="text"
-            className={selectClassName}
-            value={ipLoading ? 'Detecting…' : countryDisplayName || '—'}
-            readOnly
-            disabled
-            style={{ opacity: 0.9, cursor: 'not-allowed' }}
-            aria-label={countryLabel}
-          />
           <input type="hidden" name={countryName} value={countryDisplayName} />
+          <select
+            className={selectClassName}
+            value={countryDisplayName}
+            onChange={(e) => {
+              const entry = findCountryByName(e.target.value);
+              if (!entry) {
+                setCountryCode('');
+                setCityCode('');
+                setUserSelectedCountry(true);
+                return;
+              }
+
+              setCountryCode(entry.code);
+              setCityCode('');
+              setUserSelectedCountry(true);
+            }}
+            disabled={forceIpCountry}
+            aria-label={countryLabel}
+          >
+            <option value="">{ipLoading ? 'Detecting…' : '—'}</option>
+            {COUNTRIES.map((c) => (
+              <option key={c.code} value={c[nameKey]}>
+                {c[nameKey]}
+              </option>
+            ))}
+          </select>
         </div>
         <div className="profile-screen-field" style={{ flex: 1, minWidth: '140px' }}>
           <label className="profile-screen-label">{cityLabel}</label>

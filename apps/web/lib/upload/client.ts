@@ -1,3 +1,4 @@
+import { authApiClient } from '@/lib/auth/client';
 import { getApiBaseUrl } from '@/lib/env';
 
 type UploadResponse = { data: { url: string; filename: string; originalName: string } };
@@ -75,25 +76,48 @@ export async function getPrivateFileOpenableUrl(
   accessToken: string,
   privatePathOrId: string,
 ): Promise<string> {
-  const base = (getApiBaseUrl() || '').replace(/\/$/, '');
-  const fullUrl =
-    privatePathOrId.startsWith('http')
-      ? privatePathOrId
-      : (() => {
-          const path = privatePathOrId.startsWith('/') ? privatePathOrId : `/${privatePathOrId}`;
-          return path.startsWith('/api/') ? `${base}${path}` : `${base}/api/upload/private/${privatePathOrId.replace(/^\//, '')}`;
-        })();
-  const res = await fetch(fullUrl, {
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      Accept: 'image/*, application/pdf, */*',
-    },
-    credentials: 'include',
-  });
-  if (!res.ok) {
-    const body = (await res.json().catch(() => ({}))) as { error?: { message?: string } };
-    throw new Error(body?.error?.message ?? 'Could not load file');
+  // IMPORTANT: fetch private uploads through Next.js proxy (same-origin)
+  // to avoid browser CORS issues when the API host is different.
+  const proxyUrl = `/api/proxy/private-upload?path=${encodeURIComponent(privatePathOrId)}`;
+  const fetchWithToken = async (token: string): Promise<Response> => {
+    return fetch(proxyUrl, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: 'image/*, application/pdf, */*',
+      },
+      credentials: 'include',
+    });
+  };
+
+  let res = await fetchWithToken(accessToken);
+
+  if (res.status === 401) {
+    // Access token may expire while admin is open; try refreshing once.
+    try {
+      const refreshed = await authApiClient.refresh();
+      const newToken = refreshed.tokens.accessToken;
+      res = await fetchWithToken(newToken);
+    } catch {
+      // Keep original error handling below.
+    }
   }
+
+  if (res.status === 401) {
+    throw new Error('Session expired. Please log out and log in again.');
+  }
+
+  if (!res.ok) {
+    const body = (await res.json().catch(() => ({}))) as { error?: { message?: string } } | Record<string, unknown>;
+    const message =
+      typeof body === 'object' &&
+      body &&
+      'error' in body &&
+      typeof (body as { error?: { message?: string } }).error?.message === 'string'
+        ? (body as { error: { message: string } }).error.message
+        : `Could not load file (HTTP ${res.status})`;
+    throw new Error(message);
+  }
+
   const blob = await res.blob();
   const blobUrl = URL.createObjectURL(blob);
   setTimeout(() => URL.revokeObjectURL(blobUrl), 5 * 60 * 1000);

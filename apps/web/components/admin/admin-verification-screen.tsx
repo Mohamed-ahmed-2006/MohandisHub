@@ -19,13 +19,15 @@ type AdminVerificationScreenProps = {
   dictionary: Dictionary;
 };
 
-type TabId = 'identity' | 'academic' | 'business';
+type RoleTabId = 'customer' | 'expert' | 'business' | 'craftsman';
+type CategoryTabId = 'identity' | 'academic' | 'business';
 
 export const AdminVerificationScreen = ({ locale, dictionary }: AdminVerificationScreenProps) => {
   const router = useRouter();
   const { addToast } = useToast();
   const { authUser, accessToken, isAuthenticated, isReady, authGuard } = useAuth();
-  const [activeTab, setActiveTab] = useState<TabId>('identity');
+  const [activeRoleTab, setActiveRoleTab] = useState<RoleTabId>('expert');
+  const [activeCategoryTab, setActiveCategoryTab] = useState<CategoryTabId>('identity');
   const [items, setItems] = useState<PendingVerificationItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [reviewing, setReviewing] = useState<string | null>(null);
@@ -150,6 +152,67 @@ export const AdminVerificationScreen = ({ locale, dictionary }: AdminVerificatio
         i.businessProfile.verificationStatus === 'under_review'),
   );
 
+  const roleLabel: Record<RoleTabId, string> = {
+    customer: dictionary.profileModal?.roleCustomer ?? 'Customer',
+    expert: dictionary.profileModal?.roleExpert ?? 'Expert',
+    business: dictionary.profileModal?.roleBusiness ?? 'Business',
+    craftsman: dictionary.profileModal?.roleCraftsman ?? 'Craftsman',
+  };
+
+  const identityCount = identityDocs.reduce<Record<RoleTabId, number>>(
+    (acc, doc) => {
+      const role = doc.role as RoleTabId;
+      if (role === 'customer' || role === 'expert' || role === 'business' || role === 'craftsman') {
+        acc[role] += 1;
+      }
+      return acc;
+    },
+    { customer: 0, expert: 0, business: 0, craftsman: 0 },
+  );
+  const academicCount = academicRecs.reduce<Record<RoleTabId, number>>(
+    (acc, rec) => {
+      const role = rec.role as RoleTabId;
+      if (role === 'customer' || role === 'expert' || role === 'business' || role === 'craftsman') {
+        acc[role] += 1;
+      }
+      return acc;
+    },
+    { customer: 0, expert: 0, business: 0, craftsman: 0 },
+  );
+  const businessCount = businessUsers.reduce<Record<RoleTabId, number>>(
+    (acc, u) => {
+      const role = u.role as RoleTabId;
+      if (role === 'customer' || role === 'expert' || role === 'business' || role === 'craftsman') {
+        acc[role] += 1;
+      }
+      return acc;
+    },
+    { customer: 0, expert: 0, business: 0, craftsman: 0 },
+  );
+
+  const categoryCountForActiveRole: Record<CategoryTabId, number> = {
+    identity: identityCount[activeRoleTab],
+    academic: academicCount[activeRoleTab],
+    business: businessCount[activeRoleTab],
+  };
+
+  const totalCountForRole: Record<RoleTabId, number> = {
+    customer: identityCount.customer + academicCount.customer + businessCount.customer,
+    expert: identityCount.expert + academicCount.expert + businessCount.expert,
+    business: identityCount.business + academicCount.business + businessCount.business,
+    craftsman: identityCount.craftsman + academicCount.craftsman + businessCount.craftsman,
+  };
+
+  useEffect(() => {
+    setActiveCategoryTab((prev) =>
+      activeRoleTab === 'business' ? 'business' : prev === 'business' ? 'identity' : prev,
+    );
+  }, [activeRoleTab]);
+
+  const filteredIdentityDocs = identityDocs.filter((doc) => doc.role === activeRoleTab);
+  const filteredAcademicRecs = academicRecs.filter((rec) => rec.role === activeRoleTab);
+  const filteredBusinessUsers = businessUsers.filter((u) => u.role === activeRoleTab);
+
   if (!isReady || !authUser) {
     return (
       <main className="admin-verification-main">
@@ -179,39 +242,80 @@ export const AdminVerificationScreen = ({ locale, dictionary }: AdminVerificatio
           </button>
         </div>
 
+        <div className="admin-verification-tabs" style={{ marginBottom: '0.75rem' }}>
+          <button
+            type="button"
+            className={
+              activeRoleTab === 'customer' ? 'admin-verification-tab admin-verification-tab-active' : 'admin-verification-tab'
+            }
+            onClick={() => setActiveRoleTab('customer')}
+          >
+            {roleLabel.customer} ({totalCountForRole.customer})
+          </button>
+          <button
+            type="button"
+            className={
+              activeRoleTab === 'expert' ? 'admin-verification-tab admin-verification-tab-active' : 'admin-verification-tab'
+            }
+            onClick={() => setActiveRoleTab('expert')}
+          >
+            {roleLabel.expert} ({totalCountForRole.expert})
+          </button>
+          <button
+            type="button"
+            className={
+              activeRoleTab === 'business' ? 'admin-verification-tab admin-verification-tab-active' : 'admin-verification-tab'
+            }
+            onClick={() => setActiveRoleTab('business')}
+          >
+            {roleLabel.business} ({totalCountForRole.business})
+          </button>
+          <button
+            type="button"
+            className={
+              activeRoleTab === 'craftsman'
+                ? 'admin-verification-tab admin-verification-tab-active'
+                : 'admin-verification-tab'
+            }
+            onClick={() => setActiveRoleTab('craftsman')}
+          >
+            {roleLabel.craftsman} ({totalCountForRole.craftsman})
+          </button>
+        </div>
+
         <div className="admin-verification-tabs">
           <button
             type="button"
             className={
-              activeTab === 'identity'
+              activeCategoryTab === 'identity'
                 ? 'admin-verification-tab admin-verification-tab-active'
                 : 'admin-verification-tab'
             }
-            onClick={() => setActiveTab('identity')}
+            onClick={() => setActiveCategoryTab('identity')}
           >
-            {dictionary.admin.identity} ({identityDocs.length})
+            {dictionary.admin.identity} ({categoryCountForActiveRole.identity})
           </button>
           <button
             type="button"
             className={
-              activeTab === 'academic'
+              activeCategoryTab === 'academic'
                 ? 'admin-verification-tab admin-verification-tab-active'
                 : 'admin-verification-tab'
             }
-            onClick={() => setActiveTab('academic')}
+            onClick={() => setActiveCategoryTab('academic')}
           >
-            {dictionary.admin.academic} ({academicRecs.length})
+            {dictionary.admin.academic} ({categoryCountForActiveRole.academic})
           </button>
           <button
             type="button"
             className={
-              activeTab === 'business'
+              activeCategoryTab === 'business'
                 ? 'admin-verification-tab admin-verification-tab-active'
                 : 'admin-verification-tab'
             }
-            onClick={() => setActiveTab('business')}
+            onClick={() => setActiveCategoryTab('business')}
           >
-            {dictionary.admin.business} ({businessUsers.length})
+            {dictionary.admin.business} ({categoryCountForActiveRole.business})
           </button>
         </div>
 
@@ -222,13 +326,13 @@ export const AdminVerificationScreen = ({ locale, dictionary }: AdminVerificatio
           </div>
         )}
 
-        {!loading && activeTab === 'identity' && (
+        {!loading && activeCategoryTab === 'identity' && (
           <section className="admin-verification-card">
-            {identityDocs.length === 0 ? (
+            {filteredIdentityDocs.length === 0 ? (
               <p className="admin-verification-empty">{dictionary.admin.noPending}</p>
             ) : (
               <ul className="admin-verification-list">
-                {identityDocs.map((doc) => (
+                {filteredIdentityDocs.map((doc) => (
                   <li key={doc.id} className="admin-verification-item">
                     <div className="admin-verification-item-header">
                       <span className="admin-verification-item-name">{doc.fullNameOnDoc}</span>
@@ -261,13 +365,13 @@ export const AdminVerificationScreen = ({ locale, dictionary }: AdminVerificatio
           </section>
         )}
 
-        {!loading && activeTab === 'academic' && (
+        {!loading && activeCategoryTab === 'academic' && (
           <section className="admin-verification-card">
-            {academicRecs.length === 0 ? (
+            {filteredAcademicRecs.length === 0 ? (
               <p className="admin-verification-empty">{dictionary.admin.noPending}</p>
             ) : (
               <ul className="admin-verification-list">
-                {academicRecs.map((rec) => (
+                {filteredAcademicRecs.map((rec) => (
                   <li key={rec.id} className="admin-verification-item">
                     <div className="admin-verification-item-header">
                       <span className="admin-verification-item-name">{rec.title}</span>
@@ -300,13 +404,13 @@ export const AdminVerificationScreen = ({ locale, dictionary }: AdminVerificatio
           </section>
         )}
 
-        {!loading && activeTab === 'business' && (
+        {!loading && activeCategoryTab === 'business' && (
           <section className="admin-verification-card">
-            {businessUsers.length === 0 ? (
+            {filteredBusinessUsers.length === 0 ? (
               <p className="admin-verification-empty">{dictionary.admin.noPending}</p>
             ) : (
               <ul className="admin-verification-list">
-                {businessUsers.map((item) => (
+                {filteredBusinessUsers.map((item) => (
                   <li key={item.userId} className="admin-verification-item">
                     <div className="admin-verification-item-header">
                       <span className="admin-verification-item-name">

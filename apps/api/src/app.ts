@@ -30,6 +30,14 @@ export const createApp = () => {
   const allowedOrigins: string[] = env.CORS_ORIGIN.split(',')
     .map((o) => o.trim())
     .filter(Boolean);
+  // Allow local dev origins even when API is running in prod/staging.
+  // This is required for admin/KYC previews that fetch private uploads with `Authorization` headers.
+  const localDevOrigins = [
+    'http://localhost:3000',
+    'http://localhost:3001',
+    'http://127.0.0.1:3000',
+    'http://127.0.0.1:3001',
+  ];
   if (env.CORS_EXTRA_ORIGINS) {
     allowedOrigins.push(
       ...env.CORS_EXTRA_ORIGINS.split(',')
@@ -37,10 +45,12 @@ export const createApp = () => {
         .filter(Boolean),
     );
   }
+  allowedOrigins.push(...localDevOrigins);
+  const uniqueAllowedOrigins = Array.from(new Set(allowedOrigins));
   app.use(
     cors({
       origin: (origin, cb) => {
-        if (!origin || allowedOrigins.includes(origin)) return cb(null, true);
+        if (!origin || uniqueAllowedOrigins.includes(origin)) return cb(null, true);
         return cb(null, false);
       },
       credentials: true,
