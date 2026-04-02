@@ -79,7 +79,6 @@ export async function getPrivateFileOpenableUrl(
   // IMPORTANT: fetch private uploads through Next.js proxy (same-origin)
   // to avoid browser CORS issues when the API host is different.
   const proxyUrl = `/api/proxy/private-upload?path=${encodeURIComponent(privatePathOrId)}`;
-  // eslint-disable-next-line no-console
   console.warn('[getPrivateFileOpenableUrl] start', {
     proxyUrl,
     privatePathOrIdPrefix: privatePathOrId.slice(0, 60),
@@ -117,7 +116,6 @@ export async function getPrivateFileOpenableUrl(
   };
 
   let res = await fetchWithToken(accessToken);
-  // eslint-disable-next-line no-console
   console.warn('[getPrivateFileOpenableUrl] proxy response initial', {
     status: res.status,
   });
@@ -145,7 +143,6 @@ export async function getPrivateFileOpenableUrl(
   if (res.status === 401) {
     // Access token may expire while admin is open; try refreshing once.
     try {
-      // eslint-disable-next-line no-console
       console.warn('[getPrivateFileOpenableUrl] proxy 401 -> refreshing token once');
       const refreshed = await authApiClient.refresh();
       const newToken = refreshed.tokens.accessToken;
@@ -155,7 +152,6 @@ export async function getPrivateFileOpenableUrl(
     }
   }
 
-  // eslint-disable-next-line no-console
   console.warn('[getPrivateFileOpenableUrl] proxy response final', { status: res.status });
 
   // #region agent log
@@ -184,7 +180,6 @@ export async function getPrivateFileOpenableUrl(
   }
 
   if (!res.ok) {
-    // eslint-disable-next-line no-console
     console.warn('[getPrivateFileOpenableUrl] proxy fetch not ok', { status: res.status });
     const body = (await res.json().catch(() => ({}))) as { error?: { message?: string } } | Record<string, unknown>;
     const message =
@@ -198,7 +193,6 @@ export async function getPrivateFileOpenableUrl(
   }
 
   const blob = await res.blob();
-  // eslint-disable-next-line no-console
   console.warn('[getPrivateFileOpenableUrl] blob meta', {
     proxyUrl,
     finalStatus: res.status,
@@ -208,7 +202,6 @@ export async function getPrivateFileOpenableUrl(
     blobSize: blob.size,
   });
   const blobUrl = URL.createObjectURL(blob);
-  // eslint-disable-next-line no-console
   console.warn('[getPrivateFileOpenableUrl] created blob url', {
     blobUrlPrefix: blobUrl.slice(0, 20),
   });

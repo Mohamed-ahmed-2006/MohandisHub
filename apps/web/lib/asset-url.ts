@@ -30,7 +30,6 @@ export function resolvePublicAssetUrl(url: string | null | undefined): string | 
 
       const rewritten = base ? `${base}${parsed.pathname}${parsed.search}${parsed.hash}` : trimmed;
       // Runtime evidence for this bug (visible in devtools).
-      // eslint-disable-next-line no-console
       console.warn('[asset-url] rewrite local upload', { input: trimmed, apiBaseUrl: base, output: rewritten });
 
       // #region agent log

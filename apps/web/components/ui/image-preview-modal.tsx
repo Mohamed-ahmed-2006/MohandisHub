@@ -22,7 +22,6 @@ export function ImagePreviewModal({
   onClose,
   accessToken,
 }: ImagePreviewModalProps) {
-  // eslint-disable-next-line no-console
   console.warn('[ImagePreviewModal] opened', {
     title,
     isPrivate: isPrivateUploadUrl(imageUrl),
@@ -110,7 +109,6 @@ export function ImagePreviewModal({
       })
       .catch((err) => {
         if (cancelled) return;
-        // eslint-disable-next-line no-console
         console.warn('[ImagePreviewModal] resolve error', {
           errorMessage: err instanceof Error ? err.message : String(err),
           accessTokenPresent: !!accessToken,
@@ -179,7 +177,6 @@ export function ImagePreviewModal({
                 alt={title ?? 'Preview'}
                 className="image-preview-img"
                 onError={() => {
-                  // eslint-disable-next-line no-console
                   console.warn('[ImagePreviewModal] <img> failed to load', {
                     title,
                     imageUrl,

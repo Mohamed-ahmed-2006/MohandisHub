@@ -86,7 +86,7 @@ const upload = multer({
 const uploadRouter = Router();
 
 /** In production, disk uploads are wiped on redeploy (e.g. Render). Require object storage. */
-const requireDurableStorageInProduction = asyncHandler(async (_req, _res, next) => {
+const requireDurableStorageInProduction = asyncHandler((_req, _res, next) => {
   if (env.NODE_ENV === 'production' && !isSupabaseStorageConfigured()) {
     throw new HttpError({
       statusCode: 503,
