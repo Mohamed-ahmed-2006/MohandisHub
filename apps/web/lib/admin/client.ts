@@ -9,6 +9,7 @@ import type {
   AdminJobApplicationActivityItem,
   AdminNeedActivityItem,
   AdminReview,
+  AdminReviewHistoryItem,
   AdminServiceListItem,
   AdminTransactionListItem,
   AdminUpdateBusinessProfileBody,
@@ -655,6 +656,18 @@ export const adminApiClient = {
     apiRequest<PendingVerificationItem[]>({
       method: 'GET',
       path: '/api/admin/verification/pending',
+      accessToken,
+      ...(options?.refreshSession ? { refreshSession: options.refreshSession } : {}),
+    }),
+
+  getVerificationReviewHistory: (
+    accessToken: string,
+    userId: string,
+    options?: AdminClientOptions,
+  ) =>
+    apiRequest<AdminReviewHistoryItem[]>({
+      method: 'GET',
+      path: `/api/admin/verification/users/${userId}/reviews`,
       accessToken,
       ...(options?.refreshSession ? { refreshSession: options.refreshSession } : {}),
     }),

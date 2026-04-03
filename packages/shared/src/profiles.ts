@@ -268,6 +268,11 @@ export type AdminReview = {
   createdAt: string;
 };
 
+/** Admin audit row with reviewer label for history UIs (GET .../verification/users/:id/reviews). */
+export type AdminReviewHistoryItem = AdminReview & {
+  reviewerDisplayName: string | null;
+};
+
 export type PendingVerificationItem = {
   userId: string;
   displayName: string;

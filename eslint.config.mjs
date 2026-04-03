@@ -57,6 +57,13 @@ export default [
       ...nextPlugin.configs.recommended.rules,
       ...nextPlugin.configs['core-web-vitals'].rules,
       '@next/next/no-html-link-for-pages': 'off',
+      // Locale `Dictionary` is intentionally loose (see lib/i18n/types.ts); strict unsafe rules
+      // flag every `dictionary.*` access as thousands of false positives.
+      '@typescript-eslint/no-unsafe-member-access': 'off',
+      '@typescript-eslint/no-unsafe-assignment': 'off',
+      '@typescript-eslint/no-unsafe-call': 'off',
+      '@typescript-eslint/no-unsafe-return': 'off',
+      '@typescript-eslint/no-unsafe-argument': 'off',
     },
   },
   {

@@ -81,7 +81,7 @@ export const BusinessDashboard = ({
 
   const suggestions = dictionary.appHome?.suggestions?.business;
   const suggestTitle = suggestions?.title ?? 'Suggested actions for businesses';
-  const suggestItems = suggestions?.items ?? [];
+  const suggestItems = (suggestions?.items ?? []) as string[];
 
   return (
     <section className="dashboard-section">

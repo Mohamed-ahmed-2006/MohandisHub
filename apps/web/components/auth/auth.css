@@ -5,44 +5,28 @@
 }
 
 .auth-page-floating-controls {
+  position: fixed;
+  top: 0.85rem;
+  right: 0.85rem;
+  z-index: 60;
   display: inline-flex;
   align-items: center;
   gap: 0.45rem;
+}
+
+[dir='rtl'] .auth-page-floating-controls {
+  right: auto;
+  left: 0.85rem;
 }
 
 .auth-page-container {
   padding-top: 2rem;
   padding-bottom: 3rem;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
 }
 
 .auth-page-header {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.85rem;
-  width: min(100%, 32rem);
-}
-
-.auth-page-header-actions {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.45rem;
-}
-
-.auth-page-layout {
-  width: min(100%, 68rem);
-  margin-top: 1.6rem;
-}
-
-.auth-page-content {
-  width: 100%;
-}
-
-.auth-page-banner {
-  display: none;
+  justify-content: flex-start;
 }
 
 .auth-page-brand-link {
@@ -62,19 +46,6 @@
   box-shadow: var(--shadow-soft-lg);
   padding: 1.25rem;
   backdrop-filter: blur(14px);
-}
-
-.auth-form-dev-link {
-  margin-top: 0.75rem;
-  padding: 0.6rem 0.75rem;
-  font-size: 0.85rem;
-  background: hsl(var(--muted));
-  border-radius: var(--radius-md);
-}
-
-.auth-form-dev-link a {
-  color: hsl(var(--primary));
-  font-weight: 600;
 }
 
 .auth-mode-switch,
@@ -125,26 +96,12 @@
   letter-spacing: -0.03em;
 }
 
-[dir='rtl'] .auth-form-title,
-[dir='rtl'] .auth-role-card-title,
-[dir='rtl'] .auth-register-stepper .onboarding-stepper-current {
-  font-family: var(--font-cairo), sans-serif;
-  font-weight: 700;
-}
-
 .auth-form-subtitle {
   margin-top: 0.65rem;
   margin-bottom: 0;
   color: hsl(var(--text-soft));
   font-size: 0.95rem;
   line-height: 1.65;
-}
-
-[dir='rtl'] .auth-form-subtitle,
-[dir='rtl'] .auth-role-card-description,
-[dir='rtl'] .auth-register-stepper .onboarding-stepper-text {
-  font-family: var(--font-tajawal), sans-serif;
-  font-weight: 400;
 }
 
 .auth-status-banner {
@@ -212,52 +169,6 @@ html[data-theme='dark'] .auth-status-banner-error {
 
 .auth-form-field-input:focus-visible {
   border-color: hsl(var(--accent));
-}
-
-.auth-password-input-wrap {
-  position: relative;
-}
-
-.auth-password-input {
-  padding-inline-end: 2.9rem;
-}
-
-.auth-password-toggle {
-  position: absolute;
-  inset-inline-end: 0.55rem;
-  top: 50%;
-  transform: translateY(-50%);
-  border: none;
-  background: transparent;
-  color: hsl(var(--text-soft));
-  width: 2rem;
-  height: 2rem;
-  border-radius: 999px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-}
-
-.auth-password-toggle:hover {
-  color: hsl(var(--foreground));
-  background-color: color-mix(in srgb, hsl(var(--muted)) 85%, transparent);
-}
-
-.auth-password-toggle:focus-visible {
-  outline: 1px solid hsl(var(--accent));
-}
-
-.auth-form-inline-link {
-  color: hsl(var(--accent));
-  font-size: 0.82rem;
-  font-weight: 700;
-  text-decoration: none;
-  width: fit-content;
-}
-
-.auth-form-inline-link:hover {
-  text-decoration: underline;
 }
 
 .auth-form-field-hint {
@@ -351,6 +262,16 @@ html[data-theme='dark'] .auth-form-field-error {
 }
 
 @media (min-width: 640px) {
+  .auth-page-floating-controls {
+    top: 1.1rem;
+    right: 1.1rem;
+  }
+
+  [dir='rtl'] .auth-page-floating-controls {
+    right: auto;
+    left: 1.1rem;
+  }
+
   .auth-page-container {
     padding-top: 2.75rem;
   }
@@ -358,46 +279,6 @@ html[data-theme='dark'] .auth-form-field-error {
   .auth-form-shell {
     margin-top: 2.65rem;
     padding: 1.65rem;
-  }
-}
-
-@media (min-width: 1024px) {
-  .auth-page-layout {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(0, 32rem);
-    align-items: start;
-    gap: 1.25rem;
-  }
-
-  .auth-page-banner {
-    display: block;
-    border: 1px solid hsl(var(--border));
-    border-radius: var(--radius-lg);
-    padding: 1.35rem;
-    background:
-      linear-gradient(145deg, hsl(var(--surface-strong)) 0%, color-mix(in srgb, hsl(var(--accent)) 8%, hsl(var(--surface-strong))) 100%);
-  }
-
-  .auth-page-banner-title {
-    margin: 0;
-    font-family: var(--font-sora), sans-serif;
-    font-size: clamp(1.35rem, 2vw, 1.7rem);
-    line-height: 1.2;
-  }
-
-  .auth-page-banner-text {
-    margin: 0.65rem 0 0;
-    color: hsl(var(--text-soft));
-    line-height: 1.7;
-    font-size: 0.95rem;
-  }
-
-  [dir='rtl'] .auth-page-banner-title {
-    font-family: var(--font-cairo), sans-serif;
-  }
-
-  [dir='rtl'] .auth-page-banner-text {
-    font-family: var(--font-tajawal), sans-serif;
   }
 }
 

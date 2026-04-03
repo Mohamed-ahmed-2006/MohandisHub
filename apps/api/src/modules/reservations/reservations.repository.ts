@@ -243,8 +243,13 @@ export class ReservationsRepository {
     const clauses = ['provider_id = $1', 'start_at < $3', 'end_at > $2'];
     if (availableOnly) clauses.push(`status = 'available'`);
     if (filters?.purpose) {
-      params.push(filters.purpose);
-      clauses.push(`purpose = $${params.length}`);
+      // Pre-migration rows may have NULL purpose; treat as service availability.
+      if (filters.purpose === 'service') {
+        clauses.push(`(COALESCE(purpose, 'service') = 'service')`);
+      } else {
+        params.push(filters.purpose);
+        clauses.push(`purpose = $${params.length}`);
+      }
     }
     if (filters?.jobId) {
       params.push(filters.jobId);

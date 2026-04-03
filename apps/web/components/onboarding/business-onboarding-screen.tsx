@@ -435,7 +435,7 @@ export const BusinessOnboardingScreen = ({ locale, dictionary }: Props) => {
                     <option value="" />
                     {Object.entries(dictionary.verification.companySizes).map(([k, v]) => (
                       <option key={k} value={k}>
-                        {v}
+                        {String(v)}
                       </option>
                     ))}
                   </select>

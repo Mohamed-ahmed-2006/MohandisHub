@@ -161,7 +161,7 @@ export const ExpertDashboard = ({
 
   const suggestions = dictionary.appHome?.suggestions?.[providerRole];
   const suggestTitle = suggestions?.title ?? 'Suggested actions for providers';
-  const suggestItems = suggestions?.items ?? [];
+  const suggestItems = (suggestions?.items ?? []) as string[];
   const suggestCta = suggestions?.ctaLabel ?? 'Manage Services';
 
   return (

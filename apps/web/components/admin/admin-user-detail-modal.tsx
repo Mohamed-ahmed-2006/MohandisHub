@@ -3,6 +3,7 @@
 
 import type {
   AdminChangeUserEmailBody,
+  AdminReviewHistoryItem,
   AdminUpdateUserBody,
   AdminUserActivityType,
   AdminUserOverview,
@@ -141,10 +142,15 @@ export const AdminUserDetailModal = ({
   } | null>(null);
 
   const [previewImage, setPreviewImage] = useState<{ url: string; title: string } | null>(null);
+  const [verificationReviewHistory, setVerificationReviewHistory] = useState<AdminReviewHistoryItem[]>(
+    [],
+  );
+  const [verificationReviewHistoryLoading, setVerificationReviewHistoryLoading] = useState(false);
 
   const d = dictionary.admin.users;
   const ud = d.userDetail;
   const u360 = ud.user360;
+  const vh = ud.verificationHistory;
 
   const canManageUsers = hasPermission(adminPermissions, 'manage_users');
   const canManagePlans = hasPermission(adminPermissions, 'manage_plans');
@@ -170,38 +176,6 @@ export const AdminUserDetailModal = ({
           : Promise.resolve([] as Plan[]),
       ]);
 
-      // #region agent log
-      fetch('http://127.0.0.1:7325/ingest/ebd08bf8-7d73-450c-ad4d-4436a6c2225b', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Debug-Session-Id': 'b33485',
-        },
-        body: JSON.stringify({
-          sessionId: 'b33485',
-          runId: 'pre-debug',
-          hypothesisId: 'H2_admin_user_detail_images_presence',
-          location: 'admin-user-detail-modal.tsx:loadOverview-afterFetch',
-          message: 'Admin user overview fetched (logo + identity image URL presence summary)',
-          data: {
-            businessLogoPresent: Boolean(overviewData.businessProfile?.logoUrl),
-            businessLogoStartsWithHttp: (overviewData.businessProfile?.logoUrl ?? '').startsWith('http'),
-            businessLogoIncludesPrivatePrefix: (overviewData.businessProfile?.logoUrl ?? '').includes('/api/upload/private/'),
-            identityDocsCount: overviewData.identityDocuments.length,
-            identityDocsWithAnyImageUrlCount: overviewData.identityDocuments.filter(
-              (d) => Boolean(d.frontImageUrl || d.backImageUrl || d.selfieImageUrl),
-            ).length,
-            identityDocsSample: overviewData.identityDocuments.slice(0, 3).map((d) => ({
-              id: d.id,
-              hasFront: Boolean(d.frontImageUrl),
-              hasBack: Boolean(d.backImageUrl),
-              hasSelfie: Boolean(d.selfieImageUrl),
-            })),
-          },
-          timestamp: Date.now(),
-        }),
-      }).catch(() => {});
-      // #endregion
       setOverview(overviewData);
       setPlans(plansData);
 
@@ -257,9 +231,32 @@ export const AdminUserDetailModal = ({
     }
   }, [accessToken, activityPage, activityType, canManageTransactions, refreshSession, userId]);
 
+  const loadVerificationReviewHistory = useCallback(async () => {
+    if (!userId || !canManageVerifications || !accessToken) return;
+    setVerificationReviewHistoryLoading(true);
+    try {
+      const rows = await adminApiClient.getVerificationReviewHistory(
+        accessToken,
+        userId,
+        opts(refreshSession),
+      );
+      setVerificationReviewHistory(Array.isArray(rows) ? rows : []);
+    } catch {
+      setVerificationReviewHistory([]);
+    } finally {
+      setVerificationReviewHistoryLoading(false);
+    }
+  }, [accessToken, canManageVerifications, refreshSession, userId]);
+
   useEffect(() => {
     void loadOverview();
   }, [loadOverview]);
+
+  useEffect(() => {
+    if (activeTab === 'verification' && userId && canManageVerifications) {
+      void loadVerificationReviewHistory();
+    }
+  }, [activeTab, canManageVerifications, loadVerificationReviewHistory, userId]);
 
   useEffect(() => {
     if (activeTab === 'activity') {
@@ -466,6 +463,7 @@ export const AdminUserDetailModal = ({
         opts(refreshSession),
       );
       await loadOverview();
+      await loadVerificationReviewHistory();
       onSuccess();
     } finally {
       setActionLoading(null);
@@ -486,6 +484,7 @@ export const AdminUserDetailModal = ({
         opts(refreshSession),
       );
       await loadOverview();
+      await loadVerificationReviewHistory();
       onSuccess();
     } finally {
       setActionLoading(null);
@@ -506,6 +505,7 @@ export const AdminUserDetailModal = ({
         opts(refreshSession),
       );
       await loadOverview();
+      await loadVerificationReviewHistory();
       onSuccess();
     } finally {
       setActionLoading(null);
@@ -802,6 +802,69 @@ export const AdminUserDetailModal = ({
                       </>
                     )}
                   </section>
+
+                  {canManageVerifications && (
+                    <section className="admin-user-card admin-user360-span-2">
+                      <h3 className="admin-user-card-title">
+                        {vh?.title ?? 'Verification review history'}
+                      </h3>
+                      <p
+                        className="admin-user360-item-meta"
+                        style={{ fontSize: '0.85rem', color: 'var(--text-soft)', marginBottom: '0.75rem' }}
+                      >
+                        {vh?.hint ??
+                          'Past approve/reject actions for this user (including older document record IDs if they resubmitted).'}
+                      </p>
+                      {verificationReviewHistoryLoading ? (
+                        <p className="admin-empty">{dictionary.admin.loading}</p>
+                      ) : verificationReviewHistory.length === 0 ? (
+                        <p className="admin-empty">{vh?.empty ?? 'No past admin reviews yet.'}</p>
+                      ) : (
+                        <div className="admin-table-wrapper">
+                          <table className="admin-table">
+                            <thead>
+                              <tr>
+                                <th>{vh?.date ?? 'Date'}</th>
+                                <th>{vh?.reviewer ?? 'Reviewer'}</th>
+                                <th>{vh?.type ?? 'Type'}</th>
+                                <th>{vh?.decision ?? 'Decision'}</th>
+                                <th>{vh?.recordId ?? 'Record ID'}</th>
+                                <th>{vh?.notes ?? 'Notes'}</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {verificationReviewHistory.map((row) => (
+                                <tr key={row.id}>
+                                  <td>{formatDateTime(row.createdAt)}</td>
+                                  <td>{row.reviewerDisplayName ?? `${row.reviewerId.slice(0, 8)}…`}</td>
+                                  <td>
+                                    {row.reviewType === 'identity'
+                                      ? (vh?.typeIdentity ?? 'Identity document')
+                                      : row.reviewType === 'academic'
+                                        ? (vh?.typeAcademic ?? 'Academic record')
+                                        : (vh?.typeBusiness ?? 'Business verification')}
+                                  </td>
+                                  <td>
+                                    <span
+                                      className={`admin-badge ${row.decision === 'approved' ? 'admin-badge--completed' : 'admin-badge--rejected'}`}
+                                    >
+                                      {row.decision === 'approved'
+                                        ? (vh?.approved ?? 'Approved')
+                                        : (vh?.rejected ?? 'Rejected')}
+                                    </span>
+                                  </td>
+                                  <td style={{ fontSize: '0.75rem', wordBreak: 'break-all' }}>
+                                    {row.targetRecordId}
+                                  </td>
+                                  <td>{row.notes?.trim() ? row.notes : '—'}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                    </section>
+                  )}
                 </div>
               )}
 

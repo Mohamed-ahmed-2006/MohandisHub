@@ -612,6 +612,29 @@ export class ProfilesRepository {
     return rows[0]!;
   }
 
+  async findAdminReviewsForTargetUser(targetUserId: string): Promise<
+    Array<
+      AdminReviewRow & {
+        reviewer_display_name: string | null;
+      }
+    >
+  > {
+    const { rows } = await this.db.query<
+      AdminReviewRow & { reviewer_display_name: string | null }
+    >(
+      `SELECT ar.id, ar.reviewer_id, ar.target_user_id, ar.review_type, ar.target_table,
+              ar.target_record_id, ar.decision, ar.notes, ar.created_at,
+              COALESCE(NULLIF(TRIM(rev.display_name), ''), rev.email) AS reviewer_display_name
+       FROM admin_reviews ar
+       JOIN users rev ON rev.id = ar.reviewer_id
+       WHERE ar.target_user_id = $1
+       ORDER BY ar.created_at DESC
+       LIMIT 500`,
+      [targetUserId],
+    );
+    return rows;
+  }
+
   // ── Admin: list pending items ──────────────────────────────────────────
 
   async findPendingIdentityDocuments(): Promise<IdentityDocumentRow[]> {

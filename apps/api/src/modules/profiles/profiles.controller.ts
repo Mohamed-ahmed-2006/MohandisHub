@@ -5,6 +5,7 @@
 import type {
   AcademicRecord,
   AdminReview,
+  AdminReviewHistoryItem,
   ApiSuccessBody,
   BusinessProfile,
   CraftsmanProfile,
@@ -292,6 +293,22 @@ const getPendingVerifications = asyncHandler(async (req, res) => {
   res.json(response);
 });
 
+/** GET /api/admin/verification/users/:userId/reviews — audit trail of past approve/reject decisions */
+const getVerificationReviewHistory = asyncHandler(async (req, res) => {
+  requireAdmin(req);
+  const userId = req.params.userId;
+  if (!userId) {
+    throw new HttpError({
+      statusCode: 400,
+      code: 'VALIDATION_ERROR',
+      message: 'userId is required.',
+    });
+  }
+  const data = await profilesService.getAdminVerificationReviewHistory(userId);
+  const response: ApiSuccessBody<AdminReviewHistoryItem[]> = { ok: true, data };
+  res.json(response);
+});
+
 /** POST /api/admin/identity/:docId/review — approve/reject identity doc */
 const reviewIdentityDocument = asyncHandler(async (req, res) => {
   const admin = requireAdmin(req);
@@ -430,6 +447,7 @@ export const profilesController = {
   getAcademicRecords,
   updateAcademicRecord,
   getPendingVerifications,
+  getVerificationReviewHistory,
   syncVerifiedAt,
   reviewIdentityDocument,
   reviewAcademicRecord,

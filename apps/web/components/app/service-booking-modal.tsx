@@ -106,12 +106,13 @@ export const ServiceBookingModal = ({
 
       const onlineSupported = upcomingSlots.some((slot) => slot.supportsOnline);
       const offlineSupported = upcomingSlots.some((slot) => slot.supportsOffline);
-      const modeSupported = mode === 'online' ? onlineSupported : offlineSupported;
-
-      if (!modeSupported) {
-        const fallbackMode = onlineSupported ? 'online' : offlineSupported ? 'offline' : mode;
-        setMode(fallbackMode);
-      }
+      setMode((current) => {
+        const modeSupported = current === 'online' ? onlineSupported : offlineSupported;
+        if (!modeSupported) {
+          return onlineSupported ? 'online' : offlineSupported ? 'offline' : current;
+        }
+        return current;
+      });
 
       setModeReady(true);
     } catch (e) {
@@ -122,7 +123,7 @@ export const ServiceBookingModal = ({
     } finally {
       setLoading(false);
     }
-  }, [accessToken, mode, service.providerId]);
+  }, [accessToken, service.providerId]);
 
   const prevOpenRef = useRef(false);
   useEffect(() => {

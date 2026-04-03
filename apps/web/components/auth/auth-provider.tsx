@@ -5,6 +5,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState } 
 
 import { authUserCache } from '@/lib/auth/auth-cache';
 import { authApiClient } from '@/lib/auth/client';
+import { coalescedRefresh } from '@/lib/auth/refresh-coalesced';
 import { sessionStore } from '@/lib/auth/session-store';
 
 type RegisterRole = Exclude<UserRole, 'admin'>;
@@ -69,19 +70,22 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   }, []);
 
   const refreshSession = useCallback(async (): Promise<string | null> => {
-    try {
-      const refreshed = await authApiClient.refresh();
-      setSessionToken(refreshed.tokens.accessToken);
+    const result = await coalescedRefresh();
 
-      const me = await authApiClient.me(refreshed.tokens.accessToken);
-      setAuthUser(me);
-      authUserCache.set(me);
-
-      return refreshed.tokens.accessToken;
-    } catch {
+    if (result.kind === 'fatal') {
       clearSessionState(setAccessToken, setAuthUser);
       return null;
     }
+
+    if (result.kind === 'transient') {
+      return null;
+    }
+
+    setSessionToken(result.accessToken);
+    setAuthUser(result.user);
+    authUserCache.set(result.user);
+
+    return result.accessToken;
   }, [setSessionToken]);
 
   useEffect(() => {
@@ -104,11 +108,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     }
 
     void (async () => {
-      const restored = await refreshSession();
-
-      if (!restored && isMounted) {
-        clearSessionState(setAccessToken, setAuthUser);
-      }
+      await refreshSession();
 
       if (isMounted) {
         setIsReady(true);
@@ -119,6 +119,17 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       isMounted = false;
     };
   }, [refreshSession]);
+
+  useEffect(() => {
+    const onVisibility = () => {
+      if (document.visibilityState !== 'visible') return;
+      if (window.localStorage.getItem(AUTH_SESSION_HINT_KEY) !== '1') return;
+      if (accessToken) return;
+      void refreshSession();
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => document.removeEventListener('visibilitychange', onVisibility);
+  }, [refreshSession, accessToken]);
 
   const login = useCallback(
     async (input: LoginBody): Promise<AuthUser> => {

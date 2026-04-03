@@ -83,7 +83,7 @@ const HomePage = async ({ params }: HomePageProps) => {
         <section className="home-page-section">
           <h2 className="home-page-section-title">{dictionary.home.whatYouCanDoTitle}</h2>
           <div className="home-page-feature-grid">
-            {dictionary.home.features.map((feature) => (
+            {dictionary.home.features.map((feature: { title: string; description: string }) => (
               <Card key={feature.title}>
                 <h3 className="home-page-feature-title">{feature.title}</h3>
                 <p className="home-page-feature-description">{feature.description}</p>
@@ -95,7 +95,7 @@ const HomePage = async ({ params }: HomePageProps) => {
         <section className="home-page-section">
           <h2 className="home-page-section-title">{dictionary.home.howItWorksTitle}</h2>
           <div className="home-page-steps-grid">
-            {dictionary.home.steps.map((step, index) => (
+            {dictionary.home.steps.map((step: string, index: number) => (
               <Card key={step}>
                 <p className="home-page-step-label">
                   {dictionary.home.stepLabel} {index + 1}
@@ -218,7 +218,7 @@ const HomePage = async ({ params }: HomePageProps) => {
                     <div className="home-page-faq-block">
                       <h2 className="home-page-section-title">{dictionary.home.faqTitle}</h2>
                       <ul className="home-page-faq-list">
-                        {dictionary.home.faqItems.map((item, i) => (
+                        {dictionary.home.faqItems.map((item: { question: string; answer: string }, i: number) => (
                           <li key={i} className="home-page-faq-item">
                             <strong className="home-page-faq-question">{item.question}</strong>
                             <p className="home-page-faq-answer">{item.answer}</p>

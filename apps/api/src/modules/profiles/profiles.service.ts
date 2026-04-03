@@ -5,6 +5,7 @@
 import type {
   AcademicRecord,
   AdminReview,
+  AdminReviewHistoryItem,
   BusinessProfile,
   CraftsmanProfile,
   CustomerProfile,
@@ -626,6 +627,33 @@ export class ProfilesService {
       });
     }
     return this.toAcademicRecord(row);
+  }
+
+  /**
+   * Where admin verification decisions are stored (see also `admin_reviews`):
+   * - **Identity** (`review_type: identity`, `target_table: identity_documents`): updates the
+   *   identity document row’s status; sets profile `identity_verified` on expert / business /
+   *   craftsman; sets expert `identity_verification_method` when manual; recomputes
+   *   `verification_status` / `verified_at` on the role profile (expert also needs academic + avatar;
+   *   business needs `business_verified` + logo; craftsman needs avatar).
+   * - **Academic** (`academic`, `academic_records`): expert `academic_verified` and overall expert status.
+   * - **Business company docs** (`business_docs`, `business_profiles`): `business_verified` and
+   *   overall business `verification_status`; `target_record_id` is the **business_profiles.id** UUID.
+   */
+  async getAdminVerificationReviewHistory(targetUserId: string): Promise<AdminReviewHistoryItem[]> {
+    const rows = await this.repo.findAdminReviewsForTargetUser(targetUserId);
+    return rows.map((r) => ({
+      id: r.id,
+      reviewerId: r.reviewer_id,
+      reviewerDisplayName: r.reviewer_display_name,
+      targetUserId: r.target_user_id,
+      reviewType: r.review_type,
+      targetTable: r.target_table,
+      targetRecordId: r.target_record_id,
+      decision: r.decision,
+      notes: r.notes,
+      createdAt: r.created_at.toISOString(),
+    }));
   }
 
   // ── Admin: review identity document ────────────────────────────────────

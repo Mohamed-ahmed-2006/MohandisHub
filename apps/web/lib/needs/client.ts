@@ -56,7 +56,6 @@ async function apiReq<T>(path: string, token: string, opts?: RequestInit): Promi
     },
   });
   if (!res.ok) {
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- res.json() returns any
     const body = await res.json().catch(() => ({}));
     const err = body as { error?: { message?: string; details?: unknown } };
     const msg = err?.error?.message ?? 'Request failed';

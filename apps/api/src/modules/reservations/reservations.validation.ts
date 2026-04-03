@@ -23,6 +23,9 @@ export const createReservationSlotSchema = z
     return Number.isFinite(durationMs) && durationMs <= 24 * 60 * 60 * 1000;
   }, {
     message: 'Slot duration must be 24 hours or less.',
+  })
+  .refine((d) => (d.supportsOnline ?? true) || (d.supportsOffline ?? true), {
+    message: 'Enable at least online or offline for the slot so customers can book.',
   });
 
 export const updateReservationSlotSchema = z.object({

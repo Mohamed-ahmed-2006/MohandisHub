@@ -4,7 +4,7 @@
 
 import { randomUUID } from 'node:crypto';
 
-import type { RegisterableRole } from '@mohandishub/shared';
+import type { UserRole } from '@mohandishub/shared';
 import type { Pool } from 'pg';
 
 import { getPool } from '../../db/pool.js';
@@ -28,8 +28,7 @@ export class AuthRepository {
     const { rows } = await this.db.query<UserRow>(
       `SELECT u.id, u.email, u.password_hash, u.phone, u.phone_code, u.nationality,
               u.display_name, u.avatar_url, u.date_of_birth, u.primary_role,
-              COALESCE(u.is_admin, false) AS is_admin,
-              u.admin_permissions,
+              u.is_admin, COALESCE(u.admin_permissions, '[]'::jsonb) AS admin_permissions,
               u.plan_id, COALESCE(p.slug, 'free') AS plan_slug,
               u.email_verified_at, u.phone_verified_at, u.is_active, u.created_at, u.updated_at
        FROM users u
@@ -45,8 +44,7 @@ export class AuthRepository {
     const { rows } = await this.db.query<UserRow>(
       `SELECT u.id, u.email, u.password_hash, u.phone, u.phone_code, u.nationality,
               u.display_name, u.avatar_url, u.date_of_birth, u.primary_role,
-              COALESCE(u.is_admin, false) AS is_admin,
-              u.admin_permissions,
+              u.is_admin, COALESCE(u.admin_permissions, '[]'::jsonb) AS admin_permissions,
               u.plan_id, COALESCE(p.slug, 'free') AS plan_slug,
               u.email_verified_at, u.phone_verified_at, u.is_active, u.created_at, u.updated_at
        FROM users u
@@ -62,7 +60,7 @@ export class AuthRepository {
     email: string;
     passwordHash: string;
     displayName: string;
-    role: RegisterableRole;
+    role: UserRole;
     phone?: string | undefined;
     phoneCode?: string | undefined;
     nationality?: string | undefined;
@@ -104,7 +102,6 @@ export class AuthRepository {
       phone?: string | null;
       phoneCode?: string | null;
       nationality?: string | null;
-      avatarUrl?: string | null;
       dateOfBirth?: string | null;
     },
   ): Promise<UserRow | null> {
@@ -127,10 +124,6 @@ export class AuthRepository {
     if (fields.nationality !== undefined) {
       setClauses.push(`nationality = $${idx++}`);
       values.push(fields.nationality);
-    }
-    if (fields.avatarUrl !== undefined) {
-      setClauses.push(`avatar_url = $${idx++}`);
-      values.push(fields.avatarUrl);
     }
     if (fields.dateOfBirth !== undefined) {
       setClauses.push(`date_of_birth = $${idx++}`);
@@ -161,7 +154,9 @@ export class AuthRepository {
   }
 
   /** Get pending email info for a user. */
-  async getPendingEmail(userId: string): Promise<{
+  async getPendingEmail(
+    userId: string,
+  ): Promise<{
     pending_email: string;
     pending_email_token: string;
     pending_email_expires: Date;
@@ -202,56 +197,6 @@ export class AuthRepository {
     );
   }
 
-  /** Set password reset token hash + expiry for a user. */
-  async setPasswordResetToken(userId: string, tokenHash: string, expiresAt: Date): Promise<void> {
-    await this.db.query(
-      `UPDATE users
-       SET password_reset_token = $1,
-           password_reset_expires = $2
-       WHERE id = $3`,
-      [tokenHash, expiresAt, userId],
-    );
-  }
-
-  /** Find a user by active password reset token hash. */
-  async findUserByPasswordResetToken(tokenHash: string): Promise<UserRow | null> {
-    const { rows } = await this.db.query<UserRow>(
-      `SELECT u.id, u.email, u.password_hash, u.phone, u.phone_code, u.nationality,
-              u.display_name, u.avatar_url, u.date_of_birth, u.primary_role,
-              COALESCE(u.is_admin, false) AS is_admin,
-              u.admin_permissions,
-              u.plan_id, COALESCE(p.slug, 'free') AS plan_slug,
-              u.email_verified_at, u.phone_verified_at, u.is_active, u.created_at, u.updated_at
-       FROM users u
-       LEFT JOIN plans p ON u.plan_id = p.id
-       WHERE u.password_reset_token = $1
-         AND u.password_reset_expires > now()
-         AND u.deleted_at IS NULL
-       LIMIT 1`,
-      [tokenHash],
-    );
-    return rows[0] ?? null;
-  }
-
-  /** Replace user's password hash. */
-  async updatePasswordHash(userId: string, passwordHash: string): Promise<void> {
-    await this.db.query('UPDATE users SET password_hash = $1, updated_at = now() WHERE id = $2', [
-      passwordHash,
-      userId,
-    ]);
-  }
-
-  /** Clear password reset fields after successful reset. */
-  async clearPasswordResetToken(userId: string): Promise<void> {
-    await this.db.query(
-      `UPDATE users
-       SET password_reset_token = NULL,
-           password_reset_expires = NULL
-       WHERE id = $1`,
-      [userId],
-    );
-  }
-
   // ── Role-specific profile creation (called at registration) ────────────
 
   async createCustomerProfile(userId: string): Promise<void> {
@@ -269,18 +214,11 @@ export class AuthRepository {
     ]);
   }
 
-  async createCraftsmanProfile(userId: string): Promise<void> {
-    await this.db.query('INSERT INTO craftsman_profiles (user_id) VALUES ($1)', [userId]);
-  }
-
   // ── Verification status lookup ─────────────────────────────────────────
 
   async getExpertVerification(userId: string): Promise<ExpertVerificationRow | null> {
     const { rows } = await this.db.query<ExpertVerificationRow>(
-      `SELECT verification_status, identity_verified, academic_verified
-       FROM expert_profiles
-       WHERE user_id = $1
-       LIMIT 1`,
+      'SELECT verification_status FROM expert_profiles WHERE user_id = $1 LIMIT 1',
       [userId],
     );
     return rows[0] ?? null;
@@ -288,10 +226,7 @@ export class AuthRepository {
 
   async getBusinessVerification(userId: string): Promise<BusinessVerificationRow | null> {
     const { rows } = await this.db.query<BusinessVerificationRow>(
-      `SELECT verification_status, identity_verified, business_verified
-       FROM business_profiles
-       WHERE user_id = $1
-       LIMIT 1`,
+      'SELECT verification_status FROM business_profiles WHERE user_id = $1 LIMIT 1',
       [userId],
     );
     return rows[0] ?? null;
@@ -299,13 +234,50 @@ export class AuthRepository {
 
   async getCraftsmanVerification(userId: string): Promise<CraftsmanVerificationRow | null> {
     const { rows } = await this.db.query<CraftsmanVerificationRow>(
-      `SELECT verification_status, identity_verified
-       FROM craftsman_profiles
-       WHERE user_id = $1
-       LIMIT 1`,
+      'SELECT verification_status, identity_verified FROM craftsman_profiles WHERE user_id = $1 LIMIT 1',
       [userId],
     );
     return rows[0] ?? null;
+  }
+
+  async setPasswordResetToken(userId: string, tokenHash: string, expiresAt: Date): Promise<void> {
+    await this.db.query(
+      `UPDATE users SET password_reset_token = $2, password_reset_expires = $3, updated_at = now()
+       WHERE id = $1 AND deleted_at IS NULL`,
+      [userId, tokenHash, expiresAt],
+    );
+  }
+
+  async findUserByPasswordResetToken(tokenHash: string): Promise<UserRow | null> {
+    const { rows } = await this.db.query<UserRow>(
+      `SELECT u.id, u.email, u.password_hash, u.phone, u.phone_code, u.nationality,
+              u.display_name, u.avatar_url, u.date_of_birth, u.primary_role,
+              u.is_admin, COALESCE(u.admin_permissions, '[]'::jsonb) AS admin_permissions,
+              u.plan_id, COALESCE(p.slug, 'free') AS plan_slug,
+              u.email_verified_at, u.phone_verified_at, u.is_active, u.created_at, u.updated_at
+       FROM users u
+       LEFT JOIN plans p ON u.plan_id = p.id
+       WHERE u.password_reset_token = $1
+         AND u.password_reset_expires > now()
+         AND u.deleted_at IS NULL
+       LIMIT 1`,
+      [tokenHash],
+    );
+    return rows[0] ?? null;
+  }
+
+  async updatePasswordHash(userId: string, passwordHash: string): Promise<void> {
+    await this.db.query(
+      `UPDATE users SET password_hash = $2, updated_at = now() WHERE id = $1 AND deleted_at IS NULL`,
+      [userId, passwordHash],
+    );
+  }
+
+  async clearPasswordResetToken(userId: string): Promise<void> {
+    await this.db.query(
+      `UPDATE users SET password_reset_token = NULL, password_reset_expires = NULL, updated_at = now() WHERE id = $1`,
+      [userId],
+    );
   }
 
   // ── Refresh tokens ────────────────────────────────────────────────────

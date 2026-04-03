@@ -103,6 +103,11 @@ adminRouter.delete('/categories/:id', requireAdminPermission('manage_services'),
 
 // Verifications (existing — delegated to profiles controller)
 adminRouter.get('/verification/pending', requireAdminPermission('manage_verifications'), profilesController.getPendingVerifications);
+adminRouter.get(
+  '/verification/users/:userId/reviews',
+  requireAdminPermission('manage_verifications'),
+  profilesController.getVerificationReviewHistory,
+);
 adminRouter.post('/verification/sync-verified-at', requireAdminPermission('manage_verifications'), profilesController.syncVerifiedAt);
 adminRouter.post('/identity/:docId/review', requireAdminPermission('manage_verifications'), profilesController.reviewIdentityDocument);
 adminRouter.post('/academic/:recordId/review', requireAdminPermission('manage_verifications'), profilesController.reviewAcademicRecord);

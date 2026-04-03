@@ -19,7 +19,7 @@ export const registerSchema = z
       .min(2, 'Display name must be at least 2 characters.')
       .max(100, 'Display name must not exceed 100 characters.')
       .trim(),
-    role: z.enum(['customer', 'expert', 'business', 'craftsman']),
+    role: z.enum(['customer', 'expert', 'business']),
     phone: z.string().max(20).optional(),
     phoneCode: z.string().max(6).optional(),
     nationality: z.string().max(3).optional(),
@@ -78,18 +78,20 @@ export const loginSchema = z.object({
 });
 
 export const forgotPasswordSchema = z.object({
-  email: z.string().email('Invalid email format.').max(255),
+  email: z.string().email('Invalid email format.'),
 });
 
+const resetPasswordPasswordField = z
+  .string()
+  .min(8, 'Password must be at least 8 characters.')
+  .max(128, 'Password must not exceed 128 characters.')
+  .regex(/[A-Z]/, 'Password must contain at least one uppercase letter.')
+  .regex(/[a-z]/, 'Password must contain at least one lowercase letter.')
+  .regex(/[0-9]/, 'Password must contain at least one digit.');
+
 export const resetPasswordSchema = z.object({
-  token: z.string().min(20, 'Reset token is required.'),
-  password: z
-    .string()
-    .min(8, 'Password must be at least 8 characters.')
-    .max(128, 'Password must not exceed 128 characters.')
-    .regex(/[A-Z]/, 'Password must contain at least one uppercase letter.')
-    .regex(/[a-z]/, 'Password must contain at least one lowercase letter.')
-    .regex(/[0-9]/, 'Password must contain at least one digit.'),
+  token: z.string().min(1, 'Reset token is required.'),
+  password: resetPasswordPasswordField,
 });
 
 export type RegisterInput = z.infer<typeof registerSchema>;
