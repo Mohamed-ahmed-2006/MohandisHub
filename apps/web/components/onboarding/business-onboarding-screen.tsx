@@ -133,9 +133,17 @@ export const BusinessOnboardingScreen = ({ locale, dictionary }: Props) => {
     }
   }, [accessToken, withdrawableManualDocId, loadKycStatus, updateAuthUser, dictionary.profile.saveError]);
 
-  // When on complete step or pending KYC, refresh auth and status so verificationStatus updates after admin approval
+  // Poll while user may be waiting on admin (identity, business, or final checks). Otherwise
+  // kycStatus stays stale on the documents step and Continue never enables after approval.
   useEffect(() => {
-    if ((step !== 'complete' && kycStatus !== 'pending') || !accessToken) return;
+    if (!accessToken) return;
+    const shouldPoll =
+      step === 'complete' ||
+      step === 'documents' ||
+      kycStatus === 'pending' ||
+      kycStatus === 'under_review';
+    if (!shouldPoll) return;
+
     void updateAuthUser();
     void loadKycStatus();
     const interval = setInterval(() => {
@@ -727,16 +735,29 @@ export const BusinessOnboardingScreen = ({ locale, dictionary }: Props) => {
                   type="button"
                   className="onboarding-cta-button"
                   onClick={() => setStep('documents')}
-                  disabled={kycStatus !== 'verified'}
+                  disabled={
+                    hasActiveIdentitySubmission ||
+                    (kycStatus !== 'verified' && kycStatus !== 'under_review')
+                  }
                 >
                   {dictionary.common.next}
                 </button>
               </div>
-              {kycStatus !== 'verified' && !hasActiveIdentitySubmission && (
+              {kycStatus !== 'verified' &&
+                kycStatus !== 'under_review' &&
+                !hasActiveIdentitySubmission && (
                 <p className="onboarding-hint">
                   {tr(
                     'Complete identity verification or submit for manual review before continuing.',
                     'أكمل التحقق من الهوية أو قدّم للمراجعة اليدوية قبل المتابعة.',
+                  )}
+                </p>
+              )}
+              {kycStatus === 'under_review' && !hasActiveIdentitySubmission && (
+                <p className="onboarding-hint">
+                  {tr(
+                    'Identity review is complete. Continue to company verification — you can finish onboarding once our team approves your business details.',
+                    'اكتملت مراجعة الهوية. تابع إلى توثيق الشركة — يمكنك إنهاء الإعداد بعد موافقة الفريق على بيانات عملك.',
                   )}
                 </p>
               )}
