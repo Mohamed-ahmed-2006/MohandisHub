@@ -102,14 +102,21 @@
 }
 
 .home-page-hero-banner {
-  display: none;
+  display: block;
+  margin-top: 1.5rem;
+  border: 1px solid hsl(var(--border));
+  border-radius: var(--radius-lg);
+  padding: 1rem;
+  background:
+    linear-gradient(145deg, hsl(var(--surface-strong)) 0%, color-mix(in srgb, hsl(var(--accent)) 8%, hsl(var(--surface-strong))) 100%);
+  box-shadow: var(--shadow-soft-lg);
 }
 
 .home-page-hero-banner-image {
   width: 100%;
   height: auto;
   display: block;
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-md);
   border: 1px solid hsl(var(--border));
   object-fit: cover;
 }
@@ -401,13 +408,8 @@
   }
 
   .home-page-hero-banner {
-    display: block;
-    border: 1px solid hsl(var(--border));
-    border-radius: var(--radius-lg);
+    margin-top: 0;
     padding: 1.25rem;
-    background:
-      linear-gradient(145deg, hsl(var(--surface-strong)) 0%, color-mix(in srgb, hsl(var(--accent)) 8%, hsl(var(--surface-strong))) 100%);
-    box-shadow: var(--shadow-soft-lg);
   }
 
   .home-page-hero-banner-title {

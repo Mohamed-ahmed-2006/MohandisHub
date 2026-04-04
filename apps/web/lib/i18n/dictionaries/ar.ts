@@ -8,6 +8,7 @@ export const arDictionary: Dictionary = {
     login: 'تسجيل الدخول',
     signUp: 'إنشاء حساب',
     getStarted: 'ابدأ الآن',
+    goToDashboard: 'الذهاب إلى لوحة التحكم',
     backToHome: 'العودة للرئيسية',
     submit: 'إرسال',
     save: 'حفظ',

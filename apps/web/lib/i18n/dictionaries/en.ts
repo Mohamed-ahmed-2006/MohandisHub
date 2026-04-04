@@ -6,6 +6,7 @@ export const enDictionary = {
     login: 'Log in',
     signUp: 'Sign up',
     getStarted: 'Get started',
+    goToDashboard: 'Go to dashboard',
     backToHome: 'Back to home',
     submit: 'Submit',
     save: 'Save',
