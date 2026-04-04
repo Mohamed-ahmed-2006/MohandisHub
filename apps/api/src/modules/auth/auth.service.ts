@@ -78,6 +78,9 @@ export class AuthService {
       case 'expert':
         await this.authRepository.createExpertProfile(userRow.id);
         break;
+      case 'craftsman':
+        await this.authRepository.createCraftsmanProfile(userRow.id);
+        break;
       case 'business':
         await this.authRepository.createBusinessProfile(
           userRow.id,

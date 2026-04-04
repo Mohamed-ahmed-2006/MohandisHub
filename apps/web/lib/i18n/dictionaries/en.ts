@@ -37,7 +37,11 @@ export const enDictionary = {
     whatYouCanDoTitle: 'What you can do',
     howItWorksTitle: 'How it works',
     stepLabel: 'Step',
-    footerText: 'MohandisHub foundation build. Local development mode.',
+    footerText:
+      '© 2026 MohandisHub. Engineering services marketplace connecting customers with verified experts and businesses. All rights reserved.',
+    footerPrivacy: 'Privacy Policy',
+    footerTerms: 'Terms & Conditions',
+    footerLegalNavAria: 'Legal',
     features: [
       {
         title: 'Find expert help quickly',

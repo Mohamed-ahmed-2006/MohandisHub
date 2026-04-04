@@ -233,7 +233,21 @@ const HomePage = async ({ params }: HomePageProps) => {
         )}
 
         <footer className="home-page-footer">
-          <p>{dictionary.home.footerText}</p>
+          <p className="home-page-footer-copy">{dictionary.home.footerText}</p>
+          <nav
+            className="home-page-footer-nav"
+            aria-label={dictionary.home.footerLegalNavAria}
+          >
+            <Link className="home-page-footer-link" href={buildLocalePath(typedLocale, '/privacy')}>
+              {dictionary.home.footerPrivacy}
+            </Link>
+            <span className="home-page-footer-sep" aria-hidden>
+              ·
+            </span>
+            <Link className="home-page-footer-link" href={buildLocalePath(typedLocale, '/terms')}>
+              {dictionary.home.footerTerms}
+            </Link>
+          </nav>
         </footer>
       </Container>
     </main>

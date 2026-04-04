@@ -39,7 +39,11 @@ export const arDictionary: Dictionary = {
     whatYouCanDoTitle: 'ماذا يمكنك أن تفعل',
     howItWorksTitle: 'كيف تعمل المنصة',
     stepLabel: 'الخطوة',
-    footerText: 'بنية مهندس هب الأساسية. وضع التطوير المحلي.',
+    footerText:
+      '© 2026 مهندس هب. سوق خدمات هندسية يربط العملاء بالخبراء والشركات الموثوقة. جميع الحقوق محفوظة.',
+    footerPrivacy: 'سياسة الخصوصية',
+    footerTerms: 'الشروط والأحكام',
+    footerLegalNavAria: 'روابط قانونية',
     features: [
       {
         title: 'اعثر على الخبراء بسرعة',

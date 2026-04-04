@@ -13,6 +13,7 @@ import { COUNTRIES, DEFAULT_COUNTRY_CODE, getDialCodeForCountry } from '@/lib/da
 import { detectCountryByIp } from '@/lib/geo/detect-country';
 import { buildLocalePath } from '@/lib/i18n/path';
 import type { Dictionary, Locale } from '@/lib/i18n/types';
+import { LEGAL_VERSION } from '@/lib/legal/legal-constants';
 
 type RegisterRole = Exclude<UserRole, 'admin'>;
 
@@ -292,7 +293,7 @@ export const AuthForm = ({
         role,
         dateOfBirth: registerValues.dateOfBirth,
         acceptedTermsAt: new Date().toISOString(),
-        termsVersion: '2024-01',
+        termsVersion: LEGAL_VERSION,
       };
       if (registerValues.nationality) registerPayload.nationality = registerValues.nationality;
       if (registerValues.phoneCode) registerPayload.phoneCode = registerValues.phoneCode;

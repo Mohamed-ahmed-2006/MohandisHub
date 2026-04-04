@@ -20,7 +20,7 @@ const TermsPage = async ({ params }: TermsPageProps) => {
   const dictionary = await getDictionary(locale);
   const title = dictionary.auth.register.termsAndConditions;
   const content = getTermsContent(locale);
-  const email = 'support@mohandishub.com';
+  const email = content.contactEmail;
 
   return (
     <main className="legal-page-main">
