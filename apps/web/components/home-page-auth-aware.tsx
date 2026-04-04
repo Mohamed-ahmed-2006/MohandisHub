@@ -12,6 +12,15 @@ type BaseProps = {
   dictionary: Dictionary;
 };
 
+/** Navbar/hero use `common.goToDashboard`; keep fallbacks for older bundles or partial dictionaries. */
+function goToDashboardLabel(dictionary: Dictionary, locale: Locale): string {
+  const fromCommon = dictionary.common?.goToDashboard;
+  if (typeof fromCommon === 'string' && fromCommon.trim() !== '') return fromCommon;
+  const fromOnboarding = dictionary.onboarding?.customer?.goToDashboard;
+  if (typeof fromOnboarding === 'string' && fromOnboarding.trim() !== '') return fromOnboarding;
+  return locale === 'ar' ? 'الذهاب إلى لوحة التحكم' : 'Go to dashboard';
+}
+
 const guestNav = (locale: Locale, dictionary: Dictionary) => (
   <>
     <ButtonLink
@@ -57,7 +66,7 @@ export function HomePageNavAuth({ locale, dictionary }: BaseProps) {
   if (isAuthenticated) {
     return (
       <nav className="home-page-nav-actions">
-        <ButtonLink href={appHref} label={dictionary.common.goToDashboard} />
+        <ButtonLink href={appHref} label={goToDashboardLabel(dictionary, locale)} />
       </nav>
     );
   }
@@ -104,7 +113,9 @@ export function HomePageHeroCta({ locale, dictionary }: BaseProps) {
     <div className="home-page-hero-actions">
       <ButtonLink
         href={isAuthenticated ? appHref : registerHref}
-        label={isAuthenticated ? dictionary.common.goToDashboard : dictionary.common.getStarted}
+        label={
+          isAuthenticated ? goToDashboardLabel(dictionary, locale) : dictionary.common.getStarted
+        }
         className="home-page-hero-cta-button"
       />
     </div>

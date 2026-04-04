@@ -52,6 +52,20 @@
   display: flex;
   align-items: center;
   gap: 0.6rem;
+  flex-shrink: 0;
+}
+
+.home-page-nav-actions .button-link {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+[dir='rtl'] .home-page-navbar .button-link {
+  font-family: var(--font-tajawal), var(--font-cairo), sans-serif;
+}
+
+[dir='rtl'] .home-page-hero-actions .button-link {
+  font-family: var(--font-tajawal), var(--font-cairo), sans-serif;
 }
 
 [dir='rtl'] .home-page-nav-actions {
