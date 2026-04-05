@@ -1,7 +1,7 @@
 'use client';
 
 import type { SupportTicketCategory, UserRole } from '@mohandishub/shared';
-import { LifeBuoy } from 'lucide-react';
+import { Ticket } from 'lucide-react';
 import { useState } from 'react';
 
 import { useToast } from '@/components/app/toast';
@@ -98,7 +98,7 @@ export const SupportFab = () => {
         aria-label={sf.openAria}
         onClick={() => setOpen(true)}
       >
-        <LifeBuoy size={22} strokeWidth={2} aria-hidden />
+        <Ticket size={22} strokeWidth={2} aria-hidden />
       </button>
 
       {open ? (
@@ -116,6 +116,7 @@ export const SupportFab = () => {
             <h2 id="support-fab-title" className="support-fab-title">
               {sf.title}
             </h2>
+            <p className="support-fab-subtitle">{sf.subtitle}</p>
 
             <form className="support-fab-form" onSubmit={(e) => void handleSubmit(e)}>
               <label className="support-fab-label" htmlFor="support-fab-email">

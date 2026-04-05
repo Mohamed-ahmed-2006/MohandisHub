@@ -12,6 +12,7 @@ const requiredSnippets = [
   'onboarding: {',
   'craftsman:',
   'chatPage:',
+  'supportPage:',
   'verification:',
   'joinAsCraftsman',
   'kycRequirementsHint',

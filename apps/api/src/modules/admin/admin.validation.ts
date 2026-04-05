@@ -2,6 +2,7 @@
 // Admin module - Zod validation schemas
 // ---------------------------------------------------------------------------
 
+import { MANAGED_SIDEBAR_HREFS } from '@mohandishub/shared';
 import { z } from 'zod';
 
 import {
@@ -43,14 +44,27 @@ export const userActivityTypeSchema = z.enum([
   'transactions',
 ]);
 
+export const planSubscriberRoleSchema = z.enum(['customer', 'expert', 'business', 'craftsman']);
+
 export const planLimitsSchema = z
   .object({
     maxServices: z.number().int().min(0).nullable().optional(),
     maxNeeds: z.number().int().min(0).nullable().optional(),
     maxJobs: z.number().int().min(0).nullable().optional(),
     canPriorityListing: z.boolean().optional(),
-    bidsVisibleToCustomer: z.enum(['all', 'top_n', 'premium_first']).nullable().optional(),
+    bidsVisibleToCustomer: z
+      .enum(['all', 'top_n', 'premium_first', 'priority_first'])
+      .nullable()
+      .optional(),
     bidsVisibleTopN: z.number().int().min(1).nullable().optional(),
+    maxBidsPerNeed: z.number().int().min(0).nullable().optional(),
+    maxActiveBids: z.number().int().min(0).nullable().optional(),
+    maxBusinessServices: z.number().int().min(0).nullable().optional(),
+    maxTeamSlots: z.number().int().min(0).nullable().optional(),
+    canBusinessFeatured: z.boolean().optional(),
+    canPriorityBid: z.boolean().optional(),
+    canProBadge: z.boolean().optional(),
+    canTrustedBusinessBadge: z.boolean().optional(),
   })
   .optional()
   .nullable();
@@ -67,6 +81,10 @@ export const createPlanSchema = z.object({
   maxServices: z.number().int().positive().optional(),
   maxProjects: z.number().int().positive().optional(),
   features: z.array(z.string()).default([]),
+  allowedRoles: z
+    .array(planSubscriberRoleSchema)
+    .min(1)
+    .default(['customer', 'expert', 'business', 'craftsman']),
   planLimits: planLimitsSchema,
   sortOrder: z.number().int().min(0).default(0),
 });
@@ -161,6 +179,14 @@ export const updateSettingsSchema = z.object({
   walletEgpPerUsdtWithdrawal: z.number().positive().nullable().optional(),
   platformInstapayDisplay: z.record(z.string(), z.unknown()).nullable().optional(),
   walletUsdToEgpMigrationRate: z.number().positive().nullable().optional(),
+  sidebarHiddenHrefs: z
+    .array(z.string())
+    .optional()
+    .refine(
+      (arr) =>
+        !arr || arr.every((h) => (MANAGED_SIDEBAR_HREFS as readonly string[]).includes(h)),
+      { message: 'sidebarHiddenHrefs must only contain managed sidebar paths' },
+    ),
 });
 
 export const approveManualInstapayDepositSchema = z.object({

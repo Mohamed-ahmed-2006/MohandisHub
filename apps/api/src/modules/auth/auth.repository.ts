@@ -29,7 +29,7 @@ export class AuthRepository {
       `SELECT u.id, u.email, u.password_hash, u.phone, u.phone_code, u.nationality,
               u.display_name, u.avatar_url, u.date_of_birth, u.primary_role,
               u.is_admin, COALESCE(u.admin_permissions, '[]'::jsonb) AS admin_permissions,
-              u.plan_id, COALESCE(p.slug, 'free') AS plan_slug,
+              u.plan_id, COALESCE(p.slug, 'free') AS plan_slug, p.plan_limits AS plan_limits,
               u.email_verified_at, u.phone_verified_at, u.is_active, u.created_at, u.updated_at
        FROM users u
        LEFT JOIN plans p ON u.plan_id = p.id
@@ -45,7 +45,7 @@ export class AuthRepository {
       `SELECT u.id, u.email, u.password_hash, u.phone, u.phone_code, u.nationality,
               u.display_name, u.avatar_url, u.date_of_birth, u.primary_role,
               u.is_admin, COALESCE(u.admin_permissions, '[]'::jsonb) AS admin_permissions,
-              u.plan_id, COALESCE(p.slug, 'free') AS plan_slug,
+              u.plan_id, COALESCE(p.slug, 'free') AS plan_slug, p.plan_limits AS plan_limits,
               u.email_verified_at, u.phone_verified_at, u.is_active, u.created_at, u.updated_at
        FROM users u
        LEFT JOIN plans p ON u.plan_id = p.id
@@ -253,7 +253,7 @@ export class AuthRepository {
       `SELECT u.id, u.email, u.password_hash, u.phone, u.phone_code, u.nationality,
               u.display_name, u.avatar_url, u.date_of_birth, u.primary_role,
               u.is_admin, COALESCE(u.admin_permissions, '[]'::jsonb) AS admin_permissions,
-              u.plan_id, COALESCE(p.slug, 'free') AS plan_slug,
+              u.plan_id, COALESCE(p.slug, 'free') AS plan_slug, p.plan_limits AS plan_limits,
               u.email_verified_at, u.phone_verified_at, u.is_active, u.created_at, u.updated_at
        FROM users u
        LEFT JOIN plans p ON u.plan_id = p.id

@@ -7,6 +7,7 @@ import { AdminCategoriesTab } from './admin-categories-tab';
 import { AdminDashboardTab } from './admin-dashboard-tab';
 import { AdminNotificationsTab } from './admin-notifications-tab';
 import { AdminPlansTab } from './admin-plans-tab';
+import { AdminRetentionTab } from './admin-retention-tab';
 import { AdminReviewReportsTab } from './admin-review-reports-tab';
 import { AdminServicesTab } from './admin-services-tab';
 import { AdminSettingsTab } from './admin-settings-tab';
@@ -41,7 +42,8 @@ type TabId =
   | 'reviewReports'
   | 'support'
   | 'notifications'
-  | 'settings';
+  | 'settings'
+  | 'retention';
 
 export const AdminPanel = ({ locale, dictionary }: AdminPanelProps) => {
   const router = useRouter();
@@ -77,6 +79,7 @@ export const AdminPanel = ({ locale, dictionary }: AdminPanelProps) => {
     { id: 'support', label: dictionary.admin.tabs.support ?? '', permission: 'manage_users' },
     { id: 'notifications', label: dictionary.admin.tabs.notifications ?? '', permission: 'manage_notifications' },
     { id: 'settings', label: dictionary.admin.tabs.settings, permission: 'manage_settings' },
+    { id: 'retention', label: dictionary.admin.tabs.retention ?? 'Retention', permission: 'manage_retention' },
   ];
 
   const filteredTabs = tabs.filter(
@@ -191,6 +194,13 @@ export const AdminPanel = ({ locale, dictionary }: AdminPanelProps) => {
         )}
         {activeTab === 'settings' && (
           <AdminSettingsTab
+            dictionary={dictionary}
+            accessToken={accessToken}
+            refreshSession={refreshSession}
+          />
+        )}
+        {activeTab === 'retention' && (
+          <AdminRetentionTab
             dictionary={dictionary}
             accessToken={accessToken}
             refreshSession={refreshSession}

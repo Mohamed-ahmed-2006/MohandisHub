@@ -12,6 +12,8 @@ type AppAvatarMenuProps = {
   displayName: string;
   email: string;
   role: string;
+  planProBadge?: boolean;
+  planTrustedBusinessBadge?: boolean;
   onLogout: () => void;
 };
 
@@ -21,6 +23,8 @@ export const AppAvatarMenu = ({
   displayName,
   email,
   role,
+  planProBadge,
+  planTrustedBusinessBadge,
   onLogout,
 }: AppAvatarMenuProps) => {
   const [open, setOpen] = useState(false);
@@ -68,7 +72,17 @@ export const AppAvatarMenu = ({
       {open && (
         <div className="app-avatar-dropdown" role="menu">
           <div className="app-avatar-dropdown-header">
-            <span className="app-avatar-dropdown-name">{displayName}</span>
+            <span className="app-avatar-dropdown-name-row">
+              <span className="app-avatar-dropdown-name">{displayName}</span>
+              {planProBadge ? (
+                <span className="app-plan-badge app-plan-badge--pro">{dictionary.plan.badgePro}</span>
+              ) : null}
+              {planTrustedBusinessBadge ? (
+                <span className="app-plan-badge app-plan-badge--trusted">
+                  {dictionary.plan.badgeTrustedBusiness}
+                </span>
+              ) : null}
+            </span>
             <span className="app-avatar-dropdown-email">{email}</span>
             <span className="app-avatar-dropdown-role">{roleLabel}</span>
           </div>

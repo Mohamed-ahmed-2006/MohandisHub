@@ -91,7 +91,13 @@ const envSchema = z.object({
   RETENTION_REFRESH_TOKENS_AFTER_EXPIRY_DAYS: z.coerce.number().int().min(0).default(7),
   RETENTION_VERIFICATION_REQUESTS_DAYS: z.coerce.number().int().min(0).default(90),
   RETENTION_CHAT_MESSAGES_DAYS: z.coerce.number().int().min(0).default(0),
+  /** Unsafe for global orphan scan; logged as no-op when > 0 until prefix strategy exists. */
   RETENTION_UPLOADS_DAYS: z.coerce.number().int().min(0).default(0),
+  RETENTION_NEED_REFERENCE_DAYS_AFTER_COMPLETED: z.coerce.number().int().min(0).default(0),
+  RETENTION_BID_MESSAGE_ATTACHMENT_DAYS: z.coerce.number().int().min(0).default(0),
+
+  /** Hard ceiling for public upload size (bytes). Admin/settings cannot exceed this. */
+  PUBLIC_UPLOAD_MAX_BYTES_CEILING: z.coerce.number().int().positive().default(52_428_800), // 50 * 1024 * 1024
 });
 
 const parsed = envSchema.safeParse(process.env);

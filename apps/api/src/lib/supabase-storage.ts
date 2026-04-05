@@ -20,8 +20,72 @@ export function isSupabaseStorageConfigured(): boolean {
   return Boolean(env.SUPABASE_URL && env.SUPABASE_SERVICE_ROLE_KEY);
 }
 
-const UPLOADS_BUCKET = 'uploads';
-const VERIFICATION_DOCS_BUCKET = 'verification-docs';
+export const UPLOADS_BUCKET = 'uploads';
+export const VERIFICATION_DOCS_BUCKET = 'verification-docs';
+
+/** Supabase public URL pattern: .../storage/v1/object/public/{bucket}/{path} */
+const PUBLIC_OBJECT_URL_RE = /\/storage\/v1\/object\/public\/([^/]+)\/(.+)$/;
+
+/**
+ * Extract storage object path for our public `uploads` bucket from a full URL, or null if not a match.
+ */
+export function parsePublicUploadsPathFromUrl(url: string): string | null {
+  const u = url.trim();
+  if (!u) return null;
+  try {
+    const parsed = new URL(u);
+    const m = parsed.pathname.match(PUBLIC_OBJECT_URL_RE);
+    if (!m) return null;
+    const bucket = decodeURIComponent(m[1]!);
+    const objectPath = decodeURIComponent(m[2]!);
+    if (bucket !== UPLOADS_BUCKET) return null;
+    if (!objectPath || objectPath.includes('..')) return null;
+    return objectPath;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * `/uploads/{filename}` on API host → local basename (same as public-uploads middleware).
+ */
+export function parseLocalUploadsBasenameFromUrl(url: string): string | null {
+  const u = url.trim();
+  if (!u) return null;
+  try {
+    const parsed = new URL(u, 'http://localhost');
+    const path = parsed.pathname.replace(/\/+$/, '');
+    const m = path.match(/^\/uploads\/([^/]+)$/);
+    if (!m) return null;
+    const base = m[1]!;
+    if (!base || base.includes('..') || base.includes('/') || base.includes('\\')) return null;
+    return base;
+  } catch {
+    return null;
+  }
+}
+
+/** Resolve public uploads URL to either `{ kind: 'supabase', path }` or `{ kind: 'local', basename }`. */
+export function resolvePublicUploadRef(
+  url: string,
+): { kind: 'supabase'; path: string } | { kind: 'local'; basename: string } | null {
+  const supa = parsePublicUploadsPathFromUrl(url);
+  if (supa) return { kind: 'supabase', path: supa };
+  const local = parseLocalUploadsBasenameFromUrl(url);
+  if (local) return { kind: 'local', basename: local };
+  return null;
+}
+
+export async function deleteObjectsFromBucket(bucket: string, paths: string[]): Promise<void> {
+  const unique = [...new Set(paths.filter(Boolean))];
+  if (unique.length === 0) return;
+  const supabase = getSupabaseStorageClient();
+  if (!supabase) return;
+  const { error } = await supabase.storage.from(bucket).remove(unique);
+  if (error) {
+    throw new Error(`Supabase delete failed: ${error.message}`);
+  }
+}
 
 export type UploadResult = { url: string; path: string };
 

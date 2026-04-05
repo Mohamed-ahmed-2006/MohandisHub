@@ -95,6 +95,14 @@ export type PlanLimitsRow = {
   canPriorityListing?: boolean;
   bidsVisibleToCustomer?: string | null;
   bidsVisibleTopN?: number | null;
+  maxBidsPerNeed?: number | null;
+  maxActiveBids?: number | null;
+  maxBusinessServices?: number | null;
+  maxTeamSlots?: number | null;
+  canBusinessFeatured?: boolean;
+  canPriorityBid?: boolean;
+  canProBadge?: boolean;
+  canTrustedBusinessBadge?: boolean;
 };
 
 export type PlanRow = {
@@ -110,6 +118,7 @@ export type PlanRow = {
   max_services: number | null;
   max_projects: number | null;
   features: string[];
+  allowed_roles?: string[] | null;
   plan_limits?: PlanLimitsRow | null;
   is_active: boolean;
   sort_order: number;

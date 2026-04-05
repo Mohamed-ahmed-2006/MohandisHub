@@ -21,6 +21,7 @@ export type UserRow = {
   admin_permissions?: string[];
   plan_id: string | null;
   plan_slug: string;
+  plan_limits: Record<string, unknown> | null;
   email_verified_at: Date | null;
   phone_verified_at: Date | null;
   is_active: boolean;

@@ -53,6 +53,7 @@ export type BidMessageRow = {
   bid_id: string;
   sender_id: string;
   content: string;
+  attachment_url?: string | null;
   created_at: string;
   sender_name?: string;
 };
@@ -85,6 +86,16 @@ export class NeedsRepository {
   async countNeedsByCustomer(customerId: string): Promise<number> {
     const { rows } = await getPool().query<{ count: string }>(
       `SELECT count(*)::text AS count FROM needs WHERE customer_id = $1`,
+      [customerId],
+    );
+    return rows.length > 0 ? parseInt(rows[0]!.count, 10) : 0;
+  }
+
+  /** Needs that count toward plan maxNeeds: still in-flight, not completed/closed. */
+  async countActiveNeedsByCustomer(customerId: string): Promise<number> {
+    const { rows } = await getPool().query<{ count: string }>(
+      `SELECT count(*)::text AS count FROM needs
+       WHERE customer_id = $1 AND status IN ('open', 'awarded', 'in_progress')`,
       [customerId],
     );
     return rows.length > 0 ? parseInt(rows[0]!.count, 10) : 0;
@@ -174,6 +185,24 @@ export class NeedsRepository {
     return rows[0] as BidRow;
   }
 
+  /** Bids that still occupy a slot on the need (customer plan maxBidsPerNeed). */
+  async countActiveBidsOnNeed(needId: string): Promise<number> {
+    const { rows } = await getPool().query<{ count: string }>(
+      `SELECT count(*)::text AS count FROM bids WHERE need_id = $1 AND status IN ('pending', 'accepted')`,
+      [needId],
+    );
+    return rows.length > 0 ? parseInt(rows[0]!.count, 10) : 0;
+  }
+
+  /** Pending bids across all needs for this provider (plan maxActiveBids). */
+  async countPendingBidsForExpert(expertId: string): Promise<number> {
+    const { rows } = await getPool().query<{ count: string }>(
+      `SELECT count(*)::text AS count FROM bids WHERE expert_id = $1 AND status = 'pending'`,
+      [expertId],
+    );
+    return rows.length > 0 ? parseInt(rows[0]!.count, 10) : 0;
+  }
+
   async listBidsForNeed(needId: string): Promise<BidRow[]> {
     const { rows } = await getPool().query(
       `SELECT b.*, COALESCE(u.display_name, u.email) AS expert_name, u.email AS expert_email,
@@ -186,21 +215,22 @@ export class NeedsRepository {
     return rows as BidRow[];
   }
 
-  /** List bids for a need with expert's plan slug for visibility/sorting by plan. */
+  /** List bids for a need with expert's plan slug and priority-bid flag for marketplace ordering. */
   async listBidsForNeedWithExpertPlan(
     needId: string,
-  ): Promise<(BidRow & { expert_plan_slug: string | null })[]> {
+  ): Promise<(BidRow & { expert_plan_slug: string | null; bidder_can_priority_bid: boolean })[]> {
     const { rows } = await getPool().query(
       `SELECT b.*, COALESCE(u.display_name, u.email) AS expert_name, u.email AS expert_email,
         ((SELECT m.created_at FROM bid_messages m WHERE m.bid_id = b.id ORDER BY m.created_at DESC LIMIT 1) > b.customer_last_read_at) AS has_unread,
-        p.slug AS expert_plan_slug
+        p.slug AS expert_plan_slug,
+        CASE WHEN COALESCE(p.plan_limits->>'canPriorityBid', '') IN ('true', '1') THEN true ELSE false END AS bidder_can_priority_bid
        FROM bids b
        JOIN users u ON u.id = b.expert_id
        LEFT JOIN plans p ON p.id = u.plan_id
        WHERE b.need_id = $1 ORDER BY b.created_at ASC`,
       [needId],
     );
-    return rows as (BidRow & { expert_plan_slug: string | null })[];
+    return rows as (BidRow & { expert_plan_slug: string | null; bidder_can_priority_bid: boolean })[];
   }
 
   async listBidsByExpert(
@@ -288,10 +318,15 @@ export class NeedsRepository {
     );
   }
 
-  async createBidMessage(bidId: string, senderId: string, content: string): Promise<BidMessageRow> {
+  async createBidMessage(
+    bidId: string,
+    senderId: string,
+    content: string,
+    attachmentUrl?: string | null,
+  ): Promise<BidMessageRow> {
     const { rows } = await getPool().query(
-      `INSERT INTO bid_messages (bid_id, sender_id, content) VALUES ($1, $2, $3) RETURNING *`,
-      [bidId, senderId, content]
+      `INSERT INTO bid_messages (bid_id, sender_id, content, attachment_url) VALUES ($1, $2, $3, $4) RETURNING *`,
+      [bidId, senderId, content, attachmentUrl ?? null],
     );
     return rows[0] as BidMessageRow;
   }

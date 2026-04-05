@@ -143,4 +143,6 @@ export type ServiceSearchResult = {
   area: string | null;
   avgRating: number | null;
   isFeatured: boolean;
+  /** Public gallery URLs (same as `Service.images`); may be empty. */
+  images: string[];
 };

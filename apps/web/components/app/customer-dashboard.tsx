@@ -1,6 +1,6 @@
 'use client';
 
-import type { ServiceCategory } from '@mohandishub/shared';
+import type { PlanUsageSummary, ServiceCategory } from '@mohandishub/shared';
 import Image from 'next/image';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
@@ -12,6 +12,7 @@ import { pickLocalized } from '@/lib/i18n/api';
 import type { Dictionary, Locale } from '@/lib/i18n/types';
 import type { Bid, BidMessage, Need } from '@/lib/needs/client';
 import { needsApiClient } from '@/lib/needs/client';
+import { plansApiClient } from '@/lib/plans/client';
 import { uploadFile } from '@/lib/upload/client';
 import { walletApiClient } from '@/lib/wallet/client';
 
@@ -73,6 +74,8 @@ export const CustomerDashboard = ({
   const [chatBidId, setChatBidId] = useState<string | null>(null);
   const [messages, setMessages] = useState<BidMessage[]>([]);
   const [msgContent, setMsgContent] = useState('');
+  const [bidChatAttachmentUrl, setBidChatAttachmentUrl] = useState<string | null>(null);
+  const [bidChatUploading, setBidChatUploading] = useState(false);
   const [uploadedFiles, setUploadedFiles] = useState<
     Array<{ url: string; displayName: string; isVideo: boolean }>
   >([]);
@@ -82,13 +85,16 @@ export const CustomerDashboard = ({
   const { addToast } = useToast();
   const { status } = useAppStatus();
   const needsFeatureEnabled = status?.featureNeedsEnabled !== false;
+  const plansFeatureEnabled = status?.featurePlansEnabled !== false;
   const hourlyPricingEnabled = status?.featureHourlyPricingEnabled === true;
+  const [planUsage, setPlanUsage] = useState<PlanUsageSummary | null>(null);
 
   const isVideoFile = (file: File) => file.type.startsWith('video/');
   const maxImages = 5;
   const maxVideos = 1;
 
   const d = (dictionary.needs ?? {}) as Record<string, string>;
+  const planDict = (dictionary.plan ?? {}) as Record<string, string>;
   const tr = (en: string, ar: string) => (locale === 'ar' ? ar : en);
   const needStatusLabels: Record<string, string> = {
     open: d.needStatusOpen ?? 'Open',
@@ -139,6 +145,19 @@ export const CustomerDashboard = ({
     }
   }, [accessToken, authReady, onNeedsCountChange]);
 
+  const loadPlanUsage = useCallback(async () => {
+    if (!authReady || !accessToken || !plansFeatureEnabled) {
+      setPlanUsage(null);
+      return;
+    }
+    try {
+      const u = await plansApiClient.getMyUsage(accessToken);
+      setPlanUsage(u);
+    } catch {
+      setPlanUsage(null);
+    }
+  }, [accessToken, authReady, plansFeatureEnabled]);
+
   const markNeedCompleted = useCallback(
     async (needId: string) => {
       if (!accessToken) return;
@@ -146,19 +165,24 @@ export const CustomerDashboard = ({
       try {
         await needsApiClient.updateNeed(accessToken, needId, { status: 'completed' });
         await loadNeeds();
+        void loadPlanUsage();
       } catch {
         /* ignore */
       } finally {
         setMarkingCompleted(null);
       }
     },
-    [accessToken, loadNeeds],
+    [accessToken, loadNeeds, loadPlanUsage],
   );
 
   useEffect(() => {
     if (!authReady) return;
     void loadNeeds();
   }, [authReady, loadNeeds]);
+
+  useEffect(() => {
+    void loadPlanUsage();
+  }, [loadPlanUsage]);
 
   useEffect(() => {
     const handler = () => {
@@ -268,6 +292,7 @@ export const CustomerDashboard = ({
       setFieldErrors(null);
       addToast(dictionary.common.success ?? 'Success', d.needCreated ?? 'Need created. Experts can now submit bids.');
       void loadNeeds();
+      void loadPlanUsage();
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed';
       const details =
@@ -308,6 +333,7 @@ export const CustomerDashboard = ({
 
   const openChat = async (bidId: string) => {
     setChatBidId(bidId);
+    setBidChatAttachmentUrl(null);
     try {
       if (!selectedNeed) return;
       const msgs = await needsApiClient.listBidMessages(accessToken, selectedNeed.id, bidId);
@@ -319,10 +345,17 @@ export const CustomerDashboard = ({
 
   const sendMsg = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!msgContent.trim() || !selectedNeed || !chatBidId) return;
+    if (!selectedNeed || !chatBidId) return;
+    const text = msgContent.trim();
+    const attach = bidChatAttachmentUrl?.trim() ?? '';
+    if (!text && !attach) return;
     try {
-      await needsApiClient.createBidMessage(accessToken, selectedNeed.id, chatBidId, msgContent);
+      await needsApiClient.createBidMessage(accessToken, selectedNeed.id, chatBidId, {
+        content: text,
+        ...(attach ? { attachmentUrl: attach } : {}),
+      });
       setMsgContent('');
+      setBidChatAttachmentUrl(null);
       void openChat(chatBidId);
     } catch {
       // ignore
@@ -372,6 +405,26 @@ export const CustomerDashboard = ({
           {d.postNeed ?? 'Post a Need'}
         </button>
       </div>
+      {plansFeatureEnabled &&
+        planUsage?.plansFeatureEnabled &&
+        planUsage.customer &&
+        (() => {
+          const c = planUsage.customer;
+          const line =
+            c.maxNeeds != null && c.remainingNeeds != null
+              ? (planDict.usageNeeds ?? '')
+                  .replace('{used}', String(c.activeNeedsCount))
+                  .replace('{max}', String(c.maxNeeds))
+                  .replace('{remaining}', String(c.remainingNeeds))
+              : (planDict.usageNeedsUnlimited ?? '').replace('{used}', String(c.activeNeedsCount));
+          return (
+            <div className="dashboard-plan-usage" role="status">
+              <p>{planDict.usageTitle ?? 'Your plan usage'}</p>
+              <p>{line}</p>
+              <p>{planDict.usageConcurrentNote ?? ''}</p>
+            </div>
+          );
+        })()}
       {!needsFeatureEnabled && (
         <p className="dashboard-empty" role="status">
           Needs are currently disabled by admin.
@@ -971,16 +1024,86 @@ export const CustomerDashboard = ({
               <div className="dashboard-need-chat">
                 <h4 className="dashboard-need-chat-title">Pre-Award Chat</h4>
                 <div className="dashboard-need-chat-messages">
-                  {messages.map(m => (
+                  {messages.map((m) => (
                     <div key={m.id} className="dashboard-need-chat-message">
-                      <strong>{m.sender_name}</strong>: {m.content}
+                      <strong>{m.sender_name}</strong>:{' '}
+                      <span>{m.content}</span>
+                      {m.attachment_url ? (
+                        <button
+                          type="button"
+                          className="dashboard-link-btn dashboard-need-chat-attach-thumb-wrap"
+                          onClick={() =>
+                            setPreviewImage({
+                              url: toAbsoluteAssetUrl(m.attachment_url!),
+                              urls: [toAbsoluteAssetUrl(m.attachment_url!)],
+                            })
+                          }
+                        >
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img
+                            src={toAbsoluteAssetUrl(m.attachment_url)}
+                            alt=""
+                            className="dashboard-need-chat-attach-thumb"
+                          />
+                        </button>
+                      ) : null}
                     </div>
                   ))}
                   {messages.length === 0 && <p className="dashboard-empty">No messages yet.</p>}
                 </div>
                 <form onSubmit={(e) => { void sendMsg(e); }} className="dashboard-need-chat-form">
-                  <input className="dashboard-input" value={msgContent} onChange={e => setMsgContent(e.target.value)} placeholder="Type a message..." required />
-                  <button type="submit" className="dashboard-primary-btn">Send</button>
+                  {bidChatAttachmentUrl ? (
+                    <div className="dashboard-need-chat-pending">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={bidChatAttachmentUrl} alt="" className="dashboard-need-chat-attach-thumb" />
+                      <button
+                        type="button"
+                        className="dashboard-link-btn"
+                        onClick={() => setBidChatAttachmentUrl(null)}
+                      >
+                        {tr('Remove image', 'إزالة الصورة')}
+                      </button>
+                    </div>
+                  ) : null}
+                  <label className="dashboard-need-chat-file">
+                    <span className="dashboard-need-chat-file-label">
+                      {tr('Attach image', 'إرفاق صورة')}
+                    </span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      disabled={bidChatUploading || Boolean(bidChatAttachmentUrl)}
+                      onChange={(ev) => {
+                        const file = ev.target.files?.[0];
+                        ev.target.value = '';
+                        if (!file) return;
+                        void (async () => {
+                          setBidChatUploading(true);
+                          try {
+                            const { url } = await uploadFile(accessToken, file);
+                            setBidChatAttachmentUrl(toAbsoluteAssetUrl(url));
+                          } catch {
+                            addToast('Error', tr('Upload failed', 'فشل الرفع'));
+                          } finally {
+                            setBidChatUploading(false);
+                          }
+                        })();
+                      }}
+                    />
+                  </label>
+                  <input
+                    className="dashboard-input"
+                    value={msgContent}
+                    onChange={(e) => setMsgContent(e.target.value)}
+                    placeholder={tr('Type a message…', 'اكتب رسالة…')}
+                  />
+                  <button
+                    type="submit"
+                    className="dashboard-primary-btn"
+                    disabled={bidChatUploading || (!msgContent.trim() && !bidChatAttachmentUrl)}
+                  >
+                    Send
+                  </button>
                 </form>
               </div>
             )}

@@ -46,24 +46,24 @@ const ALLOWED_MIME = [
   'video/mp4',
   'video/webm',
 ];
-const MAX_SIZE = 50 * 1024 * 1024; // 50 MB for video
+const DEFAULT_MAX_SIZE = 50 * 1024 * 1024; // 50 MB for video
 
-const fileFilter = (
+function parseSettingsMimes(raw: unknown): string[] | null {
+  if (raw == null) return null;
+  if (Array.isArray(raw)) {
+    const out = raw.filter((x): x is string => typeof x === 'string');
+    return out.length > 0 ? out : null;
+  }
+  return null;
+}
+
+/** MIME check runs after upload using app_settings allowlist (or defaults). */
+const permissiveFileFilter = (
   _req: Express.Request,
-  file: Express.Multer.File,
+  _file: Express.Multer.File,
   cb: (err: Error | null, accept?: boolean) => void,
 ): void => {
-  if (ALLOWED_MIME.includes(file.mimetype)) {
-    cb(null, true);
-  } else {
-    cb(
-      new HttpError({
-        statusCode: 400,
-        code: 'INVALID_FILE_TYPE',
-        message: 'Only JPEG, PNG, WebP, PDF, MP4, and WebM are allowed.',
-      }) as unknown as Error,
-    );
-  }
+  cb(null, true);
 };
 
 const diskStorage = multer.diskStorage({
@@ -79,8 +79,8 @@ const memoryStorage = multer.memoryStorage();
 
 const upload = multer({
   storage: isSupabaseStorageConfigured() ? memoryStorage : diskStorage,
-  limits: { fileSize: MAX_SIZE },
-  fileFilter,
+  limits: { fileSize: env.PUBLIC_UPLOAD_MAX_BYTES_CEILING },
+  fileFilter: permissiveFileFilter,
 });
 
 const uploadRouter = Router();
@@ -118,6 +118,27 @@ uploadRouter.post(
   asyncHandler(async (req, res) => {
     if (!req.file) {
       throw new HttpError({ statusCode: 400, code: 'NO_FILE', message: 'No file provided.' });
+    }
+    const settingsRow = await settingsService.getRawRow();
+    const customMimes = parseSettingsMimes(settingsRow?.public_upload_allowed_mimes);
+    const effectiveMimes = customMimes ?? ALLOWED_MIME;
+    if (!effectiveMimes.includes(req.file.mimetype)) {
+      throw new HttpError({
+        statusCode: 400,
+        code: 'INVALID_FILE_TYPE',
+        message: 'This file type is not allowed.',
+      });
+    }
+    const maxBytes = Math.min(
+      env.PUBLIC_UPLOAD_MAX_BYTES_CEILING,
+      settingsRow?.max_public_upload_bytes ?? DEFAULT_MAX_SIZE,
+    );
+    if (req.file.size > maxBytes) {
+      throw new HttpError({
+        statusCode: 413,
+        code: 'FILE_TOO_LARGE',
+        message: `File exceeds maximum size of ${maxBytes} bytes.`,
+      });
     }
     let fileUrl: string;
     let filename: string;
@@ -168,6 +189,27 @@ uploadRouter.post(
   asyncHandler(async (req, res) => {
     if (!req.file) {
       throw new HttpError({ statusCode: 400, code: 'NO_FILE', message: 'No file provided.' });
+    }
+    const settingsRow = await settingsService.getRawRow();
+    const customMimes = parseSettingsMimes(settingsRow?.public_upload_allowed_mimes);
+    const effectiveMimes = customMimes ?? ALLOWED_MIME;
+    if (!effectiveMimes.includes(req.file.mimetype)) {
+      throw new HttpError({
+        statusCode: 400,
+        code: 'INVALID_FILE_TYPE',
+        message: 'This file type is not allowed.',
+      });
+    }
+    const maxBytes = Math.min(
+      env.PUBLIC_UPLOAD_MAX_BYTES_CEILING,
+      settingsRow?.max_public_upload_bytes ?? DEFAULT_MAX_SIZE,
+    );
+    if (req.file.size > maxBytes) {
+      throw new HttpError({
+        statusCode: 413,
+        code: 'FILE_TOO_LARGE',
+        message: `File exceeds maximum size of ${maxBytes} bytes.`,
+      });
     }
     const user = req.user!;
     const useSupabase = isSupabaseStorageConfigured();

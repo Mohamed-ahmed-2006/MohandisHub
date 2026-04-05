@@ -14,7 +14,9 @@ import { useAppStatus } from '@/components/app-status-provider';
 import { useAuth } from '@/components/auth/auth-provider';
 import { AvatarImage } from '@/components/ui/avatar-image';
 import { Container } from '@/components/ui/container';
+import { ImagePreviewModal } from '@/components/ui/image-preview-modal';
 import { Skeleton, SkeletonCard, SkeletonText } from '@/components/ui/skeleton';
+import { toAbsoluteAssetUrl } from '@/lib/asset-url';
 import { EGYPTIAN_CITIES } from '@/lib/data/egyptian-cities';
 import { buildLocalePath } from '@/lib/i18n/path';
 import type { Dictionary, Locale } from '@/lib/i18n/types';
@@ -231,6 +233,7 @@ export const AppHomeScreen = ({ locale, dictionary }: AppHomeScreenProps) => {
   const [topCraftsmen, setTopCraftsmen] = useState<TopCraftsman[]>([]);
   const [topBusinesses, setTopBusinesses] = useState<TopBusiness[]>([]);
   const [showBookingModal, setShowBookingModal] = useState(false);
+  const [previewServiceImage, setPreviewServiceImage] = useState<string | null>(null);
   const totalTopSlides = 3;
 
   const areaOptions = city ? (CITY_AREAS[city] ?? []) : [];
@@ -282,6 +285,7 @@ export const AppHomeScreen = ({ locale, dictionary }: AppHomeScreenProps) => {
   useEffect(() => {
     if (!selectedResult) {
       setShowBookingModal(false);
+      setPreviewServiceImage(null);
     }
   }, [selectedResult]);
 
@@ -320,7 +324,11 @@ export const AppHomeScreen = ({ locale, dictionary }: AppHomeScreenProps) => {
       if (sort) params.sort = sort;
       const data = await servicesApiClient.searchServices(params);
       const visibleItems = authUser ? data.items.filter((item) => item.providerId !== authUser.id) : data.items;
-      setResults(dedupeById(visibleItems));
+      const withImages = visibleItems.map((item) => ({
+        ...item,
+        images: Array.isArray(item.images) ? item.images : [],
+      }));
+      setResults(dedupeById(withImages));
     } catch {
       setResults([]);
     } finally {
@@ -847,6 +855,15 @@ export const AppHomeScreen = ({ locale, dictionary }: AppHomeScreenProps) => {
                               }
                             }}
                           >
+                            {r.images?.[0] ? (
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img
+                                src={toAbsoluteAssetUrl(r.images[0])}
+                                alt=""
+                                className="home-result-service-thumb"
+                                onClick={(e) => e.stopPropagation()}
+                              />
+                            ) : null}
                             <span
                               className="home-result-avatar home-result-avatar--clickable"
                               onClick={(e) => {
@@ -1142,6 +1159,15 @@ export const AppHomeScreen = ({ locale, dictionary }: AppHomeScreenProps) => {
                           }
                         }}
                       >
+                        {r.images?.[0] ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={toAbsoluteAssetUrl(r.images[0])}
+                            alt=""
+                            className="home-result-service-thumb"
+                            onClick={(e) => e.stopPropagation()}
+                          />
+                        ) : null}
                         <div className="home-result-avatar">
                           <AvatarImage
                             src={r.providerAvatar}
@@ -1227,6 +1253,22 @@ export const AppHomeScreen = ({ locale, dictionary }: AppHomeScreenProps) => {
                 </span>
               </button>
               <h2 className="home-drawer-title">{selectedResult.title}</h2>
+              {(selectedResult.images ?? []).length > 0 ? (
+                <div className="home-drawer-gallery">
+                  {(selectedResult.images ?? []).map((u) => (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      key={u}
+                      src={toAbsoluteAssetUrl(u)}
+                      alt=""
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setPreviewServiceImage(toAbsoluteAssetUrl(u));
+                      }}
+                    />
+                  ))}
+                </div>
+              ) : null}
               <button
                 type="button"
                 className="home-drawer-provider-btn"
@@ -1288,6 +1330,13 @@ export const AppHomeScreen = ({ locale, dictionary }: AppHomeScreenProps) => {
               setShowBookingModal(false);
               setSelectedResult(null);
             }}
+          />
+        )}
+        {previewServiceImage && (
+          <ImagePreviewModal
+            imageUrl={previewServiceImage}
+            onClose={() => setPreviewServiceImage(null)}
+            accessToken={accessToken}
           />
         )}
       </Container>

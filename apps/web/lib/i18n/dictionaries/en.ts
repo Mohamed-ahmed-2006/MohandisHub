@@ -49,8 +49,10 @@ export const enDictionary: Dictionary = {
     ticketSendError: 'Could not send. Please try again.',
   },
   supportFab: {
-    title: 'Help & feedback',
-    openAria: 'Open help and feedback',
+    title: 'Contact support',
+    subtitle:
+      "Sends a ticket to the Support page so our team can reply in a thread. This is not the same as reporting someone's review — use Report on that review.",
+    openAria: 'Contact support — new ticket',
     email: 'Email',
     role: 'Role',
     roleAdmin: 'Admin',
@@ -497,6 +499,20 @@ export const enDictionary: Dictionary = {
     conversationClosed: 'This conversation is closed.',
     send: 'Send',
   },
+  supportPage: {
+    intro:
+      'Support tickets are conversations with the platform team. You can add replies until the ticket is closed.',
+    reviewTip:
+      'To report an inappropriate review, open that review and use Report — moderators handle that separately.',
+    selectTicket: 'Select a ticket to read the thread.',
+    staffLabel: 'Support team',
+    youLabel: 'You',
+    threadTitle: 'Conversation',
+    newTicket: 'New ticket',
+    ticketReadOnlyTitle: 'This ticket is finished',
+    ticketReadOnlyBody:
+      'This ticket is resolved or closed. You cannot send more messages here. Use New ticket if you still need help.',
+  },
   appHome: {
     loading: 'Loading your workspace...',
     roleLabel: 'Role',
@@ -605,6 +621,7 @@ export const enDictionary: Dictionary = {
       support: 'Support',
       notifications: 'Notifications',
       settings: 'Settings',
+      retention: 'Retention',
       walletRails: 'Wallet (InstaPay)',
     },
     supportTicket: {
@@ -759,7 +776,10 @@ export const enDictionary: Dictionary = {
         content: 'Content',
         communication: 'Communication',
         features: 'Feature Flags',
+        sidebarNav: 'Sidebar navigation',
       },
+      sidebarNavDesc:
+        'Hide individual app menu links. Users who can access a section can still open it via a direct URL.',
       maintenanceMode: 'Maintenance mode',
       maintenanceModeDesc: 'Show maintenance page and block non-admin access.',
       maintenanceMessage: 'Maintenance message',
@@ -782,6 +802,13 @@ export const enDictionary: Dictionary = {
       pauseBids: 'Pause placing bids',
       pauseAwardBids: 'Pause awarding bids',
       pauseUploads: 'Pause file uploads',
+      pauseUploadsDesc: 'Block public and private file uploads.',
+      uploadPolicySection: 'Upload policy',
+      maxPublicUploadBytes: 'Max public upload (bytes)',
+      maxPublicUploadBytesDesc: 'Leave empty for default (~50MB). Cannot exceed server ceiling.',
+      publicUploadMimes: 'Allowed MIME types (comma-separated)',
+      publicUploadMimesDesc: 'Leave empty for defaults (images, PDF, MP4, WebM).',
+      supabaseStorageDashboardUrl: 'Supabase Storage dashboard URL',
       pauseVerificationSubmissions: 'Pause verification submissions',
       pauseChat: 'Pause chat',
       pauseOtpEmails: 'Pause OTP / verification emails',
@@ -807,9 +834,9 @@ export const enDictionary: Dictionary = {
       walletMigrationAppliedLabel: 'USD→EGP migration applied',
       commissionPercent: 'Commission %',
       commissionPercentDesc: 'Platform commission percentage (0–100) on bid/booking payments.',
-    commissionMinEgp: 'Min commission (EGP)',
-    commissionMinEgpDesc: 'Minimum commission amount in EGP per transaction.',
-    dangerZone: 'Danger zone',
+      commissionMinEgp: 'Min commission (EGP)',
+      commissionMinEgpDesc: 'Minimum commission amount in EGP per transaction.',
+      dangerZone: 'Danger zone',
     factoryReset: 'Factory reset',
     factoryResetWarning:
       'Factory reset permanently removes all user accounts and their data except the platform and your admin account. This cannot be undone.',
@@ -843,6 +870,69 @@ export const enDictionary: Dictionary = {
       bidsVisibleToCustomer: 'Bids visible to customer',
       bidsVisibleTopN: 'Top N (number of bids)',
       sortOrder: 'Sort Order',
+      allowedRoles: 'Who can subscribe',
+      selectAtLeastOneRole: 'Select at least one role that can subscribe to this plan.',
+      limitsSectionCustomer: 'Customers (needs & bid rules)',
+      limitsSectionProviders: 'Experts & craftsmen (services & bids)',
+      limitsSectionBusiness: 'Businesses (jobs & listings)',
+      roleCustomer: 'Customer',
+      roleExpert: 'Expert',
+      roleCraftsman: 'Craftsman',
+      roleBusiness: 'Business',
+      maxBidsPerNeed: 'Max bids per need',
+      maxActiveBids: 'Max active bids (pending applications)',
+      maxBusinessServices: 'Max business services',
+      maxTeamSlots: 'Max team slots',
+      canBusinessFeatured: 'Featured company listing',
+      selectRolesForLimits: 'Select at least one role above to show plan limit options for that audience.',
+      bidsOrderingHint:
+        'When plans are enabled, customers see bids ordered like freelance marketplaces: priority proposals first, then paid plans, then oldest first.',
+      bidsVisibleOptionAll: 'Show all bids (smart order)',
+      bidsVisibleOptionPriorityFirst: 'Show all (label: priority-first)',
+      bidsVisibleOptionPremiumFirst: 'Show all (label: premium-first)',
+      bidsVisibleOptionTopN: 'Only top N after smart order',
+      canPriorityBid: 'Priority proposal (sort to top for customers)',
+      canProBadge: 'Pro badge on profile (experts & craftsmen)',
+      canTrustedBusinessBadge: 'Trusted business badge',
+      planLimitsIntro:
+        'These limits are concurrent: they count what is open right now (active needs, listings, pending bids). They are not monthly quotas. When a user completes or closes work, the slot frees up again.',
+      hintAllowedRoles:
+        'Only users with these primary roles will see this plan and can subscribe. Use separate plans per audience (e.g. craftsmen vs business).',
+      hintMaxNeeds:
+        'Max needs that are open, awarded, or in progress at the same time. Completed or closed needs do not count. No calendar reset.',
+      hintMaxBidsPerNeed:
+        'Once this many bids are pending or accepted on one need, no more bids are accepted on that need.',
+      hintBidsVisible:
+        'Controls how many bids the customer sees and in what order (priority and paid plans sort first, then time).',
+      hintBidsVisibleTopN:
+        'After sorting, the customer only sees this many bids. Ignored unless mode is Top N.',
+      hintMaxServices:
+        'Total service listings this expert or craftsman can have. The API counts all rows; adjust if you exclude drafts later.',
+      hintMaxActiveBids:
+        'Max pending bids across all needs at once. Withdrawal or customer action frees slots.',
+      hintCanPriorityListing:
+        'Plan flag for featuring services in search when the product enforces it.',
+      hintCanPriorityBid:
+        'Bids from subscribers with this flag are shown before others when the customer opens proposals.',
+      hintCanProBadge:
+        'Shows a Pro badge in the app header for experts and craftsmen on this plan.',
+      hintMaxJobs:
+        'Total job posts the business can have. Counts all jobs until you add status filters in code.',
+      hintMaxBusinessServices:
+        'Cap on company service listings. If empty, the general max services value applies for businesses.',
+      hintMaxTeamSlots:
+        'Reserved for team-member limits; wire into API when you add teams.',
+      hintCanBusinessFeatured:
+        'Reserved for promoting the company in listings when implemented.',
+      hintCanTrustedBusinessBadge:
+        'Shows a Trusted badge next to the business name in the app.',
+      hintName: 'Display name on plan cards and checkout.',
+      hintSlug: 'Stable ID in URLs and APIs (lowercase, no spaces).',
+      hintPrice: 'Amount deducted from the subscriber wallet when they pay for this plan.',
+      hintDescription: 'Optional longer text; some screens can show it under the plan name.',
+      hintBillingCycle: 'Renewal rhythm (or one-time). The wallet is charged again on each renewal.',
+      hintFeatures:
+        'Comma-separated bullets shown on the plan card in the app.',
     },
     txns: {
       title: 'Transaction Management',
@@ -1002,6 +1092,22 @@ export const enDictionary: Dictionary = {
       'Subscribe to {name} for {price} {currency}? This will be deducted from your wallet balance.',
     confirm: 'Confirm',
     subscribeSuccess: 'Subscribed successfully!',
+    badgePro: 'Pro',
+    badgeTrustedBusiness: 'Trusted',
+    usageTitle: 'Your plan usage',
+    usageConcurrentNote:
+      'These are live slots, not monthly limits. Finishing or closing work frees capacity.',
+    usageNeeds:
+      'Active needs: {used} of {max} ({remaining} remaining).',
+    usageNeedsUnlimited: 'Active needs: {used} (no cap on your plan).',
+    usageServices: 'Service listings: {used} of {max} ({remaining} left).',
+    usageServicesUnlimited: 'Service listings: {used} (no cap).',
+    usagePendingBids: 'Pending bids: {used} of {max} ({remaining} left).',
+    usagePendingBidsUnlimited: 'Pending bids: {used} (no cap).',
+    usageJobs: 'Job posts: {used} of {max} ({remaining} left).',
+    usageJobsUnlimited: 'Job posts: {used} (no cap).',
+    usageBusinessServices: 'Business services: {used} of {max} ({remaining} left).',
+    usageBusinessServicesUnlimited: 'Business services: {used} (no cap).',
   },
   needs: {
     myNeeds: 'My Needs',

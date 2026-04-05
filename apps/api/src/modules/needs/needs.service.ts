@@ -51,12 +51,12 @@ export class NeedsService {
     if (status.featurePlansEnabled) {
       const limits = await this.plansService.getEffectivePlanLimits(customerId);
       if (limits.maxNeeds != null) {
-        const count = await this.repo.countNeedsByCustomer(customerId);
+        const count = await this.repo.countActiveNeedsByCustomer(customerId);
         if (count >= limits.maxNeeds) {
           throw new HttpError({
             statusCode: 403,
             code: 'PLAN_LIMIT_REACHED',
-            message: `Your plan allows up to ${limits.maxNeeds} needs. Upgrade to post more.`,
+            message: `Your plan allows up to ${limits.maxNeeds} active needs (open, in progress, or awarded). Complete or close one to free a slot, or upgrade.`,
           });
         }
       }
@@ -173,6 +173,30 @@ export class NeedsService {
         message: 'You cannot bid on your own need.',
       });
     }
+    if (status.featurePlansEnabled) {
+      const customerLimits = await this.plansService.getEffectivePlanLimits(need.customer_id);
+      if (customerLimits.maxBidsPerNeed != null) {
+        const bidCount = await this.repo.countActiveBidsOnNeed(needId);
+        if (bidCount >= customerLimits.maxBidsPerNeed) {
+          throw new HttpError({
+            statusCode: 403,
+            code: 'PLAN_LIMIT_REACHED',
+            message: `This need has reached the maximum number of bids allowed (${customerLimits.maxBidsPerNeed}) for the owner's plan.`,
+          });
+        }
+      }
+      const bidderLimits = await this.plansService.getEffectivePlanLimits(expertId);
+      if (bidderLimits.maxActiveBids != null) {
+        const pending = await this.repo.countPendingBidsForExpert(expertId);
+        if (pending >= bidderLimits.maxActiveBids) {
+          throw new HttpError({
+            statusCode: 403,
+            code: 'PLAN_LIMIT_REACHED',
+            message: `Your plan allows up to ${bidderLimits.maxActiveBids} active bids. Withdraw or wait for responses before placing more.`,
+          });
+        }
+      }
+    }
     try {
       return await this.repo.createBid(needId, expertId, input);
     } catch (err: unknown) {
@@ -205,23 +229,24 @@ export class NeedsService {
       }
       const limits = await this.plansService.getEffectivePlanLimits(userId);
       const visibility = limits.bidsVisibleToCustomer;
-      if (!visibility || visibility === 'all') {
-        return await this.repo.listBidsForNeed(needId);
-      }
       const bidsWithPlan = await this.repo.listBidsForNeedWithExpertPlan(needId);
-      let result = bidsWithPlan;
-      if (visibility === 'premium_first') {
-        result = [...bidsWithPlan].sort((a, b) => {
-          const aPremium = a.expert_plan_slug && a.expert_plan_slug !== 'free' ? 1 : 0;
-          const bPremium = b.expert_plan_slug && b.expert_plan_slug !== 'free' ? 1 : 0;
-          return bPremium - aPremium;
-        });
-      }
+      const sorted = [...bidsWithPlan].sort((a, b) => {
+        const score = (x: (typeof bidsWithPlan)[0]) => {
+          let s = 0;
+          if (x.bidder_can_priority_bid) s += 100;
+          if (x.expert_plan_slug && x.expert_plan_slug !== 'free') s += 10;
+          return s;
+        };
+        const d = score(b) - score(a);
+        if (d !== 0) return d;
+        return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+      });
+      let result = sorted;
       if (visibility === 'top_n') {
         const n = limits.bidsVisibleTopN ?? 3;
-        result = result.slice(0, n);
+        result = sorted.slice(0, n);
       }
-      return result.map(({ expert_plan_slug: _plan, ...bid }) => bid as BidRow);
+      return result.map(({ expert_plan_slug: _plan, bidder_can_priority_bid: _pri, ...bid }) => bid as BidRow);
     } catch (err: unknown) {
       const pgErr = err as { code?: string; message?: string };
       if (pgErr.code === '42703' || (pgErr.message?.includes('does not exist') ?? false)) {
@@ -508,7 +533,12 @@ export class NeedsService {
     return this.repo.listBidMessages(bidId, userId, isCustomer);
   }
 
-  async createBidMessage(needId: string, bidId: string, userId: string, content: string) {
+  async createBidMessage(
+    needId: string,
+    bidId: string,
+    userId: string,
+    input: { content: string; attachmentUrl?: string },
+  ) {
     await this.assertNeedsFeatureEnabled();
     const need = await this.getNeed(needId);
     const bid = await this.repo.getBidById(bidId);
@@ -518,7 +548,10 @@ export class NeedsService {
     if (need.customer_id !== userId && bid.expert_id !== userId) {
       throw new HttpError({ statusCode: 403, code: 'FORBIDDEN', message: 'Not allowed to post messages' });
     }
-    return this.repo.createBidMessage(bidId, userId, content);
+    const trimmed = input.content.trim();
+    const url = input.attachmentUrl?.trim();
+    const contentForDb = trimmed.length > 0 ? trimmed : url ? '[Image]' : '';
+    return this.repo.createBidMessage(bidId, userId, contentForDb, url ?? null);
   }
 
   private async findNeedForUpdate(client: PoolClient, needId: string): Promise<NeedRow | null> {

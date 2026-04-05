@@ -1,8 +1,11 @@
 import type {
   EffectivePlanLimits,
   Plan,
+  PlanSubscriberRole,
+  PlanUsageSummary,
   SubscribeToPlanResponse,
 } from '@mohandishub/shared';
+import { normalizePlanAllowedRoles, PLAN_SUBSCRIBER_ROLES } from '@mohandishub/shared';
 
 import { getPool } from '../../db/pool.js';
 import { HttpError } from '../../utils/http-error.js';
@@ -16,12 +19,17 @@ const BILLING_CYCLE_DAYS: Record<string, number> = {
   one_time: 365,
 };
 
+const SUBSCRIBER_ROLE_SET = new Set<string>(PLAN_SUBSCRIBER_ROLES);
+
 export class PlansService {
   constructor(
     private readonly settingsService: SettingsService = new SettingsService(),
     private readonly walletRepo: WalletRepository = new WalletRepository(),
   ) {}
-  async listActivePlans(): Promise<Plan[]> {
+  /**
+   * Lists active plans visible to the given primary role. Admins see the full catalog (for support/testing).
+   */
+  async listActivePlansForRole(primaryRole: string): Promise<Plan[]> {
     const status = await this.settingsService.getAppStatus();
     if (!status.featurePlansEnabled) {
       throw new HttpError({
@@ -33,7 +41,11 @@ export class PlansService {
     const { rows } = await getPool().query(
       `SELECT * FROM plans WHERE COALESCE(is_active, true) = true ORDER BY COALESCE(sort_order, 0) ASC, COALESCE(price, 0) ASC`,
     );
-    return rows.map((r: Record<string, unknown>) => this.toPlan(r));
+    const plans = rows.map((r: Record<string, unknown>) => this.toPlan(r));
+    if (primaryRole === 'admin') return plans;
+    if (!SUBSCRIBER_ROLE_SET.has(primaryRole)) return [];
+    const role = primaryRole as PlanSubscriberRole;
+    return plans.filter((p) => p.allowedRoles.includes(role));
   }
 
   /**
@@ -181,6 +193,10 @@ export class PlansService {
     return { subscriptionEndsAt: rows[0]!.ends_at };
   }
 
+  /**
+   * Subscribes using `users.primary_role` for eligibility. If an admin changes a user's role
+   * while they hold a paid plan, limits follow the new role on next action; subscription row is unchanged until expiry.
+   */
   async subscribeToPlan(userId: string, planId: string): Promise<SubscribeToPlanResponse> {
     const status = await this.settingsService.getAppStatus();
     if (!status.featurePlansEnabled) {
@@ -199,6 +215,12 @@ export class PlansService {
     }
 
     const pool = getPool();
+    const { rows: userRoleRows } = await pool.query<{ primary_role: string }>(
+      `SELECT primary_role FROM users WHERE id = $1 LIMIT 1`,
+      [userId],
+    );
+    const primaryRole = userRoleRows[0]?.primary_role ?? 'customer';
+
     const { rows: planRows } = await pool.query(
       `SELECT * FROM plans WHERE id = $1 AND is_active = true LIMIT 1`,
       [planId],
@@ -211,6 +233,22 @@ export class PlansService {
       });
     }
     const planRow = planRows[0] as Record<string, unknown>;
+    const allowed = normalizePlanAllowedRoles(planRow.allowed_roles);
+    if (primaryRole !== 'admin' && !SUBSCRIBER_ROLE_SET.has(primaryRole)) {
+      throw new HttpError({
+        statusCode: 403,
+        code: 'PLAN_ROLE_NOT_ALLOWED',
+        message: 'Your account role cannot subscribe to plans.',
+      });
+    }
+    if (primaryRole !== 'admin' && !allowed.includes(primaryRole as PlanSubscriberRole)) {
+      throw new HttpError({
+        statusCode: 403,
+        code: 'PLAN_NOT_ALLOWED_FOR_ROLE',
+        message: 'This plan is not available for your role.',
+      });
+    }
+
     const price = parseFloat(planRow.price as string);
 
     const wallet = await this.walletRepo.findWalletByUserId(userId);
@@ -279,6 +317,102 @@ export class PlansService {
     }
   }
 
+  /**
+   * Usage vs plan caps for the current user. Limits are **concurrent** (active open slots), not monthly quotas:
+   * e.g. completing or closing a need frees a slot for customers.
+   */
+  async getMyUsage(userId: string): Promise<PlanUsageSummary> {
+    const appStatus = await this.settingsService.getAppStatus();
+    const empty: PlanUsageSummary = {
+      plansFeatureEnabled: appStatus.featurePlansEnabled,
+      resetPolicy: 'concurrent_slots',
+      customer: null,
+      individualProvider: null,
+      business: null,
+    };
+    if (!appStatus.featurePlansEnabled) return empty;
+
+    const pool = getPool();
+    const { rows: roleRows } = await pool.query<{ primary_role: string }>(
+      `SELECT primary_role FROM users WHERE id = $1 LIMIT 1`,
+      [userId],
+    );
+    const role = roleRows[0]?.primary_role ?? 'customer';
+    const limits = await this.getEffectivePlanLimits(userId);
+
+    if (role === 'customer') {
+      const { rows } = await pool.query<{ c: string }>(
+        `SELECT count(*)::text AS c FROM needs
+         WHERE customer_id = $1 AND status IN ('open', 'awarded', 'in_progress')`,
+        [userId],
+      );
+      const active = rows[0]?.c ? parseInt(rows[0].c, 10) : 0;
+      const max = limits.maxNeeds;
+      return {
+        ...empty,
+        customer: {
+          maxNeeds: max,
+          activeNeedsCount: active,
+          remainingNeeds: max == null ? null : Math.max(0, max - active),
+        },
+      };
+    }
+
+    if (role === 'expert' || role === 'craftsman') {
+      const { rows: sRows } = await pool.query<{ c: string }>(
+        `SELECT count(*)::text AS c FROM services WHERE provider_id = $1`,
+        [userId],
+      );
+      const svc = sRows[0]?.c ? parseInt(sRows[0].c, 10) : 0;
+      const maxS = limits.maxServices;
+      const { rows: bRows } = await pool.query<{ c: string }>(
+        `SELECT count(*)::text AS c FROM bids WHERE expert_id = $1 AND status = 'pending'`,
+        [userId],
+      );
+      const pending = bRows[0]?.c ? parseInt(bRows[0].c, 10) : 0;
+      const maxB = limits.maxActiveBids;
+      return {
+        ...empty,
+        individualProvider: {
+          maxServices: maxS,
+          servicesCount: svc,
+          remainingServices: maxS == null ? null : Math.max(0, maxS - svc),
+          maxActiveBids: maxB,
+          pendingBidsCount: pending,
+          remainingActiveBids: maxB == null ? null : Math.max(0, maxB - pending),
+        },
+      };
+    }
+
+    if (role === 'business') {
+      const cap = limits.maxBusinessServices ?? limits.maxServices;
+      const { rows: sRows } = await pool.query<{ c: string }>(
+        `SELECT count(*)::text AS c FROM services WHERE provider_id = $1`,
+        [userId],
+      );
+      const svc = sRows[0]?.c ? parseInt(sRows[0].c, 10) : 0;
+      const { rows: jRows } = await pool.query<{ c: string }>(
+        `SELECT count(*)::text AS c FROM jobs WHERE business_id = $1`,
+        [userId],
+      );
+      const jobs = jRows[0]?.c ? parseInt(jRows[0].c, 10) : 0;
+      const maxJ = limits.maxJobs;
+      return {
+        ...empty,
+        business: {
+          maxJobs: maxJ,
+          jobsCount: jobs,
+          remainingJobs: maxJ == null ? null : Math.max(0, maxJ - jobs),
+          maxBusinessServices: cap,
+          servicesCount: svc,
+          remainingBusinessServices: cap == null ? null : Math.max(0, cap - svc),
+        },
+      };
+    }
+
+    return empty;
+  }
+
   private toPlan(row: Record<string, unknown>): Plan {
     const price = Number(row.price);
     const createdAt = row.created_at;
@@ -305,6 +439,7 @@ export class PlansService {
       maxServices: (row.max_services as number) ?? null,
       maxProjects: (row.max_projects as number) ?? null,
       features: Array.isArray(row.features) ? (row.features as string[]) : [],
+      allowedRoles: normalizePlanAllowedRoles(row.allowed_roles),
       planLimits: planLimits ?? null,
       isActive: row.is_active !== false,
       sortOrder: (row.sort_order as number) ?? 0,

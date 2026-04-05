@@ -1,6 +1,6 @@
 'use client';
 
-import { Link2 } from 'lucide-react';
+import { Link2, Send } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 
@@ -628,8 +628,10 @@ export const ChatScreen = ({ locale, dictionary }: Props) => {
                         type="submit"
                         className="chat-send-btn"
                         disabled={sending || !msgText.trim()}
+                        aria-label={t.send ?? dictionary.common.submit}
                       >
-                        {t.send ?? dictionary.common.submit}
+                        <Send size={18} strokeWidth={2} aria-hidden />
+                        <span>{t.send ?? dictionary.common.submit}</span>
                       </button>
                     </form>
                   </>

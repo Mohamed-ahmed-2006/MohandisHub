@@ -7,7 +7,8 @@ import { plansController } from './plans.controller.js';
 
 const plansRouter = Router();
 
-plansRouter.get('/', plansController.listActivePlans);
+plansRouter.get('/', authenticate, plansController.listActivePlans);
+plansRouter.get('/usage', authenticate, plansController.getMyUsage);
 plansRouter.get(
   '/my-subscription',
   authenticate,

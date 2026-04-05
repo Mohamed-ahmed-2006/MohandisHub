@@ -250,6 +250,10 @@ const AppShellInner = ({ children }: AppShellProps) => {
                   displayName={authUser.displayName}
                   email={authUser.email}
                   role={authUser.role}
+                  {...(authUser.planProBadge === true ? { planProBadge: true as const } : {})}
+                  {...(authUser.planTrustedBusinessBadge === true
+                    ? { planTrustedBusinessBadge: true as const }
+                    : {})}
                   onLogout={() => void handleLogout()}
                 />
               </>

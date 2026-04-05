@@ -841,4 +841,66 @@ export const adminApiClient = {
       accessToken,
       ...(options?.refreshSession ? { refreshSession: options.refreshSession } : {}),
     }),
+
+  getRetentionDashboard: (accessToken: string, options?: AdminClientOptions) =>
+    apiRequest<Record<string, unknown>>({
+      method: 'GET',
+      path: '/api/admin/retention',
+      accessToken,
+      ...(options?.refreshSession ? { refreshSession: options.refreshSession } : {}),
+    }),
+
+  patchRetentionGovernance: (
+    accessToken: string,
+    body: Record<string, unknown>,
+    options?: AdminClientOptions,
+  ) =>
+    apiRequest<{ updated: boolean }>({
+      method: 'PATCH',
+      path: '/api/admin/retention',
+      body,
+      accessToken,
+      ...(options?.refreshSession ? { refreshSession: options.refreshSession } : {}),
+    }),
+
+  postRetentionRun: (
+    accessToken: string,
+    body: { dryRun?: boolean },
+    options?: AdminClientOptions,
+  ) =>
+    apiRequest<Record<string, unknown>>({
+      method: 'POST',
+      path: '/api/admin/retention/run',
+      body,
+      accessToken,
+      ...(options?.refreshSession ? { refreshSession: options.refreshSession } : {}),
+    }),
+
+  fetchAdminText: async (
+    accessToken: string,
+    pathWithQuery: string,
+    options?: AdminClientOptions,
+  ): Promise<string> => {
+    const doFetch = async (token: string): Promise<string> => {
+      const res = await fetch(`${getApiBaseUrl()}${pathWithQuery}`, {
+        method: 'GET',
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      if (res.status === 401 && options?.refreshSession) {
+        const next = await options.refreshSession();
+        if (next) return doFetch(next);
+      }
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        const msg = (body as { error?: { message?: string } }).error?.message ?? 'Request failed';
+        throw new Error(msg);
+      }
+      return res.text();
+    };
+    return doFetch(accessToken);
+  },
 };

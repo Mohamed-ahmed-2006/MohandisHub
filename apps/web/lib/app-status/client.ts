@@ -55,5 +55,6 @@ function getDefaultAppStatus(): AppStatus {
     platformInstapayDisplay: null,
     walletUsdToEgpMigrationRate: null,
     walletMigrationUsdToEgpApplied: false,
+    sidebarHiddenHrefs: [],
   };
 }

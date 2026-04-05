@@ -2,10 +2,33 @@
 // Plan types — shared between API and frontend
 // ---------------------------------------------------------------------------
 
+/** Roles that can subscribe to a paid plan (excludes admin). */
+export const PLAN_SUBSCRIBER_ROLES = ['customer', 'expert', 'business', 'craftsman'] as const;
+export type PlanSubscriberRole = (typeof PLAN_SUBSCRIBER_ROLES)[number];
+
+export const DEFAULT_PLAN_ALLOWED_ROLES: PlanSubscriberRole[] = [
+  'customer',
+  'expert',
+  'business',
+  'craftsman',
+];
+
+const SUBSCRIBER_ROLE_SET = new Set<string>(PLAN_SUBSCRIBER_ROLES);
+
+/** Normalize DB/API values to a non-empty list of subscriber roles. */
+export function normalizePlanAllowedRoles(raw: unknown): PlanSubscriberRole[] {
+  if (!Array.isArray(raw) || raw.length === 0) return [...DEFAULT_PLAN_ALLOWED_ROLES];
+  const out = raw.filter(
+    (r): r is PlanSubscriberRole =>
+      typeof r === 'string' && SUBSCRIBER_ROLE_SET.has(r as PlanSubscriberRole),
+  );
+  return out.length > 0 ? out : [...DEFAULT_PLAN_ALLOWED_ROLES];
+}
+
 export type BillingCycle = 'monthly' | 'quarterly' | 'yearly' | 'one_time';
 
 /** Bids visibility for customer when viewing bids on a need. */
-export type BidsVisibleToCustomer = 'all' | 'top_n' | 'premium_first';
+export type BidsVisibleToCustomer = 'all' | 'top_n' | 'premium_first' | 'priority_first';
 
 /** Structured limits and feature flags per plan (enforced by API). */
 export type PlanLimits = {
@@ -28,6 +51,10 @@ export type PlanLimits = {
   canPriorityListing?: boolean;
   /** Max concurrent applications (bids) an expert can have. */
   maxActiveBids?: number | null;
+  /** Bid appears ahead of non-priority bids when the customer views proposals (marketplace-style). */
+  canPriorityBid?: boolean;
+  /** Show a Pro-style badge on the profile for experts and craftsmen. */
+  canProBadge?: boolean;
 
   // —— For businesses ——
   /** Max services a business can publish. */
@@ -36,6 +63,8 @@ export type PlanLimits = {
   maxTeamSlots?: number | null;
   /** Business can be featured. */
   canBusinessFeatured?: boolean;
+  /** Trusted / verified business badge on the company profile. */
+  canTrustedBusinessBadge?: boolean;
 };
 
 export type Plan = {
@@ -51,6 +80,8 @@ export type Plan = {
   maxServices: number | null;
   maxProjects: number | null;
   features: string[];
+  /** Primary roles that may list and subscribe to this plan. */
+  allowedRoles: PlanSubscriberRole[];
   planLimits?: PlanLimits | null;
   isActive: boolean;
   sortOrder: number;
@@ -70,6 +101,7 @@ export type CreatePlanBody = {
   maxServices?: number;
   maxProjects?: number;
   features?: string[];
+  allowedRoles?: PlanSubscriberRole[];
   planLimits?: PlanLimits | null;
   sortOrder?: number;
 };
@@ -110,4 +142,34 @@ export type SubscribeToPlanResponse = {
   plan: Plan;
   walletBalance: number;
   subscriptionEndsAt: string;
+};
+
+/** How usage limits reset: concurrent slots only (no calendar/monthly reset). */
+export type PlanUsageResetPolicy = 'concurrent_slots';
+
+/** Current usage vs plan caps for the signed-in user (one branch populated by role). */
+export type PlanUsageSummary = {
+  plansFeatureEnabled: boolean;
+  resetPolicy: PlanUsageResetPolicy;
+  customer: {
+    maxNeeds: number | null;
+    activeNeedsCount: number;
+    remainingNeeds: number | null;
+  } | null;
+  individualProvider: {
+    maxServices: number | null;
+    servicesCount: number;
+    remainingServices: number | null;
+    maxActiveBids: number | null;
+    pendingBidsCount: number;
+    remainingActiveBids: number | null;
+  } | null;
+  business: {
+    maxJobs: number | null;
+    jobsCount: number;
+    remainingJobs: number | null;
+    maxBusinessServices: number | null;
+    servicesCount: number;
+    remainingBusinessServices: number | null;
+  } | null;
 };

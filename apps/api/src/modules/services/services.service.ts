@@ -2,7 +2,7 @@
 // Services service — business logic for public service endpoints
 // ---------------------------------------------------------------------------
 
-import type { Service, ServiceCategory, ServiceSearchResult } from '@mohandishub/shared';
+import type { Service, ServiceCategory, ServiceSearchResult, UserRole } from '@mohandishub/shared';
 
 import { HttpError } from '../../utils/http-error.js';
 import { PlansService } from '../plans/plans.service.js';
@@ -74,7 +74,7 @@ export class ServicesService {
     return this.toService(row);
   }
 
-  async createService(providerId: string, input: CreateServiceInput): Promise<Service> {
+  async createService(providerId: string, providerRole: UserRole, input: CreateServiceInput): Promise<Service> {
     const appStatus = await this.settingsService.getAppStatus();
     if (appStatus.featureHourlyPricingEnabled === false && input.priceType === 'hourly') {
       throw new HttpError({
@@ -85,13 +85,17 @@ export class ServicesService {
     }
     if (appStatus.featurePlansEnabled) {
       const limits = await this.plansService.getEffectivePlanLimits(providerId);
-      if (limits.maxServices != null) {
+      const serviceCap =
+        providerRole === 'business'
+          ? (limits.maxBusinessServices ?? limits.maxServices)
+          : limits.maxServices;
+      if (serviceCap != null) {
         const count = await this.repo.countServicesByProvider(providerId);
-        if (count >= limits.maxServices) {
+        if (count >= serviceCap) {
           throw new HttpError({
             statusCode: 403,
             code: 'PLAN_LIMIT_REACHED',
-            message: `Your plan allows up to ${limits.maxServices} services. Upgrade to add more.`,
+            message: `Your plan allows up to ${serviceCap} services. Upgrade to add more.`,
           });
         }
       }
@@ -314,6 +318,7 @@ export class ServicesService {
       area: row.area,
       avgRating: row.avg_rating ? parseFloat(row.avg_rating) : null,
       isFeatured: row.is_featured,
+      images: Array.isArray(row.images) ? row.images : [],
     };
   }
 

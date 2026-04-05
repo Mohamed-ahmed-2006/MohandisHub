@@ -1,6 +1,6 @@
 'use client';
 
-import type { AppSettings, UpdateAppSettingsBody } from '@mohandishub/shared';
+import { MANAGED_SIDEBAR_HREFS, type AppSettings, type UpdateAppSettingsBody } from '@mohandishub/shared';
 import { useCallback, useEffect, useState } from 'react';
 
 import { adminApiClient } from '@/lib/admin/client';
@@ -12,6 +12,26 @@ type Props = {
   accessToken: string;
   refreshSession: () => Promise<string | null>;
 };
+
+/** Map sidebar href → `dictionary.nav` key for labels */
+const SIDEBAR_HREF_TO_NAV_KEY: Record<string, string> = {
+  '/app': 'home',
+  '/app/bookings': 'bookings',
+  '/app/services': 'myServices',
+  '/app/calendar': 'calendar',
+  '/app/settings': 'settings',
+  '/app/chat': 'chat',
+  '/app/history': 'history',
+  '/app/support': 'support',
+  '/app/plan': 'plan',
+  '/app/admin': 'admin',
+};
+
+function sidebarLinkLabel(dictionary: Dictionary, href: string): string {
+  const key = SIDEBAR_HREF_TO_NAV_KEY[href];
+  if (key && dictionary.nav?.[key]) return dictionary.nav[key] as string;
+  return href;
+}
 
 const getErrorMessage = (error: unknown, dictionary: Dictionary): string => {
   if (isApiClientError(error)) return error.message;
@@ -132,6 +152,17 @@ export const AdminSettingsTab = ({ dictionary, accessToken, refreshSession }: Pr
       void update({ [key]: value });
     },
     [update],
+  );
+
+  const setSidebarHrefHidden = useCallback(
+    (href: string, hidden: boolean) => {
+      if (!settings) return;
+      const next = new Set(settings.sidebarHiddenHrefs ?? []);
+      if (hidden) next.add(href);
+      else next.delete(href);
+      void update({ sidebarHiddenHrefs: [...next] });
+    },
+    [settings, update],
   );
 
   const handleInstapayJsonBlur = useCallback(
@@ -600,11 +631,67 @@ export const AdminSettingsTab = ({ dictionary, accessToken, refreshSession }: Pr
         <h3 className="admin-settings-section-title">{d.sections.content}</h3>
         <Toggle
           label={d.pauseUploads}
-          desc=""
+          desc={d.pauseUploadsDesc ?? ''}
           checked={settings.pauseUploads}
           onChange={(v) => handleToggle('pauseUploads', v)}
           disabled={saving}
         />
+        <h4 className="admin-settings-section-title" style={{ marginTop: '1rem', fontSize: '1rem' }}>
+          {d.uploadPolicySection ?? 'Upload policy'}
+        </h4>
+        <div className="admin-settings-row" key={`up-max-${settings.updatedAt}`}>
+          <div className="admin-settings-label-wrap">
+            <label className="admin-settings-label">{d.maxPublicUploadBytes}</label>
+            <span className="admin-settings-desc">{d.maxPublicUploadBytesDesc}</span>
+          </div>
+          <input
+            type="number"
+            min={1}
+            className="admin-settings-input admin-settings-input--number"
+            defaultValue={settings.maxPublicUploadBytes ?? ''}
+            placeholder={tr('Default (~50MB)', 'افتراضي')}
+            onBlur={(e) => {
+              const v = e.target.value.trim();
+              void handleNumberChange('maxPublicUploadBytes', v === '' ? null : parseInt(v, 10));
+            }}
+            disabled={saving}
+          />
+        </div>
+        <div className="admin-settings-row" key={`up-mime-${settings.updatedAt}`}>
+          <div className="admin-settings-label-wrap">
+            <label className="admin-settings-label">{d.publicUploadMimes}</label>
+            <span className="admin-settings-desc">{d.publicUploadMimesDesc}</span>
+          </div>
+          <input
+            type="text"
+            className="admin-settings-input"
+            defaultValue={(settings.publicUploadAllowedMimes ?? []).join(', ')}
+            placeholder="image/jpeg, image/png, …"
+            onBlur={(e) => {
+              const parts = e.target.value
+                .split(',')
+                .map((s) => s.trim())
+                .filter(Boolean);
+              void update({ publicUploadAllowedMimes: parts.length > 0 ? parts : null });
+            }}
+            disabled={saving}
+          />
+        </div>
+        <div className="admin-settings-row" key={`up-dash-${settings.updatedAt}`}>
+          <div className="admin-settings-label-wrap">
+            <label className="admin-settings-label">{d.supabaseStorageDashboardUrl}</label>
+          </div>
+          <input
+            type="url"
+            className="admin-settings-input"
+            defaultValue={settings.supabaseStorageDashboardUrl ?? ''}
+            onBlur={(e) => {
+              const v = e.target.value.trim();
+              void handleTextChange('supabaseStorageDashboardUrl', v || null);
+            }}
+            disabled={saving}
+          />
+        </div>
         <Toggle
           label={d.pauseVerificationSubmissions}
           desc=""
@@ -672,6 +759,24 @@ export const AdminSettingsTab = ({ dictionary, accessToken, refreshSession }: Pr
             onBlur={(e) => handleTextChange('globalAnnouncement', e.target.value || null)}
           />
         </div>
+      </section>
+
+      <section className="admin-settings-section">
+        <h3 className="admin-settings-section-title">{d.sections.sidebarNav}</h3>
+        <p className="admin-settings-desc admin-settings-desc--block">{d.sidebarNavDesc}</p>
+        {MANAGED_SIDEBAR_HREFS.map((href) => {
+          const hidden = (settings.sidebarHiddenHrefs ?? []).includes(href);
+          return (
+            <Toggle
+              key={href}
+              label={sidebarLinkLabel(dictionary, href)}
+              desc=""
+              checked={!hidden}
+              onChange={(visible) => setSidebarHrefHidden(href, !visible)}
+              disabled={saving}
+            />
+          );
+        })}
       </section>
 
       <section className="admin-settings-section admin-settings-section--danger">

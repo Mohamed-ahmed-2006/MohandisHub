@@ -85,6 +85,10 @@ export type AuthUser = {
   isAdmin: boolean;
   adminPermissions: string[];
   plan: string;
+  /** Plan grants a Pro-style badge (experts & craftsmen). */
+  planProBadge?: boolean;
+  /** Plan grants a trusted-business badge (business role). */
+  planTrustedBusinessBadge?: boolean;
   emailVerified: boolean;
   verificationStatus: VerificationStatus | null;
   createdAt: string;

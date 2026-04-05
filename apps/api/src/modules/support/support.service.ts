@@ -124,6 +124,14 @@ export class SupportService {
     if (!isStaff && ticket.user_id !== userId) {
       throw new HttpError({ statusCode: 403, code: 'FORBIDDEN', message: 'Not your ticket.' });
     }
+    const terminal = ticket.status === 'resolved' || ticket.status === 'closed';
+    if (terminal && !isStaff) {
+      throw new HttpError({
+        statusCode: 403,
+        code: 'TICKET_NOT_OPEN_FOR_REPLY',
+        message: 'This ticket is resolved or closed. Open a new ticket if you need more help.',
+      });
+    }
     const msg = await this.repo.addMessage(ticketId, userId, body, isStaff, attachmentUrls);
     const newStatus = isStaff ? 'in_progress' : 'waiting_reply';
     await this.repo.updateTicketStatus(ticketId, newStatus);

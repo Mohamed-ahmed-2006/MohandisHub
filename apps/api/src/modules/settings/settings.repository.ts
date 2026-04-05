@@ -46,6 +46,12 @@ export type AppSettingsRow = {
   platform_instapay_display?: Record<string, unknown> | null;
   wallet_usd_to_egp_migration_rate?: string | null;
   wallet_migration_usd_to_egp_applied?: boolean;
+  sidebar_hidden_hrefs?: unknown;
+  retention_policy?: unknown;
+  retention_alerts?: unknown;
+  max_public_upload_bytes?: number | null;
+  public_upload_allowed_mimes?: unknown;
+  supabase_storage_dashboard_url?: string | null;
 };
 
 export type AppSettingsUpdate = Partial<{
@@ -85,6 +91,15 @@ export type AppSettingsUpdate = Partial<{
   walletEgpPerUsdtWithdrawal: number | null;
   platformInstapayDisplay: Record<string, unknown> | null;
   walletUsdToEgpMigrationRate: number | null;
+  sidebarHiddenHrefs?: string[];
+  maxPublicUploadBytes?: number | null;
+  publicUploadAllowedMimes?: string[] | null;
+  supabaseStorageDashboardUrl?: string | null;
+  retention_policy?: unknown;
+  retention_alerts?: unknown;
+  max_public_upload_bytes?: number | null;
+  public_upload_allowed_mimes?: string[] | null;
+  supabase_storage_dashboard_url?: string | null;
 }>;
 
 export class SettingsRepository {
@@ -129,12 +144,16 @@ export class SettingsRepository {
     reservationVoiceMinuteRate: 'reservation_voice_minute_rate',
     reservationVideoMinuteRate: 'reservation_video_minute_rate',
     reservationMinPrejoinMinutes: 'reservation_min_prejoin_minutes',
-  jobInterviewFeeAmount: 'job_interview_fee_amount',
-  walletEgpPerUsdtDeposit: 'wallet_egp_per_usdt_deposit',
-  walletEgpPerUsdtWithdrawal: 'wallet_egp_per_usdt_withdrawal',
-  platformInstapayDisplay: 'platform_instapay_display',
-  walletUsdToEgpMigrationRate: 'wallet_usd_to_egp_migration_rate',
-};
+    jobInterviewFeeAmount: 'job_interview_fee_amount',
+    walletEgpPerUsdtDeposit: 'wallet_egp_per_usdt_deposit',
+    walletEgpPerUsdtWithdrawal: 'wallet_egp_per_usdt_withdrawal',
+    platformInstapayDisplay: 'platform_instapay_display',
+    walletUsdToEgpMigrationRate: 'wallet_usd_to_egp_migration_rate',
+    sidebarHiddenHrefs: 'sidebar_hidden_hrefs',
+    maxPublicUploadBytes: 'max_public_upload_bytes',
+    publicUploadAllowedMimes: 'public_upload_allowed_mimes',
+    supabaseStorageDashboardUrl: 'supabase_storage_dashboard_url',
+  };
 
   async update(partial: AppSettingsUpdate): Promise<AppSettingsRow | null> {
     const entries = Object.entries(partial).filter(([, v]) => v !== undefined);

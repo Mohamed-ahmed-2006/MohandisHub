@@ -2,10 +2,38 @@
 // Settings service — app settings business logic
 // ---------------------------------------------------------------------------
 
-import type { AppSettings, AppStatus, UpdateAppSettingsBody } from '@mohandishub/shared';
+import {
+  MANAGED_SIDEBAR_HREFS,
+  type AppSettings,
+  type AppStatus,
+  type UpdateAppSettingsBody,
+} from '@mohandishub/shared';
+
+import { env } from '../../config/env.js';
+import { HttpError } from '../../utils/http-error.js';
 
 import { SettingsRepository } from './settings.repository.js';
 import type { AppSettingsRow } from './settings.repository.js';
+
+const MANAGED_SIDEBAR_SET = new Set<string>(MANAGED_SIDEBAR_HREFS);
+
+function parsePublicUploadMimes(raw: unknown): string[] | null {
+  if (raw == null) return null;
+  if (Array.isArray(raw)) {
+    const o = raw.filter((x): x is string => typeof x === 'string');
+    return o.length > 0 ? o : null;
+  }
+  return null;
+}
+
+function parseSidebarHiddenHrefs(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return [];
+  const out: string[] = [];
+  for (const item of raw) {
+    if (typeof item === 'string' && MANAGED_SIDEBAR_SET.has(item)) out.push(item);
+  }
+  return [...new Set(out)].sort();
+}
 
 export class SettingsService {
   constructor(private readonly repo: SettingsRepository = new SettingsRepository()) {}
@@ -73,10 +101,21 @@ export class SettingsService {
           ? parseFloat(row.wallet_usd_to_egp_migration_rate)
           : null,
       walletMigrationUsdToEgpApplied: row.wallet_migration_usd_to_egp_applied ?? false,
+      sidebarHiddenHrefs: parseSidebarHiddenHrefs(row.sidebar_hidden_hrefs),
     };
   }
 
   async updateSettings(partial: UpdateAppSettingsBody, adminId?: string): Promise<AppSettings | null> {
+    if (
+      partial.maxPublicUploadBytes != null &&
+      partial.maxPublicUploadBytes > env.PUBLIC_UPLOAD_MAX_BYTES_CEILING
+    ) {
+      throw new HttpError({
+        statusCode: 400,
+        code: 'ABOVE_CEILING',
+        message: `maxPublicUploadBytes cannot exceed ${env.PUBLIC_UPLOAD_MAX_BYTES_CEILING}.`,
+      });
+    }
     const dbPartial: Parameters<SettingsRepository['update']>[0] = {};
     if (partial.maintenanceMode !== undefined) dbPartial.maintenance_mode = partial.maintenanceMode;
     if (partial.maintenanceMessage !== undefined) dbPartial.maintenance_message = partial.maintenanceMessage;
@@ -125,6 +164,14 @@ export class SettingsService {
       dbPartial.platformInstapayDisplay = partial.platformInstapayDisplay;
     if (partial.walletUsdToEgpMigrationRate !== undefined)
       dbPartial.walletUsdToEgpMigrationRate = partial.walletUsdToEgpMigrationRate;
+    if (partial.sidebarHiddenHrefs !== undefined)
+      dbPartial.sidebarHiddenHrefs = parseSidebarHiddenHrefs(partial.sidebarHiddenHrefs);
+    if (partial.maxPublicUploadBytes !== undefined)
+      dbPartial.maxPublicUploadBytes = partial.maxPublicUploadBytes;
+    if (partial.publicUploadAllowedMimes !== undefined)
+      dbPartial.publicUploadAllowedMimes = partial.publicUploadAllowedMimes;
+    if (partial.supabaseStorageDashboardUrl !== undefined)
+      dbPartial.supabaseStorageDashboardUrl = partial.supabaseStorageDashboardUrl;
 
     const row = await this.repo.update(dbPartial);
     return row ? this.toAppSettings(row) : null;
@@ -182,6 +229,10 @@ export class SettingsService {
           ? parseFloat(row.wallet_usd_to_egp_migration_rate)
           : null,
       walletMigrationUsdToEgpApplied: row.wallet_migration_usd_to_egp_applied ?? false,
+      sidebarHiddenHrefs: parseSidebarHiddenHrefs(row.sidebar_hidden_hrefs),
+      maxPublicUploadBytes: row.max_public_upload_bytes ?? null,
+      publicUploadAllowedMimes: parsePublicUploadMimes(row.public_upload_allowed_mimes),
+      supabaseStorageDashboardUrl: row.supabase_storage_dashboard_url ?? null,
     };
   }
 
@@ -223,6 +274,7 @@ export class SettingsService {
       platformInstapayDisplay: null,
       walletUsdToEgpMigrationRate: null,
       walletMigrationUsdToEgpApplied: false,
+      sidebarHiddenHrefs: [],
     };
   }
 }

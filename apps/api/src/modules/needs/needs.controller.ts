@@ -6,6 +6,7 @@ import { HttpError } from '../../utils/http-error.js';
 import { NeedsService } from './needs.service.js';
 import {
   awardBidSchema,
+  createBidMessageSchema,
   createBidSchema,
   createNeedSchema,
   updateNeedSchema,
@@ -13,28 +14,6 @@ import {
 } from './needs.validation.js';
 
 const svc = new NeedsService();
-const createBidMessageSchema = {
-  safeParse(data: unknown): {
-    success: boolean;
-    data?: { content: string };
-    error?: { flatten: () => { fieldErrors: unknown } };
-  } {
-    if (typeof data !== 'object' || data == null) {
-      return {
-        success: false,
-        error: { flatten: () => ({ fieldErrors: { content: ['Content is required'] } }) },
-      };
-    }
-    const content = (data as { content?: unknown }).content;
-    if (typeof content !== 'string' || content.trim().length === 0) {
-      return {
-        success: false,
-        error: { flatten: () => ({ fieldErrors: { content: ['Content is required'] } }) },
-      };
-    }
-    return { success: true, data: { content } };
-  },
-};
 
 function requireUser(req: { user?: { id: string; role?: string } }) {
   if (!req.user)
@@ -178,8 +157,10 @@ const listBidMessages = asyncHandler(async (req, res) => {
 
 const createBidMessage = asyncHandler(async (req, res) => {
   const user = requireUser(req);
-  const { content } = parseBody(createBidMessageSchema, req.body);
-  const msg = await svc.createBidMessage(req.params.needId!, req.params.bidId!, user.id, content);
+  const input = parseBody(createBidMessageSchema, req.body);
+  const payload: { content: string; attachmentUrl?: string } = { content: input.content ?? '' };
+  if (input.attachmentUrl) payload.attachmentUrl = input.attachmentUrl;
+  const msg = await svc.createBidMessage(req.params.needId!, req.params.bidId!, user.id, payload);
   res.status(201).json({ ok: true, data: msg });
 });
 

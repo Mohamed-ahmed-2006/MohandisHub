@@ -35,7 +35,7 @@ From `apps/api/.env.example`. Required for production:
 
 ### Worker (Render Background Worker)
 
-Same repo; same build. Required: `DATABASE_URL`, `JWT_SECRET`, `JWT_REFRESH_SECRET`, and any NOWPayments keys used by the worker.
+Same repo; same build. Start command should run the worker entrypoint (for example `npm run worker` from `apps/api`), **not** only `npm start` (HTTP server). The worker process runs **reservation lifecycle sweeps** and **data retention sweeps** (plus any other scheduled jobs). Required env vars overlap with the API: at minimum `DATABASE_URL`, `JWT_SECRET`, and `JWT_REFRESH_SECRET`, plus optional `RETENTION_*` variables from `apps/api/.env.example` when you want automated cleanup. Include any NOWPayments (or other) keys if the worker touches those code paths.
 
 ### Supabase
 

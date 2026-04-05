@@ -8,10 +8,13 @@ import { ExpertJobsTab } from './expert-jobs-tab';
 
 import { useToast } from '@/components/app/toast';
 import { useAppStatus } from '@/components/app-status-provider';
+import { ImagePreviewModal } from '@/components/ui/image-preview-modal';
+import { toAbsoluteAssetUrl } from '@/lib/asset-url';
 import { buildLocalePath } from '@/lib/i18n/path';
 import type { Dictionary, Locale } from '@/lib/i18n/types';
 import type { Bid, BidMessage, Need } from '@/lib/needs/client';
 import { needsApiClient } from '@/lib/needs/client';
+import { uploadFile } from '@/lib/upload/client';
 
 
 type Props = {
@@ -45,9 +48,13 @@ export const ExpertDashboard = ({
   const [chatBid, setChatBid] = useState<Bid | null>(null);
   const [messages, setMessages] = useState<BidMessage[]>([]);
   const [msgContent, setMsgContent] = useState('');
+  const [bidMsgAttachmentUrl, setBidMsgAttachmentUrl] = useState<string | null>(null);
+  const [bidMsgUploading, setBidMsgUploading] = useState(false);
+  const [bidImagePreview, setBidImagePreview] = useState<string | null>(null);
 
   const openChat = async (bid: Bid) => {
     setChatBid(bid);
+    setBidMsgAttachmentUrl(null);
     setMessages([]);
     try {
       const msgs = await needsApiClient.listBidMessages(accessToken, bid.need_id, bid.id);
@@ -59,10 +66,17 @@ export const ExpertDashboard = ({
 
   const sendMsg = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!msgContent.trim() || !chatBid) return;
+    if (!chatBid) return;
+    const text = msgContent.trim();
+    const attach = bidMsgAttachmentUrl?.trim() ?? '';
+    if (!text && !attach) return;
     try {
-      await needsApiClient.createBidMessage(accessToken, chatBid.need_id, chatBid.id, msgContent);
+      await needsApiClient.createBidMessage(accessToken, chatBid.need_id, chatBid.id, {
+        content: text,
+        ...(attach ? { attachmentUrl: attach } : {}),
+      });
       setMsgContent('');
+      setBidMsgAttachmentUrl(null);
       void openChat(chatBid);
     } catch {
       // ignore
@@ -430,16 +444,82 @@ export const ExpertDashboard = ({
           >
             <h3 className="plan-modal-title">Pre-Award Chat: {chatBid.need_title}</h3>
             <div style={{ maxHeight: '300px', overflowY: 'auto', marginBottom: '1rem', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-              {messages.map(m => (
-                <div key={m.id} style={{ padding: '0.5rem', background: 'hsl(var(--muted))', color: 'hsl(var(--foreground))', borderRadius: '4px' }}>
+              {messages.map((m) => (
+                <div
+                  key={m.id}
+                  style={{
+                    padding: '0.5rem',
+                    background: 'hsl(var(--muted))',
+                    color: 'hsl(var(--foreground))',
+                    borderRadius: '4px',
+                  }}
+                >
                   <strong>{m.sender_name}</strong>: <span>{m.content}</span>
+                  {m.attachment_url ? (
+                    <button
+                      type="button"
+                      className="dashboard-need-chat-attach-thumb-wrap"
+                      onClick={() => setBidImagePreview(toAbsoluteAssetUrl(m.attachment_url!))}
+                    >
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={toAbsoluteAssetUrl(m.attachment_url)}
+                        alt=""
+                        className="dashboard-need-chat-attach-thumb"
+                      />
+                    </button>
+                  ) : null}
                 </div>
               ))}
               {messages.length === 0 && <p className="dashboard-empty">No messages yet.</p>}
             </div>
-            <form onSubmit={(e) => { void sendMsg(e); }} style={{ display: 'flex', gap: '0.5rem' }}>
-              <input className="dashboard-input" value={msgContent} onChange={e => setMsgContent(e.target.value)} placeholder="Type a message..." required />
-              <button type="submit" className="dashboard-primary-btn">Send</button>
+            {bidMsgAttachmentUrl ? (
+              <div className="dashboard-need-chat-pending" style={{ marginBottom: '0.5rem' }}>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={bidMsgAttachmentUrl} alt="" className="dashboard-need-chat-attach-thumb" />
+                <button type="button" className="dashboard-link-btn" onClick={() => setBidMsgAttachmentUrl(null)}>
+                  {tr('Remove image', 'إزالة الصورة')}
+                </button>
+              </div>
+            ) : null}
+            <label className="dashboard-need-chat-file" style={{ display: 'block', marginBottom: '0.5rem' }}>
+              <span className="dashboard-need-chat-file-label">{tr('Attach image', 'إرفاق صورة')}</span>
+              <input
+                type="file"
+                accept="image/*"
+                disabled={bidMsgUploading || Boolean(bidMsgAttachmentUrl)}
+                onChange={(ev) => {
+                  const file = ev.target.files?.[0];
+                  ev.target.value = '';
+                  if (!file) return;
+                  void (async () => {
+                    setBidMsgUploading(true);
+                    try {
+                      const { url } = await uploadFile(accessToken, file);
+                      setBidMsgAttachmentUrl(toAbsoluteAssetUrl(url));
+                    } catch {
+                      addToast('Error', tr('Upload failed', 'فشل الرفع'));
+                    } finally {
+                      setBidMsgUploading(false);
+                    }
+                  })();
+                }}
+              />
+            </label>
+            <form onSubmit={(e) => { void sendMsg(e); }} className="dashboard-need-chat-form">
+              <input
+                className="dashboard-input"
+                value={msgContent}
+                onChange={(e) => setMsgContent(e.target.value)}
+                placeholder={tr('Type a message…', 'اكتب رسالة…')}
+              />
+              <button
+                type="submit"
+                className="dashboard-primary-btn"
+                disabled={bidMsgUploading || (!msgContent.trim() && !bidMsgAttachmentUrl)}
+              >
+                Send
+              </button>
             </form>
             <button
               type="button"
@@ -451,6 +531,13 @@ export const ExpertDashboard = ({
             </button>
           </div>
         </div>
+      )}
+      {bidImagePreview && (
+        <ImagePreviewModal
+          imageUrl={bidImagePreview}
+          onClose={() => setBidImagePreview(null)}
+          accessToken={accessToken}
+        />
       )}
     </section>
   );

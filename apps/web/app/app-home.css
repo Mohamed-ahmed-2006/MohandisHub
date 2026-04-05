@@ -503,6 +503,32 @@
   outline-offset: 2px;
 }
 
+.home-result-service-thumb {
+  flex-shrink: 0;
+  width: 56px;
+  height: 56px;
+  border-radius: 0.5rem;
+  object-fit: cover;
+  background-color: hsl(var(--muted));
+}
+
+.home-drawer-gallery {
+  display: flex;
+  gap: 0.5rem;
+  overflow-x: auto;
+  margin: 0.75rem 0;
+  padding-bottom: 0.25rem;
+}
+
+.home-drawer-gallery img {
+  width: 72px;
+  height: 72px;
+  object-fit: cover;
+  border-radius: 0.5rem;
+  flex-shrink: 0;
+  cursor: pointer;
+}
+
 .home-result-avatar {
   flex-shrink: 0;
   width: 48px;

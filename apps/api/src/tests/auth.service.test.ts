@@ -27,6 +27,7 @@ const makeUserRow = (): UserRow => ({
   primary_role: 'customer',
   plan_id: null,
   plan_slug: 'free',
+  plan_limits: null,
   email_verified_at: null,
   phone_verified_at: null,
   is_active: true,

@@ -1,4 +1,4 @@
-import type { ApiSuccessBody, Plan, SubscribeToPlanResponse } from '@mohandishub/shared';
+import type { ApiSuccessBody, Plan, PlanUsageSummary, SubscribeToPlanResponse } from '@mohandishub/shared';
 
 import { getApiBaseUrl } from '@/lib/env';
 
@@ -28,7 +28,8 @@ async function apiRequest<T>(opts: {
 }
 
 export const plansApiClient = {
-  listActivePlans: () => apiRequest<Plan[]>({ method: 'GET', path: '/api/plans' }),
+  listActivePlans: (accessToken: string) =>
+    apiRequest<Plan[]>({ method: 'GET', path: '/api/plans', accessToken }),
 
   getCurrentSubscription: (accessToken: string) =>
     apiRequest<{ subscriptionEndsAt: string } | null>({
@@ -36,6 +37,9 @@ export const plansApiClient = {
       path: '/api/plans/my-subscription',
       accessToken,
     }),
+
+  getMyUsage: (accessToken: string) =>
+    apiRequest<PlanUsageSummary>({ method: 'GET', path: '/api/plans/usage', accessToken }),
 
   subscribe: (accessToken: string, planId: string) =>
     apiRequest<SubscribeToPlanResponse>({

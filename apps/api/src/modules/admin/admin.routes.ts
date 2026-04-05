@@ -7,8 +7,9 @@ import { Router } from 'express';
 import { authenticate } from '../../middleware/authenticate.js';
 import { loadAdminFromDb } from '../../middleware/load-admin-from-db.js';
 import { requireEmailVerified } from '../../middleware/require-email-verified.js';
-import { requireAdminPermission, requireRole } from '../../middleware/require-role.js';
+import { requireAdminAnyPermission, requireAdminPermission, requireRole } from '../../middleware/require-role.js';
 import { profilesController } from '../profiles/profiles.controller.js';
+import * as retentionAdminController from '../retention/retention.admin.controller.js';
 
 import { adminController } from './admin.controller.js';
 
@@ -26,6 +27,48 @@ adminRouter.get('/dashboard/stats', adminController.getDashboardStats);
 adminRouter.get('/settings', adminController.getSettings);
 adminRouter.patch('/settings', requireAdminPermission('manage_settings'), adminController.updateSettings);
 adminRouter.post('/factory-reset', requireAdminPermission('manage_settings'), adminController.factoryReset);
+
+// Retention & upload governance
+adminRouter.get(
+  '/retention',
+  requireAdminAnyPermission('manage_retention', 'manage_settings'),
+  retentionAdminController.getRetentionDashboard,
+);
+adminRouter.patch(
+  '/retention',
+  requireAdminPermission('manage_retention'),
+  retentionAdminController.patchRetentionGovernance,
+);
+adminRouter.post(
+  '/retention/run',
+  requireAdminPermission('manage_retention'),
+  retentionAdminController.postRetentionRun,
+);
+adminRouter.get(
+  '/retention/sweep-log/export',
+  requireAdminPermission('manage_retention'),
+  retentionAdminController.getRetentionSweepLogExport,
+);
+adminRouter.get(
+  '/moderation/log/export',
+  requireAdminPermission('manage_retention'),
+  retentionAdminController.getModerationLogExport,
+);
+adminRouter.post(
+  '/moderation/clear-need-references',
+  requireAdminPermission('manage_retention'),
+  retentionAdminController.postModerationClearNeedReferences,
+);
+adminRouter.post(
+  '/moderation/clear-bid-attachment',
+  requireAdminPermission('manage_retention'),
+  retentionAdminController.postModerationClearBidAttachment,
+);
+adminRouter.post(
+  '/moderation/remove-service-image',
+  requireAdminPermission('manage_retention'),
+  retentionAdminController.postModerationRemoveServiceImage,
+);
 
 // Users
 adminRouter.get('/users', requireAdminPermission('manage_users'), adminController.listUsers);

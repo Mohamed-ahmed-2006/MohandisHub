@@ -425,10 +425,38 @@
   gap: 0.15rem;
 }
 
+.app-avatar-dropdown-name-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+}
+
 .app-avatar-dropdown-name {
   font-size: 0.88rem;
   font-weight: 700;
   color: hsl(var(--foreground));
+}
+
+.app-plan-badge {
+  font-size: 0.62rem;
+  font-weight: 800;
+  padding: 0.12rem 0.4rem;
+  border-radius: 999px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.app-plan-badge--pro {
+  border: 1px solid color-mix(in srgb, hsl(var(--primary)) 45%, hsl(var(--border)));
+  background: color-mix(in srgb, hsl(var(--primary)) 12%, transparent);
+  color: hsl(var(--primary));
+}
+
+.app-plan-badge--trusted {
+  border: 1px solid color-mix(in srgb, hsl(142 50% 40%) 50%, hsl(var(--border)));
+  background: color-mix(in srgb, hsl(142 45% 42%) 10%, transparent);
+  color: hsl(142 45% 32%);
 }
 
 .app-avatar-dropdown-email {
@@ -647,11 +675,19 @@
 }
 
 .support-fab-title {
-  margin: 0 2rem 1rem 0;
+  margin: 0 2rem 0.35rem 0;
   font-family: var(--font-sora), sans-serif;
   font-size: 1.15rem;
   font-weight: 700;
   color: hsl(var(--foreground));
+}
+
+.support-fab-subtitle {
+  margin: 0 2rem 1rem 0;
+  font-size: 0.8rem;
+  line-height: 1.45;
+  color: hsl(var(--muted-foreground));
+  font-weight: 400;
 }
 
 .support-fab-form {

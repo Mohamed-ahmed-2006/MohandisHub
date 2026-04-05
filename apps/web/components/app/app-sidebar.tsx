@@ -79,7 +79,10 @@ export const AppSidebar = ({
     { href: '/app/admin', label: dictionary.nav.admin, roles: ['admin'] },
   ];
 
+  const hiddenHrefs = status?.sidebarHiddenHrefs ?? [];
+
   const visibleItems = navItems.filter((item) => {
+    if (hiddenHrefs.includes(item.href)) return false;
     if (item.href === '/app/plan' && status?.featurePlansEnabled === false) return false;
     if (!item.roles) return true;
     if (item.roles.includes('admin')) return isAdmin;

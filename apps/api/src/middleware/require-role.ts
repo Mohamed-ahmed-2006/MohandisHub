@@ -98,3 +98,43 @@ export const requireAdminPermission =
 
     next();
   };
+
+export const requireAdminAnyPermission =
+  (...permissions: string[]): RequestHandler =>
+  (req, _res, next) => {
+    const user = req.user as {
+      id: string;
+      isAdmin: boolean;
+      adminPermissions?: string[];
+    };
+
+    if (!user) {
+      throw new HttpError({
+        statusCode: 401,
+        code: 'UNAUTHORIZED',
+        message: 'Authentication required.',
+      });
+    }
+
+    if (!user.isAdmin) {
+      throw new HttpError({
+        statusCode: 403,
+        code: 'FORBIDDEN',
+        message: 'This action requires admin privileges.',
+      });
+    }
+
+    if (!user.adminPermissions || user.adminPermissions.length === 0) {
+      return next();
+    }
+
+    if (!permissions.some((p) => user.adminPermissions!.includes(p))) {
+      throw new HttpError({
+        statusCode: 403,
+        code: 'FORBIDDEN',
+        message: 'You do not have permission to perform this action.',
+      });
+    }
+
+    next();
+  };

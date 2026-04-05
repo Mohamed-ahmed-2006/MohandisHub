@@ -28,6 +28,7 @@ import type {
   Transaction,
   WithdrawalRequest,
 } from '@mohandishub/shared';
+import { normalizePlanAllowedRoles } from '@mohandishub/shared';
 
 import { HttpError } from '../../utils/http-error.js';
 import { AuthRepository } from '../auth/auth.repository.js';
@@ -537,6 +538,7 @@ export class AdminService {
       slug: input.slug,
       name: input.name,
       price: input.price,
+      allowed_roles: input.allowedRoles,
     };
     if (input.description !== undefined) dbFields.description = input.description;
     if (input.currency !== undefined) dbFields.currency = input.currency;
@@ -574,6 +576,7 @@ export class AdminService {
       dbFields.features = Array.isArray(input.features) ? input.features : [];
     if (input.planLimits !== undefined) dbFields.plan_limits = input.planLimits;
     if (input.sortOrder !== undefined) dbFields.sort_order = input.sortOrder;
+    if (input.allowedRoles !== undefined) dbFields.allowed_roles = input.allowedRoles;
     if (input.isActive !== undefined) dbFields.is_active = input.isActive;
 
     try {
@@ -915,6 +918,7 @@ export class AdminService {
       maxServices: row.max_services,
       maxProjects: row.max_projects,
       features: Array.isArray(row.features) ? row.features : [],
+      allowedRoles: normalizePlanAllowedRoles(row.allowed_roles),
       planLimits: planLimits ?? null,
       isActive: row.is_active,
       sortOrder: row.sort_order,

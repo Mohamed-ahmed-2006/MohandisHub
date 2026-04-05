@@ -55,3 +55,24 @@ export type UpdateBidInput = z.infer<typeof updateBidSchema>;
 export const awardBidSchema = z.object({
   bidId: z.string().uuid(),
 });
+
+export const createBidMessageSchema = z
+  .object({
+    content: z.string().max(5000).optional().default(''),
+    attachmentUrl: z
+      .union([z.string().url().max(500), z.literal('')])
+      .optional()
+      .transform((v) => (v === '' || v == null ? undefined : v)),
+  })
+  .superRefine((data, ctx) => {
+    const c = data.content?.trim() ?? '';
+    const a = data.attachmentUrl?.trim();
+    if (c.length === 0 && !a) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Either non-empty content or attachmentUrl is required.',
+        path: ['content'],
+      });
+    }
+  });
+export type CreateBidMessageInput = z.infer<typeof createBidMessageSchema>;

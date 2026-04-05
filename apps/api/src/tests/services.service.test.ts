@@ -60,7 +60,7 @@ describe('ServicesService launch hardening', () => {
     };
     const service = new ServicesService(repo as never, plansService as never, settingsService as never);
 
-    const result = await service.createService('provider-1', {
+    const result = await service.createService('provider-1', 'expert', {
       title: 'Structural Review',
       submitForReview: true,
     });

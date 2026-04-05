@@ -34,6 +34,12 @@ import type {
 
 const SALT_ROUNDS = 12;
 
+function planLimitBool(limits: unknown, key: string): boolean {
+  if (limits == null || typeof limits !== 'object' || Array.isArray(limits)) return false;
+  const v = (limits as Record<string, unknown>)[key];
+  return v === true || v === 'true';
+}
+
 export class AuthService {
   public constructor(private readonly authRepository: AuthRepository = new AuthRepository()) {}
 
@@ -392,6 +398,8 @@ export class AuthService {
     const adminPermissions = Array.isArray(user.admin_permissions)
       ? user.admin_permissions.filter((p): p is string => typeof p === 'string')
       : [];
+    const role = user.primary_role;
+    const pl = user.plan_limits;
     return {
       id: user.id,
       email: user.email,
@@ -401,10 +409,13 @@ export class AuthService {
       nationality: user.nationality,
       avatarUrl: user.avatar_url,
       dateOfBirth: user.date_of_birth ? user.date_of_birth.toISOString().slice(0, 10) : null,
-      role: user.primary_role,
+      role,
       isAdmin: user.is_admin === true,
       adminPermissions,
       plan: user.plan_slug,
+      planProBadge:
+        (role === 'expert' || role === 'craftsman') && planLimitBool(pl, 'canProBadge'),
+      planTrustedBusinessBadge: role === 'business' && planLimitBool(pl, 'canTrustedBusinessBadge'),
       emailVerified: user.email_verified_at !== null,
       verificationStatus,
       createdAt: user.created_at.toISOString(),

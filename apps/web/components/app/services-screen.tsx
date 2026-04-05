@@ -1,16 +1,18 @@
 'use client';
 
-import type { Service, ServiceCategory } from '@mohandishub/shared';
+import type { Service, ServiceCategory, UpdateServiceBody } from '@mohandishub/shared';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 
 import { useAppStatus } from '@/components/app-status-provider';
 import { useAuth } from '@/components/auth/auth-provider';
 import { Container } from '@/components/ui/container';
+import { toAbsoluteAssetUrl } from '@/lib/asset-url';
 import { EGYPTIAN_CITIES } from '@/lib/data/egyptian-cities';
 import { buildLocalePath } from '@/lib/i18n/path';
 import type { Dictionary, Locale } from '@/lib/i18n/types';
 import { servicesApiClient } from '@/lib/services/client';
+import { uploadFile } from '@/lib/upload/client';
 
 import '@/app/dashboard.css';
 import './services-screen.css';
@@ -19,6 +21,8 @@ type Props = {
   locale: Locale;
   dictionary: Dictionary;
 };
+
+const MAX_SERVICE_IMAGES = 10;
 
 const getStatusLabel = (status: string, sp: Record<string, string>): string => {
   const keyMap: Record<string, string> = {
@@ -43,6 +47,11 @@ export const ServicesScreen = ({ locale, dictionary }: Props) => {
   const [showCreate, setShowCreate] = useState(false);
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [createImages, setCreateImages] = useState<string[]>([]);
+  const [editingService, setEditingService] = useState<Service | null>(null);
+  const [editImages, setEditImages] = useState<string[]>([]);
+  const [imageUploadBusy, setImageUploadBusy] = useState(false);
+  const [savingEdit, setSavingEdit] = useState(false);
 
   const sp = dictionary.servicesPage ?? ({} as Record<string, string>);
   const { status } = useAppStatus();
@@ -90,6 +99,32 @@ export const ServicesScreen = ({ locale, dictionary }: Props) => {
     void load();
   }, [load]);
 
+  const pickServiceImages = useCallback(
+    async (fileList: FileList | null, current: string[], setUrls: (next: string[]) => void) => {
+      if (!accessToken || !fileList?.length) return;
+      const room = MAX_SERVICE_IMAGES - current.length;
+      if (room <= 0) return;
+      setImageUploadBusy(true);
+      setError(null);
+      try {
+        const next = [...current];
+        const take = Math.min(fileList.length, room);
+        for (let i = 0; i < take; i++) {
+          const file = fileList.item(i);
+          if (!file) continue;
+          const { url } = await uploadFile(accessToken, file);
+          next.push(toAbsoluteAssetUrl(url));
+        }
+        setUrls(next);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Upload failed');
+      } finally {
+        setImageUploadBusy(false);
+      }
+    },
+    [accessToken],
+  );
+
   const handleCreate = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!accessToken) return;
@@ -125,8 +160,10 @@ export const ServicesScreen = ({ locale, dictionary }: Props) => {
       body.isNegotiable = !!isNegotiable;
       if (city?.trim()) body.city = city.trim();
       if (country?.trim()) body.country = country.trim();
+      if (createImages.length > 0) body.images = createImages.slice(0, MAX_SERVICE_IMAGES);
       await servicesApiClient.createService(accessToken, body);
       setShowCreate(false);
+      setCreateImages([]);
       void load();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create service');
@@ -151,22 +188,53 @@ export const ServicesScreen = ({ locale, dictionary }: Props) => {
     }
   };
 
-  const handleEdit = async (service: Service) => {
-    if (!accessToken) return;
-    const title = window.prompt('Service title', service.title)?.trim();
-    if (!title || title.length < 3) return;
-    const description = window.prompt('Description (optional)', service.description ?? '') ?? '';
-    const priceRaw = window.prompt('Price (optional)', service.price != null ? String(service.price) : '');
-    const price = priceRaw?.trim() ? parseFloat(priceRaw.trim()) : undefined;
+  const openEdit = (service: Service) => {
+    setError(null);
+    setEditingService(service);
+    setEditImages([...(service.images ?? [])].slice(0, MAX_SERVICE_IMAGES));
+  };
+
+  const handleSaveEdit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (!accessToken || !editingService) return;
+    setSavingEdit(true);
+    setError(null);
+    const form = e.currentTarget;
+    const title = (form.elements.namedItem('title') as HTMLInputElement)?.value?.trim();
+    if (!title || title.length < 3) {
+      setError('Title must be at least 3 characters.');
+      setSavingEdit(false);
+      return;
+    }
     try {
-      await servicesApiClient.updateService(accessToken, service.id, {
+      const description = (form.elements.namedItem('description') as HTMLTextAreaElement)?.value?.trim();
+      const priceRaw = (form.elements.namedItem('price') as HTMLInputElement)?.value;
+      const price = priceRaw?.trim() ? parseFloat(priceRaw.trim()) : undefined;
+      const priceType = hourlyPricingEnabled
+        ? ((form.elements.namedItem('priceType') as HTMLSelectElement)?.value as 'fixed' | 'hourly')
+        : 'fixed';
+      const isNegotiable = (form.elements.namedItem('isNegotiable') as HTMLInputElement)?.checked;
+      const categoryId = (form.elements.namedItem('categoryId') as HTMLSelectElement)?.value;
+      const city = (form.elements.namedItem('city') as HTMLSelectElement)?.value?.trim();
+      const country = (form.elements.namedItem('country') as HTMLInputElement)?.value?.trim();
+      const body: UpdateServiceBody = {
         title,
-        ...(description.trim() ? { description: description.trim() } : {}),
-        ...(typeof price === 'number' && Number.isFinite(price) ? { price } : {}),
-      });
+        isNegotiable: !!isNegotiable,
+        images: editImages.slice(0, MAX_SERVICE_IMAGES),
+      };
+      if (description) body.description = description;
+      if (typeof price === 'number' && Number.isFinite(price)) body.price = price;
+      if (hourlyPricingEnabled) body.priceType = priceType;
+      if (categoryId) body.categoryId = categoryId;
+      if (city) body.city = city;
+      if (country) body.country = country;
+      await servicesApiClient.updateService(accessToken, editingService.id, body);
+      setEditingService(null);
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to update service');
+    } finally {
+      setSavingEdit(false);
     }
   };
 
@@ -201,7 +269,15 @@ export const ServicesScreen = ({ locale, dictionary }: Props) => {
           <h1 className="dashboard-section-title">
             {sp.title ?? dictionary.nav?.myServices ?? 'My Services'}
           </h1>
-          <button type="button" className="dashboard-primary-btn" onClick={() => setShowCreate(true)}>
+          <button
+            type="button"
+            className="dashboard-primary-btn"
+            onClick={() => {
+              setCreateImages([]);
+              setError(null);
+              setShowCreate(true);
+            }}
+          >
             {sp.addService ?? 'Add Service'}
           </button>
         </div>
@@ -211,7 +287,15 @@ export const ServicesScreen = ({ locale, dictionary }: Props) => {
         ) : services.length === 0 ? (
           <div className="dashboard-empty-state">
             <p className="dashboard-empty">{sp.noServices ?? sp.addFirstService}</p>
-            <button type="button" className="dashboard-primary-btn" onClick={() => setShowCreate(true)}>
+            <button
+              type="button"
+              className="dashboard-primary-btn"
+              onClick={() => {
+                setCreateImages([]);
+                setError(null);
+                setShowCreate(true);
+              }}
+            >
               {sp.addService ?? 'Add Service'}
             </button>
           </div>
@@ -219,6 +303,19 @@ export const ServicesScreen = ({ locale, dictionary }: Props) => {
           <div className="dashboard-cards">
             {services.map((s) => (
               <div key={s.id} className="dashboard-card">
+                {s.images?.length ? (
+                  <div className="service-card-thumbs" aria-hidden>
+                    {s.images.slice(0, 4).map((u) => (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        key={u}
+                        src={toAbsoluteAssetUrl(u)}
+                        alt=""
+                        className="service-card-thumb"
+                      />
+                    ))}
+                  </div>
+                ) : null}
                 <h3 className="dashboard-card-title">{s.title}</h3>
                 {s.description && (
                   <p className="dashboard-card-desc">
@@ -238,11 +335,7 @@ export const ServicesScreen = ({ locale, dictionary }: Props) => {
                   {getStatusLabel(s.status, sp as Record<string, string>)}
                 </span>
                 <div className="dashboard-card-actions" style={{ marginTop: '0.5rem' }}>
-                  <button
-                    type="button"
-                    className="dashboard-link-btn"
-                    onClick={() => void handleEdit(s)}
-                  >
+                  <button type="button" className="dashboard-link-btn" onClick={() => openEdit(s)}>
                     Edit
                   </button>
                   <button
@@ -286,7 +379,13 @@ export const ServicesScreen = ({ locale, dictionary }: Props) => {
         )}
 
         {showCreate && (
-          <div className="plan-modal-overlay" onClick={() => setShowCreate(false)}>
+          <div
+            className="plan-modal-overlay"
+            onClick={() => {
+              setShowCreate(false);
+              setCreateImages([]);
+            }}
+          >
             <div className="plan-modal service-create-modal" onClick={(e) => e.stopPropagation()}>
               <h3 className="plan-modal-title">{sp.createService ?? 'Create Service'}</h3>
               {error && <p className="dashboard-error">{error}</p>}
@@ -385,18 +484,220 @@ export const ServicesScreen = ({ locale, dictionary }: Props) => {
                     />
                   </div>
 
+                  <div className="service-create-field service-create-field--full">
+                    <label className="service-create-label">
+                      Gallery ({createImages.length}/{MAX_SERVICE_IMAGES})
+                    </label>
+                    <p className="service-create-hint">JPEG/PNG/WebP — up to {MAX_SERVICE_IMAGES} images.</p>
+                    <div className="service-images-row">
+                      {createImages.map((u, idx) => (
+                        <div key={`${u}-${idx}`} className="service-image-tile">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src={u} alt="" className="service-image-tile-img" />
+                          <button
+                            type="button"
+                            className="service-image-remove"
+                            aria-label="Remove"
+                            onClick={() => setCreateImages((prev) => prev.filter((_, i) => i !== idx))}
+                          >
+                            ×
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      multiple
+                      className="service-image-file-input"
+                      disabled={imageUploadBusy || createImages.length >= MAX_SERVICE_IMAGES}
+                      onChange={(ev) => {
+                        void pickServiceImages(ev.target.files, createImages, setCreateImages);
+                        ev.target.value = '';
+                      }}
+                    />
+                  </div>
+
                 </div>
 
                 <div className="service-create-actions">
                   <button
                     type="button"
                     className="plan-modal-cancel"
-                    onClick={() => setShowCreate(false)}
+                    onClick={() => {
+                      setShowCreate(false);
+                      setCreateImages([]);
+                    }}
                   >
                     {dictionary.common?.back ?? 'Back'}
                   </button>
                   <button type="submit" className="dashboard-primary-btn" disabled={creating}>
                     {creating ? '...' : 'Publish'}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {editingService && (
+          <div className="plan-modal-overlay" onClick={() => setEditingService(null)}>
+            <div className="plan-modal service-create-modal" onClick={(e) => e.stopPropagation()}>
+              <h3 className="plan-modal-title">Edit service</h3>
+              {error && <p className="dashboard-error">{error}</p>}
+              <form
+                key={editingService.id}
+                className="dashboard-form service-create-form"
+                onSubmit={(e) => void handleSaveEdit(e)}
+              >
+                <div className="service-create-grid">
+                  <div className="service-create-field service-create-field--full">
+                    <label className="service-create-label">{sp.titleLabel ?? 'Title'}</label>
+                    <input
+                      name="title"
+                      type="text"
+                      className="dashboard-input service-create-input"
+                      defaultValue={editingService.title}
+                      minLength={3}
+                      maxLength={300}
+                      required
+                    />
+                  </div>
+
+                  <div className="service-create-field service-create-field--full">
+                    <label className="service-create-label">{sp.descriptionLabel ?? 'Description'}</label>
+                    <textarea
+                      name="description"
+                      className="dashboard-textarea service-create-input"
+                      defaultValue={editingService.description ?? ''}
+                      rows={4}
+                    />
+                  </div>
+
+                  <div className="service-create-field">
+                    <label className="service-create-label">{sp.categoryLabel ?? 'Category'}</label>
+                    <select
+                      name="categoryId"
+                      className="dashboard-select service-create-input"
+                      defaultValue={editingService.categoryId ?? ''}
+                    >
+                      <option value="">-</option>
+                      {categories.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {categoryName(c)}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="service-create-field">
+                    <label className="service-create-label">{sp.priceLabel ?? 'Price'}</label>
+                    <input
+                      name="price"
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      className="dashboard-input service-create-input"
+                      placeholder={sp.pricePlaceholder}
+                      defaultValue={editingService.price != null ? String(editingService.price) : ''}
+                    />
+                  </div>
+
+                  {hourlyPricingEnabled ? (
+                    <div className="service-create-field">
+                      <label className="service-create-label">Type</label>
+                      <select
+                        name="priceType"
+                        className="dashboard-select service-create-input"
+                        defaultValue={editingService.priceType}
+                      >
+                        <option value="fixed">{sp.priceTypeFixed ?? 'Fixed'}</option>
+                        <option value="hourly">{sp.priceTypeHourly ?? 'Hourly'}</option>
+                      </select>
+                    </div>
+                  ) : null}
+
+                  <label
+                    className="service-create-checkbox service-create-field service-create-field--full"
+                    style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}
+                  >
+                    <input
+                      name="isNegotiable"
+                      type="checkbox"
+                      defaultChecked={editingService.isNegotiable}
+                    />
+                    <span>Price is negotiable</span>
+                  </label>
+
+                  <div className="service-create-field">
+                    <label className="service-create-label">{sp.cityLabel ?? 'City'}</label>
+                    <select
+                      name="city"
+                      className="home-search-select service-create-city-select"
+                      defaultValue={editingService.city ?? ''}
+                    >
+                      <option value="">
+                        {dictionary.homeSearch?.chooseCity ?? 'Choose city'}
+                      </option>
+                      {EGYPTIAN_CITIES.map((cityOption) => (
+                        <option key={cityOption} value={cityOption}>
+                          {cityOption}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="service-create-field">
+                    <label className="service-create-label">{sp.countryLabel ?? 'Country'}</label>
+                    <input
+                      name="country"
+                      type="text"
+                      className="dashboard-input service-create-input"
+                      defaultValue={editingService.country ?? 'Egypt'}
+                    />
+                  </div>
+
+                  <div className="service-create-field service-create-field--full">
+                    <label className="service-create-label">
+                      Gallery ({editImages.length}/{MAX_SERVICE_IMAGES})
+                    </label>
+                    <p className="service-create-hint">JPEG/PNG/WebP — up to {MAX_SERVICE_IMAGES} images.</p>
+                    <div className="service-images-row">
+                      {editImages.map((u, idx) => (
+                        <div key={`${u}-${idx}`} className="service-image-tile">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src={u} alt="" className="service-image-tile-img" />
+                          <button
+                            type="button"
+                            className="service-image-remove"
+                            aria-label="Remove"
+                            onClick={() => setEditImages((prev) => prev.filter((_, i) => i !== idx))}
+                          >
+                            ×
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      multiple
+                      className="service-image-file-input"
+                      disabled={imageUploadBusy || editImages.length >= MAX_SERVICE_IMAGES}
+                      onChange={(ev) => {
+                        void pickServiceImages(ev.target.files, editImages, setEditImages);
+                        ev.target.value = '';
+                      }}
+                    />
+                  </div>
+                </div>
+
+                <div className="service-create-actions">
+                  <button type="button" className="plan-modal-cancel" onClick={() => setEditingService(null)}>
+                    {dictionary.common?.back ?? 'Back'}
+                  </button>
+                  <button type="submit" className="dashboard-primary-btn" disabled={savingEdit}>
+                    {savingEdit ? '...' : 'Save'}
                   </button>
                 </div>
               </form>

@@ -1,3 +1,4 @@
+import { DEFAULT_PLAN_ALLOWED_ROLES } from '@mohandishub/shared';
 import { describe, expect, it, vi } from 'vitest';
 
 import { AdminService } from '../modules/admin/admin.service.js';
@@ -29,6 +30,7 @@ describe('admin plan DB error mapping', () => {
         billingCycle: 'monthly',
         trialDays: 0,
         features: [],
+        allowedRoles: [...DEFAULT_PLAN_ALLOWED_ROLES],
         sortOrder: 0,
       }),
     ).rejects.toMatchObject({
@@ -50,6 +52,7 @@ describe('admin plan DB error mapping', () => {
         billingCycle: 'monthly',
         trialDays: 0,
         features: [],
+        allowedRoles: [...DEFAULT_PLAN_ALLOWED_ROLES],
         sortOrder: 0,
       }),
     ).rejects.toMatchObject({

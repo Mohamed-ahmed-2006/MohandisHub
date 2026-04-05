@@ -2,7 +2,7 @@
 // Services controller — public and provider HTTP handlers
 // ---------------------------------------------------------------------------
 
-import type { ApiSuccessBody, Service, ServiceCategory } from '@mohandishub/shared';
+import type { ApiSuccessBody, Service, ServiceCategory, UserRole } from '@mohandishub/shared';
 
 import { asyncHandler } from '../../utils/async-handler.js';
 import { HttpError } from '../../utils/http-error.js';
@@ -99,7 +99,8 @@ const getServiceDetail = asyncHandler(async (req, res) => {
 const createService = asyncHandler(async (req, res) => {
   const user = requireUser(req);
   const input = parseBody(createServiceSchema, req.body);
-  const service = await servicesService.createService(user.id, input);
+  const providerRole = (user.role ?? 'customer') as UserRole;
+  const service = await servicesService.createService(user.id, providerRole, input);
   res.status(201).json({ ok: true, data: service });
 });
 

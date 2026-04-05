@@ -44,6 +44,7 @@ export type BidMessage = {
   sender_name: string;
   content: string;
   created_at?: string;
+  attachment_url?: string | null;
 };
 
 async function apiReq<T>(path: string, token: string, opts?: RequestInit): Promise<T> {
@@ -145,9 +146,14 @@ export const needsApiClient = {
   listBidMessages: (token: string, needId: string, bidId: string) =>
     apiReq<BidMessage[]>(`/api/needs/${needId}/bids/${bidId}/messages`, token),
 
-  createBidMessage: (token: string, needId: string, bidId: string, content: string) =>
+  createBidMessage: (
+    token: string,
+    needId: string,
+    bidId: string,
+    body: { content: string; attachmentUrl?: string },
+  ) =>
     apiReq<BidMessage>(`/api/needs/${needId}/bids/${bidId}/messages`, token, {
       method: 'POST',
-      body: JSON.stringify({ content }),
+      body: JSON.stringify(body),
     }),
 };

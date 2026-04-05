@@ -1,6 +1,6 @@
 'use client';
 
-import type { Plan, Wallet } from '@mohandishub/shared';
+import type { Plan, PlanUsageSummary, Wallet } from '@mohandishub/shared';
 import { ClipboardList } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
@@ -23,6 +23,7 @@ export const MyPlanScreen = ({ locale, dictionary }: Props) => {
   const { status } = useAppStatus();
 
   const [plans, setPlans] = useState<Plan[]>([]);
+  const [planUsage, setPlanUsage] = useState<PlanUsageSummary | null>(null);
   const [wallet, setWallet] = useState<Wallet | null>(null);
   const [subscriptionEndsAt, setSubscriptionEndsAt] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -47,6 +48,7 @@ export const MyPlanScreen = ({ locale, dictionary }: Props) => {
   const load = useCallback(async () => {
     if (!plansFeatureEnabled) {
       setPlans([]);
+      setPlanUsage(null);
       setWallet(null);
       setSubscriptionEndsAt(null);
       setLoading(false);
@@ -54,12 +56,16 @@ export const MyPlanScreen = ({ locale, dictionary }: Props) => {
     }
     setLoading(true);
     try {
-      const [planList, w, subscription] = await Promise.all([
-        plansApiClient.listActivePlans(),
+      const [planList, w, subscription, usage] = await Promise.all([
+        accessToken
+          ? plansApiClient.listActivePlans(accessToken)
+          : Promise.resolve([] as Plan[]),
         accessToken ? walletApiClient.getMyWallet(accessToken) : Promise.resolve(null),
         accessToken ? plansApiClient.getCurrentSubscription(accessToken) : Promise.resolve(null),
+        accessToken ? plansApiClient.getMyUsage(accessToken) : Promise.resolve(null),
       ]);
       setPlans(planList);
+      setPlanUsage(usage);
       setWallet(w);
       setSubscriptionEndsAt(subscription?.subscriptionEndsAt ?? null);
     } catch {
@@ -82,6 +88,12 @@ export const MyPlanScreen = ({ locale, dictionary }: Props) => {
       setWallet((prev) => (prev ? { ...prev, balance: result.walletBalance } : prev));
       setSubscriptionEndsAt(result.subscriptionEndsAt);
       await updateAuthUser();
+      try {
+        const nextUsage = await plansApiClient.getMyUsage(accessToken);
+        setPlanUsage(nextUsage);
+      } catch {
+        setPlanUsage(null);
+      }
       window.dispatchEvent(new CustomEvent('wallet-updated'));
       const endDate = result.subscriptionEndsAt
         ? new Date(result.subscriptionEndsAt).toLocaleDateString(undefined, {
@@ -115,6 +127,19 @@ export const MyPlanScreen = ({ locale, dictionary }: Props) => {
   }
 
   const currentPlan = authUser.plan ?? 'free';
+  const role = authUser.role;
+  const u = planUsage;
+
+  const fmt = (template: string, vars: Record<string, string | number>) =>
+    template.replace(/\{(\w+)\}/g, (_, key: string) => String(vars[key] ?? ''));
+
+  const showPlanUsage =
+    plansFeatureEnabled &&
+    !loading &&
+    u?.plansFeatureEnabled &&
+    ((role === 'customer' && u.customer) ||
+      ((role === 'expert' || role === 'craftsman') && u.individualProvider) ||
+      (role === 'business' && u.business));
 
   const getPlanIcon = (slug: string) => {
     const icons: Record<string, React.ReactNode> = {
@@ -214,6 +239,74 @@ export const MyPlanScreen = ({ locale, dictionary }: Props) => {
             </span>
           )}
         </div>
+
+        {showPlanUsage && u && (
+          <section className="plan-screen-usage" aria-labelledby="plan-usage-heading">
+            <h2 id="plan-usage-heading" className="plan-screen-usage-title">
+              {d.usageTitle ?? 'Your plan usage'}
+            </h2>
+            <p className="plan-screen-usage-note">{d.usageConcurrentNote}</p>
+            <ul className="plan-screen-usage-list">
+              {role === 'customer' && u.customer && (
+                <li>
+                  {u.customer.maxNeeds == null
+                    ? fmt(d.usageNeedsUnlimited ?? '', { used: u.customer.activeNeedsCount })
+                    : fmt(d.usageNeeds ?? '', {
+                        used: u.customer.activeNeedsCount,
+                        max: u.customer.maxNeeds,
+                        remaining: u.customer.remainingNeeds ?? 0,
+                      })}
+                </li>
+              )}
+              {(role === 'expert' || role === 'craftsman') && u.individualProvider && (
+                <>
+                  <li>
+                    {u.individualProvider.maxServices == null
+                      ? fmt(d.usageServicesUnlimited ?? '', { used: u.individualProvider.servicesCount })
+                      : fmt(d.usageServices ?? '', {
+                          used: u.individualProvider.servicesCount,
+                          max: u.individualProvider.maxServices,
+                          remaining: u.individualProvider.remainingServices ?? 0,
+                        })}
+                  </li>
+                  <li>
+                    {u.individualProvider.maxActiveBids == null
+                      ? fmt(d.usagePendingBidsUnlimited ?? '', {
+                          used: u.individualProvider.pendingBidsCount,
+                        })
+                      : fmt(d.usagePendingBids ?? '', {
+                          used: u.individualProvider.pendingBidsCount,
+                          max: u.individualProvider.maxActiveBids,
+                          remaining: u.individualProvider.remainingActiveBids ?? 0,
+                        })}
+                  </li>
+                </>
+              )}
+              {role === 'business' && u.business && (
+                <>
+                  <li>
+                    {u.business.maxJobs == null
+                      ? fmt(d.usageJobsUnlimited ?? '', { used: u.business.jobsCount })
+                      : fmt(d.usageJobs ?? '', {
+                          used: u.business.jobsCount,
+                          max: u.business.maxJobs,
+                          remaining: u.business.remainingJobs ?? 0,
+                        })}
+                  </li>
+                  <li>
+                    {u.business.maxBusinessServices == null
+                      ? fmt(d.usageBusinessServicesUnlimited ?? '', { used: u.business.servicesCount })
+                      : fmt(d.usageBusinessServices ?? '', {
+                          used: u.business.servicesCount,
+                          max: u.business.maxBusinessServices,
+                          remaining: u.business.remainingBusinessServices ?? 0,
+                        })}
+                  </li>
+                </>
+              )}
+            </ul>
+          </section>
+        )}
 
         {message && (
           <div className={`plan-screen-msg plan-screen-msg--${message.type}`} role="alert">

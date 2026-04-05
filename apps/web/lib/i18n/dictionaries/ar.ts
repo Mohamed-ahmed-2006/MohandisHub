@@ -49,8 +49,10 @@ export const arDictionary: Dictionary = {
     ticketSendError: 'تعذر الإرسال. حاول مرة أخرى.',
   },
   supportFab: {
-    title: 'المساعدة والملاحظات',
-    openAria: 'فتح المساعدة والملاحظات',
+    title: 'تواصل مع الدعم',
+    subtitle:
+      'يُنشئ تذكرة في صفحة الدعم ليرد فريقنا في نفس المحادثة. هذا ليس الإبلاغ عن مراجعة — استخدم «إبلاغ» من على المراجعة نفسها.',
+    openAria: 'تواصل مع الدعم — تذكرة جديدة',
     email: 'البريد',
     role: 'الدور',
     roleAdmin: 'مشرف',
@@ -486,6 +488,19 @@ export const arDictionary: Dictionary = {
     conversationClosed: 'هذه المحادثة مغلقة.',
     send: 'إرسال',
   },
+  supportPage: {
+    intro: 'تذاكر الدعم محادثات مع فريق المنصة. يمكنك إضافة ردود حتى تُغلق التذكرة.',
+    reviewTip:
+      'للإبلاغ عن مراجعة غير لائقة، افتح تلك المراجعة واستخدم «إبلاغ» — يعالجها المشرفون بشكل منفصل.',
+    selectTicket: 'اختر تذكرة لعرض المحادثة.',
+    staffLabel: 'فريق الدعم',
+    youLabel: 'أنت',
+    threadTitle: 'المحادثة',
+    newTicket: 'تذكرة جديدة',
+    ticketReadOnlyTitle: 'تم إنهاء هذه التذكرة',
+    ticketReadOnlyBody:
+      'التذكرة مُغلقة أو مُحلّة. لا يمكنك إرسال رسائل جديدة هنا. استخدم «تذكرة جديدة» إذا كنت لا تزال بحاجة إلى مساعدة.',
+  },
   appHome: {
     loading: 'جارٍ تحميل مساحة العمل...',
     roleLabel: 'الدور',
@@ -594,6 +609,7 @@ export const arDictionary: Dictionary = {
       support: 'الدعم',
       notifications: 'الإشعارات',
       settings: 'الإعدادات',
+      retention: 'الاحتفاظ بالبيانات',
       walletRails: 'المحفظة (إنستاباي)',
     },
     supportTicket: {
@@ -748,7 +764,10 @@ export const arDictionary: Dictionary = {
         content: 'المحتوى',
         communication: 'التواصل',
         features: 'ميزات العرض',
+        sidebarNav: 'قائمة التنقل الجانبية',
       },
+      sidebarNavDesc:
+        'إخفاء روابط محددة من قائمة التطبيق. يمكن للمستخدمين الذين يصلون للقسم فتحه مباشرة بالرابط.',
       maintenanceMode: 'وضع الصيانة',
       maintenanceModeDesc: 'إظهار صفحة الصيانة ومنع الوصول لغير المدراء.',
       maintenanceMessage: 'رسالة الصيانة',
@@ -771,6 +790,13 @@ export const arDictionary: Dictionary = {
       pauseBids: 'إيقاف وضع العروض',
       pauseAwardBids: 'إيقاف منح العروض',
       pauseUploads: 'إيقاف رفع الملفات',
+      pauseUploadsDesc: 'إيقاف الرفع العام والخاص.',
+      uploadPolicySection: 'سياسة الرفع',
+      maxPublicUploadBytes: 'الحد الأقصى للرفع العام (بايت)',
+      maxPublicUploadBytesDesc: 'اتركه فارغًا للافتراضي. لا يتجاوز سقف الخادم.',
+      publicUploadMimes: 'أنواع MIME المسموحة (مفصولة بفواصل)',
+      publicUploadMimesDesc: 'اتركه فارغًا للافتراضي.',
+      supabaseStorageDashboardUrl: 'رابط لوحة تخزين Supabase',
       pauseVerificationSubmissions: 'إيقاف تقديم التحققات',
       pauseChat: 'إيقاف الدردشة',
       pauseOtpEmails: 'إيقاف رسائل OTP / التحقق',
@@ -832,6 +858,69 @@ export const arDictionary: Dictionary = {
       bidsVisibleToCustomer: 'عروض مرئية للعميل',
       bidsVisibleTopN: 'أول N عرض',
       sortOrder: 'ترتيب العرض',
+      allowedRoles: 'من يمكنه الاشتراك',
+      selectAtLeastOneRole: 'اختر دوراً واحداً على الأقل يمكنه الاشتراك في هذه الخطة.',
+      limitsSectionCustomer: 'العملاء (الاحتياجات وقواعد العروض)',
+      limitsSectionProviders: 'الخبراء والحرفيون (الخدمات والعروض)',
+      limitsSectionBusiness: 'الشركات (الوظائف والقوائم)',
+      roleCustomer: 'عميل',
+      roleExpert: 'خبير',
+      roleCraftsman: 'حرفي',
+      roleBusiness: 'شركة',
+      maxBidsPerNeed: 'أقصى عروض لكل احتياج',
+      maxActiveBids: 'أقصى عروض نشطة (طلبات قيد الانتظار)',
+      maxBusinessServices: 'أقصى خدمات للشركة',
+      maxTeamSlots: 'أقصى مقاعد للفريق',
+      canBusinessFeatured: 'إبراز الشركة في القائمة',
+      selectRolesForLimits: 'اختر دوراً واحداً على الأقل أعلاه لعرض خيارات الحدود المناسبة له.',
+      bidsOrderingHint:
+        'عند تفعيل الخطط، يرى العميل العروض مرتبة كالمنصات العالمية: أولوية للعروض المميزة، ثم خطط مدفوعة، ثم الأقدم.',
+      bidsVisibleOptionAll: 'عرض كل العروض (ترتيب ذكي)',
+      bidsVisibleOptionPriorityFirst: 'عرض الكل (تسمية: أولوية أولاً)',
+      bidsVisibleOptionPremiumFirst: 'عرض الكل (تسمية: باقة مدفوعة أولاً)',
+      bidsVisibleOptionTopN: 'أول N بعد الترتيب الذكي فقط',
+      canPriorityBid: 'عرض مُقدَّم بأولوية (يظهر أعلى للعميل)',
+      canProBadge: 'شارة Pro في الملف (خبراء وحرفيون)',
+      canTrustedBusinessBadge: 'شارة شركة موثوقة',
+      planLimitsIntro:
+        'الحدود «المتزامنة»: تُحسب ما هو مفتوح الآن (احتياجات نشطة، قوائم، عروض قيد الانتظار). ليست حصصاً شهرية. عند إتمام العمل أو إغلاقه تُفرَّغ خانة.',
+      hintAllowedRoles:
+        'فقط من لديهم هذه الأدوار يرون الخطة ويشتركون. أنشئ خططاً منفصلة لكل فئة (مثلاً حرفيون مقابل شركات).',
+      hintMaxNeeds:
+        'أقصى احتياجات بحالة مفتوح أو مُسنَد أو قيد التنفيذ معاً. المكتمل أو المغلق لا يُحسب. لا إعادة تعيين تقويمية.',
+      hintMaxBidsPerNeed:
+        'عند وصول عدد العروض (قيد الانتظار أو مقبولة) لهذا الحد على احتياج واحد، لا يُقبل المزيد.',
+      hintBidsVisible:
+        'كم عرضاً يرى العميل وبأي ترتيب (الأولوية والخطط المدفوعة أولاً ثم الزمن).',
+      hintBidsVisibleTopN:
+        'بعد الترتيب يرى العميل هذا العدد فقط. يُستخدم عند اختيار «أول N».',
+      hintMaxServices:
+        'إجمالي قوائم الخدمات للخبير أو الحرفي. العدّ حالياً لكل الصفوف.',
+      hintMaxActiveBids:
+        'أقصى عروض قيد الانتظار على جميع الاحتياجات. الرد أو السحب يُفرّغ خانة.',
+      hintCanPriorityListing:
+        'علم للخطة لتمييز الخدمات في البحث عند تفعيله في المنتج.',
+      hintCanPriorityBid:
+        'عروض أصحاب هذه الخطة تظهر أولاً عندما يفتح العميل قائمة العروض.',
+      hintCanProBadge:
+        'تظهر شارة Pro في رأس التطبيق للخبراء والحرفيين على هذه الخطة.',
+      hintMaxJobs:
+        'إجمالي إعلانات الوظائف للشركة (يُحسب كل الصفوف حتى تضيف تصفية حالة).',
+      hintMaxBusinessServices:
+        'حد قوائم خدمات الشركة. إن وُجد الفراغ يُطبَّق حد الخدمات العام للشركات.',
+      hintMaxTeamSlots:
+        'محجوز لحد أعضاء الفريق؛ اربطه بالـ API عند إضافة الفرق.',
+      hintCanBusinessFeatured:
+        'محجوز لإبراز الشركة في القوائم عند التنفيذ.',
+      hintCanTrustedBusinessBadge:
+        'تظهر شارة «موثوق» بجانب اسم الشركة في التطبيق.',
+      hintName: 'الاسم الظاهر في بطاقات الخطط وعند الدفع.',
+      hintSlug: 'معرّف ثابت في الروابط والـ API (أحرف صغيرة، بلا مسافات).',
+      hintPrice: 'المبلغ المخصوم من محفظة المشترك عند دفع هذه الخطة.',
+      hintDescription: 'نص اختياري أطول؛ يمكن عرضه تحت اسم الخطة في بعض الشاشات.',
+      hintBillingCycle: 'دورة التجديد (أو دفعة لمرة واحدة). تُخصم المحفظة عند كل تجديد.',
+      hintFeatures:
+        'عناصر مفصولة بفواصل تظهر في بطاقة الخطة.',
     },
     txns: {
       title: 'إدارة المعاملات',
@@ -990,6 +1079,21 @@ export const arDictionary: Dictionary = {
     confirmText: 'الاشتراك في {name} مقابل {price} {currency}؟ سيتم خصم المبلغ من رصيد محفظتك.',
     confirm: 'تأكيد',
     subscribeSuccess: 'تم الاشتراك بنجاح!',
+    badgePro: 'Pro',
+    badgeTrustedBusiness: 'موثوق',
+    usageTitle: 'استخدام خطتك',
+    usageConcurrentNote:
+      'هذه خانات حية وليست حدوداً شهرية. إنهاء العمل أو إغلاقه يُفرّغ السعة.',
+    usageNeeds: 'احتياجات نشطة: {used} من {max} ({remaining} متبقية).',
+    usageNeedsUnlimited: 'احتياجات نشطة: {used} (لا حد أقصى في خطتك).',
+    usageServices: 'قوائم الخدمات: {used} من {max} ({remaining} متبقية).',
+    usageServicesUnlimited: 'قوائم الخدمات: {used} (بدون حد).',
+    usagePendingBids: 'عروض قيد الانتظار: {used} من {max} ({remaining} متبقية).',
+    usagePendingBidsUnlimited: 'عروض قيد الانتظار: {used} (بدون حد).',
+    usageJobs: 'إعلانات الوظائف: {used} من {max} ({remaining} متبقية).',
+    usageJobsUnlimited: 'إعلانات الوظائف: {used} (بدون حد).',
+    usageBusinessServices: 'خدمات الشركة: {used} من {max} ({remaining} متبقية).',
+    usageBusinessServicesUnlimited: 'خدمات الشركة: {used} (بدون حد).',
   },
   needs: {
     myNeeds: 'احتياجاتي',
