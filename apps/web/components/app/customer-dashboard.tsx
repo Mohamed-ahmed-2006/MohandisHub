@@ -407,20 +407,46 @@ export const CustomerDashboard = ({
       </div>
       {plansFeatureEnabled &&
         planUsage?.plansFeatureEnabled &&
-        planUsage.customer &&
+        (planUsage.customer || (planUsage.usageQuotas?.length ?? 0) > 0) &&
         (() => {
           const c = planUsage.customer;
           const line =
-            c.maxNeeds != null && c.remainingNeeds != null
+            c &&
+            (c.maxNeeds != null && c.remainingNeeds != null
               ? (planDict.usageNeeds ?? '')
                   .replace('{used}', String(c.activeNeedsCount))
                   .replace('{max}', String(c.maxNeeds))
                   .replace('{remaining}', String(c.remainingNeeds))
-              : (planDict.usageNeedsUnlimited ?? '').replace('{used}', String(c.activeNeedsCount));
+              : (planDict.usageNeedsUnlimited ?? '').replace('{used}', String(c.activeNeedsCount)));
           return (
             <div className="dashboard-plan-usage" role="status">
               <p>{planDict.usageTitle ?? 'Your plan usage'}</p>
-              <p>{line}</p>
+              {line != null && <p>{line}</p>}
+              {planUsage.usageQuotas && planUsage.usageQuotas.length > 0 && (
+                <>
+                  <p className="dashboard-plan-usage-metered">{planDict.usageMeteredTitle}</p>
+                  <ul className="dashboard-plan-usage-quota-list">
+                    {planUsage.usageQuotas.map((q) => {
+                      const label =
+                        planDict[`quotaFeature_${q.featureKey}`] ?? q.featureKey;
+                      const ends = new Date(q.periodEndsAt).toLocaleDateString(
+                        locale === 'ar' ? 'ar-EG' : undefined,
+                        { year: 'numeric', month: 'short', day: 'numeric' },
+                      );
+                      const tpl = planDict.usageQuotaLine ?? '';
+                      const row = tpl
+                        .replace('{label}', label)
+                        .replace('{used}', String(q.used))
+                        .replace('{max}', String(q.maxPerPeriod))
+                        .replace('{remaining}', String(q.remaining))
+                        .replace('{ends}', ends);
+                      return (
+                        <li key={q.featureKey}>{row}</li>
+                      );
+                    })}
+                  </ul>
+                </>
+              )}
               <p>{planDict.usageConcurrentNote ?? ''}</p>
             </div>
           );

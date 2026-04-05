@@ -1,8 +1,10 @@
+import type { EffectivePlanLimits } from '@mohandishub/shared';
 import type { PoolClient } from 'pg';
 
 import { getPool } from '../../db/pool.js';
 import { HttpError } from '../../utils/http-error.js';
 import { PlansService } from '../plans/plans.service.js';
+import { UsageQuotaService } from '../plans/usage-quota.service.js';
 import { SettingsService } from '../settings/settings.service.js';
 import { WalletRepository } from '../wallet/wallet.repository.js';
 
@@ -18,6 +20,7 @@ export class NeedsService {
     private readonly settingsService: SettingsService = new SettingsService(),
     private readonly walletRepo: WalletRepository = new WalletRepository(),
     private readonly plansService: PlansService = new PlansService(),
+    private readonly usageQuotaService: UsageQuotaService = new UsageQuotaService(),
   ) {}
 
   private async assertNeedsFeatureEnabled(): Promise<void> {
@@ -48,21 +51,42 @@ export class NeedsService {
         message: 'Posting new needs is temporarily disabled.',
       });
     }
+    let planLimits: EffectivePlanLimits | null = null;
     if (status.featurePlansEnabled) {
-      const limits = await this.plansService.getEffectivePlanLimits(customerId);
-      if (limits.maxNeeds != null) {
+      planLimits = await this.plansService.getEffectivePlanLimits(customerId);
+      if (planLimits.maxNeeds != null) {
         const count = await this.repo.countActiveNeedsByCustomer(customerId);
-        if (count >= limits.maxNeeds) {
+        if (count >= planLimits.maxNeeds) {
           throw new HttpError({
             statusCode: 403,
             code: 'PLAN_LIMIT_REACHED',
-            message: `Your plan allows up to ${limits.maxNeeds} active needs (open, in progress, or awarded). Complete or close one to free a slot, or upgrade.`,
+            message: `Your plan allows up to ${planLimits.maxNeeds} active needs (open, in progress, or awarded). Complete or close one to free a slot, or upgrade.`,
+          });
+        }
+      }
+      const q = planLimits.usageQuotas.new_needs_per_period;
+      if (q) {
+        const { start } = await this.usageQuotaService.resolvePeriodBounds(customerId, q.period);
+        const used = await this.usageQuotaService.getCountForWindow(customerId, 'new_needs_per_period', start);
+        if (used >= q.maxPerPeriod) {
+          throw new HttpError({
+            statusCode: 403,
+            code: 'PLAN_USAGE_QUOTA_EXCEEDED',
+            message: `You have reached your plan limit for posting new needs in this period (${q.maxPerPeriod} maximum).`,
           });
         }
       }
     }
     try {
-      return await this.repo.createNeed(customerId, input);
+      const created = await this.repo.createNeed(customerId, input);
+      if (planLimits?.usageQuotas?.new_needs_per_period) {
+        await this.usageQuotaService.consumeIfConfigured(
+          customerId,
+          'new_needs_per_period',
+          planLimits.usageQuotas.new_needs_per_period,
+        );
+      }
+      return created;
     } catch (err: unknown) {
       const pgErr = err as { code?: string; message?: string };
       if (pgErr.code === '42703' || (pgErr.message?.includes('does not exist') ?? false)) {
@@ -173,6 +197,7 @@ export class NeedsService {
         message: 'You cannot bid on your own need.',
       });
     }
+    let bidderLimitsForMeter: EffectivePlanLimits | undefined;
     if (status.featurePlansEnabled) {
       const customerLimits = await this.plansService.getEffectivePlanLimits(need.customer_id);
       if (customerLimits.maxBidsPerNeed != null) {
@@ -186,6 +211,7 @@ export class NeedsService {
         }
       }
       const bidderLimits = await this.plansService.getEffectivePlanLimits(expertId);
+      bidderLimitsForMeter = bidderLimits;
       if (bidderLimits.maxActiveBids != null) {
         const pending = await this.repo.countPendingBidsForExpert(expertId);
         if (pending >= bidderLimits.maxActiveBids) {
@@ -196,9 +222,29 @@ export class NeedsService {
           });
         }
       }
+      const bidQ = bidderLimits.usageQuotas.new_bids_per_period;
+      if (bidQ) {
+        const { start } = await this.usageQuotaService.resolvePeriodBounds(expertId, bidQ.period);
+        const used = await this.usageQuotaService.getCountForWindow(expertId, 'new_bids_per_period', start);
+        if (used >= bidQ.maxPerPeriod) {
+          throw new HttpError({
+            statusCode: 403,
+            code: 'PLAN_USAGE_QUOTA_EXCEEDED',
+            message: `You have reached your plan limit for new bids in this period (${bidQ.maxPerPeriod} maximum).`,
+          });
+        }
+      }
     }
     try {
-      return await this.repo.createBid(needId, expertId, input);
+      const bid = await this.repo.createBid(needId, expertId, input);
+      if (bidderLimitsForMeter?.usageQuotas.new_bids_per_period) {
+        await this.usageQuotaService.consumeIfConfigured(
+          expertId,
+          'new_bids_per_period',
+          bidderLimitsForMeter.usageQuotas.new_bids_per_period,
+        );
+      }
+      return bid;
     } catch (err: unknown) {
       const pgErr = err as { code?: string };
       if (pgErr.code === '23505') {

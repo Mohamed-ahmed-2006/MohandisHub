@@ -137,9 +137,10 @@ export const MyPlanScreen = ({ locale, dictionary }: Props) => {
     plansFeatureEnabled &&
     !loading &&
     u?.plansFeatureEnabled &&
-    ((role === 'customer' && u.customer) ||
+    (((role === 'customer' && u.customer) ||
       ((role === 'expert' || role === 'craftsman') && u.individualProvider) ||
-      (role === 'business' && u.business));
+      (role === 'business' && u.business)) ||
+      (u.usageQuotas?.length ?? 0) > 0);
 
   const getPlanIcon = (slug: string) => {
     const icons: Record<string, React.ReactNode> = {
@@ -305,6 +306,32 @@ export const MyPlanScreen = ({ locale, dictionary }: Props) => {
                 </>
               )}
             </ul>
+            {u.usageQuotas && u.usageQuotas.length > 0 && (
+              <>
+                <h3 className="plan-screen-usage-subtitle">{d.usageMeteredTitle}</h3>
+                <p className="plan-screen-usage-note">{d.usageMeteredIntro}</p>
+                <ul className="plan-screen-usage-list">
+                  {u.usageQuotas.map((q) => {
+                    const label = d[`quotaFeature_${q.featureKey}`] ?? q.featureKey;
+                    const ends = new Date(q.periodEndsAt).toLocaleDateString(
+                      locale === 'ar' ? 'ar-EG' : undefined,
+                      { year: 'numeric', month: 'short', day: 'numeric' },
+                    );
+                    return (
+                      <li key={q.featureKey}>
+                        {fmt(d.usageQuotaLine ?? '', {
+                          label,
+                          used: q.used,
+                          max: q.maxPerPeriod,
+                          remaining: q.remaining,
+                          ends,
+                        })}
+                      </li>
+                    );
+                  })}
+                </ul>
+              </>
+            )}
           </section>
         )}
 

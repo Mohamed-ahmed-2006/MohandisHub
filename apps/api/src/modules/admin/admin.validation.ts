@@ -46,6 +46,11 @@ export const userActivityTypeSchema = z.enum([
 
 export const planSubscriberRoleSchema = z.enum(['customer', 'expert', 'business', 'craftsman']);
 
+const planUsageQuotaEntrySchema = z.object({
+  maxPerPeriod: z.number().int().min(1),
+  period: z.enum(['billing_cycle', 'calendar_month']),
+});
+
 export const planLimitsSchema = z
   .object({
     maxServices: z.number().int().min(0).nullable().optional(),
@@ -65,6 +70,14 @@ export const planLimitsSchema = z
     canPriorityBid: z.boolean().optional(),
     canProBadge: z.boolean().optional(),
     canTrustedBusinessBadge: z.boolean().optional(),
+    usageQuotas: z
+      .object({
+        new_needs_per_period: planUsageQuotaEntrySchema.nullable().optional(),
+        new_services_per_period: planUsageQuotaEntrySchema.nullable().optional(),
+        new_bids_per_period: planUsageQuotaEntrySchema.nullable().optional(),
+        new_jobs_per_period: planUsageQuotaEntrySchema.nullable().optional(),
+      })
+      .optional(),
   })
   .optional()
   .nullable();

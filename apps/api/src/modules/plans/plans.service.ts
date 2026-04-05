@@ -2,15 +2,23 @@ import type {
   EffectivePlanLimits,
   Plan,
   PlanSubscriberRole,
+  PlanUsageQuotaLine,
   PlanUsageSummary,
   SubscribeToPlanResponse,
 } from '@mohandishub/shared';
-import { normalizePlanAllowedRoles, PLAN_SUBSCRIBER_ROLES } from '@mohandishub/shared';
+import {
+  normalizePlanAllowedRoles,
+  normalizeUsageQuotasFromPlanLimits,
+  PLAN_SUBSCRIBER_ROLES,
+  USAGE_QUOTA_KEYS_FOR_ROLE,
+} from '@mohandishub/shared';
 
 import { getPool } from '../../db/pool.js';
 import { HttpError } from '../../utils/http-error.js';
 import { SettingsService } from '../settings/settings.service.js';
 import { WalletRepository } from '../wallet/wallet.repository.js';
+
+import { UsageQuotaService } from './usage-quota.service.js';
 
 const BILLING_CYCLE_DAYS: Record<string, number> = {
   monthly: 30,
@@ -25,6 +33,7 @@ export class PlansService {
   constructor(
     private readonly settingsService: SettingsService = new SettingsService(),
     private readonly walletRepo: WalletRepository = new WalletRepository(),
+    private readonly usageQuotaService: UsageQuotaService = new UsageQuotaService(),
   ) {}
   /**
    * Lists active plans visible to the given primary role. Admins see the full catalog (for support/testing).
@@ -89,6 +98,7 @@ export class PlansService {
         maxBusinessServices: null,
         maxTeamSlots: null,
         canBusinessFeatured: false,
+        usageQuotas: {},
       };
     }
     const { rows: planRows } = await pool.query(
@@ -108,6 +118,7 @@ export class PlansService {
         maxBusinessServices: null,
         maxTeamSlots: null,
         canBusinessFeatured: false,
+        usageQuotas: {},
       };
     }
     const row = planRows[0] as {
@@ -155,7 +166,32 @@ export class PlansService {
           ? Number(limits.maxTeamSlots)
           : null,
       canBusinessFeatured: Boolean(limits.canBusinessFeatured),
+      usageQuotas: normalizeUsageQuotasFromPlanLimits(limits),
     };
+  }
+
+  private async buildUsageQuotaLines(
+    userId: string,
+    role: 'customer' | 'expert' | 'craftsman' | 'business',
+    limits: EffectivePlanLimits,
+  ): Promise<PlanUsageQuotaLine[]> {
+    const keys = USAGE_QUOTA_KEYS_FOR_ROLE[role];
+    const out: PlanUsageQuotaLine[] = [];
+    for (const featureKey of keys) {
+      const def = limits.usageQuotas[featureKey];
+      if (!def) continue;
+      const { start, end } = await this.usageQuotaService.resolvePeriodBounds(userId, def.period);
+      const used = await this.usageQuotaService.getCountForWindow(userId, featureKey, start);
+      out.push({
+        featureKey,
+        period: def.period,
+        maxPerPeriod: def.maxPerPeriod,
+        used,
+        remaining: Math.max(0, def.maxPerPeriod - used),
+        periodEndsAt: end.toISOString(),
+      });
+    }
+    return out;
   }
 
   /**
@@ -326,6 +362,7 @@ export class PlansService {
     const empty: PlanUsageSummary = {
       plansFeatureEnabled: appStatus.featurePlansEnabled,
       resetPolicy: 'concurrent_slots',
+      usageQuotas: [],
       customer: null,
       individualProvider: null,
       business: null,
@@ -340,6 +377,14 @@ export class PlansService {
     const role = roleRows[0]?.primary_role ?? 'customer';
     const limits = await this.getEffectivePlanLimits(userId);
 
+    const quotaRole =
+      role === 'customer' || role === 'expert' || role === 'craftsman' || role === 'business'
+        ? role
+        : null;
+    const quotaLines = quotaRole
+      ? await this.buildUsageQuotaLines(userId, quotaRole, limits)
+      : [];
+
     if (role === 'customer') {
       const { rows } = await pool.query<{ c: string }>(
         `SELECT count(*)::text AS c FROM needs
@@ -350,6 +395,7 @@ export class PlansService {
       const max = limits.maxNeeds;
       return {
         ...empty,
+        usageQuotas: quotaLines,
         customer: {
           maxNeeds: max,
           activeNeedsCount: active,
@@ -373,6 +419,7 @@ export class PlansService {
       const maxB = limits.maxActiveBids;
       return {
         ...empty,
+        usageQuotas: quotaLines,
         individualProvider: {
           maxServices: maxS,
           servicesCount: svc,
@@ -399,6 +446,7 @@ export class PlansService {
       const maxJ = limits.maxJobs;
       return {
         ...empty,
+        usageQuotas: quotaLines,
         business: {
           maxJobs: maxJ,
           jobsCount: jobs,
@@ -410,7 +458,7 @@ export class PlansService {
       };
     }
 
-    return empty;
+    return { ...empty, usageQuotas: quotaLines };
   }
 
   private toPlan(row: Record<string, unknown>): Plan {

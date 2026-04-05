@@ -58,6 +58,13 @@
   letter-spacing: -0.01em;
 }
 
+.plan-screen-usage-subtitle {
+  font-size: 0.95rem;
+  font-weight: 700;
+  margin: 1rem 0 0.35rem 0;
+  letter-spacing: -0.01em;
+}
+
 .plan-screen-usage-note {
   font-size: 0.85rem;
   color: hsl(var(--muted-foreground));

@@ -2,10 +2,17 @@
 // Services service — business logic for public service endpoints
 // ---------------------------------------------------------------------------
 
-import type { Service, ServiceCategory, ServiceSearchResult, UserRole } from '@mohandishub/shared';
+import type {
+  EffectivePlanLimits,
+  Service,
+  ServiceCategory,
+  ServiceSearchResult,
+  UserRole,
+} from '@mohandishub/shared';
 
 import { HttpError } from '../../utils/http-error.js';
 import { PlansService } from '../plans/plans.service.js';
+import { UsageQuotaService } from '../plans/usage-quota.service.js';
 import { SettingsService } from '../settings/settings.service.js';
 
 import { ServicesRepository } from './services.repository.js';
@@ -17,6 +24,7 @@ export class ServicesService {
     private readonly repo: ServicesRepository = new ServicesRepository(),
     private readonly plansService: PlansService = new PlansService(),
     private readonly settingsService: SettingsService = new SettingsService(),
+    private readonly usageQuotaService: UsageQuotaService = new UsageQuotaService(),
   ) {}
 
   async listCategories(): Promise<ServiceCategory[]> {
@@ -83,12 +91,13 @@ export class ServicesService {
         message: 'Hourly pricing is disabled.',
       });
     }
+    let planLimits: EffectivePlanLimits | null = null;
     if (appStatus.featurePlansEnabled) {
-      const limits = await this.plansService.getEffectivePlanLimits(providerId);
+      planLimits = await this.plansService.getEffectivePlanLimits(providerId);
       const serviceCap =
         providerRole === 'business'
-          ? (limits.maxBusinessServices ?? limits.maxServices)
-          : limits.maxServices;
+          ? (planLimits.maxBusinessServices ?? planLimits.maxServices)
+          : planLimits.maxServices;
       if (serviceCap != null) {
         const count = await this.repo.countServicesByProvider(providerId);
         if (count >= serviceCap) {
@@ -96,6 +105,18 @@ export class ServicesService {
             statusCode: 403,
             code: 'PLAN_LIMIT_REACHED',
             message: `Your plan allows up to ${serviceCap} services. Upgrade to add more.`,
+          });
+        }
+      }
+      const q = planLimits.usageQuotas.new_services_per_period;
+      if (q) {
+        const { start } = await this.usageQuotaService.resolvePeriodBounds(providerId, q.period);
+        const used = await this.usageQuotaService.getCountForWindow(providerId, 'new_services_per_period', start);
+        if (used >= q.maxPerPeriod) {
+          throw new HttpError({
+            statusCode: 403,
+            code: 'PLAN_USAGE_QUOTA_EXCEEDED',
+            message: `You have reached your plan limit for creating new services in this period (${q.maxPerPeriod} maximum).`,
           });
         }
       }
@@ -130,6 +151,13 @@ export class ServicesService {
     if (input.area !== undefined) dbInput.area = input.area;
     if (input.country !== undefined) dbInput.country = input.country;
     const row = await this.repo.createService(providerId, dbInput);
+    if (planLimits?.usageQuotas.new_services_per_period) {
+      await this.usageQuotaService.consumeIfConfigured(
+        providerId,
+        'new_services_per_period',
+        planLimits.usageQuotas.new_services_per_period,
+      );
+    }
     return this.toService(row);
   }
 

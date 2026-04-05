@@ -897,6 +897,9 @@ export const arDictionary: Dictionary = {
       maxProjects: 'حد المشاريع',
       maxNeeds: 'حد الاحتياجات',
       maxJobs: 'حد الوظائف',
+      planModalHint:
+        'مرّر على أيقونة (i) أو اضغط مطولاً للمساعدة. أقسام الحدود تتوافق مع الأدوار التي تختارها.',
+      planModalSectionDetails: 'التفاصيل والتسعير',
       planLimits: 'حدود الخطة والامتيازات',
       canPriorityListing: 'عرض ذو أولوية',
       bidsVisibleToCustomer: 'عروض مرئية للعميل',
@@ -965,6 +968,26 @@ export const arDictionary: Dictionary = {
       hintBillingCycle: 'دورة التجديد (أو دفعة لمرة واحدة). تُخصم المحفظة عند كل تجديد.',
       hintFeatures:
         'عناصر مفصولة بفواصل تظهر في بطاقة الخطة.',
+      usageQuotasSection: 'استخدام مُقاس (لكل فترة)',
+      usageQuotasIntro:
+        'حدود اختيارية لعدد مرات تنفيذ إجراءات في نافذة زمنية. دورة الفوترة تستخدم تواريخ الاشتراك النشط؛ إن كان المستخدم على خطة مجانية فقط تُحسب النافذة كالشهر التقويمي (UTC). لا يُرحّل الرصيد غير المستخدم.',
+      hintUsageQuotasSection:
+        'منفصلة عن الحدود المتزامنة أعلاه. كل إنشاء احتياج/خدمة/عرض/وظيفة ناجح يُحسب حتى انتهاء الفترة.',
+      quotaMaxPlaceholder: 'الحد الأقصى (فارغ = معطّل)',
+      quotaPeriodCalendarMonth: 'إعادة التعيين: شهر تقويمي (UTC)',
+      quotaPeriodBillingCycle: 'إعادة التعيين: فترة الاشتراك',
+      quotaFeature_new_needs_per_period: 'احتياجات جديدة منشورة',
+      quotaFeature_new_services_per_period: 'خدمات جديدة مُنشأة',
+      quotaFeature_new_bids_per_period: 'عروض جديدة مقدَّمة',
+      quotaFeature_new_jobs_per_period: 'وظائف جديدة منشورة',
+      hintQuota_new_needs_per_period:
+        'يُحسب كل احتياج ينشئه العميل بنجاح في الفترة (بالإضافة لحد الاحتياجات النشطة المتزامنة).',
+      hintQuota_new_services_per_period:
+        'يُحسب كل صف خدمة جديد يُنشئه المزوّد في الفترة (مسودة أو مرسل للمراجعة).',
+      hintQuota_new_bids_per_period:
+        'يُحسب كل عرض جديد يقدّمه الخبير أو الحرفي في الفترة.',
+      hintQuota_new_jobs_per_period:
+        'يُحسب كل وظيفة جديدة تنشئها الشركة في الفترة.',
     },
     txns: {
       title: 'إدارة المعاملات',
@@ -1138,6 +1161,15 @@ export const arDictionary: Dictionary = {
     usageJobsUnlimited: 'إعلانات الوظائف: {used} (بدون حد).',
     usageBusinessServices: 'خدمات الشركة: {used} من {max} ({remaining} متبقية).',
     usageBusinessServicesUnlimited: 'خدمات الشركة: {used} (بدون حد).',
+    usageMeteredTitle: 'إجراءات مُقاسة (هذه الفترة)',
+    usageMeteredIntro:
+      'تُصفَّر هذه الأعداد عند انتهاء الفترة (تجديد الاشتراك أو الشهر التقويمي حسب إعداد خطتك).',
+    usageQuotaLine:
+      '{label}: {used} من {max} ({remaining} متبقية). تنتهي الفترة في {ends}.',
+    quotaFeature_new_needs_per_period: 'احتياجات جديدة منشورة',
+    quotaFeature_new_services_per_period: 'خدمات جديدة مُنشأة',
+    quotaFeature_new_bids_per_period: 'عروض جديدة مقدَّمة',
+    quotaFeature_new_jobs_per_period: 'وظائف جديدة منشورة',
   },
   needs: {
     myNeeds: 'احتياجاتي',

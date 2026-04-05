@@ -30,6 +30,23 @@ export type BillingCycle = 'monthly' | 'quarterly' | 'yearly' | 'one_time';
 /** Bids visibility for customer when viewing bids on a need. */
 export type BidsVisibleToCustomer = 'all' | 'top_n' | 'premium_first' | 'priority_first';
 
+/** Metered actions: max uses per window (distinct from concurrent inventory caps). */
+export const USAGE_QUOTA_FEATURE_KEYS = [
+  'new_needs_per_period',
+  'new_services_per_period',
+  'new_bids_per_period',
+  'new_jobs_per_period',
+] as const;
+export type UsageQuotaFeatureKey = (typeof USAGE_QUOTA_FEATURE_KEYS)[number];
+
+/** `billing_cycle` uses the active subscription window, or calendar month if none. */
+export type UsageQuotaPeriodType = 'billing_cycle' | 'calendar_month';
+
+export type PlanUsageQuotaDef = {
+  maxPerPeriod: number;
+  period: UsageQuotaPeriodType;
+};
+
 /** Structured limits and feature flags per plan (enforced by API). */
 export type PlanLimits = {
   // —— For customers (posting needs) ——
@@ -65,6 +82,12 @@ export type PlanLimits = {
   canBusinessFeatured?: boolean;
   /** Trusted / verified business badge on the company profile. */
   canTrustedBusinessBadge?: boolean;
+
+  /**
+   * Per-period usage caps (counts actions in the window). Omitted or empty = no metered limit for that action.
+   * Enforced at: create need, create service, create bid, create job.
+   */
+  usageQuotas?: Partial<Record<UsageQuotaFeatureKey, PlanUsageQuotaDef | null>>;
 };
 
 export type Plan = {
@@ -123,6 +146,8 @@ export type EffectivePlanLimits = {
   maxBusinessServices: number | null;
   maxTeamSlots: number | null;
   canBusinessFeatured: boolean;
+  /** Normalized metered quotas (only valid keys; null max skipped at parse time). */
+  usageQuotas: Partial<Record<UsageQuotaFeatureKey, PlanUsageQuotaDef>>;
 };
 
 // ---------------------------------------------------------------------------
@@ -144,13 +169,24 @@ export type SubscribeToPlanResponse = {
   subscriptionEndsAt: string;
 };
 
-/** How usage limits reset: concurrent slots only (no calendar/monthly reset). */
+/** How inventory-style limits reset (concurrent slots). Metered quotas use `usageQuotas[].period`. */
 export type PlanUsageResetPolicy = 'concurrent_slots';
+
+export type PlanUsageQuotaLine = {
+  featureKey: UsageQuotaFeatureKey;
+  period: UsageQuotaPeriodType;
+  maxPerPeriod: number;
+  used: number;
+  remaining: number;
+  periodEndsAt: string;
+};
 
 /** Current usage vs plan caps for the signed-in user (one branch populated by role). */
 export type PlanUsageSummary = {
   plansFeatureEnabled: boolean;
   resetPolicy: PlanUsageResetPolicy;
+  /** Metered uses in the current window (only quotas relevant to the user role). */
+  usageQuotas: PlanUsageQuotaLine[];
   customer: {
     maxNeeds: number | null;
     activeNeedsCount: number;
@@ -172,4 +208,38 @@ export type PlanUsageSummary = {
     servicesCount: number;
     remainingBusinessServices: number | null;
   } | null;
+};
+
+/** Parse `plan_limits.usageQuotas` from DB/API into enforced shape. */
+export function normalizeUsageQuotasFromPlanLimits(
+  raw: unknown,
+): Partial<Record<UsageQuotaFeatureKey, PlanUsageQuotaDef>> {
+  const out: Partial<Record<UsageQuotaFeatureKey, PlanUsageQuotaDef>> = {};
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return out;
+  const obj = raw as Record<string, unknown>;
+  const quotas = obj.usageQuotas;
+  if (!quotas || typeof quotas !== 'object' || Array.isArray(quotas)) return out;
+  const q = quotas as Record<string, unknown>;
+  for (const key of USAGE_QUOTA_FEATURE_KEYS) {
+    const v = q[key];
+    if (!v || typeof v !== 'object' || Array.isArray(v)) continue;
+    const o = v as Record<string, unknown>;
+    const max = o.maxPerPeriod;
+    const period = o.period;
+    if (typeof max !== 'number' || !Number.isFinite(max) || max < 1) continue;
+    if (period !== 'billing_cycle' && period !== 'calendar_month') continue;
+    out[key] = { maxPerPeriod: Math.floor(max), period };
+  }
+  return out;
+}
+
+/** Metered quota keys to show / enforce per primary role. */
+export const USAGE_QUOTA_KEYS_FOR_ROLE: Record<
+  'customer' | 'expert' | 'craftsman' | 'business',
+  readonly UsageQuotaFeatureKey[]
+> = {
+  customer: ['new_needs_per_period'],
+  expert: ['new_services_per_period', 'new_bids_per_period'],
+  craftsman: ['new_services_per_period', 'new_bids_per_period'],
+  business: ['new_jobs_per_period', 'new_services_per_period'],
 };

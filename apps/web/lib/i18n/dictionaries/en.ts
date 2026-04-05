@@ -909,6 +909,8 @@ export const enDictionary: Dictionary = {
       maxProjects: 'Max Projects',
       maxNeeds: 'Max Needs',
       maxJobs: 'Max Jobs',
+      planModalHint: 'Hover or long-press (i) icons for help. Limit sections match the roles you select.',
+      planModalSectionDetails: 'Details & pricing',
       planLimits: 'Plan limits & privileges',
       canPriorityListing: 'Priority listing',
       bidsVisibleToCustomer: 'Bids visible to customer',
@@ -977,6 +979,26 @@ export const enDictionary: Dictionary = {
       hintBillingCycle: 'Renewal rhythm (or one-time). The wallet is charged again on each renewal.',
       hintFeatures:
         'Comma-separated bullets shown on the plan card in the app.',
+      usageQuotasSection: 'Metered usage (per period)',
+      usageQuotasIntro:
+        'Optional caps on how many times certain actions can happen in a window. Billing cycle uses the subscriber’s active subscription dates; if they only have a free plan, the window matches the calendar month. Unused quota does not roll over.',
+      hintUsageQuotasSection:
+        'Separate from concurrent caps above. Each successful create need / service / bid / job can count toward these limits until the period resets.',
+      quotaMaxPlaceholder: 'Max (empty = off)',
+      quotaPeriodCalendarMonth: 'Resets: calendar month (UTC)',
+      quotaPeriodBillingCycle: 'Resets: subscription period',
+      quotaFeature_new_needs_per_period: 'New needs posted',
+      quotaFeature_new_services_per_period: 'New services created',
+      quotaFeature_new_bids_per_period: 'New bids placed',
+      quotaFeature_new_jobs_per_period: 'New jobs posted',
+      hintQuota_new_needs_per_period:
+        'Counts each need the customer successfully creates in the window (in addition to concurrent max needs).',
+      hintQuota_new_services_per_period:
+        'Counts each new service row the provider creates in the window (draft or submitted).',
+      hintQuota_new_bids_per_period:
+        'Counts each new bid the expert or craftsman places in the window.',
+      hintQuota_new_jobs_per_period:
+        'Counts each new job the business creates in the window.',
     },
     txns: {
       title: 'Transaction Management',
@@ -1152,6 +1174,15 @@ export const enDictionary: Dictionary = {
     usageJobsUnlimited: 'Job posts: {used} (no cap).',
     usageBusinessServices: 'Business services: {used} of {max} ({remaining} left).',
     usageBusinessServicesUnlimited: 'Business services: {used} (no cap).',
+    usageMeteredTitle: 'Metered actions (this period)',
+    usageMeteredIntro:
+      'These counts reset when the period ends (subscription renewal or calendar month, as configured on your plan).',
+    usageQuotaLine:
+      '{label}: {used} of {max} ({remaining} left). Period ends {ends}.',
+    quotaFeature_new_needs_per_period: 'New needs posted',
+    quotaFeature_new_services_per_period: 'New services created',
+    quotaFeature_new_bids_per_period: 'New bids placed',
+    quotaFeature_new_jobs_per_period: 'New jobs posted',
   },
   needs: {
     myNeeds: 'My Needs',

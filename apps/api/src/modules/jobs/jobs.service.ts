@@ -1,4 +1,5 @@
 import type {
+  EffectivePlanLimits,
   ApplyJobDto,
   BookJobInterviewDto,
   CreateJobDto,
@@ -21,6 +22,7 @@ import { getSocketServer } from '../../lib/socket-instance.js';
 import { HttpError } from '../../utils/http-error.js';
 import { NotificationsService } from '../notifications/notifications.service.js';
 import { PlansService } from '../plans/plans.service.js';
+import { UsageQuotaService } from '../plans/usage-quota.service.js';
 import { ProfilesService } from '../profiles/profiles.service.js';
 import { ReservationsRepository } from '../reservations/reservations.repository.js';
 import { ReservationsService } from '../reservations/reservations.service.js';
@@ -73,19 +75,33 @@ export class JobsService {
     private readonly settingsService: SettingsService = new SettingsService(),
     private readonly profilesService: ProfilesService = new ProfilesService(),
     private readonly plansService: PlansService = new PlansService(),
+    private readonly usageQuotaService: UsageQuotaService = new UsageQuotaService(),
   ) {}
 
   async createJob(businessId: string, input: CreateJobDto): Promise<Job> {
     const appStatus = await this.settingsService.getAppStatus();
+    let planLimits: EffectivePlanLimits | null = null;
     if (appStatus.featurePlansEnabled) {
-      const limits = await this.plansService.getEffectivePlanLimits(businessId);
-      if (limits.maxJobs != null) {
+      planLimits = await this.plansService.getEffectivePlanLimits(businessId);
+      if (planLimits.maxJobs != null) {
         const count = await this.repo.countJobsByBusiness(businessId);
-        if (count >= limits.maxJobs) {
+        if (count >= planLimits.maxJobs) {
           throw new HttpError({
             statusCode: 403,
             code: 'PLAN_LIMIT_REACHED',
-            message: `Your plan allows up to ${limits.maxJobs} jobs. Upgrade to post more.`,
+            message: `Your plan allows up to ${planLimits.maxJobs} jobs. Upgrade to post more.`,
+          });
+        }
+      }
+      const q = planLimits.usageQuotas.new_jobs_per_period;
+      if (q) {
+        const { start } = await this.usageQuotaService.resolvePeriodBounds(businessId, q.period);
+        const used = await this.usageQuotaService.getCountForWindow(businessId, 'new_jobs_per_period', start);
+        if (used >= q.maxPerPeriod) {
+          throw new HttpError({
+            statusCode: 403,
+            code: 'PLAN_USAGE_QUOTA_EXCEEDED',
+            message: `You have reached your plan limit for new job posts in this period (${q.maxPerPeriod} maximum).`,
           });
         }
       }
@@ -102,6 +118,13 @@ export class JobsService {
         : {}),
     };
     const row = await this.repo.createJob(businessId, createInput);
+    if (planLimits?.usageQuotas.new_jobs_per_period) {
+      await this.usageQuotaService.consumeIfConfigured(
+        businessId,
+        'new_jobs_per_period',
+        planLimits.usageQuotas.new_jobs_per_period,
+      );
+    }
     return this.toJob(row);
   }
 

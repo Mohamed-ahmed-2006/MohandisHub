@@ -87,6 +87,24 @@
   font-size: 0.85rem;
 }
 
+.dashboard-plan-usage-metered {
+  margin: 0.5rem 0 0.25rem 0 !important;
+  font-weight: 600 !important;
+  color: hsl(var(--foreground)) !important;
+  font-size: 0.8rem !important;
+}
+
+.dashboard-plan-usage-quota-list {
+  margin: 0.15rem 0 0.35rem 1rem;
+  padding: 0;
+  font-size: 0.78rem;
+  color: hsl(var(--text-soft));
+}
+
+.dashboard-plan-usage-quota-list li {
+  margin-bottom: 0.2rem;
+}
+
 .dashboard-empty-state {
   padding: 2rem 1rem;
   text-align: center;

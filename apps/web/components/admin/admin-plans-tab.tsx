@@ -1,7 +1,11 @@
 'use client';
 
-import type { Plan, PlanLimits, PlanSubscriberRole } from '@mohandishub/shared';
-import { DEFAULT_PLAN_ALLOWED_ROLES, PLAN_SUBSCRIBER_ROLES } from '@mohandishub/shared';
+import type { Plan, PlanLimits, PlanSubscriberRole, UsageQuotaPeriodType } from '@mohandishub/shared';
+import {
+  DEFAULT_PLAN_ALLOWED_ROLES,
+  PLAN_SUBSCRIBER_ROLES,
+  USAGE_QUOTA_FEATURE_KEYS,
+} from '@mohandishub/shared';
 import { useCallback, useEffect, useState } from 'react';
 
 import { PlanFieldHint } from '@/components/admin/plan-field-hint';
@@ -40,6 +44,7 @@ const defaultPlanLimits = (): PlanLimits => ({
   maxTeamSlots: null,
   canBusinessFeatured: false,
   canTrustedBusinessBadge: false,
+  usageQuotas: {},
 });
 
 export const AdminPlansTab = ({ dictionary, accessToken, refreshSession }: Props) => {
@@ -138,6 +143,7 @@ export const AdminPlansTab = ({ dictionary, accessToken, refreshSession }: Props
         canPriorityBid: limits.canPriorityBid ?? false,
         canProBadge: limits.canProBadge ?? false,
         canTrustedBusinessBadge: limits.canTrustedBusinessBadge ?? false,
+        usageQuotas: { ...(limits.usageQuotas ?? {}) },
       },
     });
     setError(null);
@@ -155,6 +161,13 @@ export const AdminPlansTab = ({ dictionary, accessToken, refreshSession }: Props
       .split(',')
       .map((f) => f.trim())
       .filter(Boolean);
+    const usageQuotas: NonNullable<PlanLimits['usageQuotas']> = {};
+    for (const key of USAGE_QUOTA_FEATURE_KEYS) {
+      const q = formData.planLimits.usageQuotas?.[key];
+      if (q && typeof q.maxPerPeriod === 'number' && q.maxPerPeriod >= 1 && q.period) {
+        usageQuotas[key] = { maxPerPeriod: q.maxPerPeriod, period: q.period };
+      }
+    }
     const planLimits: PlanLimits = {
       maxNeeds: formData.planLimits.maxNeeds ?? null,
       bidsVisibleToCustomer: formData.planLimits.bidsVisibleToCustomer ?? null,
@@ -170,6 +183,7 @@ export const AdminPlansTab = ({ dictionary, accessToken, refreshSession }: Props
       canPriorityBid: formData.planLimits.canPriorityBid ?? false,
       canProBadge: formData.planLimits.canProBadge ?? false,
       canTrustedBusinessBadge: formData.planLimits.canTrustedBusinessBadge ?? false,
+      ...(Object.keys(usageQuotas).length > 0 ? { usageQuotas } : {}),
     };
     const baseBody = {
       slug: formData.slug,
@@ -284,154 +298,261 @@ export const AdminPlansTab = ({ dictionary, accessToken, refreshSession }: Props
 
       {showForm && (
         <div className="admin-modal-overlay" onClick={() => setShowForm(false)}>
-          <div className="admin-modal" onClick={(e) => e.stopPropagation()}>
-            <h2 className="admin-modal-title">{editingPlan ? d.editPlan : d.createPlan}</h2>
-
-            <div className="admin-form-group">
-              <label className="admin-form-label admin-form-label--inline-hint">
-                <span>{d.name}</span>
-                <AdminPlanFieldHint hints={hints} hintKey="hintName" />
-              </label>
-              <input
-                className="admin-form-input"
-                value={formData.name}
-                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-              />
-            </div>
-            <div className="admin-form-group">
-              <label className="admin-form-label admin-form-label--inline-hint">
-                <span>{d.slug}</span>
-                <AdminPlanFieldHint hints={hints} hintKey="hintSlug" />
-              </label>
-              <input
-                className="admin-form-input"
-                value={formData.slug}
-                onChange={(e) => setFormData({ ...formData, slug: e.target.value })}
-              />
-            </div>
-            <div className="admin-form-group">
-              <label className="admin-form-label admin-form-label--inline-hint">
-                <span>{d.price}</span>
-                <AdminPlanFieldHint hints={hints} hintKey="hintPrice" />
-              </label>
-              <input
-                className="admin-form-input"
-                type="number"
-                value={formData.price}
-                onChange={(e) =>
-                  setFormData({ ...formData, price: parseFloat(e.target.value) || 0 })
-                }
-              />
-            </div>
-            <div className="admin-form-group">
-              <label className="admin-form-label admin-form-label--inline-hint">
-                <span>{d.description}</span>
-                <AdminPlanFieldHint hints={hints} hintKey="hintDescription" />
-              </label>
-              <textarea
-                className="admin-form-textarea"
-                value={formData.description}
-                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-              />
-            </div>
-            <div className="admin-form-group">
-              <label className="admin-form-label admin-form-label--inline-hint">
-                <span>{d.billingCycle}</span>
-                <AdminPlanFieldHint hints={hints} hintKey="hintBillingCycle" />
-              </label>
-              <select
-                className="admin-form-select"
-                value={formData.billingCycle}
-                onChange={(e) =>
-                  setFormData({ ...formData, billingCycle: e.target.value as Plan['billingCycle'] })
-                }
+          <div
+            className="admin-modal admin-modal--plan"
+            onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="admin-plan-modal-title"
+          >
+            <header className="admin-plan-modal__header">
+              <div className="admin-plan-modal__header-main">
+                <h2 id="admin-plan-modal-title" className="admin-plan-modal__title">
+                  {editingPlan ? d.editPlan : d.createPlan}
+                </h2>
+                <p className="admin-plan-modal__subtitle">{d.planModalHint}</p>
+              </div>
+              <button
+                type="button"
+                className="admin-plan-modal__close"
+                onClick={() => setShowForm(false)}
+                aria-label={dictionary.common.cancel}
               >
-                <option value="monthly">Monthly</option>
-                <option value="quarterly">Quarterly</option>
-                <option value="yearly">Yearly</option>
-                <option value="one_time">One-time</option>
-              </select>
-            </div>
-            <div className="admin-form-group">
-              <label className="admin-form-label admin-form-label--inline-hint">
-                <span>{d.features}</span>
-                <AdminPlanFieldHint hints={hints} hintKey="hintFeatures" />
-              </label>
-              <input
-                className="admin-form-input"
-                value={formData.features}
-                onChange={(e) => setFormData({ ...formData, features: e.target.value })}
-                placeholder="Feature 1, Feature 2, ..."
-              />
-            </div>
+                ×
+              </button>
+            </header>
 
-            <fieldset
-              className="admin-form-group"
-              style={{ border: '1px solid hsl(var(--border))', padding: '1rem', borderRadius: 8 }}
-            >
-              <legend className="admin-form-label admin-form-label--inline-hint">
-                <span>{d.allowedRoles}</span>
-                <AdminPlanFieldHint hints={hints} hintKey="hintAllowedRoles" />
-              </legend>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.75rem 1.25rem' }}>
-                {PLAN_SUBSCRIBER_ROLES.map((role) => (
-                  <label
-                    key={role}
-                    style={{ display: 'inline-flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}
-                  >
+            <div className="admin-plan-modal__body">
+              <section className="admin-plan-modal__section" aria-labelledby="admin-plan-modal-details">
+                <h3 id="admin-plan-modal-details" className="admin-plan-modal__section-title">
+                  {d.planModalSectionDetails}
+                </h3>
+                <div className="admin-plan-modal__grid-2">
+                  <div className="admin-form-group">
+                    <label className="admin-form-label admin-form-label--inline-hint">
+                      <span>{d.name}</span>
+                      <AdminPlanFieldHint hints={hints} hintKey="hintName" />
+                    </label>
                     <input
-                      type="checkbox"
-                      checked={formData.allowedRoles.includes(role)}
-                      onChange={(e) => {
-                        if (e.target.checked) {
-                          setFormData({
-                            ...formData,
-                            allowedRoles: [...formData.allowedRoles, role],
-                          });
-                        } else {
-                          setFormData({
-                            ...formData,
-                            allowedRoles: formData.allowedRoles.filter((r) => r !== role),
-                          });
-                        }
-                      }}
+                      className="admin-form-input"
+                      value={formData.name}
+                      onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                     />
-                    <span>
-                      {role === 'customer'
-                        ? d.roleCustomer
-                        : role === 'expert'
-                          ? d.roleExpert
-                          : role === 'craftsman'
-                            ? d.roleCraftsman
-                            : d.roleBusiness}
-                    </span>
+                  </div>
+                  <div className="admin-form-group">
+                    <label className="admin-form-label admin-form-label--inline-hint">
+                      <span>{d.slug}</span>
+                      <AdminPlanFieldHint hints={hints} hintKey="hintSlug" />
+                    </label>
+                    <input
+                      className="admin-form-input"
+                      value={formData.slug}
+                      onChange={(e) => setFormData({ ...formData, slug: e.target.value })}
+                    />
+                  </div>
+                  <div className="admin-form-group">
+                    <label className="admin-form-label admin-form-label--inline-hint">
+                      <span>{d.price}</span>
+                      <AdminPlanFieldHint hints={hints} hintKey="hintPrice" />
+                    </label>
+                    <input
+                      className="admin-form-input"
+                      type="number"
+                      value={formData.price}
+                      onChange={(e) =>
+                        setFormData({ ...formData, price: parseFloat(e.target.value) || 0 })
+                      }
+                    />
+                  </div>
+                  <div className="admin-form-group">
+                    <label className="admin-form-label admin-form-label--inline-hint">
+                      <span>{d.billingCycle}</span>
+                      <AdminPlanFieldHint hints={hints} hintKey="hintBillingCycle" />
+                    </label>
+                    <select
+                      className="admin-form-select"
+                      value={formData.billingCycle}
+                      onChange={(e) =>
+                        setFormData({ ...formData, billingCycle: e.target.value as Plan['billingCycle'] })
+                      }
+                    >
+                      <option value="monthly">Monthly</option>
+                      <option value="quarterly">Quarterly</option>
+                      <option value="yearly">Yearly</option>
+                      <option value="one_time">One-time</option>
+                    </select>
+                  </div>
+                </div>
+                <div className="admin-form-group admin-plan-modal__full">
+                  <label className="admin-form-label admin-form-label--inline-hint">
+                    <span>{d.description}</span>
+                    <AdminPlanFieldHint hints={hints} hintKey="hintDescription" />
                   </label>
-                ))}
-              </div>
-            </fieldset>
+                  <textarea
+                    className="admin-form-textarea"
+                    value={formData.description}
+                    onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                    rows={3}
+                  />
+                </div>
+                <div className="admin-form-group admin-plan-modal__full">
+                  <label className="admin-form-label admin-form-label--inline-hint">
+                    <span>{d.features}</span>
+                    <AdminPlanFieldHint hints={hints} hintKey="hintFeatures" />
+                  </label>
+                  <input
+                    className="admin-form-input"
+                    value={formData.features}
+                    onChange={(e) => setFormData({ ...formData, features: e.target.value })}
+                    placeholder="Feature 1, Feature 2, ..."
+                  />
+                </div>
+              </section>
 
-            {!showAnyLimitSection && (
-              <p className="admin-empty" style={{ margin: '0.5rem 0 1rem' }}>
-                {d.selectRolesForLimits}
-              </p>
-            )}
+              <section className="admin-plan-modal__section" aria-labelledby="admin-plan-modal-roles">
+                <h3
+                  id="admin-plan-modal-roles"
+                  className="admin-plan-modal__section-title admin-plan-modal__section-title--row"
+                >
+                  <span className="admin-form-label admin-form-label--inline-hint admin-plan-modal__row-hint">
+                    <span>{d.allowedRoles}</span>
+                    <AdminPlanFieldHint hints={hints} hintKey="hintAllowedRoles" />
+                  </span>
+                </h3>
+                <fieldset
+                  className="admin-plan-modal__fieldset admin-plan-modal__fieldset--roles"
+                  aria-labelledby="admin-plan-modal-roles"
+                >
+                  <legend className="admin-sr-only">{d.allowedRoles}</legend>
+                  <div className="admin-plan-modal__roles">
+                    {PLAN_SUBSCRIBER_ROLES.map((role) => (
+                      <label key={role} className="admin-plan-modal__role-chip">
+                        <input
+                          type="checkbox"
+                          checked={formData.allowedRoles.includes(role)}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setFormData({
+                                ...formData,
+                                allowedRoles: [...formData.allowedRoles, role],
+                              });
+                            } else {
+                              setFormData({
+                                ...formData,
+                                allowedRoles: formData.allowedRoles.filter((r) => r !== role),
+                              });
+                            }
+                          }}
+                        />
+                        <span>
+                          {role === 'customer'
+                            ? d.roleCustomer
+                            : role === 'expert'
+                              ? d.roleExpert
+                              : role === 'craftsman'
+                                ? d.roleCraftsman
+                                : d.roleBusiness}
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                </fieldset>
+              </section>
 
-            {showAnyLimitSection && (
-              <div className="admin-form-group" style={{ marginBottom: '1rem' }}>
-                <p className="admin-form-label" style={{ marginBottom: '0.35rem', fontWeight: 600 }}>
-                  {d.planLimits}
+              {!showAnyLimitSection && (
+                <p className="admin-empty admin-plan-modal__empty-roles">
+                  {d.selectRolesForLimits}
                 </p>
-                <p className="admin-plan-limits-intro">{d.planLimitsIntro}</p>
-              </div>
-            )}
+              )}
+
+              {showAnyLimitSection && (
+                <section className="admin-plan-modal__section admin-plan-modal__limits-block">
+                  <div className="admin-plan-modal__limits-heading">
+                    <h3 className="admin-plan-modal__section-title admin-plan-modal__section-title--compact">
+                      {d.planLimits}
+                    </h3>
+                    <p className="admin-plan-limits-intro">{d.planLimitsIntro}</p>
+                  </div>
+                  <div className="admin-plan-modal__card admin-plan-modal__card--quotas">
+                    <p className="admin-form-label admin-form-label--inline-hint" style={{ marginBottom: '0.35rem' }}>
+                      <span>{d.usageQuotasSection}</span>
+                      <AdminPlanFieldHint hints={hints} hintKey="hintUsageQuotasSection" />
+                    </p>
+                    <p className="admin-plan-limits-intro" style={{ marginBottom: '0.85rem' }}>
+                      {d.usageQuotasIntro}
+                    </p>
+                    <div style={{ display: 'grid', gap: '0.75rem' }}>
+                  {USAGE_QUOTA_FEATURE_KEYS.map((key) => {
+                    const row = formData.planLimits.usageQuotas?.[key];
+                    const label = hints[`quotaFeature_${key}`] ?? key;
+                    return (
+                      <div key={key} className="admin-form-group" style={{ marginBottom: 0 }}>
+                        <label className="admin-form-label admin-form-label--inline-hint">
+                          <span>{label}</span>
+                          <AdminPlanFieldHint hints={hints} hintKey={`hintQuota_${key}`} />
+                        </label>
+                        <div className="admin-plan-modal__quota-toolbar">
+                          <input
+                            type="number"
+                            min={1}
+                            className="admin-form-input"
+                            style={{ maxWidth: 120 }}
+                            placeholder={d.quotaMaxPlaceholder}
+                            value={row?.maxPerPeriod != null && row.maxPerPeriod >= 1 ? row.maxPerPeriod : ''}
+                            onChange={(e) => {
+                              const v = e.target.value === '' ? null : parseInt(e.target.value, 10);
+                              const nextUq = { ...formData.planLimits.usageQuotas };
+                              if (v == null || Number.isNaN(v) || v < 1) {
+                                delete nextUq[key];
+                              } else {
+                                const period: UsageQuotaPeriodType =
+                                  nextUq[key]?.period ?? 'calendar_month';
+                                nextUq[key] = {
+                                  maxPerPeriod: v,
+                                  period,
+                                };
+                              }
+                              setFormData({
+                                ...formData,
+                                planLimits: { ...formData.planLimits, usageQuotas: nextUq },
+                              });
+                            }}
+                          />
+                          <select
+                            className="admin-form-select"
+                            style={{ minWidth: 180 }}
+                            value={row?.period ?? 'calendar_month'}
+                            disabled={!row || row.maxPerPeriod == null || row.maxPerPeriod < 1}
+                            onChange={(e) => {
+                              const p = e.target.value as UsageQuotaPeriodType;
+                              if (row && row.maxPerPeriod >= 1) {
+                                setFormData({
+                                  ...formData,
+                                  planLimits: {
+                                    ...formData.planLimits,
+                                    usageQuotas: {
+                                      ...formData.planLimits.usageQuotas,
+                                      [key]: { ...row, period: p },
+                                    },
+                                  },
+                                });
+                              }
+                            }}
+                          >
+                            <option value="calendar_month">{d.quotaPeriodCalendarMonth}</option>
+                            <option value="billing_cycle">{d.quotaPeriodBillingCycle}</option>
+                          </select>
+                        </div>
+                      </div>
+                    );
+                  })}
+                    </div>
+                  </div>
 
             {showCustomerLimits && (
-              <fieldset
-                className="admin-form-group"
-                style={{ border: '1px solid hsl(var(--border))', padding: '1rem', borderRadius: 8, marginBottom: '1rem' }}
-              >
-                <legend className="admin-form-label">{d.limitsSectionCustomer}</legend>
-                <p style={{ fontSize: '0.85rem', color: 'hsl(var(--text-soft))', marginBottom: '0.75rem' }}>
+              <fieldset className="admin-plan-modal__fieldset">
+                <legend className="admin-plan-modal__fieldset-legend">{d.limitsSectionCustomer}</legend>
+                <p className="admin-plan-limits-intro" style={{ marginBottom: '0.75rem' }}>
                   {d.bidsOrderingHint}
                 </p>
                 <div className="admin-form-group">
@@ -530,11 +651,8 @@ export const AdminPlansTab = ({ dictionary, accessToken, refreshSession }: Props
             )}
 
             {showProviderLimits && (
-              <fieldset
-                className="admin-form-group"
-                style={{ border: '1px solid hsl(var(--border))', padding: '1rem', borderRadius: 8, marginBottom: '1rem' }}
-              >
-                <legend className="admin-form-label">{d.limitsSectionProviders}</legend>
+              <fieldset className="admin-plan-modal__fieldset">
+                <legend className="admin-plan-modal__fieldset-legend">{d.limitsSectionProviders}</legend>
                 <div className="admin-form-group">
                   <label className="admin-form-label admin-form-label--inline-hint">
                     <span>{d.maxServices}</span>
@@ -579,10 +697,7 @@ export const AdminPlansTab = ({ dictionary, accessToken, refreshSession }: Props
                     }
                   />
                 </div>
-                <div
-                  className="admin-form-group"
-                  style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}
-                >
+                <div className="admin-form-group admin-plan-modal__check-row">
                   <input
                     type="checkbox"
                     id="plan-can-priority-listing"
@@ -599,10 +714,7 @@ export const AdminPlansTab = ({ dictionary, accessToken, refreshSession }: Props
                   </label>
                   <AdminPlanFieldHint hints={hints} hintKey="hintCanPriorityListing" />
                 </div>
-                <div
-                  className="admin-form-group"
-                  style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}
-                >
+                <div className="admin-form-group admin-plan-modal__check-row">
                   <input
                     type="checkbox"
                     id="plan-can-priority-bid"
@@ -619,10 +731,7 @@ export const AdminPlansTab = ({ dictionary, accessToken, refreshSession }: Props
                   </label>
                   <AdminPlanFieldHint hints={hints} hintKey="hintCanPriorityBid" />
                 </div>
-                <div
-                  className="admin-form-group"
-                  style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}
-                >
+                <div className="admin-form-group admin-plan-modal__check-row">
                   <input
                     type="checkbox"
                     id="plan-can-pro-badge"
@@ -643,11 +752,8 @@ export const AdminPlansTab = ({ dictionary, accessToken, refreshSession }: Props
             )}
 
             {showBusinessLimits && (
-              <fieldset
-                className="admin-form-group"
-                style={{ border: '1px solid hsl(var(--border))', padding: '1rem', borderRadius: 8, marginBottom: '1rem' }}
-              >
-                <legend className="admin-form-label">{d.limitsSectionBusiness}</legend>
+              <fieldset className="admin-plan-modal__fieldset">
+                <legend className="admin-plan-modal__fieldset-legend">{d.limitsSectionBusiness}</legend>
                 <div className="admin-form-group">
                   <label className="admin-form-label admin-form-label--inline-hint">
                     <span>{d.maxJobs}</span>
@@ -714,10 +820,7 @@ export const AdminPlansTab = ({ dictionary, accessToken, refreshSession }: Props
                     }
                   />
                 </div>
-                <div
-                  className="admin-form-group"
-                  style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}
-                >
+                <div className="admin-form-group admin-plan-modal__check-row">
                   <input
                     type="checkbox"
                     id="plan-can-business-featured"
@@ -734,10 +837,7 @@ export const AdminPlansTab = ({ dictionary, accessToken, refreshSession }: Props
                   </label>
                   <AdminPlanFieldHint hints={hints} hintKey="hintCanBusinessFeatured" />
                 </div>
-                <div
-                  className="admin-form-group"
-                  style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}
-                >
+                <div className="admin-form-group admin-plan-modal__check-row">
                   <input
                     type="checkbox"
                     id="plan-can-trusted-badge"
@@ -756,20 +856,26 @@ export const AdminPlansTab = ({ dictionary, accessToken, refreshSession }: Props
                 </div>
               </fieldset>
             )}
+                </section>
+              )}
 
-            <div className="admin-modal-actions">
-              <button type="button" className="admin-btn" onClick={() => setShowForm(false)}>
-                {dictionary.common.cancel}
-              </button>
-              <button
-                type="button"
-                className="admin-btn admin-btn--primary"
-                onClick={() => void handleSubmit()}
-                disabled={saving}
-              >
-                {editingPlan ? dictionary.common.save : dictionary.common.submit}
-              </button>
             </div>
+
+            <footer className="admin-plan-modal__footer">
+              <div className="admin-plan-modal__actions">
+                <button type="button" className="admin-btn" onClick={() => setShowForm(false)}>
+                  {dictionary.common.cancel}
+                </button>
+                <button
+                  type="button"
+                  className="admin-btn admin-btn--primary"
+                  onClick={() => void handleSubmit()}
+                  disabled={saving}
+                >
+                  {editingPlan ? dictionary.common.save : dictionary.common.submit}
+                </button>
+              </div>
+            </footer>
           </div>
         </div>
       )}
