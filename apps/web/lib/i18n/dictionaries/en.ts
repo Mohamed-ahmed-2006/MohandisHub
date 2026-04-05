@@ -6,7 +6,6 @@ export const enDictionary = {
     login: 'Log in',
     signUp: 'Sign up',
     getStarted: 'Get started',
-    goToDashboard: 'Go to dashboard',
     backToHome: 'Back to home',
     submit: 'Submit',
     save: 'Save',
@@ -37,11 +36,7 @@ export const enDictionary = {
     whatYouCanDoTitle: 'What you can do',
     howItWorksTitle: 'How it works',
     stepLabel: 'Step',
-    footerText:
-      '© 2026 MohandisHub. Engineering services marketplace connecting customers with verified experts and businesses. All rights reserved.',
-    footerPrivacy: 'Privacy Policy',
-    footerTerms: 'Terms & Conditions',
-    footerLegalNavAria: 'Legal',
+    footerText: 'MohandisHub foundation build. Local development mode.',
     features: [
       {
         title: 'Find expert help quickly',
@@ -65,37 +60,6 @@ export const enDictionary = {
       'Choose your role as Customer, Expert, or Business.',
       'Create a request or publish your engineering offer.',
       'Chat, agree on scope, and complete the service confidently.',
-    ],
-    joinAsTitle: 'Join as',
-    joinAsCustomer: 'I need engineering help',
-    joinAsExpert: "I'm an expert",
-    joinAsCraftsman: "I'm a craftsman",
-    joinAsBusiness: "I'm a business",
-    trustTitle: 'Why trust us',
-    trustVerified: 'Identity and credentials checks for experts and businesses help keep the marketplace trustworthy.',
-    trustPayments: 'Wallet-style ledger flows and clear payment paths are built into the platform architecture.',
-    trustCancellation: 'Transparent communication tools so you can align on scope, timelines, and changes with confidence.',
-    metricsTitle: 'By the numbers',
-    metricsExperts: 'Verified experts',
-    metricsProjects: 'Projects completed',
-    metricsCustomers: 'Customers served',
-    faqTitle: 'Frequently asked questions',
-    faqItems: [
-      {
-        question: 'What is MohandisHub?',
-        answer:
-          'An Egypt-first engineering services marketplace connecting customers with verified experts and businesses for consultations, projects, and on-site work.',
-      },
-      {
-        question: 'How do payments work?',
-        answer:
-          'The platform is designed for secure wallet and ledger workflows. Exact payment methods and fees follow the live product rules in your account.',
-      },
-      {
-        question: 'How are experts verified?',
-        answer:
-          'Experts and businesses can complete verification steps (such as identity and documents) so customers can choose providers with more confidence.',
-      },
     ],
   },
   login: {
@@ -713,5 +677,18 @@ export const enDictionary = {
       networkError:
         'Cannot reach the server. Check your connection and that the API is running, then try again.',
     },
+  },
+  notificationCenter: {
+    title: 'Notifications',
+    ariaNotifications: 'Notifications',
+    ariaUnread: '{count} unread notifications',
+    markAllRead: 'Mark all read',
+    loading: 'Loading notifications...',
+    empty: 'You have no notifications.',
+    justNow: 'Just now',
+    timeAgoMinutes: '{n}m ago',
+    timeAgoHours: '{n}h ago',
+    timeAgoDays: '{n}d ago',
+    sendDemo: 'Send test notification',
   },
 };
