@@ -18,6 +18,8 @@ const CATEGORY_DEFS: Array<{
   key: string;
   labelEn: string;
   labelAr: string;
+  helpEn: string;
+  helpAr: string;
   suggest: 'hours' | 'days';
   envKey?: string;
 }> = [
@@ -25,6 +27,10 @@ const CATEGORY_DEFS: Array<{
     key: 'verificationCodesAfterExpiry',
     labelEn: 'OTP / verification codes',
     labelAr: 'رموز التحقق',
+    helpEn:
+      'Deletes old rows in verification_codes after they have expired, with a small cushion beyond expires_at. Turn off (unchecked or value 0) to keep all rows.',
+    helpAr:
+      'يحذف صفوف verification_codes القديمة بعد انتهاء صلاحيتها مع هامش زمني. أوقف التفعيل أو اضبط القيمة 0 للإبقاء على كل السجلات.',
     suggest: 'hours',
     envKey: 'RETENTION_VERIFICATION_CODES_AFTER_EXPIRY_HOURS',
   },
@@ -32,6 +38,9 @@ const CATEGORY_DEFS: Array<{
     key: 'otpRateLimitWindows',
     labelEn: 'OTP rate-limit rows',
     labelAr: 'حدود إرسال OTP',
+    helpEn:
+      'Cleans stale rows in otp_rate_limits by window_start. Safe to enable if you want the DB table to stay small.',
+    helpAr: 'ينظف صفوف otp_rate_limits القديمة حسب window_start. مفيد لتصغير الجدول.',
     suggest: 'hours',
     envKey: 'RETENTION_OTP_RATE_LIMIT_WINDOW_HOURS',
   },
@@ -39,6 +48,10 @@ const CATEGORY_DEFS: Array<{
     key: 'refreshTokensAfterExpiry',
     labelEn: 'Expired refresh tokens',
     labelAr: 'رموز التحديث المنتهية',
+    helpEn:
+      'Removes refresh_tokens that are already past expires_at (plus cushion). Users stay logged in until access token expires; this only clears dead refresh rows.',
+    helpAr:
+      'يحذف refresh_tokens المنتهية (مع هامش). المستخدمون يبقون مسجلين حتى تنتهي الجلسة؛ هذا يمسح الرموز الميتة فقط.',
     suggest: 'days',
     envKey: 'RETENTION_REFRESH_TOKENS_AFTER_EXPIRY_DAYS',
   },
@@ -46,6 +59,10 @@ const CATEGORY_DEFS: Array<{
     key: 'verificationRequestsTerminal',
     labelEn: 'Terminal verification requests',
     labelAr: 'طلبات تحقق منتهية',
+    helpEn:
+      'Deletes old verification_requests that are already in a final state. Legal/audit: keep off (0) until your policy allows.',
+    helpAr:
+      'يحذف طلبات تحقق قديمة بحالة نهائية. قد تتعارض مع الاحتفاظ القانوني — اتركها معطلة حتى تراجع السياسة.',
     suggest: 'days',
     envKey: 'RETENTION_VERIFICATION_REQUESTS_DAYS',
   },
@@ -53,6 +70,10 @@ const CATEGORY_DEFS: Array<{
     key: 'dmMessages',
     labelEn: 'DM messages (1:1 chat)',
     labelAr: 'رسائل الدردشة',
+    helpEn:
+      'Deletes old rows in messages (direct chat), not bid-thread chat. Default env 0 means “keep forever” until you raise it.',
+    helpAr:
+      'يحذف رسائل الدردشة المباشرة (messages) وليس محادثات العروض. القيمة 0 في البيئة تعني عدم الحذف.',
     suggest: 'days',
     envKey: 'RETENTION_CHAT_MESSAGES_DAYS',
   },
@@ -60,6 +81,10 @@ const CATEGORY_DEFS: Array<{
     key: 'needReferenceAfterCompleted',
     labelEn: 'Completed need reference media',
     labelAr: 'وسائط الطلبات المكتملة',
+    helpEn:
+      'For needs with status completed and old updated_at: removes files from public uploads and clears reference_url. Requires worker + env RETENTION_NEED_REFERENCE_DAYS_AFTER_COMPLETED > 0 as ceiling.',
+    helpAr:
+      'للطلبات المكتملة وقديمة التحديث: يحذف الملفات من التخزين ويمسح reference_url. يحتاج worker وقيمة البيئة كسقف.',
     suggest: 'days',
     envKey: 'RETENTION_NEED_REFERENCE_DAYS_AFTER_COMPLETED',
   },
@@ -67,6 +92,9 @@ const CATEGORY_DEFS: Array<{
     key: 'bidMessageAttachments',
     labelEn: 'Bid message attachments',
     labelAr: 'مرفقات عروض الأسعار',
+    helpEn:
+      'Old bid_messages with attachment_url: deletes the public file and nulls the URL. Text of the message stays.',
+    helpAr: 'للمرفقات القديمة في عروض الأسعار: يحذف الملف العام ويمسح الرابط ويبقى نص الرسالة.',
     suggest: 'days',
     envKey: 'RETENTION_BID_MESSAGE_ATTACHMENT_DAYS',
   },
@@ -74,11 +102,50 @@ const CATEGORY_DEFS: Array<{
     key: 'verifiedPrivateUploads',
     labelEn: 'Verified private uploads (not implemented)',
     labelAr: 'رفع خاص (غير مفعّل)',
+    helpEn:
+      'Placeholder for future KYC/private bucket cleanup. Do not enable until implemented and legally approved.',
+    helpAr: 'محجوز لمستقبل تنظيف ملفات KYC الخاصة. لا تفعّل حتى يُنفَّذ ويُوافَق قانونياً.',
     suggest: 'days',
   },
 ];
 
 type CategoryCfg = { enabled: boolean; unit: 'hours' | 'days'; value: number };
+
+/**
+ * Suggested starting points when `app_settings.retention_policy.categories` has no row yet.
+ * Safe/low-risk items on; legal/sensitive or unimplemented off (values kept as a starting point if you enable).
+ */
+const RECOMMENDED_CATEGORY_DEFAULTS: Record<string, CategoryCfg> = {
+  verificationCodesAfterExpiry: { enabled: true, unit: 'hours', value: 24 },
+  otpRateLimitWindows: { enabled: true, unit: 'hours', value: 24 },
+  refreshTokensAfterExpiry: { enabled: true, unit: 'days', value: 7 },
+  verificationRequestsTerminal: { enabled: false, unit: 'days', value: 365 },
+  dmMessages: { enabled: false, unit: 'days', value: 365 },
+  needReferenceAfterCompleted: { enabled: false, unit: 'days', value: 90 },
+  bidMessageAttachments: { enabled: false, unit: 'days', value: 90 },
+  verifiedPrivateUploads: { enabled: false, unit: 'days', value: 0 },
+};
+
+function mergeRecommendedCategoriesIntoRow(row: Record<string, unknown>): Record<string, unknown> {
+  const policy = (row.policy as Record<string, unknown>) ?? {};
+  const rawCats = policy.categories;
+  const cats: Record<string, CategoryCfg> =
+    rawCats && typeof rawCats === 'object' && !Array.isArray(rawCats)
+      ? { ...(rawCats as Record<string, CategoryCfg>) }
+      : {};
+  for (const def of CATEGORY_DEFS) {
+    if (cats[def.key] !== undefined && cats[def.key] !== null) continue;
+    const preset = RECOMMENDED_CATEGORY_DEFAULTS[def.key];
+    if (preset) cats[def.key] = { ...preset };
+  }
+  return {
+    ...row,
+    policy: {
+      ...policy,
+      categories: cats,
+    },
+  };
+}
 
 function stringFromUnknown(v: unknown): string {
   if (v == null) return '';
@@ -101,7 +168,7 @@ export const AdminRetentionTab = ({ dictionary, accessToken, refreshSession }: P
     setError(null);
     try {
       const row = await adminApiClient.getRetentionDashboard(accessToken, { refreshSession });
-      setData(row);
+      setData(mergeRecommendedCategoriesIntoRow(row));
     } catch (e: unknown) {
       if (isApiClientError(e) && e.status === 404) {
         setError(
@@ -232,6 +299,60 @@ export const AdminRetentionTab = ({ dictionary, accessToken, refreshSession }: P
       <h2 className="admin-settings-title">{tr('Retention & storage', 'الاحتفاظ والتخزين')}</h2>
       {error && <p className="admin-settings-error">{error}</p>}
 
+      <details className="admin-retention-guide">
+        <summary>{tr('How this page works (read me)', 'كيف تستخدم هذه الصفحة')}</summary>
+        <ul className="admin-retention-guide-list">
+          <li>
+            {tr(
+              'You need two processes in production: the HTTP API (npm start) and the worker (npm run worker). Scheduled sweeps run only in the worker.',
+              'تحتاج عمليتين: الـ API والـ worker. المسح المجدول يعمل في الـ worker فقط.',
+            )}
+          </li>
+          <li>
+            {tr(
+              'Server env vars (e.g. RETENTION_CHAT_MESSAGES_DAYS) are a hard ceiling. Effective retention = min(env, what you set here). If env is 0, that category never deletes.',
+              'متغيرات السيرفر سقف أقصى. القيمة الفعلية = الأصغر بين البيئة وإعدادك هنا. إذا كانت القيمة في البيئة 0 فلا يُحذف في تلك الفئة.',
+            )}
+          </li>
+          <li>
+            {tr(
+              'Per category: “On” and value greater than 0 means the step can run. Value 0 or Off = skip that step.',
+              'لكل فئة: التشغيل + قيمة أكبر من 0 يعني يمكن للمسح تنفيذها. 0 أو إيقاف = تخطي.',
+            )}
+          </li>
+          <li>
+            {tr(
+              '“Eff. hours” is the computed window used at sweep time (after merging with env). “Env” shows the raw env number for that row.',
+              'عمود الساعات الفعّالة = النافذة المحسوبة. عمود البيئة = رقم الإعداد في السيرفر.',
+            )}
+          </li>
+          <li>
+            {tr(
+              'Master switch off = sweeps do nothing (emergency stop). “Next scheduled … dry-run” makes only the next worker sweep log deletes without applying them.',
+              'إيقاف المفتاح الرئيسي يوقف المسح. خيار المسح التجريبي للدورة القادمة يسجل فقط دون حذف فعلي.',
+            )}
+          </li>
+          <li>
+            {tr(
+              '“Run dry sweep now” / “Run sweep now” trigger immediately from this browser (requires manage_retention).',
+              'أزرار المسح الفوري تنفّذ من المتصفح (صلاحية manage_retention).',
+            )}
+          </li>
+          <li>
+            {tr(
+              'Upload max size / MIME list live under App Settings; this page shows the server ceiling for max bytes.',
+              'حدود الرفع وأنواع الملفات في تبويب إعدادات التطبيق؛ هنا يظهر سقف السيرفر للحجم.',
+            )}
+          </li>
+          <li>
+            {tr(
+              'New categories show suggested On/Off and numbers here first. They are not stored until you click Save policy. The “Eff. hours” column follows the last saved server policy until then.',
+              'الفئات الجديدة تظهر هنا بقيم مقترحة ولا تُحفظ حتى تضغط حفظ السياسة. عمود الساعات الفعّالة يعكس آخر حفظ على السيرفر.',
+            )}
+          </li>
+        </ul>
+      </details>
+
       <section className="admin-settings-section">
         <h3 className="admin-settings-section-title">{tr('Health', 'الحالة')}</h3>
         <p className="admin-settings-desc admin-settings-desc--block">
@@ -255,6 +376,12 @@ export const AdminRetentionTab = ({ dictionary, accessToken, refreshSession }: P
 
       <section className="admin-settings-section">
         <h3 className="admin-settings-section-title">{tr('Master switch', 'التشغيل الرئيسي')}</h3>
+        <p className="admin-settings-desc admin-settings-desc--block admin-retention-section-hint">
+          {tr(
+            'Save policy after changing toggles. Dry-run sweeps still write a row to the sweep log so you can inspect counts in “Recent sweeps”.',
+            'احفظ السياسة بعد التعديل. المسح التجريبي يسجّل نتيجة في “آخر المسح”.',
+          )}
+        </p>
         <label className="admin-settings-label">
           <input
             type="checkbox"
@@ -291,7 +418,13 @@ export const AdminRetentionTab = ({ dictionary, accessToken, refreshSession }: P
 
       <section className="admin-settings-section">
         <h3 className="admin-settings-section-title">{tr('Categories (env = ceiling)', 'الفئات')}</h3>
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
+        <p className="admin-settings-desc admin-settings-desc--block admin-retention-section-hint">
+          {tr(
+            'Each row is one database/storage cleanup job. Start with conservative values and one category at a time if unsure.',
+            'كل صف يمثل نوع حذف. ابدأ بقيم حذرة وفعّل فئة واحدة إن لم تكن متأكداً.',
+          )}
+        </p>
+        <table className="admin-retention-table" style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
           <thead>
             <tr>
               <th style={{ textAlign: 'left', padding: 4 }}>{tr('Category', 'الفئة')}</th>
@@ -313,7 +446,10 @@ export const AdminRetentionTab = ({ dictionary, accessToken, refreshSession }: P
               const envVal = ek ? envSnapshot[ek] : undefined;
               return (
                 <tr key={c.key} style={{ borderTop: '1px solid rgba(128,128,128,0.25)' }}>
-                  <td style={{ padding: 4 }}>{tr(c.labelEn, c.labelAr)}</td>
+                  <td style={{ padding: 8, maxWidth: 340, verticalAlign: 'top' }}>
+                    <div className="admin-retention-cat-title">{tr(c.labelEn, c.labelAr)}</div>
+                    <p className="admin-retention-category-hint">{tr(c.helpEn, c.helpAr)}</p>
+                  </td>
                   <td style={{ textAlign: 'center', padding: 4 }}>
                     <input
                       type="checkbox"
@@ -356,6 +492,12 @@ export const AdminRetentionTab = ({ dictionary, accessToken, refreshSession }: P
 
       <section className="admin-settings-section">
         <h3 className="admin-settings-section-title">{tr('Alerts', 'تنبيهات')}</h3>
+        <p className="admin-settings-desc admin-settings-desc--block admin-retention-section-hint">
+          {tr(
+            'Optional: webhook or email used by the API/worker when a sweep fails or delete counts look suspicious (if configured in policy). Save alerts separately from policy.',
+            'اختياري: إشعار عند فشل المسح أو أرقام حذف غير عادية (حسب إعدادات السياسة في الـ API). احفظ التنبيهات بزرها الخاص.',
+          )}
+        </p>
         <div className="admin-settings-row">
           <label className="admin-settings-label">{tr('Webhook URL', 'Webhook')}</label>
           <input

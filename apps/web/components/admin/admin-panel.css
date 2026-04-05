@@ -998,6 +998,97 @@
   gap: 0.5rem;
 }
 
+.admin-user360-permissions-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin-top: 0.35rem;
+}
+
+.admin-permission-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  padding: 0.45rem 0.5rem;
+  border-radius: 0.65rem;
+  border: 1px solid hsl(var(--border) / 0.65);
+  background: hsl(var(--muted) / 0.2);
+  cursor: pointer;
+}
+
+.admin-permission-row-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+}
+
+.admin-permission-row-head input {
+  margin-top: 0.2rem;
+  flex-shrink: 0;
+}
+
+.admin-permission-label {
+  font-weight: 600;
+  font-size: 0.86rem;
+  color: hsl(var(--foreground));
+}
+
+.admin-permission-hint {
+  margin: 0;
+  padding-left: 1.35rem;
+  font-size: 0.78rem;
+  line-height: 1.35;
+  color: hsl(var(--text-soft));
+}
+
+.admin-retention-guide {
+  margin: 0 0 1.25rem;
+  padding: 0.65rem 1rem;
+  border-radius: 0.85rem;
+  border: 1px solid hsl(var(--border));
+  background: hsl(var(--muted) / 0.28);
+}
+
+.admin-retention-guide summary {
+  cursor: pointer;
+  font-weight: 700;
+  font-size: 0.95rem;
+  color: hsl(var(--foreground));
+}
+
+.admin-retention-guide-list {
+  margin: 0.6rem 0 0;
+  padding-left: 1.15rem;
+  font-size: 0.82rem;
+  line-height: 1.45;
+  color: hsl(var(--muted-foreground));
+}
+
+.admin-retention-guide-list li {
+  margin-bottom: 0.35rem;
+}
+
+.admin-retention-section-hint {
+  font-size: 0.82rem;
+  margin-bottom: 0.65rem;
+}
+
+.admin-retention-cat-title {
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.admin-retention-category-hint {
+  margin: 0.35rem 0 0;
+  font-size: 0.76rem;
+  line-height: 1.4;
+  color: hsl(var(--muted-foreground));
+}
+
+.admin-retention-table {
+  table-layout: fixed;
+}
+
 .admin-user360-note {
   margin: 0 0 0.5rem;
   color: hsl(var(--text-soft));

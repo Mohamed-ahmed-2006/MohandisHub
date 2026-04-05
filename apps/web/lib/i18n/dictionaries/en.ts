@@ -714,6 +714,50 @@ export const enDictionary: Dictionary = {
             activityCounts: 'Activity Counts',
             permissions: 'Permissions',
           },
+          adminPermissionsIntro:
+            'Checked boxes grant only those areas. Leave all unchecked for full access (super-admin). Scoped admins need explicit permissions to see each admin tab.',
+          permissionDefs: [
+            {
+              id: 'manage_users',
+              label: 'Users & support',
+              hint: 'User list, profiles, wallet freeze on user, support tickets, verification email tools.',
+            },
+            {
+              id: 'manage_plans',
+              label: 'Plans',
+              hint: 'Subscription plans CRUD and pricing shown in the Plans admin tab.',
+            },
+            {
+              id: 'manage_transactions',
+              label: 'Transactions & wallet rails',
+              hint: 'Ledger, adjustments, reversals, Instapay/crypto rail settings, user wallet freeze.',
+            },
+            {
+              id: 'manage_services',
+              label: 'Services & categories',
+              hint: 'Approve/reject provider services and manage marketplace categories.',
+            },
+            {
+              id: 'manage_verifications',
+              label: 'Verifications & reviews',
+              hint: 'KYC queues, identity/academic/business review, review reports and disputes.',
+            },
+            {
+              id: 'manage_notifications',
+              label: 'Notifications',
+              hint: 'Send admin push/in-app notifications to users.',
+            },
+            {
+              id: 'manage_settings',
+              label: 'App settings',
+              hint: 'Feature flags, pauses, maintenance, upload limits, sidebar visibility, Instapay display JSON.',
+            },
+            {
+              id: 'manage_retention',
+              label: 'Retention & moderation',
+              hint: 'Data retention policy, manual/dry sweeps, sweep log export, moderation clears (needs/bids/services).',
+            },
+          ],
           account: {
             title: 'Account Controls',
           },

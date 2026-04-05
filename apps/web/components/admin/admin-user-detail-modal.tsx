@@ -83,14 +83,55 @@ const formatPrimitive = (value: unknown, fallback = '-'): string => {
   return fallback;
 };
 
-const availablePermissions = [
-  { id: 'manage_users', label: 'Manage Users' },
-  { id: 'manage_plans', label: 'Manage Plans' },
-  { id: 'manage_transactions', label: 'Manage Transactions' },
-  { id: 'manage_services', label: 'Manage Services' },
-  { id: 'manage_verifications', label: 'Manage Verifications' },
-  { id: 'manage_settings', label: 'Manage App Settings' },
+type AdminPermissionDef = { id: string; label: string; hint: string };
+
+/** If i18n is missing permissionDefs (stale cache), keep assignable permissions in sync with admin.routes.ts */
+const FALLBACK_ADMIN_PERMISSION_DEFS: AdminPermissionDef[] = [
+  {
+    id: 'manage_users',
+    label: 'Users & support',
+    hint: 'Users list, profiles, support tickets, account tools.',
+  },
+  { id: 'manage_plans', label: 'Plans', hint: 'Plans admin tab.' },
+  {
+    id: 'manage_transactions',
+    label: 'Transactions & wallet rails',
+    hint: 'Ledger, adjustments, wallet rails.',
+  },
+  { id: 'manage_services', label: 'Services & categories', hint: 'Service approval and categories.' },
+  {
+    id: 'manage_verifications',
+    label: 'Verifications & reviews',
+    hint: 'KYC queues and review moderation.',
+  },
+  { id: 'manage_notifications', label: 'Notifications', hint: 'Send admin notifications.' },
+  { id: 'manage_settings', label: 'App settings', hint: 'Feature flags, pauses, upload policy.' },
+  {
+    id: 'manage_retention',
+    label: 'Retention & moderation',
+    hint: 'Retention sweeps, logs export, moderation actions.',
+  },
 ];
+
+function readPermissionDefsFromUser360(user360: unknown): AdminPermissionDef[] {
+  if (!user360 || typeof user360 !== 'object') return FALLBACK_ADMIN_PERMISSION_DEFS;
+  const raw = (user360 as Record<string, unknown>).permissionDefs;
+  if (!Array.isArray(raw) || raw.length === 0) return FALLBACK_ADMIN_PERMISSION_DEFS;
+  const out: AdminPermissionDef[] = [];
+  for (const item of raw) {
+    if (!item || typeof item !== 'object') continue;
+    const o = item as Record<string, unknown>;
+    if (typeof o.id !== 'string' || typeof o.label !== 'string' || typeof o.hint !== 'string') continue;
+    out.push({ id: o.id, label: o.label, hint: o.hint });
+  }
+  return out.length > 0 ? out : FALLBACK_ADMIN_PERMISSION_DEFS;
+}
+
+function readAdminPermissionsIntro(user360: unknown): string | undefined {
+  if (!user360 || typeof user360 !== 'object') return undefined;
+  const v = (user360 as Record<string, unknown>).adminPermissionsIntro;
+  return typeof v === 'string' ? v : undefined;
+}
 
 export const AdminUserDetailModal = ({
   dictionary,
@@ -150,6 +191,8 @@ export const AdminUserDetailModal = ({
   const d = dictionary.admin.users;
   const ud = d.userDetail;
   const u360 = ud.user360;
+  const permissionDefs = readPermissionDefsFromUser360(u360);
+  const adminPermissionsIntro = readAdminPermissionsIntro(u360);
   const vh = ud.verificationHistory;
 
   const canManageUsers = hasPermission(adminPermissions, 'manage_users');
@@ -638,12 +681,29 @@ export const AdminUserDetailModal = ({
 
                   {account.isAdmin && (
                     <div className="admin-user360-permissions">
+                      {adminPermissionsIntro ? (
+                        <p className="admin-user360-note">{adminPermissionsIntro}</p>
+                      ) : null}
                       <p className="admin-form-label">{u360?.labels?.permissions ?? 'Permissions'}</p>
-                      <div className="admin-user360-permissions-grid">
-                        {availablePermissions.map((permission) => (
-                          <label key={permission.id} className="admin-inline-checkbox">
-                            <input type="checkbox" checked={account.adminPermissions.includes(permission.id)} onChange={(e) => setAccount((prev) => ({ ...prev, adminPermissions: e.target.checked ? [...prev.adminPermissions, permission.id] : prev.adminPermissions.filter((id) => id !== permission.id) }))} />
-                            {permission.label}
+                      <div className="admin-user360-permissions-list">
+                        {permissionDefs.map((permission) => (
+                          <label key={permission.id} className="admin-permission-row">
+                            <span className="admin-permission-row-head">
+                              <input
+                                type="checkbox"
+                                checked={account.adminPermissions.includes(permission.id)}
+                                onChange={(e) =>
+                                  setAccount((prev) => ({
+                                    ...prev,
+                                    adminPermissions: e.target.checked
+                                      ? [...prev.adminPermissions, permission.id]
+                                      : prev.adminPermissions.filter((id) => id !== permission.id),
+                                  }))
+                                }
+                              />
+                              <span className="admin-permission-label">{permission.label}</span>
+                            </span>
+                            <span className="admin-permission-hint">{permission.hint}</span>
                           </label>
                         ))}
                       </div>
