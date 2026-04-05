@@ -916,15 +916,17 @@ export class ProfilesService {
   // ── Admin: get pending items ───────────────────────────────────────────
 
   async getPendingVerifications(): Promise<PendingVerificationItem[]> {
-    const [pendingDocs, pendingRecords] = await Promise.all([
+    const [pendingDocs, pendingRecords, pendingBusinessUserIds] = await Promise.all([
       this.repo.findPendingIdentityDocuments(),
       this.repo.findPendingAcademicRecords(),
+      this.repo.findUserIdsWithPendingBusinessVerificationReview(),
     ]);
 
     // Collect unique user IDs
     const userIds = new Set<string>();
     pendingDocs.forEach((d) => userIds.add(d.user_id));
     pendingRecords.forEach((r) => userIds.add(r.user_id));
+    pendingBusinessUserIds.forEach((id) => userIds.add(id));
 
     // Build result per user
     const items: PendingVerificationItem[] = [];
