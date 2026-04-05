@@ -1,6 +1,6 @@
 'use client';
 
-import type { SupportTicket, SupportTicketMessage } from '@mohandishub/shared';
+import type { SupportTicket, SupportTicketCategory, SupportTicketMessage } from '@mohandishub/shared';
 import { ChevronLeft } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
@@ -10,10 +10,59 @@ import { Container } from '@/components/ui/container';
 import { getApiBaseUrl } from '@/lib/env';
 import { useI18n } from '@/lib/i18n/context';
 import { buildLocalePath } from '@/lib/i18n/path';
+import { toStoredAttachmentUrl } from '@/lib/support/attachment-url';
 import { supportApiClient } from '@/lib/support/client';
 import { uploadFile } from '@/lib/upload/client';
 
 import '@/app/dashboard.css';
+
+const CATEGORY_ADMIN_KEYS: Record<SupportTicketCategory, string> = {
+  bug: 'categoryBug',
+  suggestion: 'categorySuggestion',
+  error: 'categoryError',
+  other: 'categoryOther',
+};
+
+function categoryLabel(
+  c: SupportTicketCategory | undefined,
+  sf: Record<string, string>,
+  st: Record<string, string>,
+): string {
+  const cat = c ?? 'other';
+  const adminKey = CATEGORY_ADMIN_KEYS[cat];
+  const fromAdmin = st[adminKey];
+  if (typeof fromAdmin === 'string') return fromAdmin;
+  switch (cat) {
+    case 'bug':
+      return sf.categoryBug ?? cat;
+    case 'suggestion':
+      return sf.categorySuggestion ?? cat;
+    case 'error':
+      return sf.categoryError ?? cat;
+    default:
+      return sf.categoryOther ?? cat;
+  }
+}
+
+function statusLabel(
+  s: SupportTicket['status'],
+  st: Record<string, string>,
+): string {
+  switch (s) {
+    case 'open':
+      return st.statusOpen ?? s;
+    case 'in_progress':
+      return st.statusInProgress ?? s;
+    case 'waiting_reply':
+      return st.statusWaitingReply ?? s;
+    case 'resolved':
+      return st.statusResolved ?? s;
+    case 'closed':
+      return st.statusClosed ?? s;
+    default:
+      return s;
+  }
+}
 
 export const SupportScreen = () => {
   const { locale, dictionary } = useI18n();
@@ -28,7 +77,7 @@ export const SupportScreen = () => {
   const [replyBody, setReplyBody] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [showCreate, setShowCreate] = useState(false);
-  const [createSubject, setCreateSubject] = useState('');
+  const [createCategory, setCreateCategory] = useState<SupportTicketCategory>('other');
   const [createBody, setCreateBody] = useState('');
   const [createFiles, setCreateFiles] = useState<File[]>([]);
   const [replyFiles, setReplyFiles] = useState<File[]>([]);
@@ -80,10 +129,9 @@ export const SupportScreen = () => {
     setSubmitting(true);
     try {
       const attachmentUrls: string[] = [];
-      for (const file of replyFiles) {
+      for (const file of replyFiles.slice(0, 2)) {
         const { url } = await uploadFile(accessToken, file);
-        const fullUrl = url.startsWith('http') ? url : `${getApiBaseUrl()}${url.startsWith('/') ? '' : '/'}${url}`;
-        attachmentUrls.push(fullUrl);
+        attachmentUrls.push(toStoredAttachmentUrl(url));
       }
       const msg = await supportApiClient.reply(accessToken, selectedTicket.id, {
         body: replyBody.trim(),
@@ -100,22 +148,21 @@ export const SupportScreen = () => {
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!accessToken || !createSubject.trim() || !createBody.trim()) return;
+    if (!accessToken || !createBody.trim()) return;
     setSubmitting(true);
     try {
       const attachmentUrls: string[] = [];
-      for (const file of createFiles) {
+      for (const file of createFiles.slice(0, 2)) {
         const { url } = await uploadFile(accessToken, file);
-        const fullUrl = url.startsWith('http') ? url : `${getApiBaseUrl()}${url.startsWith('/') ? '' : '/'}${url}`;
-        attachmentUrls.push(fullUrl);
+        attachmentUrls.push(toStoredAttachmentUrl(url));
       }
       await supportApiClient.createTicket(accessToken, {
-        subject: createSubject.trim(),
+        category: createCategory,
         body: createBody.trim(),
         ...(attachmentUrls.length ? { attachmentUrls } : {}),
       });
       setShowCreate(false);
-      setCreateSubject('');
+      setCreateCategory('other');
       setCreateBody('');
       setCreateFiles([]);
       void loadTickets();
@@ -125,6 +172,8 @@ export const SupportScreen = () => {
   };
 
   const d = dictionary.common as Record<string, string | undefined>;
+  const sf = dictionary.supportFab as Record<string, string>;
+  const st = (dictionary.admin?.supportTicket ?? {}) as Record<string, string>;
   const supportTitle = dictionary.nav?.support ?? 'Support';
 
   if (!isReady || !authUser) {
@@ -146,37 +195,43 @@ export const SupportScreen = () => {
           <div className="dashboard-card" style={{ marginBottom: '1rem' }}>
             <h2>{d.createTicket ?? 'New ticket'}</h2>
             <form onSubmit={(e) => { void handleCreate(e); }} className="dashboard-form">
-              <input
-                type="text"
+              <label className="dashboard-form-label-inline" htmlFor="support-create-category">
+                {sf.categoryLabel}
+              </label>
+              <select
+                id="support-create-category"
                 className="dashboard-input"
-                placeholder={d.subject ?? 'Subject'}
-                value={createSubject}
-                onChange={(e) => setCreateSubject(e.target.value)}
-                required
-                maxLength={500}
-              />
+                value={createCategory}
+                onChange={(e) => setCreateCategory(e.target.value as SupportTicketCategory)}
+              >
+                <option value="bug">{sf.categoryBug}</option>
+                <option value="suggestion">{sf.categorySuggestion}</option>
+                <option value="error">{sf.categoryError}</option>
+                <option value="other">{sf.categoryOther}</option>
+              </select>
               <textarea
                 className="dashboard-input"
-                placeholder={d.message ?? 'Message'}
+                placeholder={sf.descriptionPlaceholder}
                 value={createBody}
                 onChange={(e) => setCreateBody(e.target.value)}
                 required
                 rows={4}
+                maxLength={10000}
               />
               <div className="dashboard-form-field">
                 <label className="dashboard-form-label-inline">
-                  {d.upload ?? 'Upload'} (images, max 5)
+                  {d.upload ?? 'Upload'} — {d.maxTwoImages ?? 'Max 2 images'}
                 </label>
                 <input
                   type="file"
                   accept="image/*"
                   multiple
                   className="dashboard-input"
-                  onChange={(e) => setCreateFiles(Array.from(e.target.files ?? []).slice(0, 5))}
+                  onChange={(e) => setCreateFiles(Array.from(e.target.files ?? []).slice(0, 2))}
                 />
                 {createFiles.length > 0 && (
                   <p className="dashboard-form-hint">
-                    {createFiles.length} file(s) selected
+                    {createFiles.length} / 2
                   </p>
                 )}
               </div>
@@ -221,7 +276,8 @@ export const SupportScreen = () => {
                 >
                   <strong>{t.subject}</strong>
                   <p className="dashboard-card-meta">
-                    {t.status} · {new Date(t.updatedAt).toLocaleDateString()}
+                    {categoryLabel(t.category, sf, st)} · {statusLabel(t.status, st)} ·{' '}
+                    {new Date(t.updatedAt).toLocaleDateString()}
                     {t.messageCount != null && ` · ${t.messageCount} message(s)`}
                   </p>
                 </div>
@@ -239,7 +295,9 @@ export const SupportScreen = () => {
                 </button>
                 <div className="dashboard-card">
                   <h3>{selectedTicket.subject}</h3>
-                  <p className="dashboard-card-meta">Status: {selectedTicket.status}</p>
+                  <p className="dashboard-card-meta">
+                    {categoryLabel(selectedTicket.category, sf, st)} · {statusLabel(selectedTicket.status, st)}
+                  </p>
                 </div>
                 {messagesLoading ? (
                   <p className="dashboard-empty">{d.loading ?? 'Loading...'}</p>
@@ -265,7 +323,7 @@ export const SupportScreen = () => {
                               return (
                                 <a key={u} href={src} target="_blank" rel="noopener noreferrer" className="dashboard-card-media-thumb">
                                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                                  <img src={src} alt="Attachment" width={80} height={80} />
+                                  <img src={src} alt="" width={80} height={80} />
                                 </a>
                               );
                             })}
@@ -283,14 +341,14 @@ export const SupportScreen = () => {
                       />
                       <div className="dashboard-form-field" style={{ marginTop: '0.5rem' }}>
                         <label className="dashboard-form-label-inline">
-                          {d.upload ?? 'Upload'} (images, max 5)
+                          {d.upload ?? 'Upload'} — {d.maxTwoImages ?? 'Max 2 images'}
                         </label>
                         <input
                           type="file"
                           accept="image/*"
                           multiple
                           className="dashboard-input"
-                          onChange={(e) => setReplyFiles(Array.from(e.target.files ?? []).slice(0, 5))}
+                          onChange={(e) => setReplyFiles(Array.from(e.target.files ?? []).slice(0, 2))}
                         />
                       </div>
                       <button type="submit" className="dashboard-primary-btn" style={{ marginTop: '0.5rem' }} disabled={submitting}>

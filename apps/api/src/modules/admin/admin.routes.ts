@@ -123,5 +123,6 @@ adminRouter.patch('/review-disputes/:id', requireAdminPermission('manage_verific
 // Support tickets
 adminRouter.get('/support/tickets', requireAdminPermission('manage_users'), adminController.listSupportTickets);
 adminRouter.patch('/support/tickets/:id', requireAdminPermission('manage_users'), adminController.updateSupportTicket);
+adminRouter.delete('/support/tickets/:id', requireAdminPermission('manage_users'), adminController.deleteSupportTicket);
 
 export { adminRouter };

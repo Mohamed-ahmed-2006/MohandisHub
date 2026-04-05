@@ -8,6 +8,7 @@ export type TicketRow = {
   id: string;
   user_id: string;
   subject: string;
+  category: string;
   status: string;
   assigned_to: string | null;
   created_at: string;
@@ -25,13 +26,13 @@ export type TicketMessageRow = {
 };
 
 export class SupportRepository {
-  async createTicket(userId: string, subject: string): Promise<TicketRow> {
+  async createTicket(userId: string, subject: string, category: string): Promise<TicketRow> {
     const pool = getPool();
     const { rows } = await pool.query<TicketRow>(
-      `INSERT INTO support_tickets (user_id, subject, status)
-       VALUES ($1, $2, 'open')
-       RETURNING id, user_id, subject, status, assigned_to, created_at, updated_at`,
-      [userId, subject],
+      `INSERT INTO support_tickets (user_id, subject, category, status)
+       VALUES ($1, $2, $3, 'open')
+       RETURNING id, user_id, subject, category, status, assigned_to, created_at, updated_at`,
+      [userId, subject, category],
     );
     if (!rows[0]) throw new Error('Insert ticket failed');
     return rows[0];
@@ -63,7 +64,7 @@ export class SupportRepository {
   async getTicketById(ticketId: string): Promise<TicketRow | null> {
     const pool = getPool();
     const { rows } = await pool.query<TicketRow>(
-      `SELECT id, user_id, subject, status, assigned_to, created_at, updated_at
+      `SELECT id, user_id, subject, category, status, assigned_to, created_at, updated_at
        FROM support_tickets WHERE id = $1`,
       [ticketId],
     );
@@ -78,7 +79,7 @@ export class SupportRepository {
     );
     const total = parseInt(countResult.rows[0]?.count ?? '0', 10);
     const { rows } = await pool.query<TicketRow>(
-      `SELECT id, user_id, subject, status, assigned_to, created_at, updated_at
+      `SELECT id, user_id, subject, category, status, assigned_to, created_at, updated_at
        FROM support_tickets WHERE user_id = $1
        ORDER BY updated_at DESC LIMIT $2 OFFSET $3`,
       [userId, limit, offset],
@@ -101,7 +102,7 @@ export class SupportRepository {
     const pool = getPool();
     const { rows } = await pool.query<TicketRow>(
       `UPDATE support_tickets SET status = $1, updated_at = now() WHERE id = $2
-       RETURNING id, user_id, subject, status, assigned_to, created_at, updated_at`,
+       RETURNING id, user_id, subject, category, status, assigned_to, created_at, updated_at`,
       [status, ticketId],
     );
     return rows[0] ?? null;
@@ -111,13 +112,17 @@ export class SupportRepository {
     const pool = getPool();
     const { rows } = await pool.query<TicketRow>(
       `UPDATE support_tickets SET assigned_to = $1, updated_at = now() WHERE id = $2
-       RETURNING id, user_id, subject, status, assigned_to, created_at, updated_at`,
+       RETURNING id, user_id, subject, category, status, assigned_to, created_at, updated_at`,
       [assignedTo, ticketId],
     );
     return rows[0] ?? null;
   }
 
-  async listAllTickets(filters: { status?: string }, limit: number, offset: number): Promise<{ rows: (TicketRow & { user_email?: string; message_count?: string })[]; total: number }> {
+  async listAllTickets(
+    filters: { status?: string; category?: string },
+    limit: number,
+    offset: number,
+  ): Promise<{ rows: (TicketRow & { user_email?: string; message_count?: string })[]; total: number }> {
     const pool = getPool();
     const conditions: string[] = ['1=1'];
     const params: unknown[] = [];
@@ -125,6 +130,10 @@ export class SupportRepository {
     if (filters.status) {
       conditions.push(`t.status = $${idx++}`);
       params.push(filters.status);
+    }
+    if (filters.category) {
+      conditions.push(`t.category = $${idx++}`);
+      params.push(filters.category);
     }
     const where = conditions.join(' AND ');
     const countResult = await pool.query<{ count: string }>(
@@ -136,7 +145,7 @@ export class SupportRepository {
     const limitParam = params.length - 1;
     const offsetParam = params.length;
     const { rows } = await pool.query<TicketRow & { user_email?: string; message_count?: string }>(
-      `SELECT t.id, t.user_id, t.subject, t.status, t.assigned_to, t.created_at, t.updated_at,
+      `SELECT t.id, t.user_id, t.subject, t.category, t.status, t.assigned_to, t.created_at, t.updated_at,
               u.email AS user_email,
               (SELECT COUNT(*)::text FROM support_ticket_messages m WHERE m.ticket_id = t.id) AS message_count
        FROM support_tickets t
@@ -146,5 +155,11 @@ export class SupportRepository {
       params,
     );
     return { rows, total };
+  }
+
+  async deleteTicket(ticketId: string): Promise<boolean> {
+    const pool = getPool();
+    const { rowCount } = await pool.query(`DELETE FROM support_tickets WHERE id = $1`, [ticketId]);
+    return (rowCount ?? 0) > 0;
   }
 }

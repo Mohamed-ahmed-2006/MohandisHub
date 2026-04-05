@@ -797,13 +797,14 @@ export const adminApiClient = {
   // Support tickets (admin)
   listSupportTickets: (
     accessToken: string,
-    params?: { page?: number; limit?: number; status?: string },
+    params?: { page?: number; limit?: number; status?: string; category?: string },
     options?: AdminClientOptions,
   ) => {
     const query = new URLSearchParams();
     if (params?.page) query.set('page', String(params.page));
     if (params?.limit) query.set('limit', String(params.limit));
     if (params?.status) query.set('status', params.status);
+    if (params?.category) query.set('category', params.category);
     const qs = query.toString();
     return apiRequest<{
       items: Array<SupportTicket & { userEmail?: string }>;
@@ -829,6 +830,14 @@ export const adminApiClient = {
       method: 'PATCH',
       path: `/api/admin/support/tickets/${ticketId}`,
       body,
+      accessToken,
+      ...(options?.refreshSession ? { refreshSession: options.refreshSession } : {}),
+    }),
+
+  deleteSupportTicket: (accessToken: string, ticketId: string, options?: AdminClientOptions) =>
+    apiRequest<{ id: string }>({
+      method: 'DELETE',
+      path: `/api/admin/support/tickets/${ticketId}`,
       accessToken,
       ...(options?.refreshSession ? { refreshSession: options.refreshSession } : {}),
     }),

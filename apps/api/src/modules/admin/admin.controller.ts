@@ -619,8 +619,10 @@ const listSupportTickets = asyncHandler(async (req, res) => {
   const page = parseInt(req.query.page as string, 10) || 1;
   const limit = Math.min(parseInt(req.query.limit as string, 10) || 20, 100);
   const status = req.query.status as string | undefined;
-  const filters: { status?: string } = {};
+  const category = req.query.category as string | undefined;
+  const filters: { status?: string; category?: string } = {};
   if (status) filters.status = status;
+  if (category) filters.category = category;
   const data = await supportService.listAllTickets(filters, page, limit);
   res.json({ ok: true, data });
 });
@@ -637,6 +639,15 @@ const updateSupportTicket = asyncHandler(async (req, res) => {
   }
   const ticket = await supportService.getTicket(ticketId, '', true);
   res.json({ ok: true, data: ticket });
+});
+
+const deleteSupportTicket = asyncHandler(async (req, res) => {
+  const ticketId = req.params.id as string;
+  const deleted = await supportService.deleteTicket(ticketId);
+  if (!deleted) {
+    throw new HttpError({ statusCode: 404, code: 'TICKET_NOT_FOUND', message: 'Ticket not found.' });
+  }
+  res.json({ ok: true, data: { id: ticketId } });
 });
 
 export const adminController = {
@@ -690,4 +701,5 @@ export const adminController = {
   sendNotification,
   listSupportTickets,
   updateSupportTicket,
+  deleteSupportTicket,
 };

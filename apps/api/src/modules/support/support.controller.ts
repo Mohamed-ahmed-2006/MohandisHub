@@ -29,12 +29,12 @@ function parseBody<T>(schema: { safeParse: (d: unknown) => { success: boolean; d
 const createTicket = asyncHandler(async (req, res) => {
   const user = requireUser(req);
   const input = parseBody(createTicketSchema, req.body);
-  const ticket = await supportService.createTicket(
-    user.id,
-    input.subject,
-    input.body,
-    input.attachmentUrls ?? undefined,
-  );
+  const ticket = await supportService.createTicket(user.id, {
+    category: input.category ?? 'other',
+    body: input.body,
+    ...(input.subject ? { subject: input.subject } : {}),
+    ...(input.attachmentUrls?.length ? { attachmentUrls: input.attachmentUrls } : {}),
+  });
   res.status(201).json({ ok: true, data: ticket } as ApiSuccessBody<typeof ticket>);
 });
 
@@ -69,7 +69,7 @@ const reply = asyncHandler(async (req, res) => {
     user.id,
     input.body,
     user.isAdmin ?? false,
-    input.attachmentUrls ?? undefined,
+    input.attachmentUrls?.length ? input.attachmentUrls : null,
   );
   res.status(201).json({ ok: true, data: message });
 });

@@ -4,6 +4,7 @@
 
 import type {
   SupportTicket,
+  SupportTicketCategory,
   SupportTicketMessage,
   SupportTicketStatus,
 } from '@mohandishub/shared';
@@ -13,6 +14,29 @@ import { HttpError } from '../../utils/http-error.js';
 import type { TicketRow, TicketMessageRow } from './support.repository.js';
 import { SupportRepository } from './support.repository.js';
 
+const CATEGORY_PREFIX: Record<SupportTicketCategory, string> = {
+  bug: 'Bug',
+  suggestion: 'Suggestion',
+  error: 'Error',
+  other: 'Other',
+};
+
+export function buildSupportTicketSubject(
+  category: SupportTicketCategory,
+  body: string,
+  explicitSubject?: string,
+): string {
+  if (explicitSubject?.trim()) {
+    return explicitSubject.trim().slice(0, 500);
+  }
+  const firstLine = body.trim().split('\n')[0] ?? '';
+  const snippet = firstLine.slice(0, 80);
+  const suffix = firstLine.length > 80 ? '…' : '';
+  const prefix = CATEGORY_PREFIX[category];
+  const built = `${prefix}: ${snippet}${suffix}`;
+  return built.slice(0, 500);
+}
+
 export class SupportService {
   constructor(private readonly repo: SupportRepository = new SupportRepository()) {}
 
@@ -21,6 +45,7 @@ export class SupportService {
       id: row.id,
       userId: row.user_id,
       subject: row.subject,
+      category: row.category as SupportTicketCategory,
       status: row.status as SupportTicketStatus,
       assignedTo: row.assigned_to,
       createdAt: row.created_at,
@@ -43,12 +68,16 @@ export class SupportService {
 
   async createTicket(
     userId: string,
-    subject: string,
-    firstBody: string,
-    attachmentUrls?: string[] | null,
+    input: {
+      category: SupportTicketCategory;
+      body: string;
+      subject?: string;
+      attachmentUrls?: string[] | null;
+    },
   ): Promise<SupportTicket> {
-    const ticket = await this.repo.createTicket(userId, subject);
-    await this.repo.addMessage(ticket.id, userId, firstBody, false, attachmentUrls);
+    const subject = buildSupportTicketSubject(input.category, input.body, input.subject);
+    const ticket = await this.repo.createTicket(userId, subject, input.category);
+    await this.repo.addMessage(ticket.id, userId, input.body, false, input.attachmentUrls);
     return this.toTicket(ticket);
   }
 
@@ -111,7 +140,11 @@ export class SupportService {
     return updated ? this.toTicket(updated) : null;
   }
 
-  async listAllTickets(filters: { status?: string }, page: number, limit: number): Promise<{
+  async listAllTickets(
+    filters: { status?: string; category?: string },
+    page: number,
+    limit: number,
+  ): Promise<{
     items: (SupportTicket & { userEmail?: string })[];
     total: number;
     page: number;
@@ -131,5 +164,9 @@ export class SupportService {
       limit,
       totalPages: Math.ceil(total / limit),
     };
+  }
+
+  async deleteTicket(ticketId: string): Promise<boolean> {
+    return this.repo.deleteTicket(ticketId);
   }
 }

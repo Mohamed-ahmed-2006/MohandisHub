@@ -7,6 +7,7 @@ import { AppAvatarMenu } from './app-avatar-menu';
 import { AppSidebar } from './app-sidebar';
 import { NotificationCenter } from './notification-center';
 import { ProfileModalProvider, useProfileModal } from './profile-modal-context';
+import { SupportFab } from './support-fab';
 import { ToastProvider, useToast } from './toast';
 import { UserProfileModal } from './user-profile-modal';
 import { WalletDepositModal } from './wallet-deposit-modal';
@@ -259,6 +260,8 @@ const AppShellInner = ({ children }: AppShellProps) => {
         </header>
 
         {children}
+
+        <SupportFab />
 
         {depositMessage && (
           <div

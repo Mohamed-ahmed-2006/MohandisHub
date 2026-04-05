@@ -4,10 +4,13 @@
 
 export type SupportTicketStatus = 'open' | 'in_progress' | 'waiting_reply' | 'resolved' | 'closed';
 
+export type SupportTicketCategory = 'bug' | 'suggestion' | 'error' | 'other';
+
 export type SupportTicket = {
   id: string;
   userId: string;
   subject: string;
+  category: SupportTicketCategory;
   status: SupportTicketStatus;
   assignedTo: string | null;
   createdAt: string;
@@ -26,14 +29,16 @@ export type SupportTicketMessage = {
 };
 
 export type CreateSupportTicketBody = {
-  subject: string;
+  category: SupportTicketCategory;
   body: string;
-  /** Optional URLs from POST /api/upload (images/files). */
+  /** If omitted, the API builds a subject from category and a short body snippet. */
+  subject?: string;
+  /** Optional URLs from POST /api/upload (images/files). Max 2 per request. */
   attachmentUrls?: string[];
 };
 
 export type ReplySupportTicketBody = {
   body: string;
-  /** Optional URLs from POST /api/upload (images/files). */
+  /** Optional URLs from POST /api/upload (images/files). Max 2 per request. */
   attachmentUrls?: string[];
 };

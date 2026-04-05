@@ -1,10 +1,11 @@
 'use client';
 
-import type { SupportTicket, SupportTicketMessage } from '@mohandishub/shared';
+import type { SupportTicket, SupportTicketCategory, SupportTicketMessage } from '@mohandishub/shared';
 import { ChevronLeft } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 
 import { adminApiClient } from '@/lib/admin/client';
+import { getApiBaseUrl } from '@/lib/env';
 import type { Dictionary } from '@/lib/i18n/types';
 import { supportApiClient } from '@/lib/support/client';
 
@@ -18,14 +19,48 @@ type Props = {
 
 const STATUS_OPTIONS: SupportTicket['status'][] = ['open', 'in_progress', 'waiting_reply', 'resolved', 'closed'];
 
-const buildTicketListParams = (page: number, limit: number, statusFilter: string) => ({
+const CATEGORY_OPTIONS: SupportTicketCategory[] = ['bug', 'suggestion', 'error', 'other'];
+
+const buildTicketListParams = (page: number, limit: number, statusFilter: string, categoryFilter: string) => ({
   page,
   limit,
   ...(statusFilter ? { status: statusFilter } : {}),
+  ...(categoryFilter ? { category: categoryFilter } : {}),
 });
 
 const buildAdminClientOptions = (refreshSession?: () => Promise<string | null>) =>
   refreshSession ? { refreshSession } : {};
+
+function statusOptionLabel(status: SupportTicket['status'], st: Record<string, string>): string {
+  switch (status) {
+    case 'open':
+      return st.statusOpen ?? status;
+    case 'in_progress':
+      return st.statusInProgress ?? status;
+    case 'waiting_reply':
+      return st.statusWaitingReply ?? status;
+    case 'resolved':
+      return st.statusResolved ?? status;
+    case 'closed':
+      return st.statusClosed ?? status;
+    default:
+      return status;
+  }
+}
+
+function categoryCellLabel(cat: SupportTicketCategory | undefined, st: Record<string, string>): string {
+  const c = cat ?? 'other';
+  switch (c) {
+    case 'bug':
+      return st.categoryBug ?? c;
+    case 'suggestion':
+      return st.categorySuggestion ?? c;
+    case 'error':
+      return st.categoryError ?? c;
+    default:
+      return st.categoryOther ?? c;
+  }
+}
 
 export const AdminSupportTab = ({ dictionary, accessToken, refreshSession }: Props) => {
   const [tickets, setTickets] = useState<TicketWithEmail[]>([]);
@@ -33,6 +68,7 @@ export const AdminSupportTab = ({ dictionary, accessToken, refreshSession }: Pro
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
   const [statusFilter, setStatusFilter] = useState<string>('');
+  const [categoryFilter, setCategoryFilter] = useState<string>('');
   const limit = 20;
 
   const [selectedTicket, setSelectedTicket] = useState<TicketWithEmail | null>(null);
@@ -40,13 +76,17 @@ export const AdminSupportTab = ({ dictionary, accessToken, refreshSession }: Pro
   const [messagesLoading, setMessagesLoading] = useState(false);
   const [replyBody, setReplyBody] = useState('');
   const [replySubmitting, setReplySubmitting] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
+  const d = dictionary.admin;
+  const st = (d.supportTicket ?? {}) as Record<string, string>;
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
       const data = await adminApiClient.listSupportTickets(
         accessToken,
-        buildTicketListParams(page, limit, statusFilter),
+        buildTicketListParams(page, limit, statusFilter, categoryFilter),
         buildAdminClientOptions(refreshSession),
       );
       setTickets(data.items);
@@ -57,7 +97,7 @@ export const AdminSupportTab = ({ dictionary, accessToken, refreshSession }: Pro
     } finally {
       setLoading(false);
     }
-  }, [accessToken, refreshSession, page, limit, statusFilter]);
+  }, [accessToken, refreshSession, page, limit, statusFilter, categoryFilter]);
 
   useEffect(() => {
     void load();
@@ -104,6 +144,22 @@ export const AdminSupportTab = ({ dictionary, accessToken, refreshSession }: Pro
     }
   };
 
+  const handleDeleteTicket = async (ticketId: string) => {
+    if (!window.confirm(st.deleteConfirm ?? 'Delete this ticket?')) return;
+    setDeleting(true);
+    try {
+      await adminApiClient.deleteSupportTicket(accessToken, ticketId, buildAdminClientOptions(refreshSession));
+      if (selectedTicket?.id === ticketId) {
+        setSelectedTicket(null);
+      }
+      void load();
+    } catch {
+      /* ignore */
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   const handleReply = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedTicket || !replyBody.trim()) return;
@@ -120,7 +176,6 @@ export const AdminSupportTab = ({ dictionary, accessToken, refreshSession }: Pro
     }
   };
 
-  const d = dictionary.admin;
   const totalPages = Math.ceil(total / limit) || 1;
 
   if (selectedTicket) {
@@ -139,10 +194,12 @@ export const AdminSupportTab = ({ dictionary, accessToken, refreshSession }: Pro
         <div className="admin-user-card" style={{ marginBottom: '1rem' }}>
           <p style={{ margin: '0 0 0.35rem', fontWeight: 600 }}>{selectedTicket.subject}</p>
           <p className="dashboard-card-meta" style={{ margin: 0 }}>
-            {selectedTicket.userEmail ?? selectedTicket.userId} · Status:{' '}
-            <span className="admin-badge admin-badge--pending">{selectedTicket.status}</span>
+            {categoryCellLabel(selectedTicket.category, st)} · {selectedTicket.userEmail ?? selectedTicket.userId} ·{' '}
+            <span className="admin-badge admin-badge--pending">
+              {statusOptionLabel(selectedTicket.status, st)}
+            </span>
           </p>
-          <div style={{ marginTop: '0.5rem' }}>
+          <div style={{ marginTop: '0.75rem', display: 'flex', flexWrap: 'wrap', gap: '0.5rem', alignItems: 'center' }}>
             <select
               className="admin-form-select admin-form-select--inline"
               value={selectedTicket.status}
@@ -152,10 +209,33 @@ export const AdminSupportTab = ({ dictionary, accessToken, refreshSession }: Pro
             >
               {STATUS_OPTIONS.map((s) => (
                 <option key={s} value={s}>
-                  {s.replace('_', ' ')}
+                  {statusOptionLabel(s, st)}
                 </option>
               ))}
             </select>
+            <button
+              type="button"
+              className="admin-btn admin-btn--small admin-btn--primary"
+              onClick={() => void handleStatusChange(selectedTicket.id, 'resolved')}
+            >
+              {st.markFixed ?? 'Mark fixed'}
+            </button>
+            <button
+              type="button"
+              className="admin-btn admin-btn--small"
+              onClick={() => void handleStatusChange(selectedTicket.id, 'open')}
+            >
+              {st.markPending ?? 'Mark pending'}
+            </button>
+            <button
+              type="button"
+              className="admin-btn admin-btn--small"
+              style={{ color: 'hsl(var(--destructive))' }}
+              disabled={deleting}
+              onClick={() => void handleDeleteTicket(selectedTicket.id)}
+            >
+              {st.delete ?? 'Delete'}
+            </button>
           </div>
         </div>
         <div className="admin-user-card">
@@ -178,6 +258,25 @@ export const AdminSupportTab = ({ dictionary, accessToken, refreshSession }: Pro
                     {m.isStaff ? 'Staff' : 'Customer'} · {new Date(m.createdAt).toLocaleString()}
                   </p>
                   <p style={{ margin: 0, whiteSpace: 'pre-wrap' }}>{m.body}</p>
+                  {m.attachmentUrls?.length ? (
+                    <div className="dashboard-card-media" style={{ marginTop: '0.5rem', display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+                      {m.attachmentUrls.map((u) => {
+                        const src = u.startsWith('http') ? u : `${getApiBaseUrl()}${u.startsWith('/') ? '' : '/'}${u}`;
+                        return (
+                          <a
+                            key={u}
+                            href={src}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="dashboard-card-media-thumb"
+                          >
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img src={src} alt={st.attachmentAlt ?? 'Attachment'} width={80} height={80} />
+                          </a>
+                        );
+                      })}
+                    </div>
+                  ) : null}
                 </li>
               ))}
             </ul>
@@ -215,7 +314,7 @@ export const AdminSupportTab = ({ dictionary, accessToken, refreshSession }: Pro
   return (
     <section className="admin-tab-content">
       <h2 className="admin-tab-title">{d.tabs.support ?? 'Support'}</h2>
-      <div className="admin-toolbar">
+      <div className="admin-toolbar" style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
         <select
           className="admin-toolbar-select"
           value={statusFilter}
@@ -227,7 +326,22 @@ export const AdminSupportTab = ({ dictionary, accessToken, refreshSession }: Pro
           <option value="">All statuses</option>
           {STATUS_OPTIONS.map((s) => (
             <option key={s} value={s}>
-              {s.replace('_', ' ')}
+              {statusOptionLabel(s, st)}
+            </option>
+          ))}
+        </select>
+        <select
+          className="admin-toolbar-select"
+          value={categoryFilter}
+          onChange={(e) => {
+            setCategoryFilter(e.target.value);
+            setPage(1);
+          }}
+        >
+          <option value="">{st.filterCategory ?? 'All types'}</option>
+          {CATEGORY_OPTIONS.map((c) => (
+            <option key={c} value={c}>
+              {categoryCellLabel(c, st)}
             </option>
           ))}
         </select>
@@ -243,6 +357,7 @@ export const AdminSupportTab = ({ dictionary, accessToken, refreshSession }: Pro
               <thead>
                 <tr>
                   <th>Subject</th>
+                  <th>{st.categoryColumn ?? 'Type'}</th>
                   <th>User</th>
                   <th>Status</th>
                   <th>Messages</th>
@@ -258,9 +373,10 @@ export const AdminSupportTab = ({ dictionary, accessToken, refreshSession }: Pro
                     onClick={() => setSelectedTicket(t)}
                   >
                     <td>{t.subject}</td>
+                    <td>{categoryCellLabel(t.category, st)}</td>
                     <td>{t.userEmail ?? t.userId}</td>
                     <td>
-                      <span className="admin-badge admin-badge--pending">{t.status}</span>
+                      <span className="admin-badge admin-badge--pending">{statusOptionLabel(t.status, st)}</span>
                     </td>
                     <td>{t.messageCount ?? 0}</td>
                     <td>{new Date(t.updatedAt).toLocaleString()}</td>
@@ -274,7 +390,7 @@ export const AdminSupportTab = ({ dictionary, accessToken, refreshSession }: Pro
                       >
                         {STATUS_OPTIONS.map((s) => (
                           <option key={s} value={s}>
-                            {s.replace('_', ' ')}
+                            {statusOptionLabel(s, st)}
                           </option>
                         ))}
                       </select>
@@ -285,6 +401,15 @@ export const AdminSupportTab = ({ dictionary, accessToken, refreshSession }: Pro
                         onClick={() => setSelectedTicket(t)}
                       >
                         View & reply
+                      </button>
+                      <button
+                        type="button"
+                        className="admin-btn admin-btn--small"
+                        style={{ marginLeft: '0.35rem' }}
+                        disabled={deleting}
+                        onClick={() => void handleDeleteTicket(t.id)}
+                      >
+                        {st.delete ?? 'Delete'}
                       </button>
                     </td>
                   </tr>
