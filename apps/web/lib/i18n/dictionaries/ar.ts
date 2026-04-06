@@ -824,6 +824,16 @@ export const arDictionary: Dictionary = {
       depositsPausedDesc: 'منع إيداعات ستايب والعملات.',
       moneyMovementsPaused: 'إيقاف حركة الأموال',
       moneyMovementsPausedDesc: 'منع الإيداعات والاشتراكات وتعديلات الرصيد.',
+      paymentMethodsSection: 'طرق الدفع (المحفظة)',
+      paymentMethodsSectionDesc:
+        'تفعيل أو إخفاء كل طريقة للمستخدمين. الطرق المخفية لا تظهر في شاشات الإيداع/السحب ويرفضها الـ API. البطاقة ما زالت تحتاج تفعيل fiat في NOWPayments على الخادم.',
+      paymentMethodLabels: {
+        deposit_crypto: 'إيداع: عملات مشفرة (NOWPayments)',
+        deposit_card: 'إيداع: بطاقة (NOWPayments fiat)',
+        deposit_instapay: 'إيداع: إنستاباي (يدوي)',
+        withdrawal_crypto: 'سحب: عملات مشفرة',
+        withdrawal_instapay: 'سحب: إنستاباي (يدوي)',
+      },
       disableCryptoDeposits: 'تعطيل الإيداعات بالعملات',
       disableCryptoDepositsDesc: 'إخفاء/منع إيداعات Cryptomus.',
       disableCardDeposits: 'تعطيل الإيداعات بالبطاقة',

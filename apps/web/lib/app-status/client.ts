@@ -1,4 +1,5 @@
 import type { AppStatus } from '@mohandishub/shared';
+import { parsePaymentMethodsEnabled } from '@mohandishub/shared';
 
 import { getApiBaseUrl } from '@/lib/env';
 
@@ -56,5 +57,9 @@ function getDefaultAppStatus(): AppStatus {
     walletUsdToEgpMigrationRate: null,
     walletMigrationUsdToEgpApplied: false,
     sidebarHiddenHrefs: [],
+    paymentMethodsEnabled: parsePaymentMethodsEnabled(null, {
+      disableCryptoDeposits: false,
+      disableCardDeposits: false,
+    }),
   };
 }

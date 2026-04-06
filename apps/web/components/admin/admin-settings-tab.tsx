@@ -1,6 +1,11 @@
 'use client';
 
-import { MANAGED_SIDEBAR_HREFS, type AppSettings, type UpdateAppSettingsBody } from '@mohandishub/shared';
+import {
+  KNOWN_PAYMENT_METHOD_KEYS,
+  MANAGED_SIDEBAR_HREFS,
+  type AppSettings,
+  type UpdateAppSettingsBody,
+} from '@mohandishub/shared';
 import { useCallback, useEffect, useState } from 'react';
 
 import { adminApiClient } from '@/lib/admin/client';
@@ -154,6 +159,23 @@ export const AdminSettingsTab = ({ dictionary, accessToken, refreshSession }: Pr
     [update],
   );
 
+  const handlePaymentMethodToggle = useCallback(
+    (key: string, enabled: boolean) => {
+      if (!settings) return;
+      void update({
+        paymentMethodsEnabled: { ...settings.paymentMethodsEnabled, [key]: enabled },
+      });
+    },
+    [settings, update],
+  );
+
+  const paymentMethodKeysForUi = (() => {
+    if (!settings) return [];
+    const known = new Set<string>(KNOWN_PAYMENT_METHOD_KEYS);
+    const extra = Object.keys(settings.paymentMethodsEnabled).filter((k) => !known.has(k));
+    return [...KNOWN_PAYMENT_METHOD_KEYS, ...extra.sort()];
+  })();
+
   const setSidebarHrefHidden = useCallback(
     (href: string, hidden: boolean) => {
       if (!settings) return;
@@ -260,20 +282,27 @@ export const AdminSettingsTab = ({ dictionary, accessToken, refreshSession }: Pr
           onChange={(v) => handleToggle('moneyMovementsPaused', v)}
           disabled={saving}
         />
-        <Toggle
-          label={d.disableCryptoDeposits}
-          desc={d.disableCryptoDepositsDesc}
-          checked={settings.disableCryptoDeposits}
-          onChange={(v) => handleToggle('disableCryptoDeposits', v)}
-          disabled={saving}
-        />
-        <Toggle
-          label={d.disableCardDeposits}
-          desc={d.disableCardDepositsDesc}
-          checked={settings.disableCardDeposits}
-          onChange={(v) => handleToggle('disableCardDeposits', v)}
-          disabled={saving}
-        />
+        <p className="admin-settings-label" style={{ marginTop: '0.75rem' }}>
+          {d.paymentMethodsSection}
+        </p>
+        <p className="admin-settings-desc" style={{ marginBottom: '0.75rem' }}>
+          {d.paymentMethodsSectionDesc}
+        </p>
+        {paymentMethodKeysForUi.map((key) => {
+          const label =
+            (d.paymentMethodLabels as Record<string, string> | undefined)?.[key] ?? key;
+          const enabled = settings.paymentMethodsEnabled[key] !== false;
+          return (
+            <Toggle
+              key={key}
+              label={label}
+              desc={tr('Visible to users in the wallet; API rejects hidden methods.', 'يظهر للمستخدمين في المحفظة؛ الـ API يرفض الطرق المخفية.')}
+              checked={enabled}
+              onChange={(v) => handlePaymentMethodToggle(key, v)}
+              disabled={saving}
+            />
+          );
+        })}
         <div className="admin-settings-row">
           <label className="admin-settings-label">{d.minDepositAmount}</label>
           <input

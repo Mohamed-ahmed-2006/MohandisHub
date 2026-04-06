@@ -4,6 +4,7 @@
 
 import {
   MANAGED_SIDEBAR_HREFS,
+  parsePaymentMethodsEnabled,
   type AppSettings,
   type AppStatus,
   type UpdateAppSettingsBody,
@@ -53,6 +54,10 @@ export class SettingsService {
     if (!row) {
       return this.defaultAppStatus();
     }
+    const paymentMethodsEnabled = parsePaymentMethodsEnabled(row.payment_methods_enabled, {
+      disableCryptoDeposits: row.disable_crypto_deposits,
+      disableCardDeposits: row.disable_card_deposits,
+    });
     return {
       maintenanceMode: row.maintenance_mode,
       maintenanceMessage: row.maintenance_message,
@@ -60,8 +65,8 @@ export class SettingsService {
       lockLogins: row.lock_logins,
       depositsPaused: row.deposits_paused,
       moneyMovementsPaused: row.money_movements_paused,
-      disableCryptoDeposits: row.disable_crypto_deposits,
-      disableCardDeposits: row.disable_card_deposits,
+      disableCryptoDeposits: !paymentMethodsEnabled.deposit_crypto,
+      disableCardDeposits: !paymentMethodsEnabled.deposit_card,
       minDepositAmount: row.min_deposit_amount != null ? parseFloat(row.min_deposit_amount) : null,
       maxDepositAmount: row.max_deposit_amount != null ? parseFloat(row.max_deposit_amount) : null,
       pausePlanSubscriptions: row.pause_plan_subscriptions,
@@ -102,6 +107,7 @@ export class SettingsService {
           : null,
       walletMigrationUsdToEgpApplied: row.wallet_migration_usd_to_egp_applied ?? false,
       sidebarHiddenHrefs: parseSidebarHiddenHrefs(row.sidebar_hidden_hrefs),
+      paymentMethodsEnabled,
     };
   }
 
@@ -124,8 +130,6 @@ export class SettingsService {
     if (partial.moneyMovementsPaused !== undefined) dbPartial.money_movements_paused = partial.moneyMovementsPaused;
     if (adminId !== undefined) dbPartial.updated_by = adminId;
     if (partial.lockLogins !== undefined) dbPartial.lock_logins = partial.lockLogins;
-    if (partial.disableCryptoDeposits !== undefined) dbPartial.disable_crypto_deposits = partial.disableCryptoDeposits;
-    if (partial.disableCardDeposits !== undefined) dbPartial.disable_card_deposits = partial.disableCardDeposits;
     if (partial.minDepositAmount !== undefined) dbPartial.min_deposit_amount = partial.minDepositAmount;
     if (partial.maxDepositAmount !== undefined) dbPartial.max_deposit_amount = partial.maxDepositAmount;
     if (partial.pausePlanSubscriptions !== undefined) dbPartial.pause_plan_subscriptions = partial.pausePlanSubscriptions;
@@ -173,11 +177,47 @@ export class SettingsService {
     if (partial.supabaseStorageDashboardUrl !== undefined)
       dbPartial.supabaseStorageDashboardUrl = partial.supabaseStorageDashboardUrl;
 
+    if (
+      partial.paymentMethodsEnabled !== undefined ||
+      partial.disableCryptoDeposits !== undefined ||
+      partial.disableCardDeposits !== undefined
+    ) {
+      const current = await this.repo.get();
+      if (!current) {
+        throw new HttpError({
+          statusCode: 500,
+          code: 'SETTINGS_MISSING',
+          message: 'App settings row missing.',
+        });
+      }
+      let next = parsePaymentMethodsEnabled(current.payment_methods_enabled, {
+        disableCryptoDeposits: current.disable_crypto_deposits,
+        disableCardDeposits: current.disable_card_deposits,
+      });
+      if (partial.paymentMethodsEnabled != null) {
+        next = { ...next, ...partial.paymentMethodsEnabled };
+      } else {
+        if (partial.disableCryptoDeposits !== undefined) {
+          next.deposit_crypto = !partial.disableCryptoDeposits;
+        }
+        if (partial.disableCardDeposits !== undefined) {
+          next.deposit_card = !partial.disableCardDeposits;
+        }
+      }
+      dbPartial.payment_methods_enabled = next;
+      dbPartial.disable_crypto_deposits = !next.deposit_crypto;
+      dbPartial.disable_card_deposits = !next.deposit_card;
+    }
+
     const row = await this.repo.update(dbPartial);
     return row ? this.toAppSettings(row) : null;
   }
 
   private toAppSettings(row: AppSettingsRow): AppSettings {
+    const paymentMethodsEnabled = parsePaymentMethodsEnabled(row.payment_methods_enabled, {
+      disableCryptoDeposits: row.disable_crypto_deposits,
+      disableCardDeposits: row.disable_card_deposits,
+    });
     return {
       id: row.id,
       maintenanceMode: row.maintenance_mode,
@@ -188,8 +228,8 @@ export class SettingsService {
       updatedAt: row.updated_at.toISOString(),
       updatedBy: row.updated_by,
       lockLogins: row.lock_logins,
-      disableCryptoDeposits: row.disable_crypto_deposits,
-      disableCardDeposits: row.disable_card_deposits,
+      disableCryptoDeposits: !paymentMethodsEnabled.deposit_crypto,
+      disableCardDeposits: !paymentMethodsEnabled.deposit_card,
       minDepositAmount: row.min_deposit_amount != null ? parseFloat(row.min_deposit_amount) : null,
       maxDepositAmount: row.max_deposit_amount != null ? parseFloat(row.max_deposit_amount) : null,
       pausePlanSubscriptions: row.pause_plan_subscriptions,
@@ -233,6 +273,7 @@ export class SettingsService {
       maxPublicUploadBytes: row.max_public_upload_bytes ?? null,
       publicUploadAllowedMimes: parsePublicUploadMimes(row.public_upload_allowed_mimes),
       supabaseStorageDashboardUrl: row.supabase_storage_dashboard_url ?? null,
+      paymentMethodsEnabled,
     };
   }
 
@@ -275,6 +316,10 @@ export class SettingsService {
       walletUsdToEgpMigrationRate: null,
       walletMigrationUsdToEgpApplied: false,
       sidebarHiddenHrefs: [],
+      paymentMethodsEnabled: parsePaymentMethodsEnabled(null, {
+        disableCryptoDeposits: false,
+        disableCardDeposits: false,
+      }),
     };
   }
 }

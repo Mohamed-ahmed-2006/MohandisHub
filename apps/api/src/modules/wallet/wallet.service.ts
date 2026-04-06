@@ -10,6 +10,7 @@ import type {
   WithdrawalQuoteResponse,
   WithdrawalRequest,
 } from '@mohandishub/shared';
+import { isPaymentMethodEnabled } from '@mohandishub/shared';
 
 import { env } from '../../config/env.js';
 import {
@@ -230,7 +231,7 @@ export class WalletService {
       });
     }
 
-    if (input.method === 'crypto' && status.disableCryptoDeposits) {
+    if (input.method === 'crypto' && !isPaymentMethodEnabled(status.paymentMethodsEnabled, 'deposit_crypto')) {
       throw new HttpError({
         statusCode: 503,
         code: 'CRYPTO_DEPOSITS_DISABLED',
@@ -238,7 +239,10 @@ export class WalletService {
       });
     }
 
-    if (input.method === 'card' && (status.disableCardDeposits || !env.NOWPAYMENTS_FIAT_ENABLED)) {
+    if (
+      input.method === 'card' &&
+      (!isPaymentMethodEnabled(status.paymentMethodsEnabled, 'deposit_card') || !env.NOWPAYMENTS_FIAT_ENABLED)
+    ) {
       throw new HttpError({
         statusCode: 503,
         code: 'CARD_DEPOSITS_DISABLED',
@@ -515,6 +519,21 @@ export class WalletService {
       });
     }
 
+    if (input.method === 'instapay' && !isPaymentMethodEnabled(status.paymentMethodsEnabled, 'withdrawal_instapay')) {
+      throw new HttpError({
+        statusCode: 503,
+        code: 'INSTAPAY_WITHDRAWALS_DISABLED',
+        message: 'InstaPay withdrawals are not available.',
+      });
+    }
+    if (input.method === 'crypto' && !isPaymentMethodEnabled(status.paymentMethodsEnabled, 'withdrawal_crypto')) {
+      throw new HttpError({
+        statusCode: 503,
+        code: 'CRYPTO_WITHDRAWALS_DISABLED',
+        message: 'Crypto withdrawals are not available.',
+      });
+    }
+
     const prefs = await this.repo.getUserPayoutPreferences(userId);
     const profilePayout =
       role === 'business'
@@ -727,8 +746,14 @@ export class WalletService {
         message: 'Deposits are temporarily disabled.',
       });
     }
-    const settings = await this.settingsService.getAppStatus();
-    const display = settings.platformInstapayDisplay;
+    if (!isPaymentMethodEnabled(status.paymentMethodsEnabled, 'deposit_instapay')) {
+      throw new HttpError({
+        statusCode: 503,
+        code: 'INSTAPAY_DEPOSITS_DISABLED',
+        message: 'InstaPay deposits are not available.',
+      });
+    }
+    const display = status.platformInstapayDisplay;
     if (!display || Object.keys(display).length === 0) {
       throw new HttpError({
         statusCode: 503,

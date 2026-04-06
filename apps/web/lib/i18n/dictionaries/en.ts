@@ -836,6 +836,16 @@ export const enDictionary: Dictionary = {
       depositsPausedDesc: 'Block Stripe and crypto deposits.',
       moneyMovementsPaused: 'Pause all money movements',
       moneyMovementsPausedDesc: 'Block deposits, plan subscriptions, and admin balance adjustments.',
+      paymentMethodsSection: 'Payment methods (wallet)',
+      paymentMethodsSectionDesc:
+        'Turn each method on or off for users. Hidden methods disappear from deposit/withdraw screens and are rejected by the API. Card still requires NOWPayments fiat to be enabled in the deployment.',
+      paymentMethodLabels: {
+        deposit_crypto: 'Deposits: cryptocurrency (NOWPayments)',
+        deposit_card: 'Deposits: card (NOWPayments fiat)',
+        deposit_instapay: 'Deposits: InstaPay (manual)',
+        withdrawal_crypto: 'Withdrawals: cryptocurrency',
+        withdrawal_instapay: 'Withdrawals: InstaPay (manual)',
+      },
       disableCryptoDeposits: 'Disable crypto deposits',
       disableCryptoDepositsDesc: 'Hide/block Cryptomus deposits.',
       disableCardDeposits: 'Disable card deposits',

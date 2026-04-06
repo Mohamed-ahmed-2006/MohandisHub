@@ -1,13 +1,14 @@
 'use client';
 
 import type { Wallet, WithdrawalRequest } from '@mohandishub/shared';
-import { canRequestWithdrawal } from '@mohandishub/shared';
+import { canRequestWithdrawal, isPaymentMethodEnabled } from '@mohandishub/shared';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { WalletDepositModal } from './wallet-deposit-modal';
 
+import { useAppStatus } from '@/components/app-status-provider';
 import { useAuth } from '@/components/auth/auth-provider';
 import { Container } from '@/components/ui/container';
 import { isApiClientError } from '@/lib/auth/client';
@@ -73,6 +74,11 @@ export const WalletSettingsScreen = (_props: WalletSettingsScreenProps) => {
   const [withdrawSuccess, setWithdrawSuccess] = useState<string | null>(null);
 
   const canWithdraw = authUser?.role ? canRequestWithdrawal(authUser.role) : false;
+  const { status: appStatus } = useAppStatus();
+  const pm = appStatus?.paymentMethodsEnabled ?? {};
+  const showWithdrawCrypto = isPaymentMethodEnabled(pm, 'withdrawal_crypto');
+  const showWithdrawInstapay = isPaymentMethodEnabled(pm, 'withdrawal_instapay');
+  const anyWithdrawMethod = showWithdrawCrypto || showWithdrawInstapay;
 
   const depositResult = useMemo(() => {
     const value = searchParams.get('deposit');
@@ -128,6 +134,14 @@ export const WalletSettingsScreen = (_props: WalletSettingsScreenProps) => {
     window.addEventListener('wallet-updated', handler);
     return () => window.removeEventListener('wallet-updated', handler);
   }, [accessToken, loadData]);
+
+  useEffect(() => {
+    if (showWithdrawCrypto && !showWithdrawInstapay) {
+      setWithdrawMethod('crypto');
+    } else if (!showWithdrawCrypto && showWithdrawInstapay) {
+      setWithdrawMethod('instapay');
+    }
+  }, [showWithdrawCrypto, showWithdrawInstapay]);
 
   useEffect(() => {
     if (!accessToken) return;
@@ -278,29 +292,37 @@ export const WalletSettingsScreen = (_props: WalletSettingsScreenProps) => {
         {canWithdraw && (
           <section className="wallet-settings-card">
             <h2 className="wallet-settings-section-title">Withdraw</h2>
-            <p className="wallet-settings-hint">
-              Withdraw from your wallet in EGP. Minimum {MIN_WITHDRAWAL_AMOUNT} EGP. Crypto withdrawals are
-              sent to your wallet address in the selected payout currency. InstaPay withdrawals are reviewed
-              manually and usually take 1-5 business days to complete.
-            </p>
+            {!anyWithdrawMethod ? (
+              <p className="wallet-settings-hint">
+                No withdrawal methods are available right now. Please check back later.
+              </p>
+            ) : (
+              <>
+                <p className="wallet-settings-hint">
+                  Withdraw from your wallet in EGP. Minimum {MIN_WITHDRAWAL_AMOUNT} EGP. Crypto withdrawals are
+                  sent to your wallet address in the selected payout currency. InstaPay withdrawals are reviewed
+                  manually and usually take 1-5 business days to complete.
+                </p>
 
-            <div className="wallet-settings-form" style={{ marginBottom: 12 }}>
-              <label className="wallet-settings-form-label">
-                Method
-                <select
-                  className="wallet-settings-input"
-                  value={withdrawMethod}
-                  onChange={(e) => {
-                    setWithdrawMethod(e.target.value as 'crypto' | 'instapay');
-                    setCryptoQuote(null);
-                    setWithdrawError(null);
-                  }}
-                >
-                  <option value="crypto">Crypto (NOWPayments)</option>
-                  <option value="instapay">InstaPay (manual, 1-5 business days)</option>
-                </select>
-              </label>
-            </div>
+                {showWithdrawCrypto && showWithdrawInstapay && (
+                  <div className="wallet-settings-form" style={{ marginBottom: 12 }}>
+                    <label className="wallet-settings-form-label">
+                      Method
+                      <select
+                        className="wallet-settings-input"
+                        value={withdrawMethod}
+                        onChange={(e) => {
+                          setWithdrawMethod(e.target.value as 'crypto' | 'instapay');
+                          setCryptoQuote(null);
+                          setWithdrawError(null);
+                        }}
+                      >
+                        <option value="crypto">Crypto (NOWPayments)</option>
+                        <option value="instapay">InstaPay (manual, 1-5 business days)</option>
+                      </select>
+                    </label>
+                  </div>
+                )}
 
             <form className="wallet-settings-form" onSubmit={(event) => void handleCreateWithdrawal(event)}>
               <label className="wallet-settings-form-label">
@@ -319,7 +341,7 @@ export const WalletSettingsScreen = (_props: WalletSettingsScreenProps) => {
                 />
               </label>
 
-              {withdrawMethod === 'crypto' && (
+              {withdrawMethod === 'crypto' && showWithdrawCrypto && (
                 <>
                   <label className="wallet-settings-form-label">
                     Payout currency
@@ -414,7 +436,7 @@ export const WalletSettingsScreen = (_props: WalletSettingsScreenProps) => {
                 </>
               )}
 
-              {withdrawMethod === 'instapay' && (
+              {withdrawMethod === 'instapay' && showWithdrawInstapay && (
                 <>
                   <p className="wallet-settings-hint">
                     InstaPay deposits and withdrawals are processed manually and usually take 1-5 business days
@@ -474,6 +496,8 @@ export const WalletSettingsScreen = (_props: WalletSettingsScreenProps) => {
               <p className="wallet-settings-message wallet-settings-message-success">
                 {withdrawSuccess}
               </p>
+            )}
+              </>
             )}
           </section>
         )}

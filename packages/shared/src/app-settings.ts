@@ -18,6 +18,45 @@ export const MANAGED_SIDEBAR_HREFS = [
 
 export type ManagedSidebarHref = (typeof MANAGED_SIDEBAR_HREFS)[number];
 
+/** Built-in wallet payment method toggles; extra keys may exist for future providers. */
+export const KNOWN_PAYMENT_METHOD_KEYS = [
+  'deposit_crypto',
+  'deposit_card',
+  'deposit_instapay',
+  'withdrawal_crypto',
+  'withdrawal_instapay',
+] as const;
+
+export type KnownPaymentMethodKey = (typeof KNOWN_PAYMENT_METHOD_KEYS)[number];
+
+/**
+ * Merge stored JSON with legacy disable_* columns. Unknown keys in `raw` are preserved
+ * so future methods can be toggled without a migration.
+ */
+export function parsePaymentMethodsEnabled(
+  raw: unknown,
+  legacy: { disableCryptoDeposits: boolean; disableCardDeposits: boolean },
+): Record<string, boolean> {
+  const base: Record<string, boolean> = {
+    deposit_crypto: !legacy.disableCryptoDeposits,
+    deposit_card: !legacy.disableCardDeposits,
+    deposit_instapay: true,
+    withdrawal_crypto: true,
+    withdrawal_instapay: true,
+  };
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return base;
+  const o = raw as Record<string, unknown>;
+  const out = { ...base };
+  for (const [k, v] of Object.entries(o)) {
+    if (typeof v === 'boolean') out[k] = v;
+  }
+  return out;
+}
+
+export function isPaymentMethodEnabled(map: Record<string, boolean>, key: string): boolean {
+  return map[key] !== false;
+}
+
 export type AppSettings = {
   id: string;
   maintenanceMode: boolean;
@@ -67,6 +106,11 @@ export type AppSettings = {
   publicUploadAllowedMimes: string[] | null;
   /** Optional link to Supabase Storage dashboard for operators. */
   supabaseStorageDashboardUrl: string | null;
+  /**
+   * When false, the method is hidden in the wallet UI and blocked by the API.
+   * Always includes {@link KNOWN_PAYMENT_METHOD_KEYS}; may include additional keys.
+   */
+  paymentMethodsEnabled: Record<string, boolean>;
 };
 
 /** Public app status returned by GET /api/app/status — subset needed by frontend */
@@ -108,6 +152,7 @@ export type AppStatus = {
   walletUsdToEgpMigrationRate: number | null;
   walletMigrationUsdToEgpApplied: boolean;
   sidebarHiddenHrefs: string[];
+  paymentMethodsEnabled: Record<string, boolean>;
 };
 
 export type UpdateAppSettingsBody = Partial<{
@@ -150,4 +195,6 @@ export type UpdateAppSettingsBody = Partial<{
   maxPublicUploadBytes: number | null;
   publicUploadAllowedMimes: string[] | null;
   supabaseStorageDashboardUrl: string | null;
+  /** Merged into stored flags; omit keys you do not change. */
+  paymentMethodsEnabled?: Record<string, boolean>;
 }>;

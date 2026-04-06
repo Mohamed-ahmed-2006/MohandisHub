@@ -1,5 +1,6 @@
 'use client';
 
+import { isPaymentMethodEnabled } from '@mohandishub/shared';
 import { useEffect, useState, type FormEvent } from 'react';
 
 import { useAppStatus } from '@/components/app-status-provider';
@@ -25,16 +26,18 @@ export const WalletDepositModal = ({
   const d = dictionary.wallet;
 
   const depositsPaused = status?.depositsPaused === true;
-  const cryptoDisabled = status?.disableCryptoDeposits === true;
+  const pm = status?.paymentMethodsEnabled ?? {};
+  const cryptoDisabled = !isPaymentMethodEnabled(pm, 'deposit_crypto');
   const fiatEnabled = process.env.NEXT_PUBLIC_NOWPAYMENTS_FIAT_ENABLED === 'true';
-  const cardDisabled = status?.disableCardDeposits === true || !fiatEnabled;
+  const cardDisabled = !isPaymentMethodEnabled(pm, 'deposit_card') || !fiatEnabled;
   const instapayConfigured =
     status?.platformInstapayDisplay != null &&
     typeof status.platformInstapayDisplay === 'object' &&
     Object.keys(status.platformInstapayDisplay as object).length > 0;
+  const instapayDepositAllowed = isPaymentMethodEnabled(pm, 'deposit_instapay') && instapayConfigured;
   const canDeposit =
     !depositsPaused &&
-    (cryptoDisabled === false || cardDisabled === false || instapayConfigured);
+    (!cryptoDisabled || !cardDisabled || instapayDepositAllowed);
 
   const [step, setStep] = useState<'choose' | 'amount' | 'instapay'>('choose');
   const [method, setMethod] = useState<'crypto' | 'card' | 'instapay'>('crypto');
@@ -233,7 +236,7 @@ export const WalletDepositModal = ({
                   <span className="deposit-option-action">{d.depositPayWithCard}</span>
                 </button>
               )}
-              {instapayConfigured && (
+              {instapayDepositAllowed && (
                 <button
                   type="button"
                   className="deposit-option-card"

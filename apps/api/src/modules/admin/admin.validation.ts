@@ -200,6 +200,7 @@ export const updateSettingsSchema = z.object({
         !arr || arr.every((h) => (MANAGED_SIDEBAR_HREFS as readonly string[]).includes(h)),
       { message: 'sidebarHiddenHrefs must only contain managed sidebar paths' },
     ),
+  paymentMethodsEnabled: z.record(z.string(), z.boolean()).optional(),
 });
 
 export const approveManualInstapayDepositSchema = z.object({
