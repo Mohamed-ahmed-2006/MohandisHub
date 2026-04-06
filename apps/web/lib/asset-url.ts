@@ -32,29 +32,6 @@ export function resolvePublicAssetUrl(url: string | null | undefined): string | 
       // Runtime evidence for this bug (visible in devtools).
       console.warn('[asset-url] rewrite local upload', { input: trimmed, apiBaseUrl: base, output: rewritten });
 
-      // #region agent log
-      fetch('http://127.0.0.1:7325/ingest/ebd08bf8-7d73-450c-ad4d-4436a6c2225b', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Debug-Session-Id': 'b33485',
-        },
-        body: JSON.stringify({
-          sessionId: 'b33485',
-          runId: 'post-fix',
-          hypothesisId: 'H_localhost_rewrite_scheme_less_handled',
-          location: 'asset-url.ts:resolvePublicAssetUrl:rewrite',
-          message: 'Rewriting local upload URL to API host (incl. scheme-less)',
-          data: {
-            apiBaseUrlPresent: Boolean(base),
-            input: trimmed.slice(0, 120),
-            rewritten: rewritten.slice(0, 120),
-          },
-          timestamp: Date.now(),
-        }),
-      }).catch(() => {});
-      // #endregion
-
       return rewritten;
     } catch {
       return trimmed;

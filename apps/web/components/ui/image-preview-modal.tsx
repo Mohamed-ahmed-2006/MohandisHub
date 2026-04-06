@@ -44,28 +44,6 @@ export function ImagePreviewModal({
 
   useEffect(() => {
     if (!isPrivateUploadUrl(imageUrl) || !accessToken) {
-      // #region agent log
-      fetch('http://127.0.0.1:7325/ingest/ebd08bf8-7d73-450c-ad4d-4436a6c2225b', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Debug-Session-Id': 'b33485',
-        },
-        body: JSON.stringify({
-          sessionId: 'b33485',
-          runId: 'pre-debug',
-          hypothesisId: 'H4_modal_missing_accessToken_or_public_path',
-          location: 'image-preview-modal.tsx:ImagePreviewModal-useEffect-branch',
-          message: 'Modal entering non-private/no-accessToken branch',
-          data: {
-            imageUrlStartsWithHttp: imageUrl.startsWith('http'),
-            isPrivateUploadUrl: isPrivateUploadUrl(imageUrl),
-            accessTokenPresent: !!accessToken,
-          },
-          timestamp: Date.now(),
-        }),
-      }).catch(() => {});
-      // #endregion
       setResolvedUrl(resolvePublicAssetUrl(imageUrl) ?? imageUrl);
       setLoading(false);
       setError(null);
@@ -73,31 +51,6 @@ export function ImagePreviewModal({
     }
 
     let cancelled = false;
-    // #region agent log
-    fetch('http://127.0.0.1:7325/ingest/ebd08bf8-7d73-450c-ad4d-4436a6c2225b', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Debug-Session-Id': 'b33485',
-      },
-      body: JSON.stringify({
-        sessionId: 'b33485',
-        runId: 'pre-debug',
-        hypothesisId: 'H3_modal_private_url_resolution_inputs',
-        location: 'image-preview-modal.tsx:ImagePreviewModal-useEffect-start',
-        message: 'Modal starting private URL resolution',
-        data: {
-          imageUrlStartsWithHttp: imageUrl.startsWith('http'),
-          isPrivateUploadUrl: isPrivateUploadUrl(imageUrl),
-          accessTokenPresent: !!accessToken,
-          resolvedCandidateIncludesPrivatePrefix:
-            (resolvePublicAssetUrl(imageUrl) ?? imageUrl).includes('/api/upload/private/'),
-          resolvedCandidateStartsWithHttp: (resolvePublicAssetUrl(imageUrl) ?? imageUrl).startsWith('http'),
-        },
-        timestamp: Date.now(),
-      }),
-    }).catch(() => {});
-    // #endregion
     setLoading(true);
     setError(null);
     setResolvedUrl(null);
@@ -114,28 +67,6 @@ export function ImagePreviewModal({
           accessTokenPresent: !!accessToken,
           imageUrl,
         });
-        // #region agent log
-        fetch('http://127.0.0.1:7325/ingest/ebd08bf8-7d73-450c-ad4d-4436a6c2225b', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-Debug-Session-Id': 'b33485',
-          },
-          body: JSON.stringify({
-            sessionId: 'b33485',
-            runId: 'pre-debug',
-            hypothesisId: 'H5_modal_private_fetch_error',
-            location: 'image-preview-modal.tsx:ImagePreviewModal-privateFetch-catch',
-            message: 'Modal failed resolving private image',
-            data: {
-              errorMessage: err instanceof Error ? err.message : 'unknown',
-              accessTokenPresent: !!accessToken,
-              isPrivateUploadUrl: isPrivateUploadUrl(imageUrl),
-            },
-            timestamp: Date.now(),
-          }),
-        }).catch(() => {});
-        // #endregion
         setError(err instanceof Error ? err.message : 'Failed to load image');
         setLoading(false);
       });

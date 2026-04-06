@@ -83,28 +83,6 @@ export async function getPrivateFileOpenableUrl(
     proxyUrl,
     privatePathOrIdPrefix: privatePathOrId.slice(0, 60),
   });
-  // #region agent log
-  fetch('http://127.0.0.1:7325/ingest/ebd08bf8-7d73-450c-ad4d-4436a6c2225b', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'X-Debug-Session-Id': 'b33485',
-    },
-    body: JSON.stringify({
-      sessionId: 'b33485',
-      runId: 'pre-debug',
-      hypothesisId: 'H5_proxy_private_upload_resolution_inputs',
-      location: 'upload/client.ts:getPrivateFileOpenableUrl:start',
-      message: 'Resolving private upload via proxy',
-      data: {
-        privatePathOrIdStartsWithHttp: privatePathOrId.startsWith('http'),
-        privatePathOrIdIncludesPrivatePrefix: privatePathOrId.includes('/api/upload/private/'),
-        proxyUrlLength: proxyUrl.length,
-      },
-      timestamp: Date.now(),
-    }),
-  }).catch(() => {});
-  // #endregion
   const fetchWithToken = async (token: string): Promise<Response> => {
     return fetch(proxyUrl, {
       headers: {
@@ -119,26 +97,6 @@ export async function getPrivateFileOpenableUrl(
   console.warn('[getPrivateFileOpenableUrl] proxy response initial', {
     status: res.status,
   });
-  // #region agent log
-  fetch('http://127.0.0.1:7325/ingest/ebd08bf8-7d73-450c-ad4d-4436a6c2225b', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'X-Debug-Session-Id': 'b33485',
-    },
-    body: JSON.stringify({
-      sessionId: 'b33485',
-      runId: 'pre-debug',
-      hypothesisId: 'H5_proxy_private_upload_resolution_status_initial',
-      location: 'upload/client.ts:getPrivateFileOpenableUrl:initialStatus',
-      message: 'Private upload proxy initial response',
-      data: {
-        status: res.status,
-      },
-      timestamp: Date.now(),
-    }),
-  }).catch(() => {});
-  // #endregion
 
   if (res.status === 401) {
     // Access token may expire while admin is open; try refreshing once.
@@ -153,27 +111,6 @@ export async function getPrivateFileOpenableUrl(
   }
 
   console.warn('[getPrivateFileOpenableUrl] proxy response final', { status: res.status });
-
-  // #region agent log
-  fetch('http://127.0.0.1:7325/ingest/ebd08bf8-7d73-450c-ad4d-4436a6c2225b', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'X-Debug-Session-Id': 'b33485',
-    },
-    body: JSON.stringify({
-      sessionId: 'b33485',
-      runId: 'pre-debug',
-      hypothesisId: 'H5_proxy_private_upload_resolution_status_afterRefresh',
-      location: 'upload/client.ts:getPrivateFileOpenableUrl:afterRefresh',
-      message: 'Private upload proxy response after refresh (if needed)',
-      data: {
-        finalStatus: res.status,
-      },
-      timestamp: Date.now(),
-    }),
-  }).catch(() => {});
-  // #endregion
 
   if (res.status === 401) {
     throw new Error('Session expired. Please log out and log in again.');

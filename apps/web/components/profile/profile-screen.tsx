@@ -586,30 +586,6 @@ export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
 
   useEffect(() => {
     setBusinessLogoPreviewUrl(businessProfile?.logoUrl ?? null);
-    // #region agent log
-    fetch('http://127.0.0.1:7325/ingest/ebd08bf8-7d73-450c-ad4d-4436a6c2225b', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Debug-Session-Id': 'b33485',
-      },
-      body: JSON.stringify({
-        sessionId: 'b33485',
-        runId: 'pre-debug',
-        hypothesisId: 'H1_logo_missing_or_private_requires_auth',
-        location: 'profile-screen.tsx:businessLogo-useEffect',
-        message: 'Business logo URL loaded into state',
-        data: {
-          role,
-          hasLogoUrl: Boolean(businessProfile?.logoUrl),
-          logoUrlStartsWithHttp: (businessProfile?.logoUrl ?? '').startsWith('http'),
-          logoUrlIncludesPrivatePrefix: (businessProfile?.logoUrl ?? '').includes('/api/upload/private/'),
-          logoUrlLength: (businessProfile?.logoUrl ?? '').length,
-        },
-        timestamp: Date.now(),
-      }),
-    }).catch(() => {});
-    // #endregion
     setBusinessLogoFile(null);
     setBusinessLogoRemoved(false);
   }, [businessProfile?.logoUrl]);
@@ -720,36 +696,6 @@ export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
       ]);
       const resolvedIds = Array.isArray(ids) ? ids : [];
       const resolvedAcads = Array.isArray(acads) ? acads : [];
-      // #region agent log
-      fetch('http://127.0.0.1:7325/ingest/ebd08bf8-7d73-450c-ad4d-4436a6c2225b', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Debug-Session-Id': 'b33485',
-        },
-        body: JSON.stringify({
-          sessionId: 'b33485',
-          runId: 'pre-debug',
-          hypothesisId: 'H2_identity_doc_images_presence_from_backend',
-          location: 'profile-screen.tsx:loadDocuments-afterFetch',
-          message: 'Identity documents loaded (image URL presence summary)',
-          data: {
-            identityDocsCount: resolvedIds.length,
-            docsWithAnyImageUrlCount: resolvedIds.filter(
-              (d) => Boolean(d.frontImageUrl || d.backImageUrl || d.selfieImageUrl),
-            ).length,
-            sample: resolvedIds.slice(0, 3).map((d) => ({
-              id: d.id,
-              hasFrontImage: Boolean(d.frontImageUrl),
-              hasBackImage: Boolean(d.backImageUrl),
-              hasSelfieImage: Boolean(d.selfieImageUrl),
-              frontIncludesPrivatePrefix: Boolean(d.frontImageUrl?.includes('/api/upload/private/')),
-            })),
-          },
-          timestamp: Date.now(),
-        }),
-      }).catch(() => {});
-      // #endregion
       setIdentityDocuments(resolvedIds);
       setAcademicRecords(resolvedAcads);
     } catch {
@@ -862,33 +808,6 @@ export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
       const frontFullUrl = toFullUploadUrl(frontRes.url);
       const selfieFullUrl = toFullUploadUrl(selfieRes.url);
       const backFullUrl = backRes ? toFullUploadUrl(backRes.url) : null;
-
-      // #region agent log
-      fetch('http://127.0.0.1:7325/ingest/ebd08bf8-7d73-450c-ad4d-4436a6c2225b', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Debug-Session-Id': 'b33485',
-        },
-        body: JSON.stringify({
-          sessionId: 'b33485',
-          runId: 'pre-debug',
-          hypothesisId: 'H2_identity_doc_uploaded_urls_format',
-          location: 'profile-screen.tsx:handleAddIdentityDocument-beforeSubmit',
-          message: 'Identity uploads returned URL formats',
-          data: {
-            docType: identityDocType,
-            frontUrlStartsWithHttp: frontFullUrl.startsWith('http'),
-            frontUrlIncludesPrivatePrefix: frontFullUrl.includes('/api/upload/private/'),
-            selfieUrlStartsWithHttp: selfieFullUrl.startsWith('http'),
-            selfieUrlIncludesPrivatePrefix: selfieFullUrl.includes('/api/upload/private/'),
-            backUrlPresent: Boolean(backFullUrl),
-            backUrlIncludesPrivatePrefix: Boolean(backFullUrl?.includes('/api/upload/private/')),
-          },
-          timestamp: Date.now(),
-        }),
-      }).catch(() => {});
-      // #endregion
 
       await profilesApiClient.submitIdentityDocument(accessToken, {
         documentType: identityDocType,
