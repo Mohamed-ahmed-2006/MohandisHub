@@ -1,0 +1,134 @@
+/* Motion tokens — respect prefers-reduced-motion via globals.css reset */
+:root {
+  --motion-duration-xs: 150ms;
+  --motion-duration-sm: 220ms;
+  --motion-duration-md: 360ms;
+  --motion-ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --motion-ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes mh-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes mh-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes mh-scale-in {
+  from {
+    opacity: 0;
+    transform: scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.mh-animate-fade-up {
+  animation: mh-fade-up var(--motion-duration-md) var(--motion-ease-out) both;
+}
+
+.mh-animate-fade-in {
+  animation: mh-fade-in var(--motion-duration-sm) var(--motion-ease-out) both;
+}
+
+.mh-animate-scale-in {
+  animation: mh-scale-in var(--motion-duration-md) var(--motion-ease-out) both;
+}
+
+.mh-stagger-1 {
+  animation-delay: 60ms;
+}
+.mh-stagger-2 {
+  animation-delay: 120ms;
+}
+.mh-stagger-3 {
+  animation-delay: 180ms;
+}
+.mh-stagger-4 {
+  animation-delay: 240ms;
+}
+
+.mh-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 0.75rem;
+  padding: clamp(1.5rem, 4vw, 2.5rem);
+  border-radius: var(--radius-lg);
+  border: 1px dashed hsl(var(--border));
+  background: color-mix(in srgb, hsl(var(--muted)) 35%, transparent);
+}
+
+.mh-empty-state-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 3.25rem;
+  height: 3.25rem;
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, hsl(var(--accent)) 14%, transparent);
+  color: hsl(var(--accent));
+}
+
+.mh-empty-state-title {
+  margin: 0;
+  font-family: var(--font-sora), var(--font-tajawal), sans-serif;
+  font-size: 1.125rem;
+  font-weight: 700;
+  color: hsl(var(--foreground));
+}
+
+.mh-empty-state-desc {
+  margin: 0;
+  max-width: 26rem;
+  font-size: 0.9rem;
+  line-height: 1.6;
+  color: hsl(var(--text-soft));
+}
+
+.mh-coming-soon-main {
+  min-height: 100vh;
+  padding-block: var(--space-8);
+}
+
+.mh-coming-soon-card {
+  padding: var(--space-8) var(--space-6);
+  border-radius: var(--radius-xl);
+  border: 1px solid hsl(var(--border));
+  background: color-mix(in srgb, hsl(var(--card)) 94%, transparent);
+  box-shadow: var(--elevation-2), var(--shadow-soft-lg);
+  text-align: center;
+  backdrop-filter: blur(14px);
+}
+
+.mh-coming-soon-title {
+  margin: 0 0 var(--space-3);
+  font-family: var(--font-sora), var(--font-tajawal), sans-serif;
+  font-size: clamp(1.35rem, 3vw, 1.65rem);
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  color: hsl(var(--foreground));
+}
+
+.mh-coming-soon-text {
+  margin: 0;
+  color: hsl(var(--text-soft));
+  font-size: var(--text-base);
+  line-height: var(--leading-relaxed);
+}

@@ -1,7 +1,6 @@
-import fs from 'node:fs';
-import path from 'node:path';
-
 import { ImageResponse } from 'next/og';
+
+import { BRAND_ACCENT_HEX, getBrandLogoDataUrl } from '@/lib/brand-icon-source';
 
 export const size = { width: 32, height: 32 };
 export const contentType = 'image/png';
@@ -9,33 +8,8 @@ export const contentType = 'image/png';
 /** Use Node so we can read logo from filesystem; favicon falls back to "M" if logo not found (e.g. Edge). */
 export const runtime = 'nodejs';
 
-function getLogoSrc(): string | null {
-  try {
-    const cwd = process.cwd();
-    const candidates = [
-      path.join(cwd, 'components', 'assets', 'mohandishub3 dark.png'),
-      path.join(cwd, 'components', 'assets', 'mohandishub3 light.png'),
-      path.join(cwd, 'apps', 'web', 'components', 'assets', 'mohandishub3 dark.png'),
-      path.join(cwd, 'apps', 'web', 'components', 'assets', 'mohandishub3 light.png'),
-      path.join(cwd, 'public', 'icon.png'),
-      path.join(cwd, 'public', 'brand', 'mohandishub-email-logo.png'),
-      path.join(cwd, 'apps', 'web', 'public', 'icon.png'),
-      path.join(cwd, 'apps', 'web', 'public', 'brand', 'mohandishub-email-logo.png'),
-    ];
-    for (const file of candidates) {
-      if (fs.existsSync(file)) {
-        const buffer = fs.readFileSync(file);
-        return `data:image/png;base64,${buffer.toString('base64')}`;
-      }
-    }
-  } catch {
-    // e.g. Edge runtime or missing file
-  }
-  return null;
-}
-
 export default function Icon() {
-  const logoSrc = getLogoSrc();
+  const logoSrc = getBrandLogoDataUrl();
 
   if (logoSrc) {
     return new ImageResponse(
@@ -70,7 +44,7 @@ export default function Icon() {
         style={{
           fontSize: 20,
           fontWeight: 700,
-          background: 'linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)',
+          background: `linear-gradient(135deg, ${BRAND_ACCENT_HEX} 0%, #c2410c 100%)`,
           width: '100%',
           height: '100%',
           display: 'flex',

@@ -11,13 +11,25 @@ export function GET(_req: NextRequest) {
     description: 'Engineering services marketplace connecting customers, experts, and businesses.',
     start_url: '/',
     display: 'standalone',
-    background_color: '#ffffff',
-    theme_color: '#0f766e',
+    background_color: '#fff7ed',
+    theme_color: '#ea580c',
     icons: [
       {
         src: `/icon?v=${iconVersion}`,
         sizes: '32x32',
         type: 'image/png',
+      },
+      {
+        src: `/brand-icons/192?v=${iconVersion}`,
+        sizes: '192x192',
+        type: 'image/png',
+        purpose: 'any',
+      },
+      {
+        src: `/brand-icons/512?v=${iconVersion}`,
+        sizes: '512x512',
+        type: 'image/png',
+        purpose: 'any maskable',
       },
     ],
   });

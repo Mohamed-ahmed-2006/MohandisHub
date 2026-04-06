@@ -18,12 +18,23 @@
 }
 
 .card-root {
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-lg);
   border: 1px solid hsl(var(--border));
-  background-color: color-mix(in srgb, hsl(var(--card)) 84%, transparent);
+  background-color: color-mix(in srgb, hsl(var(--card)) 92%, transparent);
   padding: 1.5rem;
-  box-shadow: var(--shadow-soft-lg);
-  backdrop-filter: blur(12px);
+  box-shadow: var(--elevation-2), var(--shadow-soft);
+  backdrop-filter: blur(14px);
+  transition:
+    box-shadow var(--motion-duration-sm) var(--motion-ease-out, ease),
+    border-color var(--motion-duration-sm) var(--motion-ease-out, ease),
+    transform var(--motion-duration-sm) var(--motion-ease-out, ease);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .card-root:hover {
+    border-color: color-mix(in srgb, hsl(var(--accent)) 22%, hsl(var(--border)));
+    box-shadow: var(--elevation-3), var(--shadow-soft-lg);
+  }
 }
 
 .button-link {
@@ -53,9 +64,9 @@
 }
 
 .button-link-primary {
-  box-shadow: 0 12px 25px -18px hsl(var(--accent) / 0.9);
+  box-shadow: 0 14px 28px -16px hsl(var(--accent) / 0.85), var(--elevation-1);
   background-color: hsl(var(--accent));
-  color: #fff;
+  color: hsl(var(--primary-foreground));
 }
 
 .button-link-primary:hover {

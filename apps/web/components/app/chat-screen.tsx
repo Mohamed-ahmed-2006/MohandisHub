@@ -1,6 +1,6 @@
 'use client';
 
-import { Link2, Send } from 'lucide-react';
+import { Link2, MessageSquare, Send } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 
@@ -258,7 +258,14 @@ export const ChatScreen = ({ locale, dictionary }: Props) => {
             {loading ? (
               <p className="chat-loading">{t.loadingConversations ?? dictionary.common.loading}</p>
             ) : conversations.length === 0 ? (
-              <p className="chat-empty">{t.noConversations ?? 'No conversations yet.'}</p>
+              <div className="chat-empty mh-empty-state" role="status">
+                <div className="mh-empty-state-icon" aria-hidden>
+                  <MessageSquare size={22} strokeWidth={2} aria-hidden />
+                </div>
+                <p className="mh-empty-state-desc chat-empty-desc">
+                  {t.noConversations ?? 'No conversations yet.'}
+                </p>
+              </div>
             ) : (
               conversations.map((conv) => (
                 <div

@@ -23,11 +23,23 @@ const resolveLocaleFromHeader = (acceptLanguage: string | null): 'en' | 'ar' | n
   return null;
 };
 
+/** App-root metadata and asset routes (no `[locale]` segment) — do not prefix with /en or /ar. */
+const LOCALE_SKIP_FIRST_SEGMENTS = new Set([
+  'brand-icons',
+  'apple-icon',
+  'opengraph-image',
+  'twitter-image',
+]);
+
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   const segments = pathname.split('/').filter(Boolean);
   const maybeLocale = segments[0];
+
+  if (maybeLocale && LOCALE_SKIP_FIRST_SEGMENTS.has(maybeLocale)) {
+    return NextResponse.next();
+  }
 
   if (maybeLocale && isSupportedLocale(maybeLocale)) {
     return NextResponse.next();

@@ -35,7 +35,7 @@ const HomePage = async ({ params }: HomePageProps) => {
   const typedLocale: Locale = locale;
 
   return (
-    <main className="home-page-main">
+    <main className="home-page-main mh-animate-fade-in">
       <Container className="home-page-container">
         <header className="home-page-navbar">
           <Link href={buildLocalePath(typedLocale, '/')} className="home-page-brand">
@@ -61,13 +61,13 @@ const HomePage = async ({ params }: HomePageProps) => {
 
         <section className="home-page-hero-section">
           <div className="home-page-hero-layout">
-            <div className="home-page-hero-copy">
+            <div className="home-page-hero-copy mh-animate-fade-up">
               <ApiHealthBadge />
               <h1 className="home-page-hero-title">{dictionary.home.headline}</h1>
               <p className="home-page-hero-description">{dictionary.home.description}</p>
               <HomePageHeroCta locale={typedLocale} dictionary={dictionary} />
             </div>
-            <aside className="home-page-hero-banner" aria-hidden="true">
+            <aside className="home-page-hero-banner mh-animate-fade-up mh-stagger-2" aria-hidden="true">
               <Image
                 src="/assets/herosection.png"
                 alt=""

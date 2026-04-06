@@ -1,7 +1,7 @@
 'use client';
 
 import type { PlanUsageSummary, ServiceCategory } from '@mohandishub/shared';
-import Image from 'next/image';
+import { ClipboardList } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { useToast } from '@/components/app/toast';
@@ -768,11 +768,11 @@ export const CustomerDashboard = ({
         <p>{dictionary.admin?.loading ?? 'Loading...'}</p>
       ) : myNeeds.length === 0 ? (
         showEmptyState ? (
-          <div className="dashboard-empty-wrapper">
-            <div className="dashboard-empty-icon" aria-hidden>
-              <Image src="/favicon.ico" alt="" width={48} height={48} />
+          <div className="dashboard-empty-wrapper mh-empty-state mh-animate-fade-up">
+            <div className="mh-empty-state-icon dashboard-empty-icon" aria-hidden>
+              <ClipboardList size={24} strokeWidth={2} aria-hidden />
             </div>
-            <p className="dashboard-empty">
+            <p className="mh-empty-state-title dashboard-empty">
               {d.noNeeds ?? 'No needs posted yet. Post your first need!'}
             </p>
             <button

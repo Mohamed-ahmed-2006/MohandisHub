@@ -17,12 +17,12 @@
   position: sticky;
   top: 1rem;
   z-index: 20;
-  border-radius: 999px;
-  border: 1px solid hsl(var(--border));
-  background-color: color-mix(in srgb, hsl(var(--surface-panel)) 86%, transparent);
+  border-radius: var(--radius-full);
+  border: 1px solid color-mix(in srgb, hsl(var(--border)) 88%, hsl(var(--accent)) 12%);
+  background-color: color-mix(in srgb, hsl(var(--surface-panel)) 90%, transparent);
   padding: 0.75rem 1rem;
-  box-shadow: var(--shadow-soft-lg);
-  backdrop-filter: blur(14px);
+  box-shadow: var(--elevation-2), var(--shadow-soft-lg);
+  backdrop-filter: blur(16px);
 }
 
 .home-page-navbar-right {
@@ -202,19 +202,28 @@
 .home-page-role-card {
   display: block;
   padding: 1.25rem 1.5rem;
-  border-radius: var(--radius-md, 0.5rem);
+  border-radius: var(--radius-lg);
   border: 1px solid hsl(var(--border));
-  background: hsl(var(--card));
+  background: color-mix(in srgb, hsl(var(--card)) 94%, transparent);
   color: hsl(var(--foreground));
   text-align: center;
   text-decoration: none;
   font-weight: 600;
-  transition: background 0.2s, border-color 0.2s;
+  box-shadow: var(--elevation-1);
+  transition:
+    background var(--motion-duration-sm, 0.2s) ease,
+    border-color var(--motion-duration-sm, 0.2s) ease,
+    box-shadow var(--motion-duration-sm, 0.2s) ease,
+    transform var(--motion-duration-sm, 0.2s) var(--motion-ease-out, ease);
 }
 
-.home-page-role-card:hover {
-  background: hsl(var(--muted) / 0.5);
-  border-color: hsl(var(--primary) / 0.5);
+@media (hover: hover) and (pointer: fine) {
+  .home-page-role-card:hover {
+    background: color-mix(in srgb, hsl(var(--muted)) 55%, hsl(var(--card)));
+    border-color: hsl(var(--primary) / 0.45);
+    box-shadow: var(--elevation-2);
+    transform: translateY(-2px);
+  }
 }
 
 .home-page-role-label {

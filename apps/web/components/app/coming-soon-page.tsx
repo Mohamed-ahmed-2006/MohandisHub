@@ -30,30 +30,11 @@ export const ComingSoonPage = ({ locale, dictionary, title }: ComingSoonPageProp
   }, [isReady, isAuthenticated, authUser, authGuard.emailVerified, locale, router]);
 
   return (
-    <main style={{ minHeight: '100vh', paddingBlock: '2rem' }}>
+    <main className="mh-coming-soon-main">
       <Container className="profile-screen-container">
-        <section
-          style={{
-            padding: '2rem',
-            borderRadius: '1rem',
-            border: '1px solid hsl(var(--border))',
-            backgroundColor: 'hsl(var(--card))',
-            textAlign: 'center',
-          }}
-        >
-          <h1
-            style={{
-              margin: '0 0 0.75rem',
-              fontSize: '1.5rem',
-              fontWeight: 700,
-              color: 'hsl(var(--foreground))',
-            }}
-          >
-            {title}
-          </h1>
-          <p style={{ margin: 0, color: 'hsl(var(--text-soft))', fontSize: '1rem' }}>
-            {dictionary.common.comingSoon}
-          </p>
+        <section className="mh-coming-soon-card mh-animate-scale-in">
+          <h1 className="mh-coming-soon-title">{title}</h1>
+          <p className="mh-coming-soon-text">{dictionary.common.comingSoon}</p>
         </section>
       </Container>
     </main>

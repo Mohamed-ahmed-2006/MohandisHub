@@ -532,8 +532,13 @@
   align-items: center;
   justify-content: center;
   text-align: center;
-  padding: 3rem 1.5rem;
+  padding: clamp(2rem, 5vw, 3rem) 1.5rem;
   gap: 0.75rem;
+}
+
+.dashboard-empty-wrapper.mh-empty-state {
+  max-width: 28rem;
+  margin-inline: auto;
 }
 
 .dashboard-empty-wrapper .dashboard-empty {
@@ -544,9 +549,9 @@
   flex-shrink: 0;
 }
 
-.dashboard-empty-icon img {
-  display: block;
-  border-radius: 12px;
+.dashboard-empty-wrapper .mh-empty-state-icon {
+  width: 3.5rem;
+  height: 3.5rem;
 }
 
 .dashboard-bids-list {

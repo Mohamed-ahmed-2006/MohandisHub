@@ -358,11 +358,11 @@ export const MyPlanScreen = ({ locale, dictionary }: Props) => {
             ))}
           </div>
         ) : plansFeatureEnabled && plans.length === 0 ? (
-          <div className="plan-screen-empty">
-            <div className="plan-screen-empty-icon" aria-hidden>
-              <ClipboardList size={32} aria-hidden />
+          <div className="plan-screen-empty mh-empty-state mh-animate-fade-up" role="status">
+            <div className="mh-empty-state-icon plan-screen-empty-icon" aria-hidden>
+              <ClipboardList size={22} strokeWidth={2} aria-hidden />
             </div>
-            <p>{d.noPlans ?? 'No plans available yet.'}</p>
+            <p className="mh-empty-state-desc">{d.noPlans ?? 'No plans available yet.'}</p>
           </div>
         ) : plansFeatureEnabled ? (
           <div className="plan-screen-grid">

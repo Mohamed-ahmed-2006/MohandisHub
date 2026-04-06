@@ -41,11 +41,11 @@
   width: 100%;
   max-width: 32rem;
   border: 1px solid hsl(var(--border));
-  border-radius: var(--radius-lg);
-  background-color: color-mix(in srgb, hsl(var(--surface-elevated)) 92%, transparent);
-  box-shadow: var(--shadow-soft-lg);
-  padding: 1.25rem;
-  backdrop-filter: blur(14px);
+  border-radius: var(--radius-xl);
+  background-color: color-mix(in srgb, hsl(var(--surface-elevated)) 94%, transparent);
+  box-shadow: var(--elevation-2), var(--shadow-soft-lg);
+  padding: clamp(1.25rem, 3vw, 1.5rem);
+  backdrop-filter: blur(16px);
 }
 
 .auth-mode-switch,

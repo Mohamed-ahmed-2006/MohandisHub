@@ -2,6 +2,12 @@
 @tailwind components;
 @tailwind utilities;
 
+/*
+  MohandisHub UI refresh — design tokens (presentation layer).
+  Principles: warm engineering marketplace, high legibility, RTL/dark parity,
+  visible focus, reduced-motion friendly (see motion.css + media query below).
+*/
+@import './motion.css';
 @import '../components/ui/shared-ui.css';
 @import '../components/ui/skeleton.css';
 @import '../components/api-health-badge.css';
@@ -23,50 +29,88 @@
 @import '../components/admin/admin-verification-screen.css';
 
 :root {
-  --background: 36 33% 98%;
-  --foreground: 214 30% 16%;
-  --muted: 210 20% 95%;
-  --accent: 27 90% 55%;
-  --primary: 27 90% 55%;
+  /* Core surfaces — warm paper, deep slate ink */
+  --background: 40 38% 97%;
+  --foreground: 222 32% 14%;
+  --muted: 38 28% 93%;
+  --muted-foreground: 220 12% 42%;
+  --accent: 24 95% 53%;
+  --primary: 24 95% 53%;
   --primary-foreground: 0 0% 100%;
   --card: 0 0% 100%;
-  --border: 212 24% 88%;
+  --border: 30 18% 86%;
   --surface-strong: 0 0% 100%;
-  --text-soft: 215 25% 32%;
-  --shadow-soft: 0 14px 45px -25px rgba(0, 0, 0, 0.25);
-  --success: 142 60% 35%;
-  --warning: 36 80% 40%;
-  --destructive: 0 70% 45%;
-  --focus-ring: 27 90% 55%;
-  --focus-shadow: 0 0 0 3px hsl(var(--focus-ring) / 0.18);
-  --surface-elevated: 0 0% 100% / 0.82;
-  --surface-panel: 0 0% 100% / 0.68;
-  --radius-sm: 0.75rem;
+  --text-soft: 222 18% 38%;
+  --shadow-soft: 0 14px 45px -25px rgba(15, 23, 42, 0.18);
+  --success: 152 55% 36%;
+  --warning: 38 92% 42%;
+  --destructive: 0 72% 46%;
+  --info: 221 78% 52%;
+  --ring: 24 95% 53%;
+  --focus-ring: 24 95% 53%;
+  --focus-shadow: 0 0 0 3px hsl(var(--focus-ring) / 0.22);
+  --surface-elevated: 0 0% 100% / 0.88;
+  --surface-panel: 40 35% 98% / 0.78;
+  /* Radii */
+  --radius-xs: 0.5rem;
+  --radius-sm: 0.8rem;
   --radius-md: 1rem;
   --radius-lg: 1.25rem;
-  --shadow-soft-lg: 0 24px 60px -34px rgba(15, 23, 42, 0.28);
+  --radius-xl: 1.5rem;
+  --radius-full: 9999px;
+  /* Spacing scale (rem) */
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.25rem;
+  --space-6: 1.5rem;
+  --space-8: 2rem;
+  --space-10: 2.5rem;
+  --space-12: 3rem;
+  /* Elevation */
+  --shadow-soft-lg: 0 24px 60px -34px rgba(15, 23, 42, 0.22);
+  --elevation-1: 0 1px 2px rgba(15, 23, 42, 0.06);
+  --elevation-2: 0 8px 24px -8px rgba(15, 23, 42, 0.12);
+  --elevation-3: 0 20px 50px -24px rgba(15, 23, 42, 0.2);
+  /* Typography scale */
+  --text-xs: 0.75rem;
+  --text-sm: 0.875rem;
+  --text-base: 1rem;
+  --text-lg: 1.125rem;
+  --text-xl: 1.25rem;
+  --leading-tight: 1.2;
+  --leading-snug: 1.35;
+  --leading-normal: 1.5;
+  --leading-relaxed: 1.65;
 }
 
 html[data-theme='dark'] {
-  --background: 220 24% 10%;
-  --foreground: 210 28% 94%;
-  --muted: 220 19% 16%;
-  --accent: 27 95% 60%;
-  --primary: 27 95% 60%;
-  --primary-foreground: 0 0% 100%;
-  --card: 221 22% 14%;
-  --border: 220 14% 26%;
-  --surface-strong: 220 21% 12%;
-  --text-soft: 214 24% 76%;
-  --shadow-soft: 0 18px 45px -26px rgba(0, 0, 0, 0.6);
-  --success: 142 50% 45%;
-  --warning: 36 80% 55%;
-  --destructive: 0 65% 55%;
-  --focus-ring: 27 95% 60%;
-  --focus-shadow: 0 0 0 3px hsl(var(--focus-ring) / 0.24);
-  --surface-elevated: 221 22% 14% / 0.84;
-  --surface-panel: 221 22% 14% / 0.7;
-  --shadow-soft-lg: 0 28px 72px -34px rgba(0, 0, 0, 0.58);
+  --background: 222 28% 9%;
+  --foreground: 210 32% 94%;
+  --muted: 222 22% 16%;
+  --muted-foreground: 218 14% 62%;
+  --accent: 26 96% 61%;
+  --primary: 26 96% 61%;
+  --primary-foreground: 222 28% 9%;
+  --card: 222 24% 12%;
+  --border: 222 16% 22%;
+  --surface-strong: 222 26% 11%;
+  --text-soft: 218 16% 72%;
+  --shadow-soft: 0 18px 45px -26px rgba(0, 0, 0, 0.55);
+  --success: 152 48% 46%;
+  --warning: 38 88% 54%;
+  --destructive: 0 62% 56%;
+  --info: 217 85% 62%;
+  --ring: 26 96% 61%;
+  --focus-ring: 26 96% 61%;
+  --focus-shadow: 0 0 0 3px hsl(var(--focus-ring) / 0.28);
+  --surface-elevated: 222 24% 12% / 0.92;
+  --surface-panel: 222 24% 12% / 0.78;
+  --shadow-soft-lg: 0 28px 72px -34px rgba(0, 0, 0, 0.5);
+  --elevation-1: 0 1px 2px rgba(0, 0, 0, 0.35);
+  --elevation-2: 0 10px 28px -10px rgba(0, 0, 0, 0.45);
+  --elevation-3: 0 24px 56px -28px rgba(0, 0, 0, 0.55);
 }
 
 html {
@@ -96,9 +140,9 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   background:
-    radial-gradient(circle at 12% 15%, rgba(255, 201, 120, 0.3), transparent 35%),
-    radial-gradient(circle at 90% 10%, rgba(164, 197, 255, 0.25), transparent 38%),
-    linear-gradient(180deg, #fcfaf5 0%, #f8f7f3 100%);
+    radial-gradient(circle at 10% 12%, rgba(251, 191, 36, 0.22), transparent 38%),
+    radial-gradient(circle at 92% 8%, rgba(96, 165, 250, 0.18), transparent 40%),
+    linear-gradient(180deg, hsl(40 42% 98%) 0%, hsl(38 30% 96%) 100%);
   transition:
     background-color 420ms ease,
     color 420ms ease,
@@ -176,9 +220,9 @@ main {
 
 html[data-theme='dark'] body {
   background:
-    radial-gradient(circle at 12% 12%, rgba(255, 182, 74, 0.15), transparent 34%),
-    radial-gradient(circle at 86% 8%, rgba(80, 125, 255, 0.2), transparent 36%),
-    linear-gradient(180deg, #11151d 0%, #0f131b 100%);
+    radial-gradient(circle at 14% 10%, rgba(251, 146, 60, 0.12), transparent 36%),
+    radial-gradient(circle at 88% 6%, rgba(59, 130, 246, 0.14), transparent 38%),
+    linear-gradient(180deg, hsl(222 28% 10%) 0%, hsl(222 30% 7%) 100%);
 }
 
 a,

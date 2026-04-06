@@ -1,4 +1,4 @@
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import { Cairo, Manrope, Sora, Tajawal } from 'next/font/google';
 import Script from 'next/script';
 
@@ -35,17 +35,29 @@ const tajawal = Tajawal({
 
 const iconVersion = getIconVersion();
 
+const siteUrl =
+  process.env.NEXT_PUBLIC_APP_URL?.trim() ||
+  (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000');
+
+export const viewport: Viewport = {
+  themeColor: [
+    { media: '(prefers-color-scheme: light)', color: '#ea580c' },
+    { media: '(prefers-color-scheme: dark)', color: '#fb923c' },
+  ],
+};
+
 export const metadata: Metadata = {
+  metadataBase: new URL(siteUrl),
   title: 'MohandisHub',
   description: 'Engineering services marketplace connecting customers, experts, and businesses.',
   manifest: '/manifest',
   icons: {
     icon: [
       { url: `/icon?v=${iconVersion}`, type: 'image/png', sizes: '32x32' },
-      { url: `/icons/favicon-light.png?v=${iconVersion}`, media: '(prefers-color-scheme: light)' },
-      { url: `/icons/favicon-dark.png?v=${iconVersion}`, media: '(prefers-color-scheme: dark)' },
+      { url: `/brand-icons/192?v=${iconVersion}`, type: 'image/png', sizes: '192x192' },
+      { url: `/brand-icons/512?v=${iconVersion}`, type: 'image/png', sizes: '512x512' },
     ],
-    apple: [{ url: `/icon?v=${iconVersion}`, type: 'image/png', sizes: '32x32' }],
+    apple: [{ url: `/apple-icon?v=${iconVersion}`, type: 'image/png', sizes: '180x180' }],
   },
 };
 

@@ -272,11 +272,20 @@
   cursor: default;
 }
 
-.chat-loading,
-.chat-empty {
+.chat-loading {
   padding: 1rem;
   color: hsl(var(--muted-foreground));
   font-size: 0.85rem;
+}
+
+.chat-sidebar .chat-empty.mh-empty-state {
+  margin: 0.75rem 0.5rem;
+  padding: clamp(1rem, 3vw, 1.35rem);
+  align-items: center;
+}
+
+.chat-empty-desc {
+  text-align: center;
 }
 
 .chat-msg-link {

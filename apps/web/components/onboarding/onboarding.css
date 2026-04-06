@@ -33,12 +33,12 @@
 .onboarding-card {
   max-width: 40rem;
   margin: 0 auto 3rem;
-  padding: 1.5rem;
-  border-radius: var(--radius-lg);
+  padding: clamp(1.35rem, 3vw, 1.75rem);
+  border-radius: var(--radius-xl);
   border: 1px solid hsl(var(--border));
-  background-color: color-mix(in srgb, hsl(var(--surface-elevated)) 92%, transparent);
-  box-shadow: var(--shadow-soft-lg);
-  backdrop-filter: blur(12px);
+  background-color: color-mix(in srgb, hsl(var(--surface-elevated)) 94%, transparent);
+  box-shadow: var(--elevation-2), var(--shadow-soft-lg);
+  backdrop-filter: blur(14px);
 }
 
 .onboarding-title {
