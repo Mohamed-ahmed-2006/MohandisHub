@@ -167,6 +167,42 @@ html[data-theme='dark'] .auth-status-banner-error {
   font-size: 0.95rem;
 }
 
+.auth-password-input-wrap {
+  position: relative;
+}
+
+.auth-password-input {
+  padding-right: 2.9rem;
+}
+
+[dir='rtl'] .auth-password-input {
+  padding-right: 0.95rem;
+  padding-left: 2.9rem;
+}
+
+.auth-password-visibility-button {
+  position: absolute;
+  top: 50%;
+  right: 0.6rem;
+  transform: translateY(-50%);
+  border: none;
+  background: transparent;
+  color: hsl(var(--text-soft));
+  cursor: pointer;
+  font-size: 1rem;
+  line-height: 1;
+  padding: 0.2rem;
+}
+
+[dir='rtl'] .auth-password-visibility-button {
+  right: auto;
+  left: 0.6rem;
+}
+
+.auth-password-visibility-button:hover {
+  color: hsl(var(--foreground));
+}
+
 .auth-form-field-input:focus-visible {
   border-color: hsl(var(--accent));
 }

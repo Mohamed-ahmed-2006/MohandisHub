@@ -1,6 +1,7 @@
 'use client';
 
 import type { UserRole } from '@mohandishub/shared';
+import { Eye, EyeOff } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -146,6 +147,7 @@ export const AuthForm = ({
   const [statusVariant, setStatusVariant] = useState<'error' | 'success' | 'info'>('info');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [termsAccepted, setTermsAccepted] = useState(false);
+  const [isPasswordVisible, setIsPasswordVisible] = useState(false);
 
   useEffect(() => {
     if (geoDetectedRef.current) return;
@@ -255,6 +257,7 @@ export const AuthForm = ({
     onModeChange(nextMode);
     setFieldErrors({});
     setStatusMessage(null);
+    setIsPasswordVisible(false);
   };
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>): Promise<void> => {
@@ -498,21 +501,34 @@ export const AuthForm = ({
           <span className="auth-form-field-label">
             {mode === 'login' ? dictionary.login.passwordLabel : dictionary.register.passwordLabel}
           </span>
-          <input
-            type="password"
-            className="auth-form-field-input"
-            value={mode === 'login' ? loginValues.password : registerValues.password}
-            suppressHydrationWarning
-            onChange={(e) => {
-              const val = e.target.value;
-              if (mode === 'login') {
-                setLoginValues((prev) => ({ ...prev, password: val }));
-              } else {
-                setRegisterValues((prev) => ({ ...prev, password: val }));
+          <div className="auth-password-input-wrap">
+            <input
+              type={isPasswordVisible ? 'text' : 'password'}
+              className="auth-form-field-input auth-password-input"
+              value={mode === 'login' ? loginValues.password : registerValues.password}
+              suppressHydrationWarning
+              onChange={(e) => {
+                const val = e.target.value;
+                if (mode === 'login') {
+                  setLoginValues((prev) => ({ ...prev, password: val }));
+                } else {
+                  setRegisterValues((prev) => ({ ...prev, password: val }));
+                }
+              }}
+              autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
+            />
+            <button
+              type="button"
+              className="auth-password-visibility-button"
+              onClick={() => setIsPasswordVisible((prev) => !prev)}
+              aria-label={
+                isPasswordVisible ? dictionary.common.hidePassword : dictionary.common.showPassword
               }
-            }}
-            autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
-          />
+              title={isPasswordVisible ? dictionary.common.hidePassword : dictionary.common.showPassword}
+            >
+              {isPasswordVisible ? <EyeOff size={18} aria-hidden="true" /> : <Eye size={18} aria-hidden="true" />}
+            </button>
+          </div>
           {fieldErrors.password ? (
             <span className="auth-form-field-error">{fieldErrors.password}</span>
           ) : null}

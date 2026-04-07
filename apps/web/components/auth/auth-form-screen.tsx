@@ -32,14 +32,14 @@ const resolveMode = (value: string | null): AuthMode => {
 };
 
 const resolveRole = (value: string | null): RegisterRole => {
-  if (value === 'expert' || value === 'business' || value === 'customer') {
+  if (value === 'expert' || value === 'business' || value === 'customer' || value === 'craftsman') {
     return value;
   }
 
   return 'customer';
 };
 
-const roleOptions: RegisterRole[] = ['customer', 'expert', 'business'];
+const roleOptions: RegisterRole[] = ['customer', 'expert', 'craftsman', 'business'];
 
 export const AuthFormScreen = ({
   locale,
@@ -72,11 +72,15 @@ export const AuthFormScreen = ({
     }
   }, [searchParams]);
 
-  const syncQueryState = (nextMode: AuthMode, nextRole: RegisterRole): void => {
+  const syncQueryState = (
+    nextMode: AuthMode,
+    nextRole: RegisterRole,
+    includeRoleForRegister: boolean,
+  ): void => {
     const query = new URLSearchParams();
     query.set('mode', nextMode);
 
-    if (nextMode === 'register') {
+    if (nextMode === 'register' && includeRoleForRegister) {
       query.set('role', nextRole);
     }
 
@@ -88,25 +92,27 @@ export const AuthFormScreen = ({
     setMode(nextMode);
     if (nextMode === 'register') {
       setRegisterStep('role');
+      syncQueryState(nextMode, role, false);
     } else {
       setRegisterStep('form');
+      syncQueryState(nextMode, role, false);
     }
-    syncQueryState(nextMode, role);
   };
 
   const handleRoleCardSelect = (selectedRole: RegisterRole): void => {
     setRole(selectedRole);
     setRegisterStep('form');
-    syncQueryState('register', selectedRole);
+    syncQueryState('register', selectedRole, true);
   };
 
   const handleBackToRoleStep = (): void => {
     setRegisterStep('role');
+    syncQueryState('register', role, false);
   };
 
   const handleRoleChange = (nextRole: RegisterRole): void => {
     setRole(nextRole);
-    syncQueryState(mode, nextRole);
+    syncQueryState(mode, nextRole, mode === 'register');
   };
 
   const backToHomePath = useMemo(() => buildLocalePath(locale, '/'), [locale]);

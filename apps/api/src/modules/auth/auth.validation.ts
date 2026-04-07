@@ -19,7 +19,7 @@ export const registerSchema = z
       .min(2, 'Display name must be at least 2 characters.')
       .max(100, 'Display name must not exceed 100 characters.')
       .trim(),
-    role: z.enum(['customer', 'expert', 'business']),
+    role: z.enum(['customer', 'expert', 'craftsman', 'business']),
     phone: z.string().max(20).optional(),
     phoneCode: z.string().max(6).optional(),
     nationality: z.string().max(3).optional(),

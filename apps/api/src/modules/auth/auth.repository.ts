@@ -207,6 +207,10 @@ export class AuthRepository {
     await this.db.query('INSERT INTO expert_profiles (user_id) VALUES ($1)', [userId]);
   }
 
+  async createCraftsmanProfile(userId: string): Promise<void> {
+    await this.db.query('INSERT INTO craftsman_profiles (user_id) VALUES ($1)', [userId]);
+  }
+
   async createBusinessProfile(userId: string, companyName: string): Promise<void> {
     await this.db.query(`INSERT INTO business_profiles (user_id, company_name) VALUES ($1, $2)`, [
       userId,
