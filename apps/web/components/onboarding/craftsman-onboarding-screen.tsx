@@ -428,7 +428,11 @@ export const CraftsmanOnboardingScreen = ({ locale, dictionary }: Props) => {
           {error && <div className="onboarding-error">{error}</div>}
 
           {step === 'profile' && (
-            <form className="onboarding-form" onSubmit={(e) => void handleSaveProfile(e)}>
+            <form
+              key={`craftsman-profile-${craftsmanProfile?.id ?? 'new'}`}
+              className="onboarding-form"
+              onSubmit={(e) => void handleSaveProfile(e)}
+            >
               <div className="onboarding-row">
                 <div className="onboarding-field">
                   <label className="onboarding-label">{dict.profileForm.tradeLabel}</label>
@@ -448,7 +452,9 @@ export const CraftsmanOnboardingScreen = ({ locale, dictionary }: Props) => {
                     name="title"
                     className="onboarding-input"
                     placeholder={dict.profileForm.titlePlaceholder}
-                    defaultValue={craftsmanProfile?.title ?? ''}
+                    defaultValue={
+                      craftsmanProfile?.title?.trim() || authUser?.displayName || ''
+                    }
                     required
                   />
                 </div>
@@ -555,8 +561,13 @@ export const CraftsmanOnboardingScreen = ({ locale, dictionary }: Props) => {
           )}
 
           {step === 'workshop' && (
-            <form className="onboarding-form" onSubmit={(e) => void handleSaveWorkshop(e)}>
+            <form
+              key={`craftsman-workshop-${craftsmanProfile?.id ?? 'new'}`}
+              className="onboarding-form"
+              onSubmit={(e) => void handleSaveWorkshop(e)}
+            >
               <CityCountrySelect
+                key={`craftsman-loc-${craftsmanProfile?.id ?? 'x'}-${craftsmanProfile?.city ?? ''}-${craftsmanProfile?.country ?? ''}`}
                 name="city"
                 countryName="country"
                 locale={locale}
@@ -565,7 +576,8 @@ export const CraftsmanOnboardingScreen = ({ locale, dictionary }: Props) => {
                 className="onboarding-field"
                 selectClassName="onboarding-input"
                 defaultValue={craftsmanProfile?.city ?? ''}
-                forceIpCountry
+                defaultCountry={craftsmanProfile?.country ?? ''}
+                forceIpCountry={!craftsmanProfile?.country?.trim()}
                 required
               />
               <div className="onboarding-field">

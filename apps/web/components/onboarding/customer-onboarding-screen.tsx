@@ -1,5 +1,6 @@
 'use client';
 
+import type { CustomerProfile } from '@mohandishub/shared';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
@@ -22,6 +23,7 @@ export const CustomerOnboardingScreen = ({ locale, dictionary }: Props) => {
   const [step, setStep] = useState<'welcome' | 'profile' | 'done'>('welcome');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [customerProfile, setCustomerProfile] = useState<CustomerProfile | null>(null);
 
   useEffect(() => {
     if (!isReady) return;
@@ -33,6 +35,22 @@ export const CustomerOnboardingScreen = ({ locale, dictionary }: Props) => {
       router.replace(buildLocalePath(locale, '/verify-email'));
     }
   }, [isReady, isAuthenticated, authUser, authGuard.emailVerified, locale, router]);
+
+  useEffect(() => {
+    if (!accessToken || step !== 'profile') return;
+    let cancelled = false;
+    void profilesApiClient
+      .getCustomerProfile(accessToken)
+      .then((p) => {
+        if (!cancelled) setCustomerProfile(p);
+      })
+      .catch(() => {
+        if (!cancelled) setCustomerProfile(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [accessToken, step]);
 
   const handleProfileSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -113,7 +131,11 @@ export const CustomerOnboardingScreen = ({ locale, dictionary }: Props) => {
               <p className="onboarding-description">
                 {dictionary.onboarding.customer.profileDescription ?? 'Add a few details so providers can recognize you.'}
               </p>
-              <form className="onboarding-form" onSubmit={(e) => void handleProfileSubmit(e)}>
+              <form
+                key={`customer-profile-${customerProfile?.userId ?? 'new'}`}
+                className="onboarding-form"
+                onSubmit={(e) => void handleProfileSubmit(e)}
+              >
                 {error && <p className="onboarding-error" role="alert">{error}</p>}
                 <div className="onboarding-field">
                   <label className="onboarding-label" htmlFor="customer-displayName">
@@ -140,7 +162,11 @@ export const CustomerOnboardingScreen = ({ locale, dictionary }: Props) => {
                     name="phone"
                     type="tel"
                     className="onboarding-input"
-                    defaultValue={authUser.phone ?? ''}
+                    defaultValue={
+                      authUser.phone && authUser.phone.trim().length > 0
+                        ? authUser.phone
+                        : [authUser.phoneCode, authUser.phone].filter(Boolean).join('') || ''
+                    }
                     placeholder={tr('+1 234 567 8900', '+20 100 000 0000')}
                   />
                 </div>
@@ -154,6 +180,7 @@ export const CustomerOnboardingScreen = ({ locale, dictionary }: Props) => {
                     type="text"
                     className="onboarding-input"
                     placeholder={dictionary.onboarding.customer.profileCityPlaceholder ?? 'e.g. Cairo, Dubai'}
+                    defaultValue={customerProfile?.city ?? ''}
                   />
                 </div>
                 <div className="onboarding-field">
@@ -164,6 +191,7 @@ export const CustomerOnboardingScreen = ({ locale, dictionary }: Props) => {
                     id="customer-contactPreference"
                     name="contactPreference"
                     className="onboarding-input"
+                    defaultValue={customerProfile?.contactPreference ?? ''}
                   >
                     <option value="">{dictionary.onboarding.customer.profileContactPrefOptional ?? 'Any'}</option>
                     <option value="email">{tr('Email', 'البريد الإلكتروني')}</option>

@@ -1,6 +1,11 @@
 'use client';
 
-import type { IdentityDocumentType, UpdateAccountBody, UpdateExpertProfileBody } from '@mohandishub/shared';
+import type {
+  ExpertProfile,
+  IdentityDocumentType,
+  UpdateAccountBody,
+  UpdateExpertProfileBody,
+} from '@mohandishub/shared';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
@@ -75,6 +80,7 @@ export const ExpertOnboardingScreen = ({ locale, dictionary }: Props) => {
   const [avatarPreviewUrl, setAvatarPreviewUrl] = useState<string | null>(null);
   const [withdrawableManualDocId, setWithdrawableManualDocId] = useState<string | null>(null);
   const [hasActiveIdentitySubmission, setHasActiveIdentitySubmission] = useState(false);
+  const [expertProfile, setExpertProfile] = useState<ExpertProfile | null>(null);
 
   const dict = dictionary.onboarding.expert;
   const stepLabels = [dict.steps.profileDetails, dict.steps.kyc, dict.steps.documents];
@@ -169,6 +175,7 @@ export const ExpertOnboardingScreen = ({ locale, dictionary }: Props) => {
           profilesApiClient.getIdentityDocuments(accessToken).catch(() => []),
         ]);
         if (cancelled) return;
+        setExpertProfile(profile);
         setKycStatus(verification.verificationStatus);
         if (profile?.country) {
           const c = findCountryByName(profile.country);
@@ -448,7 +455,11 @@ export const ExpertOnboardingScreen = ({ locale, dictionary }: Props) => {
           {error && <div className="onboarding-error">{error}</div>}
 
           {step === 'profile' && (
-            <form className="onboarding-form" onSubmit={(e) => void handleSaveProfile(e)}>
+            <form
+              key={`expert-profile-${expertProfile?.id ?? 'new'}`}
+              className="onboarding-form"
+              onSubmit={(e) => void handleSaveProfile(e)}
+            >
               <div className="onboarding-field">
                 <label className="onboarding-label">{dict.profileForm.titleLabel}</label>
                 <input
@@ -456,12 +467,20 @@ export const ExpertOnboardingScreen = ({ locale, dictionary }: Props) => {
                   name="title"
                   className="onboarding-input"
                   placeholder={dict.profileForm.titlePlaceholder}
+                  defaultValue={
+                    expertProfile?.title?.trim() || authUser?.displayName || ''
+                  }
                   required
                 />
               </div>
               <div className="onboarding-field">
                 <label className="onboarding-label">{dict.profileForm.bioLabel}</label>
-                <textarea name="bio" className="onboarding-input onboarding-textarea" rows={3} />
+                <textarea
+                  name="bio"
+                  className="onboarding-input onboarding-textarea"
+                  rows={3}
+                  defaultValue={expertProfile?.bio ?? ''}
+                />
               </div>
               <div className="onboarding-field">
                 <label className="onboarding-label">
@@ -518,6 +537,7 @@ export const ExpertOnboardingScreen = ({ locale, dictionary }: Props) => {
                     name="specializations"
                     className="onboarding-input"
                     placeholder={dict.profileForm.specializationsHint}
+                    defaultValue={expertProfile?.specializations?.join(', ') ?? ''}
                   />
                 </div>
                 <div className="onboarding-field">
@@ -529,6 +549,7 @@ export const ExpertOnboardingScreen = ({ locale, dictionary }: Props) => {
                     name="yearsOfExperience"
                     className="onboarding-input"
                     min="0"
+                    defaultValue={expertProfile?.yearsOfExperience ?? ''}
                   />
                 </div>
               </div>
@@ -542,15 +563,22 @@ export const ExpertOnboardingScreen = ({ locale, dictionary }: Props) => {
                       className="onboarding-input"
                       min="0"
                       step="0.01"
+                      defaultValue={expertProfile?.hourlyRate ?? ''}
                     />
                   </div>
                 ) : null}
                 <div className="onboarding-field">
                   <label className="onboarding-label">{dict.profileForm.employerLabel}</label>
-                  <input type="text" name="employer" className="onboarding-input" />
+                  <input
+                    type="text"
+                    name="employer"
+                    className="onboarding-input"
+                    defaultValue={expertProfile?.employer ?? ''}
+                  />
                 </div>
               </div>
               <CityCountrySelect
+                key={`expert-loc-${expertProfile?.id ?? 'x'}-${expertProfile?.city ?? ''}-${expertProfile?.country ?? ''}`}
                 name="city"
                 countryName="country"
                 locale={locale}
@@ -558,30 +586,51 @@ export const ExpertOnboardingScreen = ({ locale, dictionary }: Props) => {
                 countryLabel={dict.profileForm.countryLabel}
                 className="onboarding-field"
                 selectClassName="onboarding-input"
+                defaultValue={expertProfile?.city ?? ''}
+                defaultCountry={expertProfile?.country ?? ''}
                 required
               />
               <div className="onboarding-row">
                 <div className="onboarding-field">
                   <label className="onboarding-label">{dict.profileForm.jobTitleLabel}</label>
-                  <input type="text" name="jobTitle" className="onboarding-input" />
+                  <input
+                    type="text"
+                    name="jobTitle"
+                    className="onboarding-input"
+                    defaultValue={expertProfile?.jobTitle ?? ''}
+                  />
                 </div>
                 <div className="onboarding-field">
                   <label className="onboarding-label">{dict.profileForm.linkedinLabel}</label>
-                  <input type="text" name="linkedinUrl" className="onboarding-input" placeholder="linkedin.com/in/username" />
+                  <input
+                    type="text"
+                    name="linkedinUrl"
+                    className="onboarding-input"
+                    placeholder="linkedin.com/in/username"
+                    defaultValue={expertProfile?.linkedinUrl ?? ''}
+                  />
                 </div>
               </div>
               <div className="onboarding-row">
                 <div className="onboarding-field">
                   <label className="onboarding-label">{dict.profileForm.portfolioLabel}</label>
-                  <input type="text" name="portfolioUrl" className="onboarding-input" placeholder="example.com or full URL" />
+                  <input
+                    type="text"
+                    name="portfolioUrl"
+                    className="onboarding-input"
+                    placeholder="example.com or full URL"
+                    defaultValue={expertProfile?.portfolioUrl ?? ''}
+                  />
                 </div>
                 <div className="onboarding-field">
                   <label className="onboarding-label">{dict.profileForm.languagesLabel}</label>
                   <LanguagesCheckboxes
+                    key={`expert-lang-${expertProfile?.id ?? 'x'}`}
                     name="languages"
                     locale={locale}
                     required
                     className="onboarding-languages"
+                    defaultValue={expertProfile?.languages ?? []}
                   />
                 </div>
               </div>
@@ -591,6 +640,7 @@ export const ExpertOnboardingScreen = ({ locale, dictionary }: Props) => {
                   name="educationSummary"
                   className="onboarding-input onboarding-textarea"
                   rows={2}
+                  defaultValue={expertProfile?.educationSummary ?? ''}
                 />
               </div>
               <button type="submit" className="onboarding-cta-button" disabled={saving}>

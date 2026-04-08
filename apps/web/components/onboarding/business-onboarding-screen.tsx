@@ -1,6 +1,10 @@
 'use client';
 
-import type { IdentityDocumentType, UpdateBusinessProfileBody } from '@mohandishub/shared';
+import type {
+  BusinessProfile,
+  IdentityDocumentType,
+  UpdateBusinessProfileBody,
+} from '@mohandishub/shared';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
@@ -66,6 +70,7 @@ export const BusinessOnboardingScreen = ({ locale, dictionary }: Props) => {
   const [logoPreviewUrl, setLogoPreviewUrl] = useState<string | null>(null);
   const [withdrawableManualDocId, setWithdrawableManualDocId] = useState<string | null>(null);
   const [hasActiveIdentitySubmission, setHasActiveIdentitySubmission] = useState(false);
+  const [businessProfile, setBusinessProfile] = useState<BusinessProfile | null>(null);
 
   const dict = dictionary.onboarding.business;
   const stepLabels = [dict.steps.companyDetails, dict.steps.kyc, dict.steps.documents];
@@ -164,6 +169,8 @@ export const BusinessOnboardingScreen = ({ locale, dictionary }: Props) => {
           profilesApiClient.getIdentityDocuments(accessToken).catch(() => []),
         ]);
         if (cancelled) return;
+        setBusinessProfile(profile);
+        setLogoPreviewUrl(profile.logoUrl ?? null);
         setKycStatus(verification.verificationStatus);
         const companyComplete = Boolean(profile?.companyName?.trim() && profile?.logoUrl?.trim());
         // Use profile/API status; authUser.verificationStatus reflects GET /me (profile) so include for consistency after refresh
@@ -197,18 +204,6 @@ export const BusinessOnboardingScreen = ({ locale, dictionary }: Props) => {
       cancelled = true;
     };
   }, [accessToken, authUser?.verificationStatus, onboardingCompleted]);
-
-  useEffect(() => {
-    if (!accessToken) return;
-    void (async () => {
-      try {
-        const profile = await profilesApiClient.getBusinessProfile(accessToken);
-        setLogoPreviewUrl(profile.logoUrl ?? null);
-      } catch {
-        setLogoPreviewUrl(null);
-      }
-    })();
-  }, [accessToken]);
 
   // When KYC is verified, there are no extra business documents to upload during onboarding.
   // So we automatically mark onboarding completed and move to the final step.
@@ -419,19 +414,39 @@ export const BusinessOnboardingScreen = ({ locale, dictionary }: Props) => {
           {error && <div className="onboarding-error">{error}</div>}
 
           {step === 'company' && (
-            <form className="onboarding-form" onSubmit={(e) => void handleSaveCompany(e)}>
+            <form
+              key={`company-${businessProfile?.id ?? 'new'}`}
+              className="onboarding-form"
+              onSubmit={(e) => void handleSaveCompany(e)}
+            >
               <div className="onboarding-field">
                 <label className="onboarding-label">{dict.companyForm.companyNameLabel}</label>
-                <input type="text" name="companyName" className="onboarding-input" required />
+                <input
+                  type="text"
+                  name="companyName"
+                  className="onboarding-input"
+                  defaultValue={businessProfile?.companyName ?? ''}
+                  required
+                />
               </div>
               <div className="onboarding-row">
                 <div className="onboarding-field">
                   <label className="onboarding-label">{dict.companyForm.industryLabel}</label>
-                  <IndustrySelect locale={locale} name="industry" subName="subIndustry" />
+                  <IndustrySelect
+                    key={`industry-${businessProfile?.id ?? 'x'}-${businessProfile?.industry ?? ''}`}
+                    locale={locale}
+                    name="industry"
+                    subName="subIndustry"
+                    defaultValue={businessProfile?.industry ?? ''}
+                  />
                 </div>
                 <div className="onboarding-field">
                   <label className="onboarding-label">{dict.companyForm.companySizeLabel}</label>
-                  <select name="companySize" className="onboarding-input">
+                  <select
+                    name="companySize"
+                    className="onboarding-input"
+                    defaultValue={businessProfile?.companySize ?? ''}
+                  >
                     <option value="" />
                     {Object.entries(dictionary.verification.companySizes).map(([k, v]) => (
                       <option key={k} value={k}>
@@ -449,16 +464,28 @@ export const BusinessOnboardingScreen = ({ locale, dictionary }: Props) => {
                     name="website"
                     className="onboarding-input"
                     placeholder={tr('example.com or full URL', 'example.com أو رابط كامل')}
+                    defaultValue={businessProfile?.website ?? ''}
                   />
                 </div>
                 <div className="onboarding-field">
                   <label className="onboarding-label">{dict.companyForm.companyEmailLabel}</label>
-                  <input type="email" name="companyEmail" className="onboarding-input" />
+                  <input
+                    type="email"
+                    name="companyEmail"
+                    className="onboarding-input"
+                    defaultValue={businessProfile?.companyEmail ?? ''}
+                  />
                 </div>
               </div>
               <div className="onboarding-field">
                 <label className="onboarding-label">{dict.companyForm.companyPhoneLabel}</label>
-                <input type="tel" name="companyPhone" className="onboarding-input" maxLength={15} />
+                <input
+                  type="tel"
+                  name="companyPhone"
+                  className="onboarding-input"
+                  maxLength={15}
+                  defaultValue={businessProfile?.companyPhone ?? ''}
+                />
               </div>
               <div className="onboarding-field">
                 <label className="onboarding-label">
@@ -504,6 +531,7 @@ export const BusinessOnboardingScreen = ({ locale, dictionary }: Props) => {
                 />
               </div>
               <CityCountrySelect
+                key={`loc-${businessProfile?.id ?? 'x'}-${businessProfile?.city ?? ''}-${businessProfile?.country ?? ''}`}
                 name="city"
                 countryName="country"
                 locale={locale}
@@ -511,6 +539,8 @@ export const BusinessOnboardingScreen = ({ locale, dictionary }: Props) => {
                 countryLabel={dict.companyForm.countryLabel}
                 className="onboarding-field"
                 selectClassName="onboarding-input"
+                defaultValue={businessProfile?.city ?? ''}
+                defaultCountry={businessProfile?.country ?? ''}
               />
               <div className="onboarding-row">
                 <div className="onboarding-field">
@@ -521,6 +551,7 @@ export const BusinessOnboardingScreen = ({ locale, dictionary }: Props) => {
                     className="onboarding-input"
                     min="1900"
                     max="2030"
+                    defaultValue={businessProfile?.foundedYear ?? ''}
                   />
                 </div>
               </div>
@@ -531,6 +562,7 @@ export const BusinessOnboardingScreen = ({ locale, dictionary }: Props) => {
                   className="onboarding-input onboarding-textarea"
                   rows={2}
                   placeholder={tr('Paste a Google Maps link or enter address', 'ألصق رابط خرائط Google أو أدخل العنوان')}
+                  defaultValue={businessProfile?.address ?? ''}
                 />
               </div>
               <div className="onboarding-field">
@@ -539,6 +571,7 @@ export const BusinessOnboardingScreen = ({ locale, dictionary }: Props) => {
                   name="description"
                   className="onboarding-input onboarding-textarea"
                   rows={3}
+                  defaultValue={businessProfile?.description ?? ''}
                 />
               </div>
 
@@ -546,39 +579,82 @@ export const BusinessOnboardingScreen = ({ locale, dictionary }: Props) => {
               <div className="onboarding-row">
                 <div className="onboarding-field">
                   <label className="onboarding-label">{dict.companyForm.ownerNameLabel}</label>
-                  <input type="text" name="ownerFullName" className="onboarding-input" />
+                  <input
+                    type="text"
+                    name="ownerFullName"
+                    className="onboarding-input"
+                    defaultValue={
+                      businessProfile?.ownerFullName?.trim() || authUser?.displayName || ''
+                    }
+                  />
                 </div>
                 <div className="onboarding-field">
                   <label className="onboarding-label">{dict.companyForm.ownerTitleLabel}</label>
-                  <input type="text" name="ownerTitle" className="onboarding-input" />
+                  <input
+                    type="text"
+                    name="ownerTitle"
+                    className="onboarding-input"
+                    defaultValue={businessProfile?.ownerTitle ?? ''}
+                  />
                 </div>
               </div>
               <div className="onboarding-row">
                 <div className="onboarding-field">
                   <label className="onboarding-label">{dict.companyForm.ownerEmailLabel}</label>
-                  <input type="email" name="ownerEmail" className="onboarding-input" />
+                  <input
+                    type="email"
+                    name="ownerEmail"
+                    className="onboarding-input"
+                    defaultValue={businessProfile?.ownerEmail?.trim() || authUser?.email || ''}
+                  />
                 </div>
                 <div className="onboarding-field">
                   <label className="onboarding-label">{dict.companyForm.ownerPhoneLabel}</label>
-                  <input type="tel" name="ownerPhone" className="onboarding-input" />
+                  <input
+                    type="tel"
+                    name="ownerPhone"
+                    className="onboarding-input"
+                    defaultValue={
+                      businessProfile?.ownerPhone?.trim() ||
+                      (authUser?.phone && authUser.phone.trim().length > 0
+                        ? authUser.phone
+                        : [authUser?.phoneCode, authUser?.phone].filter(Boolean).join('')) ||
+                      ''
+                    }
+                  />
                 </div>
               </div>
 
               <div className="onboarding-row">
                 <div className="onboarding-field">
                   <label className="onboarding-label">{dict.companyForm.tradeLicenseLabel}</label>
-                  <input type="text" name="tradeLicenseNumber" className="onboarding-input" />
+                  <input
+                    type="text"
+                    name="tradeLicenseNumber"
+                    className="onboarding-input"
+                    defaultValue={businessProfile?.tradeLicenseNumber ?? ''}
+                  />
                 </div>
                 <div className="onboarding-field">
                   <label className="onboarding-label">{dict.companyForm.taxIdLabel}</label>
-                  <input type="text" name="taxId" className="onboarding-input" />
+                  <input
+                    type="text"
+                    name="taxId"
+                    className="onboarding-input"
+                    defaultValue={businessProfile?.taxId ?? ''}
+                  />
                 </div>
               </div>
               <div className="onboarding-field">
                 <label className="onboarding-label">
                   {dict.companyForm.commercialRegisterLabel}
                 </label>
-                <input type="text" name="commercialRegister" className="onboarding-input" />
+                <input
+                  type="text"
+                  name="commercialRegister"
+                  className="onboarding-input"
+                  defaultValue={businessProfile?.commercialRegister ?? ''}
+                />
               </div>
               <button type="submit" className="onboarding-cta-button" disabled={saving}>
                 {saving ? dictionary.auth.common.loading : dictionary.common.next}
