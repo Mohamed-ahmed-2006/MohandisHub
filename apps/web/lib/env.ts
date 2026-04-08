@@ -21,3 +21,20 @@ export const getApiBaseUrl = (): string => {
 
   return '';
 };
+
+/**
+ * Base URL for cookie-based auth (login / refresh / logout). When
+ * `NEXT_PUBLIC_AUTH_SAME_ORIGIN=1` in the browser, returns `''` so requests hit
+ * `/api/auth/*` on the Next host — rewrites must forward to the real API via
+ * `API_INTERNAL_URL`. Use this for localhost dev against a remote API so Chrome
+ * still stores and sends the refresh cookie (cross-site api host is blocked).
+ */
+export const getAuthApiBaseUrl = (): string => {
+  const sameOriginAuth =
+    process.env.NEXT_PUBLIC_AUTH_SAME_ORIGIN === '1' ||
+    process.env.NEXT_PUBLIC_AUTH_SAME_ORIGIN === 'true';
+  if (typeof window !== 'undefined' && sameOriginAuth) {
+    return '';
+  }
+  return getApiBaseUrl();
+};

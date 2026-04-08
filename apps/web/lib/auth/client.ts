@@ -12,7 +12,7 @@ import type {
   VerifyOtpResult,
 } from '@mohandishub/shared';
 
-import { getApiBaseUrl } from '@/lib/env';
+import { getAuthApiBaseUrl } from '@/lib/env';
 
 type AuthEnvelope = {
   user: AuthUser;
@@ -91,7 +91,7 @@ const apiRequest = async <T>({
     ...(body ? { body: JSON.stringify(body) } : {}),
   };
 
-  const response = await fetch(`${getApiBaseUrl()}${path}`, requestInit);
+  const response = await fetch(`${getAuthApiBaseUrl()}${path}`, requestInit);
 
   if (!response.ok) {
     const rawErrorBody: unknown = await response.json().catch(() => null);

@@ -1,6 +1,6 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { getApiBaseUrl } from '../lib/env';
+import { getApiBaseUrl, getAuthApiBaseUrl } from '../lib/env';
 
 describe('getApiBaseUrl', () => {
   it('returns configured NEXT_PUBLIC_API_URL when present', () => {
@@ -31,5 +31,26 @@ describe('getApiBaseUrl', () => {
     process.env.NEXT_PUBLIC_API_URL = 'http://127.0.0.1:4000';
 
     expect(getApiBaseUrl()).toBe('http://127.0.0.1:4000');
+  });
+});
+
+describe('getAuthApiBaseUrl', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    delete process.env.NEXT_PUBLIC_AUTH_SAME_ORIGIN;
+  });
+
+  it('matches getApiBaseUrl when NEXT_PUBLIC_AUTH_SAME_ORIGIN is unset (Node has no window)', () => {
+    process.env.NEXT_PUBLIC_API_URL = 'https://api.example.com';
+
+    expect(getAuthApiBaseUrl()).toBe('https://api.example.com');
+  });
+
+  it('returns empty string in browser when NEXT_PUBLIC_AUTH_SAME_ORIGIN=1', () => {
+    process.env.NEXT_PUBLIC_API_URL = 'https://api.example.com';
+    process.env.NEXT_PUBLIC_AUTH_SAME_ORIGIN = '1';
+    vi.stubGlobal('window', {} as Window & typeof globalThis);
+
+    expect(getAuthApiBaseUrl()).toBe('');
   });
 });
