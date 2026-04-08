@@ -3,7 +3,9 @@ import type { Response } from 'express';
 import { env } from './env.js';
 
 const REFRESH_COOKIE_NAME = 'rid';
-const isProduction = env.NODE_ENV === 'production';
+
+const useCrossSiteRefreshCookie =
+  env.NODE_ENV === 'production' || env.AUTH_CROSS_SITE_REFRESH_COOKIE;
 
 /**
  * Production API is often called from another origin (e.g. https://www.mohandishub.app or
@@ -11,8 +13,8 @@ const isProduction = env.NODE_ENV === 'production';
  * SameSite=Lax does not send cookies on cross-site POST, so refresh always 401s.
  * SameSite=None + Secure allows credentialed fetch (credentials: 'include') from those origins.
  */
-const refreshCookieSameSite: 'lax' | 'none' = isProduction ? 'none' : 'lax';
-const refreshCookieSecure = isProduction;
+const refreshCookieSameSite: 'lax' | 'none' = useCrossSiteRefreshCookie ? 'none' : 'lax';
+const refreshCookieSecure = useCrossSiteRefreshCookie;
 
 export const setRefreshCookie = (res: Response, token: string): void => {
   res.cookie(REFRESH_COOKIE_NAME, token, {

@@ -27,6 +27,16 @@ const envSchema = z.object({
   JWT_ACCESS_EXPIRES_IN: z.coerce.number().int().positive().default(900), // 15 min
   JWT_REFRESH_EXPIRES_IN_DAYS: z.coerce.number().int().positive().default(30), // 30 days
 
+  /**
+   * Set to 1 if this API is served over HTTPS with a cross-origin web app but NODE_ENV is not
+   * production (e.g. NODE_ENV=development in Render env overrides the blueprint). Enables
+   * SameSite=None + Secure on the refresh cookie; see apps/api/src/config/cookies.ts.
+   */
+  AUTH_CROSS_SITE_REFRESH_COOKIE: z
+    .string()
+    .default('0')
+    .transform((s) => s === '1' || s.toLowerCase() === 'true'),
+
   // Verification provider
   VERIFICATION_PROVIDER: z.enum(['didit', 'idenfy', 'manual']).default('manual'),
   IDENFY_API_KEY: z.string().optional(),

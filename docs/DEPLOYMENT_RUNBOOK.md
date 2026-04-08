@@ -21,7 +21,7 @@ Set **Root Directory** to `apps/web`. Build and install are in `apps/web/vercel.
 
 From `apps/api/.env.example`. Required for production:
 
-- `NODE_ENV=production`
+- `NODE_ENV=production` — do **not** set `development` on the public API (Dashboard env overrides `render.yaml`); it breaks cross-origin refresh cookies unless you set `AUTH_CROSS_SITE_REFRESH_COOKIE=1`.
 - `PORT=10000` (Render sets this)
 - `DATABASE_URL` — Supabase connection string (pooler or direct)
 - `CORS_ORIGIN` — Web app origin(s), comma-separated if multiple
