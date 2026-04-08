@@ -49,32 +49,63 @@ export class AuthService {
     input: RegisterInput,
     meta?: { deviceInfo?: string | undefined; ipAddress?: string | undefined },
   ): Promise<{ user: AuthUser; tokens: AuthTokens; refreshToken: string }> {
-    // Check duplicate email
     const existing = await this.authRepository.findUserByEmail(input.email);
     if (existing) {
-      throw new HttpError({
-        statusCode: 409,
-        code: 'EMAIL_ALREADY_EXISTS',
-        message: 'An account with this email address already exists.',
-      });
+      const abandoned = await this.authRepository.isAbandonedUnverifiedBusinessSignup(existing.id);
+      if (abandoned) {
+        await this.authRepository.hardDeleteUserById(existing.id);
+      } else {
+        throw new HttpError({
+          statusCode: 409,
+          code: 'EMAIL_ALREADY_EXISTS',
+          message: 'An account with this email address already exists.',
+        });
+      }
     }
 
     // Hash password
     const passwordHash = await bcrypt.hash(input.password, SALT_ROUNDS);
 
     // Create user row
-    const userRow = await this.authRepository.createUser({
-      email: input.email,
-      passwordHash,
-      displayName: input.displayName,
-      role: input.role,
-      phone: input.phone,
-      phoneCode: input.phoneCode,
-      nationality: input.nationality,
-      dateOfBirth: input.dateOfBirth,
-      acceptedTermsAt: input.acceptedTermsAt,
-      termsVersion: input.termsVersion,
-    });
+    let userRow: UserRow;
+    try {
+      userRow = await this.authRepository.createUser({
+        email: input.email,
+        passwordHash,
+        displayName: input.displayName,
+        role: input.role,
+        phone: input.phone,
+        phoneCode: input.phoneCode,
+        nationality: input.nationality,
+        dateOfBirth: input.dateOfBirth,
+        acceptedTermsAt: input.acceptedTermsAt,
+        termsVersion: input.termsVersion,
+      });
+    } catch (error: unknown) {
+      const pgError = error as { code?: string; constraint?: string };
+      if (pgError.code === '23505') {
+        throw new HttpError({
+          statusCode: 409,
+          code: 'EMAIL_ALREADY_EXISTS',
+          message: 'An account with this email address already exists.',
+        });
+      }
+      if (pgError.code === '22001') {
+        throw new HttpError({
+          statusCode: 400,
+          code: 'VALIDATION_ERROR',
+          message: 'A field value is too long for the database.',
+        });
+      }
+      if (pgError.code === '23514' && pgError.constraint === 'chk_users_min_age') {
+        throw new HttpError({
+          statusCode: 400,
+          code: 'VALIDATION_ERROR',
+          message: 'Date of birth does not meet the minimum age requirement.',
+        });
+      }
+      throw error;
+    }
 
     // Create role-specific profile
     switch (input.role) {

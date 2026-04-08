@@ -57,6 +57,8 @@ export type AdminUserListItem = {
   createdAt: string;
   lastLoginAt: string | null;
   deletedAt: string | null;
+  /** Business signup: email not verified and onboarding not marked complete (easy to miss in lists). */
+  incompleteBusinessSignup?: boolean;
 };
 
 export type AdminUserDetail = AdminUserListItem & {

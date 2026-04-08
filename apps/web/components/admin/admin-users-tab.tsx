@@ -22,6 +22,7 @@ export const AdminUsersTab = ({ dictionary, accessToken, refreshSession, adminPe
   const [search, setSearch] = useState('');
   const [roleFilter, setRoleFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
+  const [incompleteBusinessOnly, setIncompleteBusinessOnly] = useState(false);
   const [page, setPage] = useState(1);
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
 
@@ -36,8 +37,13 @@ export const AdminUsersTab = ({ dictionary, accessToken, refreshSession, adminPe
         role?: string;
         isActive?: string;
         search?: string;
+        incompleteBusinessSignup?: string;
       } = { page, limit: 20 };
-      if (roleFilter) params.role = roleFilter;
+      if (incompleteBusinessOnly) {
+        params.incompleteBusinessSignup = 'true';
+      } else if (roleFilter) {
+        params.role = roleFilter;
+      }
       if (statusFilter) params.isActive = statusFilter;
       if (search) params.search = search;
       const result = await adminApiClient.getUsers(accessToken, params, { refreshSession });
@@ -47,7 +53,7 @@ export const AdminUsersTab = ({ dictionary, accessToken, refreshSession, adminPe
     } finally {
       setLoading(false);
     }
-  }, [accessToken, refreshSession, page, roleFilter, statusFilter, search]);
+  }, [accessToken, refreshSession, page, roleFilter, statusFilter, search, incompleteBusinessOnly]);
 
   useEffect(() => {
     void load();
@@ -85,6 +91,7 @@ export const AdminUsersTab = ({ dictionary, accessToken, refreshSession, adminPe
         <select
           className="admin-toolbar-select"
           value={roleFilter}
+          disabled={incompleteBusinessOnly}
           onChange={(e) => {
             setRoleFilter(e.target.value);
             setPage(1);
@@ -109,6 +116,18 @@ export const AdminUsersTab = ({ dictionary, accessToken, refreshSession, adminPe
           <option value="true">{d.active}</option>
           <option value="false">{d.inactive}</option>
         </select>
+        <label className="admin-toolbar-checkbox">
+          <input
+            type="checkbox"
+            checked={incompleteBusinessOnly}
+            onChange={(e) => {
+              setIncompleteBusinessOnly(e.target.checked);
+              if (e.target.checked) setRoleFilter('');
+              setPage(1);
+            }}
+          />
+          {d.filterIncompleteBusiness}
+        </label>
       </div>
 
       {loading ? (
@@ -137,6 +156,11 @@ export const AdminUsersTab = ({ dictionary, accessToken, refreshSession, adminPe
                     <td>{user.email}</td>
                     <td>
                       <span className="admin-badge">{user.primaryRole}</span>
+                      {user.incompleteBusinessSignup ? (
+                        <span className="admin-badge admin-badge--warn" title={d.badgeIncompleteBusiness}>
+                          {d.badgeIncompleteBusiness}
+                        </span>
+                      ) : null}
                     </td>
                     <td>
                       <span

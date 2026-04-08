@@ -109,7 +109,12 @@ export class AdminService {
   // ── Users ───────────────────────────────────────────────────────────────
 
   async listUsers(
-    filters: { role?: string; isActive?: boolean; search?: string },
+    filters: {
+      role?: string;
+      isActive?: boolean;
+      search?: string;
+      incompleteBusinessSignup?: boolean;
+    },
     page: number = 1,
     limit: number = 20,
   ): Promise<PaginatedResponse<AdminUserListItem>> {
@@ -868,6 +873,9 @@ export class AdminService {
   }
 
   private toUserListItem(row: UserListRow): AdminUserListItem {
+    const onboardingDone = row.business_onboarding_completed_at != null;
+    const incompleteBusinessSignup =
+      row.primary_role === 'business' && row.email_verified_at == null && !onboardingDone;
     return {
       id: row.id,
       email: row.email,
@@ -883,6 +891,7 @@ export class AdminService {
       createdAt: row.created_at,
       lastLoginAt: row.last_login_at,
       deletedAt: row.deleted_at,
+      ...(incompleteBusinessSignup ? { incompleteBusinessSignup: true } : {}),
     };
   }
 

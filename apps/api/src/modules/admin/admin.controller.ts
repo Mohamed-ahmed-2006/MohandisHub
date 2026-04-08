@@ -156,11 +156,17 @@ const getDashboardStats = asyncHandler(async (_req, res) => {
 const listUsers = asyncHandler(async (req, res) => {
   const page = parseInt(req.query.page as string, 10) || 1;
   const limit = Math.min(parseInt(req.query.limit as string, 10) || 20, 100);
-  const filters: { role?: string; isActive?: boolean; search?: string } = {};
+  const filters: {
+    role?: string;
+    isActive?: boolean;
+    search?: string;
+    incompleteBusinessSignup?: boolean;
+  } = {};
   if (req.query.role) filters.role = req.query.role as string;
   if (req.query.isActive === 'true') filters.isActive = true;
   else if (req.query.isActive === 'false') filters.isActive = false;
   if (req.query.search) filters.search = req.query.search as string;
+  if (req.query.incompleteBusinessSignup === 'true') filters.incompleteBusinessSignup = true;
 
   const result = await adminService.listUsers(filters, page, limit);
   const response: ApiSuccessBody<PaginatedResponse<AdminUserListItem>> = { ok: true, data: result };

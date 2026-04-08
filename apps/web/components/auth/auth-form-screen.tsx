@@ -165,7 +165,10 @@ export const AuthFormScreen = ({
 
             <header className="auth-form-header">
               <h1 className="auth-form-title">{dictionary.auth.register.chooseRoleTitle}</h1>
-              <p className="auth-form-subtitle">{dictionary.auth.register.chooseRoleSubtitle}</p>
+              <p className="auth-form-subtitle">{dictionary.auth.register.subtitle}</p>
+              <p className="auth-form-subtitle auth-form-subtitle-secondary">
+                {dictionary.auth.register.chooseRoleSubtitle}
+              </p>
             </header>
 
             <div className="auth-role-cards">

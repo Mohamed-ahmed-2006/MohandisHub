@@ -675,6 +675,8 @@ export const enDictionary: Dictionary = {
       edit: 'Edit',
       view: 'View',
       confirmDelete: 'Are you sure you want to delete this user?',
+      filterIncompleteBusiness: 'Incomplete business signup',
+      badgeIncompleteBusiness: 'Onboarding incomplete',
       noUsers: 'No users found.',
       userDetail: {
         title: 'User Details',
@@ -771,6 +773,13 @@ export const enDictionary: Dictionary = {
             academicTitle: 'Academic Records',
             businessTitle: 'Business Verification',
             businessMissing: 'No business profile.',
+            businessApproveHint:
+              'Approve marks company details (KYB) as reviewed. Overall status becomes Verified only after owner identity is approved and a company logo is saved on the profile.',
+            businessKybApproved: 'Company docs (KYB)',
+            businessOwnerIdentity: 'Owner identity',
+            businessLogoOnFile: 'Logo on file',
+            yes: 'Yes',
+            no: 'No',
             status: 'Status',
             empty: 'No records found.',
           },

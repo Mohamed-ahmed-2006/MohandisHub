@@ -59,6 +59,7 @@ export class AdminRepository {
     role?: string;
     isActive?: boolean;
     search?: string;
+    incompleteBusinessSignup?: boolean;
   }): Promise<number> {
     const conditions: string[] = ['u.deleted_at IS NULL'];
     const params: unknown[] = [];
@@ -81,16 +82,31 @@ export class AdminRepository {
       params.push(`%${filters.search}%`);
       idx++;
     }
+    if (filters.incompleteBusinessSignup) {
+      conditions.push(
+        `u.primary_role = 'business' AND u.email_verified_at IS NULL AND bp.onboarding_completed_at IS NULL`,
+      );
+    }
+
+    const from =
+      filters.incompleteBusinessSignup === true
+        ? `users u LEFT JOIN business_profiles bp ON bp.user_id = u.id`
+        : 'users u';
 
     const { rows } = await this.db.query<{ count: string }>(
-      `SELECT COUNT(*)::text AS count FROM users u WHERE ${conditions.join(' AND ')}`,
+      `SELECT COUNT(*)::text AS count FROM ${from} WHERE ${conditions.join(' AND ')}`,
       params,
     );
     return parseInt(rows[0]!.count, 10);
   }
 
   async listUsers(
-    filters: { role?: string; isActive?: boolean; search?: string },
+    filters: {
+      role?: string;
+      isActive?: boolean;
+      search?: string;
+      incompleteBusinessSignup?: boolean;
+    },
     page: number,
     limit: number,
   ): Promise<UserListRow[]> {
@@ -115,14 +131,21 @@ export class AdminRepository {
       params.push(`%${filters.search}%`);
       idx++;
     }
+    if (filters.incompleteBusinessSignup) {
+      conditions.push(
+        `u.primary_role = 'business' AND u.email_verified_at IS NULL AND bp.onboarding_completed_at IS NULL`,
+      );
+    }
 
     const offset = (page - 1) * limit;
     params.push(limit, offset);
 
     const { rows } = await this.db.query<UserListRow>(
-      `SELECT u.*, p.slug AS plan_slug, p.name AS plan_name, u.admin_permissions
+      `SELECT u.*, p.slug AS plan_slug, p.name AS plan_name, u.admin_permissions,
+              bp.onboarding_completed_at AS business_onboarding_completed_at
        FROM users u
        LEFT JOIN plans p ON u.plan_id = p.id
+       LEFT JOIN business_profiles bp ON bp.user_id = u.id
        WHERE ${conditions.join(' AND ')}
        ORDER BY u.created_at DESC
        LIMIT $${idx++} OFFSET $${idx}`,
@@ -160,10 +183,12 @@ export class AdminRepository {
   async getUserDetail(userId: string): Promise<UserDetailRow | null> {
     const { rows } = await this.db.query<UserDetailRow>(
       `SELECT u.*, p.slug AS plan_slug, p.name AS plan_name, u.admin_permissions,
-              w.balance::text AS wallet_balance, w.currency AS wallet_currency, w.is_frozen AS wallet_frozen
+              w.balance::text AS wallet_balance, w.currency AS wallet_currency, w.is_frozen AS wallet_frozen,
+              bp.onboarding_completed_at AS business_onboarding_completed_at
        FROM users u
        LEFT JOIN plans p ON u.plan_id = p.id
        LEFT JOIN wallets w ON w.user_id = u.id
+       LEFT JOIN business_profiles bp ON bp.user_id = u.id
        WHERE u.id = $1`,
       [userId],
     );

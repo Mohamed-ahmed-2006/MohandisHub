@@ -89,6 +89,31 @@ export class AuthRepository {
     return created;
   }
 
+  /**
+   * Business account that never verified email and never finished onboarding (or has no profile row).
+   * Safe to remove so the same email can register again after abandoning the flow.
+   */
+  async isAbandonedUnverifiedBusinessSignup(userId: string): Promise<boolean> {
+    const { rows } = await this.db.query<{ ok: boolean }>(
+      `SELECT EXISTS (
+         SELECT 1 FROM users u
+         LEFT JOIN business_profiles bp ON bp.user_id = u.id
+         WHERE u.id = $1
+           AND u.primary_role = 'business'
+           AND u.email_verified_at IS NULL
+           AND u.deleted_at IS NULL
+           AND (bp.user_id IS NULL OR bp.onboarding_completed_at IS NULL)
+       ) AS ok`,
+      [userId],
+    );
+    return rows[0]?.ok === true;
+  }
+
+  /** Hard delete (CASCADE removes profiles, tokens, etc.). Use only for reclaim paths. */
+  async hardDeleteUserById(userId: string): Promise<void> {
+    await this.db.query(`DELETE FROM users WHERE id = $1`, [userId]);
+  }
+
   /** Set last_login_at to now() for the user. */
   async updateLastLoginAt(userId: string): Promise<void> {
     await this.db.query('UPDATE users SET last_login_at = now() WHERE id = $1', [userId]);

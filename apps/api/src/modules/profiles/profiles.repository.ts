@@ -655,11 +655,16 @@ export class ProfilesRepository {
    * Business KYC is two steps (identity docs + company docs). After identity is approved, identity
    * rows are no longer "pending", but company verification may still be open. Those users must
    * stay on the admin pending list so the Business tab (logo / tax ID) is not dropped.
+   *
+   * After an admin approves company docs (`business_verified = true`), overall status often stays
+   * `under_review` until owner identity + logo are satisfied — exclude those from this queue so
+   * KYB-approved businesses do not look "stuck" in the business-requests list.
    */
   async findUserIdsWithPendingBusinessVerificationReview(): Promise<string[]> {
     const { rows } = await this.db.query<{ user_id: string }>(
       `SELECT user_id FROM business_profiles
        WHERE verification_status IN ('pending', 'under_review')
+         AND business_verified = false
        ORDER BY created_at ASC`,
     );
     return rows.map((r) => r.user_id);

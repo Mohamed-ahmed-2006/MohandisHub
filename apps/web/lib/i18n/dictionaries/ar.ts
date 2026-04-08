@@ -663,6 +663,8 @@ export const arDictionary: Dictionary = {
       edit: 'تعديل',
       view: 'عرض',
       confirmDelete: 'هل أنت متأكد من حذف هذا المستخدم؟',
+      filterIncompleteBusiness: 'تسجيل أعمال غير مكتمل',
+      badgeIncompleteBusiness: 'إعداد الحساب غير مكتمل',
       noUsers: 'لا يوجد مستخدمون.',
       userDetail: {
         title: 'تفاصيل المستخدم',
@@ -759,6 +761,13 @@ export const arDictionary: Dictionary = {
             academicTitle: 'السجلات الأكاديمية',
             businessTitle: 'تحقق الأعمال',
             businessMissing: 'لا يوجد ملف أعمال.',
+            businessApproveHint:
+              'الموافقة تعني مراجعة بيانات الشركة (KYB). تصبح الحالة «موثّق» فقط بعد اعتماد هوية المالك وحفظ شعار الشركة في الملف.',
+            businessKybApproved: 'بيانات الشركة (KYB)',
+            businessOwnerIdentity: 'هوية المالك',
+            businessLogoOnFile: 'شعار محفوظ',
+            yes: 'نعم',
+            no: 'لا',
             status: 'الحالة',
             empty: 'لا توجد بيانات.',
           },

@@ -167,7 +167,7 @@ export const AuthForm = ({
 
   const submitLabel = useMemo(() => {
     if (isSubmitting) return dictionary.common.loading;
-    return mode === 'login' ? dictionary.login.title : dictionary.register.title;
+    return mode === 'login' ? dictionary.common.login : dictionary.common.submit;
   }, [dictionary, isSubmitting, mode]);
 
   const countryName = locale === 'ar' ? 'nameAr' : 'nameEn';
@@ -283,10 +283,7 @@ export const AuthForm = ({
     setIsSubmitting(true);
 
     try {
-      const fullPhone =
-        registerValues.phone.trim().length > 0
-          ? `${registerValues.phoneCode}${registerValues.phone.trim()}`
-          : undefined;
+      const nationalPhone = registerValues.phone.trim();
 
       const registerPayload: Parameters<typeof register>[0] = {
         displayName: registerValues.displayName.trim(),
@@ -299,7 +296,8 @@ export const AuthForm = ({
       };
       if (registerValues.nationality) registerPayload.nationality = registerValues.nationality;
       if (registerValues.phoneCode) registerPayload.phoneCode = registerValues.phoneCode;
-      if (fullPhone) registerPayload.phone = fullPhone;
+      // DB `users.phone` is VARCHAR(20) for the national number only; dial code lives in `phone_code`.
+      if (nationalPhone.length > 0) registerPayload.phone = nationalPhone;
       if (role === 'business' && registerValues.companyName.trim().length > 0) {
         registerPayload.companyName = registerValues.companyName.trim();
       }
@@ -355,7 +353,7 @@ export const AuthForm = ({
           customer: dictionary.register.customerTitle,
           expert: dictionary.register.expertTitle,
           business: dictionary.register.businessTitle,
-          craftsman: dictionary.register.expertTitle,
+          craftsman: dictionary.register.craftsmanTitle,
         }[role]
       : dictionary.login.title;
 
@@ -365,7 +363,7 @@ export const AuthForm = ({
           customer: dictionary.register.customerSubtitle,
           expert: dictionary.register.expertSubtitle,
           business: dictionary.register.businessSubtitle,
-          craftsman: dictionary.register.expertSubtitle,
+          craftsman: dictionary.register.craftsmanSubtitle,
         }[role]
       : dictionary.login.subtitle;
 
@@ -373,7 +371,7 @@ export const AuthForm = ({
     customer: dictionary.register.displayNameCustomerLabel,
     expert: dictionary.register.displayNameExpertLabel,
     business: dictionary.register.displayNameBusinessLabel,
-    craftsman: dictionary.register.displayNameExpertLabel,
+    craftsman: dictionary.register.displayNameCraftsmanLabel,
   }[role];
 
   const dobLabel = {
@@ -383,7 +381,12 @@ export const AuthForm = ({
     craftsman: dictionary.register.dateOfBirthLabel,
   }[role];
 
-  const dobHint = role === 'expert' ? dictionary.register.dateOfBirthExpertHint : null;
+  const dobHint =
+    role === 'expert'
+      ? dictionary.register.dateOfBirthExpertHint
+      : role === 'craftsman'
+        ? dictionary.register.dateOfBirthCraftsmanHint
+        : null;
 
   const phoneLabel =
     role === 'business' ? dictionary.register.phoneBusinessLabel : dictionary.register.phoneLabel;
@@ -525,6 +528,7 @@ export const AuthForm = ({
                 isPasswordVisible ? dictionary.common.hidePassword : dictionary.common.showPassword
               }
               title={isPasswordVisible ? dictionary.common.hidePassword : dictionary.common.showPassword}
+              suppressHydrationWarning
             >
               {isPasswordVisible ? <EyeOff size={18} aria-hidden="true" /> : <Eye size={18} aria-hidden="true" />}
             </button>
@@ -533,6 +537,14 @@ export const AuthForm = ({
             <span className="auth-form-field-error">{fieldErrors.password}</span>
           ) : null}
         </label>
+
+        {mode === 'login' ? (
+          <div className="auth-form-forgot-row">
+            <Link href={buildLocalePath(locale, '/auth/forgot-password')} className="auth-form-forgot-link">
+              {dictionary.login.forgotPasswordLink}
+            </Link>
+          </div>
+        ) : null}
 
         {mode === 'register' ? (
           <>

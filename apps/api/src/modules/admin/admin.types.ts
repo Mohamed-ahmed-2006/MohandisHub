@@ -26,6 +26,7 @@ export type UserRow = {
 export type UserListRow = UserRow & {
   plan_slug: string | null;
   plan_name: string | null;
+  business_onboarding_completed_at?: string | null;
 };
 
 export type UserDetailRow = UserListRow & {

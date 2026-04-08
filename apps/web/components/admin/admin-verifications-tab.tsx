@@ -143,6 +143,7 @@ export const AdminVerificationsTab = ({ dictionary, accessToken, refreshSession 
   const businessUsers = items.filter(
     (i) =>
       i.businessProfile &&
+      !i.businessProfile.businessVerified &&
       (i.businessProfile.verificationStatus === 'pending' ||
         i.businessProfile.verificationStatus === 'under_review'),
   );

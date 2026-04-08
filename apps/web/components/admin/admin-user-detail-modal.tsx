@@ -819,7 +819,50 @@ export const AdminUserDetailModal = ({
                     <h3 className="admin-user-card-title">{u360?.verification?.businessTitle ?? 'Business Verification'}</h3>
                     {!currentOverview.businessProfile ? <p className="admin-empty">{u360?.verification?.businessMissing ?? 'No business profile.'}</p> : (
                       <>
+                        <p
+                          className="admin-user360-item-meta"
+                          style={{ fontSize: '0.85rem', color: 'var(--text-soft)', marginBottom: '0.5rem' }}
+                        >
+                          {(u360?.verification as { businessApproveHint?: string } | undefined)
+                            ?.businessApproveHint ??
+                            'Approve marks company details (KYB) as reviewed. Verified status requires owner identity approved and a logo on file.'}
+                        </p>
                         <p className="admin-user360-item-meta">{u360?.verification?.status ?? 'Status'}: {currentOverview.businessProfile.verificationStatus}</p>
+                        <div className="admin-user-field-grid" style={{ marginBottom: '0.5rem' }}>
+                          <div className="admin-user-field">
+                            <span className="admin-user-field-label">
+                              {(u360?.verification as { businessKybApproved?: string } | undefined)
+                                ?.businessKybApproved ?? 'Company docs (KYB)'}
+                            </span>
+                            <span className="admin-user-field-value">
+                              {currentOverview.businessProfile.businessVerified
+                                ? ((u360?.verification as { yes?: string } | undefined)?.yes ?? 'Yes')
+                                : ((u360?.verification as { no?: string } | undefined)?.no ?? 'No')}
+                            </span>
+                          </div>
+                          <div className="admin-user-field">
+                            <span className="admin-user-field-label">
+                              {(u360?.verification as { businessOwnerIdentity?: string } | undefined)
+                                ?.businessOwnerIdentity ?? 'Owner identity'}
+                            </span>
+                            <span className="admin-user-field-value">
+                              {currentOverview.businessProfile.identityVerified
+                                ? ((u360?.verification as { yes?: string } | undefined)?.yes ?? 'Yes')
+                                : ((u360?.verification as { no?: string } | undefined)?.no ?? 'No')}
+                            </span>
+                          </div>
+                          <div className="admin-user-field">
+                            <span className="admin-user-field-label">
+                              {(u360?.verification as { businessLogoOnFile?: string } | undefined)
+                                ?.businessLogoOnFile ?? 'Logo on file'}
+                            </span>
+                            <span className="admin-user-field-value">
+                              {currentOverview.businessProfile.logoUrl?.trim()
+                                ? ((u360?.verification as { yes?: string } | undefined)?.yes ?? 'Yes')
+                                : ((u360?.verification as { no?: string } | undefined)?.no ?? 'No')}
+                            </span>
+                          </div>
+                        </div>
                         {currentOverview.businessProfile.logoUrl && (
                           <div className="admin-user360-links" style={{ marginBottom: '0.75rem' }}>
                             <button

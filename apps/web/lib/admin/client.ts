@@ -180,7 +180,14 @@ export const adminApiClient = {
   // Users
   getUsers: (
     accessToken: string,
-    params?: { page?: number; limit?: number; role?: string; isActive?: string; search?: string },
+    params?: {
+      page?: number;
+      limit?: number;
+      role?: string;
+      isActive?: string;
+      search?: string;
+      incompleteBusinessSignup?: string;
+    },
     options?: AdminClientOptions,
   ) => {
     const query = new URLSearchParams();
@@ -189,6 +196,7 @@ export const adminApiClient = {
     if (params?.role) query.set('role', params.role);
     if (params?.isActive !== undefined) query.set('isActive', params.isActive);
     if (params?.search) query.set('search', params.search);
+    if (params?.incompleteBusinessSignup === 'true') query.set('incompleteBusinessSignup', 'true');
     const qs = query.toString();
     return apiRequest<PaginatedResponse<AdminUserListItem>>({
       method: 'GET',
