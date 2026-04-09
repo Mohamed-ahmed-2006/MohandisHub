@@ -1,20 +1,5 @@
-export type AdLinkType = 'profile' | 'service' | 'need' | 'external';
+export type AdLinkType = 'profile' | 'service' | 'need';
 export type AdStatus = 'pending_payment' | 'active' | 'expired' | 'cancelled' | 'paused_by_admin';
-
-export type AdvertisementPlanRow = {
-  id: string;
-  name_en: string;
-  name_ar: string | null;
-  duration_days: number;
-  price: string;
-  currency: string;
-  description_en: string | null;
-  description_ar: string | null;
-  is_active: boolean;
-  admin_override_allowed: boolean;
-  created_at: string;
-  updated_at: string;
-};
 
 export type AdPricingRuleRow = {
   id: string;
@@ -39,7 +24,6 @@ export type AdPricingRuleRow = {
 export type AdvertisementRow = {
   id: string;
   advertiser_id: string;
-  ad_plan_id: string | null;
   title_en: string;
   title_ar: string | null;
   description_en: string | null;

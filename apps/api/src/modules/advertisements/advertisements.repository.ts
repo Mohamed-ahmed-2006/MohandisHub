@@ -4,10 +4,10 @@ import { getPool } from '../../db/pool.js';
 
 import type {
   AdPricingRuleRow,
-  AdvertisementPlanRow,
   AdvertisementRow,
 } from './advertisements.types.js';
 import type {
+  AdminAdControlsInput,
   AdminPricingOverrideInput,
   AdminScheduleInput,
   CreateAdInput,
@@ -17,38 +17,82 @@ import type {
   UpdatePricingRuleInput,
 } from './advertisements.validation.js';
 
+const GLOBAL_AD_CONTROLS_RULE_NAME = '__GLOBAL_AD_CONTROLS__';
+
 export class AdvertisementsRepository {
-  async listPlans(): Promise<AdvertisementPlanRow[]> {
-    const { rows } = await getPool().query<AdvertisementPlanRow>(
-      `SELECT * FROM advertisement_plans WHERE is_active = true ORDER BY duration_days ASC, price ASC`,
+  async getGlobalAdControls(): Promise<{ acceptAds: boolean; pricePerDay: number } | null> {
+    const { rows } = await getPool().query<{ is_active: boolean; flat_fee: string }>(
+      `SELECT is_active, flat_fee
+       FROM ad_pricing_rules
+       WHERE name = $1
+       ORDER BY created_at DESC
+       LIMIT 1`,
+      [GLOBAL_AD_CONTROLS_RULE_NAME],
     );
-    return rows;
+    const row = rows[0];
+    if (!row) return null;
+    return {
+      acceptAds: row.is_active,
+      pricePerDay: parseFloat(row.flat_fee ?? '0'),
+    };
   }
 
-  async getPlanById(id: string): Promise<AdvertisementPlanRow | null> {
-    const { rows } = await getPool().query<AdvertisementPlanRow>(
-      `SELECT * FROM advertisement_plans WHERE id = $1 LIMIT 1`,
-      [id],
+  async upsertGlobalAdControls(
+    adminId: string,
+    input: AdminAdControlsInput,
+  ): Promise<{ acceptAds: boolean; pricePerDay: number }> {
+    const existing = await getPool().query<{ id: string }>(
+      `SELECT id FROM ad_pricing_rules WHERE name = $1 ORDER BY created_at DESC LIMIT 1`,
+      [GLOBAL_AD_CONTROLS_RULE_NAME],
     );
-    return rows[0] ?? null;
+    if (existing.rows[0]?.id) {
+      await getPool().query(
+        `UPDATE ad_pricing_rules
+         SET is_active = $2,
+             flat_fee = $3,
+             price_multiplier = 1,
+             priority = 10000,
+             updated_at = now()
+         WHERE id = $1`,
+        [existing.rows[0].id, input.acceptAds, input.pricePerDay],
+      );
+    } else {
+      await getPool().query(
+        `INSERT INTO ad_pricing_rules (
+          name, is_active, role_scope, country_scope, city_scope, category_scope,
+          min_duration_days, max_duration_days, price_multiplier, flat_fee, starts_at, ends_at, priority, created_by
+        ) VALUES (
+          $1, $2, '{}'::text[], '{}'::text[], '{}'::text[], '{}'::uuid[],
+          NULL, NULL, 1, $3, NULL, NULL, 10000, $4
+        )`,
+        [GLOBAL_AD_CONTROLS_RULE_NAME, input.acceptAds, input.pricePerDay, adminId],
+      );
+    }
+    return { acceptAds: input.acceptAds, pricePerDay: input.pricePerDay };
   }
 
-  async createAd(advertiserId: string, input: CreateAdInput): Promise<AdvertisementRow> {
-    const { rows } = await getPool().query<AdvertisementRow>(
+  async createAdInTx(
+    client: PoolClient,
+    advertiserId: string,
+    input: CreateAdInput,
+    amountPaid: number,
+    startsAt: Date,
+    expiresAt: Date,
+  ): Promise<AdvertisementRow> {
+    const { rows } = await client.query<AdvertisementRow>(
       `INSERT INTO advertisements (
-        advertiser_id, ad_plan_id, title_en, title_ar, description_en, description_ar, image_url,
-        cta_text_en, cta_text_ar, link_type, link_target, starts_at, status, priority,
+        advertiser_id, title_en, title_ar, description_en, description_ar, image_url,
+        cta_text_en, cta_text_ar, link_type, link_target, starts_at, expires_at, amount_paid, status, priority,
         target_roles, target_countries, target_cities, target_categories, target_languages,
         target_min_budget, target_max_budget
       ) VALUES (
-        $1, $2, $3, $4, $5, $6, $7,
-        $8, $9, $10, $11, $12, 'pending_payment', $13,
-        $14::text[], $15::text[], $16::text[], $17::uuid[], $18::text[],
-        $19, $20
+        $1, $2, $3, $4, $5, $6,
+        $7, $8, $9, $10, $11, $12, $13, 'active', $14,
+        $15::text[], $16::text[], $17::text[], $18::uuid[], $19::text[],
+        $20, $21
       ) RETURNING *`,
       [
         advertiserId,
-        input.adPlanId,
         input.titleEn,
         input.titleAr ?? null,
         input.descriptionEn ?? null,
@@ -58,7 +102,9 @@ export class AdvertisementsRepository {
         input.ctaTextAr ?? null,
         input.linkType,
         input.linkTarget ?? null,
-        input.startsAt ?? null,
+        startsAt.toISOString(),
+        expiresAt.toISOString(),
+        amountPaid,
         input.priority ?? 0,
         input.targetRoles ?? [],
         input.targetCountries ?? [],
@@ -169,25 +215,6 @@ export class AdvertisementsRepository {
 
   async cancelAd(id: string): Promise<void> {
     await getPool().query(`UPDATE advertisements SET status = 'cancelled', updated_at = now() WHERE id = $1`, [id]);
-  }
-
-  async activatePaidAdInTx(
-    client: PoolClient,
-    adId: string,
-    amountPaid: number,
-    startsAt: Date,
-    expiresAt: Date,
-  ): Promise<void> {
-    await client.query(
-      `UPDATE advertisements
-       SET status = 'active',
-           amount_paid = $2,
-           starts_at = $3,
-           expires_at = $4,
-           updated_at = now()
-       WHERE id = $1`,
-      [adId, amountPaid, startsAt.toISOString(), expiresAt.toISOString()],
-    );
   }
 
   async expireStaleAds(): Promise<void> {

@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-export const adLinkTypeSchema = z.enum(['profile', 'service', 'need', 'external']);
+export const adLinkTypeSchema = z.enum(['profile', 'service', 'need']);
 export const adStatusSchema = z.enum([
   'pending_payment',
   'active',
@@ -10,7 +10,7 @@ export const adStatusSchema = z.enum([
 ]);
 
 export const createAdSchema = z.object({
-  adPlanId: z.string().uuid(),
+  durationDays: z.coerce.number().int().min(1).max(365),
   startsAt: z.string().datetime().optional(),
   titleEn: z.string().trim().min(3).max(180),
   titleAr: z.string().trim().max(180).optional(),
@@ -42,8 +42,6 @@ export const listAdsQuerySchema = z.object({
   advertiserId: z.string().uuid().optional(),
 });
 
-export const payAdSchema = z.object({});
-
 export const adClickSchema = z.object({});
 
 export const adminScheduleSchema = z.object({
@@ -54,6 +52,11 @@ export const adminScheduleSchema = z.object({
 
 export const adminPricingOverrideSchema = z.object({
   amount: z.coerce.number().min(0),
+});
+
+export const adminAdControlsSchema = z.object({
+  acceptAds: z.boolean(),
+  pricePerDay: z.coerce.number().min(0),
 });
 
 export const createPricingRuleSchema = z.object({
@@ -89,6 +92,7 @@ export type UpdateAdInput = z.infer<typeof updateAdSchema>;
 export type ListAdsQueryInput = z.infer<typeof listAdsQuerySchema>;
 export type AdminScheduleInput = z.infer<typeof adminScheduleSchema>;
 export type AdminPricingOverrideInput = z.infer<typeof adminPricingOverrideSchema>;
+export type AdminAdControlsInput = z.infer<typeof adminAdControlsSchema>;
 export type CreatePricingRuleInput = z.infer<typeof createPricingRuleSchema>;
 export type UpdatePricingRuleInput = z.infer<typeof updatePricingRuleSchema>;
 export type AdCenterResolveInput = z.infer<typeof adCenterResolveSchema>;

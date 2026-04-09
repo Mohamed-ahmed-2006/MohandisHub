@@ -4,13 +4,12 @@ import { HttpError } from '../../utils/http-error.js';
 import { AdvertisementsService } from './advertisements.service.js';
 import {
   adCenterResolveSchema,
+  adminAdControlsSchema,
   adminPricingOverrideSchema,
   adminScheduleSchema,
   createAdSchema,
-  createPricingRuleSchema,
   listAdsQuerySchema,
   updateAdSchema,
-  updatePricingRuleSchema,
 } from './advertisements.validation.js';
 
 const svc = new AdvertisementsService();
@@ -41,11 +40,6 @@ function parseBody<T>(
   }
   return result.data as T;
 }
-
-const listPlans = asyncHandler(async (_req, res) => {
-  const data = await svc.listPlans();
-  res.json({ ok: true, data });
-});
 
 const createAd = asyncHandler(async (req, res) => {
   const user = requireUser(req);
@@ -85,20 +79,8 @@ const deleteAd = asyncHandler(async (req, res) => {
   res.json({ ok: true, data });
 });
 
-const payAd = asyncHandler(async (req, res) => {
-  const user = requireUser(req);
-  const data = await svc.payAd(req.params.id!, user.id);
-  res.json({ ok: true, data });
-});
-
 const listActiveResolved = asyncHandler(async (req, res) => {
   const input = parseBody(adCenterResolveSchema, req.query);
-  const data = await svc.resolveActiveAds(input);
-  res.json({ ok: true, data });
-});
-
-const resolveAdCenter = asyncHandler(async (req, res) => {
-  const input = parseBody(adCenterResolveSchema, req.body);
   const data = await svc.resolveActiveAds(input);
   res.json({ ok: true, data });
 });
@@ -129,47 +111,30 @@ const adminPricingOverride = asyncHandler(async (req, res) => {
   res.json({ ok: true, data });
 });
 
-const listPricingRules = asyncHandler(async (_req, res) => {
-  const data = await svc.listPricingRules();
+const getAdControls = asyncHandler(async (_req, res) => {
+  const data = await svc.getAdminAdControls();
   res.json({ ok: true, data });
 });
 
-const createPricingRule = asyncHandler(async (req, res) => {
+const updateAdminAdControls = asyncHandler(async (req, res) => {
   const user = requireUser(req);
-  const input = parseBody(createPricingRuleSchema, req.body);
-  const data = await svc.createPricingRule(user.id, input);
-  res.status(201).json({ ok: true, data });
-});
-
-const updatePricingRule = asyncHandler(async (req, res) => {
-  const input = parseBody(updatePricingRuleSchema, req.body);
-  const data = await svc.updatePricingRule(req.params.id!, input);
-  res.json({ ok: true, data });
-});
-
-const disablePricingRule = asyncHandler(async (req, res) => {
-  const data = await svc.disablePricingRule(req.params.id!);
+  const input = parseBody(adminAdControlsSchema, req.body);
+  const data = await svc.updateAdminAdControls(user.id, input);
   res.json({ ok: true, data });
 });
 
 export const advertisementsController = {
-  listPlans,
   createAd,
   getAd,
   listMyAds,
   listAllAds,
   updateAd,
   deleteAd,
-  payAd,
   listActiveResolved,
-  resolveAdCenter,
   trackClick,
   adminSetStatus,
   adminSchedule,
   adminPricingOverride,
-  listPricingRules,
-  createPricingRule,
-  updatePricingRule,
-  disablePricingRule,
+  getAdControls,
+  updateAdminAdControls,
 };
-

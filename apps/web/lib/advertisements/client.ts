@@ -3,13 +3,12 @@ import { getApiBaseUrl } from '@/lib/env';
 type ApiSuccess<T> = { ok: true; data: T };
 type ApiError = { error?: { code?: string; message?: string } };
 
-export type AdLinkType = 'profile' | 'service' | 'need' | 'external';
+export type AdLinkType = 'profile' | 'service' | 'need';
 export type AdStatus = 'pending_payment' | 'active' | 'expired' | 'cancelled' | 'paused_by_admin';
 
 export type Advertisement = {
   id: string;
   advertiser_id: string;
-  ad_plan_id: string | null;
   title_en: string;
   title_ar: string | null;
   description_en: string | null;
@@ -21,7 +20,6 @@ export type Advertisement = {
   link_target: string | null;
   status: AdStatus;
   amount_paid: string | null;
-  admin_price_override?: string | null;
   starts_at: string | null;
   expires_at: string | null;
   priority: number;
@@ -35,15 +33,9 @@ export type Advertisement = {
   advertiser_name?: string;
 };
 
-export type AdvertisementPlan = {
-  id: string;
-  name_en: string;
-  name_ar: string | null;
-  duration_days: number;
-  price: string;
-  currency: string;
-  description_en: string | null;
-  description_ar: string | null;
+export type AdminAdControls = {
+  acceptAds: boolean;
+  pricePerDay: number;
 };
 
 type ApiOpts = {
@@ -72,14 +64,6 @@ async function apiReq<T>(path: string, opts: ApiOpts): Promise<T> {
       return [] as T;
     }
     const body = (await response.json().catch(() => ({}))) as ApiError;
-    if (
-      response.status === 404 &&
-      (path.startsWith('/api/advertisements/admin') || path.startsWith('/api/advertisements/pricing-rules'))
-    ) {
-      throw new Error(
-        'Advertisements admin endpoints are not available on this API deployment yet. Please deploy the latest API version.',
-      );
-    }
     throw new Error(body.error?.message ?? 'Request failed');
   }
   const json = (await response.json()) as ApiSuccess<T>;
@@ -99,12 +83,15 @@ export const advertisementsApiClient = {
       allow404AsEmpty: true,
     });
   },
-  getAdPlans: (token: string) =>
-    apiReq<AdvertisementPlan[]>('/api/advertisements/plans', { token, allow404As: [] }),
+  getAdControls: (token: string) =>
+    apiReq<AdminAdControls>('/api/advertisements/controls', {
+      token,
+      allow404As: { acceptAds: true, pricePerDay: 0 },
+    }),
   createAd: (
     token: string,
     body: {
-      adPlanId: string;
+      durationDays: number;
       startsAt?: string;
       titleEn: string;
       titleAr?: string;
@@ -124,13 +111,6 @@ export const advertisementsApiClient = {
       targetMaxBudget?: number;
     },
   ) => apiReq<Advertisement>('/api/advertisements', { method: 'POST', token, body }),
-  updateAd: (token: string, adId: string, body: Record<string, unknown>) =>
-    apiReq<Advertisement>(`/api/advertisements/${adId}`, { method: 'PUT', token, body }),
-  payForAd: (token: string, adId: string) =>
-    apiReq<{ paid: boolean; amount: number; startsAt: string; expiresAt: string }>(
-      `/api/advertisements/${adId}/pay`,
-      { method: 'POST', token, body: {} },
-    ),
   getMyAds: (token: string, params?: { page?: number; limit?: number; status?: AdStatus }) => {
     const qs = new URLSearchParams();
     if (params?.page) qs.set('page', String(params.page));
@@ -168,5 +148,11 @@ export const advertisementsApiClient = {
       token,
       body: { amount },
     }),
+  adminGetControls: (token: string) =>
+    apiReq<AdminAdControls>('/api/advertisements/admin/controls', {
+      token,
+      allow404As: { acceptAds: true, pricePerDay: 0 },
+    }),
+  adminUpdateControls: (token: string, body: AdminAdControls) =>
+    apiReq<AdminAdControls>('/api/advertisements/admin/controls', { method: 'PUT', token, body }),
 };
-

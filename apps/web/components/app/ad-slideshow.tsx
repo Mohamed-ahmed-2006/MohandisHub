@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
 
 import { advertisementsApiClient, type Advertisement } from '@/lib/advertisements/client';
+import { toAbsoluteAssetUrl } from '@/lib/asset-url';
 import { buildLocalePath } from '@/lib/i18n/path';
 import type { Dictionary, Locale } from '@/lib/i18n/types';
 
@@ -64,6 +65,7 @@ export const AdSlideshow = ({ locale, dictionary, accessToken, role }: AdSlidesh
   const description =
     locale === 'ar' ? active.description_ar || active.description_en : active.description_en;
   const cta = locale === 'ar' ? active.cta_text_ar || active.cta_text_en : active.cta_text_en;
+  const imageUrl = toAbsoluteAssetUrl(active.image_url);
 
   const onClick = async () => {
     try {
@@ -71,27 +73,23 @@ export const AdSlideshow = ({ locale, dictionary, accessToken, role }: AdSlidesh
     } catch {
       // no-op
     }
-    if (active.link_type === 'external' && active.link_target) {
-      window.open(active.link_target, '_blank', 'noopener,noreferrer');
-      return;
-    }
     if (active.link_type === 'profile') {
-      router.push(buildLocalePath(locale, '/app/profile'));
+      router.push(buildLocalePath(locale, `/app/profile/${active.advertiser_id}`));
       return;
     }
     if (active.link_type === 'service' && active.link_target) {
-      router.push(buildLocalePath(locale, '/app/services'));
+      router.push(buildLocalePath(locale, `/app/services/${active.link_target}`));
       return;
     }
     if (active.link_type === 'need' && active.link_target) {
-      router.push(buildLocalePath(locale, '/app'));
+      router.push(buildLocalePath(locale, `/app/needs/${active.link_target}`));
       return;
     }
   };
 
   return (
     <section className="ad-slideshow" aria-label={dictionary.advertisements?.title ?? 'Advertisements'}>
-      <div className="ad-slideshow-banner" style={{ backgroundImage: `url(${active.image_url})` }}>
+      <div className="ad-slideshow-banner" style={{ backgroundImage: `url(${imageUrl})` }}>
         <div className="ad-slideshow-overlay">
           <p className="ad-slideshow-badge">{dictionary.advertisements?.adLabel ?? 'Sponsored'}</p>
           <h2 className="ad-slideshow-title">{title}</h2>
@@ -110,6 +108,7 @@ export const AdSlideshow = ({ locale, dictionary, accessToken, role }: AdSlidesh
               type="button"
               role="tab"
               aria-selected={slide === idx}
+              aria-label={`Ad ${idx + 1}`}
               className="ad-slideshow-dot"
               onClick={() => setSlide(idx)}
             />
@@ -119,4 +118,3 @@ export const AdSlideshow = ({ locale, dictionary, accessToken, role }: AdSlidesh
     </section>
   );
 };
-

@@ -2,7 +2,11 @@
 
 import { useCallback, useEffect, useState } from 'react';
 
-import { advertisementsApiClient, type Advertisement } from '@/lib/advertisements/client';
+import {
+  advertisementsApiClient,
+  type Advertisement,
+  type AdminAdControls,
+} from '@/lib/advertisements/client';
 import type { Dictionary } from '@/lib/i18n/types';
 
 type AdminAdsTabProps = {
@@ -12,6 +16,7 @@ type AdminAdsTabProps = {
 
 export const AdminAdsTab = ({ dictionary, accessToken }: AdminAdsTabProps) => {
   const [rows, setRows] = useState<Advertisement[]>([]);
+  const [controls, setControls] = useState<AdminAdControls>({ acceptAds: true, pricePerDay: 0 });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<string>('');
@@ -19,17 +24,26 @@ export const AdminAdsTab = ({ dictionary, accessToken }: AdminAdsTabProps) => {
   const [scheduleForm, setScheduleForm] = useState({ startsAt: '', expiresAt: '', reason: '' });
   const [pricingAdId, setPricingAdId] = useState<string | null>(null);
   const [overrideAmount, setOverrideAmount] = useState('');
+  const [savingControls, setSavingControls] = useState(false);
+
+  const stats = {
+    total: rows.length,
+    active: rows.filter((row) => row.status === 'active').length,
+    paused: rows.filter((row) => row.status === 'paused_by_admin').length,
+    expired: rows.filter((row) => row.status === 'expired').length,
+  };
 
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
       const status = statusFilter as 'pending_payment' | 'active' | 'expired' | 'cancelled' | 'paused_by_admin' | '';
-      const data = await advertisementsApiClient.adminListAds(
-        accessToken,
-        status ? { status } : undefined,
-      );
+      const [data, adControls] = await Promise.all([
+        advertisementsApiClient.adminListAds(accessToken, status ? { status } : undefined),
+        advertisementsApiClient.adminGetControls(accessToken),
+      ]);
       setRows(data.rows);
+      setControls(adControls);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load ads');
     } finally {
@@ -81,8 +95,94 @@ export const AdminAdsTab = ({ dictionary, accessToken }: AdminAdsTabProps) => {
     }
   };
 
+  const saveControls = async () => {
+    if (controls.pricePerDay < 0) return;
+    setSavingControls(true);
+    try {
+      await advertisementsApiClient.adminUpdateControls(accessToken, controls);
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to save ad controls');
+    } finally {
+      setSavingControls(false);
+    }
+  };
+
   return (
-    <section>
+    <section className="admin-tab-content">
+      <h2 className="admin-tab-title">{dictionary.admin?.tabs?.ads ?? 'Advertisements'}</h2>
+
+      <div className="admin-section">
+        <div className="admin-panel-header">
+          <div>
+            <h3 className="admin-section-title">Overview & Ad Controls</h3>
+            <p className="admin-section-desc">
+              Global controls: enable/disable accepting ads and set one price per day.
+            </p>
+          </div>
+        </div>
+        <div className="admin-stats-grid">
+          <article className="admin-stat-card">
+            <p className="admin-stat-label">Total campaigns</p>
+            <p className="admin-stat-value">{stats.total}</p>
+          </article>
+          <article className="admin-stat-card">
+            <p className="admin-stat-label">Active</p>
+            <p className="admin-stat-value">{stats.active}</p>
+          </article>
+          <article className="admin-stat-card">
+            <p className="admin-stat-label">Paused by admin</p>
+            <p className="admin-stat-value">{stats.paused}</p>
+          </article>
+          <article className="admin-stat-card">
+            <p className="admin-stat-label">Expired</p>
+            <p className="admin-stat-value">{stats.expired}</p>
+          </article>
+        </div>
+        <div className="admin-settings-section" style={{ marginBottom: '1rem' }}>
+          <p className="admin-settings-section-title">Global advertisement settings</p>
+          <div className="admin-settings-row">
+            <label className="admin-settings-label-wrap">
+              <span className="admin-settings-label">Price per day (EGP)</span>
+              <input
+                type="number"
+                min={0}
+                step="0.01"
+                className="admin-settings-input admin-settings-input--number"
+                value={String(controls.pricePerDay)}
+                onChange={(e) =>
+                  setControls((prev) => ({ ...prev, pricePerDay: Number.parseFloat(e.target.value || '0') }))
+                }
+              />
+            </label>
+            <label className="admin-settings-row" style={{ justifyContent: 'flex-start', gap: '0.6rem', marginTop: '0.5rem' }}>
+              <button
+                type="button"
+                className={`admin-settings-toggle ${controls.acceptAds ? 'admin-settings-toggle--on' : ''}`}
+                onClick={() => setControls((prev) => ({ ...prev, acceptAds: !prev.acceptAds }))}
+                aria-label="Toggle accepting ads"
+                aria-pressed={controls.acceptAds}
+              >
+                <span className="admin-settings-toggle-thumb" />
+              </button>
+              <span className="admin-settings-label">Accept new ads</span>
+            </label>
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '0.75rem' }}>
+            <button type="button" className="admin-btn admin-btn--primary" onClick={() => void saveControls()} disabled={savingControls}>
+              {savingControls ? 'Saving...' : 'Save controls'}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div className="admin-section">
+        <h3 className="admin-section-title">Campaign Controls</h3>
+        <p className="admin-section-desc">
+          Per-campaign controls (Activate, Pause, Cancel, Schedule, Price Override) appear on each campaign row below.
+        </p>
+      </div>
+
       <div className="admin-toolbar">
         <select
           className="admin-toolbar-select"
@@ -90,15 +190,20 @@ export const AdminAdsTab = ({ dictionary, accessToken }: AdminAdsTabProps) => {
           onChange={(e) => setStatusFilter(e.target.value)}
         >
           <option value="">{dictionary.admin?.txns?.allStatuses ?? 'All statuses'}</option>
-          <option value="pending_payment">pending_payment</option>
-          <option value="active">active</option>
-          <option value="paused_by_admin">paused_by_admin</option>
-          <option value="expired">expired</option>
-          <option value="cancelled">cancelled</option>
+          <option value="active">Active</option>
+          <option value="paused_by_admin">Paused</option>
+          <option value="expired">Expired</option>
+          <option value="cancelled">Cancelled</option>
         </select>
       </div>
 
       {error ? <p className="admin-empty">{error}</p> : null}
+      {!loading && rows.length === 0 ? (
+        <p className="admin-empty" style={{ marginBottom: '0.75rem' }}>
+          No ad campaigns yet. Once first campaign is created, you will immediately get row controls:
+          Activate / Pause / Cancel / Schedule / Pricing Override.
+        </p>
+      ) : null}
       {loading ? (
         <p className="admin-empty">{dictionary.admin.loading}</p>
       ) : rows.length === 0 ? (
@@ -127,23 +232,31 @@ export const AdminAdsTab = ({ dictionary, accessToken }: AdminAdsTabProps) => {
                     </span>
                   </td>
                   <td>{ad.status}</td>
-                  <td>{ad.amount_paid ?? ad.admin_price_override ?? '—'}</td>
+                  <td>{ad.amount_paid ? `${ad.amount_paid} EGP` : '—'}</td>
                   <td>{ad.impressions}</td>
                   <td>{ad.clicks}</td>
                   <td>
                     <div className="admin-actions-row">
-                      <button type="button" className="admin-btn admin-btn--small" onClick={() => void setStatus(ad.id, 'active')}>
-                        Activate
-                      </button>
-                      <button type="button" className="admin-btn admin-btn--small admin-btn--danger" onClick={() => void setStatus(ad.id, 'paused_by_admin')}>
-                        Pause
-                      </button>
-                      <button type="button" className="admin-btn admin-btn--small admin-btn--danger" onClick={() => void setStatus(ad.id, 'cancelled')}>
-                        Cancel
-                      </button>
-                      <button type="button" className="admin-btn admin-btn--small" onClick={() => setScheduleAdId(ad.id)}>
-                        Schedule
-                      </button>
+                      {ad.status !== 'active' && ad.status !== 'cancelled' && ad.status !== 'expired' && (
+                        <button type="button" className="admin-btn admin-btn--small" onClick={() => void setStatus(ad.id, 'active')}>
+                          Activate
+                        </button>
+                      )}
+                      {ad.status === 'active' && (
+                        <button type="button" className="admin-btn admin-btn--small admin-btn--danger" onClick={() => void setStatus(ad.id, 'paused_by_admin')}>
+                          Pause
+                        </button>
+                      )}
+                      {ad.status !== 'cancelled' && ad.status !== 'expired' && (
+                        <button type="button" className="admin-btn admin-btn--small admin-btn--danger" onClick={() => void setStatus(ad.id, 'cancelled')}>
+                          Cancel
+                        </button>
+                      )}
+                      {ad.status !== 'cancelled' && ad.status !== 'expired' && (
+                        <button type="button" className="admin-btn admin-btn--small" onClick={() => setScheduleAdId(ad.id)}>
+                          Schedule
+                        </button>
+                      )}
                       <button type="button" className="admin-btn admin-btn--small" onClick={() => setPricingAdId(ad.id)}>
                         Pricing
                       </button>

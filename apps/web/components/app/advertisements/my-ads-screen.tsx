@@ -6,9 +6,9 @@ import { useAuth } from '@/components/auth/auth-provider';
 import { SiteLogo } from '@/components/site-logo';
 import {
   advertisementsApiClient,
+  type AdminAdControls,
   type AdStatus,
   type Advertisement,
-  type AdvertisementPlan,
 } from '@/lib/advertisements/client';
 import { toAbsoluteAssetUrl } from '@/lib/asset-url';
 import type { Dictionary, Locale } from '@/lib/i18n/types';
@@ -31,7 +31,6 @@ const STATUS_COLORS: Record<AdStatus, string> = {
 
 export const MyAdsScreen = ({ locale, dictionary }: MyAdsScreenProps) => {
   const { accessToken, authUser } = useAuth();
-  const [plans, setPlans] = useState<AdvertisementPlan[]>([]);
   const [rows, setRows] = useState<Advertisement[]>([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -39,10 +38,10 @@ export const MyAdsScreen = ({ locale, dictionary }: MyAdsScreenProps) => {
   const [success, setSuccess] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [showForm, setShowForm] = useState(false);
-  const [payingId, setPayingId] = useState<string | null>(null);
+  const [adControls, setAdControls] = useState<AdminAdControls>({ acceptAds: true, pricePerDay: 0 });
 
   const [form, setForm] = useState({
-    adPlanId: '',
+    durationDays: '7',
     startsAt: '',
     titleEn: '',
     titleAr: '',
@@ -69,15 +68,12 @@ export const MyAdsScreen = ({ locale, dictionary }: MyAdsScreenProps) => {
     if (!accessToken) return;
     setLoading(true);
     try {
-      const [planData, myAds] = await Promise.all([
-        advertisementsApiClient.getAdPlans(accessToken),
+      const [myAds, controls] = await Promise.all([
         advertisementsApiClient.getMyAds(accessToken, { limit: 50 }),
+        advertisementsApiClient.getAdControls(accessToken),
       ]);
-      setPlans(planData);
       setRows(myAds.rows);
-      if (planData.length > 0) {
-        setForm((prev) => (prev.adPlanId ? prev : { ...prev, adPlanId: planData[0]!.id }));
-      }
+      setAdControls(controls);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load ads.');
     } finally {
@@ -89,10 +85,12 @@ export const MyAdsScreen = ({ locale, dictionary }: MyAdsScreenProps) => {
     void load();
   }, [load]);
 
-  const selectedPlan = useMemo(
-    () => plans.find((p) => p.id === form.adPlanId),
-    [plans, form.adPlanId],
-  );
+  const durationDays = useMemo(() => {
+    const parsed = Number.parseInt(form.durationDays, 10);
+    if (!Number.isFinite(parsed) || parsed < 1) return 1;
+    if (parsed > 365) return 365;
+    return parsed;
+  }, [form.durationDays]);
 
   const plannedStartAt = useMemo(() => {
     if (!form.startsAt) return new Date();
@@ -102,9 +100,9 @@ export const MyAdsScreen = ({ locale, dictionary }: MyAdsScreenProps) => {
   }, [form.startsAt]);
 
   const plannedEndAt = useMemo(() => {
-    if (!selectedPlan) return null;
-    return new Date(plannedStartAt.getTime() + selectedPlan.duration_days * 24 * 60 * 60 * 1000);
-  }, [plannedStartAt, selectedPlan]);
+    return new Date(plannedStartAt.getTime() + durationDays * 24 * 60 * 60 * 1000);
+  }, [plannedStartAt, durationDays]);
+  const totalCost = useMemo(() => Math.max(0, adControls.pricePerDay * durationDays), [adControls.pricePerDay, durationDays]);
 
   if (!canUse) {
     return (
@@ -157,7 +155,7 @@ export const MyAdsScreen = ({ locale, dictionary }: MyAdsScreenProps) => {
       const ctaTextAr = form.ctaTextAr.trim();
       const linkTarget = form.linkTarget.trim();
       await advertisementsApiClient.createAd(accessToken, {
-        adPlanId: form.adPlanId,
+        durationDays,
         ...(form.startsAt ? { startsAt: new Date(form.startsAt).toISOString() } : {}),
         titleEn: form.titleEn,
         ...(titleAr ? { titleAr } : {}),
@@ -170,28 +168,12 @@ export const MyAdsScreen = ({ locale, dictionary }: MyAdsScreenProps) => {
         ...(linkTarget ? { linkTarget } : {}),
       });
       resetForm();
-      setSuccess(tr('Ad created! Pay to activate it.', 'تم إنشاء الإعلان! ادفع لتفعيله.'));
+      setSuccess(tr('Ad created and activated successfully.', 'تم إنشاء الإعلان وتفعيله بنجاح.'));
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create ad.');
     } finally {
       setSubmitting(false);
-    }
-  };
-
-  const onPay = async (adId: string) => {
-    if (!accessToken) return;
-    setError(null);
-    setSuccess(null);
-    setPayingId(adId);
-    try {
-      await advertisementsApiClient.payForAd(accessToken, adId);
-      setSuccess(tr('Ad activated!', 'تم تفعيل الإعلان!'));
-      await load();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Payment failed.');
-    } finally {
-      setPayingId(null);
     }
   };
 
@@ -227,8 +209,7 @@ export const MyAdsScreen = ({ locale, dictionary }: MyAdsScreenProps) => {
   };
 
   const activeAds = rows.filter((r) => r.status === 'active');
-  const pendingAds = rows.filter((r) => r.status === 'pending_payment');
-  const otherAds = rows.filter((r) => r.status !== 'active' && r.status !== 'pending_payment');
+  const otherAds = rows.filter((r) => r.status !== 'active');
 
   return (
     <main className="myads-main">
@@ -271,6 +252,11 @@ export const MyAdsScreen = ({ locale, dictionary }: MyAdsScreenProps) => {
           </button>
         </div>
       )}
+      {!adControls.acceptAds && (
+        <div className="myads-msg myads-msg--error">
+          <span>{tr('Ads are currently disabled by admin.', 'الإعلانات متوقفة حاليا من الإدارة.')}</span>
+        </div>
+      )}
 
       {/* Create Ad Form */}
       {showForm && (
@@ -282,33 +268,20 @@ export const MyAdsScreen = ({ locale, dictionary }: MyAdsScreenProps) => {
                 {d.createAd ?? tr('Create Advertisement', 'إنشاء إعلان')}
               </h2>
 
-              {/* Plan selection */}
               <fieldset className="myads-fieldset">
                 <legend className="myads-legend">
-                  {tr('Choose a plan', 'اختر خطة')}
+                  {tr('Campaign timing', 'مدة الحملة')}
                 </legend>
-                <div className="myads-plan-grid">
-                  {plans.map((p) => {
-                    const active = form.adPlanId === p.id;
-                    return (
-                      <button
-                        key={p.id}
-                        type="button"
-                        className={`myads-plan-option ${active ? 'myads-plan-option--active' : ''}`}
-                        onClick={() => setForm((prev) => ({ ...prev, adPlanId: p.id }))}
-                      >
-                        <span className="myads-plan-option-name">
-                          {isAr ? p.name_ar || p.name_en : p.name_en}
-                        </span>
-                        <span className="myads-plan-option-price">
-                          {p.price} {p.currency}
-                        </span>
-                        <span className="myads-plan-option-duration">
-                          {p.duration_days} {tr('days', 'يوم')}
-                        </span>
-                      </button>
-                    );
-                  })}
+                <div className="myads-field">
+                  <label className="myads-label">{tr('Duration (days)', 'المدة (بالأيام)')}</label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={365}
+                    className="dashboard-input"
+                    value={form.durationDays}
+                    onChange={(e) => setForm((prev) => ({ ...prev, durationDays: e.target.value }))}
+                  />
                 </div>
                 <div className="myads-field">
                   <label className="myads-label">{tr('Start date & time', 'تاريخ ووقت البداية')}</label>
@@ -480,30 +453,32 @@ export const MyAdsScreen = ({ locale, dictionary }: MyAdsScreenProps) => {
               </fieldset>
 
               {/* Price summary */}
-              {selectedPlan && (
-                <div className="myads-price-summary">
-                  <span className="myads-price-summary-label">
-                    {tr('Total cost', 'التكلفة الإجمالية')}
-                  </span>
-                  <span className="myads-price-summary-value">
-                    {selectedPlan.price} {selectedPlan.currency}
-                  </span>
+              <div className="myads-price-summary">
+                <span className="myads-price-summary-label">
+                  {tr('Billing & timeline', 'الفوترة والجدول')}
+                </span>
+                <span className="myads-price-summary-value">
+                  {totalCost.toFixed(2)} EGP
+                </span>
+                <span className="myads-price-summary-note">
+                  {tr(
+                    `Deducted from wallet immediately on create · runs for ${durationDays} days`,
+                    `تُخصم من المحفظة مباشرة عند الإنشاء · تعمل لمدة ${durationDays} يوم`,
+                  )}
+                </span>
+                <span className="myads-price-summary-note">
+                  {tr('Price/day', 'سعر اليوم')}: {adControls.pricePerDay.toFixed(2)} EGP × {durationDays}{' '}
+                  {tr('days', 'يوم')}
+                </span>
+                <span className="myads-price-summary-note">
+                  {tr('Starts', 'يبدأ')}: {plannedStartAt.toLocaleString(isAr ? 'ar-EG' : 'en-US')}
+                </span>
+                {plannedEndAt ? (
                   <span className="myads-price-summary-note">
-                    {tr(
-                      `Deducted from wallet on payment · runs for ${selectedPlan.duration_days} days`,
-                      `تُخصم من المحفظة عند الدفع · تعمل لمدة ${selectedPlan.duration_days} يوم`,
-                    )}
+                    {tr('Ends', 'ينتهي')}: {plannedEndAt.toLocaleString(isAr ? 'ar-EG' : 'en-US')}
                   </span>
-                  <span className="myads-price-summary-note">
-                    {tr('Starts', 'يبدأ')}: {plannedStartAt.toLocaleString(isAr ? 'ar-EG' : 'en-US')}
-                  </span>
-                  {plannedEndAt ? (
-                    <span className="myads-price-summary-note">
-                      {tr('Ends', 'ينتهي')}: {plannedEndAt.toLocaleString(isAr ? 'ar-EG' : 'en-US')}
-                    </span>
-                  ) : null}
-                </div>
-              )}
+                ) : null}
+              </div>
 
               {/* Actions */}
               <div className="myads-form-actions">
@@ -520,7 +495,7 @@ export const MyAdsScreen = ({ locale, dictionary }: MyAdsScreenProps) => {
                 <button
                   type="submit"
                   className="dashboard-btn dashboard-btn--primary"
-                  disabled={submitting || !form.imageUrl || !form.titleEn || !form.adPlanId}
+                  disabled={submitting || !form.imageUrl || !form.titleEn || !adControls.acceptAds}
                 >
                   {submitting
                     ? c.loading ?? 'Loading...'
@@ -587,29 +562,6 @@ export const MyAdsScreen = ({ locale, dictionary }: MyAdsScreenProps) => {
         </div>
       ) : (
         <>
-          {/* Pending payment */}
-          {pendingAds.length > 0 && (
-            <section className="myads-list-section">
-              <h2 className="myads-list-title">
-                {tr('Pending Payment', 'بانتظار الدفع')} ({pendingAds.length})
-              </h2>
-              <div className="myads-ad-grid">
-                {pendingAds.map((ad) => (
-                  <AdCard
-                    key={ad.id}
-                    ad={ad}
-                    locale={locale}
-                    statusLabel={statusLabel}
-                    onPay={() => void onPay(ad.id)}
-                    paying={payingId === ad.id}
-                    d={d}
-                    tr={tr}
-                  />
-                ))}
-              </div>
-            </section>
-          )}
-
           {/* Active */}
           {activeAds.length > 0 && (
             <section className="myads-list-section">
@@ -661,13 +613,11 @@ type AdCardProps = {
   ad: Advertisement;
   locale: Locale;
   statusLabel: (s: AdStatus) => string;
-  onPay?: () => void;
-  paying?: boolean;
   d: Record<string, unknown>;
   tr: (en: string, ar: string) => string;
 };
 
-const AdCard = ({ ad, locale, statusLabel, onPay, paying, d, tr }: AdCardProps) => {
+const AdCard = ({ ad, locale, statusLabel, d, tr }: AdCardProps) => {
   const isAr = locale === 'ar';
   const title = isAr ? ad.title_ar || ad.title_en : ad.title_en;
   const resolvedImg = toAbsoluteAssetUrl(ad.image_url);
@@ -722,18 +672,6 @@ const AdCard = ({ ad, locale, statusLabel, onPay, paying, d, tr }: AdCardProps) 
           <p className="myads-ad-card-meta">
             {tr('Expires', 'ينتهي')}: {expires}
           </p>
-        )}
-        {ad.status === 'pending_payment' && onPay && (
-          <button
-            type="button"
-            className="dashboard-btn dashboard-btn--primary myads-pay-btn"
-            disabled={paying}
-            onClick={onPay}
-          >
-            {paying
-              ? tr('Processing...', 'جاري المعالجة...')
-              : (d.payNow as string) ?? tr('Pay & Activate', 'ادفع وفعّل')}
-          </button>
         )}
       </div>
     </article>

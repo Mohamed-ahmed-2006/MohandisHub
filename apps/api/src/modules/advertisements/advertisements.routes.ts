@@ -10,7 +10,7 @@ import { advertisementsController } from './advertisements.controller.js';
 const advertisementsRouter = Router();
 
 advertisementsRouter.get('/active', authenticate, requireEmailVerified, advertisementsController.listActiveResolved);
-advertisementsRouter.get('/plans', authenticate, requireEmailVerified, advertisementsController.listPlans);
+advertisementsRouter.get('/controls', authenticate, requireEmailVerified, advertisementsController.getAdControls);
 advertisementsRouter.post(
   '/',
   authenticate,
@@ -19,22 +19,8 @@ advertisementsRouter.post(
   requireVerified,
   advertisementsController.createAd,
 );
-advertisementsRouter.post(
-  '/:id/pay',
-  authenticate,
-  requireEmailVerified,
-  requireRole('expert', 'business', 'craftsman'),
-  requireVerified,
-  advertisementsController.payAd,
-);
 advertisementsRouter.get('/my', authenticate, requireEmailVerified, advertisementsController.listMyAds);
 advertisementsRouter.post('/:id/click', authenticate, requireEmailVerified, advertisementsController.trackClick);
-advertisementsRouter.post(
-  '/adcenter/resolve',
-  authenticate,
-  requireEmailVerified,
-  advertisementsController.resolveAdCenter,
-);
 
 advertisementsRouter.get(
   '/admin/all',
@@ -69,36 +55,20 @@ advertisementsRouter.put(
   advertisementsController.adminPricingOverride,
 );
 advertisementsRouter.get(
-  '/admin/pricing-rules',
+  '/admin/controls',
   authenticate,
   requireEmailVerified,
   requireRole('admin'),
   requireAdminPermission('manage_ad_pricing'),
-  advertisementsController.listPricingRules,
-);
-advertisementsRouter.post(
-  '/admin/pricing-rules',
-  authenticate,
-  requireEmailVerified,
-  requireRole('admin'),
-  requireAdminPermission('manage_ad_pricing'),
-  advertisementsController.createPricingRule,
+  advertisementsController.getAdControls,
 );
 advertisementsRouter.put(
-  '/admin/pricing-rules/:id',
+  '/admin/controls',
   authenticate,
   requireEmailVerified,
   requireRole('admin'),
   requireAdminPermission('manage_ad_pricing'),
-  advertisementsController.updatePricingRule,
-);
-advertisementsRouter.delete(
-  '/admin/pricing-rules/:id',
-  authenticate,
-  requireEmailVerified,
-  requireRole('admin'),
-  requireAdminPermission('manage_ad_pricing'),
-  advertisementsController.disablePricingRule,
+  advertisementsController.updateAdminAdControls,
 );
 
 advertisementsRouter.get('/:id', authenticate, requireEmailVerified, advertisementsController.getAd);
@@ -118,4 +88,3 @@ advertisementsRouter.delete(
 );
 
 export { advertisementsRouter };
-
