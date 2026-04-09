@@ -34,6 +34,7 @@ export function useWallet(accessToken: string | null, options?: { revalidateOnFo
     {
       revalidateOnFocus: options?.revalidateOnFocus ?? true,
       dedupingInterval: 30_000,
+      shouldRetryOnError: false,
     },
   );
   return { wallet: data ?? null, error, mutate };

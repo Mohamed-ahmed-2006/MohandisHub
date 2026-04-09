@@ -24,8 +24,7 @@ export const isCustomerRole = (role: string): role is 'customer' => role === 'cu
 
 export const canManageNeeds = (role: string): role is 'customer' => isCustomerRole(role);
 
-export const canBidOnNeeds = (role: string): role is IndividualProviderRole =>
-  isIndividualProviderRole(role);
+export const canBidOnNeeds = (role: string): role is ProviderRole => isProviderRole(role);
 
 export const canAccessProviderAnalytics = (role: string): role is ProviderRole =>
   isProviderRole(role);
@@ -86,7 +85,7 @@ export const ROLE_PERMISSION_MATRIX = {
   },
   business: {
     manageNeeds: false,
-    bidOnNeeds: false,
+    bidOnNeeds: true,
     manageProviderServices: true,
     manageReservationAvailability: true,
     requestWithdrawal: true,

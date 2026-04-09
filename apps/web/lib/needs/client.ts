@@ -61,8 +61,9 @@ async function apiReq<T>(path: string, token: string, opts?: RequestInit): Promi
     const err = body as { error?: { message?: string; details?: unknown } };
     const msg = err?.error?.message ?? 'Request failed';
     const details = err?.error?.details;
-    const e = new Error(msg) as Error & { details?: unknown };
+    const e = new Error(msg) as Error & { details?: unknown; status?: number };
     e.details = details;
+    e.status = res.status;
     throw e;
   }
   const json = (await res.json()) as { data: T };
@@ -75,7 +76,7 @@ export const needsApiClient = {
     body: {
       title: string;
       description: string;
-      categoryId?: string;
+      categoryId: string;
       budgetType: string;
       budgetAmount: number;
       currency?: string;

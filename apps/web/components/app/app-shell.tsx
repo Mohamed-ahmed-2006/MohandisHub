@@ -51,8 +51,10 @@ const AppShellInner = ({ children }: AppShellProps) => {
   const { profileModalUserId, profileModalInitialData, closeProfileModal } = useProfileModal();
   const { status } = useAppStatus();
 
-  const { authUser, accessToken, logout, isReady, refreshSession } = useAuth();
-  const { wallet, mutate: mutateWallet } = useWallet(isReady && accessToken ? accessToken : null);
+  const { authUser, accessToken, logout, isReady, refreshSession, isAuthenticated } = useAuth();
+  const { wallet, mutate: mutateWallet } = useWallet(
+    isReady && isAuthenticated && accessToken ? accessToken : null,
+  );
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [showDepositModal, setShowDepositModal] = useState(false);
   const [depositMessage, setDepositMessage] = useState<'success' | 'cancelled' | null>(null);

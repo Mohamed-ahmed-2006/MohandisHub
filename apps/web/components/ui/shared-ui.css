@@ -1,8 +1,8 @@
 .container-root {
   margin: 0 auto;
   width: 100%;
-  max-width: 92rem;
-  padding-inline: 1rem;
+  max-width: min(100%, var(--content-max, 84rem));
+  padding-inline: clamp(0.9rem, 2.4vw, 2rem);
 }
 
 @media (min-width: 640px) {
@@ -28,6 +28,140 @@
     box-shadow var(--motion-duration-sm) var(--motion-ease-out, ease),
     border-color var(--motion-duration-sm) var(--motion-ease-out, ease),
     transform var(--motion-duration-sm) var(--motion-ease-out, ease);
+}
+
+.glass-panel {
+  border: 1px solid hsl(var(--glass-border));
+  background: hsl(var(--glass-bg));
+  box-shadow: var(--elevation-2), var(--glass-shadow);
+  backdrop-filter: blur(var(--glass-blur));
+}
+
+.glass-card {
+  border-radius: var(--radius-lg);
+  border: 1px solid hsl(var(--glass-border));
+  background: hsl(var(--glass-bg-strong));
+  box-shadow: var(--elevation-2), var(--glass-shadow);
+  backdrop-filter: blur(var(--glass-blur));
+  padding: clamp(1rem, 2.2vw, 1.4rem);
+}
+
+.hero-gradient {
+  background: var(--hero-gradient);
+}
+
+.section-shell {
+  width: min(100%, var(--content-max, 84rem));
+  margin-inline: auto;
+  padding-inline: clamp(0.9rem, 2.6vw, 1.8rem);
+  padding-block: clamp(0.85rem, 2vw, 1.35rem);
+}
+
+.content-stack {
+  display: flex;
+  flex-direction: column;
+  gap: clamp(0.9rem, 1.8vw, 1.3rem);
+}
+
+.mh-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  padding: 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: hsl(222 22% 10% / 0.45);
+  backdrop-filter: blur(7px);
+}
+
+.mh-modal {
+  width: min(100%, 38rem);
+  max-height: min(92vh, 54rem);
+  overflow: auto;
+  border-radius: var(--radius-xl);
+  border: 1px solid hsl(var(--glass-border));
+  background: hsl(var(--glass-bg-strong));
+  box-shadow: var(--elevation-3), var(--glass-shadow);
+  backdrop-filter: blur(var(--glass-blur));
+}
+
+.mh-modal--sm {
+  width: min(100%, 30rem);
+}
+
+.mh-modal--md {
+  width: min(100%, 42rem);
+}
+
+.mh-modal--lg {
+  width: min(100%, 56rem);
+}
+
+.mh-modal--xl {
+  width: min(100%, 72rem);
+}
+
+.mh-modal--full {
+  width: min(100%, 92rem);
+  height: min(95vh, 64rem);
+}
+
+.mh-drawer-overlay {
+  justify-content: flex-end;
+  padding: 0;
+}
+
+.mh-drawer {
+  width: min(100%, 42rem);
+  height: 100%;
+  border-left: 1px solid hsl(var(--glass-border));
+  background: hsl(var(--glass-bg-strong));
+  box-shadow: var(--elevation-3), var(--glass-shadow);
+  backdrop-filter: blur(var(--glass-blur));
+  overflow: auto;
+}
+
+.mh-dialog-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.9rem;
+  padding: 1.1rem 1.1rem 0.5rem;
+}
+
+.mh-dialog-header-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.mh-dialog-title {
+  margin: 0;
+  font-size: clamp(1.05rem, 2.4vw, 1.35rem);
+  font-weight: 700;
+  color: hsl(var(--foreground));
+}
+
+.mh-dialog-subtitle {
+  margin: 0.3rem 0 0;
+  font-size: 0.86rem;
+  color: hsl(var(--text-soft));
+}
+
+.mh-dialog-close {
+  width: 2.2rem;
+  height: 2.2rem;
+  border-radius: 999px;
+  border: 1px solid hsl(var(--border));
+  background: color-mix(in srgb, hsl(var(--surface-strong)) 80%, transparent);
+  font-size: 1.3rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.mh-upload-hint {
+  margin: 0.45rem 0 0;
+  font-size: 0.8rem;
+  color: hsl(var(--text-soft));
 }
 
 @media (hover: hover) and (pointer: fine) {

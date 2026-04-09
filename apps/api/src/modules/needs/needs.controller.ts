@@ -27,7 +27,7 @@ function requireBidder(req: { user?: { id: string; role?: string } }) {
     throw new HttpError({
       statusCode: 403,
       code: 'FORBIDDEN',
-      message: 'Only individual providers can place and manage bids.',
+      message: 'Only provider accounts can place and manage bids.',
     });
   }
   return user;

@@ -3,6 +3,8 @@
 import Image from 'next/image';
 import { useEffect, useState } from 'react';
 
+import { DialogHeader } from '@/components/ui/dialog-header';
+import { Modal } from '@/components/ui/modal';
 import { resolvePublicAssetUrl } from '@/lib/asset-url';
 import { getPrivateFileOpenableUrl } from '@/lib/upload/client';
 
@@ -77,25 +79,13 @@ export function ImagePreviewModal({
   }, [imageUrl, accessToken]);
 
   return (
-    <div
-      className="admin-modal-overlay image-preview-overlay"
-      onClick={(e) => e.target === e.currentTarget && onClose()}
-      role="dialog"
-      aria-modal="true"
-      aria-label={title ?? 'Image preview'}
-    >
-      <div className="image-preview-modal" onClick={(e) => e.stopPropagation()}>
-        <div className="image-preview-header">
-          {title && <span className="image-preview-title">{title}</span>}
-          <button
-            type="button"
-            className="image-preview-close"
-            onClick={onClose}
-            aria-label="Close"
-          >
-            ×
-          </button>
-        </div>
+    <Modal open onClose={onClose} size="lg" className="image-preview-modal" zIndex={1100}>
+      <DialogHeader
+        title={title ?? 'Image preview'}
+        onClose={onClose}
+        closeLabel="Close"
+        className="image-preview-header"
+      />
         <div className="image-preview-content">
           {loading && <p className="admin-empty">Loading…</p>}
           {error && <p className="admin-error-banner">{error}</p>}
@@ -127,7 +117,6 @@ export function ImagePreviewModal({
             )
           )}
         </div>
-      </div>
-    </div>
+    </Modal>
   );
 }

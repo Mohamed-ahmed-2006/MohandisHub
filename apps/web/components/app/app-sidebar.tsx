@@ -70,6 +70,7 @@ export const AppSidebar = ({
     { href: '/app', label: dictionary.nav.home },
     { href: '/app/bookings', label: dictionary.nav.bookings },
     { href: '/app/services', label: dictionary.nav.myServices ?? dictionary.nav.browse, roles: ['expert', 'craftsman', 'business'] },
+    { href: '/app/advertisements', label: dictionary.nav.advertisements ?? 'My Ads', roles: ['expert', 'craftsman', 'business'] },
     { href: '/app/calendar', label: dictionary.nav.calendar ?? dictionary.calendarPage?.title ?? dictionary.nav.home, roles: ['expert', 'craftsman', 'business'] },
     { href: '/app/settings', label: dictionary.nav.settings },
     { href: '/app/chat', label: dictionary.nav.chat },

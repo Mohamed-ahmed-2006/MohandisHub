@@ -4,6 +4,8 @@ import { isPaymentMethodEnabled } from '@mohandishub/shared';
 import { useEffect, useState, type FormEvent } from 'react';
 
 import { useAppStatus } from '@/components/app-status-provider';
+import { DialogHeader } from '@/components/ui/dialog-header';
+import { Modal } from '@/components/ui/modal';
 import { isApiClientError } from '@/lib/auth/client';
 import type { Dictionary } from '@/lib/i18n/types';
 import { uploadPrivateFile } from '@/lib/upload/client';
@@ -199,12 +201,12 @@ export const WalletDepositModal = ({
   };
 
   return (
-    <div className="home-drawer-overlay" onClick={onClose}>
-      <div className="deposit-modal" onClick={(e) => e.stopPropagation()}>
-        <button type="button" className="deposit-modal-close" onClick={onClose}>
-          x
-        </button>
-        <h2 className="deposit-modal-title">{d.depositTitle}</h2>
+    <Modal open onClose={onClose} size="sm" className="deposit-modal" usePortal>
+      <DialogHeader
+        title={d.depositTitle}
+        onClose={onClose}
+        closeLabel={dictionary.common.close ?? dictionary.common.cancel}
+      />
 
         {!canDeposit ? (
           <p className="deposit-modal-subtitle">
@@ -354,7 +356,6 @@ export const WalletDepositModal = ({
             </div>
           </form>
         )}
-      </div>
-    </div>
+    </Modal>
   );
 };

@@ -18,10 +18,10 @@ describe('role policy helpers', () => {
     expect(canManageNeeds('business')).toBe(false);
   });
 
-  it('allows individual providers to bid; experts, craftsmen, and businesses can withdraw', () => {
+  it('allows provider roles to bid; experts, craftsmen, and businesses can withdraw', () => {
     expect(canBidOnNeeds('expert')).toBe(true);
     expect(canBidOnNeeds('craftsman')).toBe(true);
-    expect(canBidOnNeeds('business')).toBe(false);
+    expect(canBidOnNeeds('business')).toBe(true);
     expect(canBidOnNeeds('customer')).toBe(false);
 
     expect(canRequestWithdrawal('expert')).toBe(true);

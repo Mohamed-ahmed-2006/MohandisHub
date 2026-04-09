@@ -138,6 +138,23 @@ export type AdminUserActivityItem =
   | AdminBookingActivityItem
   | AdminTransactionListItem;
 
+export type AdminMediaUsageType = 'banner' | 'announcement' | 'hero' | 'general';
+
+export type AdminMediaAsset = {
+  id: string;
+  title: string;
+  alt_text: string | null;
+  usage_type: AdminMediaUsageType;
+  image_url: string;
+  active: boolean;
+  sort_order: number;
+  starts_at: string | null;
+  ends_at: string | null;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
 export const adminApiClient = {
   // Dashboard
   getSettings: (accessToken: string, options?: AdminClientOptions) =>
@@ -911,4 +928,67 @@ export const adminApiClient = {
     };
     return doFetch(accessToken);
   },
+
+  listMediaAssets: (accessToken: string, usageType?: AdminMediaUsageType, options?: AdminClientOptions) => {
+    const qs = usageType ? `?usageType=${encodeURIComponent(usageType)}` : '';
+    return apiRequest<AdminMediaAsset[]>({
+      method: 'GET',
+      path: `/api/media/${qs}`,
+      accessToken,
+      ...(options?.refreshSession ? { refreshSession: options.refreshSession } : {}),
+    });
+  },
+
+  createMediaAsset: (
+    accessToken: string,
+    body: {
+      title: string;
+      altText?: string | null;
+      usageType: AdminMediaUsageType;
+      imageUrl: string;
+      active?: boolean;
+      sortOrder?: number;
+      startsAt?: string | null;
+      endsAt?: string | null;
+    },
+    options?: AdminClientOptions,
+  ) =>
+    apiRequest<AdminMediaAsset>({
+      method: 'POST',
+      path: '/api/media',
+      body,
+      accessToken,
+      ...(options?.refreshSession ? { refreshSession: options.refreshSession } : {}),
+    }),
+
+  updateMediaAsset: (
+    accessToken: string,
+    assetId: string,
+    body: Partial<{
+      title: string;
+      altText: string | null;
+      usageType: AdminMediaUsageType;
+      imageUrl: string;
+      active: boolean;
+      sortOrder: number;
+      startsAt: string | null;
+      endsAt: string | null;
+    }>,
+    options?: AdminClientOptions,
+  ) =>
+    apiRequest<AdminMediaAsset>({
+      method: 'PATCH',
+      path: `/api/media/${assetId}`,
+      body,
+      accessToken,
+      ...(options?.refreshSession ? { refreshSession: options.refreshSession } : {}),
+    }),
+
+  deleteMediaAsset: (accessToken: string, assetId: string, options?: AdminClientOptions) =>
+    apiRequest<{ deleted: boolean }>({
+      method: 'DELETE',
+      path: `/api/media/${assetId}`,
+      accessToken,
+      ...(options?.refreshSession ? { refreshSession: options.refreshSession } : {}),
+    }),
 };

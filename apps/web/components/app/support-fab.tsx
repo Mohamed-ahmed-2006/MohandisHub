@@ -6,6 +6,8 @@ import { useState } from 'react';
 
 import { useToast } from '@/components/app/toast';
 import { useAuth } from '@/components/auth/auth-provider';
+import { DialogHeader } from '@/components/ui/dialog-header';
+import { Modal } from '@/components/ui/modal';
 import { useI18n } from '@/lib/i18n/context';
 import { toStoredAttachmentUrl } from '@/lib/support/attachment-url';
 import { supportApiClient } from '@/lib/support/client';
@@ -102,23 +104,15 @@ export const SupportFab = () => {
       </button>
 
       {open ? (
-        <div className="support-fab-overlay" role="presentation" onClick={handleClose}>
-          <div
-            className="support-fab-dialog"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="support-fab-title"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <button type="button" className="support-fab-close" onClick={handleClose} aria-label={common.close}>
-              ×
-            </button>
-            <h2 id="support-fab-title" className="support-fab-title">
-              {sf.title}
-            </h2>
-            <p className="support-fab-subtitle">{sf.subtitle}</p>
+        <Modal open={open} onClose={handleClose} size="md" className="support-fab-dialog" usePortal={false}>
+          <DialogHeader
+            title={sf.title ?? 'Support'}
+            {...(sf.subtitle ? { subtitle: sf.subtitle } : {})}
+            onClose={handleClose}
+            closeLabel={common.close ?? common.cancel ?? sf.send ?? 'Close'}
+          />
 
-            <form className="support-fab-form" onSubmit={(e) => void handleSubmit(e)}>
+          <form className="support-fab-form" onSubmit={(e) => void handleSubmit(e)}>
               <label className="support-fab-label" htmlFor="support-fab-email">
                 {sf.email}
               </label>
@@ -190,9 +184,8 @@ export const SupportFab = () => {
                   {sending ? sf.sending : sf.send}
                 </button>
               </div>
-            </form>
-          </div>
-        </div>
+          </form>
+        </Modal>
       ) : null}
     </>
   );

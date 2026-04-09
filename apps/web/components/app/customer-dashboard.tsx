@@ -7,7 +7,9 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useToast } from '@/components/app/toast';
 import { useAppStatus } from '@/components/app-status-provider';
 import { resolvePublicAssetUrl, toAbsoluteAssetUrl } from '@/lib/asset-url';
+import { findCountryByCode } from '@/lib/data/countries';
 import { getApiBaseUrl } from '@/lib/env';
+import { getCountryFromIp } from '@/lib/geo/ip-geo';
 import { pickLocalized } from '@/lib/i18n/api';
 import type { Dictionary, Locale } from '@/lib/i18n/types';
 import type { Bid, BidMessage, Need } from '@/lib/needs/client';
@@ -82,6 +84,7 @@ export const CustomerDashboard = ({
   const [uploading, setUploading] = useState(false);
   const [previewImage, setPreviewImage] = useState<{ url: string; urls: string[] } | null>(null);
   const [markingCompleted, setMarkingCompleted] = useState<string | null>(null);
+  const [postNeedCountry, setPostNeedCountry] = useState('');
   const { addToast } = useToast();
   const { status } = useAppStatus();
   const needsFeatureEnabled = status?.featureNeedsEnabled !== false;
@@ -192,6 +195,20 @@ export const CustomerDashboard = ({
     return () => window.removeEventListener('customer-dashboard-post-need', handler);
   }, []);
 
+  useEffect(() => {
+    if (!showForm) return;
+    let active = true;
+    void getCountryFromIp().then((code) => {
+      if (!active || !code) return;
+      const entry = findCountryByCode(code);
+      const name = entry ? (locale === 'ar' ? entry.nameAr : entry.nameEn) : code;
+      setPostNeedCountry(name);
+    });
+    return () => {
+      active = false;
+    };
+  }, [showForm, locale]);
+
   const handleCreate = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setSaving(true);
@@ -253,6 +270,12 @@ export const CustomerDashboard = ({
       return;
     }
 
+    if (!categoryIdVal) {
+      setError(tr('Please select a category.', 'يرجى اختيار فئة.'));
+      setSaving(false);
+      return;
+    }
+
     if (timelineDaysValue && timelineDays == null) {
       setError(tr('Please enter a timeline between 1 and 365 days.', 'يرجى إدخال مدة بين 1 و 365 يومًا.'));
       setSaving(false);
@@ -262,15 +285,15 @@ export const CustomerDashboard = ({
     const data: Parameters<typeof needsApiClient.createNeed>[1] = {
       title,
       description,
+      categoryId: categoryIdVal,
       budgetType,
       budgetAmount,
       currency: 'EGP',
     };
-    if (
-      categoryIdVal &&
-      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(categoryIdVal)
-    ) {
-      data.categoryId = categoryIdVal;
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(categoryIdVal)) {
+      setError(tr('Please select a valid category.', 'يرجى اختيار فئة صالحة.'));
+      setSaving(false);
+      return;
     }
     if (timelineDays != null) data.timelineDays = timelineDays;
     if (locationVal) data.city = locationVal;
@@ -522,8 +545,9 @@ export const CustomerDashboard = ({
                         <select
                           name="categoryId"
                           className="dashboard-select dashboard-select--modal"
+                          required
                         >
-                          <option value="">{d.anyCategory ?? 'Category (optional)'}</option>
+                          <option value="">{d.chooseCategory ?? tr('Choose category', 'اختر الفئة')}</option>
                           {categories.map((c) => (
                             <option key={c.id} value={c.id}>
                               {categoryName(c)}
@@ -555,8 +579,10 @@ export const CustomerDashboard = ({
                         <input
                           name="country"
                           className="dashboard-input"
-                          placeholder={tr('Country (optional)', 'الدولة (اختياري)')}
-                          defaultValue=""
+                          placeholder={tr('Country', 'الدولة')}
+                          value={postNeedCountry}
+                          onChange={(e) => setPostNeedCountry(e.target.value)}
+                          disabled
                         />
                       </div>
                       {hourlyPricingEnabled ? (

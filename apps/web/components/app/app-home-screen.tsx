@@ -4,6 +4,7 @@ import type { ServiceCategory, ServiceSearchResult } from '@mohandishub/shared';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 
+import { AdSlideshow } from './ad-slideshow';
 import { BusinessDashboard } from './business-dashboard';
 import { CustomerDashboard } from './customer-dashboard';
 import { ExpertDashboard } from './expert-dashboard';
@@ -16,10 +17,12 @@ import { AvatarImage } from '@/components/ui/avatar-image';
 import { Container } from '@/components/ui/container';
 import { ImagePreviewModal } from '@/components/ui/image-preview-modal';
 import { Skeleton, SkeletonCard, SkeletonText } from '@/components/ui/skeleton';
-import { toAbsoluteAssetUrl } from '@/lib/asset-url';
+import { resolvePublicAssetUrl, toAbsoluteAssetUrl } from '@/lib/asset-url';
 import { EGYPTIAN_CITIES } from '@/lib/data/egyptian-cities';
 import { buildLocalePath } from '@/lib/i18n/path';
 import type { Dictionary, Locale } from '@/lib/i18n/types';
+import type { Bid, Need } from '@/lib/needs/client';
+import { needsApiClient } from '@/lib/needs/client';
 import type { TopBusiness, TopCraftsman, TopExpert } from '@/lib/profiles/client';
 import { profilesApiClient } from '@/lib/profiles/client';
 import { servicesApiClient } from '@/lib/services/client';
@@ -228,12 +231,28 @@ export const AppHomeScreen = ({ locale, dictionary }: AppHomeScreenProps) => {
   const [_customerNeedsCount, setCustomerNeedsCount] = useState<number | null>(null);
   const [customerTab, setCustomerTab] = useState<'browse' | 'posted'>('browse');
   const [providerTab, setProviderTab] = useState<'overview' | 'search'>('overview');
+  const [businessSearchMode, setBusinessSearchMode] = useState<'services' | 'needs'>('needs');
+  const [businessOpenNeeds, setBusinessOpenNeeds] = useState<Need[]>([]);
+  const [businessMyBids, setBusinessMyBids] = useState<Bid[]>([]);
+  const [businessNeedsLoading, setBusinessNeedsLoading] = useState(false);
+  const [businessNeedsMinBudget, setBusinessNeedsMinBudget] = useState<number | ''>('');
+  const [businessNeedsMaxBudget, setBusinessNeedsMaxBudget] = useState<number | ''>('');
+  const [businessNeedsSort, setBusinessNeedsSort] = useState<'newest' | 'budget_asc' | 'budget_desc'>('newest');
+  const [businessBidNeed, setBusinessBidNeed] = useState<Pick<Need, 'id' | 'title' | 'budget_type'> | null>(null);
+  const [businessEditingBid, setBusinessEditingBid] = useState<Bid | null>(null);
+  const [businessBidAmountInput, setBusinessBidAmountInput] = useState('');
+  const [businessBidError, setBusinessBidError] = useState<string | null>(null);
+  const [businessBidding, setBusinessBidding] = useState(false);
   const [topSlideIndex, setTopSlideIndex] = useState(0);
   const [topExperts, setTopExperts] = useState<TopExpert[]>([]);
   const [topCraftsmen, setTopCraftsmen] = useState<TopCraftsman[]>([]);
   const [topBusinesses, setTopBusinesses] = useState<TopBusiness[]>([]);
   const [showBookingModal, setShowBookingModal] = useState(false);
   const [previewServiceImage, setPreviewServiceImage] = useState<string | null>(null);
+  const [selectedBusinessNeed, setSelectedBusinessNeed] = useState<Need | null>(null);
+  const [selectedNeedBids, setSelectedNeedBids] = useState<Bid[]>([]);
+  const [selectedNeedBidsLoading, setSelectedNeedBidsLoading] = useState(false);
+  const [selectedNeedBidsError, setSelectedNeedBidsError] = useState<string | null>(null);
   const totalTopSlides = 3;
 
   const areaOptions = city ? (CITY_AREAS[city] ?? []) : [];
@@ -241,6 +260,20 @@ export const AppHomeScreen = ({ locale, dictionary }: AppHomeScreenProps) => {
     setCity(newCity);
     setArea('');
   };
+
+  const getNeedMediaUrls = useCallback((referenceUrl: string | null | undefined): string[] => {
+    if (!referenceUrl || !referenceUrl.trim()) return [];
+    const t = referenceUrl.trim();
+    if (t.startsWith('[')) {
+      try {
+        const arr = JSON.parse(t) as unknown;
+        return Array.isArray(arr) ? arr.filter((u): u is string => typeof u === 'string') : [];
+      } catch {
+        return [t];
+      }
+    }
+    return [t];
+  }, []);
 
   // Remove the redundant Stripe checking from AppHomeScreen as it's now handled globally in AppShell
   // ...
@@ -289,6 +322,53 @@ export const AppHomeScreen = ({ locale, dictionary }: AppHomeScreenProps) => {
     }
   }, [selectedResult]);
 
+  useEffect(() => {
+    if (!selectedBusinessNeed || !accessToken) {
+      setSelectedNeedBids([]);
+      setSelectedNeedBidsLoading(false);
+      setSelectedNeedBidsError(null);
+      return;
+    }
+    if (authUser?.role === 'business') {
+      setSelectedNeedBids([]);
+      setSelectedNeedBidsLoading(false);
+      setSelectedNeedBidsError(
+        dictionary.needs?.bidsUnavailableForRole ??
+          'Bidder details are not available for this account type.',
+      );
+      return;
+    }
+    let active = true;
+    setSelectedNeedBidsLoading(true);
+    setSelectedNeedBidsError(null);
+    void needsApiClient
+      .listBidsForNeed(accessToken, selectedBusinessNeed.id)
+      .then((bids) => {
+        if (!active) return;
+        setSelectedNeedBids(bids);
+      })
+      .catch(() => {
+        if (!active) return;
+        setSelectedNeedBids([]);
+        setSelectedNeedBidsError(
+          dictionary.needs?.bidsUnavailable ?? 'Bids are not available for this need right now.',
+        );
+      })
+      .finally(() => {
+        if (!active) return;
+        setSelectedNeedBidsLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [
+    selectedBusinessNeed,
+    accessToken,
+    authUser?.role,
+    dictionary.needs?.bidsUnavailable,
+    dictionary.needs?.bidsUnavailableForRole,
+  ]);
+
   // Top experts/business slideshow auto-rotate
   useEffect(() => {
     const t = setInterval(() => setTopSlideIndex((i) => (i + 1) % totalTopSlides), 5000);
@@ -336,6 +416,121 @@ export const AppHomeScreen = ({ locale, dictionary }: AppHomeScreenProps) => {
     }
   }, [authUser, categoryId, city, area, providerType, searchQuery, minRating, minPrice, maxPrice, verifiedOnly, sort]);
 
+  const loadBusinessNeeds = useCallback(async () => {
+    if (!accessToken || authUser?.role !== 'business') return;
+    setBusinessNeedsLoading(true);
+    setHasSearched(true);
+    try {
+      const needsData = await needsApiClient.listOpenNeeds(accessToken, 1);
+      setBusinessOpenNeeds(needsData.rows);
+      // API may still forbid /api/bids/my for business in current backend deployment.
+      // Keep UI functional without triggering forbidden requests.
+      setBusinessMyBids([]);
+    } catch {
+      setBusinessOpenNeeds([]);
+      setBusinessMyBids([]);
+    } finally {
+      setBusinessNeedsLoading(false);
+    }
+  }, [
+    accessToken,
+    authUser?.role,
+  ]);
+
+  const handleBusinessSearchModeChange = useCallback(
+    (checked: boolean) => {
+      const nextMode: 'services' | 'needs' = checked ? 'needs' : 'services';
+      setBusinessSearchMode(nextMode);
+      if (nextMode === 'needs') {
+        // Reset carry-over service filters so needs are visible immediately on switch.
+        setSearchQuery('');
+        setCategoryId('');
+        setCity('');
+        setArea('');
+        setProviderType('');
+        setMinRating('');
+        setMinPrice('');
+        setMaxPrice('');
+        setVerifiedOnly(false);
+        setSort('newest');
+        setBusinessNeedsMinBudget('');
+        setBusinessNeedsMaxBudget('');
+        setBusinessNeedsSort('newest');
+      }
+    },
+    [],
+  );
+
+  const handleBusinessBid = useCallback(
+    async (e: React.FormEvent<HTMLFormElement>) => {
+      e.preventDefault();
+      if (!accessToken || (!businessBidNeed && !businessEditingBid)) return;
+      setBusinessBidding(true);
+      setBusinessBidError(null);
+      const form = e.currentTarget;
+      try {
+        const amountRaw = (form.elements.namedItem('amount') as HTMLInputElement).value;
+        const amount = Number.parseFloat(amountRaw);
+        const message = (form.elements.namedItem('message') as HTMLTextAreaElement).value.trim();
+        if (!Number.isFinite(amount) || amount < 1) {
+          setBusinessBidError('Please enter a valid bid amount (at least 1).');
+          return;
+        }
+        if (message.length < 5) {
+          setBusinessBidError('Please enter at least 5 characters in your proposal.');
+          return;
+        }
+        const payload: { amount: number; message: string; deliveryDays?: number; estimatedHours?: number } = {
+          amount,
+          message,
+        };
+        if (businessBidNeed?.budget_type === 'hourly') {
+          const estimatedHours = parseInt(
+            (form.elements.namedItem('estimatedHours') as HTMLInputElement)?.value || '',
+            10,
+          );
+          if (Number.isInteger(estimatedHours) && estimatedHours > 0) {
+            payload.estimatedHours = estimatedHours;
+          }
+        } else {
+          const deliveryDays = parseInt(
+            (form.elements.namedItem('deliveryDays') as HTMLInputElement)?.value || '',
+            10,
+          );
+          if (Number.isInteger(deliveryDays) && deliveryDays > 0 && deliveryDays <= 365) {
+            payload.deliveryDays = deliveryDays;
+          }
+        }
+        if (businessEditingBid) {
+          await needsApiClient.updateBid(
+            accessToken,
+            businessEditingBid.need_id,
+            businessEditingBid.id,
+            payload,
+          );
+        } else if (businessBidNeed) {
+          await needsApiClient.createBid(accessToken, businessBidNeed.id, payload);
+        }
+        setBusinessBidNeed(null);
+        setBusinessEditingBid(null);
+        setBusinessBidAmountInput('');
+        await loadBusinessNeeds();
+      } catch (err) {
+        const e = err as Error & { status?: number };
+        if (e?.status === 403) {
+          setBusinessBidError(
+            'Your account is currently not allowed to place bids in this environment. Please contact support/admin to enable business bidding on the API.',
+          );
+        } else {
+          setBusinessBidError(err instanceof Error ? err.message : 'Failed to submit bid');
+        }
+      } finally {
+        setBusinessBidding(false);
+      }
+    },
+    [accessToken, businessBidNeed, businessEditingBid, loadBusinessNeeds],
+  );
+
   const isSearchTabActive =
     (authUser?.role === 'customer' && customerTab === 'browse') ||
     (authUser?.role === 'expert' && providerTab === 'search') ||
@@ -351,10 +546,18 @@ export const AppHomeScreen = ({ locale, dictionary }: AppHomeScreenProps) => {
   // Run search on initial load and when filters or debounced query change (no button click needed)
   useEffect(() => {
     if (!isReady || !isSearchTabActive) return;
+    if (authUser?.role === 'business' && providerTab === 'search' && businessSearchMode === 'needs') {
+      void loadBusinessNeeds();
+      return;
+    }
     void handleSearch(debouncedSearchQuery);
   }, [
     isReady,
     isSearchTabActive,
+    authUser?.role,
+    providerTab,
+    businessSearchMode,
+    loadBusinessNeeds,
     handleSearch,
     debouncedSearchQuery,
     categoryId,
@@ -371,6 +574,7 @@ export const AppHomeScreen = ({ locale, dictionary }: AppHomeScreenProps) => {
   const d = dictionary.homeSearch;
   const commonDict = dictionary.common as Record<string, string | undefined>;
   const categoryName = (cat: ServiceCategory) => (locale === 'ar' ? cat.nameAr : cat.nameEn);
+  const businessSearchControlsAlign = locale === 'ar' ? 'flex-start' : 'flex-end';
 
   if (!authUser) {
     return (
@@ -416,6 +620,15 @@ export const AppHomeScreen = ({ locale, dictionary }: AppHomeScreenProps) => {
             </div>
           </div>
         </section>
+
+        {accessToken && (
+          <AdSlideshow
+            locale={locale}
+            dictionary={dictionary}
+            accessToken={accessToken}
+            role={authUser.role}
+          />
+        )}
 
         {/* Top Experts / Top Businesses slideshow — arrows, dots below, scrollable cards */}
         <section className="home-top-slideshow" aria-label="Top providers">
@@ -985,232 +1198,415 @@ export const AppHomeScreen = ({ locale, dictionary }: AppHomeScreenProps) => {
             {providerTab === 'search' && (
               <>
                 <section className="home-search-card">
-              <div className="home-search-grid home-search-grid--4-cols">
-                <div className="home-search-field home-search-field--full">
-                  <label className="home-search-label">{d.search}</label>
-                  <input
-                    type="search"
-                    className="home-search-input"
-                    placeholder={d.searchPlaceholder}
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    aria-label={d.searchPlaceholder}
-                  />
-                </div>
-                <div className="home-search-field">
-                  <label className="home-search-label">{d.serviceType}</label>
-                  <select
-                    className="home-search-select"
-                    value={categoryId}
-                    onChange={(e) => setCategoryId(e.target.value)}
-                  >
-                    <option value="">{d.chooseServiceType}</option>
-                    {categories.map((cat) => (
-                      <option key={cat.id} value={cat.id}>
-                        {categoryName(cat)}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="home-search-field">
-                  <label className="home-search-label">{d.city}</label>
-                  <select
-                    className="home-search-select"
-                    value={city}
-                    onChange={(e) => handleCityChange(e.target.value)}
-                  >
-                    <option value="">{d.chooseCity}</option>
-                    {EGYPTIAN_CITIES.map((c) => (
-                      <option key={c} value={c}>
-                        {c}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="home-search-field">
-                  <label className="home-search-label">{d.area}</label>
-                  <select
-                    className="home-search-select"
-                    value={area}
-                    onChange={(e) => setArea(e.target.value)}
-                    disabled={!city}
-                  >
-                    <option value="">{areaOptions.length ? d.chooseArea : d.areaPlaceholder}</option>
-                    {areaOptions.map((a) => (
-                      <option key={a} value={a}>
-                        {a}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="home-search-field">
-                  <label className="home-search-label">{d.providerType}</label>
-                  <select
-                    className="home-search-select"
-                    value={providerType}
-                    onChange={(e) => setProviderType(e.target.value)}
-                  >
-                    <option value="">{d.anyProvider}</option>
-                    <option value="expert">{d.expert}</option>
-                    <option value="craftsman">{d.craftsman}</option>
-                    <option value="business">{d.businessProvider}</option>
-                  </select>
-                </div>
-                <div className="home-search-field">
-                  <label className="home-search-label">{d.minRating ?? 'Min rating'}</label>
-                  <select
-                    className="home-search-select"
-                    value={minRating === '' ? '' : String(minRating)}
-                    onChange={(e) => setMinRating(e.target.value === '' ? '' : Number(e.target.value))}
-                  >
-                    <option value="">{d.any ?? 'Any'}</option>
-                    {[1, 2, 3, 4, 5].map((n) => (
-                      <option key={n} value={n}>
-                        {n}+ ★
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="home-search-field">
-                  <label className="home-search-label">{d.minPrice ?? 'Min price'}</label>
-                  <input
-                    type="number"
-                    min={0}
-                    step={1}
-                    className="home-search-input"
-                    placeholder="0"
-                    value={minPrice === '' ? '' : minPrice}
-                    onChange={(e) =>
-                      setMinPrice(e.target.value === '' ? '' : parseFloat(e.target.value) || 0)
-                    }
-                  />
-                </div>
-                <div className="home-search-field">
-                  <label className="home-search-label">{d.maxPrice ?? 'Max price'}</label>
-                  <input
-                    type="number"
-                    min={0}
-                    step={1}
-                    className="home-search-input"
-                    placeholder="—"
-                    value={maxPrice === '' ? '' : maxPrice}
-                    onChange={(e) =>
-                      setMaxPrice(e.target.value === '' ? '' : parseFloat(e.target.value) || 0)
-                    }
-                  />
-                </div>
-                <div className="home-search-field">
-                  <label className="home-search-label">{d.sort ?? 'Sort by'}</label>
-                  <select
-                    className="home-search-select"
-                    value={sort}
-                    onChange={(e) => setSort(e.target.value)}
-                  >
-                    <option value="newest">{d.sortNewest ?? 'Newest'}</option>
-                    <option value="rating">{d.sortRating ?? 'Rating'}</option>
-                    <option value="price_asc">{d.sortPriceAsc ?? 'Price: low to high'}</option>
-                    <option value="price_desc">{d.sortPriceDesc ?? 'Price: high to low'}</option>
-                    <option value="completed_count">{d.sortPopular ?? 'Most orders'}</option>
-                  </select>
-                </div>
-                <div className="home-search-field home-search-field--full" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                  <input
-                    type="checkbox"
-                    id="verified-only-provider"
-                    checked={verifiedOnly}
-                    onChange={(e) => setVerifiedOnly(e.target.checked)}
-                  />
-                  <label htmlFor="verified-only-provider" className="home-search-label" style={{ margin: 0 }}>
-                    {d.verifiedOnly ?? 'Verified providers only'}
-                  </label>
-                </div>
-              </div>
-
-              <button
-                type="button"
-                className="home-search-btn"
-                onClick={() => void handleSearch()}
-                disabled={searching}
-              >
-                {searching ? dictionary.admin.loading : d.search}
-              </button>
-            </section>
-
-            {hasSearched && (
-              <section className="home-results-section">
-                <h2 className="home-section-title">
-                  {d.results} ({results.length})
-                </h2>
-                {results.length === 0 ? (
-                  <p className="home-empty">{d.noResults}</p>
-                ) : (
-                  <div className="home-results-grid">
-                    {results.map((r) => (
-                      <div
-                        key={r.id}
-                        role="button"
-                        tabIndex={0}
-                        className="home-result-card"
-                        onClick={() => setSelectedResult(r)}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter' || e.key === ' ') {
-                            e.preventDefault();
-                            setSelectedResult(r);
+                  <div className="home-search-grid home-search-grid--4-cols">
+                    <div className="home-search-field home-search-field--full">
+                      <label className="home-search-label">{d.search}</label>
+                      <input
+                        type="search"
+                        className="home-search-input"
+                        placeholder={
+                          authUser.role === 'business' && businessSearchMode === 'needs'
+                            ? dictionary.needs?.searchNeedsPlaceholder ?? 'Search by title, description, or category'
+                            : d.searchPlaceholder
+                        }
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        aria-label={d.searchPlaceholder}
+                      />
+                    </div>
+                    <div className="home-search-field">
+                      <label className="home-search-label">{d.serviceType}</label>
+                      <select
+                        className="home-search-select"
+                        value={categoryId}
+                        onChange={(e) => setCategoryId(e.target.value)}
+                      >
+                        <option value="">{d.chooseServiceType}</option>
+                        {categories.map((cat) => (
+                          <option key={cat.id} value={cat.id}>
+                            {categoryName(cat)}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="home-search-field">
+                      <label className="home-search-label">{d.city}</label>
+                      <select
+                        className="home-search-select"
+                        value={city}
+                        onChange={(e) => handleCityChange(e.target.value)}
+                      >
+                        <option value="">{d.chooseCity}</option>
+                        {EGYPTIAN_CITIES.map((c) => (
+                          <option key={c} value={c}>
+                            {c}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="home-search-field">
+                      <label className="home-search-label">{d.area}</label>
+                      <select
+                        className="home-search-select"
+                        value={area}
+                        onChange={(e) => setArea(e.target.value)}
+                        disabled={!city}
+                      >
+                        <option value="">{areaOptions.length ? d.chooseArea : d.areaPlaceholder}</option>
+                        {areaOptions.map((a) => (
+                          <option key={a} value={a}>
+                            {a}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="home-search-field">
+                      <label className="home-search-label">{d.providerType}</label>
+                      <select
+                        className="home-search-select"
+                        value={providerType}
+                        onChange={(e) => setProviderType(e.target.value)}
+                      >
+                        <option value="">{d.anyProvider}</option>
+                        <option value="expert">{d.expert}</option>
+                        <option value="craftsman">{d.craftsman}</option>
+                        <option value="business">{d.businessProvider}</option>
+                      </select>
+                    </div>
+                    <div className="home-search-field">
+                      <label className="home-search-label">{d.minRating ?? 'Min rating'}</label>
+                      <select
+                        className="home-search-select"
+                        value={minRating === '' ? '' : String(minRating)}
+                        onChange={(e) => setMinRating(e.target.value === '' ? '' : Number(e.target.value))}
+                      >
+                        <option value="">{d.any ?? 'Any'}</option>
+                        {[1, 2, 3, 4, 5].map((n) => (
+                          <option key={n} value={n}>
+                            {n}+ ★
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="home-search-field">
+                      <label className="home-search-label">{d.minPrice ?? 'Min price'}</label>
+                      <input
+                        type="number"
+                        min={0}
+                        step={1}
+                        className="home-search-input"
+                        placeholder="0"
+                        value={
+                          authUser.role === 'business' && businessSearchMode === 'needs'
+                            ? businessNeedsMinBudget === '' ? '' : businessNeedsMinBudget
+                            : minPrice === '' ? '' : minPrice
+                        }
+                        onChange={(e) => {
+                          const val = e.target.value === '' ? '' : parseFloat(e.target.value) || 0;
+                          if (authUser.role === 'business' && businessSearchMode === 'needs') {
+                            setBusinessNeedsMinBudget(val);
+                          } else {
+                            setMinPrice(val);
+                          }
+                        }}
+                      />
+                    </div>
+                    <div className="home-search-field">
+                      <label className="home-search-label">{d.maxPrice ?? 'Max price'}</label>
+                      <input
+                        type="number"
+                        min={0}
+                        step={1}
+                        className="home-search-input"
+                        placeholder="—"
+                        value={
+                          authUser.role === 'business' && businessSearchMode === 'needs'
+                            ? businessNeedsMaxBudget === '' ? '' : businessNeedsMaxBudget
+                            : maxPrice === '' ? '' : maxPrice
+                        }
+                        onChange={(e) => {
+                          const val = e.target.value === '' ? '' : parseFloat(e.target.value) || 0;
+                          if (authUser.role === 'business' && businessSearchMode === 'needs') {
+                            setBusinessNeedsMaxBudget(val);
+                          } else {
+                            setMaxPrice(val);
+                          }
+                        }}
+                      />
+                    </div>
+                    <div className="home-search-field">
+                      <label className="home-search-label">{d.sort ?? 'Sort by'}</label>
+                      <select
+                        className="home-search-select"
+                        value={
+                          authUser.role === 'business' && businessSearchMode === 'needs'
+                            ? businessNeedsSort
+                            : sort
+                        }
+                        onChange={(e) => {
+                          if (authUser.role === 'business' && businessSearchMode === 'needs') {
+                            setBusinessNeedsSort(e.target.value as 'newest' | 'budget_asc' | 'budget_desc');
+                          } else {
+                            setSort(e.target.value);
                           }
                         }}
                       >
-                        {r.images?.[0] ? (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img
-                            src={toAbsoluteAssetUrl(r.images[0])}
-                            alt=""
-                            className="home-result-service-thumb"
-                            onClick={(e) => e.stopPropagation()}
-                          />
-                        ) : null}
-                        <div className="home-result-avatar">
-                          <AvatarImage
-                            src={r.providerAvatar}
-                            displayName={r.providerName}
-                            width={48}
-                            height={48}
-                            imageClassName="home-result-avatar-img"
-                            fallbackClassName="home-result-avatar-fallback"
-                          />
-                        </div>
-                        <div className="home-result-info">
-                          <p className="home-result-title">{r.title}</p>
-                          <p className="home-result-provider">
-                            {r.providerName}
-                            {r.providerVerified && (
-                              <span className="home-result-badge" title={d.verified ?? 'Verified'}>
-                                {d.verified ?? '✓'}
-                              </span>
-                            )}
-                          </p>
-                          <p className="home-result-meta">
-                            {locale === 'ar' ? r.categoryNameAr : r.categoryNameEn}
-                            {r.city && ` · ${r.city}`}
-                            {r.avgRating != null && (
-                              <span> · {r.avgRating.toFixed(1)} ★{r.avgRating >= 4 ? ` · ${d.topRated ?? 'Top rated'}` : ''}</span>
-                            )}
-                          </p>
-                          {r.price != null && (
-                            <p className="home-result-price">
-                    {r.price} {r.currency ?? 'EGP'}
-                    {hourlyPricingEnabled && r.priceType === 'hourly' ? '/hr' : ''}
-                            </p>
-                          )}
-                        </div>
-                        {r.isFeatured && <span className="home-result-featured">★</span>}
-                      </div>
-                    ))}
+                        <option value="newest">{d.sortNewest ?? 'Newest'}</option>
+                        <option value="rating">{d.sortRating ?? 'Rating'}</option>
+                        <option value="price_asc">{d.sortPriceAsc ?? 'Price: low to high'}</option>
+                        <option value="price_desc">{d.sortPriceDesc ?? 'Price: high to low'}</option>
+                        <option value="completed_count">{d.sortPopular ?? 'Most orders'}</option>
+                      </select>
+                    </div>
+                    <div className="home-search-field home-search-field--full home-search-controls-row" style={{ justifyContent: businessSearchControlsAlign }}>
+                      <input
+                        type="checkbox"
+                        id="verified-only-provider"
+                        checked={verifiedOnly}
+                        onChange={(e) => setVerifiedOnly(e.target.checked)}
+                      />
+                      <label htmlFor="verified-only-provider" className="home-search-label" style={{ margin: 0 }}>
+                        {d.verifiedOnly ?? 'Verified providers only'}
+                      </label>
+                      {authUser.role === 'business' && (
+                        <>
+                          <span className="home-search-label" style={{ margin: 0 }}>
+                            {dictionary.common.services ?? 'Service'}
+                          </span>
+                          <label htmlFor="business-search-mode-toggle" className="home-toggle-switch">
+                            <input
+                              id="business-search-mode-toggle"
+                              type="checkbox"
+                              className="home-toggle-switch-input"
+                              checked={businessSearchMode === 'needs'}
+                              onChange={(e) => handleBusinessSearchModeChange(e.target.checked)}
+                              aria-label="Toggle search mode between services and customer needs"
+                            />
+                            <span className="home-toggle-switch-track" aria-hidden="true">
+                              <span className="home-toggle-switch-knob" />
+                            </span>
+                          </label>
+                          <span className="home-search-label" style={{ margin: 0 }}>
+                            {dictionary.needs?.customerNeeds ?? 'Customer Need'}
+                          </span>
+                        </>
+                      )}
+                    </div>
                   </div>
+
+                  <button
+                    type="button"
+                    className="home-search-btn"
+                    onClick={() =>
+                      void (authUser.role === 'business' && businessSearchMode === 'needs'
+                        ? loadBusinessNeeds()
+                        : handleSearch())
+                    }
+                    disabled={searching || businessNeedsLoading}
+                  >
+                    {searching || businessNeedsLoading ? dictionary.admin.loading : d.search}
+                  </button>
+                </section>
+
+                {hasSearched && (
+                  <section className="home-results-section">
+                    <h2 className="home-section-title">
+                      {d.results} ({authUser.role === 'business' && businessSearchMode === 'needs' ? businessOpenNeeds.length : results.length})
+                    </h2>
+                    {authUser.role === 'business' && businessSearchMode === 'needs' ? (
+                      businessNeedsLoading ? (
+                        <p className="home-empty">{dictionary.admin.loading ?? 'Loading...'}</p>
+                      ) : businessOpenNeeds.length === 0 ? (
+                        <p className="home-empty">{dictionary.needs?.noOpenNeeds ?? 'No open needs at the moment.'}</p>
+                      ) : (
+                        <div className="home-results-grid">
+                          {businessOpenNeeds.map((need) => {
+                            const existingBid = businessMyBids.find((b) => b.need_id === need.id);
+                            const mediaUrls = getNeedMediaUrls(need.reference_url);
+                            const location = [need.city, need.country].filter(Boolean).join(', ');
+                            const postedDate = need.created_at
+                              ? new Date(need.created_at).toLocaleDateString(
+                                  locale === 'ar' ? 'ar-EG' : 'en-US',
+                                )
+                              : null;
+                            const bidsCount = Number(need.bid_count ?? 0);
+                            return (
+                              <div key={need.id} className="home-result-card home-need-card">
+                                <div className="home-result-info home-need-card__info">
+                                  <p className="home-result-title">{need.title}</p>
+                                  <p className="home-result-meta">
+                                    {need.description.slice(0, 220)}
+                                    {need.description.length > 220 ? '...' : ''}
+                                  </p>
+                                  <p className="home-result-meta">
+                                    {parseFloat(need.budget_amount).toFixed(2)} {need.currency}
+                                    {` · ${need.budget_type === 'hourly' ? 'Hourly' : 'Fixed'}`}
+                                    {need.timeline_days ? ` - ${need.timeline_days} days` : ''}
+                                  </p>
+                                  {(need.category_name_en || need.category_name_ar) && (
+                                    <p className="home-result-meta">
+                                      {dictionary.common.category ?? 'Category'}:{' '}
+                                      {locale === 'ar' ? need.category_name_ar : need.category_name_en}
+                                    </p>
+                                  )}
+                                  {location && (
+                                    <p className="home-result-meta">
+                                      {dictionary.common.location ?? 'Location'}: {location}
+                                    </p>
+                                  )}
+                                  <p className="home-result-meta">
+                                    {(dictionary.needs?.postedBy ?? 'By')}: {need.customer_name}
+                                    {postedDate ? ` · ${dictionary.common.date ?? 'Date'}: ${postedDate}` : ''}
+                                  </p>
+                                  <p className="home-result-meta">
+                                    {dictionary.needs?.bids ?? 'Bids'}: {Number.isFinite(bidsCount) ? bidsCount : 0}
+                                    {` · ${dictionary.common.media ?? 'Media'}: ${mediaUrls.length}`}
+                                  </p>
+                                  {mediaUrls.length > 0 && (
+                                    <div className="home-need-card__media">
+                                      {mediaUrls.slice(0, 3).map((url, idx) => {
+                                        const full = resolvePublicAssetUrl(url) ?? url;
+                                        const isImage = /\.(jpe?g|png|webp|gif)$/i.test(url) || url.includes('/uploads/');
+                                        if (!isImage) {
+                                          return (
+                                            <a
+                                              key={`${need.id}-file-${idx}`}
+                                              href={full}
+                                              target="_blank"
+                                              rel="noopener noreferrer"
+                                              className="home-need-card__file"
+                                            >
+                                              File
+                                            </a>
+                                          );
+                                        }
+                                        return (
+                                          <button
+                                            key={`${need.id}-img-${idx}`}
+                                            type="button"
+                                            className="home-need-card__thumb"
+                                            onClick={() => setPreviewServiceImage(full)}
+                                          >
+                                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                                            <img src={full} alt="" />
+                                          </button>
+                                        );
+                                      })}
+                                    </div>
+                                  )}
+                                </div>
+                                <div className="home-need-card__actions">
+                                  <button
+                                    type="button"
+                                    className="dashboard-link-btn"
+                                    onClick={() => setSelectedBusinessNeed(need)}
+                                  >
+                                    {dictionary.common.viewDetails ?? 'View details'}
+                                  </button>
+                                  {existingBid ? (
+                                    <button
+                                      type="button"
+                                      className="dashboard-btn dashboard-btn--secondary dashboard-btn--small"
+                                      onClick={() => {
+                                        setBusinessEditingBid(existingBid);
+                                        setBusinessBidNeed(need);
+                                        setBusinessBidAmountInput(existingBid.amount);
+                                        setBusinessBidError(null);
+                                      }}
+                                      disabled={existingBid.status !== 'pending'}
+                                    >
+                                      Edit Bid
+                                    </button>
+                                  ) : (
+                                    <button
+                                      type="button"
+                                      className="dashboard-primary-btn dashboard-primary-btn--small"
+                                      onClick={() => {
+                                        setBusinessEditingBid(null);
+                                        setBusinessBidNeed(need);
+                                        setBusinessBidAmountInput('');
+                                        setBusinessBidError(null);
+                                      }}
+                                    >
+                                      {dictionary.needs?.placeBid ?? 'Place Bid'}
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )
+                    ) : results.length === 0 ? (
+                      <p className="home-empty">{d.noResults}</p>
+                    ) : (
+                      <div className="home-results-grid">
+                        {results.map((r) => (
+                          <div
+                            key={r.id}
+                            role="button"
+                            tabIndex={0}
+                            className="home-result-card"
+                            onClick={() => setSelectedResult(r)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter' || e.key === ' ') {
+                                e.preventDefault();
+                                setSelectedResult(r);
+                              }
+                            }}
+                          >
+                            {r.images?.[0] ? (
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img
+                                src={toAbsoluteAssetUrl(r.images[0])}
+                                alt=""
+                                className="home-result-service-thumb"
+                                onClick={(e) => e.stopPropagation()}
+                              />
+                            ) : null}
+                            <div className="home-result-avatar">
+                              <AvatarImage
+                                src={r.providerAvatar}
+                                displayName={r.providerName}
+                                width={48}
+                                height={48}
+                                imageClassName="home-result-avatar-img"
+                                fallbackClassName="home-result-avatar-fallback"
+                              />
+                            </div>
+                            <div className="home-result-info">
+                              <p className="home-result-title">{r.title}</p>
+                              <p className="home-result-provider">
+                                {r.providerName}
+                                {r.providerVerified && (
+                                  <span className="home-result-badge" title={d.verified ?? 'Verified'}>
+                                    {d.verified ?? '✓'}
+                                  </span>
+                                )}
+                              </p>
+                              <p className="home-result-meta">
+                                {locale === 'ar' ? r.categoryNameAr : r.categoryNameEn}
+                                {r.city && ` · ${r.city}`}
+                                {r.avgRating != null && (
+                                  <span> · {r.avgRating.toFixed(1)} ★{r.avgRating >= 4 ? ` · ${d.topRated ?? 'Top rated'}` : ''}</span>
+                                )}
+                              </p>
+                              {r.price != null && (
+                                <p className="home-result-price">
+                                  {r.price} {r.currency ?? 'EGP'}
+                                  {hourlyPricingEnabled && r.priceType === 'hourly' ? '/hr' : ''}
+                                </p>
+                              )}
+                            </div>
+                            {r.isFeatured && <span className="home-result-featured">★</span>}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </section>
                 )}
-              </section>
+              </>
             )}
-          </>
-        )}
       </>
     )}
 
@@ -1338,6 +1734,199 @@ export const AppHomeScreen = ({ locale, dictionary }: AppHomeScreenProps) => {
             onClose={() => setPreviewServiceImage(null)}
             accessToken={accessToken}
           />
+        )}
+        {selectedBusinessNeed && (
+          <div className="plan-modal-overlay" onClick={() => setSelectedBusinessNeed(null)}>
+            <div className="plan-modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 640 }}>
+              <h3 className="plan-modal-title">{selectedBusinessNeed.title}</h3>
+              <p className="dashboard-card-meta" style={{ marginBottom: '0.5rem' }}>
+                {parseFloat(selectedBusinessNeed.budget_amount).toFixed(2)} {selectedBusinessNeed.currency}
+                {` · ${selectedBusinessNeed.budget_type === 'hourly' ? 'Hourly budget' : 'Fixed budget'}`}
+                {selectedBusinessNeed.timeline_days ? ` - ${selectedBusinessNeed.timeline_days} days` : ''}
+                {(selectedBusinessNeed.city || selectedBusinessNeed.country) &&
+                  ` - ${[selectedBusinessNeed.city, selectedBusinessNeed.country].filter(Boolean).join(', ')}`}
+              </p>
+              {(selectedBusinessNeed.category_name_en || selectedBusinessNeed.category_name_ar) && (
+                <p className="dashboard-card-meta" style={{ marginBottom: '0.5rem' }}>
+                  {dictionary.common.category ?? 'Category'}:{' '}
+                  {locale === 'ar'
+                    ? selectedBusinessNeed.category_name_ar
+                    : selectedBusinessNeed.category_name_en}
+                </p>
+              )}
+              <p className="dashboard-card-meta" style={{ marginBottom: '0.75rem' }}>
+                {dictionary.common.status ?? 'Status'}: {selectedBusinessNeed.status}
+                {selectedBusinessNeed.created_at &&
+                  ` · ${dictionary.common.date ?? 'Date'}: ${new Date(
+                    selectedBusinessNeed.created_at,
+                  ).toLocaleDateString(locale === 'ar' ? 'ar-EG' : 'en-US')}`}
+              </p>
+              <p className="dashboard-card-desc" style={{ whiteSpace: 'pre-wrap' }}>
+                {selectedBusinessNeed.description}
+              </p>
+              {getNeedMediaUrls(selectedBusinessNeed.reference_url).length > 0 && (
+                <div className="dashboard-card-media" style={{ marginTop: '0.75rem' }}>
+                  {getNeedMediaUrls(selectedBusinessNeed.reference_url).map((url, idx) => {
+                    const full = resolvePublicAssetUrl(url) ?? url;
+                    const isImage = /\.(jpe?g|png|webp|gif)$/i.test(url) || url.includes('/uploads/');
+                    if (!isImage) {
+                      return (
+                        <a
+                          key={`modal-file-${idx}`}
+                          href={full}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="dashboard-card-media-link"
+                        >
+                          File
+                        </a>
+                      );
+                    }
+                    return (
+                      <button
+                        key={`modal-img-${idx}`}
+                        type="button"
+                        className="dashboard-card-media-thumb"
+                        onClick={() => setPreviewServiceImage(full)}
+                      >
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={full} alt="" />
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+              <div
+                style={{
+                  marginTop: '0.9rem',
+                  borderTop: '1px solid hsl(var(--border))',
+                  paddingTop: '0.8rem',
+                }}
+              >
+                <p className="dashboard-card-meta" style={{ marginBottom: '0.5rem', fontWeight: 700 }}>
+                  {dictionary.needs?.bids ?? 'Bids'} ({selectedNeedBids.length})
+                </p>
+                {selectedNeedBidsLoading ? (
+                  <p className="dashboard-card-meta">{dictionary.admin.loading ?? 'Loading...'}</p>
+                ) : selectedNeedBidsError ? (
+                  <p className="dashboard-card-meta">{selectedNeedBidsError}</p>
+                ) : selectedNeedBids.length === 0 ? (
+                  <p className="dashboard-card-meta">
+                    {dictionary.needs?.noBids ?? 'No bids yet for this need.'}
+                  </p>
+                ) : (
+                  <div style={{ display: 'grid', gap: '0.45rem', maxHeight: 220, overflowY: 'auto' }}>
+                    {selectedNeedBids.map((bid) => (
+                      <div
+                        key={bid.id}
+                        style={{
+                          border: '1px solid hsl(var(--border))',
+                          borderRadius: '0.55rem',
+                          padding: '0.5rem 0.6rem',
+                        }}
+                      >
+                        <p className="dashboard-card-meta" style={{ margin: 0 }}>
+                          {(bid.expert_name ?? 'Provider')}: {parseFloat(bid.amount).toFixed(2)}{' '}
+                          {bid.currency || selectedBusinessNeed.currency}
+                          {` · ${dictionary.common.status ?? 'Status'}: ${bid.status}`}
+                        </p>
+                        {bid.message ? (
+                          <p
+                            className="dashboard-card-meta"
+                            style={{ margin: '0.25rem 0 0 0', whiteSpace: 'pre-wrap' }}
+                          >
+                            {bid.message}
+                          </p>
+                        ) : null}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <div className="dashboard-form-row" style={{ marginTop: '1rem' }}>
+                <button type="button" className="plan-modal-cancel" onClick={() => setSelectedBusinessNeed(null)}>
+                  {dictionary.common.back}
+                </button>
+                <button
+                  type="button"
+                  className="dashboard-primary-btn"
+                  onClick={() => {
+                    setSelectedBusinessNeed(null);
+                    setBusinessEditingBid(null);
+                    setBusinessBidNeed(selectedBusinessNeed);
+                    setBusinessBidAmountInput('');
+                    setBusinessBidError(null);
+                  }}
+                >
+                  {dictionary.needs?.placeBid ?? 'Place Bid'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+        {businessBidNeed && (
+          <div className="plan-modal-overlay" onClick={() => setBusinessBidNeed(null)}>
+            <div className="plan-modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 480 }}>
+              <h3 className="plan-modal-title">
+                {(dictionary.needs?.placeBid ?? 'Place Bid')}: {businessBidNeed.title}
+              </h3>
+              {businessBidError && <p className="dashboard-error">{businessBidError}</p>}
+              <form className="dashboard-form" onSubmit={(e) => void handleBusinessBid(e)}>
+                <input
+                  name="amount"
+                  type="number"
+                  min="1"
+                  step="0.01"
+                  className="dashboard-input"
+                  placeholder={dictionary.needs?.bidAmountPlaceholder ?? 'Your total bid amount (EGP)'}
+                  value={businessBidAmountInput}
+                  onChange={(e) => setBusinessBidAmountInput(e.target.value)}
+                  required
+                />
+                {businessBidNeed.budget_type === 'hourly' ? (
+                  <input
+                    name="estimatedHours"
+                    type="number"
+                    min="1"
+                    max="168"
+                    className="dashboard-input"
+                    defaultValue={businessEditingBid?.estimated_hours ?? ''}
+                    placeholder="Estimated hours per week"
+                  />
+                ) : (
+                  <input
+                    name="deliveryDays"
+                    type="number"
+                    min="1"
+                    max="365"
+                    className="dashboard-input"
+                    defaultValue={businessEditingBid?.delivery_days ?? ''}
+                    placeholder={dictionary.needs?.bidDeliveryPlaceholder ?? 'Delivery days (optional)'}
+                  />
+                )}
+                <textarea
+                  name="message"
+                  className="dashboard-textarea"
+                  placeholder={dictionary.needs?.bidMessagePlaceholder ?? 'Why are you the right fit?'}
+                  defaultValue={businessEditingBid?.message ?? ''}
+                  minLength={5}
+                  required
+                />
+                <div className="dashboard-form-row">
+                  <button
+                    type="button"
+                    className="plan-modal-cancel"
+                    onClick={() => setBusinessBidNeed(null)}
+                  >
+                    {dictionary.common.back}
+                  </button>
+                  <button type="submit" className="dashboard-primary-btn" disabled={businessBidding}>
+                    {businessBidding ? '...' : (dictionary.needs?.submitBid ?? 'Submit Bid')}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
         )}
       </Container>
     </main>

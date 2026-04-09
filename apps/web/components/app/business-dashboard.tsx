@@ -20,7 +20,7 @@ type Props = {
   verificationStatus?: string;
 };
 
-type BusinessTab = 'services' | 'orders' | 'analytics' | 'jobs';
+type BusinessTab = 'overview' | 'services' | 'orders' | 'analytics' | 'jobs';
 
 export const BusinessDashboard = ({
   locale,
@@ -29,7 +29,7 @@ export const BusinessDashboard = ({
   categories: _categories,
   verificationStatus = 'unverified',
 }: Props) => {
-  const [tab, setTab] = useState<BusinessTab>('services');
+  const [tab, setTab] = useState<BusinessTab>('overview');
   const [orders, setOrders] = useState<Reservation[]>([]);
   const [ordersLoading, setOrdersLoading] = useState(false);
   const [analytics, setAnalytics] = useState<ProviderAnalytics | null>(null);
@@ -72,6 +72,7 @@ export const BusinessDashboard = ({
   }, [tab, loadAnalytics]);
 
   const d = dictionary.appHome?.suggestions?.business ?? {};
+  const needsDict = (dictionary.needs ?? {}) as Record<string, string>;
   const nav = dictionary.nav ?? {};
   const common = dictionary.common ?? {};
 
@@ -116,6 +117,15 @@ export const BusinessDashboard = ({
         <button
           type="button"
           role="tab"
+          aria-selected={tab === 'overview'}
+          className={`dashboard-tab ${tab === 'overview' ? 'dashboard-tab--active' : ''}`}
+          onClick={() => setTab('overview')}
+        >
+          {needsDict.customerNeedsOverview ?? 'Overview Customer Needs'}
+        </button>
+        <button
+          type="button"
+          role="tab"
           aria-selected={tab === 'services'}
           className={`dashboard-tab ${tab === 'services' ? 'dashboard-tab--active' : ''}`}
           onClick={() => setTab('services')}
@@ -150,6 +160,21 @@ export const BusinessDashboard = ({
           Jobs
         </button>
       </div>
+
+      {tab === 'overview' && (
+        <div className="dashboard-empty-state">
+          <h4
+            className="dashboard-section-title"
+            style={{ fontSize: '1rem', marginBottom: '0.75rem' }}
+          >
+            {needsDict.customerNeedsOverview ?? 'Customer Needs Overview (My Bids)'}
+          </h4>
+          <p className="dashboard-empty">
+            {needsDict.bidsOverviewFromSearchHint ??
+              'Use Search -> Customer Need to view and manage your bid progress.'}
+          </p>
+        </div>
+      )}
 
       {tab === 'services' && (
         <div className="dashboard-empty-state">

@@ -3,10 +3,7 @@ import { z } from 'zod';
 export const createNeedSchema = z.object({
   title: z.string().min(3).max(300).trim(),
   description: z.string().min(10).max(5000).trim(),
-  categoryId: z
-    .union([z.string().uuid(), z.literal('')])
-    .optional()
-    .transform((v) => (v === '' || v == null ? undefined : v)),
+  categoryId: z.string().uuid(),
   budgetType: z.enum(['fixed', 'hourly']),
   budgetAmount: z.coerce.number().min(1).max(1000000),
   currency: z.string().max(10).default('EGP'),

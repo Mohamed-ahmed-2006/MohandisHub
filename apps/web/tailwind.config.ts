@@ -19,6 +19,9 @@ const config: Config = {
         warning: 'hsl(var(--warning))',
         destructive: 'hsl(var(--destructive))',
         info: 'hsl(var(--info))',
+        glass: 'hsl(var(--glass-bg))',
+        'glass-strong': 'hsl(var(--glass-bg-strong))',
+        'glass-border': 'hsl(var(--glass-border))',
       },
       borderRadius: {
         xs: 'var(--radius-xs)',
@@ -36,6 +39,9 @@ const config: Config = {
         'token-5': 'var(--space-5)',
         'token-6': 'var(--space-6)',
         'token-8': 'var(--space-8)',
+        'token-10': 'var(--space-10)',
+        'token-12': 'var(--space-12)',
+        'token-16': 'var(--space-16)',
       },
       fontFamily: {
         sans: ['var(--font-manrope)', 'sans-serif'],
@@ -48,6 +54,7 @@ const config: Config = {
         elevation1: 'var(--elevation-1)',
         elevation2: 'var(--elevation-2)',
         elevation3: 'var(--elevation-3)',
+        glass: 'var(--glass-shadow)',
       },
     },
   },

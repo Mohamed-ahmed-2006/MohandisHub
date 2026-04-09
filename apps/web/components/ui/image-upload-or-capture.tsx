@@ -100,6 +100,7 @@ export function ImageUploadOrCapture({
             Take live photo
           </button>
         </div>
+        <p className="mh-upload-hint">Accepted: JPG, PNG, WebP. Use clear high-resolution images.</p>
       </div>
     );
   }

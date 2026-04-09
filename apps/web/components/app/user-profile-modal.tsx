@@ -2,13 +2,14 @@
 
 import type { PublicUserProfile } from '@mohandishub/shared';
 import { useRouter } from 'next/navigation';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
 import type { ProfileModalInitialData } from './profile-modal-context';
 
 import { useAppStatus } from '@/components/app-status-provider';
 import { useAuth } from '@/components/auth/auth-provider';
 import { AvatarImage } from '@/components/ui/avatar-image';
+import { Modal } from '@/components/ui/modal';
 import { chatApiClient } from '@/lib/chat/client';
 import { buildLocalePath } from '@/lib/i18n/path';
 import type { Dictionary, Locale } from '@/lib/i18n/types';
@@ -46,7 +47,6 @@ export function UserProfileModal({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [messageLoading, setMessageLoading] = useState(false);
-  const overlayRef = useRef<HTMLDivElement>(null);
 
   const loadProfile = useCallback(async () => {
     setLoading(true);
@@ -69,13 +69,6 @@ export function UserProfileModal({
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
       if (e.key === 'Escape') onClose();
-    },
-    [onClose],
-  );
-
-  const handleOverlayClick = useCallback(
-    (e: React.MouseEvent) => {
-      if (e.target === overlayRef.current) onClose();
     },
     [onClose],
   );
@@ -117,16 +110,8 @@ export function UserProfileModal({
   const verifiedLabel = (dictionary.profileModal as { verified?: string })?.verified ?? 'Verified';
 
   return (
-    <div
-      ref={overlayRef}
-      className="user-profile-modal-backdrop"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="user-profile-modal-title"
-      onClick={handleOverlayClick}
-      onKeyDown={handleKeyDown}
-    >
-      <div className="user-profile-modal" onClick={(e) => e.stopPropagation()}>
+    <Modal open onClose={onClose} size="md" className="user-profile-modal" usePortal>
+      <div onKeyDown={handleKeyDown}>
         <button
           type="button"
           className="user-profile-modal-close"
@@ -311,6 +296,6 @@ export function UserProfileModal({
           </>
         ) : null}
       </div>
-    </div>
+    </Modal>
   );
 }

@@ -24,6 +24,8 @@
 @import './onboarding/expert/onboarding-expert.css';
 @import './onboarding/business/onboarding-business.css';
 @import './app-home.css';
+@import './ad-slideshow.css';
+@import './my-ads.css';
 @import '../components/app/app-shell.css';
 @import '../components/profile/profile-screen.css';
 @import '../components/admin/admin-verification-screen.css';
@@ -68,6 +70,21 @@
   --space-8: 2rem;
   --space-10: 2.5rem;
   --space-12: 3rem;
+  --space-14: 3.5rem;
+  --space-16: 4rem;
+  --space-20: 5rem;
+  --space-24: 6rem;
+  --content-max: 84rem;
+  --content-max-narrow: 68rem;
+  --glass-bg: 0 0% 100% / 0.72;
+  --glass-bg-strong: 0 0% 100% / 0.84;
+  --glass-border: 0 0% 100% / 0.65;
+  --glass-shadow: 0 18px 45px -28px rgba(15, 23, 42, 0.45);
+  --glass-blur: 16px;
+  --hero-gradient:
+    radial-gradient(circle at 8% 14%, rgba(251, 146, 60, 0.28), transparent 36%),
+    radial-gradient(circle at 90% 10%, rgba(59, 130, 246, 0.2), transparent 40%),
+    linear-gradient(135deg, rgba(14, 116, 144, 0.2), rgba(217, 70, 239, 0.08));
   /* Elevation */
   --shadow-soft-lg: 0 24px 60px -34px rgba(15, 23, 42, 0.22);
   --elevation-1: 0 1px 2px rgba(15, 23, 42, 0.06);
@@ -111,6 +128,14 @@ html[data-theme='dark'] {
   --elevation-1: 0 1px 2px rgba(0, 0, 0, 0.35);
   --elevation-2: 0 10px 28px -10px rgba(0, 0, 0, 0.45);
   --elevation-3: 0 24px 56px -28px rgba(0, 0, 0, 0.55);
+  --glass-bg: 222 24% 11% / 0.66;
+  --glass-bg-strong: 222 24% 12% / 0.84;
+  --glass-border: 220 22% 30% / 0.75;
+  --glass-shadow: 0 24px 60px -34px rgba(0, 0, 0, 0.62);
+  --hero-gradient:
+    radial-gradient(circle at 10% 10%, rgba(251, 146, 60, 0.22), transparent 36%),
+    radial-gradient(circle at 88% 8%, rgba(96, 165, 250, 0.26), transparent 38%),
+    linear-gradient(135deg, rgba(15, 118, 110, 0.22), rgba(168, 85, 247, 0.12));
 }
 
 html {
@@ -189,7 +214,7 @@ main {
   align-items: flex-start;
   justify-content: space-between;
   gap: 1rem;
-  margin-bottom: 1.4rem;
+  margin-bottom: 1.2rem;
 }
 
 .app-page-header-actions {
@@ -212,10 +237,21 @@ main {
 
 .app-page-subtitle {
   margin: 0.35rem 0 0;
-  max-width: 42rem;
+  max-width: 54ch;
   color: hsl(var(--text-soft));
   font-size: 0.98rem;
   line-height: 1.65;
+}
+
+.app-page-shell {
+  width: min(100%, var(--content-max));
+  margin-inline: auto;
+  padding-inline: clamp(0.85rem, 2.8vw, 1.75rem);
+  padding-block: clamp(0.85rem, 2.2vw, 1.35rem);
+}
+
+.app-page-shell--narrow {
+  width: min(100%, var(--content-max-narrow));
 }
 
 html[data-theme='dark'] body {

@@ -3,8 +3,10 @@
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 
+import { AdminAdsTab } from './admin-ads-tab';
 import { AdminCategoriesTab } from './admin-categories-tab';
 import { AdminDashboardTab } from './admin-dashboard-tab';
+import { AdminMediaLibraryTab } from './admin-media-library-tab';
 import { AdminNotificationsTab } from './admin-notifications-tab';
 import { AdminPlansTab } from './admin-plans-tab';
 import { AdminRetentionTab } from './admin-retention-tab';
@@ -43,7 +45,9 @@ type TabId =
   | 'support'
   | 'notifications'
   | 'settings'
-  | 'retention';
+  | 'retention'
+  | 'media'
+  | 'ads';
 
 export const AdminPanel = ({ locale, dictionary }: AdminPanelProps) => {
   const router = useRouter();
@@ -78,6 +82,8 @@ export const AdminPanel = ({ locale, dictionary }: AdminPanelProps) => {
     { id: 'reviewReports', label: dictionary.admin.tabs.reviewReports ?? '', permission: 'manage_verifications' },
     { id: 'support', label: dictionary.admin.tabs.support ?? '', permission: 'manage_users' },
     { id: 'notifications', label: dictionary.admin.tabs.notifications ?? '', permission: 'manage_notifications' },
+    { id: 'ads', label: dictionary.admin.tabs.ads ?? 'Advertisements', permission: 'manage_ads' },
+    { id: 'media', label: 'Media library', permission: 'manage_settings' },
     { id: 'settings', label: dictionary.admin.tabs.settings, permission: 'manage_settings' },
     { id: 'retention', label: dictionary.admin.tabs.retention ?? 'Retention', permission: 'manage_retention' },
   ];
@@ -192,8 +198,18 @@ export const AdminPanel = ({ locale, dictionary }: AdminPanelProps) => {
             refreshSession={refreshSession}
           />
         )}
+        {activeTab === 'ads' && (
+          <AdminAdsTab dictionary={dictionary} accessToken={accessToken} />
+        )}
         {activeTab === 'settings' && (
           <AdminSettingsTab
+            dictionary={dictionary}
+            accessToken={accessToken}
+            refreshSession={refreshSession}
+          />
+        )}
+        {activeTab === 'media' && (
+          <AdminMediaLibraryTab
             dictionary={dictionary}
             accessToken={accessToken}
             refreshSession={refreshSession}

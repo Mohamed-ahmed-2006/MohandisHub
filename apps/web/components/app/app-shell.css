@@ -1,5 +1,5 @@
 :root {
-  --sidebar-width: 15rem;
+  --sidebar-width: 17.25rem;
 }
 
 .app-shell {
@@ -12,6 +12,10 @@
   min-width: 0;
   display: flex;
   flex-direction: column;
+  background:
+    radial-gradient(circle at 8% 3%, hsl(var(--primary) / 0.12), transparent 32%),
+    radial-gradient(circle at 94% 2%, hsl(var(--info) / 0.12), transparent 34%),
+    transparent;
 }
 
 .app-topbar {
@@ -19,14 +23,14 @@
   align-items: center;
   justify-content: space-between;
   gap: 0.75rem;
-  padding: 0.75rem 1.25rem;
+  padding: 0.75rem clamp(0.8rem, 1.9vw, 1.5rem);
   border-bottom: 1px solid hsl(var(--border));
-  background-color: color-mix(in srgb, hsl(var(--surface-panel)) 92%, transparent);
+  background-color: hsl(var(--glass-bg));
   position: sticky;
   top: 0;
   z-index: 40;
-  backdrop-filter: blur(16px);
-  box-shadow: var(--elevation-1);
+  backdrop-filter: blur(var(--glass-blur));
+  box-shadow: var(--elevation-1), var(--glass-shadow);
 }
 
 .app-topbar-start {
@@ -310,18 +314,14 @@
   display: flex;
   flex-direction: column;
   border-inline-end: 1px solid hsl(var(--border));
-  background: linear-gradient(
-    180deg,
-    color-mix(in srgb, hsl(var(--surface-panel)) 96%, transparent),
-    color-mix(in srgb, hsl(var(--card)) 98%, hsl(var(--muted)))
-  );
+  background: linear-gradient(180deg, hsl(var(--glass-bg-strong)), color-mix(in srgb, hsl(var(--card)) 94%, transparent));
   height: 100vh;
   position: sticky;
   top: 0;
   overflow-y: auto;
   z-index: 50;
-  backdrop-filter: blur(16px);
-  box-shadow: var(--elevation-1);
+  backdrop-filter: blur(var(--glass-blur));
+  box-shadow: var(--elevation-2), var(--glass-shadow);
 }
 
 .app-sidebar-header {
@@ -347,16 +347,20 @@
 .app-sidebar-link {
   display: block;
   padding: 0.7rem 0.9rem;
-  border-radius: 0.9rem;
+  border-radius: 1rem;
   font-size: 0.88rem;
   font-weight: 600;
   color: hsl(var(--foreground));
   text-decoration: none;
-  transition: background-color 0.15s ease;
+  transition:
+    background-color 0.18s ease,
+    transform 0.18s ease,
+    box-shadow 0.18s ease;
 }
 
 .app-sidebar-link:hover {
-  background-color: hsl(var(--muted));
+  background-color: color-mix(in srgb, hsl(var(--muted)) 60%, transparent);
+  transform: translateY(-1px);
 }
 
 .app-sidebar-link--active {

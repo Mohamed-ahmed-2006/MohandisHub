@@ -1,0 +1,513 @@
+.myads-main {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  padding: 1rem;
+  padding-bottom: 2rem;
+}
+
+@media (min-width: 768px) {
+  .myads-main {
+    padding: 1.25rem;
+    padding-bottom: 2rem;
+  }
+}
+
+/* --- Header --- */
+.myads-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.myads-page-title {
+  margin: 0;
+  font-size: clamp(1.25rem, 2.4vw, 1.6rem);
+  font-weight: 700;
+}
+
+.myads-page-subtitle {
+  margin: 0.25rem 0 0;
+  color: hsl(var(--muted-foreground));
+  font-size: 0.9rem;
+}
+
+/* --- Messages --- */
+.myads-msg {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  border-radius: var(--radius-md, 0.5rem);
+  font-size: 0.88rem;
+  animation: myads-slide-in 0.25s ease-out;
+}
+
+.myads-msg--error {
+  background: hsl(var(--destructive) / 0.08);
+  border: 1px solid hsl(var(--destructive) / 0.3);
+  color: hsl(var(--destructive));
+}
+
+.myads-msg--success {
+  background: hsl(142 70% 93%);
+  border: 1px solid hsl(142 70% 60% / 0.3);
+  color: hsl(142 70% 25%);
+}
+
+.myads-msg-dismiss {
+  padding: 0;
+  border: none;
+  background: none;
+  font-size: 1.2rem;
+  line-height: 1;
+  cursor: pointer;
+  color: inherit;
+  opacity: 0.7;
+}
+
+.myads-msg-dismiss:hover {
+  opacity: 1;
+}
+
+@keyframes myads-slide-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* --- Create Section --- */
+.myads-create-section {
+  animation: myads-slide-in 0.3s ease-out;
+}
+
+.myads-create-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.5rem;
+  align-items: start;
+}
+
+@media (max-width: 860px) {
+  .myads-create-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* --- Form Card --- */
+.myads-form-card {
+  background: hsl(var(--card));
+  border: 1px solid hsl(var(--border));
+  border-radius: var(--radius-lg);
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  box-shadow: 0 8px 26px -20px hsl(var(--foreground) / 0.35);
+}
+
+.myads-form-card-title {
+  margin: 0;
+  font-size: 1.15rem;
+  font-weight: 700;
+}
+
+/* --- Fieldsets --- */
+.myads-fieldset {
+  border: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.myads-legend {
+  font-size: 0.82rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: hsl(var(--muted-foreground));
+  padding: 0;
+  margin-bottom: 0.15rem;
+}
+
+.myads-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.myads-field-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+}
+
+@media (max-width: 560px) {
+  .myads-field-row {
+    grid-template-columns: 1fr;
+  }
+}
+
+.myads-label {
+  font-size: 0.84rem;
+  font-weight: 600;
+  color: hsl(var(--foreground));
+}
+
+.myads-form-card .dashboard-input,
+.myads-form-card .dashboard-textarea,
+.myads-form-card .dashboard-select {
+  border-radius: 10px;
+  border-color: hsl(var(--border));
+  background: hsl(var(--background));
+  padding: 0.62rem 0.8rem;
+  font-size: 0.9rem;
+}
+
+.myads-form-card .dashboard-input:focus,
+.myads-form-card .dashboard-textarea:focus,
+.myads-form-card .dashboard-select:focus {
+  outline: none;
+  border-color: hsl(var(--primary));
+  box-shadow: 0 0 0 3px hsl(var(--primary) / 0.15);
+}
+
+/* --- Plan Grid --- */
+.myads-plan-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 0.6rem;
+}
+
+.myads-plan-option {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.15rem;
+  padding: 0.85rem 0.5rem;
+  border: 1px solid hsl(var(--border));
+  border-radius: var(--radius-lg);
+  background: hsl(var(--background));
+  cursor: pointer;
+  transition:
+    border-color 0.15s ease,
+    background-color 0.15s ease,
+    box-shadow 0.15s ease;
+  text-align: center;
+}
+
+.myads-plan-option:hover {
+  border-color: hsl(var(--primary) / 0.55);
+  background: hsl(var(--primary) / 0.03);
+}
+
+.myads-plan-option--active {
+  border-color: hsl(var(--primary));
+  background: hsl(var(--primary) / 0.07);
+  box-shadow: inset 0 0 0 1px hsl(var(--primary));
+}
+
+.myads-plan-option-name {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: hsl(var(--foreground));
+}
+
+.myads-plan-option-price {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: hsl(var(--primary));
+}
+
+.myads-plan-option-duration {
+  font-size: 0.75rem;
+  color: hsl(var(--muted-foreground));
+}
+
+/* --- Upload Area --- */
+.myads-upload-area {
+  border: 1px dashed hsl(var(--border));
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  transition: border-color 0.15s ease;
+  background: hsl(var(--background));
+}
+
+.myads-upload-area:hover {
+  border-color: hsl(var(--primary) / 0.5);
+}
+
+.myads-upload-trigger {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.55rem;
+  padding: 1.5rem 1rem;
+  cursor: pointer;
+  color: hsl(var(--muted-foreground));
+  font-size: 0.88rem;
+  text-align: center;
+  transition: color 0.15s ease;
+}
+
+.myads-upload-trigger:hover {
+  color: hsl(var(--primary));
+}
+
+.myads-upload-icon {
+  font-size: 1.55rem;
+  line-height: 1;
+  opacity: 0.65;
+}
+
+.myads-upload-preview {
+  position: relative;
+}
+
+.myads-upload-preview img {
+  width: 100%;
+  display: block;
+  max-height: 200px;
+  object-fit: cover;
+}
+
+.myads-upload-remove {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: 50%;
+  border: none;
+  background: hsl(var(--destructive));
+  color: #fff;
+  font-size: 1.15rem;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* --- Price Summary --- */
+.myads-price-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  padding: 1rem;
+  border-radius: var(--radius-md, 0.5rem);
+  background: hsl(var(--primary) / 0.06);
+  border: 1px solid hsl(var(--primary) / 0.18);
+}
+
+.myads-price-summary-label {
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: hsl(var(--muted-foreground));
+}
+
+.myads-price-summary-value {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: hsl(var(--primary));
+}
+
+.myads-price-summary-note {
+  font-size: 0.78rem;
+  color: hsl(var(--muted-foreground));
+}
+
+/* --- Form Actions --- */
+.myads-form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid hsl(var(--border));
+}
+
+/* --- Preview Card --- */
+.myads-preview-card {
+  background: hsl(var(--card));
+  border: 1px solid hsl(var(--border));
+  border-radius: var(--radius-lg);
+  padding: 1.5rem;
+  box-shadow: 0 8px 26px -20px hsl(var(--foreground) / 0.35);
+  position: sticky;
+  top: 5rem;
+}
+
+.myads-preview-card-title {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.myads-preview-hint {
+  margin: 0.25rem 0 1rem;
+  font-size: 0.82rem;
+  color: hsl(var(--muted-foreground));
+}
+
+.myads-preview-frame {
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  border: 1px solid hsl(var(--border));
+}
+
+/* --- Empty State --- */
+.myads-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  text-align: center;
+  padding: clamp(2.5rem, 6vw, 4rem) 1.5rem;
+}
+
+.myads-empty-brand-wrap {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  border: 1px solid hsl(var(--border));
+  background: hsl(var(--card));
+  display: grid;
+  place-items: center;
+  box-shadow: 0 8px 22px -18px hsl(var(--foreground) / 0.45);
+}
+
+.myads-empty-brand {
+  width: auto;
+}
+
+.myads-empty h3 {
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+.myads-empty p {
+  margin: 0;
+  color: hsl(var(--muted-foreground));
+  font-size: 0.9rem;
+  max-width: 36ch;
+}
+
+/* --- Ad List --- */
+.myads-list-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.myads-list-title {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.myads-ad-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 1rem;
+}
+
+/* --- Ad Card --- */
+.myads-ad-card {
+  border: 1px solid hsl(var(--glass-border));
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  background: hsl(var(--glass-bg-strong));
+  box-shadow: var(--elevation-2), var(--glass-shadow);
+  backdrop-filter: blur(var(--glass-blur));
+  transition: box-shadow 0.2s ease;
+}
+
+.myads-ad-card:hover {
+  box-shadow:
+    0 8px 24px -8px hsl(var(--foreground) / 0.08),
+    var(--glass-shadow);
+}
+
+.myads-ad-card-banner {
+  height: 140px;
+  background-size: cover;
+  background-position: center;
+  background-color: hsl(var(--muted));
+}
+
+.myads-ad-card-body {
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.myads-ad-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.myads-ad-card-title {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 700;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.myads-ad-card-stats {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.4rem;
+}
+
+.myads-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 0.45rem 0.25rem;
+  background: hsl(var(--muted) / 0.45);
+  border-radius: var(--radius, 0.375rem);
+}
+
+.myads-stat-value {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: hsl(var(--foreground));
+}
+
+.myads-stat-label {
+  font-size: 0.68rem;
+  color: hsl(var(--muted-foreground));
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.myads-ad-card-meta {
+  margin: 0;
+  font-size: 0.8rem;
+  color: hsl(var(--muted-foreground));
+}
+
+.myads-pay-btn {
+  width: 100%;
+  text-align: center;
+}

@@ -2,11 +2,11 @@
 
 import type { ReservationProfile, ReservationSlot, ServiceSearchResult } from '@mohandishub/shared';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { createPortal } from 'react-dom';
 
 import { useProfileModal } from './profile-modal-context';
 
 import { useAppStatus } from '@/components/app-status-provider';
+import { Drawer } from '@/components/ui/drawer';
 import type { Dictionary, Locale } from '@/lib/i18n/types';
 import { reservationsApiClient } from '@/lib/reservations/client';
 
@@ -234,14 +234,8 @@ export const ServiceBookingModal = ({
   if (!open) return null;
 
   const modalContent = (
-    <div
-      className="home-drawer-overlay"
-      style={{ zIndex: 1100 }}
-      onClick={() => {
-        onClose();
-      }}
-    >
-      <div className="service-booking-modal" onClick={(e) => e.stopPropagation()}>
+    <Drawer open={open} onClose={onClose} className="service-booking-modal" zIndex={1100}>
+      <div>
         <h2 className="service-booking-title">{service.title}</h2>
         <p className="service-booking-provider">
           <button
@@ -416,8 +410,8 @@ export const ServiceBookingModal = ({
           </button>
         </div>
       </div>
-    </div>
+    </Drawer>
   );
 
-  return typeof document !== 'undefined' ? createPortal(modalContent, document.body) : modalContent;
+  return modalContent;
 };
