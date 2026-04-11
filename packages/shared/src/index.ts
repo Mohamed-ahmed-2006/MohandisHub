@@ -9,6 +9,7 @@ export * from './bookings.js';
 export * from './auth.js';
 export * from './ids.js';
 export * from './jobs.js';
+export * from './negotiations.js';
 export * from './otp.js';
 export * from './plans.js';
 export * from './profiles.js';

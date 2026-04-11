@@ -1506,6 +1506,20 @@
   color: hsl(var(--primary));
   text-decoration: underline;
 }
+.service-booking-gallery {
+  display: flex;
+  gap: 0.5rem;
+  overflow-x: auto;
+  margin: 0.75rem 0;
+  padding-bottom: 0.25rem;
+}
+.service-booking-gallery-img {
+  width: 72px;
+  height: 72px;
+  object-fit: cover;
+  border-radius: 0.5rem;
+  flex-shrink: 0;
+}
 .service-booking-price {
   font-weight: 600;
   margin: 0 0 1rem 0;
@@ -1727,4 +1741,168 @@
   display: flex;
   gap: 0.75rem;
   justify-content: flex-end;
+}
+
+/* Price negotiation (customer modal + provider services list) */
+.negotiation-modal .negotiation-modal-inner {
+  padding: 1.25rem 1.5rem 2rem;
+  max-width: 28rem;
+  width: 100%;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+.negotiation-modal-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+.negotiation-modal-title {
+  margin: 0;
+  font-size: 1.2rem;
+}
+.negotiation-modal-close {
+  border: none;
+  background: transparent;
+  font-size: 1.5rem;
+  line-height: 1;
+  cursor: pointer;
+  color: hsl(var(--muted-foreground));
+}
+.negotiation-modal-service {
+  margin: 0.35rem 0 0;
+  font-weight: 600;
+}
+.negotiation-modal-slot-warning {
+  margin: 0.5rem 0 0;
+  font-size: 0.85rem;
+  color: hsl(var(--muted-foreground));
+}
+.negotiation-modal-error {
+  margin-top: 0.75rem;
+}
+.negotiation-label {
+  display: block;
+  margin-top: 0.75rem;
+  font-size: 0.9rem;
+  font-weight: 500;
+}
+.negotiation-input,
+.negotiation-textarea {
+  width: 100%;
+  margin-top: 0.35rem;
+}
+.negotiation-submit,
+.negotiation-book {
+  margin-top: 1rem;
+}
+.negotiation-rounds-title {
+  margin: 1rem 0 0.5rem;
+  font-size: 1rem;
+}
+.negotiation-rounds-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.negotiation-round-item {
+  padding: 0.5rem 0.65rem;
+  border: 1px solid hsl(var(--border));
+  border-radius: var(--radius-md);
+  font-size: 0.9rem;
+}
+.negotiation-round-amount {
+  font-weight: 600;
+  display: block;
+}
+.negotiation-round-meta,
+.negotiation-round-time {
+  font-size: 0.8rem;
+  color: hsl(var(--muted-foreground));
+}
+.negotiation-actions {
+  margin-top: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.negotiation-action-row {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+.negotiation-waiting {
+  color: hsl(var(--muted-foreground));
+  margin-top: 0.75rem;
+}
+.negotiation-cancel {
+  margin-top: 0.75rem;
+}
+
+.services-negotiations-section {
+  margin-bottom: 2rem;
+  padding: 1rem 1.25rem;
+  border: 1px solid hsl(var(--border));
+  border-radius: var(--radius-lg);
+  background: hsl(var(--card));
+}
+.services-negotiations-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+.services-negotiations-title {
+  margin: 0;
+  font-size: 1.1rem;
+}
+.services-negotiations-muted {
+  margin: 0;
+  color: hsl(var(--muted-foreground));
+  font-size: 0.9rem;
+}
+.services-negotiations-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+.services-negotiation-card {
+  padding: 0.75rem 1rem;
+  border: 1px solid hsl(var(--border));
+  border-radius: var(--radius-md);
+}
+.services-negotiation-title {
+  margin: 0 0 0.25rem;
+  font-weight: 600;
+}
+.services-negotiation-meta {
+  margin: 0 0 0.5rem;
+  font-size: 0.85rem;
+  color: hsl(var(--muted-foreground));
+}
+.services-negotiation-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+.services-negotiation-label {
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+.services-negotiation-select,
+.services-negotiation-input {
+  max-width: 16rem;
+}
+.services-negotiation-btn-row {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
 }

@@ -24,6 +24,7 @@ import { buildAgoraRtcToken } from '../../lib/agora-token.js';
 import { HttpError } from '../../utils/http-error.js';
 import { ChatRepository } from '../chat/chat.repository.js';
 import { JobsRepository } from '../jobs/jobs.repository.js';
+import { NegotiationsService } from '../negotiations/negotiations.service.js';
 import { ServicesRepository } from '../services/services.repository.js';
 import { SettingsService } from '../settings/settings.service.js';
 import { WalletRepository } from '../wallet/wallet.repository.js';
@@ -282,6 +283,7 @@ export class ReservationsService {
     private readonly chatRepo: ChatRepository = new ChatRepository(),
     private readonly jobsRepo: JobsRepository = new JobsRepository(),
     private readonly servicesRepo: ServicesRepository = new ServicesRepository(),
+    private readonly negotiationsSvc: NegotiationsService = new NegotiationsService(),
   ) {}
 
   async getMyProfile(userId: string, role: string): Promise<ReservationProfile> {
@@ -538,10 +540,21 @@ export class ReservationsService {
           message: 'Selected service does not belong to this provider.',
         });
       }
-      if (service.price != null) {
+      if (input.negotiationId) {
+        const { agreedPrice, currency } = await this.negotiationsSvc.validateNegotiationForReservation(
+          customerId,
+          input.negotiationId,
+          input.serviceId,
+          input.providerId,
+        );
+        servicePrice = toMoney(agreedPrice);
+        reservationCurrency = currency || service.currency || reservationCurrency;
+      } else if (service.price != null) {
         servicePrice = toNumber(service.price);
+        reservationCurrency = service.currency || reservationCurrency;
+      } else {
+        reservationCurrency = service.currency || reservationCurrency;
       }
-      reservationCurrency = service.currency || reservationCurrency;
     }
     const expertPrice = Math.max(0, toMoney(servicePrice + reservationModePrice));
     const adminMinuteRate =
@@ -597,6 +610,9 @@ export class ReservationsService {
           client,
         );
         await this.ensureFixedPriceHold(client, reservation);
+        if (input.negotiationId) {
+          await this.negotiationsSvc.markNegotiationConsumed(input.negotiationId, customerId, client);
+        }
         await client.query('COMMIT');
       } catch (err) {
         await client.query('ROLLBACK');
@@ -606,6 +622,29 @@ export class ReservationsService {
       }
       const refreshed = await this.repo.findReservationById(reservation.id);
       reservation = refreshed ?? reservation;
+    } else if (input.negotiationId) {
+      const pool = getPool();
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+        reservation = await this.repo.createReservation(createInput, client);
+        await this.repo.createEvent(
+          {
+            reservationId: reservation.id,
+            eventType: 'created',
+            actorId: customerId,
+            metadata: { purpose: 'service', mode: input.mode },
+          },
+          client,
+        );
+        await this.negotiationsSvc.markNegotiationConsumed(input.negotiationId, customerId, client);
+        await client.query('COMMIT');
+      } catch (err) {
+        await client.query('ROLLBACK');
+        throw err;
+      } finally {
+        client.release();
+      }
     } else {
       reservation = await this.repo.createReservation(createInput);
       await this.repo.createEvent({
@@ -617,6 +656,10 @@ export class ReservationsService {
           mode: input.mode,
         },
       });
+    }
+
+    if (input.serviceId && !input.negotiationId) {
+      await this.negotiationsSvc.cancelPendingForCustomerService(customerId, input.serviceId);
     }
 
     if (profile.auto_accept) {

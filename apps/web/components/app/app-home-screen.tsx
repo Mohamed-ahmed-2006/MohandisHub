@@ -8,6 +8,7 @@ import { AdSlideshow } from './ad-slideshow';
 import { BusinessDashboard } from './business-dashboard';
 import { CustomerDashboard } from './customer-dashboard';
 import { ExpertDashboard } from './expert-dashboard';
+import { NegotiationModal } from './negotiation-modal';
 import { useProfileModal } from './profile-modal-context';
 import { ServiceBookingModal } from './service-booking-modal';
 
@@ -248,6 +249,9 @@ export const AppHomeScreen = ({ locale, dictionary }: AppHomeScreenProps) => {
   const [topCraftsmen, setTopCraftsmen] = useState<TopCraftsman[]>([]);
   const [topBusinesses, setTopBusinesses] = useState<TopBusiness[]>([]);
   const [showBookingModal, setShowBookingModal] = useState(false);
+  const [showNegotiationModal, setShowNegotiationModal] = useState(false);
+  const [bookingNegotiationId, setBookingNegotiationId] = useState<string | null>(null);
+  const [bookingAgreedPrice, setBookingAgreedPrice] = useState<number | null>(null);
   const [previewServiceImage, setPreviewServiceImage] = useState<string | null>(null);
   const [selectedBusinessNeed, setSelectedBusinessNeed] = useState<Need | null>(null);
   const [selectedNeedBids, setSelectedNeedBids] = useState<Bid[]>([]);
@@ -318,6 +322,9 @@ export const AppHomeScreen = ({ locale, dictionary }: AppHomeScreenProps) => {
   useEffect(() => {
     if (!selectedResult) {
       setShowBookingModal(false);
+      setShowNegotiationModal(false);
+      setBookingNegotiationId(null);
+      setBookingAgreedPrice(null);
       setPreviewServiceImage(null);
     }
   }, [selectedResult]);
@@ -1611,7 +1618,7 @@ export const AppHomeScreen = ({ locale, dictionary }: AppHomeScreenProps) => {
     )}
 
         {/* Provider Detail Drawer - hidden when booking modal is open to avoid stacked overlays */}
-        {selectedResult && !showBookingModal && (
+        {selectedResult && !showBookingModal && !showNegotiationModal && (
           <div
             className="home-drawer-overlay"
             onClick={() => {
@@ -1697,13 +1704,29 @@ export const AppHomeScreen = ({ locale, dictionary }: AppHomeScreenProps) => {
               {selectedResult.avgRating != null && (
                 <p className="home-drawer-rating">★ {selectedResult.avgRating.toFixed(1)}</p>
               )}
-              <div className="home-drawer-actions">
+              <div className="home-drawer-actions home-drawer-actions--split">
+                {selectedResult.isNegotiable && authUser?.role === 'customer' ? (
+                  <button
+                    type="button"
+                    className="dashboard-btn dashboard-btn--secondary"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setShowNegotiationModal(true);
+                    }}
+                  >
+                    {(dictionary as { negotiation?: { negotiatePrice?: string } }).negotiation?.negotiatePrice ??
+                      'Negotiate price'}
+                  </button>
+                ) : null}
                 <button
                   type="button"
                   className="dashboard-btn dashboard-btn--primary"
                   onClick={(e) => {
                     e.preventDefault();
                     e.stopPropagation();
+                    setBookingNegotiationId(null);
+                    setBookingAgreedPrice(null);
                     setShowBookingModal(true);
                   }}
                 >
@@ -1717,14 +1740,38 @@ export const AppHomeScreen = ({ locale, dictionary }: AppHomeScreenProps) => {
         {selectedResult && (
           <ServiceBookingModal
             open={showBookingModal}
-            onClose={() => setShowBookingModal(false)}
+            onClose={() => {
+              setShowBookingModal(false);
+              setBookingNegotiationId(null);
+              setBookingAgreedPrice(null);
+            }}
             service={selectedResult}
             accessToken={accessToken ?? ''}
             locale={locale}
             dictionary={dictionary}
+            {...(bookingNegotiationId ? { negotiationId: bookingNegotiationId } : {})}
+            {...(bookingAgreedPrice != null ? { agreedServicePrice: bookingAgreedPrice } : {})}
             onSuccess={() => {
               setShowBookingModal(false);
+              setBookingNegotiationId(null);
+              setBookingAgreedPrice(null);
               setSelectedResult(null);
+            }}
+          />
+        )}
+        {selectedResult && authUser?.role === 'customer' && (
+          <NegotiationModal
+            open={showNegotiationModal}
+            onClose={() => setShowNegotiationModal(false)}
+            service={selectedResult}
+            accessToken={accessToken ?? ''}
+            locale={locale}
+            dictionary={dictionary}
+            onBookWithAgreedPrice={(negotiationId, agreedPrice) => {
+              setBookingNegotiationId(negotiationId);
+              setBookingAgreedPrice(agreedPrice);
+              setShowNegotiationModal(false);
+              setShowBookingModal(true);
             }}
           />
         )}

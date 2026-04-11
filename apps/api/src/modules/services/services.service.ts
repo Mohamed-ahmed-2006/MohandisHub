@@ -19,6 +19,17 @@ import { ServicesRepository } from './services.repository.js';
 import type { CategoryRow, ServiceDetailRow, ServiceSearchRow } from './services.repository.js';
 import type { CreateServiceInput, UpdateServiceInput } from './services.validation.js';
 
+/** pg may return text[] as a JS array or as a Postgres literal like `{url1,url2}`. */
+function safeStringArray(val: unknown): string[] {
+  if (Array.isArray(val)) return val.filter((v): v is string => typeof v === 'string');
+  if (typeof val === 'string' && val.startsWith('{') && val.endsWith('}')) {
+    const inner = val.slice(1, -1);
+    if (inner === '') return [];
+    return inner.split(',').map((s) => s.replace(/^"|"$/g, ''));
+  }
+  return [];
+}
+
 export class ServicesService {
   constructor(
     private readonly repo: ServicesRepository = new ServicesRepository(),
@@ -121,7 +132,7 @@ export class ServicesService {
         }
       }
     }
-    const status = input.submitForReview ? 'pending_review' : 'draft';
+    const status = input.submitForReview ? 'active' : 'draft';
     const dbInput: {
       title: string;
       description?: string;
@@ -258,8 +269,8 @@ export class ServicesService {
         message: 'Service not found.',
       });
     }
-    this.assertServiceStatusTransition(row.status, 'pending_review');
-    const updated = await this.repo.updateServiceStatus(serviceId, providerId, 'pending_review');
+    this.assertServiceStatusTransition(row.status, 'active');
+    const updated = await this.repo.updateServiceStatus(serviceId, providerId, 'active');
     return this.toService(updated!);
   }
 
@@ -294,11 +305,11 @@ export class ServicesService {
   private assertServiceStatusTransition(from: string, to: string): void {
     if (from === to) return;
     const allowed: Record<string, string[]> = {
-      draft: ['pending_review'],
+      draft: ['active', 'pending_review'],
       pending_review: ['active', 'rejected'],
       active: ['paused', 'rejected'],
       paused: ['active'],
-      rejected: [],
+      rejected: ['draft'],
     };
     if (!(allowed[from] ?? []).includes(to)) {
       throw new HttpError({
@@ -346,7 +357,7 @@ export class ServicesService {
       area: row.area,
       avgRating: row.avg_rating ? parseFloat(row.avg_rating) : null,
       isFeatured: row.is_featured,
-      images: Array.isArray(row.images) ? row.images : [],
+      images: safeStringArray(row.images),
     };
   }
 
@@ -366,8 +377,8 @@ export class ServicesService {
       rejectionReason: row.rejection_reason ?? null,
       reviewedBy: row.reviewed_by ?? null,
       reviewedAt: row.reviewed_at ?? null,
-      tags: row.tags ?? [],
-      images: row.images ?? [],
+      tags: Array.isArray(row.tags) ? row.tags : [],
+      images: safeStringArray(row.images),
       isFeatured: row.is_featured,
       viewCount: row.view_count,
       orderCount: row.order_count,

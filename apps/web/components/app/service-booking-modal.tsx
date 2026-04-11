@@ -7,6 +7,7 @@ import { useProfileModal } from './profile-modal-context';
 
 import { useAppStatus } from '@/components/app-status-provider';
 import { Drawer } from '@/components/ui/drawer';
+import { toAbsoluteAssetUrl } from '@/lib/asset-url';
 import type { Dictionary, Locale } from '@/lib/i18n/types';
 import { reservationsApiClient } from '@/lib/reservations/client';
 
@@ -18,6 +19,9 @@ type Props = {
   locale?: Locale;
   dictionary: Dictionary;
   onSuccess?: () => void;
+  /** Accepted price negotiation — booking uses agreed price once. */
+  negotiationId?: string;
+  agreedServicePrice?: number;
 };
 
 const dedupeSlotsById = (items: ReservationSlot[]): ReservationSlot[] => {
@@ -62,6 +66,8 @@ export const ServiceBookingModal = ({
   locale = 'en',
   dictionary,
   onSuccess,
+  negotiationId,
+  agreedServicePrice,
 }: Props) => {
   const [slots, setSlots] = useState<ReservationSlot[]>([]);
   const [profile, setProfile] = useState<ReservationProfile | null>(null);
@@ -182,7 +188,9 @@ export const ServiceBookingModal = ({
     setBooking(true);
     setError(null);
     try {
-      const idempotencyKey = `create-${service.providerId}-${selectedSlot.id}`;
+      const idempotencyKey = negotiationId
+        ? `create-${service.providerId}-${selectedSlot.id}-n-${negotiationId}`
+        : `create-${service.providerId}-${selectedSlot.id}`;
       await reservationsApiClient.createReservation(
         accessToken,
         {
@@ -191,6 +199,7 @@ export const ServiceBookingModal = ({
           slotId: selectedSlot.id,
           mode,
           ...(mode === 'online' ? { onlineType } : {}),
+          ...(negotiationId ? { negotiationId } : {}),
         },
         idempotencyKey,
       );
@@ -228,7 +237,10 @@ export const ServiceBookingModal = ({
         ? profile?.onlineVideoPrice ?? null
         : profile?.onlineVoicePrice ?? null;
   const platformFee = Math.max(0, status?.reservationAcceptanceFee ?? 0);
-  const servicePrice = service.price ?? 0;
+  const servicePrice =
+    agreedServicePrice != null && Number.isFinite(agreedServicePrice)
+      ? agreedServicePrice
+      : (service.price ?? 0);
   const totalPrice = modePrice != null ? servicePrice + modePrice + platformFee : null;
 
   if (!open) return null;
@@ -260,6 +272,15 @@ export const ServiceBookingModal = ({
             </span>
           )}
         </p>
+        {(service.images ?? []).length > 0 && (
+          <div className="service-booking-gallery">
+            {(service.images ?? []).map((u) => (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img key={u} src={toAbsoluteAssetUrl(u)} alt="" className="service-booking-gallery-img" />
+            ))}
+          </div>
+        )}
+
         {service.price != null && <p className="service-booking-price">{service.price} {service.currency ?? 'EGP'}</p>}
 
         <div className="service-booking-mode-row">

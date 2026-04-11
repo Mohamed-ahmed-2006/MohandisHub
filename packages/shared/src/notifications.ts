@@ -10,12 +10,14 @@ export type NotificationType =
   | 'milestone_submitted'
   | 'milestone_reviewed'
   | 'new_message'
+  | 'price_negotiation'
   | 'admin';
 
 export interface NotificationPayload {
   jobId?: string;
   applicationId?: string;
   reservationId?: string;
+  negotiationId?: string;
   [key: string]: unknown;
 }
 

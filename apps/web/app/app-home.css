@@ -875,6 +875,14 @@
   flex-wrap: wrap;
 }
 
+.home-drawer-actions--split {
+  display: flex;
+  gap: 0.75rem;
+  margin-top: 1.5rem;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
 .deposit-modal {
   position: relative;
   width: 100%;

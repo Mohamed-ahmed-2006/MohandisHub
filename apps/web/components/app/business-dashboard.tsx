@@ -1,6 +1,6 @@
 'use client';
 
-import type { ProviderAnalytics, Reservation, ServiceCategory } from '@mohandishub/shared';
+import type { ProviderAnalytics, Reservation, Service, ServiceCategory } from '@mohandishub/shared';
 import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
 
@@ -10,6 +10,20 @@ import { analyticsApiClient } from '@/lib/analytics/client';
 import { buildLocalePath } from '@/lib/i18n/path';
 import type { Dictionary, Locale } from '@/lib/i18n/types';
 import { reservationsApiClient } from '@/lib/reservations/client';
+import { servicesApiClient } from '@/lib/services/client';
+
+const getServiceStatusLabel = (status: string, sp: Record<string, string>): string => {
+  const keyMap: Record<string, string> = {
+    draft: 'statusDraft',
+    pending_review: 'statusPending',
+    active: 'statusActive',
+    paused: 'statusPaused',
+    rejected: 'statusRejected',
+    archived: 'Archived',
+  };
+  const key = keyMap[status];
+  return (key && sp[key]) ?? status;
+};
 
 
 type Props = {
@@ -32,6 +46,8 @@ export const BusinessDashboard = ({
   const [tab, setTab] = useState<BusinessTab>('overview');
   const [orders, setOrders] = useState<Reservation[]>([]);
   const [ordersLoading, setOrdersLoading] = useState(false);
+  const [myServices, setMyServices] = useState<Service[]>([]);
+  const [servicesLoading, setServicesLoading] = useState(false);
   const [analytics, setAnalytics] = useState<ProviderAnalytics | null>(null);
   const [analyticsLoading, setAnalyticsLoading] = useState(false);
 
@@ -63,9 +79,25 @@ export const BusinessDashboard = ({
     }
   }, [accessToken]);
 
+  const loadMyServices = useCallback(async () => {
+    setServicesLoading(true);
+    try {
+      const data = await servicesApiClient.listMyServices(accessToken, 1, 50);
+      setMyServices(data.items);
+    } catch {
+      setMyServices([]);
+    } finally {
+      setServicesLoading(false);
+    }
+  }, [accessToken]);
+
   useEffect(() => {
     if (tab === 'orders') void loadOrders();
   }, [tab, loadOrders]);
+
+  useEffect(() => {
+    if (tab === 'services') void loadMyServices();
+  }, [tab, loadMyServices]);
 
   useEffect(() => {
     if (tab === 'analytics') void loadAnalytics();
@@ -83,6 +115,7 @@ export const BusinessDashboard = ({
   const suggestions = dictionary.appHome?.suggestions?.business;
   const suggestTitle = suggestions?.title ?? 'Suggested actions for businesses';
   const suggestItems = (suggestions?.items ?? []) as string[];
+  const servicesPageDict = (dictionary as { servicesPage?: Record<string, string> }).servicesPage ?? {};
 
   return (
     <section className="dashboard-section">
@@ -178,15 +211,59 @@ export const BusinessDashboard = ({
 
       {tab === 'services' && (
         <div className="dashboard-empty-state">
-          <p className="dashboard-empty">
-            {common.addFirstService ?? 'Add your first service to start receiving orders.'}
-          </p>
-          <Link
-            href={buildLocalePath(locale, '/app/services')}
-            className="dashboard-primary-btn"
-          >
-            {d.ctaLabel ?? 'Manage Services'}
-          </Link>
+          {servicesLoading ? (
+            <p className="dashboard-empty">{common.loading ?? 'Loading...'}</p>
+          ) : myServices.length === 0 ? (
+            <>
+              <p className="dashboard-empty">
+                {common.addFirstService ?? 'Add your first service to start receiving orders.'}
+              </p>
+              <Link
+                href={buildLocalePath(locale, '/app/services')}
+                className="dashboard-primary-btn"
+              >
+                {d.ctaLabel ?? 'Manage Services'}
+              </Link>
+            </>
+          ) : (
+            <>
+              <ul className="dashboard-cards" style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+                {myServices.map((s) => (
+                  <li key={s.id} className="dashboard-card" style={{ marginBottom: '0.75rem' }}>
+                    <h4 className="dashboard-card-title">{s.title}</h4>
+                    <p className="dashboard-card-meta" style={{ marginBottom: '0.35rem' }}>
+                      <span
+                        className={`dashboard-badge dashboard-badge--${s.status.replace(/_/g, '-')}`}
+                      >
+                        {getServiceStatusLabel(s.status, servicesPageDict)}
+                      </span>
+                    </p>
+                    {s.price != null && Number.isFinite(s.price) ? (
+                      <p className="dashboard-card-meta">
+                        {s.price.toFixed(2)} {s.currency}
+                        {s.priceType === 'hourly'
+                          ? ` · ${servicesPageDict.priceTypeHourly ?? '/hr'}`
+                          : ''}
+                      </p>
+                    ) : null}
+                    <Link
+                      href={buildLocalePath(locale, '/app/services')}
+                      className="dashboard-link-btn"
+                    >
+                      {d.ctaLabel ?? 'Manage Services'}
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+              <Link
+                href={buildLocalePath(locale, '/app/services')}
+                className="dashboard-primary-btn"
+                style={{ marginTop: '1rem', display: 'inline-block' }}
+              >
+                {d.ctaLabel ?? 'Manage Services'}
+              </Link>
+            </>
+          )}
         </div>
       )}
 

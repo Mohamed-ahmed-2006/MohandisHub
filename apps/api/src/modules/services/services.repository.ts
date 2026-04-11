@@ -168,7 +168,7 @@ export class ServicesRepository {
               (u.platform_verified_at IS NOT NULL) AS provider_verified,
               c.slug AS category_slug, c.name_en AS category_name_en, c.name_ar AS category_name_ar,
               s.price::text, s.currency, s.price_type, s.is_negotiable, s.city, s.area, s.avg_rating::text, s.is_featured,
-              COALESCE(s.images, '{}') AS images
+              COALESCE(s.images, ARRAY[]::text[]) AS images
        FROM services s
        JOIN users u ON u.id = s.provider_id
        LEFT JOIN service_categories c ON c.id = s.category_id
@@ -197,7 +197,7 @@ export class ServicesRepository {
               (u.platform_verified_at IS NOT NULL) AS provider_verified,
               c.slug AS category_slug, c.name_en AS category_name_en, c.name_ar AS category_name_ar,
               s.price::text, s.currency, s.price_type, s.is_negotiable, s.city, s.area, s.avg_rating::text, s.is_featured,
-              COALESCE(s.images, '{}') AS images
+              COALESCE(s.images, ARRAY[]::text[]) AS images
        FROM services s
        JOIN users u ON u.id = s.provider_id
        LEFT JOIN service_categories c ON c.id = s.category_id

@@ -36,29 +36,40 @@ export const updateReservationSlotSchema = z.object({
   supportsOffline: z.boolean().optional(),
 });
 
-export const createReservationSchema = z.object({
-  serviceId: z.string().uuid().optional(),
-  providerId: z.string().uuid(),
-  slotId: z.string().uuid(),
-  mode: z.enum(['online', 'offline']),
-  onlineType: z.enum(['voice', 'video']).optional(),
-}).superRefine((v, ctx) => {
-  if (v.mode === 'online' && !v.onlineType) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      message: 'onlineType is required for online reservations',
-      path: ['onlineType'],
-    });
-  }
+export const createReservationSchema = z
+  .object({
+    serviceId: z.string().uuid().optional(),
+    negotiationId: z.string().uuid().optional(),
+    providerId: z.string().uuid(),
+    slotId: z.string().uuid(),
+    mode: z.enum(['online', 'offline']),
+    onlineType: z.enum(['voice', 'video']).optional(),
+  })
+  .superRefine((v, ctx) => {
+    if (v.mode === 'online' && !v.onlineType) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'onlineType is required for online reservations',
+        path: ['onlineType'],
+      });
+    }
 
-  if (v.mode === 'offline' && v.onlineType) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      message: 'onlineType is not allowed for offline reservations',
-      path: ['onlineType'],
-    });
-  }
-});
+    if (v.mode === 'offline' && v.onlineType) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'onlineType is not allowed for offline reservations',
+        path: ['onlineType'],
+      });
+    }
+
+    if (v.negotiationId && !v.serviceId) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'serviceId is required when negotiationId is set',
+        path: ['serviceId'],
+      });
+    }
+  });
 
 export const decideReservationSchema = z
   .object({

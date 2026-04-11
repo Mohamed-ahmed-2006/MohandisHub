@@ -272,6 +272,8 @@ export type CreateReservationBody = {
   slotId: string;
   mode: ReservationMode;
   onlineType?: ReservationOnlineType;
+  /** When set, service price comes from accepted negotiation (single use). */
+  negotiationId?: string;
 };
 
 export type DecideReservationBody = {
