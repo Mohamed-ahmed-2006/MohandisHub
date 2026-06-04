@@ -22,6 +22,7 @@ import type {
 import { HttpError } from '../../utils/http-error.js';
 import { sendTransactionalEmail } from '../../utils/send-transactional-email.js';
 import { AdminRepository } from '../admin/admin.repository.js';
+import { logAudit } from '../audit/audit.service.js';
 import { ReviewsRepository } from '../reviews/reviews.repository.js';
 import { SettingsService } from '../settings/settings.service.js';
 import { VerificationRepository } from '../verification/verification.repository.js';
@@ -689,6 +690,17 @@ export class ProfilesService {
       decision: params.decision,
       notes: params.notes,
     });
+    await logAudit({
+      actorId: params.reviewerId,
+      action: 'admin.verification.identity_review',
+      resourceType: 'identity_document',
+      resourceId: params.docId,
+      details: {
+        targetUserId: doc.user_id,
+        decision: params.decision,
+        notes: params.notes ?? null,
+      },
+    });
 
     // If approved, update the identity_verified flag on expert or business profile
     if (params.decision === 'approved') {
@@ -815,6 +827,17 @@ export class ProfilesService {
       decision: params.decision,
       notes: params.notes,
     });
+    await logAudit({
+      actorId: params.reviewerId,
+      action: 'admin.verification.academic_review',
+      resourceType: 'academic_record',
+      resourceId: params.recordId,
+      details: {
+        targetUserId: record.user_id,
+        decision: params.decision,
+        notes: params.notes ?? null,
+      },
+    });
 
     // If approved, update the academic_verified flag
     if (params.decision === 'approved') {
@@ -896,6 +919,17 @@ export class ProfilesService {
       targetRecordId: profile.id,
       decision: params.decision,
       notes: params.notes,
+    });
+    await logAudit({
+      actorId: params.reviewerId,
+      action: 'admin.verification.business_review',
+      resourceType: 'business_profile',
+      resourceId: profile.id,
+      details: {
+        targetUserId: params.userId,
+        decision: params.decision,
+        notes: params.notes ?? null,
+      },
     });
 
     if (params.decision === 'approved') {

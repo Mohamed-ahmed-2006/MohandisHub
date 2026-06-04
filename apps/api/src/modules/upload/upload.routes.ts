@@ -14,6 +14,7 @@ import {
   uploadToSupabasePrivate,
 } from '../../lib/supabase-storage.js';
 import { authenticate } from '../../middleware/authenticate.js';
+import { loadAdminFromDb } from '../../middleware/load-admin-from-db.js';
 import { requireEmailVerified } from '../../middleware/require-email-verified.js';
 import { asyncHandler } from '../../utils/async-handler.js';
 import { HttpError } from '../../utils/http-error.js';
@@ -273,16 +274,29 @@ function wantsPrivateUploadJson(req: Request): boolean {
   return hasExplicitJson && !wantsInlineMedia;
 }
 
+function canAdminReadPrivateUpload(user: {
+  isAdmin?: boolean;
+  adminPermissions?: string[];
+}): boolean {
+  if (user.isAdmin !== true) return false;
+  if (!user.adminPermissions || user.adminPermissions.length === 0) return true;
+  return (
+    user.adminPermissions.includes('manage_verifications') ||
+    user.adminPermissions.includes('manage_transactions')
+  );
+}
+
 uploadRouter.get(
   '/private/:id',
   authenticate,
+  loadAdminFromDb,
   asyncHandler(async (req, res) => {
     const row = await findPrivateUploadById(req.params.id!);
     if (!row) {
       throw new HttpError({ statusCode: 404, code: 'NOT_FOUND', message: 'File not found.' });
     }
     const user = req.user!;
-    if (row.user_id !== user.id && !user.isAdmin) {
+    if (row.user_id !== user.id && !canAdminReadPrivateUpload(user)) {
       const jobOwner = await isJobOwnerOfApplicationWithCv(user.id, row.id);
       if (!jobOwner) {
         throw new HttpError({ statusCode: 403, code: 'FORBIDDEN', message: 'Access denied.' });

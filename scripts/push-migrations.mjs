@@ -15,5 +15,11 @@ if (!line) {
 }
 const url = line.slice('DATABASE_URL='.length).trim().replace(/^['"]|['"]$/g, '');
 console.log('Pushing migrations to database...');
-execSync(`npx supabase db push --db-url "${url.replace(/"/g, '\\"')}"`, { stdio: 'inherit' });
+try {
+  execSync('supabase --version', { stdio: 'ignore' });
+} catch {
+  console.error('Supabase CLI is not installed. Install it from https://github.com/supabase/cli before pushing migrations.');
+  process.exit(1);
+}
+execSync(`supabase db push --db-url "${url.replace(/"/g, '\\"')}"`, { stdio: 'inherit' });
 console.log('Done.');

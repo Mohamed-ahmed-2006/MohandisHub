@@ -132,7 +132,7 @@ export class ServicesService {
         }
       }
     }
-    const status = input.submitForReview ? 'active' : 'draft';
+    const status = input.submitForReview ? 'pending_review' : 'draft';
     const dbInput: {
       title: string;
       description?: string;
@@ -229,6 +229,10 @@ export class ServicesService {
       city?: string;
       area?: string;
       country?: string;
+      status?: string;
+      rejectionReason?: string | null;
+      reviewedBy?: string | null;
+      reviewedAt?: Date | null;
     } = {};
     if (input.title !== undefined) dbInput.title = input.title;
     if (input.description !== undefined) dbInput.description = input.description;
@@ -243,6 +247,12 @@ export class ServicesService {
     if (input.city !== undefined) dbInput.city = input.city;
     if (input.area !== undefined) dbInput.area = input.area;
     if (input.country !== undefined) dbInput.country = input.country;
+    if (row.status === 'active') {
+      dbInput.status = 'pending_review';
+      dbInput.rejectionReason = null;
+      dbInput.reviewedBy = null;
+      dbInput.reviewedAt = null;
+    }
     const updated = await this.repo.updateService(serviceId, providerId, dbInput);
     return this.toService(updated!);
   }
@@ -269,9 +279,16 @@ export class ServicesService {
         message: 'Service not found.',
       });
     }
-    this.assertServiceStatusTransition(row.status, 'active');
-    const updated = await this.repo.updateServiceStatus(serviceId, providerId, 'active');
-    return this.toService(updated!);
+    this.assertServiceStatusTransition(row.status, 'pending_review');
+    const updated = await this.repo.updateServiceStatus(serviceId, providerId, 'pending_review');
+    if (!updated) {
+      throw new HttpError({
+        statusCode: 404,
+        code: 'SERVICE_NOT_FOUND',
+        message: 'Service not found.',
+      });
+    }
+    return this.toService(updated);
   }
 
   async pauseService(serviceId: string, providerId: string): Promise<Service> {
@@ -305,11 +322,12 @@ export class ServicesService {
   private assertServiceStatusTransition(from: string, to: string): void {
     if (from === to) return;
     const allowed: Record<string, string[]> = {
-      draft: ['active', 'pending_review'],
+      draft: ['pending_review'],
       pending_review: ['active', 'rejected'],
       active: ['paused', 'rejected'],
       paused: ['active'],
-      rejected: ['draft'],
+      rejected: ['pending_review'],
+      archived: [],
     };
     if (!(allowed[from] ?? []).includes(to)) {
       throw new HttpError({

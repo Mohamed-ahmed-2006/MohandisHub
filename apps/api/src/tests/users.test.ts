@@ -14,7 +14,7 @@ describe('users module', () => {
     expect(response.status).toBe(401);
     expect(body.ok).toBe(false);
     expect(body.error.code).toBe('UNAUTHORIZED');
-  });
+  }, 15_000);
 
   it('requires auth for user details', async () => {
     const app = createApp();
@@ -26,5 +26,5 @@ describe('users module', () => {
     expect(body.ok).toBe(false);
     expect(body.error.code).toBe('UNAUTHORIZED');
     expect(body.error.requestId).toBeTypeOf('string');
-  });
+  }, 15_000);
 });

@@ -25,17 +25,27 @@ From `apps/api/.env.example`. Required for production:
 - `PORT=10000` (Render sets this)
 - `DATABASE_URL` — Supabase connection string (pooler or direct)
 - `CORS_ORIGIN` — Web app origin(s), comma-separated if multiple
+- `CORS_EXTRA_ORIGINS` — optional extra production origins. Do not include localhost except during a short, intentional debugging session; credentialed localhost CORS is not enabled by default in production.
 - `WEB_PUBLIC_URL` — e.g. `https://mohandishub.app`
 - `API_PUBLIC_URL` — e.g. `https://api.mohandishub.app` (for webhooks, emails)
 - `JWT_SECRET`, `JWT_REFRESH_SECRET` — min 32 chars, generate securely
 - `VERIFICATION_PROVIDER`, `DIDIT_*` — KYC
 - `OTP_EMAIL_PROVIDER=brevo`, `BREVO_API_KEY`, `EMAIL_FROM`
+- NOWPayments launch minimum: `NOWPAYMENTS_API_KEY`, `NOWPAYMENTS_IPN_SECRET`,
+  `NOWPAYMENTS_LIVE_REQUIRED=true`, `NOWPAYMENTS_WITHDRAWAL_DEFAULT_CURRENCY=USDTTRC20`,
+  and `NOWPAYMENTS_ALLOWED_PAY_CURRENCIES=USDTTRC20`. Add
+  `NOWPAYMENTS_WITHDRAWALS_ENABLED=true`, `NOWPAYMENTS_MASS_PAYOUTS_ENABLED=true`,
+  `NOWPAYMENTS_AUTH_EMAIL`, and `NOWPAYMENTS_AUTH_PASSWORD` only when crypto withdrawals are enabled.
 - `NOWPAYMENTS_*` — deposits + withdrawals
 - `AGORA_APP_ID`, `AGORA_APP_CERTIFICATE` — if using calls
+
+Production startup blocks incomplete provider selections: `OTP_EMAIL_PROVIDER=console/sendgrid`, `OTP_SMS_PROVIDER=twilio`, and `VERIFICATION_PROVIDER=idenfy`. Use Brevo for email, and Didit or manual verification for launch.
 
 ### Worker (Render Background Worker)
 
 Same repo; same build. Start command should run the worker entrypoint (for example `npm run worker` from `apps/api`), **not** only `npm start` (HTTP server). The worker process runs **reservation lifecycle sweeps** and **data retention sweeps** (plus any other scheduled jobs). Required env vars overlap with the API: at minimum `DATABASE_URL`, `JWT_SECRET`, and `JWT_REFRESH_SECRET`, plus optional `RETENTION_*` variables from `apps/api/.env.example` when you want automated cleanup. Include any NOWPayments (or other) keys if the worker touches those code paths.
+
+When `NOWPAYMENTS_LIVE_REQUIRED=true`, the worker must also have `CORS_ORIGIN`, `API_PUBLIC_URL`, `WEB_PUBLIC_URL`, `NOWPAYMENTS_API_KEY`, and `NOWPAYMENTS_IPN_SECRET`, because production startup validates the same env contract as the API.
 
 ### Supabase
 
@@ -48,7 +58,7 @@ Same repo; same build. Start command should run the worker entrypoint (for examp
 
 - **Staging:** Run in CI on push/PR or on merge to `main` against staging DB (`DATABASE_URL` secret for staging).
 - **Production:** **Gated / manual only.** Do **not** auto-run migrations against production from CI.
-  - Option A: From a trusted machine, set `DATABASE_URL` to production and run: `npx supabase db push` (or from repo root with Supabase CLI linked to prod).
+  - Option A: From a trusted machine with Supabase CLI installed, set `DATABASE_URL` to production and run: `supabase db push` (or from repo root with Supabase CLI linked to prod).
   - Option B: Use `npm run ship` which runs `supabase db push` after typecheck/lint/build; run ship only when intentionally releasing to production.
 
 ---
@@ -80,6 +90,7 @@ Same repo; same build. Start command should run the worker entrypoint (for examp
 - Migration `20260316000000_storage_buckets.sql` creates buckets `uploads` (public) and `verification-docs` (private). Run migrations so these exist.
 - Set `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` in the API env (Render). When set, `POST /api/upload` stores files in Supabase Storage instead of local disk.
 - **Public vs private:** Use `POST /api/upload` for non-sensitive assets (returned URL is public). Use `POST /api/upload/private` for verification docs and CVs; files go to `verification-docs` (private bucket). The API returns an API path (e.g. `/api/upload/private/:id`), not a public URL. Access is via `GET /api/upload/private/:id` with auth (owner, admin, or job owner for CVs). Run migration `20260317000000_private_uploads.sql` for the private-uploads table.
+- **Private/KYC retention:** Private KYC document files are cleaned only by the worker when `RETENTION_VERIFIED_PRIVATE_UPLOADS_DAYS` and the admin retention category `verifiedPrivateUploads` are enabled. The sweep clears terminal identity/academic document image URLs first, then removes unreferenced `private_uploads` rows and storage objects. Keep this off until your legal retention window is approved.
 - Configure RLS policies per bucket in Dashboard if needed (e.g. service role for API uploads). API uses service role for uploads.
 - Avoid storing files on Render disk (ephemeral); use Supabase Storage in production.
 

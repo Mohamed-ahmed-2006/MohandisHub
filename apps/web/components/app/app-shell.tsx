@@ -208,7 +208,12 @@ const AppShellInner = ({ children }: AppShellProps) => {
           <div className="app-topbar-end">
             {isReady && authUser && accessToken ? (
               <>
-                <NotificationCenter accessToken={accessToken} dictionary={dictionary} />
+                <NotificationCenter
+                  accessToken={accessToken}
+                  dictionary={dictionary}
+                  locale={locale}
+                  {...(authUser?.role ? { userRole: authUser.role } : {})}
+                />
                 {(wallet != null || accessToken) && walletFeatureEnabled && (
                   <div className="app-topbar-balance">
                     <button

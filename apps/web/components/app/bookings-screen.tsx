@@ -6,8 +6,8 @@ import type {
   ReservationLocationProposal,
   ReservationTimelineEvent,
 } from '@mohandishub/shared';
-import { useRouter } from 'next/navigation';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { OnlineCallModal } from './online-call-modal';
 import { useProfileModal } from './profile-modal-context';
@@ -30,18 +30,9 @@ type CheckinCodeState = {
   counterpartyVerifiedAt: string | null;
 };
 
-const statusLabels: Record<string, string> = {
-  pending: 'Pending decision',
-  accepted: 'Accepted',
-  awaiting_start: 'Awaiting start',
-  in_session: 'In session',
-  waiting_customer_done: 'Waiting customer done',
-  completed: 'Completed',
-  rejected: 'Rejected',
-  disputed: 'Disputed',
-  cancelled: 'Cancelled',
-  expired: 'Expired',
-};
+type BookingsCopy = Record<string, string | undefined>;
+
+const EMPTY_BOOKINGS: BookingsCopy = {};
 
 function formatDateTime(d: string): string {
   return new Date(d).toLocaleString(undefined, {
@@ -64,20 +55,32 @@ function isInterviewReservation(reservation: Reservation): boolean {
   return reservation.purpose === 'job_interview';
 }
 
-function getReservationTitle(reservation: Reservation): string {
+function getReservationTitle(reservation: Reservation, t: BookingsCopy): string {
   if (isInterviewReservation(reservation)) {
-    return reservation.serviceTitle ? `Interview: ${reservation.serviceTitle}` : 'Job Interview';
+    return reservation.serviceTitle
+      ? `${t.interviewTitlePrefix ?? 'Interview:'} ${reservation.serviceTitle}`
+      : (t.jobInterview ?? 'Job Interview');
   }
-  return reservation.serviceTitle ?? 'Reservation';
+  return reservation.serviceTitle ?? (t.reservationFallback ?? 'Reservation');
 }
 
-function getReservationModeLabel(reservation: Reservation): string {
+function getReservationModeLabel(reservation: Reservation, t: BookingsCopy): string {
   if (reservation.mode === 'online') {
-    return isInterviewReservation(reservation)
-      ? `Online interview ${reservation.onlineType ?? 'video'}`
-      : `Online ${reservation.onlineType ?? 'voice'}`;
+    const interview = isInterviewReservation(reservation);
+    const rawType = reservation.onlineType ?? (interview ? 'video' : 'voice');
+    const typeLabel =
+      rawType === 'video'
+        ? (t.onlineTypeVideo ?? 'video')
+        : rawType === 'voice'
+          ? (t.onlineTypeVoice ?? 'voice')
+          : rawType;
+    return interview
+      ? (t.onlineInterviewMode ?? 'Online interview {type}').replace('{type}', typeLabel)
+      : (t.onlineSessionMode ?? 'Online {type}').replace('{type}', typeLabel);
   }
-  return isInterviewReservation(reservation) ? 'Offline interview' : 'Offline';
+  return isInterviewReservation(reservation)
+    ? (t.offlineInterview ?? 'Offline interview')
+    : (t.offline ?? 'Offline');
 }
 
 function timelineSteps(reservation: Reservation): string[] {
@@ -110,27 +113,32 @@ function getReservationTimingState(reservation: Reservation): 'too_early' | 'in_
   return 'in_window';
 }
 
-function describeSettlement(reservation: Reservation): string {
+function describeSettlement(reservation: Reservation, t: BookingsCopy): string {
   switch (reservation.settlementStatus) {
     case 'held':
-      return 'Customer funds are currently held.';
+      return t.settlementHeld ?? 'Customer funds are currently held.';
     case 'released_to_provider':
-      return 'Held funds were released to the provider/business.';
+      return t.settlementReleasedToProvider ?? 'Held funds were released to the provider/business.';
     case 'refunded_to_customer':
-      return 'Held funds were returned to the customer/expert.';
+      return t.settlementRefundedToCustomer ?? 'Held funds were returned to the customer/expert.';
     case 'cancelled_no_refund':
-      return 'Reservation was cancelled without automatic refund.';
+      return t.settlementCancelledNoRefund ?? 'Reservation was cancelled without automatic refund.';
     case 'partially_refunded':
-      return 'Reservation settled with a partial refund.';
+      return t.settlementPartiallyRefunded ?? 'Reservation settled with a partial refund.';
     default:
-      return 'No money is currently held.';
+      return t.settlementNone ?? 'No money is currently held.';
   }
 }
 
-function getCancellationPreview(reservation: Reservation, viewerId: string): string | null {
+function getCancellationPreview(
+  reservation: Reservation,
+  viewerId: string,
+  t: BookingsCopy,
+  formatMoneyFn: (value: number | null | undefined) => string,
+): string | null {
   if (!canCancelReservation(reservation)) return null;
   if (reservation.status === 'pending') {
-    return 'Cancelling now will close the request without additional charges.';
+    return t.cancelPreviewPending ?? 'Cancelling now will close the request without additional charges.';
   }
 
   const hoursUntilStart =
@@ -140,32 +148,50 @@ function getCancellationPreview(reservation: Reservation, viewerId: string): str
 
   if (reservation.purpose === 'job_interview') {
     return viewerIsCustomer
-      ? 'Cancelling this interview usually keeps the interview fee captured unless the business or platform failed.'
-      : 'Cancelling this interview returns the interview fee to the expert.';
+      ? (t.cancelPreviewInterviewCustomer ??
+          'Cancelling this interview usually keeps the interview fee captured unless the business or platform failed.')
+      : (t.cancelPreviewInterviewProvider ?? 'Cancelling this interview returns the interview fee to the expert.');
   }
 
-  if (!policy) return 'Cancellation outcome will be applied from the reservation policy snapshot.';
+  if (!policy) {
+    return (
+      t.cancelPreviewNoPolicy ??
+      'Cancellation outcome will be applied from the reservation policy snapshot.'
+    );
+  }
 
   if (viewerIsCustomer) {
     return hoursUntilStart >= policy.customerFreeCancelHours
-      ? `Free cancellation window is still open. The fixed reservation hold will be refunded.`
-      : `Free cancellation window has passed. The fixed reservation amount will be released to the provider.`;
+      ? (t.cancelPreviewCustomerFree ??
+          'Free cancellation window is still open. The fixed reservation hold will be refunded.')
+      : (t.cancelPreviewCustomerLate ??
+          'Free cancellation window has passed. The fixed reservation amount will be released to the provider.');
   }
 
   return hoursUntilStart >= policy.providerPenaltyCancelHours
-    ? 'Cancelling now refunds the customer with no provider penalty.'
-    : `Cancelling now refunds the customer and applies a provider penalty of ${formatMoney(policy.providerLateCancelPenaltyAmount)}.`;
+    ? (t.cancelPreviewProviderFree ?? 'Cancelling now refunds the customer with no provider penalty.')
+    : (t.cancelPreviewProviderPenalty ?? 'Cancelling now refunds the customer and applies a provider penalty of {amount}.').replace(
+        '{amount}',
+        formatMoneyFn(policy.providerLateCancelPenaltyAmount),
+      );
 }
 
-function cancellationOutcomeLabel(outcome: string): string {
+function cancellationOutcomeLabel(outcome: string, t: BookingsCopy): string {
   const labels: Record<string, string> = {
-    refunded_to_customer: 'Refunded to customer',
-    released_to_provider: 'Released to provider',
-    partially_refunded: 'Partially refunded',
-    cancelled_no_refund: 'Cancelled (no refund)',
-    held: 'Funds held',
+    refunded_to_customer: t.outcomeRefundedToCustomer ?? 'Refunded to customer',
+    released_to_provider: t.outcomeReleasedToProvider ?? 'Released to provider',
+    partially_refunded: t.outcomePartiallyRefunded ?? 'Partially refunded',
+    cancelled_no_refund: t.outcomeCancelledNoRefund ?? 'Cancelled (no refund)',
+    held: t.outcomeHeld ?? 'Funds held',
   };
   return labels[outcome] ?? outcome.replaceAll('_', ' ');
+}
+
+function proposalStatusLabel(status: string, t: BookingsCopy): string {
+  if (status === 'pending') return t.proposalStatusPending ?? status;
+  if (status === 'accepted') return t.proposalStatusAccepted ?? status;
+  if (status === 'rejected') return t.proposalStatusRejected ?? status;
+  return status;
 }
 
 function formatTimelineMetadata(metadata: Record<string, unknown> | null | undefined): string {
@@ -197,7 +223,25 @@ function formatTimelineMetadata(metadata: Record<string, unknown> | null | undef
 
 export const BookingsScreen = (_props: Props) => {
   const { locale, dictionary } = useI18n();
+  const bp = dictionary.bookingsPage ?? EMPTY_BOOKINGS;
+  const statusLabels: Record<string, string> = useMemo(
+    () => ({
+      pending: bp.statusPending ?? 'Pending decision',
+      accepted: bp.statusAccepted ?? 'Accepted',
+      awaiting_start: bp.statusAwaitingStart ?? 'Awaiting start',
+      in_session: bp.statusInSession ?? 'In session',
+      waiting_customer_done: bp.statusWaitingCustomerDone ?? 'Waiting customer done',
+      completed: bp.statusCompleted ?? 'Completed',
+      rejected: bp.statusRejected ?? 'Rejected',
+      disputed: bp.statusDisputed ?? 'Disputed',
+      cancelled: bp.statusCancelled ?? 'Cancelled',
+      expired: bp.statusExpired ?? 'Expired',
+    }),
+    [bp],
+  );
   const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const { authUser, accessToken, isAuthenticated, isReady, authGuard } = useAuth();
   const { openProfileModal } = useProfileModal();
   const [reservations, setReservations] = useState<Reservation[]>([]);
@@ -221,6 +265,7 @@ export const BookingsScreen = (_props: Props) => {
   const [reviewSubmitting, setReviewSubmitting] = useState(false);
   const [reviewedReservationIds, setReviewedReservationIds] = useState<Set<string>>(new Set());
   const [showCancelModal, setShowCancelModal] = useState(false);
+  const handledReservationParam = useRef<string | null>(null);
 
   useEffect(() => {
     if (!isReady) return;
@@ -271,11 +316,11 @@ export const BookingsScreen = (_props: Props) => {
       );
     } catch (e) {
       setReservations([]);
-      setError(e instanceof Error ? e.message : 'Failed to load reservations');
+      setError(e instanceof Error ? e.message : (bp.failedLoadReservations ?? 'Failed to load reservations'));
     } finally {
       setLoading(false);
     }
-  }, [accessToken, authUser?.role]);
+  }, [accessToken, authUser?.role, bp.failedLoadReservations]);
 
   useEffect(() => {
     void load();
@@ -309,13 +354,29 @@ export const BookingsScreen = (_props: Props) => {
           setTimeline(events);
         }
       } catch (e) {
-        setError(e instanceof Error ? e.message : 'Failed to load reservation details');
+        setError(e instanceof Error ? e.message : (bp.failedLoadDetails ?? 'Failed to load reservation details'));
       } finally {
         setDetailsLoading(false);
       }
     },
-    [accessToken],
+    [accessToken, bp.failedLoadDetails],
   );
+
+  /** Open reservation from notification / shared link (?reservation=id). */
+  useEffect(() => {
+    const rid = searchParams.get('reservation');
+    if (!rid) {
+      handledReservationParam.current = null;
+      return;
+    }
+    if (!accessToken || loading) return;
+    if (handledReservationParam.current === rid) return;
+    const match = reservations.find((r) => r.id === rid);
+    if (!match) return;
+    handledReservationParam.current = rid;
+    void openDetails(match);
+    router.replace(pathname, { scroll: false });
+  }, [searchParams, accessToken, loading, reservations, openDetails, router, pathname]);
 
   const closeDetails = () => {
     setSelectedReservation(null);
@@ -366,12 +427,12 @@ export const BookingsScreen = (_props: Props) => {
         await load();
         if (selectedReservation?.id === id) await refreshSelected();
       } catch (e) {
-        setError(e instanceof Error ? e.message : 'Action failed');
+        setError(e instanceof Error ? e.message : (bp.actionFailed ?? 'Action failed'));
       } finally {
         setUpdatingId(null);
       }
     },
-    [accessToken, load, refreshSelected, selectedReservation?.id],
+    [accessToken, load, refreshSelected, selectedReservation?.id, bp.actionFailed],
   );
 
   const cancelReservation = useCallback(async () => {
@@ -395,11 +456,11 @@ export const BookingsScreen = (_props: Props) => {
       await load();
       await refreshSelected();
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Cancellation failed');
+      setError(e instanceof Error ? e.message : (bp.cancellationFailed ?? 'Cancellation failed'));
     } finally {
       setUpdatingId(null);
     }
-  }, [accessToken, authUser, load, refreshSelected, selectedReservation]);
+  }, [accessToken, authUser, load, refreshSelected, selectedReservation, bp.cancellationFailed]);
 
   const finish = useCallback(
     async (id: string, action: 'done' | 'report') => {
@@ -415,12 +476,12 @@ export const BookingsScreen = (_props: Props) => {
         await load();
         if (selectedReservation?.id === id) await refreshSelected();
       } catch (e) {
-        setError(e instanceof Error ? e.message : 'Action failed');
+        setError(e instanceof Error ? e.message : (bp.actionFailed ?? 'Action failed'));
       } finally {
         setUpdatingId(null);
       }
     },
-    [accessToken, load, refreshSelected, selectedReservation?.id],
+    [accessToken, load, refreshSelected, selectedReservation?.id, bp.actionFailed],
   );
 
   const proposeLocation = useCallback(async () => {
@@ -435,11 +496,11 @@ export const BookingsScreen = (_props: Props) => {
       setLocationText('');
       await refreshSelected();
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not propose location');
+      setError(e instanceof Error ? e.message : (bp.proposeLocationFailed ?? 'Could not propose location'));
     } finally {
       setUpdatingId(null);
     }
-  }, [accessToken, locationText, refreshSelected, selectedReservation]);
+  }, [accessToken, locationText, refreshSelected, selectedReservation, bp.proposeLocationFailed]);
 
   const respondLocation = useCallback(
     async (proposalId: string, decision: 'accept' | 'reject') => {
@@ -453,12 +514,12 @@ export const BookingsScreen = (_props: Props) => {
         });
         await refreshSelected();
       } catch (e) {
-        setError(e instanceof Error ? e.message : 'Could not respond to location proposal');
+        setError(e instanceof Error ? e.message : (bp.respondLocationFailed ?? 'Could not respond to location proposal'));
       } finally {
         setUpdatingId(null);
       }
     },
-    [accessToken, refreshSelected, selectedReservation],
+    [accessToken, refreshSelected, selectedReservation, bp.respondLocationFailed],
   );
 
   const getCheckinCode = useCallback(async () => {
@@ -469,11 +530,11 @@ export const BookingsScreen = (_props: Props) => {
       const data = await reservationsApiClient.getOfflineCheckinCodes(accessToken, selectedReservation.id);
       setCheckinInfo(data);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not load check-in code');
+      setError(e instanceof Error ? e.message : (bp.checkinLoadFailed ?? 'Could not load check-in code'));
     } finally {
       setUpdatingId(null);
     }
-  }, [accessToken, selectedReservation]);
+  }, [accessToken, selectedReservation, bp.checkinLoadFailed]);
 
   const confirmCheckin = useCallback(async () => {
     if (!accessToken || !selectedReservation || selectedReservation.mode !== 'offline') return;
@@ -497,11 +558,11 @@ export const BookingsScreen = (_props: Props) => {
       );
       await refreshSelected();
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not confirm check-in');
+      setError(e instanceof Error ? e.message : (bp.checkinConfirmFailed ?? 'Could not confirm check-in'));
     } finally {
       setUpdatingId(null);
     }
-  }, [accessToken, counterpartyCode, refreshSelected, selectedReservation]);
+  }, [accessToken, counterpartyCode, refreshSelected, selectedReservation, bp.checkinConfirmFailed]);
 
   const filteredReservations = useMemo(() => {
     if (filterStatus === 'all') return reservations;
@@ -524,7 +585,7 @@ export const BookingsScreen = (_props: Props) => {
         setReviewComment('');
         setReviewRating(5);
       } catch (e) {
-        const msg = e instanceof Error ? e.message : 'Failed to submit review';
+        const msg = e instanceof Error ? e.message : (bp.submitReviewFailed ?? 'Failed to submit review');
         if (msg.includes('already reviewed') || msg.includes('ALREADY_REVIEWED')) {
           setReviewedReservationIds((prev) => new Set(prev).add(reservationId));
           setReviewingReservationId(null);
@@ -535,10 +596,9 @@ export const BookingsScreen = (_props: Props) => {
         setReviewSubmitting(false);
       }
     },
-    [accessToken, reviewComment, reviewRating, reviewSubmitting],
+    [accessToken, reviewComment, reviewRating, reviewSubmitting, bp.submitReviewFailed],
   );
 
-  const bp = dictionary.bookingsPage ?? {};
   const title = bp.title ?? 'My Reservations';
   const noBookings = bp.noBookings ?? 'No reservations yet.';
 
@@ -563,11 +623,11 @@ export const BookingsScreen = (_props: Props) => {
         >
           <div className="bookings-cancel-modal">
             <h2 id="cancel-modal-title" className="bookings-cancel-modal-title">
-              Cancel reservation?
+              {bp.cancelModalTitle ?? 'Cancel reservation?'}
             </h2>
             <p className="bookings-cancel-modal-preview">
-              {getCancellationPreview(selectedReservation, authUser.id) ??
-                'This will cancel the reservation. Continue?'}
+              {getCancellationPreview(selectedReservation, authUser.id, bp, formatMoney) ??
+                (bp.cancelModalFallback ?? 'This will cancel the reservation. Continue?')}
             </p>
             <div className="bookings-cancel-modal-actions">
               <button
@@ -575,7 +635,7 @@ export const BookingsScreen = (_props: Props) => {
                 className="dashboard-btn dashboard-btn--secondary"
                 onClick={() => setShowCancelModal(false)}
               >
-                Back
+                {bp.cancelModalBack ?? 'Back'}
               </button>
               <button
                 type="button"
@@ -583,7 +643,9 @@ export const BookingsScreen = (_props: Props) => {
                 onClick={() => void cancelReservation()}
                 disabled={updatingId === selectedReservation.id}
               >
-                {updatingId === selectedReservation.id ? 'Cancelling...' : 'Confirm cancellation'}
+                {updatingId === selectedReservation.id
+                  ? (bp.cancelModalCancelling ?? 'Cancelling...')
+                  : (bp.cancelModalConfirm ?? 'Confirm cancellation')}
               </button>
             </div>
           </div>
@@ -601,7 +663,7 @@ export const BookingsScreen = (_props: Props) => {
             className={`dashboard-btn dashboard-btn--small ${filterStatus === 'all' ? 'dashboard-btn--primary' : 'dashboard-btn--secondary'}`}
             onClick={() => setFilterStatus('all')}
           >
-            All
+            {bp.filterAll ?? 'All'}
           </button>
           {['pending', 'accepted', 'in_session', 'waiting_customer_done', 'completed', 'rejected', 'disputed'].map((status) => (
             <button
@@ -628,19 +690,27 @@ export const BookingsScreen = (_props: Props) => {
               const joinDisabled = canShowJoin && timingState !== 'in_window';
               const joinLabel =
                 timingState === 'too_early'
-                  ? `Starts at ${formatDateTime(r.requestedStartAt)}`
+                  ? (bp.startsAtLine ?? 'Starts at {time}').replace(
+                      '{time}',
+                      formatDateTime(r.requestedStartAt),
+                    )
                   : timingState === 'past'
-                    ? 'Reservation time is over'
+                    ? (bp.reservationTimeOver ?? 'Reservation time is over')
                     : '';
               return (
               <li key={r.id} className="calendar-booking-item reservation-card">
                 <div className="reservation-card-main">
                   <div className="calendar-booking-info">
-                    <strong>{getReservationTitle(r)}</strong>
-                    <span className="reservation-mode-pill">{getReservationModeLabel(r)}</span>
+                    <strong>{getReservationTitle(r, bp)}</strong>
+                    <span className="reservation-mode-pill">{getReservationModeLabel(r, bp)}</span>
                     {isInterviewReservation(r) && (
                       <span className="dashboard-card-meta">
-                        Hiring interview{r.jobApplicationId ? ` • Application ${r.jobApplicationId}` : ''}
+                        {r.jobApplicationId
+                          ? (bp.hiringInterviewWithApplication ?? 'Hiring interview • Application {id}').replace(
+                              '{id}',
+                              r.jobApplicationId,
+                            )
+                          : (bp.hiringInterview ?? 'Hiring interview')}
                       </span>
                     )}
                     <span>{formatDateTime(r.requestedStartAt)}</span>
@@ -667,7 +737,15 @@ export const BookingsScreen = (_props: Props) => {
                         <ul className="reservation-suggestion-list">
                           {r.suggestedSlots.map((slot) => (
                             <li key={`${slot.startAt}-${slot.endAt}`}>
-                              Suggested: {formatDateTime(slot.startAt)} - {new Date(slot.endAt).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}
+                              {(bp.suggestedSlot ?? 'Suggested: {start} – {end}')
+                                .replace('{start}', formatDateTime(slot.startAt))
+                                .replace(
+                                  '{end}',
+                                  new Date(slot.endAt).toLocaleTimeString(undefined, {
+                                    hour: '2-digit',
+                                    minute: '2-digit',
+                                  }),
+                                )}
                             </li>
                           ))}
                         </ul>
@@ -682,7 +760,7 @@ export const BookingsScreen = (_props: Props) => {
                     className="dashboard-btn dashboard-btn--small dashboard-btn--secondary"
                     onClick={() => void openDetails(r)}
                   >
-                    Details
+                    {bp.details ?? 'Details'}
                   </button>
                   {r.status === 'completed' && !isInterviewReservation(r) && !reviewedReservationIds.has(r.id) && (
                     <>
@@ -692,7 +770,7 @@ export const BookingsScreen = (_props: Props) => {
                           className="dashboard-btn dashboard-btn--small dashboard-btn--primary"
                           onClick={() => setReviewingReservationId(r.id)}
                         >
-                          Rate
+                          {bp.rate ?? 'Rate'}
                         </button>
                       ) : (
                         <div className="reservation-review-form">
@@ -703,7 +781,7 @@ export const BookingsScreen = (_props: Props) => {
                                 type="button"
                                 className="reservation-review-star-btn"
                                 onClick={() => setReviewRating(star)}
-                                aria-label={`${star} star`}
+                                aria-label={(bp.starRatingAria ?? '{n} stars').replace('{n}', String(star))}
                               >
                                 {star <= reviewRating ? '★' : '☆'}
                               </button>
@@ -712,7 +790,7 @@ export const BookingsScreen = (_props: Props) => {
                           <input
                             type="text"
                             className="dashboard-input reservation-review-comment"
-                            placeholder="Optional comment"
+                            placeholder={bp.optionalComment ?? 'Optional comment'}
                             value={reviewComment}
                             onChange={(e) => setReviewComment(e.target.value)}
                           />
@@ -726,7 +804,7 @@ export const BookingsScreen = (_props: Props) => {
                                 setReviewRating(5);
                               }}
                             >
-                              Cancel
+                              {bp.cancel ?? 'Cancel'}
                             </button>
                             <button
                               type="button"
@@ -734,7 +812,9 @@ export const BookingsScreen = (_props: Props) => {
                               disabled={reviewSubmitting}
                               onClick={() => void submitReview(r.id)}
                             >
-                              {reviewSubmitting ? '...' : 'Submit review'}
+                              {reviewSubmitting
+                                ? (bp.submittingEllipsis ?? '...')
+                                : (bp.submitReview ?? 'Submit review')}
                             </button>
                           </div>
                         </div>
@@ -755,7 +835,7 @@ export const BookingsScreen = (_props: Props) => {
                         type="button"
                         className="dashboard-btn dashboard-btn--small dashboard-btn--danger"
                         onClick={() => {
-                          const reason = window.prompt('Rejection reason (optional):');
+                          const reason = window.prompt(bp.rejectionPrompt ?? 'Rejection reason (optional):');
                           void decide(r.id, 'reject', reason ?? undefined);
                         }}
                         disabled={updatingId === r.id}
@@ -773,7 +853,9 @@ export const BookingsScreen = (_props: Props) => {
                       disabled={joinDisabled}
                       onClick={() => setCallReservation(r)}
                     >
-                      {isInterviewReservation(r) ? 'Join Interview' : 'Join Call'}
+                      {isInterviewReservation(r)
+                        ? (bp.joinInterview ?? 'Join Interview')
+                        : (bp.joinCall ?? 'Join Call')}
                     </button>
                   )}
                   {canShowJoin && joinDisabled && (
@@ -790,15 +872,15 @@ export const BookingsScreen = (_props: Props) => {
       {selectedReservation && (
         <div className="plan-modal-overlay" onClick={closeDetails}>
           <div className="plan-modal reservation-details-modal" onClick={(e) => e.stopPropagation()}>
-            <h3 className="plan-modal-title">{getReservationTitle(selectedReservation)}</h3>
+            <h3 className="plan-modal-title">{getReservationTitle(selectedReservation, bp)}</h3>
             <p className="dashboard-card-meta">
-              {getReservationModeLabel(selectedReservation)} | {formatDateTime(selectedReservation.requestedStartAt)}
+              {getReservationModeLabel(selectedReservation, bp)} | {formatDateTime(selectedReservation.requestedStartAt)}
             </p>
             {(selectedReservation.providerName || selectedReservation.customerName) && (
               <p className="dashboard-card-meta reservation-other-party">
                 {authUser.id === selectedReservation.providerId && selectedReservation.customerName && (
                   <>
-                    Customer:{' '}
+                    {bp.customerLabel ?? 'Customer:'}{' '}
                     <button
                       type="button"
                       className="reservation-other-party-btn"
@@ -816,7 +898,7 @@ export const BookingsScreen = (_props: Props) => {
                 )}
                 {authUser.id === selectedReservation.customerId && selectedReservation.providerName && (
                   <>
-                    Provider:{' '}
+                    {bp.providerLabel ?? 'Provider:'}{' '}
                     <button
                       type="button"
                       className="reservation-other-party-btn"
@@ -836,7 +918,7 @@ export const BookingsScreen = (_props: Props) => {
             )}
 
             {detailsLoading ? (
-              <p className="dashboard-loading">Loading details...</p>
+              <p className="dashboard-loading">{bp.loadingDetails ?? 'Loading details...'}</p>
             ) : (
               <>
                 <div className="reservation-timeline reservation-timeline--detailed">
@@ -851,73 +933,146 @@ export const BookingsScreen = (_props: Props) => {
                 </div>
 
                 <div className="reservation-billing-box">
-                  <h4>{isInterviewReservation(selectedReservation) ? 'Interview Billing' : 'Billing Summary'}</h4>
+                  <h4>
+                    {isInterviewReservation(selectedReservation)
+                      ? (bp.interviewBilling ?? 'Interview Billing')
+                      : (bp.billingSummary ?? 'Billing Summary')}
+                  </h4>
                   {selectedReservation.pricingBreakdown ? (
                     <>
-                      <p>Service price: {formatMoney(selectedReservation.pricingBreakdown.servicePriceAmount)}</p>
                       <p>
-                        Reservation ({getReservationModeLabel(selectedReservation)}) price:{' '}
-                        {formatMoney(selectedReservation.pricingBreakdown.reservationPriceAmount)}
+                        {(bp.servicePriceLine ?? 'Service price: {amount}').replace(
+                          '{amount}',
+                          formatMoney(selectedReservation.pricingBreakdown.servicePriceAmount),
+                        )}
                       </p>
                       <p>
-                        <strong>Total amount: {formatMoney(selectedReservation.pricingBreakdown.totalAmount)}</strong>
+                        {(bp.reservationPriceLine ?? 'Reservation ({mode}) price: {amount}')
+                          .replace('{mode}', getReservationModeLabel(selectedReservation, bp))
+                          .replace(
+                            '{amount}',
+                            formatMoney(selectedReservation.pricingBreakdown.reservationPriceAmount),
+                          )}
+                      </p>
+                      <p>
+                        <strong>
+                          {(bp.totalAmountLine ?? 'Total amount: {amount}').replace(
+                            '{amount}',
+                            formatMoney(selectedReservation.pricingBreakdown.totalAmount),
+                          )}
+                        </strong>
                       </p>
                       <p className="dashboard-card-meta">{selectedReservation.pricingBreakdown.explanation}</p>
                     </>
                   ) : null}
-                  <p>Acceptance fee: {formatMoney(selectedReservation.adminAcceptanceFee)}</p>
                   <p>
-                    {isInterviewReservation(selectedReservation) ? 'Fixed interview price' : 'Fixed reservation price'}:{' '}
-                    {formatMoney(selectedReservation.expertPriceAmount)}
+                    {(bp.acceptanceFeeLine ?? 'Acceptance fee: {amount}').replace(
+                      '{amount}',
+                      formatMoney(selectedReservation.adminAcceptanceFee),
+                    )}
+                  </p>
+                  <p>
+                    {`${isInterviewReservation(selectedReservation) ? (bp.fixedInterviewPrice ?? 'Fixed interview price') : (bp.fixedReservationPrice ?? 'Fixed reservation price')}: ${formatMoney(selectedReservation.expertPriceAmount)}`}
                   </p>
                   {selectedReservation.mode === 'online' && !isInterviewReservation(selectedReservation) && (
-                    <p>Minute fee (global): {formatMoney(selectedReservation.adminMinuteRate)} / min (split 50/50)</p>
+                    <p>
+                      {(bp.minuteFeeGlobalLine ?? 'Minute fee (global): {amount} / min (split 50/50)').replace(
+                        '{amount}',
+                        formatMoney(selectedReservation.adminMinuteRate),
+                      )}
+                    </p>
                   )}
                   {selectedReservation.mode === 'online' && isInterviewReservation(selectedReservation) && (
-                    <p>Interview calls use a fixed price only. No per-minute billing applies.</p>
+                    <p>{bp.interviewFixedPriceNote ?? 'Interview calls use a fixed price only. No per-minute billing applies.'}</p>
                   )}
                   {selectedReservation.fixedPriceHoldId && (
-                    <p>Fixed price hold: Active</p>
+                    <p>{bp.fixedPriceHoldActive ?? 'Fixed price hold: Active'}</p>
                   )}
                   {!selectedReservation.fixedPriceHoldId && selectedReservation.pricingBreakdown && (
-                    <p>Deduction status: Pending hold (will be held on Reserve).</p>
+                    <p>{bp.deductionPendingHold ?? 'Deduction status: Pending hold (will be held on Reserve).'}</p>
                   )}
-                  <p>Settlement: {describeSettlement(selectedReservation)}</p>
+                  <p>
+                    {(bp.settlementLine ?? 'Settlement: {description}').replace(
+                      '{description}',
+                      describeSettlement(selectedReservation, bp),
+                    )}
+                  </p>
                   {(selectedReservation.refundAmount > 0 || selectedReservation.capturedAmount > 0 || selectedReservation.penaltyAmount > 0) && (
                     <>
-                      <p>Refunded: {formatMoney(selectedReservation.refundAmount)}</p>
-                      <p>Captured: {formatMoney(selectedReservation.capturedAmount)}</p>
-                      <p>Penalty: {formatMoney(selectedReservation.penaltyAmount)}</p>
+                      <p>
+                        {(bp.refundedLine ?? 'Refunded: {amount}').replace(
+                          '{amount}',
+                          formatMoney(selectedReservation.refundAmount),
+                        )}
+                      </p>
+                      <p>
+                        {(bp.capturedLine ?? 'Captured: {amount}').replace(
+                          '{amount}',
+                          formatMoney(selectedReservation.capturedAmount),
+                        )}
+                      </p>
+                      <p>
+                        {(bp.penaltyLine ?? 'Penalty: {amount}').replace(
+                          '{amount}',
+                          formatMoney(selectedReservation.penaltyAmount),
+                        )}
+                      </p>
                     </>
                   )}
                   {selectedReservation.cancellationEffectiveOutcome && (
                     <p>
-                      Cancellation outcome:{' '}
-                      {cancellationOutcomeLabel(selectedReservation.cancellationEffectiveOutcome)}
+                      {(bp.cancellationOutcomeLine ?? 'Cancellation outcome: {label}').replace(
+                        '{label}',
+                        cancellationOutcomeLabel(selectedReservation.cancellationEffectiveOutcome, bp),
+                      )}
                     </p>
                   )}
                 </div>
 
                 <div className="reservation-section-box">
-                  <h4>Cancellation Policy</h4>
+                  <h4>{bp.cancellationPolicyTitle ?? 'Cancellation Policy'}</h4>
                   {selectedReservation.policySnapshot ? (
                     <>
-                      <p>Customer free cancellation window: {selectedReservation.policySnapshot.customerFreeCancelHours} hours.</p>
-                      <p>Provider penalty window: {selectedReservation.policySnapshot.providerPenaltyCancelHours} hours.</p>
-                      <p>Late provider penalty: {formatMoney(selectedReservation.policySnapshot.providerLateCancelPenaltyAmount)}</p>
+                      <p>
+                        {(bp.customerFreeCancelWindow ?? 'Customer free cancellation window: {hours} hours.').replace(
+                          '{hours}',
+                          String(selectedReservation.policySnapshot.customerFreeCancelHours),
+                        )}
+                      </p>
+                      <p>
+                        {(bp.providerPenaltyWindow ?? 'Provider penalty window: {hours} hours.').replace(
+                          '{hours}',
+                          String(selectedReservation.policySnapshot.providerPenaltyCancelHours),
+                        )}
+                      </p>
+                      <p>
+                        {(bp.lateProviderPenaltyLine ?? 'Late provider penalty: {amount}').replace(
+                          '{amount}',
+                          formatMoney(selectedReservation.policySnapshot.providerLateCancelPenaltyAmount),
+                        )}
+                      </p>
                     </>
                   ) : (
-                    <p className="dashboard-card-meta">Policy snapshot unavailable for this reservation.</p>
+                    <p className="dashboard-card-meta">
+                      {bp.policySnapshotUnavailable ?? 'Policy snapshot unavailable for this reservation.'}
+                    </p>
                   )}
-                  {authUser && getCancellationPreview(selectedReservation, authUser.id) && (
-                    <p>{getCancellationPreview(selectedReservation, authUser.id)}</p>
-                  )}
+                  {authUser &&
+                    (() => {
+                      const preview = getCancellationPreview(
+                        selectedReservation,
+                        authUser.id,
+                        bp,
+                        formatMoney,
+                      );
+                      return preview ? <p>{preview}</p> : null;
+                    })()}
                 </div>
 
                 <div className="reservation-section-box">
-                  <h4>Timeline</h4>
+                  <h4>{bp.timelineTitle ?? 'Timeline'}</h4>
                   {timeline.length === 0 ? (
-                    <p className="dashboard-card-meta">No timeline events yet.</p>
+                    <p className="dashboard-card-meta">{bp.timelineEmpty ?? 'No timeline events yet.'}</p>
                   ) : (
                     <ul className="reservation-proposal-list">
                       {timeline.map((event) => (
@@ -943,9 +1098,12 @@ export const BookingsScreen = (_props: Props) => {
                       const joinDisabled = canShowJoin && timingState !== 'in_window';
                       const joinLabel =
                         timingState === 'too_early'
-                          ? `Call is not available yet. Starts at ${formatDateTime(selectedReservation.requestedStartAt)}.`
+                          ? (bp.callNotAvailableUntil ?? 'Call is not available yet. Starts at {time}.').replace(
+                              '{time}',
+                              formatDateTime(selectedReservation.requestedStartAt),
+                            )
                           : timingState === 'past'
-                            ? 'This reservation time has ended.'
+                            ? (bp.reservationTimeEnded ?? 'This reservation time has ended.')
                             : '';
                       return (
                         <>
@@ -957,7 +1115,24 @@ export const BookingsScreen = (_props: Props) => {
                         <p>{bp.providerRemainingTime ?? 'Provider remaining time'}: {callSnapshot.providerRemainingMinutes} {bp.durationMin ?? 'min'}</p>
                         {callSnapshot.session && (
                           <p>
-                            Session: {callSnapshot.session.status === 'active' ? (bp.inProgress ?? 'In progress') : callSnapshot.session.status === 'ended' ? (bp.ended ?? 'Ended') : callSnapshot.session.status} — Duration: {callSnapshot.session.billedMinutes ?? Math.round((callSnapshot.session.billedSeconds ?? 0) / 60)} {bp.durationMin ?? 'min'}
+                            {(bp.sessionStatusLine ??
+                              'Session: {status} — Duration: {minutes} {durationUnit}')
+                              .replace(
+                                '{status}',
+                                callSnapshot.session.status === 'active'
+                                  ? (bp.inProgress ?? 'In progress')
+                                  : callSnapshot.session.status === 'ended'
+                                    ? (bp.ended ?? 'Ended')
+                                    : callSnapshot.session.status,
+                              )
+                              .replace(
+                                '{minutes}',
+                                String(
+                                  callSnapshot.session.billedMinutes ??
+                                    Math.round((callSnapshot.session.billedSeconds ?? 0) / 60),
+                                ),
+                              )
+                              .replace('{durationUnit}', bp.durationMin ?? 'min')}
                           </p>
                         )}
                       </>
@@ -987,15 +1162,24 @@ export const BookingsScreen = (_props: Props) => {
 
                 {selectedReservation.mode === 'offline' && (
                   <div className="reservation-section-box">
-                    <h4>{isInterviewReservation(selectedReservation) ? 'Offline Interview' : 'Offline Meeting'}</h4>
+                    <h4>
+                      {isInterviewReservation(selectedReservation)
+                        ? (bp.offlineInterviewTitle ?? 'Offline Interview')
+                        : (bp.offlineMeetingTitle ?? 'Offline Meeting')}
+                    </h4>
                     {selectedReservation.finalLocationText && (
-                      <p>Agreed location: {selectedReservation.finalLocationText}</p>
+                      <p>
+                        {(bp.agreedLocationLine ?? 'Agreed location: {text}').replace(
+                          '{text}',
+                          selectedReservation.finalLocationText,
+                        )}
+                      </p>
                     )}
                     <div className="reservation-inline-form">
                       <input
                         type="text"
                         className="dashboard-input"
-                        placeholder="Propose meeting location..."
+                        placeholder={bp.proposeLocationPlaceholder ?? 'Propose meeting location...'}
                         value={locationText}
                         onChange={(e) => setLocationText(e.target.value)}
                       />
@@ -1005,12 +1189,12 @@ export const BookingsScreen = (_props: Props) => {
                         onClick={() => void proposeLocation()}
                         disabled={updatingId === selectedReservation.id || !locationText.trim()}
                       >
-                        Propose
+                        {bp.propose ?? 'Propose'}
                       </button>
                     </div>
 
                     {locationProposals.length === 0 ? (
-                      <p className="dashboard-card-meta">No location proposals yet.</p>
+                      <p className="dashboard-card-meta">{bp.noLocationProposals ?? 'No location proposals yet.'}</p>
                     ) : (
                       <ul className="reservation-proposal-list">
                         {locationProposals.map((proposal) => {
@@ -1020,7 +1204,8 @@ export const BookingsScreen = (_props: Props) => {
                               <div>
                                 <strong>{proposal.locationText}</strong>
                                 <p className="dashboard-card-meta">
-                                  {mine ? 'You proposed' : 'Counterparty proposed'} | {proposal.status}
+                                  {mine ? (bp.youProposed ?? 'You proposed') : (bp.counterpartyProposed ?? 'Counterparty proposed')}{' '}
+                                  | {proposalStatusLabel(proposal.status, bp)}
                                 </p>
                               </div>
                               {!mine && proposal.status === 'pending' && (
@@ -1031,7 +1216,7 @@ export const BookingsScreen = (_props: Props) => {
                                     onClick={() => void respondLocation(proposal.id, 'accept')}
                                     disabled={updatingId === selectedReservation.id}
                                   >
-                                    Accept
+                                    {bp.accept ?? 'Accept'}
                                   </button>
                                   <button
                                     type="button"
@@ -1039,7 +1224,7 @@ export const BookingsScreen = (_props: Props) => {
                                     onClick={() => void respondLocation(proposal.id, 'reject')}
                                     disabled={updatingId === selectedReservation.id}
                                   >
-                                    Reject
+                                    {bp.reject ?? 'Reject'}
                                   </button>
                                 </div>
                               )}
@@ -1056,21 +1241,35 @@ export const BookingsScreen = (_props: Props) => {
                         onClick={() => void getCheckinCode()}
                         disabled={updatingId === selectedReservation.id}
                       >
-                        Get My Check-in Code
+                        {bp.getCheckinCode ?? 'Get My Check-in Code'}
                       </button>
                       {checkinInfo && (
                         <div className="reservation-note-box">
-                          <p>Your code: <strong>{checkinInfo.myCode}</strong></p>
-                          <p>Code expires: {formatDateTime(checkinInfo.expiresAt)}</p>
-                          <p>My check-in: {checkinInfo.myVerifiedAt ? 'Verified' : 'Pending'}</p>
-                          <p>Counterparty check-in: {checkinInfo.counterpartyVerifiedAt ? 'Verified' : 'Pending'}</p>
+                          <p>
+                            {bp.yourCodeLine ?? 'Your code:'} <strong>{checkinInfo.myCode}</strong>
+                          </p>
+                          <p>
+                            {bp.codeExpiresLine ?? 'Code expires:'} {formatDateTime(checkinInfo.expiresAt)}
+                          </p>
+                          <p>
+                            {bp.myCheckin ?? 'My check-in:'}{' '}
+                            {checkinInfo.myVerifiedAt
+                              ? (bp.checkinVerified ?? 'Verified')
+                              : (bp.checkinPending ?? 'Pending')}
+                          </p>
+                          <p>
+                            {bp.counterpartyCheckin ?? 'Counterparty check-in:'}{' '}
+                            {checkinInfo.counterpartyVerifiedAt
+                              ? (bp.checkinVerified ?? 'Verified')
+                              : (bp.checkinPending ?? 'Pending')}
+                          </p>
                         </div>
                       )}
                       <div className="reservation-inline-form">
                         <input
                           type="text"
                           className="dashboard-input"
-                          placeholder="Enter counterparty code"
+                          placeholder={bp.enterCounterpartyCode ?? 'Enter counterparty code'}
                           value={counterpartyCode}
                           onChange={(e) => setCounterpartyCode(e.target.value)}
                         />
@@ -1080,7 +1279,7 @@ export const BookingsScreen = (_props: Props) => {
                           onClick={() => void confirmCheckin()}
                           disabled={updatingId === selectedReservation.id || !counterpartyCode.trim()}
                         >
-                          Confirm Check-in
+                          {bp.confirmCheckin ?? 'Confirm Check-in'}
                         </button>
                       </div>
                     </div>
@@ -1101,7 +1300,7 @@ export const BookingsScreen = (_props: Props) => {
                       type="button"
                       className="dashboard-btn dashboard-btn--small dashboard-btn--danger"
                       onClick={() => {
-                        const reason = window.prompt('Rejection reason (optional):');
+                        const reason = window.prompt(bp.rejectionPrompt ?? 'Rejection reason (optional):');
                         void decide(selectedReservation.id, 'reject', reason ?? undefined);
                       }}
                       disabled={updatingId === selectedReservation.id}
@@ -1169,7 +1368,7 @@ export const BookingsScreen = (_props: Props) => {
                               type="button"
                               className="reservation-review-star-btn"
                               onClick={() => setReviewRating(star)}
-                              aria-label={`${star} star`}
+                              aria-label={(bp.starRatingAria ?? '{n} stars').replace('{n}', String(star))}
                             >
                               {star <= reviewRating ? '★' : '☆'}
                             </button>
@@ -1178,7 +1377,11 @@ export const BookingsScreen = (_props: Props) => {
                         <input
                           type="text"
                           className="dashboard-input reservation-review-comment reservation-review-comment--spaced"
-                          placeholder={dictionary.profile?.reviews?.commentPlaceholder ?? 'Optional comment'}
+                          placeholder={
+                            dictionary.profile?.reviews?.commentPlaceholder ??
+                            bp.optionalComment ??
+                            'Optional comment'
+                          }
                           value={reviewComment}
                           onChange={(e) => setReviewComment(e.target.value)}
                         />
@@ -1192,7 +1395,7 @@ export const BookingsScreen = (_props: Props) => {
                               setReviewRating(5);
                             }}
                           >
-                            Cancel
+                            {bp.cancel ?? 'Cancel'}
                           </button>
                           <button
                             type="button"
@@ -1200,7 +1403,9 @@ export const BookingsScreen = (_props: Props) => {
                             disabled={reviewSubmitting}
                             onClick={() => void submitReview(selectedReservation.id)}
                           >
-                            {reviewSubmitting ? '...' : 'Submit review'}
+                            {reviewSubmitting
+                              ? (bp.submittingEllipsis ?? '...')
+                              : (bp.submitReview ?? 'Submit review')}
                           </button>
                         </div>
                       </>
@@ -1220,7 +1425,7 @@ export const BookingsScreen = (_props: Props) => {
                   closeDetails();
                 }}
               >
-                Close
+                {bp.close ?? 'Close'}
               </button>
             </div>
           </div>

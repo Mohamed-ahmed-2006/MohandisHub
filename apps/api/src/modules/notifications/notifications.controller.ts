@@ -5,6 +5,7 @@
 import type { ApiSuccessBody } from '@mohandishub/shared';
 import type { Request } from 'express';
 
+import { env } from '../../config/env.js';
 import { asyncHandler } from '../../utils/async-handler.js';
 import { HttpError } from '../../utils/http-error.js';
 
@@ -57,6 +58,14 @@ export const markAllAsRead = asyncHandler(async (req, res) => {
 
 /** POST /api/notifications/demo — create a test notification for the current user. */
 export const sendDemo = asyncHandler(async (req, res) => {
+  if (env.NODE_ENV === 'production') {
+    throw new HttpError({
+      statusCode: 404,
+      code: 'NOT_FOUND',
+      message: 'Not found.',
+    });
+  }
+
   const userId = requireUserId(req);
   const notification = await notificationsService.createForUser(userId, {
     type: 'demo',

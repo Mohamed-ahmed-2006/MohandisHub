@@ -2,7 +2,6 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 
-import { ApiHealthBadge } from '@/components/api-health-badge';
 import {
   HomePageHeroCta,
   HomePageJoinSectionGate,
@@ -62,7 +61,6 @@ const HomePage = async ({ params }: HomePageProps) => {
         <section className="home-page-hero-section">
           <div className="home-page-hero-layout">
             <div className="home-page-hero-copy mh-animate-fade-up">
-              <ApiHealthBadge />
               <h1 className="home-page-hero-title">{dictionary.home.headline}</h1>
               <p className="home-page-hero-description">{dictionary.home.description}</p>
               <HomePageHeroCta locale={typedLocale} dictionary={dictionary} />

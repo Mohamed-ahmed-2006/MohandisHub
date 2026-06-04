@@ -33,6 +33,17 @@ function getDbTargetLabel(dbUrl) {
   }
 }
 
+function ensureSupabaseCli() {
+  try {
+    execSync('supabase --version', { stdio: 'ignore' });
+  } catch {
+    console.error(
+      '\nSupabase CLI is not installed. Install it from https://github.com/supabase/cli before running ship.',
+    );
+    process.exit(1);
+  }
+}
+
 console.log('🚀 Starting ship: check, build, and migrate (no git commit)...');
 
 // 1. Check for errors (Typecheck)
@@ -57,12 +68,13 @@ if (process.env.SHIP_CONFIRM !== 'YES') {
   );
   process.exit(1);
 }
+ensureSupabaseCli();
 if (dbUrl) {
   console.log(`Target database: ${getDbTargetLabel(dbUrl)}`);
-  run(`npx supabase db push --db-url "${dbUrl}"`);
+  run(`supabase db push --db-url "${dbUrl}"`);
 } else {
   console.log('Target database: linked Supabase project (no DATABASE_URL in apps/api/.env)');
-  run('npx supabase db push');
+  run('supabase db push');
 }
 
 console.log('\n🎉 Ship completed: checks, build, and migrations all passed. You can now commit and push.');

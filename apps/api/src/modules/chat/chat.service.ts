@@ -1,4 +1,5 @@
 import { HttpError } from '../../utils/http-error.js';
+import { NotificationsService } from '../notifications/notifications.service.js';
 import { SettingsService } from '../settings/settings.service.js';
 
 import { ChatRepository } from './chat.repository.js';
@@ -8,6 +9,7 @@ export class ChatService {
   constructor(
     private readonly repo: ChatRepository = new ChatRepository(),
     private readonly settingsService: SettingsService = new SettingsService(),
+    private readonly notificationsService: NotificationsService = new NotificationsService(),
   ) {}
 
   async listConversations(userId: string) {
@@ -74,7 +76,8 @@ export class ChatService {
       input.messageType === 'link' || input.messageType === 'location'
         ? (input.body ?? '').trim() || null
         : (input.body ?? '').trim() || null;
-    return this.repo.sendMessage(conversationId, userId, {
+    const recipientId = conv.participant_a === userId ? conv.participant_b : conv.participant_a;
+    const saved = await this.repo.sendMessage(conversationId, userId, {
       body,
       replyToId: input.replyToId ?? null,
       messageType: input.messageType ?? 'text',
@@ -84,6 +87,27 @@ export class ChatService {
       locationLng: input.lng ?? null,
       locationLabel: input.label ?? null,
     });
+    const preview =
+      body && body.length > 0
+        ? body.length > 120
+          ? `${body.slice(0, 117)}...`
+          : body
+        : input.attachmentUrl
+          ? 'Sent an attachment'
+          : input.messageType === 'location'
+            ? 'Shared a location'
+            : input.messageType === 'link'
+              ? 'Shared a link'
+              : 'New message';
+    void this.notificationsService
+      .createForUser(recipientId, {
+        type: 'chat_message',
+        title: 'New message',
+        message: preview,
+        payload: { conversationId, messageId: saved.id },
+      })
+      .catch(() => {});
+    return saved;
   }
 
   async deleteMessage(

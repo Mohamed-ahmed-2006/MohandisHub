@@ -89,8 +89,8 @@ type AdminPermissionDef = { id: string; label: string; hint: string };
 const FALLBACK_ADMIN_PERMISSION_DEFS: AdminPermissionDef[] = [
   {
     id: 'manage_users',
-    label: 'Users & support',
-    hint: 'Users list, profiles, support tickets, account tools.',
+    label: 'Users',
+    hint: 'Users list, profiles, account status, role and email tools.',
   },
   { id: 'manage_plans', label: 'Plans', hint: 'Plans admin tab.' },
   {
@@ -105,12 +105,17 @@ const FALLBACK_ADMIN_PERMISSION_DEFS: AdminPermissionDef[] = [
     hint: 'KYC queues and review moderation.',
   },
   { id: 'manage_notifications', label: 'Notifications', hint: 'Send admin notifications.' },
+  { id: 'manage_support', label: 'Support', hint: 'Support ticket assignment, status, and deletion.' },
+  { id: 'manage_media', label: 'Media library', hint: 'Create, edit, schedule, and delete public media assets.' },
   { id: 'manage_settings', label: 'App settings', hint: 'Feature flags, pauses, upload policy.' },
   {
     id: 'manage_retention',
     label: 'Retention & moderation',
     hint: 'Retention sweeps, logs export, moderation actions.',
   },
+  { id: 'manage_ads', label: 'Advertisements', hint: 'View and moderate ad campaigns.' },
+  { id: 'manage_ad_pricing', label: 'Ad pricing', hint: 'Set ad pricing and campaign price overrides.' },
+  { id: 'manage_ad_scheduling', label: 'Ad scheduling', hint: 'Set campaign start and end windows.' },
 ];
 
 function readPermissionDefsFromUser360(user360: unknown): AdminPermissionDef[] {

@@ -57,7 +57,21 @@ services:
         sync: false
       - key: NOWPAYMENTS_IPN_SECRET
         sync: false
+      - key: NOWPAYMENTS_LIVE_REQUIRED
+        value: true
       - key: NOWPAYMENTS_WITHDRAWALS_ENABLED
+        sync: false
+      - key: NOWPAYMENTS_MASS_PAYOUTS_ENABLED
+        sync: false
+      - key: NOWPAYMENTS_AUTH_EMAIL
+        sync: false
+      - key: NOWPAYMENTS_AUTH_PASSWORD
+        sync: false
+      - key: NOWPAYMENTS_MANUAL_PAYOUT_VERIFY
+        value: true
+      - key: NOWPAYMENTS_WITHDRAWAL_DEFAULT_CURRENCY
+        value: USDTTRC20
+      - key: NOWPAYMENTS_ALLOWED_PAY_CURRENCIES
         sync: false
       - key: AGORA_APP_ID
         sync: false
@@ -82,13 +96,69 @@ services:
         value: production
       - key: DATABASE_URL
         sync: false
+      - key: CORS_ORIGIN
+        sync: false
+      - key: API_PUBLIC_URL
+        sync: false
+      - key: WEB_PUBLIC_URL
+        sync: false
       - key: JWT_SECRET
         sync: false
       - key: JWT_REFRESH_SECRET
         sync: false
+      - key: VERIFICATION_PROVIDER
+        value: didit
+      - key: DIDIT_API_KEY
+        sync: false
+      - key: DIDIT_WEBHOOK_SECRET
+        sync: false
+      - key: DIDIT_WORKFLOW_ID
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: OTP_EMAIL_PROVIDER
+        value: brevo
+      - key: BREVO_API_KEY
+        sync: false
+      - key: EMAIL_FROM
+        sync: false
       - key: NOWPAYMENTS_API_KEY
+        sync: false
+      - key: NOWPAYMENTS_IPN_SECRET
+        sync: false
+      - key: NOWPAYMENTS_LIVE_REQUIRED
+        value: true
+      - key: NOWPAYMENTS_WITHDRAWALS_ENABLED
+        sync: false
+      - key: NOWPAYMENTS_MASS_PAYOUTS_ENABLED
         sync: false
       - key: NOWPAYMENTS_AUTH_EMAIL
         sync: false
       - key: NOWPAYMENTS_AUTH_PASSWORD
+        sync: false
+      - key: NOWPAYMENTS_MANUAL_PAYOUT_VERIFY
+        value: true
+      - key: NOWPAYMENTS_WITHDRAWAL_DEFAULT_CURRENCY
+        value: USDTTRC20
+      - key: NOWPAYMENTS_ALLOWED_PAY_CURRENCIES
+        sync: false
+      - key: RETENTION_SWEEP_INTERVAL_MS
+        sync: false
+      - key: RETENTION_VERIFICATION_CODES_AFTER_EXPIRY_HOURS
+        sync: false
+      - key: RETENTION_OTP_RATE_LIMIT_WINDOW_HOURS
+        sync: false
+      - key: RETENTION_REFRESH_TOKENS_AFTER_EXPIRY_DAYS
+        sync: false
+      - key: RETENTION_VERIFICATION_REQUESTS_DAYS
+        sync: false
+      - key: RETENTION_CHAT_MESSAGES_DAYS
+        sync: false
+      - key: RETENTION_NEED_REFERENCE_DAYS_AFTER_COMPLETED
+        sync: false
+      - key: RETENTION_BID_MESSAGE_ATTACHMENT_DAYS
+        sync: false
+      - key: RETENTION_VERIFIED_PRIVATE_UPLOADS_DAYS
         sync: false

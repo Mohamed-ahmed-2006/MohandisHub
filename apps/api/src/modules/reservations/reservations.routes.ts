@@ -1,8 +1,9 @@
 import { Router } from 'express';
 
 import { authenticate } from '../../middleware/authenticate.js';
+import { loadAdminFromDb } from '../../middleware/load-admin-from-db.js';
 import { requireEmailVerified } from '../../middleware/require-email-verified.js';
-import { requireRole } from '../../middleware/require-role.js';
+import { requireAdminPermission, requireRole } from '../../middleware/require-role.js';
 import { requireVerified } from '../../middleware/require-verified.js';
 
 import { reservationsController } from './reservations.controller.js';
@@ -46,25 +47,39 @@ reservationsRouter.post(
   reservationsController.createReservation,
 );
 reservationsRouter.get('/my', reservationsController.listMyReservations);
-reservationsRouter.get('/disputes', requireRole('admin'), reservationsController.listDisputes);
+reservationsRouter.get(
+  '/disputes',
+  loadAdminFromDb,
+  requireRole('admin'),
+  requireAdminPermission('manage_transactions'),
+  reservationsController.listDisputes,
+);
 reservationsRouter.get(
   '/admin/action-failures',
+  loadAdminFromDb,
   requireRole('admin'),
+  requireAdminPermission('manage_transactions'),
   reservationsController.listActionFailures,
 );
 reservationsRouter.post(
   '/admin/action-failures/:failureId/replay',
+  loadAdminFromDb,
   requireRole('admin'),
+  requireAdminPermission('manage_transactions'),
   reservationsController.replayActionFailure,
 );
 reservationsRouter.post(
   '/admin/:reservationId/reconcile',
+  loadAdminFromDb,
   requireRole('admin'),
+  requireAdminPermission('manage_transactions'),
   reservationsController.reconcileReservation,
 );
 reservationsRouter.post(
   '/disputes/:disputeId/resolve',
+  loadAdminFromDb,
   requireRole('admin'),
+  requireAdminPermission('manage_transactions'),
   reservationsController.resolveDispute,
 );
 

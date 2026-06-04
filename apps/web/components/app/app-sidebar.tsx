@@ -39,16 +39,48 @@ export const AppSidebar = ({
   const { status } = useAppStatus();
   const [hasUnreadChat, setHasUnreadChat] = useState(false);
   const [hasUnreadJobs, setHasUnreadJobs] = useState(false);
+  const [hasUnreadBookings, setHasUnreadBookings] = useState(false);
+  const [hasUnreadWallet, setHasUnreadWallet] = useState(false);
+  const [hasUnreadNegotiations, setHasUnreadNegotiations] = useState(false);
 
   useEffect(() => {
     if (!accessToken) return;
     let activeSocket: Awaited<ReturnType<typeof getChatSocket>> | null = null;
     const onNotification = (data: { type?: string }) => {
-      if (data.type === 'new_message' || data.type === 'new_application_message') {
+      const type = data.type ?? '';
+      if (
+        type === 'new_message' ||
+        type === 'new_application_message' ||
+        type === 'chat_message'
+      ) {
         setHasUnreadChat(true);
-      } else {
-        setHasUnreadJobs(true);
+        return;
       }
+      if (type.startsWith('reservation_')) {
+        setHasUnreadBookings(true);
+        return;
+      }
+      if (type.startsWith('wallet_')) {
+        setHasUnreadWallet(true);
+        return;
+      }
+      if (type === 'price_negotiation') {
+        setHasUnreadNegotiations(true);
+        return;
+      }
+      if (
+        type.startsWith('job_') ||
+        type === 'application_status' ||
+        type.startsWith('milestone_') ||
+        type.startsWith('need_bid_') ||
+        type === 'need_closed' ||
+        type.startsWith('service_') ||
+        type.startsWith('review_')
+      ) {
+        setHasUnreadJobs(true);
+        return;
+      }
+      setHasUnreadJobs(true);
     };
     void getChatSocket(accessToken).then((sock) => {
       if (!sock) return;
@@ -64,12 +96,20 @@ export const AppSidebar = ({
   useEffect(() => {
     if (pathname.includes('/app/chat')) setHasUnreadChat(false);
     if (pathname === buildLocalePath(locale, '/app')) setHasUnreadJobs(false);
+    if (pathname.includes('/app/bookings')) setHasUnreadBookings(false);
+    if (pathname.includes('/app/settings/wallet')) setHasUnreadWallet(false);
+    if (pathname.includes('/app/negotiations')) setHasUnreadNegotiations(false);
   }, [pathname, locale]);
 
   const navItems: NavItem[] = [
     { href: '/app', label: dictionary.nav.home },
     { href: '/app/bookings', label: dictionary.nav.bookings },
     { href: '/app/services', label: dictionary.nav.myServices ?? dictionary.nav.browse, roles: ['expert', 'craftsman', 'business'] },
+    {
+      href: '/app/negotiations',
+      label: dictionary.nav.negotiations ?? 'Price negotiations',
+      roles: ['expert', 'craftsman', 'business'],
+    },
     { href: '/app/advertisements', label: dictionary.nav.advertisements ?? 'My Ads', roles: ['expert', 'craftsman', 'business'] },
     { href: '/app/calendar', label: dictionary.nav.calendar ?? dictionary.calendarPage?.title ?? dictionary.nav.home, roles: ['expert', 'craftsman', 'business'] },
     { href: '/app/settings', label: dictionary.nav.settings },
@@ -131,6 +171,15 @@ export const AppSidebar = ({
               )}
               {item.href === '/app' && hasUnreadJobs && (
                 <span style={{ width: '8px', height: '8px', background: '#3b82f6', borderRadius: '50%' }} />
+              )}
+              {item.href === '/app/bookings' && hasUnreadBookings && (
+                <span style={{ width: '8px', height: '8px', background: '#f97316', borderRadius: '50%' }} />
+              )}
+              {item.href === '/app/settings' && hasUnreadWallet && (
+                <span style={{ width: '8px', height: '8px', background: '#22c55e', borderRadius: '50%' }} />
+              )}
+              {item.href === '/app/negotiations' && hasUnreadNegotiations && (
+                <span style={{ width: '8px', height: '8px', background: '#a855f7', borderRadius: '50%' }} />
               )}
             </Link>
           ))}

@@ -1,5 +1,6 @@
 import { asyncHandler } from '../../utils/async-handler.js';
 import { HttpError } from '../../utils/http-error.js';
+import { logAudit } from '../audit/audit.service.js';
 
 import { ReservationsService } from './reservations.service.js';
 import {
@@ -23,11 +24,19 @@ import {
 
 const svc = new ReservationsService();
 
-function requireUser(req: { user?: { id: string; role?: string } }) {
+function requireUser(req: { user?: { id: string; role?: string; isAdmin?: boolean } }) {
   if (!req.user) {
     throw new HttpError({ statusCode: 401, code: 'UNAUTHORIZED', message: 'Auth required.' });
   }
   return req.user;
+}
+
+function reservationAdminRole(user: { role?: string; isAdmin?: boolean }): string {
+  return user.isAdmin ? 'admin' : (user.role ?? 'customer');
+}
+
+function requestIp(req: { ip?: string | undefined; socket?: { remoteAddress?: string | undefined } }): string | null {
+  return req.ip ?? req.socket?.remoteAddress ?? null;
 }
 
 function parseBody<T>(
@@ -432,7 +441,7 @@ const listDisputes = asyncHandler(async (req, res) => {
     100,
   );
   const status = (req.query.status as string | undefined) ?? undefined;
-  const data = await svc.listDisputes(user.id, user.role ?? 'customer', page, limit, status);
+  const data = await svc.listDisputes(user.id, reservationAdminRole(user), page, limit, status);
   res.json({ ok: true, data });
 });
 
@@ -447,7 +456,15 @@ const resolveDispute = asyncHandler(async (req, res) => {
     });
   }
   const input = parseBody(resolveDisputeSchema, req.body);
-  const data = await svc.resolveDispute(user.id, user.role ?? 'customer', disputeId, input);
+  const data = await svc.resolveDispute(user.id, reservationAdminRole(user), disputeId, input);
+  await logAudit({
+    actorId: user.id,
+    action: 'admin.reservation_dispute.resolve',
+    resourceType: 'reservation_dispute',
+    resourceId: disputeId,
+    details: input as Record<string, unknown>,
+    ip: requestIp(req),
+  });
   res.json({ ok: true, data });
 });
 
@@ -458,7 +475,7 @@ const listActionFailures = asyncHandler(async (req, res) => {
     Math.max(parseInt((req.query.limit as string | undefined) ?? '50', 10), 1),
     200,
   );
-  const data = await svc.listActionFailures(user.id, user.role ?? 'customer', onlyOpen, limit);
+  const data = await svc.listActionFailures(user.id, reservationAdminRole(user), onlyOpen, limit);
   res.json({ ok: true, data });
 });
 
@@ -472,7 +489,15 @@ const replayActionFailure = asyncHandler(async (req, res) => {
       message: 'failureId is required.',
     });
   }
-  const data = await svc.replayActionFailure(user.id, user.role ?? 'customer', failureId);
+  const data = await svc.replayActionFailure(user.id, reservationAdminRole(user), failureId);
+  await logAudit({
+    actorId: user.id,
+    action: 'admin.reservation_action_failure.replay',
+    resourceType: 'reservation_action_failure',
+    resourceId: failureId,
+    details: { replayed: true },
+    ip: requestIp(req),
+  });
   res.json({ ok: true, data });
 });
 
@@ -486,7 +511,15 @@ const reconcileReservation = asyncHandler(async (req, res) => {
       message: 'reservationId is required.',
     });
   }
-  const data = await svc.reconcileReservationMoney(user.id, user.role ?? 'customer', reservationId);
+  const data = await svc.reconcileReservationMoney(user.id, reservationAdminRole(user), reservationId);
+  await logAudit({
+    actorId: user.id,
+    action: 'admin.reservation.reconcile',
+    resourceType: 'reservation',
+    resourceId: reservationId,
+    details: { status: data.status, settlementStatus: data.settlementStatus },
+    ip: requestIp(req),
+  });
   res.json({ ok: true, data });
 });
 

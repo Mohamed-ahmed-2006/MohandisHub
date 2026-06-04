@@ -205,7 +205,9 @@
 }
 
 .app-notification-item {
-  display: block;
+  display: flex;
+  align-items: flex-start;
+  gap: 0.65rem;
   width: 100%;
   text-align: left;
   padding: 0.75rem 1rem;
@@ -214,6 +216,24 @@
   background: transparent;
   cursor: pointer;
   font: inherit;
+}
+
+.app-notification-item-icon {
+  flex-shrink: 0;
+  margin-top: 0.1rem;
+  color: hsl(var(--primary));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.app-notification-type-icon {
+  opacity: 0.9;
+}
+
+.app-notification-item-body {
+  flex: 1;
+  min-width: 0;
 }
 
 .app-notification-item:hover {

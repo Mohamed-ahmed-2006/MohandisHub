@@ -1,6 +1,7 @@
 import { Router } from 'express';
 
 import { authenticate } from '../../middleware/authenticate.js';
+import { loadAdminFromDb } from '../../middleware/load-admin-from-db.js';
 import { requireEmailVerified } from '../../middleware/require-email-verified.js';
 import { requireAdminPermission, requireRole } from '../../middleware/require-role.js';
 import { requireVerified } from '../../middleware/require-verified.js';
@@ -26,6 +27,7 @@ advertisementsRouter.get(
   '/admin/all',
   authenticate,
   requireEmailVerified,
+  loadAdminFromDb,
   requireRole('admin'),
   requireAdminPermission('manage_ads'),
   advertisementsController.listAllAds,
@@ -34,6 +36,7 @@ advertisementsRouter.put(
   '/admin/:id/status',
   authenticate,
   requireEmailVerified,
+  loadAdminFromDb,
   requireRole('admin'),
   requireAdminPermission('manage_ads'),
   advertisementsController.adminSetStatus,
@@ -42,6 +45,7 @@ advertisementsRouter.post(
   '/admin/:id/schedule',
   authenticate,
   requireEmailVerified,
+  loadAdminFromDb,
   requireRole('admin'),
   requireAdminPermission('manage_ad_scheduling'),
   advertisementsController.adminSchedule,
@@ -50,6 +54,7 @@ advertisementsRouter.put(
   '/admin/:id/pricing',
   authenticate,
   requireEmailVerified,
+  loadAdminFromDb,
   requireRole('admin'),
   requireAdminPermission('manage_ad_pricing'),
   advertisementsController.adminPricingOverride,
@@ -58,6 +63,7 @@ advertisementsRouter.get(
   '/admin/controls',
   authenticate,
   requireEmailVerified,
+  loadAdminFromDb,
   requireRole('admin'),
   requireAdminPermission('manage_ad_pricing'),
   advertisementsController.getAdControls,
@@ -66,6 +72,7 @@ advertisementsRouter.put(
   '/admin/controls',
   authenticate,
   requireEmailVerified,
+  loadAdminFromDb,
   requireRole('admin'),
   requireAdminPermission('manage_ad_pricing'),
   advertisementsController.updateAdminAdControls,

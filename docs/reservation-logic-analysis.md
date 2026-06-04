@@ -4,8 +4,8 @@
 
 The app has **two** booking-related systems:
 
-1. **Reservations** (V2) — Request → Provider accepts/rejects → Hold/capture/refund. Used for **service bookings** (home → Book a service) and **job interviews** (expert books slot with business).
-2. **Bookings** — Immediate payment (customer debited, provider + commission credited). Simpler flow; not the primary path from the current UI.
+1. **Reservations** — Request → Provider accepts/rejects → Hold/capture/refund. Used for **service bookings** (home → Book a service) and **job interviews** (expert books slot with business).
+2. **Legacy bookings** — Removed from the launch API/client surface. Historical `bookings` table migrations may remain, but `/api/bookings` is not mounted and the old immediate-payment module/client code has been removed.
 
 This document focuses on **Reservations** as used from the app (customer + expert/provider).
 
@@ -79,9 +79,9 @@ This document focuses on **Reservations** as used from the app (customer + exper
 - **Recommendation:** Optionally show pending reservation count or list on Calendar (e.g. “You have N pending requests”) and/or link to Bookings for decisions.
 
 ### 4. **Bookings vs reservations terminology**
-- **Issue:** The **Bookings** page and route (`/app/bookings`) show **reservations** (pending/accepted/completed), not the legacy “bookings” (immediate payment). The **bookings** API (`/api/bookings`) is a separate flow (instant pay). So “Bookings” in the nav is really “Reservations & requests.”
-- **Impact:** Possible confusion if you later add the other booking type or rename things.
-- **Recommendation:** Consider renaming the screen/route to “Reservations” or “Requests & reservations” and keep “Bookings” for the instant-payment flow if you expose it.
+- **Issue:** The **Bookings** page and route (`/app/bookings`) show reservations (pending/accepted/completed). The legacy immediate-payment bookings API/client has been removed for launch.
+- **Impact:** Lower money-flow risk: users have one booking flow with request, hold, completion, cancellation, and dispute states.
+- **Recommendation:** If the product keeps the “Bookings” label, treat it as the user-facing name for reservations. Do not reintroduce an instant-payment booking flow without a separate payment/security review.
 
 ### 5. **Rejection reason and suggested slots**
 - **Issue:** When the provider **rejects** from the UI, the code sends a fixed reason: `rejectionReason: 'Rejected by provider'`. So the customer always sees that text; the provider cannot type a custom reason. When rejection is due to **slot conflict**, the backend fills `suggestedSlots` and a generic message; the UI shows both, which is good, but the provider cannot add a short note.
@@ -107,8 +107,7 @@ This document focuses on **Reservations** as used from the app (customer + exper
 - **Impact:** Depends on how prominently disputes and resolution are shown in the Bookings detail view.
 
 ### 10. **Two systems: Reservations vs Bookings**
-- **Issue:** **Bookings** (table/API) are a separate model: immediate payment, no accept/reject. **Reservations** are request → accept → hold → complete/cancel. The app’s main “book a service” flow uses **Reservations**. If any screen or link used the **bookings** API by mistake, customers would be charged immediately with no provider accept step.
-- **Impact:** Ensure all “book this service” entry points use **reservations** (as they do today with `service-booking-modal` and `createReservation`).
+- **Status:** Resolved for launch. The old immediate-payment bookings API/client/shared types were removed from the launch code path. The active booking product uses reservations only.
 
 ---
 
@@ -125,7 +124,7 @@ This document focuses on **Reservations** as used from the app (customer + exper
 | 7 | Business only sees provider side (OK for job interviews) | Info | BookingsScreen |
 | 8 | No auto-expiry of long-pending reservations | Medium | Reservations lifecycle |
 | 9 | Dispute resolution UX for customer | Low | BookingsScreen detail |
-| 10 | Two booking systems; ensure UI always uses reservations for “book service” | Info | App-wide |
+| 10 | Legacy immediate-payment bookings removed from launch code path | Resolved | App-wide |
 
 ---
 
@@ -133,4 +132,4 @@ This document focuses on **Reservations** as used from the app (customer + exper
 
 - **Customer:** `apps/web/components/app/service-booking-modal.tsx` (create), `apps/web/components/app/bookings-screen.tsx` (list, cancel, finish, location, call).
 - **Provider:** Same `bookings-screen.tsx` with `role: 'provider'` (and for expert, merged with `role: 'customer'`); accept/reject via `decideReservation`. Calendar: `apps/web/components/app/calendar-screen.tsx` (slots + profile).
-- **API:** `apps/api/src/modules/reservations/` (create, list, decide, cancel, finish, call, etc.), `apps/api/src/modules/bookings/` (separate immediate-payment flow).
+- **API:** `apps/api/src/modules/reservations/` (create, list, decide, cancel, finish, call, etc.). Legacy immediate-payment bookings module/client code has been removed from the launch surface.

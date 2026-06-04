@@ -7,7 +7,6 @@ import { advertisementsRouter } from '../modules/advertisements/advertisements.r
 import { analyticsRouter } from '../modules/analytics/analytics.routes.js';
 import { appRouter } from '../modules/app/app.routes.js';
 import { authRouter } from '../modules/auth/auth.routes.js';
-import { businessTeamsRouter } from '../modules/business-teams/business-teams.routes.js';
 import { chatRouter } from '../modules/chat/chat.routes.js';
 import { favoritesRouter } from '../modules/favorites/favorites.routes.js';
 import { geoRouter } from '../modules/geo/geo.routes.js';
@@ -62,7 +61,6 @@ apiRouter.use('/otp', authRateLimiter, otpRouter);
 apiRouter.use('/users', usersRouter);
 apiRouter.use('/profiles', profilesRouter);
 apiRouter.use('/admin', adminRouter);
-apiRouter.use('/business/team', businessTeamsRouter);
 apiRouter.use('/analytics', analyticsRouter);
 apiRouter.use('/advertisements', advertisementsRouter);
 apiRouter.use('/support', supportRouter);

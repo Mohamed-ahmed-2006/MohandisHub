@@ -3,10 +3,12 @@ import { Router } from 'express';
 import { z } from 'zod';
 
 import { authenticate } from '../../middleware/authenticate.js';
+import { loadAdminFromDb } from '../../middleware/load-admin-from-db.js';
 import { requireEmailVerified } from '../../middleware/require-email-verified.js';
-import { requireRole } from '../../middleware/require-role.js';
+import { requireAdminPermission, requireRole } from '../../middleware/require-role.js';
 import { asyncHandler } from '../../utils/async-handler.js';
 import { HttpError } from '../../utils/http-error.js';
+import { logAudit } from '../audit/audit.service.js';
 
 import {
   createMediaAsset,
@@ -49,7 +51,9 @@ mediaRouter.get(
   '/',
   authenticate,
   requireEmailVerified,
+  loadAdminFromDb,
   requireRole('admin'),
+  requireAdminPermission('manage_media'),
   asyncHandler(async (req, res) => {
     const usageRaw = req.query.usageType;
     let usageType: z.infer<typeof usageTypeSchema> | undefined;
@@ -69,7 +73,9 @@ mediaRouter.post(
   '/',
   authenticate,
   requireEmailVerified,
+  loadAdminFromDb,
   requireRole('admin'),
+  requireAdminPermission('manage_media'),
   asyncHandler(async (req, res) => {
     const parsed = createSchema.safeParse(req.body);
     if (!parsed.success) {
@@ -87,6 +93,21 @@ mediaRouter.post(
       endsAt: payload.endsAt ? new Date(payload.endsAt) : null,
       createdBy: req.user?.id ?? null,
     });
+    await logAudit({
+      actorId: req.user?.id ?? null,
+      action: 'admin.media.create',
+      resourceType: 'media_asset',
+      resourceId: row.id,
+      details: {
+        title: row.title,
+        usageType: row.usage_type,
+        active: row.active,
+        sortOrder: row.sort_order,
+        startsAt: row.starts_at,
+        endsAt: row.ends_at,
+      },
+      ip: req.ip ?? (req.socket?.remoteAddress ?? undefined) ?? null,
+    });
     res.status(201).json({ ok: true, data: row } satisfies ApiSuccessBody<typeof row>);
   }),
 );
@@ -95,7 +116,9 @@ mediaRouter.patch(
   '/:id',
   authenticate,
   requireEmailVerified,
+  loadAdminFromDb,
   requireRole('admin'),
+  requireAdminPermission('manage_media'),
   asyncHandler(async (req, res) => {
     const mediaId = req.params.id;
     if (!mediaId) {
@@ -119,6 +142,22 @@ mediaRouter.patch(
     if (!row) {
       throw new HttpError({ statusCode: 404, code: 'MEDIA_NOT_FOUND', message: 'Media asset not found.' });
     }
+    await logAudit({
+      actorId: req.user?.id ?? null,
+      action: 'admin.media.update',
+      resourceType: 'media_asset',
+      resourceId: mediaId,
+      details: {
+        changedFields: Object.keys(payload).filter((key) => key !== 'imageUrl'),
+        title: row.title,
+        usageType: row.usage_type,
+        active: row.active,
+        sortOrder: row.sort_order,
+        startsAt: row.starts_at,
+        endsAt: row.ends_at,
+      },
+      ip: req.ip ?? (req.socket?.remoteAddress ?? undefined) ?? null,
+    });
     res.json({ ok: true, data: row } satisfies ApiSuccessBody<typeof row>);
   }),
 );
@@ -127,7 +166,9 @@ mediaRouter.delete(
   '/:id',
   authenticate,
   requireEmailVerified,
+  loadAdminFromDb,
   requireRole('admin'),
+  requireAdminPermission('manage_media'),
   asyncHandler(async (req, res) => {
     const mediaId = req.params.id;
     if (!mediaId) {
@@ -137,6 +178,14 @@ mediaRouter.delete(
     if (!deleted) {
       throw new HttpError({ statusCode: 404, code: 'MEDIA_NOT_FOUND', message: 'Media asset not found.' });
     }
+    await logAudit({
+      actorId: req.user?.id ?? null,
+      action: 'admin.media.delete',
+      resourceType: 'media_asset',
+      resourceId: mediaId,
+      details: { deleted: true },
+      ip: req.ip ?? (req.socket?.remoteAddress ?? undefined) ?? null,
+    });
     res.json({ ok: true, data: { deleted: true } } satisfies ApiSuccessBody<{ deleted: boolean }>);
   }),
 );

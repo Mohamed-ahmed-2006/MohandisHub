@@ -1,5 +1,6 @@
 import { asyncHandler } from '../../utils/async-handler.js';
 import { HttpError } from '../../utils/http-error.js';
+import { logAudit } from '../audit/audit.service.js';
 
 import { AdvertisementsService } from './advertisements.service.js';
 import {
@@ -17,6 +18,10 @@ const svc = new AdvertisementsService();
 function requireUser(req: { user?: { id: string } }) {
   if (!req.user) throw new HttpError({ statusCode: 401, code: 'UNAUTHORIZED', message: 'Auth required.' });
   return req.user;
+}
+
+function requestIp(req: { ip?: string | undefined; socket?: { remoteAddress?: string | undefined } }): string | null {
+  return req.ip ?? req.socket?.remoteAddress ?? null;
 }
 
 function parseBody<T>(
@@ -91,23 +96,54 @@ const trackClick = asyncHandler(async (req, res) => {
 });
 
 const adminSetStatus = asyncHandler(async (req, res) => {
+  const user = requireUser(req);
   const input = req.body as { status?: 'active' | 'paused_by_admin' | 'cancelled'; reason?: string };
   if (!input.status) {
     throw new HttpError({ statusCode: 400, code: 'VALIDATION_ERROR', message: 'status is required.' });
   }
   const data = await svc.applyAdminStatus(req.params.id!, input.status, input.reason);
+  await logAudit({
+    actorId: user.id,
+    action: 'admin.ad.status',
+    resourceType: 'advertisement',
+    resourceId: req.params.id!,
+    details: { status: input.status, reason: input.reason ?? null },
+    ip: requestIp(req),
+  });
   res.json({ ok: true, data });
 });
 
 const adminSchedule = asyncHandler(async (req, res) => {
+  const user = requireUser(req);
   const input = parseBody(adminScheduleSchema, req.body);
   const data = await svc.applyAdminSchedule(req.params.id!, input);
+  await logAudit({
+    actorId: user.id,
+    action: 'admin.ad.schedule',
+    resourceType: 'advertisement',
+    resourceId: req.params.id!,
+    details: {
+      startsAt: input.startsAt ?? null,
+      expiresAt: input.expiresAt ?? null,
+      reason: input.reason ?? null,
+    },
+    ip: requestIp(req),
+  });
   res.json({ ok: true, data });
 });
 
 const adminPricingOverride = asyncHandler(async (req, res) => {
+  const user = requireUser(req);
   const input = parseBody(adminPricingOverrideSchema, req.body);
   const data = await svc.applyAdminPricingOverride(req.params.id!, input);
+  await logAudit({
+    actorId: user.id,
+    action: 'admin.ad.pricing_override',
+    resourceType: 'advertisement',
+    resourceId: req.params.id!,
+    details: { amount: input.amount },
+    ip: requestIp(req),
+  });
   res.json({ ok: true, data });
 });
 
@@ -120,6 +156,14 @@ const updateAdminAdControls = asyncHandler(async (req, res) => {
   const user = requireUser(req);
   const input = parseBody(adminAdControlsSchema, req.body);
   const data = await svc.updateAdminAdControls(user.id, input);
+  await logAudit({
+    actorId: user.id,
+    action: 'admin.ad.controls_update',
+    resourceType: 'advertisement_controls',
+    resourceId: null,
+    details: { acceptAds: input.acceptAds, pricePerDay: input.pricePerDay },
+    ip: requestIp(req),
+  });
   res.json({ ok: true, data });
 });
 

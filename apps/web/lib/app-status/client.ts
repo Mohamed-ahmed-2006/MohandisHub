@@ -59,7 +59,7 @@ function getDefaultAppStatus(): AppStatus {
     sidebarHiddenHrefs: [],
     paymentMethodsEnabled: parsePaymentMethodsEnabled(null, {
       disableCryptoDeposits: false,
-      disableCardDeposits: false,
+      disableCardDeposits: true,
     }),
   };
 }

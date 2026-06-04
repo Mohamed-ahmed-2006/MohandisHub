@@ -1,10 +1,14 @@
 import { env } from '../../config/env.js';
 import { logger } from '../../config/logger.js';
 import { getPool } from '../../db/pool.js';
-import { deleteLocalUploadBasenameIfExists } from '../../lib/local-upload-storage.js';
+import {
+  deleteLocalUploadBasenameIfExists,
+  deleteLocalUploadRelativePathIfExists,
+} from '../../lib/local-upload-storage.js';
 import {
   deleteObjectsFromBucket,
   isSupabaseStorageConfigured,
+  parsePrivateUploadIdFromUrl,
   resolvePublicUploadRef,
   UPLOADS_BUCKET,
 } from '../../lib/supabase-storage.js';
@@ -41,6 +45,40 @@ export class RetentionService {
         logger.error('Retention: Supabase delete batch failed', {
           error: e instanceof Error ? e.message : 'unknown',
         });
+      }
+    }
+    return n;
+  }
+
+  private async deletePrivateUploadObjects(
+    rows: Array<{ bucket: string; storage_path: string }>,
+    dryRun: boolean,
+  ): Promise<number> {
+    if (dryRun) return 0;
+    let n = 0;
+    const supabaseByBucket = new Map<string, string[]>();
+    for (const row of rows) {
+      if (row.bucket === 'local') {
+        if (deleteLocalUploadRelativePathIfExists(row.storage_path)) {
+          n += 1;
+        }
+        continue;
+      }
+      const paths = supabaseByBucket.get(row.bucket) ?? [];
+      paths.push(row.storage_path);
+      supabaseByBucket.set(row.bucket, paths);
+    }
+    if (isSupabaseStorageConfigured()) {
+      for (const [bucket, paths] of supabaseByBucket.entries()) {
+        try {
+          await deleteObjectsFromBucket(bucket, paths);
+          n += paths.length;
+        } catch (e) {
+          logger.error('Retention: private storage delete batch failed', {
+            bucket,
+            error: e instanceof Error ? e.message : 'unknown',
+          });
+        }
       }
     }
     return n;
@@ -194,10 +232,57 @@ export class RetentionService {
         results.bidMessageAttachments = { skipped: true, reason: 'disabled' };
       }
 
-      results.verifiedPrivateUploads = {
-        skipped: true,
-        reason: 'not_implemented_requires_legal_review',
-      };
+      const privateUploadHours = mergeRetentionHours(
+        cat.verifiedPrivateUploads,
+        env.RETENTION_VERIFIED_PRIVATE_UPLOADS_DAYS,
+        'days',
+      );
+      if (privateUploadHours != null) {
+        const refs = await this.repo.listTerminalKycPrivateUploadReferences(
+          client,
+          privateUploadHours,
+        );
+        const identityIds = refs
+          .filter((row) => row.source_table === 'identity_documents')
+          .map((row) => row.source_id);
+        const academicIds = refs
+          .filter((row) => row.source_table === 'academic_records')
+          .map((row) => row.source_id);
+        const privateUploadIds = [
+          ...new Set(
+            refs.flatMap((row) =>
+              row.urls
+                .map((url) => (url ? parsePrivateUploadIdFromUrl(url) : null))
+                .filter((id): id is string => Boolean(id)),
+            ),
+          ),
+        ];
+        const clearedIdentity = await this.repo.clearTerminalIdentityDocumentImages(
+          client,
+          identityIds,
+          dryRun,
+        );
+        const clearedAcademic = await this.repo.clearTerminalAcademicRecordImages(
+          client,
+          academicIds,
+          dryRun,
+        );
+        const uploadRows = dryRun
+          ? await this.repo.listPrivateUploadsByIds(client, privateUploadIds)
+          : await this.repo.listUnreferencedPrivateUploadsByIds(client, privateUploadIds);
+        const deletedFiles = await this.deletePrivateUploadObjects(uploadRows, dryRun);
+        const deletedUploadRows = await this.repo.deletePrivateUploadsIfUnreferenced(
+          client,
+          uploadRows.map((row) => row.id),
+          dryRun,
+        );
+        results.verifiedPrivateUploads = {
+          deletedRows: clearedIdentity + clearedAcademic + deletedUploadRows,
+          deletedFiles,
+        };
+      } else {
+        results.verifiedPrivateUploads = { skipped: true, reason: 'disabled' };
+      }
 
       await client.query('COMMIT');
     } catch (e) {
@@ -255,6 +340,7 @@ export class RetentionService {
         RETENTION_NEED_REFERENCE_DAYS_AFTER_COMPLETED:
           env.RETENTION_NEED_REFERENCE_DAYS_AFTER_COMPLETED,
         RETENTION_BID_MESSAGE_ATTACHMENT_DAYS: env.RETENTION_BID_MESSAGE_ATTACHMENT_DAYS,
+        RETENTION_VERIFIED_PRIVATE_UPLOADS_DAYS: env.RETENTION_VERIFIED_PRIVATE_UPLOADS_DAYS,
       },
       recentLogs: await this.repo.listSweepLogs(20),
     };
@@ -295,7 +381,11 @@ export class RetentionService {
         env.RETENTION_BID_MESSAGE_ATTACHMENT_DAYS,
         'days',
       ),
-      verifiedPrivateUploads: null,
+      verifiedPrivateUploads: mergeRetentionHours(
+        cat.verifiedPrivateUploads,
+        env.RETENTION_VERIFIED_PRIVATE_UPLOADS_DAYS,
+        'days',
+      ),
     };
   }
 }

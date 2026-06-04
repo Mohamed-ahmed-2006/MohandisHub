@@ -80,10 +80,10 @@ export const AdminPanel = ({ locale, dictionary }: AdminPanelProps) => {
     { id: 'categories', label: dictionary.admin.tabs.categories, permission: 'manage_services' },
     { id: 'verifications', label: dictionary.admin.tabs.verifications, permission: 'manage_verifications' },
     { id: 'reviewReports', label: dictionary.admin.tabs.reviewReports ?? '', permission: 'manage_verifications' },
-    { id: 'support', label: dictionary.admin.tabs.support ?? '', permission: 'manage_users' },
+    { id: 'support', label: dictionary.admin.tabs.support ?? '', permission: 'manage_support' },
     { id: 'notifications', label: dictionary.admin.tabs.notifications ?? '', permission: 'manage_notifications' },
     { id: 'ads', label: dictionary.admin.tabs.ads ?? 'Advertisements', permission: 'manage_ads' },
-    { id: 'media', label: 'Media library', permission: 'manage_settings' },
+    { id: 'media', label: 'Media library', permission: 'manage_media' },
     { id: 'settings', label: dictionary.admin.tabs.settings, permission: 'manage_settings' },
     { id: 'retention', label: dictionary.admin.tabs.retention ?? 'Retention', permission: 'manage_retention' },
   ];
@@ -199,7 +199,11 @@ export const AdminPanel = ({ locale, dictionary }: AdminPanelProps) => {
           />
         )}
         {activeTab === 'ads' && (
-          <AdminAdsTab dictionary={dictionary} accessToken={accessToken} />
+          <AdminAdsTab
+            dictionary={dictionary}
+            accessToken={accessToken}
+            adminPermissions={authUser.adminPermissions ?? []}
+          />
         )}
         {activeTab === 'settings' && (
           <AdminSettingsTab

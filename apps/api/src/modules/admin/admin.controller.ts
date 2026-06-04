@@ -79,7 +79,7 @@ const supportService = new SupportService();
 const settingsService = new SettingsService();
 const reviewsService = new ReviewsService();
 
-function getAdminId(req: { user?: { id: string } }): string {
+function getAdminId(req: { user?: { id: string } | undefined }): string {
   if (!req.user) {
     throw new HttpError({
       statusCode: 401,
@@ -88,6 +88,38 @@ function getAdminId(req: { user?: { id: string } }): string {
     });
   }
   return req.user.id;
+}
+
+function requestIp(req: { ip?: string | undefined; socket?: { remoteAddress?: string | undefined } }): string | null {
+  return req.ip ?? req.socket?.remoteAddress ?? null;
+}
+
+function definedKeys(input: Record<string, unknown>): string[] {
+  return Object.entries(input)
+    .filter(([, value]) => value !== undefined)
+    .map(([key]) => key)
+    .sort();
+}
+
+async function logAdminAction(
+  req: {
+    user?: { id: string } | undefined;
+    ip?: string | undefined;
+    socket?: { remoteAddress?: string | undefined };
+  },
+  action: string,
+  resourceType: string,
+  resourceId: string | null,
+  details?: Record<string, unknown>,
+): Promise<void> {
+  await logAudit({
+    actorId: getAdminId(req),
+    action,
+    resourceType,
+    resourceId,
+    details: details ?? null,
+    ip: requestIp(req),
+  });
 }
 
 function hasPermission(
@@ -138,6 +170,13 @@ const sendNotification = asyncHandler(async (req, res) => {
     type: 'admin',
     title: body.title,
     message: body.message,
+  });
+  await logAdminAction(req, 'admin.notification.send', 'notification', null, {
+    target: body.target,
+    role: body.target === 'role' ? body.role : null,
+    userCount: userIds.length,
+    created,
+    title: body.title,
   });
   const response: ApiSuccessBody<{ created: number }> = { ok: true, data: { created } };
   res.json(response);
@@ -222,17 +261,17 @@ const getUserActivity = asyncHandler(async (req, res) => {
 const updateUser = asyncHandler(async (req, res) => {
   const input = parseValidation<UpdateUserInput>(updateUserSchema, req.body);
   const user = await adminService.updateUser(req.params.id!, input);
-  if (input.primaryRole !== undefined || input.isAdmin !== undefined) {
-    await logAudit({
-      actorId: getAdminId(req),
-      action: 'admin.user.update',
-      resourceType: 'user',
-      resourceId: req.params.id!,
-      details: {
+  const changedFields = definedKeys(input as Record<string, unknown>);
+  if (changedFields.length > 0) {
+    await logAdminAction(req, 'admin.user.update', 'user', req.params.id!, {
+      changedFields,
+      after: {
         ...(input.primaryRole !== undefined && { primaryRole: input.primaryRole }),
         ...(input.isAdmin !== undefined && { isAdmin: input.isAdmin }),
+        ...(input.adminPermissions !== undefined && { adminPermissions: input.adminPermissions }),
+        ...(input.planId !== undefined && { planId: input.planId }),
+        ...(input.isActive !== undefined && { isActive: input.isActive }),
       },
-      ip: req.ip ?? (req.socket?.remoteAddress ?? undefined) ?? null,
     });
   }
   const response: ApiSuccessBody<AdminUserListItem> = { ok: true, data: user };
@@ -241,30 +280,39 @@ const updateUser = asyncHandler(async (req, res) => {
 
 const deleteUser = asyncHandler(async (req, res) => {
   await adminService.deleteUser(req.params.id!);
+  await logAdminAction(req, 'admin.user.delete', 'user', req.params.id!, { deleted: true });
   const response: ApiSuccessBody<{ deleted: true }> = { ok: true, data: { deleted: true } };
   res.json(response);
 });
 
 const activateUser = asyncHandler(async (req, res) => {
   const user = await adminService.activateUser(req.params.id!);
+  await logAdminAction(req, 'admin.user.activate', 'user', req.params.id!, { isActive: true });
   const response: ApiSuccessBody<AdminUserListItem> = { ok: true, data: user };
   res.json(response);
 });
 
 const deactivateUser = asyncHandler(async (req, res) => {
   const user = await adminService.deactivateUser(req.params.id!);
+  await logAdminAction(req, 'admin.user.deactivate', 'user', req.params.id!, { isActive: false });
   const response: ApiSuccessBody<AdminUserListItem> = { ok: true, data: user };
   res.json(response);
 });
 
 const sendVerificationEmail = asyncHandler(async (req, res) => {
   const result = await adminService.sendVerificationEmail(req.params.id!);
+  await logAdminAction(req, 'admin.user.send_verification_email', 'user', req.params.id!, {
+    destination: result.destination,
+  });
   const response: ApiSuccessBody<{ sent: true; destination: string }> = { ok: true, data: result };
   res.json(response);
 });
 
 const verifyEmail = asyncHandler(async (req, res) => {
   const user = await adminService.verifyEmail(req.params.id!);
+  await logAdminAction(req, 'admin.user.verify_email', 'user', req.params.id!, {
+    emailVerified: true,
+  });
   const response: ApiSuccessBody<AdminUserListItem> = { ok: true, data: user };
   res.json(response);
 });
@@ -298,18 +346,29 @@ const updateUserCraftsmanProfile = asyncHandler(async (req, res) => {
 
 const freezeUserWallet = asyncHandler(async (req, res) => {
   const result = await adminService.freezeUserWallet(req.params.id!);
+  await logAdminAction(req, 'admin.wallet.freeze', 'wallet', req.params.id!, {
+    userId: req.params.id!,
+    walletFrozen: true,
+  });
   const response: ApiSuccessBody<AdminWalletFreezeResponse> = { ok: true, data: result };
   res.json(response);
 });
 
 const unfreezeUserWallet = asyncHandler(async (req, res) => {
   const result = await adminService.unfreezeUserWallet(req.params.id!);
+  await logAdminAction(req, 'admin.wallet.unfreeze', 'wallet', req.params.id!, {
+    userId: req.params.id!,
+    walletFrozen: false,
+  });
   const response: ApiSuccessBody<AdminWalletFreezeResponse> = { ok: true, data: result };
   res.json(response);
 });
 
 const forceLogoutUser = asyncHandler(async (req, res) => {
   const result = await adminService.forceLogoutUser(req.params.id!);
+  await logAdminAction(req, 'admin.user.force_logout', 'user', req.params.id!, {
+    revoked: true,
+  });
   const response: ApiSuccessBody<AdminForceLogoutResponse> = { ok: true, data: result };
   res.json(response);
 });
@@ -317,6 +376,11 @@ const forceLogoutUser = asyncHandler(async (req, res) => {
 const changeUserEmail = asyncHandler(async (req, res) => {
   const input = parseValidation<ChangeUserEmailInput>(changeUserEmailSchema, req.body);
   const result = await adminService.changeUserEmail(req.params.id!, input);
+  await logAdminAction(req, 'admin.user.change_email', 'user', req.params.id!, {
+    newEmail: input.newEmail,
+    sendVerificationEmail: input.sendVerificationEmail === true,
+    verificationEmailSent: result.verificationEmailSent,
+  });
   const response: ApiSuccessBody<typeof result> = { ok: true, data: result };
   res.json(response);
 });
@@ -332,6 +396,12 @@ const listPlans = asyncHandler(async (_req, res) => {
 const createPlan = asyncHandler(async (req, res) => {
   const input = parseValidation<CreatePlanInput>(createPlanSchema, req.body);
   const plan = await adminService.createPlan(input);
+  await logAdminAction(req, 'admin.plan.create', 'plan', plan.id, {
+    slug: plan.slug,
+    price: plan.price,
+    currency: plan.currency,
+    allowedRoles: plan.allowedRoles,
+  });
   const response: ApiSuccessBody<Plan> = { ok: true, data: plan };
   res.status(201).json(response);
 });
@@ -339,12 +409,20 @@ const createPlan = asyncHandler(async (req, res) => {
 const updatePlan = asyncHandler(async (req, res) => {
   const input = parseValidation<UpdatePlanInput>(updatePlanSchema, req.body);
   const plan = await adminService.updatePlan(req.params.id!, input);
+  await logAdminAction(req, 'admin.plan.update', 'plan', req.params.id!, {
+    changedFields: definedKeys(input as Record<string, unknown>),
+    slug: plan.slug,
+    price: plan.price,
+    currency: plan.currency,
+    allowedRoles: plan.allowedRoles,
+  });
   const response: ApiSuccessBody<Plan> = { ok: true, data: plan };
   res.json(response);
 });
 
 const deletePlan = asyncHandler(async (req, res) => {
   await adminService.deletePlan(req.params.id!);
+  await logAdminAction(req, 'admin.plan.delete', 'plan', req.params.id!, { deleted: true });
   const response: ApiSuccessBody<{ deleted: true }> = { ok: true, data: { deleted: true } };
   res.json(response);
 });
@@ -416,6 +494,11 @@ const approveManualInstapayDeposit = asyncHandler(async (req, res) => {
     req.body,
   );
   const row = await adminService.approveManualInstapayDeposit(req.params.id!, adminId, input);
+  await logAdminAction(req, 'admin.wallet.manual_deposit.approve', 'manual_deposit', req.params.id!, {
+    creditedAmountEgp: input.creditedAmountEgp,
+    userId: row.userId,
+    status: row.status,
+  });
   res.json({ ok: true, data: row });
 });
 
@@ -426,6 +509,11 @@ const rejectManualInstapayDeposit = asyncHandler(async (req, res) => {
     req.body,
   );
   const row = await adminService.rejectManualInstapayDeposit(req.params.id!, adminId, input);
+  await logAdminAction(req, 'admin.wallet.manual_deposit.reject', 'manual_deposit', req.params.id!, {
+    reason: input.reason,
+    userId: row.userId,
+    status: row.status,
+  });
   res.json({ ok: true, data: row });
 });
 
@@ -448,6 +536,11 @@ const completeManualInstapayWithdrawal = asyncHandler(async (req, res) => {
     req.body,
   );
   const row = await adminService.completeManualInstapayWithdrawal(req.params.id!, adminId, input);
+  await logAdminAction(req, 'admin.wallet.manual_withdrawal.complete', 'manual_withdrawal', req.params.id!, {
+    proofUploadId: input.proofUploadId,
+    userId: row.userId,
+    status: row.status,
+  });
   res.json({ ok: true, data: row });
 });
 
@@ -458,12 +551,23 @@ const rejectManualInstapayWithdrawal = asyncHandler(async (req, res) => {
     req.body,
   );
   const row = await adminService.rejectManualInstapayWithdrawal(req.params.id!, adminId, input);
+  await logAdminAction(req, 'admin.wallet.manual_withdrawal.reject', 'manual_withdrawal', req.params.id!, {
+    reason: input.reason,
+    userId: row.userId,
+    status: row.status,
+  });
   res.json({ ok: true, data: row });
 });
 
 const reverseTransaction = asyncHandler(async (req, res) => {
   const adminId = getAdminId(req);
   const txn = await adminService.reverseTransaction(req.params.id!, adminId);
+  await logAdminAction(req, 'admin.wallet.transaction.reverse', 'transaction', req.params.id!, {
+    userId: txn.userId,
+    type: txn.type,
+    amount: txn.amount,
+    status: txn.status,
+  });
   const response: ApiSuccessBody<Transaction> = { ok: true, data: txn };
   res.json(response);
 });
@@ -489,6 +593,12 @@ const listServices = asyncHandler(async (req, res) => {
 const updateServiceHandler = asyncHandler(async (req, res) => {
   const input = parseValidation<UpdateServiceInput>(updateServiceSchema, req.body);
   const service = await adminService.updateService(req.params.id!, input);
+  await logAdminAction(req, 'admin.service.update', 'service', req.params.id!, {
+    changedFields: definedKeys(input as Record<string, unknown>),
+    status: service.status,
+    isFeatured: service.isFeatured,
+    providerId: service.providerId,
+  });
   const response: ApiSuccessBody<AdminServiceListItem> = { ok: true, data: service };
   res.json(response);
 });
@@ -496,6 +606,10 @@ const updateServiceHandler = asyncHandler(async (req, res) => {
 const approveService = asyncHandler(async (req, res) => {
   const adminId = getAdminId(req);
   const service = await adminService.approveService(req.params.id!, adminId);
+  await logAdminAction(req, 'admin.service.approve', 'service', req.params.id!, {
+    providerId: service.providerId,
+    status: service.status,
+  });
   const response: ApiSuccessBody<AdminServiceListItem> = { ok: true, data: service };
   res.json(response);
 });
@@ -504,6 +618,11 @@ const rejectService = asyncHandler(async (req, res) => {
   const adminId = getAdminId(req);
   const input = parseValidation<RejectServiceInput>(rejectServiceSchema, req.body);
   const service = await adminService.rejectService(req.params.id!, input.reason, adminId);
+  await logAdminAction(req, 'admin.service.reject', 'service', req.params.id!, {
+    providerId: service.providerId,
+    status: service.status,
+    reason: input.reason,
+  });
   const response: ApiSuccessBody<AdminServiceListItem> = { ok: true, data: service };
   res.json(response);
 });
@@ -519,6 +638,11 @@ const listCategories = asyncHandler(async (_req, res) => {
 const createCategory = asyncHandler(async (req, res) => {
   const input = parseValidation<CreateCategoryInput>(createCategorySchema, req.body);
   const category = await adminService.createCategory(input);
+  await logAdminAction(req, 'admin.category.create', 'category', category.id, {
+    slug: category.slug,
+    nameEn: category.nameEn,
+    nameAr: category.nameAr,
+  });
   const response: ApiSuccessBody<ServiceCategory> = { ok: true, data: category };
   res.status(201).json(response);
 });
@@ -526,12 +650,18 @@ const createCategory = asyncHandler(async (req, res) => {
 const updateCategory = asyncHandler(async (req, res) => {
   const input = parseValidation<UpdateCategoryInput>(updateCategorySchema, req.body);
   const category = await adminService.updateCategory(req.params.id!, input);
+  await logAdminAction(req, 'admin.category.update', 'category', req.params.id!, {
+    changedFields: definedKeys(input as Record<string, unknown>),
+    slug: category.slug,
+    isActive: category.isActive,
+  });
   const response: ApiSuccessBody<ServiceCategory> = { ok: true, data: category };
   res.json(response);
 });
 
 const deleteCategory = asyncHandler(async (req, res) => {
   await adminService.deleteCategory(req.params.id!);
+  await logAdminAction(req, 'admin.category.delete', 'category', req.params.id!, { deleted: true });
   const response: ApiSuccessBody<{ deleted: true }> = { ok: true, data: { deleted: true } };
   res.json(response);
 });
@@ -557,6 +687,7 @@ const updateSettings = asyncHandler(async (req, res) => {
   const filtered = Object.fromEntries(
     Object.entries(input).filter(([, v]) => v !== undefined),
   ) as UpdateAppSettingsBody;
+  const before = await settingsService.getSettings();
   const settings = await settingsService.updateSettings(filtered, adminId);
   if (!settings) {
     throw new HttpError({
@@ -565,6 +696,14 @@ const updateSettings = asyncHandler(async (req, res) => {
       message: 'Failed to update app settings.',
     });
   }
+  const changedFields = definedKeys(filtered as Record<string, unknown>);
+  await logAdminAction(req, 'admin.settings.update', 'app_settings', settings.id, {
+    changedFields,
+    before: before
+      ? Object.fromEntries(changedFields.map((key) => [key, before[key as keyof AppSettings] ?? null]))
+      : null,
+    after: Object.fromEntries(changedFields.map((key) => [key, settings[key as keyof AppSettings] ?? null])),
+  });
   const response: ApiSuccessBody<AppSettings> = { ok: true, data: settings };
   res.json(response);
 });
@@ -606,6 +745,10 @@ const resolveReviewReport = asyncHandler(async (req, res) => {
   const decision = body.decision ?? 'dismissed';
   const hideReview = body.hideReview === true;
   await reviewsService.resolveReport(reportId, adminId, decision, hideReview);
+  await logAdminAction(req, 'admin.review_report.resolve', 'review_report', reportId, {
+    decision,
+    hideReview,
+  });
   res.json({ ok: true, data: { reportId, decision, hideReview } });
 });
 
@@ -616,6 +759,10 @@ const resolveReviewDispute = asyncHandler(async (req, res) => {
   const decision = body.decision ?? 'dismissed';
   const hideReview = body.hideReview === true;
   await reviewsService.resolveDispute(disputeId, adminId, decision, hideReview);
+  await logAdminAction(req, 'admin.review_dispute.resolve', 'review_dispute', disputeId, {
+    decision,
+    hideReview,
+  });
   res.json({ ok: true, data: { disputeId, decision, hideReview } });
 });
 
@@ -644,6 +791,11 @@ const updateSupportTicket = asyncHandler(async (req, res) => {
     await supportService.assign(ticketId, body.assignedTo ?? null, adminId);
   }
   const ticket = await supportService.getTicket(ticketId, '', true);
+  await logAdminAction(req, 'admin.support_ticket.update', 'support_ticket', ticketId, {
+    changedFields: definedKeys(body as Record<string, unknown>),
+    status: body.status ?? null,
+    assignedTo: body.assignedTo ?? null,
+  });
   res.json({ ok: true, data: ticket });
 });
 
@@ -653,6 +805,7 @@ const deleteSupportTicket = asyncHandler(async (req, res) => {
   if (!deleted) {
     throw new HttpError({ statusCode: 404, code: 'TICKET_NOT_FOUND', message: 'Ticket not found.' });
   }
+  await logAdminAction(req, 'admin.support_ticket.delete', 'support_ticket', ticketId, { deleted: true });
   res.json({ ok: true, data: { id: ticketId } });
 });
 

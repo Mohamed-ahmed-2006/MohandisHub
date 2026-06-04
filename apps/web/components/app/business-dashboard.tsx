@@ -9,6 +9,7 @@ import { BusinessJobsTab } from './business-jobs-tab';
 import { analyticsApiClient } from '@/lib/analytics/client';
 import { buildLocalePath } from '@/lib/i18n/path';
 import type { Dictionary, Locale } from '@/lib/i18n/types';
+import { negotiationsApiClient } from '@/lib/negotiations/client';
 import { reservationsApiClient } from '@/lib/reservations/client';
 import { servicesApiClient } from '@/lib/services/client';
 
@@ -50,6 +51,10 @@ export const BusinessDashboard = ({
   const [servicesLoading, setServicesLoading] = useState(false);
   const [analytics, setAnalytics] = useState<ProviderAnalytics | null>(null);
   const [analyticsLoading, setAnalyticsLoading] = useState(false);
+  const [overviewLoading, setOverviewLoading] = useState(false);
+  const [overviewNegNeedAction, setOverviewNegNeedAction] = useState(0);
+  const [overviewNegPending, setOverviewNegPending] = useState(0);
+  const [overviewOrdersPreview, setOverviewOrdersPreview] = useState<Reservation[]>([]);
 
   const loadOrders = useCallback(async () => {
     setOrdersLoading(true);
@@ -103,6 +108,43 @@ export const BusinessDashboard = ({
     if (tab === 'analytics') void loadAnalytics();
   }, [tab, loadAnalytics]);
 
+  useEffect(() => {
+    if (tab !== 'overview') return;
+    let cancelled = false;
+    void (async () => {
+      setOverviewLoading(true);
+      try {
+        const [negRes, ordRes] = await Promise.all([
+          negotiationsApiClient.list(accessToken, { role: 'provider', limit: 100 }),
+          reservationsApiClient.listMyReservations(accessToken, {
+            role: 'provider',
+            page: 1,
+            limit: 5,
+          }),
+        ]);
+        if (cancelled) return;
+        const pending = negRes.items.filter((n) => n.status === 'pending');
+        const needAction = pending.filter(
+          (n) => n.latestOfferedBy === n.customerId,
+        ).length;
+        setOverviewNegNeedAction(needAction);
+        setOverviewNegPending(pending.length);
+        setOverviewOrdersPreview(ordRes.items);
+      } catch {
+        if (!cancelled) {
+          setOverviewNegNeedAction(0);
+          setOverviewNegPending(0);
+          setOverviewOrdersPreview([]);
+        }
+      } finally {
+        if (!cancelled) setOverviewLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [tab, accessToken]);
+
   const d = dictionary.appHome?.suggestions?.business ?? {};
   const needsDict = (dictionary.needs ?? {}) as Record<string, string>;
   const nav = dictionary.nav ?? {};
@@ -116,6 +158,9 @@ export const BusinessDashboard = ({
   const suggestTitle = suggestions?.title ?? 'Suggested actions for businesses';
   const suggestItems = (suggestions?.items ?? []) as string[];
   const servicesPageDict = (dictionary as { servicesPage?: Record<string, string> }).servicesPage ?? {};
+  const np = (dictionary as { negotiation?: Record<string, string> }).negotiation ?? {};
+  const bo = (dictionary.appHome as { businessOverview?: Record<string, string> } | undefined)
+    ?.businessOverview;
 
   return (
     <section className="dashboard-section">
@@ -196,9 +241,64 @@ export const BusinessDashboard = ({
 
       {tab === 'overview' && (
         <div className="dashboard-empty-state">
+          {overviewLoading ? (
+            <p className="dashboard-empty">{common.loading ?? 'Loading...'}</p>
+          ) : (
+            <ul className="dashboard-cards" style={{ listStyle: 'none', padding: 0, margin: '0 0 1rem' }}>
+              <li className="dashboard-card" style={{ marginBottom: '0.75rem' }}>
+                <h4 className="dashboard-card-title">
+                  {bo?.negotiationsTitle ?? np.providerSectionTitle ?? 'Price negotiations'}
+                </h4>
+                <p className="dashboard-card-meta">
+                  {overviewNegNeedAction > 0
+                    ? (bo?.negotiationsNeedAction ?? '{count} offer(s) need your response.').replace(
+                        '{count}',
+                        String(overviewNegNeedAction),
+                      )
+                    : overviewNegPending > 0
+                      ? (bo?.negotiationsPending ?? '{count} open negotiation(s).').replace(
+                          '{count}',
+                          String(overviewNegPending),
+                        )
+                      : (bo?.negotiationsNone ?? np.noNegotiations ?? 'No negotiations yet.')}
+                </p>
+                <Link
+                  href={buildLocalePath(locale, '/app/negotiations')}
+                  className="dashboard-link-btn"
+                >
+                  {bo?.openNegotiationsInbox ?? np.openInbox ?? 'Open price negotiations'}
+                </Link>
+              </li>
+              <li className="dashboard-card" style={{ marginBottom: '0.75rem' }}>
+                <h4 className="dashboard-card-title">
+                  {bo?.recentOrdersTitle ?? navLabel('orders', 'Orders')}
+                </h4>
+                {overviewOrdersPreview.length === 0 ? (
+                  <p className="dashboard-empty" style={{ margin: 0 }}>
+                    {common.noOrders ?? 'No orders yet.'}
+                  </p>
+                ) : (
+                  <ul style={{ listStyle: 'none', padding: 0, margin: '0 0 0.5rem' }}>
+                    {overviewOrdersPreview.slice(0, 3).map((r) => (
+                      <li key={r.id} className="dashboard-card-meta" style={{ marginBottom: '0.35rem' }}>
+                        {r.serviceTitle ?? 'Reservation'} · {r.status} ·{' '}
+                        {new Date(r.createdAt).toLocaleDateString(undefined, {
+                          month: 'short',
+                          day: 'numeric',
+                        })}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                <Link href={buildLocalePath(locale, '/app/bookings')} className="dashboard-link-btn">
+                  {bo?.viewAllBookings ?? common.viewDetails ?? 'View bookings'}
+                </Link>
+              </li>
+            </ul>
+          )}
           <h4
             className="dashboard-section-title"
-            style={{ fontSize: '1rem', marginBottom: '0.75rem' }}
+            style={{ fontSize: '1rem', marginBottom: '0.75rem', marginTop: '0.5rem' }}
           >
             {needsDict.customerNeedsOverview ?? 'Customer Needs Overview (My Bids)'}
           </h4>

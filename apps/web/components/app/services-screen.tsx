@@ -1,6 +1,7 @@
 'use client';
 
-import type { PriceNegotiation, Service, ServiceCategory, UpdateServiceBody } from '@mohandishub/shared';
+import type { Service, ServiceCategory, UpdateServiceBody } from '@mohandishub/shared';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 
@@ -11,7 +12,6 @@ import { toAbsoluteAssetUrl } from '@/lib/asset-url';
 import { EGYPTIAN_CITIES } from '@/lib/data/egyptian-cities';
 import { buildLocalePath } from '@/lib/i18n/path';
 import type { Dictionary, Locale } from '@/lib/i18n/types';
-import { negotiationsApiClient } from '@/lib/negotiations/client';
 import { servicesApiClient } from '@/lib/services/client';
 import { uploadFile } from '@/lib/upload/client';
 
@@ -53,12 +53,6 @@ export const ServicesScreen = ({ locale, dictionary }: Props) => {
   const [editImages, setEditImages] = useState<string[]>([]);
   const [imageUploadBusy, setImageUploadBusy] = useState(false);
   const [savingEdit, setSavingEdit] = useState(false);
-  const [negotiations, setNegotiations] = useState<PriceNegotiation[]>([]);
-  const [negLoading, setNegLoading] = useState(false);
-  const [negBusyId, setNegBusyId] = useState<string | null>(null);
-  const [negCounterPrice, setNegCounterPrice] = useState<Record<string, string>>({});
-  const [negValidHours, setNegValidHours] = useState<Record<string, '24' | '48' | '168'>>({});
-
   const sp = dictionary.servicesPage ?? ({} as Record<string, string>);
   const np = (dictionary as { negotiation?: Record<string, string> }).negotiation ?? {};
   const { status } = useAppStatus();
@@ -105,23 +99,6 @@ export const ServicesScreen = ({ locale, dictionary }: Props) => {
   useEffect(() => {
     void load();
   }, [load]);
-
-  const loadNegotiations = useCallback(async () => {
-    if (!accessToken) return;
-    setNegLoading(true);
-    try {
-      const res = await negotiationsApiClient.list(accessToken, { role: 'provider', limit: 50 });
-      setNegotiations(res.items);
-    } catch {
-      setNegotiations([]);
-    } finally {
-      setNegLoading(false);
-    }
-  }, [accessToken]);
-
-  useEffect(() => {
-    void loadNegotiations();
-  }, [loadNegotiations]);
 
   const pickServiceImages = useCallback(
     async (fileList: FileList | null, current: string[], setUrls: (next: string[]) => void) => {
@@ -198,6 +175,7 @@ export const ServicesScreen = ({ locale, dictionary }: Props) => {
 
   const handleAction = async (service: Service, action: 'submit' | 'pause' | 'activate') => {
     if (!accessToken) return;
+    setError(null);
     try {
       if (action === 'submit') {
         await servicesApiClient.submitService(accessToken, service.id);
@@ -207,8 +185,8 @@ export const ServicesScreen = ({ locale, dictionary }: Props) => {
         await servicesApiClient.activateService(accessToken, service.id);
       }
       void load();
-    } catch {
-      // ignore
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Action failed');
     }
   };
 
@@ -306,149 +284,18 @@ export const ServicesScreen = ({ locale, dictionary }: Props) => {
           </button>
         </div>
 
-        <section className="services-negotiations-section" aria-labelledby="negotiations-heading">
-          <div className="services-negotiations-header">
-            <h2 id="negotiations-heading" className="services-negotiations-title">
-              {np.providerSectionTitle ?? 'Price negotiations'}
-            </h2>
-            <button type="button" className="dashboard-link-btn" onClick={() => void loadNegotiations()}>
-              {np.refresh ?? 'Refresh'}
-            </button>
-          </div>
-          {negLoading ? (
-            <p className="services-negotiations-muted">{dictionary.common?.loading ?? 'Loading...'}</p>
-          ) : negotiations.length === 0 ? (
-            <p className="services-negotiations-muted">{np.noNegotiations ?? 'No negotiations yet.'}</p>
-          ) : (
-            <ul className="services-negotiations-list">
-              {negotiations.map((n) => {
-                const providerTurn = n.status === 'pending' && n.latestOfferedBy === n.customerId;
-                const hKey = n.id;
-                const validH = negValidHours[hKey] ?? '48';
-                return (
-                  <li key={n.id} className="services-negotiation-card">
-                    <p className="services-negotiation-title">{n.serviceTitle ?? 'Service'}</p>
-                    <p className="services-negotiation-meta">
-                      {n.customerName ?? 'Customer'} · {n.status} · {n.latestAmount} {n.currency}
-                    </p>
-                    {n.status === 'pending' && providerTurn && (
-                      <div className="services-negotiation-actions">
-                        <label className="services-negotiation-label">{np.validForLabel}</label>
-                        <select
-                          className="dashboard-select services-negotiation-select"
-                          value={validH}
-                          onChange={(e) =>
-                            setNegValidHours((prev) => ({
-                              ...prev,
-                              [hKey]: e.target.value as '24' | '48' | '168',
-                            }))
-                          }
-                        >
-                          <option value="24">{np.hours24 ?? '24 hours'}</option>
-                          <option value="48">{np.hours48 ?? '48 hours'}</option>
-                          <option value="168">{np.hours168 ?? '7 days'}</option>
-                        </select>
-                        <div className="services-negotiation-btn-row">
-                          <button
-                            type="button"
-                            className="dashboard-btn dashboard-btn--primary"
-                            disabled={negBusyId === n.id}
-                            onClick={() => {
-                              void (async () => {
-                                if (!accessToken) return;
-                                setNegBusyId(n.id);
-                                try {
-                                  await negotiationsApiClient.respond(accessToken, n.id, {
-                                    decision: 'accept',
-                                    validForHours: validH === '24' ? 24 : validH === '48' ? 48 : 168,
-                                  });
-                                  await loadNegotiations();
-                                } catch (err) {
-                                  setError(err instanceof Error ? err.message : 'Failed');
-                                } finally {
-                                  setNegBusyId(null);
-                                }
-                              })();
-                            }}
-                          >
-                            {np.accept ?? 'Accept'}
-                          </button>
-                          <button
-                            type="button"
-                            className="dashboard-btn dashboard-btn--secondary"
-                            disabled={negBusyId === n.id}
-                            onClick={() => {
-                              void (async () => {
-                                if (!accessToken) return;
-                                setNegBusyId(n.id);
-                                try {
-                                  await negotiationsApiClient.respond(accessToken, n.id, {
-                                    decision: 'reject',
-                                  });
-                                  await loadNegotiations();
-                                } catch (err) {
-                                  setError(err instanceof Error ? err.message : 'Failed');
-                                } finally {
-                                  setNegBusyId(null);
-                                }
-                              })();
-                            }}
-                          >
-                            {np.reject ?? 'Reject'}
-                          </button>
-                        </div>
-                        <label className="services-negotiation-label">{np.counterPrice}</label>
-                        <input
-                          type="number"
-                          className="dashboard-input services-negotiation-input"
-                          min={0}
-                          step="0.01"
-                          value={negCounterPrice[n.id] ?? ''}
-                          onChange={(e) =>
-                            setNegCounterPrice((prev) => ({ ...prev, [n.id]: e.target.value }))
-                          }
-                        />
-                        <button
-                          type="button"
-                          className="dashboard-btn dashboard-btn--secondary"
-                          disabled={negBusyId === n.id || !negCounterPrice[n.id]}
-                          onClick={() => {
-                            const p = parseFloat(negCounterPrice[n.id] ?? '');
-                            if (!Number.isFinite(p) || p <= 0) return;
-                            void (async () => {
-                              if (!accessToken) return;
-                              setNegBusyId(n.id);
-                              try {
-                                await negotiationsApiClient.respond(accessToken, n.id, {
-                                  decision: 'counter',
-                                  counterPrice: p,
-                                });
-                                setNegCounterPrice((prev) => {
-                                  const next = { ...prev };
-                                  delete next[n.id];
-                                  return next;
-                                });
-                                await loadNegotiations();
-                              } catch (err) {
-                                setError(err instanceof Error ? err.message : 'Failed');
-                              } finally {
-                                setNegBusyId(null);
-                              }
-                            })();
-                          }}
-                        >
-                          {np.counter ?? 'Counter'}
-                        </button>
-                      </div>
-                    )}
-                    {n.status === 'pending' && !providerTurn && (
-                      <p className="services-negotiations-muted">{np.waitingCustomer}</p>
-                    )}
-                  </li>
-                );
-              })}
-            </ul>
-          )}
+        <section
+          className="services-negotiations-teaser dashboard-card"
+          style={{ marginBottom: '1.25rem', padding: '1rem 1.15rem' }}
+          aria-label={np.providerSectionTitle ?? 'Price negotiations'}
+        >
+          <p className="dashboard-card-meta" style={{ marginBottom: '0.75rem', maxWidth: '42rem' }}>
+            {np.servicesPageTeaser ??
+              'Customer price offers are managed in a dedicated inbox so your service list stays easy to scan.'}
+          </p>
+          <Link href={buildLocalePath(locale, '/app/negotiations')} className="dashboard-primary-btn">
+            {np.openInbox ?? dictionary.nav?.negotiations ?? 'Open price negotiations'}
+          </Link>
         </section>
 
         {loading ? (
@@ -514,13 +361,13 @@ export const ServicesScreen = ({ locale, dictionary }: Props) => {
                   >
                     Delete
                   </button>
-                  {s.status === 'draft' && (
+                  {(s.status === 'draft' || s.status === 'rejected') && (
                     <button
                       type="button"
                       className="dashboard-link-btn"
                       onClick={() => void handleAction(s, 'submit')}
                     >
-                      {sp.submit ?? 'Submit'}
+                      {s.status === 'rejected' ? (sp.resubmit ?? 'Resubmit') : (sp.submit ?? 'Submit')}
                     </button>
                   )}
                   {s.status === 'active' && (

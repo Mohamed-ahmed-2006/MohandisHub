@@ -4,6 +4,7 @@
 
 import type { NotificationPayload } from '@mohandishub/shared';
 
+import { env } from '../../config/env.js';
 import { logger } from '../../config/logger.js';
 import { getSocketServer } from '../../lib/socket-instance.js';
 import { sendTransactionalEmail } from '../../utils/send-transactional-email.js';
@@ -15,6 +16,10 @@ import type { NotificationRow } from './notifications.repository.js';
 function isNotificationsTableMissing(err: unknown): boolean {
   const pg = err as { code?: string; message?: string };
   return pg?.code === '42P01' && typeof pg?.message === 'string' && pg.message.includes('notifications');
+}
+
+function canUseMissingTableFallback(): boolean {
+  return env.NODE_ENV !== 'production';
 }
 
 export type CreateNotificationInput = {
@@ -80,7 +85,7 @@ export class NotificationsService {
       }
       return this.toNotification(row);
     } catch (err) {
-      if (isNotificationsTableMissing(err)) {
+      if (isNotificationsTableMissing(err) && canUseMissingTableFallback()) {
         const now = new Date();
         return {
           id: 'stub-no-table',
@@ -138,7 +143,7 @@ export class NotificationsService {
         totalPages: Math.ceil(total / limit),
       };
     } catch (err) {
-      if (isNotificationsTableMissing(err)) {
+      if (isNotificationsTableMissing(err) && canUseMissingTableFallback()) {
         return { items: [], total: 0, page, limit, totalPages: 0 };
       }
       throw err;
@@ -149,7 +154,7 @@ export class NotificationsService {
     try {
       return await this.repo.getUnreadCount(userId);
     } catch (err) {
-      if (isNotificationsTableMissing(err)) return 0;
+      if (isNotificationsTableMissing(err) && canUseMissingTableFallback()) return 0;
       throw err;
     }
   }
@@ -158,7 +163,7 @@ export class NotificationsService {
     try {
       return await this.repo.markAsRead(id, userId);
     } catch (err) {
-      if (isNotificationsTableMissing(err)) return false;
+      if (isNotificationsTableMissing(err) && canUseMissingTableFallback()) return false;
       throw err;
     }
   }
@@ -167,7 +172,7 @@ export class NotificationsService {
     try {
       return await this.repo.markAllAsRead(userId);
     } catch (err) {
-      if (isNotificationsTableMissing(err)) return 0;
+      if (isNotificationsTableMissing(err) && canUseMissingTableFallback()) return 0;
       throw err;
     }
   }

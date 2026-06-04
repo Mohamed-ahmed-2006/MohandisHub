@@ -3,6 +3,7 @@ import type { PoolClient } from 'pg';
 
 import { getPool } from '../../db/pool.js';
 import { HttpError } from '../../utils/http-error.js';
+import { NotificationsService } from '../notifications/notifications.service.js';
 import { PlansService } from '../plans/plans.service.js';
 import { UsageQuotaService } from '../plans/usage-quota.service.js';
 import { SettingsService } from '../settings/settings.service.js';
@@ -21,7 +22,20 @@ export class NeedsService {
     private readonly walletRepo: WalletRepository = new WalletRepository(),
     private readonly plansService: PlansService = new PlansService(),
     private readonly usageQuotaService: UsageQuotaService = new UsageQuotaService(),
+    private readonly notificationsService: NotificationsService = new NotificationsService(),
   ) {}
+
+  private notifyUser(
+    userId: string,
+    type: string,
+    title: string,
+    message: string,
+    payload: Record<string, unknown>,
+  ): void {
+    void this.notificationsService
+      .createForUser(userId, { type, title, message, payload })
+      .catch(() => {});
+  }
 
   private async assertNeedsFeatureEnabled(): Promise<void> {
     const status = await this.settingsService.getAppStatus();
@@ -168,7 +182,23 @@ export class NeedsService {
     if (input.status) fields.status = input.status;
     if (input.title) fields.title = input.title;
     if (input.description) fields.description = input.description;
-    return this.repo.updateNeed(needId, fields);
+    const updated = await this.repo.updateNeed(needId, fields);
+    if (input.status === 'closed') {
+      const bids = await this.repo.listBidsForNeed(needId);
+      const seen = new Set<string>();
+      for (const b of bids) {
+        if (seen.has(b.expert_id)) continue;
+        seen.add(b.expert_id);
+        this.notifyUser(
+          b.expert_id,
+          'need_closed',
+          'Need closed',
+          'A need you bid on was closed by the customer.',
+          { needId, bidId: b.id },
+        );
+      }
+    }
+    return updated;
   }
 
   async createBid(needId: string, expertId: string, input: CreateBidInput) {
@@ -244,6 +274,13 @@ export class NeedsService {
           bidderLimitsForMeter.usageQuotas.new_bids_per_period,
         );
       }
+      this.notifyUser(
+        need.customer_id,
+        'need_bid_received',
+        'New bid on your need',
+        'A provider submitted a new bid.',
+        { needId, bidId: bid.id },
+      );
       return bid;
     } catch (err: unknown) {
       const pgErr = err as { code?: string };
@@ -382,6 +419,11 @@ export class NeedsService {
         });
       }
 
+      const losers = bids.filter(
+        (row) =>
+          row.id !== targetBid.id && (row.status === 'pending' || row.status === 'accepted'),
+      );
+
       await client.query(
         `UPDATE bids
          SET status = 'accepted', updated_at = now()
@@ -404,6 +446,22 @@ export class NeedsService {
       );
 
       await client.query('COMMIT');
+      this.notifyUser(
+        targetBid.expert_id,
+        'need_bid_awarded',
+        'Your bid was awarded',
+        'The customer awarded your bid on a need.',
+        { needId, bidId: targetBid.id },
+      );
+      for (const lo of losers) {
+        this.notifyUser(
+          lo.expert_id,
+          'need_bid_rejected',
+          'Bid not selected',
+          'Another bid was awarded for this need.',
+          { needId, bidId: lo.id },
+        );
+      }
       return { needId, bidId: targetBid.id, status: 'awarded' };
     } catch (err: unknown) {
       await client.query('ROLLBACK');
@@ -548,6 +606,13 @@ export class NeedsService {
       );
 
       await client.query('COMMIT');
+      this.notifyUser(
+        bid.expert_id,
+        'need_bid_paid',
+        'Bid payment received',
+        'The customer paid for your awarded bid.',
+        { needId, bidId },
+      );
       return { needId, bidId, paid: true, alreadyPaid: false };
     } catch (err: unknown) {
       await client.query('ROLLBACK');

@@ -318,7 +318,7 @@ export class SettingsService {
       sidebarHiddenHrefs: [],
       paymentMethodsEnabled: parsePaymentMethodsEnabled(null, {
         disableCryptoDeposits: false,
-        disableCardDeposits: false,
+        disableCardDeposits: true,
       }),
     };
   }

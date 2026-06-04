@@ -63,9 +63,15 @@ jobs:
       - name: Install
         run: npm ci
 
+      - name: Setup Supabase CLI
+        if: env.STAGING_DATABASE_URL != ''
+        uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
       - name: Run migrations against staging
         if: env.STAGING_DATABASE_URL != ''
-        run: npx supabase db push --db-url "$STAGING_DATABASE_URL"
+        run: supabase db push --db-url "$STAGING_DATABASE_URL"
         env:
           DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL }}
 

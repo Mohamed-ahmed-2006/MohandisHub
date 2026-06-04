@@ -312,6 +312,14 @@ export class WalletRepository {
     return parseInt(rows[0]?.c ?? '0', 10);
   }
 
+  async privateUploadBelongsToUser(uploadId: string, userId: string): Promise<boolean> {
+    const { rows } = await this.db.query<{ id: string }>(
+      `SELECT id FROM private_uploads WHERE id = $1 AND user_id = $2 LIMIT 1`,
+      [uploadId, userId],
+    );
+    return rows.length > 0;
+  }
+
   async createInstapayManualDepositRequest(params: {
     userId: string;
     walletId: string;
@@ -1419,6 +1427,14 @@ export class WalletRepository {
       );
       const row = wrRows[0] ?? null;
       if (!row || row.withdrawal_method !== 'instapay' || row.status !== 'awaiting_transfer') {
+        await client.query('ROLLBACK');
+        return null;
+      }
+      const { rows: proofRows } = await client.query<{ id: string }>(
+        `SELECT id FROM private_uploads WHERE id = $1 AND user_id = $2 LIMIT 1`,
+        [params.proofUploadId, params.adminId],
+      );
+      if (proofRows.length === 0) {
         await client.query('ROLLBACK');
         return null;
       }

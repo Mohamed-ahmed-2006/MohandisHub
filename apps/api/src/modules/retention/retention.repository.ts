@@ -4,6 +4,18 @@ import { getPool } from '../../db/pool.js';
 
 import type { RetentionAlertsJson, RetentionPolicyJson } from './retention.types.js';
 
+export type TerminalKycPrivateUploadReference = {
+  source_table: 'identity_documents' | 'academic_records';
+  source_id: string;
+  urls: Array<string | null>;
+};
+
+export type RetentionPrivateUploadRow = {
+  id: string;
+  storage_path: string;
+  bucket: string;
+};
+
 export class RetentionRepository {
   private get pool(): Pool {
     return getPool();
@@ -257,5 +269,169 @@ export class RetentionRepository {
   async clearBidMessageAttachment(client: PoolClient, messageId: string, dryRun: boolean): Promise<void> {
     if (dryRun) return;
     await client.query(`UPDATE bid_messages SET attachment_url = NULL WHERE id = $1`, [messageId]);
+  }
+
+  async listTerminalKycPrivateUploadReferences(
+    client: PoolClient,
+    hours: number,
+  ): Promise<TerminalKycPrivateUploadReference[]> {
+    const { rows } = await client.query<TerminalKycPrivateUploadReference>(
+      `SELECT 'identity_documents'::text AS source_table,
+              id AS source_id,
+              ARRAY[front_image_url, back_image_url, selfie_image_url] AS urls
+         FROM identity_documents
+        WHERE status IN ('approved', 'rejected', 'expired')
+          AND COALESCE(reviewed_at, updated_at, created_at) < NOW() - ($1::int * INTERVAL '1 hour')
+          AND (
+            front_image_url LIKE '%/api/upload/private/%'
+            OR back_image_url LIKE '%/api/upload/private/%'
+            OR selfie_image_url LIKE '%/api/upload/private/%'
+          )
+       UNION ALL
+       SELECT 'academic_records'::text AS source_table,
+              id AS source_id,
+              ARRAY[certificate_image_url, transcript_image_url] AS urls
+         FROM academic_records
+        WHERE status IN ('approved', 'rejected')
+          AND COALESCE(reviewed_at, updated_at, created_at) < NOW() - ($1::int * INTERVAL '1 hour')
+          AND (
+            certificate_image_url LIKE '%/api/upload/private/%'
+            OR transcript_image_url LIKE '%/api/upload/private/%'
+          )`,
+      [hours],
+    );
+    return rows;
+  }
+
+  async listPrivateUploadsByIds(
+    client: PoolClient,
+    ids: string[],
+  ): Promise<RetentionPrivateUploadRow[]> {
+    if (ids.length === 0) return [];
+    const { rows } = await client.query<RetentionPrivateUploadRow>(
+      `SELECT id, storage_path, bucket
+         FROM private_uploads
+        WHERE id = ANY($1::uuid[])`,
+      [ids],
+    );
+    return rows;
+  }
+
+  async clearTerminalIdentityDocumentImages(
+    client: PoolClient,
+    ids: string[],
+    dryRun: boolean,
+  ): Promise<number> {
+    if (ids.length === 0) return 0;
+    if (dryRun) return ids.length;
+    const { rowCount } = await client.query(
+      `UPDATE identity_documents
+          SET front_image_url = NULL,
+              back_image_url = NULL,
+              selfie_image_url = NULL,
+              updated_at = now()
+        WHERE id = ANY($1::uuid[])
+          AND status IN ('approved', 'rejected', 'expired')`,
+      [ids],
+    );
+    return rowCount ?? 0;
+  }
+
+  async clearTerminalAcademicRecordImages(
+    client: PoolClient,
+    ids: string[],
+    dryRun: boolean,
+  ): Promise<number> {
+    if (ids.length === 0) return 0;
+    if (dryRun) return ids.length;
+    const { rowCount } = await client.query(
+      `UPDATE academic_records
+          SET certificate_image_url = NULL,
+              transcript_image_url = NULL,
+              updated_at = now()
+        WHERE id = ANY($1::uuid[])
+          AND status IN ('approved', 'rejected')`,
+      [ids],
+    );
+    return rowCount ?? 0;
+  }
+
+  async deletePrivateUploadsIfUnreferenced(
+    client: PoolClient,
+    ids: string[],
+    dryRun: boolean,
+  ): Promise<number> {
+    if (ids.length === 0) return 0;
+    const sql = `
+      FROM private_uploads pu
+      WHERE pu.id = ANY($1::uuid[])
+        AND NOT EXISTS (
+          SELECT 1 FROM identity_documents d
+           WHERE d.front_image_url LIKE ('%/api/upload/private/' || pu.id::text || '%')
+              OR d.back_image_url LIKE ('%/api/upload/private/' || pu.id::text || '%')
+              OR d.selfie_image_url LIKE ('%/api/upload/private/' || pu.id::text || '%')
+        )
+        AND NOT EXISTS (
+          SELECT 1 FROM academic_records a
+           WHERE a.certificate_image_url LIKE ('%/api/upload/private/' || pu.id::text || '%')
+              OR a.transcript_image_url LIKE ('%/api/upload/private/' || pu.id::text || '%')
+        )
+        AND NOT EXISTS (
+          SELECT 1 FROM job_applications ja
+           WHERE ja.cv_file_url LIKE ('%/api/upload/private/' || pu.id::text || '%')
+        )
+        AND NOT EXISTS (
+          SELECT 1 FROM deposit_requests dr
+           WHERE dr.proof_upload_id = pu.id
+        )
+        AND NOT EXISTS (
+          SELECT 1 FROM withdrawal_requests wr
+           WHERE wr.admin_proof_upload_id = pu.id
+        )`;
+    if (dryRun) {
+      const { rows } = await client.query<{ c: string }>(`SELECT count(*)::text AS c ${sql}`, [
+        ids,
+      ]);
+      return parseInt(rows[0]?.c ?? '0', 10);
+    }
+    const { rowCount } = await client.query(`DELETE ${sql}`, [ids]);
+    return rowCount ?? 0;
+  }
+
+  async listUnreferencedPrivateUploadsByIds(
+    client: PoolClient,
+    ids: string[],
+  ): Promise<RetentionPrivateUploadRow[]> {
+    if (ids.length === 0) return [];
+    const { rows } = await client.query<RetentionPrivateUploadRow>(
+      `SELECT pu.id, pu.storage_path, pu.bucket
+         FROM private_uploads pu
+        WHERE pu.id = ANY($1::uuid[])
+          AND NOT EXISTS (
+            SELECT 1 FROM identity_documents d
+             WHERE d.front_image_url LIKE ('%/api/upload/private/' || pu.id::text || '%')
+                OR d.back_image_url LIKE ('%/api/upload/private/' || pu.id::text || '%')
+                OR d.selfie_image_url LIKE ('%/api/upload/private/' || pu.id::text || '%')
+          )
+          AND NOT EXISTS (
+            SELECT 1 FROM academic_records a
+             WHERE a.certificate_image_url LIKE ('%/api/upload/private/' || pu.id::text || '%')
+                OR a.transcript_image_url LIKE ('%/api/upload/private/' || pu.id::text || '%')
+          )
+          AND NOT EXISTS (
+            SELECT 1 FROM job_applications ja
+             WHERE ja.cv_file_url LIKE ('%/api/upload/private/' || pu.id::text || '%')
+          )
+          AND NOT EXISTS (
+            SELECT 1 FROM deposit_requests dr
+             WHERE dr.proof_upload_id = pu.id
+          )
+          AND NOT EXISTS (
+            SELECT 1 FROM withdrawal_requests wr
+             WHERE wr.admin_proof_upload_id = pu.id
+          )`,
+      [ids],
+    );
+    return rows;
   }
 }

@@ -32,6 +32,7 @@ import { normalizePlanAllowedRoles } from '@mohandishub/shared';
 
 import { HttpError } from '../../utils/http-error.js';
 import { AuthRepository } from '../auth/auth.repository.js';
+import { NotificationsService } from '../notifications/notifications.service.js';
 import { OtpService } from '../otp/otp.service.js';
 import { ProfilesService } from '../profiles/profiles.service.js';
 import { SettingsService } from '../settings/settings.service.js';
@@ -79,6 +80,7 @@ export class AdminService {
     private readonly authRepository: AuthRepository = new AuthRepository(),
     private readonly profilesService: ProfilesService = new ProfilesService(),
     private readonly walletService: WalletService = new WalletService(),
+    private readonly notificationsService: NotificationsService = new NotificationsService(),
   ) {}
 
   // ── Dashboard ───────────────────────────────────────────────────────────
@@ -721,6 +723,16 @@ export class AdminService {
         message: 'Service not found.',
       });
     }
+    if (input.status === 'paused') {
+      void this.notificationsService
+        .createForUser(row.provider_id, {
+          type: 'service_paused_by_admin',
+          title: 'Service paused',
+          message: 'An administrator paused one of your services.',
+          payload: { serviceId: row.id },
+        })
+        .catch(() => {});
+    }
     return this.toServiceListItem(row);
   }
 
@@ -737,6 +749,14 @@ export class AdminService {
         message: 'Service not found.',
       });
     }
+    void this.notificationsService
+      .createForUser(row.provider_id, {
+        type: 'service_approved',
+        title: 'Service approved',
+        message: 'Your service listing was approved and is now active.',
+        payload: { serviceId: row.id },
+      })
+      .catch(() => {});
     return this.toServiceListItem(row);
   }
 
@@ -758,6 +778,14 @@ export class AdminService {
         message: 'Service not found.',
       });
     }
+    void this.notificationsService
+      .createForUser(row.provider_id, {
+        type: 'service_rejected',
+        title: 'Service rejected',
+        message: `Your service listing was rejected. Reason: ${reason}`,
+        payload: { serviceId: row.id, reason },
+      })
+      .catch(() => {});
     return this.toServiceListItem(row);
   }
 

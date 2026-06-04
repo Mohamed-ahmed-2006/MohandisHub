@@ -15,12 +15,12 @@
     "dist"
   ],
   "scripts": {
-    "build": "tsc -b tsconfig.json",
+    "build": "node -e \"const fs=require('fs'); fs.rmSync('dist', { recursive: true, force: true }); fs.rmSync('tsconfig.tsbuildinfo', { force: true })\" && tsc -b tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "lint": "eslint src --max-warnings=0",
     "test": "vitest --run --passWithNoTests"
   },
   "devDependencies": {
-    "vitest": "^3.0.8"
+    "vitest": "^4.1.8"
   }
 }

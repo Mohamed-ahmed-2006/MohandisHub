@@ -8,4 +8,4 @@ Short list of known problems not yet resolved in code.
 
 **Why:** Production API CORS allowlist typically does not include `http://localhost:3000`.
 
-**Directions to fix (pick one):** Add `http://localhost:3000` to the deployed API `CORS_ORIGIN` or `CORS_EXTRA_ORIGINS`; or proxy private media through the Next app so the browser stays same-origin; or serve private files via short-lived signed URLs that work without credentialed cross-origin requests.
+**Directions to fix (pick one):** For a short debugging session only, add `http://localhost:3000` to the deployed API `CORS_EXTRA_ORIGINS` and remove it afterward. Prefer proxying private media through the Next app so the browser stays same-origin, or serve private files via short-lived signed URLs that work without credentialed cross-origin requests. Production no longer allows localhost credentialed CORS by default.

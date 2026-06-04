@@ -12,9 +12,14 @@ import type { Dictionary } from '@/lib/i18n/types';
 type AdminAdsTabProps = {
   dictionary: Dictionary;
   accessToken: string;
+  adminPermissions: string[];
 };
 
-export const AdminAdsTab = ({ dictionary, accessToken }: AdminAdsTabProps) => {
+const hasPermission = (permissions: string[], permission: string): boolean => (
+  permissions.length === 0 || permissions.includes(permission)
+);
+
+export const AdminAdsTab = ({ dictionary, accessToken, adminPermissions }: AdminAdsTabProps) => {
   const [rows, setRows] = useState<Advertisement[]>([]);
   const [controls, setControls] = useState<AdminAdControls>({ acceptAds: true, pricePerDay: 0 });
   const [loading, setLoading] = useState(true);
@@ -25,6 +30,9 @@ export const AdminAdsTab = ({ dictionary, accessToken }: AdminAdsTabProps) => {
   const [pricingAdId, setPricingAdId] = useState<string | null>(null);
   const [overrideAmount, setOverrideAmount] = useState('');
   const [savingControls, setSavingControls] = useState(false);
+  const canManageAds = hasPermission(adminPermissions, 'manage_ads');
+  const canManageAdPricing = hasPermission(adminPermissions, 'manage_ad_pricing');
+  const canManageAdScheduling = hasPermission(adminPermissions, 'manage_ad_scheduling');
 
   const stats = {
     total: rows.length,
@@ -40,7 +48,9 @@ export const AdminAdsTab = ({ dictionary, accessToken }: AdminAdsTabProps) => {
       const status = statusFilter as 'pending_payment' | 'active' | 'expired' | 'cancelled' | 'paused_by_admin' | '';
       const [data, adControls] = await Promise.all([
         advertisementsApiClient.adminListAds(accessToken, status ? { status } : undefined),
-        advertisementsApiClient.adminGetControls(accessToken),
+        canManageAdPricing
+          ? advertisementsApiClient.adminGetControls(accessToken)
+          : Promise.resolve({ acceptAds: true, pricePerDay: 0 }),
       ]);
       setRows(data.rows);
       setControls(adControls);
@@ -49,7 +59,7 @@ export const AdminAdsTab = ({ dictionary, accessToken }: AdminAdsTabProps) => {
     } finally {
       setLoading(false);
     }
-  }, [accessToken, statusFilter]);
+  }, [accessToken, canManageAdPricing, statusFilter]);
 
   useEffect(() => {
     void load();
@@ -139,6 +149,7 @@ export const AdminAdsTab = ({ dictionary, accessToken }: AdminAdsTabProps) => {
             <p className="admin-stat-value">{stats.expired}</p>
           </article>
         </div>
+        {canManageAdPricing && (
         <div className="admin-settings-section" style={{ marginBottom: '1rem' }}>
           <p className="admin-settings-section-title">Global advertisement settings</p>
           <div className="admin-settings-row">
@@ -174,6 +185,7 @@ export const AdminAdsTab = ({ dictionary, accessToken }: AdminAdsTabProps) => {
             </button>
           </div>
         </div>
+        )}
       </div>
 
       <div className="admin-section">
@@ -237,29 +249,31 @@ export const AdminAdsTab = ({ dictionary, accessToken }: AdminAdsTabProps) => {
                   <td>{ad.clicks}</td>
                   <td>
                     <div className="admin-actions-row">
-                      {ad.status !== 'active' && ad.status !== 'cancelled' && ad.status !== 'expired' && (
+                      {canManageAds && ad.status !== 'active' && ad.status !== 'cancelled' && ad.status !== 'expired' && (
                         <button type="button" className="admin-btn admin-btn--small" onClick={() => void setStatus(ad.id, 'active')}>
                           Activate
                         </button>
                       )}
-                      {ad.status === 'active' && (
+                      {canManageAds && ad.status === 'active' && (
                         <button type="button" className="admin-btn admin-btn--small admin-btn--danger" onClick={() => void setStatus(ad.id, 'paused_by_admin')}>
                           Pause
                         </button>
                       )}
-                      {ad.status !== 'cancelled' && ad.status !== 'expired' && (
+                      {canManageAds && ad.status !== 'cancelled' && ad.status !== 'expired' && (
                         <button type="button" className="admin-btn admin-btn--small admin-btn--danger" onClick={() => void setStatus(ad.id, 'cancelled')}>
                           Cancel
                         </button>
                       )}
-                      {ad.status !== 'cancelled' && ad.status !== 'expired' && (
+                      {canManageAdScheduling && ad.status !== 'cancelled' && ad.status !== 'expired' && (
                         <button type="button" className="admin-btn admin-btn--small" onClick={() => setScheduleAdId(ad.id)}>
                           Schedule
                         </button>
                       )}
-                      <button type="button" className="admin-btn admin-btn--small" onClick={() => setPricingAdId(ad.id)}>
-                        Pricing
-                      </button>
+                      {canManageAdPricing && (
+                        <button type="button" className="admin-btn admin-btn--small" onClick={() => setPricingAdId(ad.id)}>
+                          Pricing
+                        </button>
+                      )}
                     </div>
                   </td>
                 </tr>
@@ -329,4 +343,3 @@ export const AdminAdsTab = ({ dictionary, accessToken }: AdminAdsTabProps) => {
     </section>
   );
 };
-

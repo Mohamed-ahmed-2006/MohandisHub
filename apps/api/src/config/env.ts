@@ -82,6 +82,7 @@ const envSchema = z.object({
   NOWPAYMENTS_WITHDRAWAL_MIN_AMOUNT: z.coerce.number().positive().default(20),
   NOWPAYMENTS_WITHDRAWAL_DEFAULT_CURRENCY: z.string().default('USDTTRC20'),
   NOWPAYMENTS_ALLOWED_PAY_CURRENCIES: z.string().optional(),
+  NOWPAYMENTS_LIVE_REQUIRED: z.coerce.boolean().default(true),
 
   // Agora RTC
   AGORA_APP_ID: z.string().optional(),
@@ -105,6 +106,7 @@ const envSchema = z.object({
   RETENTION_UPLOADS_DAYS: z.coerce.number().int().min(0).default(0),
   RETENTION_NEED_REFERENCE_DAYS_AFTER_COMPLETED: z.coerce.number().int().min(0).default(0),
   RETENTION_BID_MESSAGE_ATTACHMENT_DAYS: z.coerce.number().int().min(0).default(0),
+  RETENTION_VERIFIED_PRIVATE_UPLOADS_DAYS: z.coerce.number().int().min(0).default(0),
 
   /** Hard ceiling for public upload size (bytes). Admin/settings cannot exceed this. */
   PUBLIC_UPLOAD_MAX_BYTES_CEILING: z.coerce.number().int().positive().default(52_428_800), // 50 * 1024 * 1024
@@ -115,6 +117,53 @@ const parsed = envSchema.safeParse(process.env);
 if (!parsed.success) {
   console.error('Invalid environment configuration', parsed.error.flatten().fieldErrors);
   throw new Error('Environment validation failed');
+}
+
+if (parsed.data.NODE_ENV === 'production') {
+  const productionErrors: Record<string, string[]> = {};
+  if (parsed.data.OTP_EMAIL_PROVIDER === 'console') {
+    productionErrors.OTP_EMAIL_PROVIDER = ['Production must use a real email provider. Set OTP_EMAIL_PROVIDER=brevo.'];
+  }
+  if (parsed.data.OTP_EMAIL_PROVIDER === 'sendgrid') {
+    productionErrors.OTP_EMAIL_PROVIDER = ['SendGrid email is not implemented for production. Use brevo or implement SendGrid first.'];
+  }
+  if (parsed.data.OTP_SMS_PROVIDER === 'twilio') {
+    productionErrors.OTP_SMS_PROVIDER = ['Twilio SMS is not implemented for production. Use console only for non-production or implement Twilio first.'];
+  }
+  if (parsed.data.VERIFICATION_PROVIDER === 'idenfy') {
+    productionErrors.VERIFICATION_PROVIDER = ['Idenfy verification is not implemented for production. Use didit or manual.'];
+  }
+  if (parsed.data.NOWPAYMENTS_LIVE_REQUIRED) {
+    if (!parsed.data.NOWPAYMENTS_API_KEY) {
+      productionErrors.NOWPAYMENTS_API_KEY = ['NOWPayments API key is required for production wallet deposits.'];
+    }
+    if (!parsed.data.NOWPAYMENTS_IPN_SECRET) {
+      productionErrors.NOWPAYMENTS_IPN_SECRET = ['NOWPayments IPN secret is required so deposits and payouts cannot be spoofed.'];
+    }
+    if (!parsed.data.API_PUBLIC_URL) {
+      productionErrors.API_PUBLIC_URL = ['API_PUBLIC_URL is required for NOWPayments IPN callback URLs.'];
+    }
+    if (!parsed.data.WEB_PUBLIC_URL) {
+      productionErrors.WEB_PUBLIC_URL = ['WEB_PUBLIC_URL is required for trusted checkout return URLs.'];
+    }
+  }
+  if (parsed.data.NOWPAYMENTS_WITHDRAWALS_ENABLED || parsed.data.NOWPAYMENTS_MASS_PAYOUTS_ENABLED) {
+    if (!parsed.data.NOWPAYMENTS_WITHDRAWALS_ENABLED || !parsed.data.NOWPAYMENTS_MASS_PAYOUTS_ENABLED) {
+      productionErrors.NOWPAYMENTS_WITHDRAWALS_ENABLED = [
+        'NOWPayments crypto withdrawals require both NOWPAYMENTS_WITHDRAWALS_ENABLED=true and NOWPAYMENTS_MASS_PAYOUTS_ENABLED=true.',
+      ];
+    }
+    if (!parsed.data.NOWPAYMENTS_API_KEY) {
+      productionErrors.NOWPAYMENTS_API_KEY = ['NOWPayments API key is required for crypto withdrawals.'];
+    }
+    if (!parsed.data.NOWPAYMENTS_AUTH_EMAIL || !parsed.data.NOWPAYMENTS_AUTH_PASSWORD) {
+      productionErrors.NOWPAYMENTS_AUTH_EMAIL = ['NOWPayments auth email/password are required for mass-payout withdrawals.'];
+    }
+  }
+  if (Object.keys(productionErrors).length > 0) {
+    console.error('Invalid production provider configuration', productionErrors);
+    throw new Error('Production provider configuration failed');
+  }
 }
 
 export const env = parsed.data;

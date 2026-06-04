@@ -1,6 +1,6 @@
 # Feature roadmap — status and how to test
 
-All **15** items from the plan are implemented. Summary and how to test each.
+This file tracks roadmap status for launch readiness. Items marked deferred are intentionally not exposed as finished production features.
 
 ---
 
@@ -8,7 +8,7 @@ All **15** items from the plan are implemented. Summary and how to test each.
 
 | # | Feature | Status | How to test |
 |---|--------|--------|-------------|
-| **1** | **Team accounts for businesses** | Done | **DB:** Migrations `20260318000002_business_teams.sql` (business_teams, business_members). **API:** `GET /api/business/team/me` (auth + business role) returns `{ team: null, members: [] }`. Expand later with invite flow. |
+| **1** | **Team accounts for businesses** | Deferred | **DB only:** Migrations `20260318000002_business_teams.sql` create future tables. The placeholder API is not mounted for launch because invite/member permissions are not implemented yet. |
 | **2** | **Email / SMS / WhatsApp notifications** | Done (email path) | **API:** When creating a notification, pass `recipientEmail` (and optional `recipientDisplayName`) in the payload; a transactional email is sent (Brevo/SendGrid) in addition to in-app. **Test:** Use admin “Send notification” or any code that calls `notificationsService.createForUser(userId, { ..., recipientEmail: 'test@example.com' })`. SMS/WhatsApp: add providers when ready; API is ready for fan-out. |
 | **3** | **Advanced search filters and ranking** | Done | **API:** `GET /api/services/search?minRating=4&minPrice=0&maxPrice=100&verifiedOnly=true&sort=rating` (or `price_asc`, `price_desc`, `completed_count`, `newest`). **Web:** Log in as customer → Browse tab: use Min rating, Min/Max price, Sort by, “Verified providers only” and search. Same filters in Expert/Business “Search” tab. |
 | **4** | **Recommendation engine** | Done | **API:** `GET /api/services/recommendations?limit=10` or `?limit=5&categoryId=<uuid>`. Returns suggested services (top by rating/orders). **Web:** Call this endpoint from the app or add a “Suggested for you” section that uses it. |
@@ -38,7 +38,7 @@ All **15** items from the plan are implemented. Summary and how to test each.
 1. **Migrations**
    - Apply Supabase migrations (including `20260318*`):
      ```bash
-     npx supabase db push
+     supabase db push
      ```
      Or run the new SQL files against your DB if you don’t use Supabase CLI.
 
@@ -69,7 +69,7 @@ All **15** items from the plan are implemented. Summary and how to test each.
 - [ ] **Reviews exposure:** Browse results show Verified and rating (and “Top rated” when ≥ 4).
 - [ ] **Receipt:** Wallet has transactions → `GET /api/wallet/me/transactions/:id/receipt` with a transaction id.
 - [ ] **Favorites:** `POST /api/favorites` with `{ targetType: 'service', targetId: '<service-uuid>' }`, then `GET /api/favorites`.
-- [ ] **Team (stub):** Business user → `GET /api/business/team/me` returns `{ team: null, members: [] }`.
+- [ ] **Team accounts:** Deferred until invite/member permissions are implemented. Do not advertise team seats as an active launch feature.
 - [ ] **PWA:** Open web app → Application → Manifest in DevTools.
 - [ ] **i18n:** Switch to Arabic and use Support, Analytics, and search filters.
 
@@ -77,5 +77,5 @@ All **15** items from the plan are implemented. Summary and how to test each.
 
 ## Summary
 
-- **All 15 items are implemented** (code, migrations, and/or docs as above).
-- Testing is mostly manual via UI and API calls; optional: add e2e tests for critical flows (e.g. analytics, support, search, favorites) using your existing e2e setup.
+- Most launch-scope items are implemented, but business team accounts remain deferred.
+- Testing is mostly manual via UI and API calls; add e2e tests for critical flows (e.g. analytics, support, search, favorites) using your existing e2e setup.

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  parsePrivateUploadIdFromUrl,
   parseLocalUploadsBasenameFromUrl,
   parsePublicUploadsPathFromUrl,
 } from '../lib/supabase-storage.js';
@@ -54,5 +55,21 @@ describe('parseLocalUploadsBasenameFromUrl', () => {
 
   it('rejects traversal', () => {
     expect(parseLocalUploadsBasenameFromUrl('http://localhost:4000/uploads/../etc/passwd')).toBeNull();
+  });
+});
+
+describe('parsePrivateUploadIdFromUrl', () => {
+  const id = '123e4567-e89b-42d3-a456-426614174000';
+
+  it('parses relative and absolute private upload URLs', () => {
+    expect(parsePrivateUploadIdFromUrl(`/api/upload/private/${id}`)).toBe(id);
+    expect(parsePrivateUploadIdFromUrl(`https://api.example.com/api/upload/private/${id}`)).toBe(
+      id,
+    );
+  });
+
+  it('rejects non-private paths and invalid ids', () => {
+    expect(parsePrivateUploadIdFromUrl(`/uploads/${id}`)).toBeNull();
+    expect(parsePrivateUploadIdFromUrl('/api/upload/private/not-a-uuid')).toBeNull();
   });
 });

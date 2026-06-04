@@ -1,15 +1,35 @@
 'use client';
 
 import type { Notification as NotificationType, NotificationPayload } from '@mohandishub/shared';
+import {
+  Bell,
+  Briefcase,
+  Calendar,
+  Handshake,
+  MessageSquare,
+  Shield,
+  Star,
+  Wallet,
+  Wrench,
+} from 'lucide-react';
+import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
+import {
+  getLocalizedNotificationText,
+  getNotificationTargetHref,
+  type NotificationTemplates,
+} from '@/components/app/notification-display';
 import { getChatSocket } from '@/lib/chat/socket';
-import type { Dictionary } from '@/lib/i18n/types';
+import { buildLocalePath } from '@/lib/i18n/path';
+import type { Dictionary, Locale } from '@/lib/i18n/types';
 import { notificationsApiClient } from '@/lib/notifications/client';
 
 type Props = {
   accessToken: string;
   dictionary: Dictionary;
+  locale: Locale;
+  userRole?: string;
 };
 
 function formatTime(
@@ -29,8 +49,35 @@ function formatTime(
   return d.toLocaleDateString();
 }
 
-export function NotificationCenter({ accessToken, dictionary }: Props) {
+const PROVIDER_ROLES = new Set(['expert', 'craftsman', 'business']);
+
+function NotificationTypeIcon({ type }: { type: string }) {
+  const common = { size: 18, strokeWidth: 2, className: 'app-notification-type-icon' as const };
+  if (type.startsWith('reservation_')) return <Calendar {...common} aria-hidden />;
+  if (type.startsWith('wallet_')) return <Wallet {...common} aria-hidden />;
+  if (
+    type.startsWith('job_') ||
+    type === 'application_status' ||
+    type.startsWith('milestone_') ||
+    type === 'new_message'
+  ) {
+    return <Briefcase {...common} aria-hidden />;
+  }
+  if (type.startsWith('need_bid_') || type === 'need_closed') {
+    return <Briefcase {...common} aria-hidden />;
+  }
+  if (type === 'price_negotiation') return <Handshake {...common} aria-hidden />;
+  if (type.startsWith('service_')) return <Wrench {...common} aria-hidden />;
+  if (type.startsWith('review_')) return <Star {...common} aria-hidden />;
+  if (type === 'chat_message') return <MessageSquare {...common} aria-hidden />;
+  if (type === 'admin' || type === 'demo') return <Shield {...common} aria-hidden />;
+  return <Bell {...common} aria-hidden />;
+}
+
+export function NotificationCenter({ accessToken, dictionary, locale, userRole }: Props) {
+  const router = useRouter();
   const t = dictionary.notificationCenter;
+  const notificationTemplates = dictionary.notificationTemplates as NotificationTemplates | undefined;
   const [open, setOpen] = useState(false);
   const [items, setItems] = useState<NotificationType[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
@@ -203,20 +250,43 @@ export function NotificationCenter({ accessToken, dictionary }: Props) {
             ) : items.length === 0 ? (
               <p className="app-notification-empty">{t.empty}</p>
             ) : (
-              items.map((n) => (
-                <button
-                  key={n.id}
-                  type="button"
-                  className={`app-notification-item ${n.readAt ? '' : 'app-notification-item--unread'}`}
-                  onClick={() => {
-                    if (!n.readAt) void handleMarkAsRead(n.id);
-                  }}
-                >
-                  <span className="app-notification-item-title">{n.title}</span>
-                  <span className="app-notification-item-message">{n.message}</span>
-                  <span className="app-notification-item-time">{formatTime(n.createdAt, t)}</span>
-                </button>
-              ))
+              items.map((n) => {
+                const { title: displayTitle, message: displayMessage } = getLocalizedNotificationText(
+                  n,
+                  notificationTemplates,
+                );
+                const targetHref = getNotificationTargetHref(n.type, n.payload, locale);
+                const isNegotiationProvider =
+                  n.type === 'price_negotiation' && userRole && PROVIDER_ROLES.has(userRole);
+                return (
+                  <button
+                    key={n.id}
+                    type="button"
+                    className={`app-notification-item ${n.readAt ? '' : 'app-notification-item--unread'}`}
+                    onClick={() => {
+                      if (!n.readAt) void handleMarkAsRead(n.id);
+                      if (targetHref) {
+                        setOpen(false);
+                        router.push(targetHref);
+                        return;
+                      }
+                      if (isNegotiationProvider) {
+                        setOpen(false);
+                        router.push(buildLocalePath(locale, '/app/negotiations'));
+                      }
+                    }}
+                  >
+                    <span className="app-notification-item-icon" aria-hidden>
+                      <NotificationTypeIcon type={n.type} />
+                    </span>
+                    <span className="app-notification-item-body">
+                      <span className="app-notification-item-title">{displayTitle}</span>
+                      <span className="app-notification-item-message">{displayMessage}</span>
+                      <span className="app-notification-item-time">{formatTime(n.createdAt, t)}</span>
+                    </span>
+                  </button>
+                );
+              })
             )}
           </div>
           <div className="app-notification-dropdown-footer">

@@ -7,6 +7,7 @@ import type { ReviewTargetType } from '@mohandishub/shared';
 import { getPool } from '../../db/pool.js';
 import { HttpError } from '../../utils/http-error.js';
 import { NeedsRepository } from '../needs/needs.repository.js';
+import { NotificationsService } from '../notifications/notifications.service.js';
 
 import { ReviewsRepository } from './reviews.repository.js';
 import type { ReviewRow } from './reviews.repository.js';
@@ -51,6 +52,7 @@ export class ReviewsService {
   constructor(
     private readonly repo: ReviewsRepository = new ReviewsRepository(),
     private readonly needsRepo: NeedsRepository = new NeedsRepository(),
+    private readonly notificationsService: NotificationsService = new NotificationsService(),
   ) {}
 
   async create(reviewerId: string, input: CreateReviewInput) {
@@ -175,6 +177,17 @@ export class ReviewsService {
     if (input.needId != null) createData.needId = input.needId;
     if (input.comment != null) createData.comment = input.comment;
     const row = await this.repo.create(createData);
+    const reviewPayload: Record<string, string> = { reviewId: row.id };
+    if (reservationId != null) reviewPayload.reservationId = reservationId;
+    if (input.needId != null) reviewPayload.needId = input.needId;
+    void this.notificationsService
+      .createForUser(targetUserId, {
+        type: 'review_received',
+        title: 'New review',
+        message: `You received a ${input.rating}-star review.`,
+        payload: reviewPayload,
+      })
+      .catch(() => {});
     return toReview(row);
   }
 
@@ -270,6 +283,17 @@ export class ReviewsService {
     if (decision === 'upheld' && hideReview) {
       await this.repo.setReviewHidden(report.review_id, true);
     }
+    void this.notificationsService
+      .createForUser(report.reporter_id, {
+        type: 'review_report_resolved',
+        title: 'Report update',
+        message:
+          decision === 'upheld'
+            ? 'Your review report was upheld by moderation.'
+            : 'Your review report was dismissed.',
+        payload: { reviewId: report.review_id, reportId },
+      })
+      .catch(() => {});
   }
 
   async resolveDispute(
@@ -287,6 +311,17 @@ export class ReviewsService {
     if (decision === 'upheld' && hideReview) {
       await this.repo.setReviewHidden(dispute.review_id, true);
     }
+    void this.notificationsService
+      .createForUser(dispute.disputer_id, {
+        type: 'review_dispute_resolved',
+        title: 'Review dispute update',
+        message:
+          decision === 'upheld'
+            ? 'Your dispute was upheld by moderation.'
+            : 'Your review dispute was dismissed.',
+        payload: { reviewId: dispute.review_id, disputeId },
+      })
+      .catch(() => {});
   }
 
   private async findReservationForReview(

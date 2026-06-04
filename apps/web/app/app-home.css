@@ -263,6 +263,14 @@
 
 .home-top-slideshow-panels {
   position: relative;
+  /* Stable block height: title + up to 3 cards (avoids layout shift between slides / load). */
+  min-height: 16rem;
+}
+
+@media (max-width: 768px) {
+  .home-top-slideshow-panels {
+    min-height: 38rem;
+  }
 }
 
 .home-top-slideshow-panel {
@@ -278,6 +286,12 @@
   grid-template-columns: repeat(3, 1fr);
   gap: 1rem;
   margin-bottom: 1rem;
+  align-items: stretch;
+}
+
+.home-top-slideshow .home-top-card--large {
+  min-height: 10.75rem;
+  box-sizing: border-box;
 }
 
 .home-top-cards-grid--scroll {

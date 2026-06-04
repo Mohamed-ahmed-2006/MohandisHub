@@ -3,6 +3,7 @@
 import {
   KNOWN_PAYMENT_METHOD_KEYS,
   MANAGED_SIDEBAR_HREFS,
+  PAYMENT_METHOD_DEFINITIONS,
   type AppSettings,
   type UpdateAppSettingsBody,
 } from '@mohandishub/shared';
@@ -169,11 +170,28 @@ export const AdminSettingsTab = ({ dictionary, accessToken, refreshSession }: Pr
     [settings, update],
   );
 
-  const paymentMethodKeysForUi = (() => {
+  const paymentMethodsForUi = (() => {
     if (!settings) return [];
     const known = new Set<string>(KNOWN_PAYMENT_METHOD_KEYS);
-    const extra = Object.keys(settings.paymentMethodsEnabled).filter((k) => !known.has(k));
-    return [...KNOWN_PAYMENT_METHOD_KEYS, ...extra.sort()];
+    const builtIn = PAYMENT_METHOD_DEFINITIONS.map((method) => ({
+      key: method.key,
+      flow: method.flow,
+      provider: method.provider,
+      launchRecommended: method.launchRecommended,
+      builtIn: true,
+    }));
+    const extra = Object.keys(settings.paymentMethodsEnabled)
+      .filter((key) => !known.has(key))
+      .sort()
+      .map((key) => ({
+        // Future/custom method key: preserve unknown provider toggles for later payment upgrades.
+        key,
+        flow: key.startsWith('withdrawal_') ? ('withdrawal' as const) : ('deposit' as const),
+        provider: 'future',
+        launchRecommended: false,
+        builtIn: false,
+      }));
+    return [...builtIn, ...extra];
   })();
 
   const setSidebarHrefHidden = useCallback(
@@ -288,7 +306,18 @@ export const AdminSettingsTab = ({ dictionary, accessToken, refreshSession }: Pr
         <p className="admin-settings-desc" style={{ marginBottom: '0.75rem' }}>
           {d.paymentMethodsSectionDesc}
         </p>
-        {paymentMethodKeysForUi.map((key) => {
+        {(['deposit', 'withdrawal'] as const).map((flow) => {
+          const methods = paymentMethodsForUi.filter((method) => method.flow === flow);
+          if (methods.length === 0) return null;
+          return (
+            <div key={flow} className="admin-settings-method-group">
+              <p className="admin-settings-method-group-title">
+                {flow === 'deposit'
+                  ? tr('Deposit methods', 'Ø·Ø±Ù‚ Ø§Ù„Ø¥ÙŠØ¯Ø§Ø¹')
+                  : tr('Withdrawal methods', 'Ø·Ø±Ù‚ Ø§Ù„Ø³Ø­Ø¨')}
+              </p>
+              {methods.map((method) => {
+          const key = method.key;
           const label =
             (d.paymentMethodLabels as Record<string, string> | undefined)?.[key] ?? key;
           const enabled = settings.paymentMethodsEnabled[key] !== false;
@@ -301,6 +330,9 @@ export const AdminSettingsTab = ({ dictionary, accessToken, refreshSession }: Pr
               onChange={(v) => handlePaymentMethodToggle(key, v)}
               disabled={saving}
             />
+          );
+              })}
+            </div>
           );
         })}
         <div className="admin-settings-row">

@@ -361,6 +361,10 @@ export class ServicesRepository {
       city?: string;
       area?: string;
       country?: string;
+      status?: string;
+      rejectionReason?: string | null;
+      reviewedBy?: string | null;
+      reviewedAt?: Date | null;
     },
   ): Promise<ServiceDetailRow | null> {
     const entries = Object.entries(input).filter(([, v]) => v !== undefined);
@@ -384,6 +388,10 @@ export class ServicesRepository {
       city: 'city',
       area: 'area',
       country: 'country',
+      status: 'status',
+      rejectionReason: 'rejection_reason',
+      reviewedBy: 'reviewed_by',
+      reviewedAt: 'reviewed_at',
     };
     for (const [key, value] of entries) {
       const col = colMap[key];

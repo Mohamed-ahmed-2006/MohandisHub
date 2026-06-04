@@ -25,6 +25,7 @@ import { HttpError } from '../../utils/http-error.js';
 import { ChatRepository } from '../chat/chat.repository.js';
 import { JobsRepository } from '../jobs/jobs.repository.js';
 import { NegotiationsService } from '../negotiations/negotiations.service.js';
+import { NotificationsService } from '../notifications/notifications.service.js';
 import { ServicesRepository } from '../services/services.repository.js';
 import { SettingsService } from '../settings/settings.service.js';
 import { WalletRepository } from '../wallet/wallet.repository.js';
@@ -284,7 +285,21 @@ export class ReservationsService {
     private readonly jobsRepo: JobsRepository = new JobsRepository(),
     private readonly servicesRepo: ServicesRepository = new ServicesRepository(),
     private readonly negotiationsSvc: NegotiationsService = new NegotiationsService(),
+    private readonly notificationsService: NotificationsService = new NotificationsService(),
   ) {}
+
+  /** Fire-and-forget in-app notification; never blocks reservation flows. */
+  private notifyUser(
+    userId: string,
+    type: string,
+    title: string,
+    message: string,
+    payload: Record<string, unknown>,
+  ): void {
+    void this.notificationsService
+      .createForUser(userId, { type, title, message, payload })
+      .catch(() => {});
+  }
 
   async getMyProfile(userId: string, role: string): Promise<ReservationProfile> {
     this.ensureProviderRole(role);
@@ -682,6 +697,15 @@ export class ReservationsService {
       return accepted;
     }
     const mapped = mapReservation(reservation);
+    if (mapped.status === 'pending') {
+      this.notifyUser(
+        reservation.provider_id,
+        'reservation_created',
+        'New reservation request',
+        'A customer requested a booking with you.',
+        { reservationId: mapped.id },
+      );
+    }
     if (idempotencyKey) {
       await this.storeReservationActionIdempotency(
         customerId,
@@ -807,6 +831,13 @@ export class ReservationsService {
         accepted,
       );
     }
+    this.notifyUser(
+      params.businessId,
+      'reservation_created',
+      'Interview scheduled',
+      'An expert booked an interview on your calendar.',
+      { reservationId: accepted.id, jobId: params.jobId },
+    );
     return accepted;
   }
 
@@ -918,6 +949,14 @@ export class ReservationsService {
       reservation,
       `${this.displayNameForParticipant(reservation, userId)} proposed a new meeting location.`,
       userId,
+    );
+    const otherLoc = this.getOtherParticipantId(reservation, userId);
+    this.notifyUser(
+      otherLoc,
+      'reservation_location_proposed',
+      'Location proposal',
+      'The other party proposed a meeting location for your reservation.',
+      { reservationId },
     );
     return mapLocationProposal(proposal);
   }
@@ -1160,6 +1199,14 @@ export class ReservationsService {
         'Offline check-in completed by both participants. Waiting for customer confirmation.',
         userId,
       );
+      const otherOffline = this.getOtherParticipantId(reservation, userId);
+      this.notifyUser(
+        otherOffline,
+        'reservation_started',
+        'Offline session started',
+        'Both parties checked in. The session is in progress.',
+        { reservationId },
+      );
     }
 
     const updated = await this.repo.findReservationById(reservationId);
@@ -1217,6 +1264,14 @@ export class ReservationsService {
         reason: dispute.reason,
       });
       await this.sendReservationMessage(updatedReservation, 'Reservation was reported and moved to dispute.', userId);
+      const otherDispute = this.getOtherParticipantId(updatedReservation, userId);
+      this.notifyUser(
+        otherDispute,
+        'reservation_disputed',
+        'Reservation disputed',
+        'A reservation you are part of was reported and is under dispute review.',
+        { reservationId, disputeId: dispute.id },
+      );
       return {
         reservation: mapReservation(updatedReservation),
         dispute: mapDispute(dispute),
@@ -1304,6 +1359,13 @@ export class ReservationsService {
       });
     }
     await this.sendReservationMessage(updated, 'Reservation completed by customer.', userId);
+    this.notifyUser(
+      updated.provider_id,
+      'reservation_completed',
+      'Reservation completed',
+      'The customer marked your reservation as completed.',
+      { reservationId },
+    );
     return { reservation: mapReservation(updated) };
   }
 
@@ -1437,6 +1499,14 @@ export class ReservationsService {
           reservationForUpdate,
           'Both participants joined the online session. Billing timer started.',
           userId,
+        );
+        const otherCall = this.getOtherParticipantId(reservationForUpdate, userId);
+        this.notifyUser(
+          otherCall,
+          'reservation_started',
+          'Session started',
+          'Both participants joined the online session.',
+          { reservationId },
         );
       }
 
@@ -2012,6 +2082,15 @@ export class ReservationsService {
     } finally {
       client.release();
     }
+    for (const row of rows) {
+      this.notifyUser(
+        row.customer_id,
+        'reservation_expired',
+        'Reservation expired',
+        'A pending reservation request expired before the provider responded.',
+        { reservationId: row.id },
+      );
+    }
     return processed;
   }
 
@@ -2063,6 +2142,24 @@ export class ReservationsService {
       disputeId: dispute.id,
       status: dispute.status,
     });
+    const resRow = await this.repo.findReservationById(dispute.reservation_id);
+    if (resRow) {
+      const payloadBase = { reservationId: dispute.reservation_id, disputeId: dispute.id };
+      this.notifyUser(
+        resRow.customer_id,
+        'reservation_dispute_resolved',
+        'Dispute resolved',
+        'An admin resolved a dispute on your reservation.',
+        payloadBase,
+      );
+      this.notifyUser(
+        resRow.provider_id,
+        'reservation_dispute_resolved',
+        'Dispute resolved',
+        'An admin resolved a dispute on your reservation.',
+        payloadBase,
+      );
+    }
     return mapDispute(dispute);
   }
 
@@ -2358,6 +2455,15 @@ export class ReservationsService {
         mapped,
       );
     }
+    const otherCancel =
+      updated.customer_id === userId ? updated.provider_id : updated.customer_id;
+    this.notifyUser(
+      otherCancel,
+      'reservation_cancelled',
+      'Reservation cancelled',
+      'A reservation you are part of was cancelled.',
+      { reservationId },
+    );
     await this.sendReservationMessage(
       updated,
       `Reservation cancelled${input.reasonText?.trim() ? `: ${input.reasonText.trim()}` : '.'}`,
@@ -2786,6 +2892,7 @@ export class ReservationsService {
     let accepted = false;
     let rejectedBySlotConflict = false;
     let rejectionReason = params.rejectionReason ?? null;
+    const slotTakenNotify: { customerId: string; reservationId: string }[] = [];
 
     try {
       await client.query('BEGIN');
@@ -2947,6 +3054,7 @@ export class ReservationsService {
               },
               client,
             );
+            slotTakenNotify.push({ customerId: other.customer_id, reservationId: other.id });
           }
         }
       }
@@ -2976,6 +3084,22 @@ export class ReservationsService {
       await this.repo.updateReservation(updated.id, { conversationId });
       const refreshed = await this.repo.findReservationById(updated.id);
       const reservation = refreshed ?? updated;
+      this.notifyUser(
+        updated.customer_id,
+        'reservation_accepted',
+        'Reservation accepted',
+        'Your reservation request was accepted.',
+        { reservationId: updated.id },
+      );
+      for (const { customerId, reservationId } of slotTakenNotify) {
+        this.notifyUser(
+          customerId,
+          'reservation_rejected',
+          'Reservation unavailable',
+          'Your reservation was declined because the slot was booked by another customer.',
+          { reservationId },
+        );
+      }
       await this.sendReservationMessage(
         reservation,
         reservation.mode === 'online'
@@ -2986,13 +3110,37 @@ export class ReservationsService {
       return mapReservation(reservation);
     }
 
+    for (const { customerId, reservationId } of slotTakenNotify) {
+      this.notifyUser(
+        customerId,
+        'reservation_rejected',
+        'Reservation unavailable',
+        'Your reservation was declined because the slot was booked by another customer.',
+        { reservationId },
+      );
+    }
+
     if (rejectedBySlotConflict) {
+      this.notifyUser(
+        updated.customer_id,
+        'reservation_rejected',
+        'Reservation rejected',
+        rejectionReason ?? 'Reservation rejected due to slot conflict.',
+        { reservationId: updated.id },
+      );
       await this.sendReservationMessage(
         updated,
         rejectionReason ?? 'Reservation rejected due to slot conflict.',
         params.providerId,
       );
     } else if (params.decision === 'reject') {
+      this.notifyUser(
+        updated.customer_id,
+        'reservation_rejected',
+        'Reservation rejected',
+        rejectionReason ? `Reason: ${rejectionReason}` : 'The provider declined your reservation request.',
+        { reservationId: updated.id },
+      );
       await this.sendReservationMessage(
         updated,
         `Reservation rejected${rejectionReason ? `: ${rejectionReason}` : '.'}`,

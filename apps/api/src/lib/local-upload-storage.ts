@@ -25,3 +25,22 @@ export function deleteLocalUploadBasenameIfExists(basename: string): boolean {
   }
   return false;
 }
+
+/** Delete a file below local `uploads/` by relative path, e.g. `private/file.pdf`. */
+export function deleteLocalUploadRelativePathIfExists(relativePath: string): boolean {
+  if (!relativePath || path.isAbsolute(relativePath)) return false;
+  const normalized = path.normalize(relativePath);
+  if (normalized.startsWith('..') || normalized.includes(`..${path.sep}`)) return false;
+  const localPath = path.resolve(UPLOAD_DIR, normalized);
+  const resolvedDir = path.resolve(UPLOAD_DIR);
+  if (!localPath.startsWith(resolvedDir + path.sep)) return false;
+  try {
+    if (fs.existsSync(localPath)) {
+      fs.unlinkSync(localPath);
+      return true;
+    }
+  } catch {
+    // ignore
+  }
+  return false;
+}

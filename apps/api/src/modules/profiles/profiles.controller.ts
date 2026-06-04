@@ -396,18 +396,21 @@ const getAnyUserProfile = asyncHandler(async (req, res) => {
   res.json(response);
 });
 
+/** Home slideshow shows at most this many per category (keep API aligned to avoid extra payload). */
+const TOP_PROFILES_HOME_LIMIT = 3;
+
 const getTopExperts = asyncHandler(async (_req, res) => {
-  const items = await profilesService.getTopExperts(6);
+  const items = await profilesService.getTopExperts(TOP_PROFILES_HOME_LIMIT);
   res.json({ ok: true, data: items });
 });
 
 const getTopBusinesses = asyncHandler(async (_req, res) => {
-  const items = await profilesService.getTopBusinesses(6);
+  const items = await profilesService.getTopBusinesses(TOP_PROFILES_HOME_LIMIT);
   res.json({ ok: true, data: items });
 });
 
 const getTopCraftsmen = asyncHandler(async (_req, res) => {
-  const items = await profilesService.getTopCraftsmen(6);
+  const items = await profilesService.getTopCraftsmen(TOP_PROFILES_HOME_LIMIT);
   res.json({ ok: true, data: items });
 });
 

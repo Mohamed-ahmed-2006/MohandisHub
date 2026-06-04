@@ -311,12 +311,7 @@ export class WalletService {
       });
     }
 
-    const webBase = (
-      input.returnUrl ||
-      env.WEB_PUBLIC_URL ||
-      env.CORS_ORIGIN ||
-      'http://localhost:3000'
-    ).replace(/\/$/, '');
+    const webBase = this.resolveTrustedWebReturnBase(input.returnUrl);
     const apiBase = (env.API_PUBLIC_URL || `http://localhost:${env.PORT}`).replace(/\/$/, '');
 
     const successUrl = this.withQueryParams(webBase, { deposit: 'success', order_id: orderId });
@@ -421,7 +416,7 @@ export class WalletService {
         invoicePriceAmount: invoiceAmount,
         invoicePriceCurrency: invoiceCurrency,
       });
-      await this.repo.creditDepositIfPendingByOrderId({
+      const { credited, row: depRow } = await this.repo.creditDepositIfPendingByOrderId({
         orderId,
         providerStatus,
         referenceType: 'nowpayments',
@@ -435,6 +430,20 @@ export class WalletService {
         creditAmountEgp: egp,
         rateSnapshot: snapshot,
       });
+      if (credited && depRow) {
+        const amt =
+          depRow.credited_amount_egp != null
+            ? parseFloat(depRow.credited_amount_egp)
+            : parseFloat(depRow.amount);
+        void this.notificationsService
+          .createForUser(depRow.user_id, {
+            type: 'wallet_deposit_confirmed',
+            title: 'Deposit confirmed',
+            message: `Your wallet was credited with ${amt.toFixed(2)} EGP.`,
+            payload: { depositId: depRow.id, orderId },
+          })
+          .catch(() => {});
+      }
       return;
     }
 
@@ -791,6 +800,17 @@ export class WalletService {
         message: 'You already have a pending InstaPay deposit request.',
       });
     }
+    const proofOwnedByUser = await this.repo.privateUploadBelongsToUser(
+      params.proofUploadId,
+      params.userId,
+    );
+    if (!proofOwnedByUser) {
+      throw new HttpError({
+        statusCode: 400,
+        code: 'INVALID_PROOF_UPLOAD',
+        message: 'Deposit proof upload was not found for this user.',
+      });
+    }
 
     const wallet = await this.getOrCreateWallet(params.userId);
     const orderId = `ip_dep_${wallet.id.replace(/-/g, '')}_${Date.now()}`.slice(0, 128);
@@ -921,7 +941,16 @@ export class WalletService {
         message: 'Withdrawal cannot be completed.',
       });
     }
-    return this.toWithdrawalRequest(row);
+    const mappedW = this.toWithdrawalRequest(row);
+    void this.notificationsService
+      .createForUser(row.user_id, {
+        type: 'wallet_withdrawal_completed',
+        title: 'Withdrawal completed',
+        message: `Your InstaPay withdrawal of ${mappedW.sourceAmountEgp.toFixed(2)} EGP was marked completed.`,
+        payload: { withdrawalId: row.id },
+      })
+      .catch(() => {});
+    return mappedW;
   }
 
   async rejectInstapayWithdrawalAdmin(
@@ -941,7 +970,16 @@ export class WalletService {
         message: 'Withdrawal cannot be rejected.',
       });
     }
-    return this.toWithdrawalRequest(row);
+    const mappedR = this.toWithdrawalRequest(row);
+    void this.notificationsService
+      .createForUser(row.user_id, {
+        type: 'wallet_withdrawal_rejected',
+        title: 'Withdrawal rejected',
+        message: `Your withdrawal request was rejected. Reason: ${reason}`,
+        payload: { withdrawalId: row.id, reason },
+      })
+      .catch(() => {});
+    return mappedR;
   }
 
   private toManualDepositRequest(row: DepositRequestRow): ManualDepositRequest {
@@ -1124,12 +1162,34 @@ export class WalletService {
       this.toStringOrNull(eventPayload.id) ||
       this.toStringOrNull(parentPayload?.withdrawal_id);
 
-    await this.repo.applyWithdrawalWebhookStatus({
+    const { updated, status, row } = await this.repo.applyWithdrawalWebhookStatus({
       batchWithdrawalId,
       withdrawalId,
       providerStatus: statusValue.toLowerCase(),
       providerPayload: parentPayload ? { parent: parentPayload, item: eventPayload } : eventPayload,
     });
+    if (updated && row) {
+      if (status === 'finished') {
+        const egp = parseFloat(row.source_amount_egp ?? row.amount);
+        void this.notificationsService
+          .createForUser(row.user_id, {
+            type: 'wallet_withdrawal_completed',
+            title: 'Withdrawal completed',
+            message: `Your crypto withdrawal of ${egp.toFixed(2)} EGP has been sent.`,
+            payload: { withdrawalId: row.id },
+          })
+          .catch(() => {});
+      } else if (status === 'failed' || status === 'rejected' || status === 'cancelled') {
+        void this.notificationsService
+          .createForUser(row.user_id, {
+            type: 'wallet_withdrawal_rejected',
+            title: 'Withdrawal failed',
+            message: `Your withdrawal could not be completed (status: ${status}). Funds were returned where applicable.`,
+            payload: { withdrawalId: row.id, reason: status },
+          })
+          .catch(() => {});
+      }
+    }
   }
 
   private async tryStartPayout(row: WithdrawalRequestRow): Promise<WithdrawalRequestRow> {
@@ -1247,6 +1307,30 @@ export class WalletService {
     return env.NOWPAYMENTS_ALLOWED_PAY_CURRENCIES.split(',')
       .map((value) => value.trim().toUpperCase())
       .filter((value) => value.length > 0);
+  }
+
+  private resolveTrustedWebReturnBase(returnUrl?: string): string {
+    const fallback = (env.WEB_PUBLIC_URL || env.CORS_ORIGIN || 'http://localhost:3000')
+      .split(',')[0]!
+      .trim()
+      .replace(/\/$/, '');
+    if (!returnUrl) return fallback;
+    try {
+      const candidate = new URL(returnUrl);
+      const allowedOrigins = [
+        ...(env.WEB_PUBLIC_URL ? [env.WEB_PUBLIC_URL] : []),
+        ...env.CORS_ORIGIN.split(','),
+        ...(env.CORS_EXTRA_ORIGINS ? env.CORS_EXTRA_ORIGINS.split(',') : []),
+      ]
+        .map((origin) => origin.trim())
+        .filter(Boolean)
+        .map((origin) => new URL(origin).origin);
+      return allowedOrigins.includes(candidate.origin)
+        ? returnUrl.replace(/\/$/, '')
+        : fallback;
+    } catch {
+      return fallback;
+    }
   }
 
   private withQueryParams(baseUrl: string, params: Record<string, string>): string {

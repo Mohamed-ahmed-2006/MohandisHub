@@ -28,6 +28,63 @@ export const KNOWN_PAYMENT_METHOD_KEYS = [
 ] as const;
 
 export type KnownPaymentMethodKey = (typeof KNOWN_PAYMENT_METHOD_KEYS)[number];
+export type PaymentMethodFlow = 'deposit' | 'withdrawal';
+
+export type PaymentMethodDefinition = {
+  key: KnownPaymentMethodKey;
+  flow: PaymentMethodFlow;
+  provider: 'nowpayments' | 'instapay_manual';
+  defaultEnabled: boolean;
+  launchRecommended: boolean;
+};
+
+/**
+ * Built-in payment rails for launch. Add future providers here first, then wire
+ * their API/client flow under the same `paymentMethodsEnabled` map.
+ */
+export const PAYMENT_METHOD_DEFINITIONS: readonly PaymentMethodDefinition[] = [
+  {
+    key: 'deposit_crypto',
+    flow: 'deposit',
+    provider: 'nowpayments',
+    defaultEnabled: true,
+    launchRecommended: true,
+  },
+  {
+    key: 'deposit_card',
+    flow: 'deposit',
+    provider: 'nowpayments',
+    defaultEnabled: false,
+    launchRecommended: false,
+  },
+  {
+    key: 'deposit_instapay',
+    flow: 'deposit',
+    provider: 'instapay_manual',
+    defaultEnabled: true,
+    launchRecommended: true,
+  },
+  {
+    key: 'withdrawal_crypto',
+    flow: 'withdrawal',
+    provider: 'nowpayments',
+    defaultEnabled: true,
+    launchRecommended: true,
+  },
+  {
+    key: 'withdrawal_instapay',
+    flow: 'withdrawal',
+    provider: 'instapay_manual',
+    defaultEnabled: true,
+    launchRecommended: true,
+  },
+] as const;
+
+export function getDefaultPaymentMethodsEnabled(): Record<KnownPaymentMethodKey, boolean> {
+  return Object.fromEntries(
+    PAYMENT_METHOD_DEFINITIONS.map((method) => [method.key, method.defaultEnabled]),
+  ) as Record<KnownPaymentMethodKey, boolean>;
+}
 
 /**
  * Merge stored JSON with legacy disable_* columns. Unknown keys in `raw` are preserved
@@ -37,13 +94,9 @@ export function parsePaymentMethodsEnabled(
   raw: unknown,
   legacy: { disableCryptoDeposits: boolean; disableCardDeposits: boolean },
 ): Record<string, boolean> {
-  const base: Record<string, boolean> = {
-    deposit_crypto: !legacy.disableCryptoDeposits,
-    deposit_card: !legacy.disableCardDeposits,
-    deposit_instapay: true,
-    withdrawal_crypto: true,
-    withdrawal_instapay: true,
-  };
+  const base: Record<string, boolean> = getDefaultPaymentMethodsEnabled();
+  base.deposit_crypto = !legacy.disableCryptoDeposits;
+  base.deposit_card = !legacy.disableCardDeposits && base.deposit_card === true;
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return base;
   const o = raw as Record<string, unknown>;
   const out = { ...base };

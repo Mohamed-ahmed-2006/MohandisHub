@@ -100,12 +100,14 @@ const CATEGORY_DEFS: Array<{
   },
   {
     key: 'verifiedPrivateUploads',
-    labelEn: 'Verified private uploads (not implemented)',
-    labelAr: 'رفع خاص (غير مفعّل)',
+    labelEn: 'Terminal KYC private uploads',
+    labelAr: 'ملفات KYC الخاصة المنتهية',
     helpEn:
-      'Placeholder for future KYC/private bucket cleanup. Do not enable until implemented and legally approved.',
-    helpAr: 'محجوز لمستقبل تنظيف ملفات KYC الخاصة. لا تفعّل حتى يُنفَّذ ويُوافَق قانونياً.',
+      'For approved/rejected/expired identity docs and approved/rejected academic records: clears private image URLs and deletes unreferenced private storage files. Enable only after legal retention is approved.',
+    helpAr:
+      'لمستندات الهوية والسجلات الأكاديمية المنتهية: يمسح روابط الصور الخاصة ويحذف الملفات غير المرجعة. فعّله بعد اعتماد مدة الاحتفاظ قانونياً فقط.',
     suggest: 'days',
+    envKey: 'RETENTION_VERIFIED_PRIVATE_UPLOADS_DAYS',
   },
 ];
 
@@ -123,7 +125,7 @@ const RECOMMENDED_CATEGORY_DEFAULTS: Record<string, CategoryCfg> = {
   dmMessages: { enabled: false, unit: 'days', value: 365 },
   needReferenceAfterCompleted: { enabled: false, unit: 'days', value: 90 },
   bidMessageAttachments: { enabled: false, unit: 'days', value: 90 },
-  verifiedPrivateUploads: { enabled: false, unit: 'days', value: 0 },
+  verifiedPrivateUploads: { enabled: false, unit: 'days', value: 365 },
 };
 
 function mergeRecommendedCategoriesIntoRow(row: Record<string, unknown>): Record<string, unknown> {

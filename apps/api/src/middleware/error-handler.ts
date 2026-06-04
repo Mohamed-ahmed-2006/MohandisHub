@@ -76,7 +76,7 @@ export const errorHandler: ErrorRequestHandler = (error, req, res, next) => {
       error: {
         code: 'SCHEMA_OUTDATED',
         message:
-          'Reservation schema is missing in database. Run migrations (`npx supabase db push`) and restart API.',
+          'Reservation schema is missing in database. Run migrations (`supabase db push`) and restart API.',
         ...(requestId ? { requestId } : {}),
       },
     };
@@ -92,7 +92,7 @@ export const errorHandler: ErrorRequestHandler = (error, req, res, next) => {
       error: {
         code: 'SCHEMA_OUTDATED',
         message:
-          'Notifications table is missing. Run migrations (e.g. `npx supabase db push` or apply 20260313000001_notifications.sql) and restart API.',
+          'Notifications table is missing. Run migrations (e.g. `supabase db push` or apply 20260313000001_notifications.sql) and restart API.',
         ...(requestId ? { requestId } : {}),
       },
     };

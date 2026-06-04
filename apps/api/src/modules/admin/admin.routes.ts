@@ -164,8 +164,8 @@ adminRouter.patch('/review-reports/:id', requireAdminPermission('manage_verifica
 adminRouter.patch('/review-disputes/:id', requireAdminPermission('manage_verifications'), adminController.resolveReviewDispute);
 
 // Support tickets
-adminRouter.get('/support/tickets', requireAdminPermission('manage_users'), adminController.listSupportTickets);
-adminRouter.patch('/support/tickets/:id', requireAdminPermission('manage_users'), adminController.updateSupportTicket);
-adminRouter.delete('/support/tickets/:id', requireAdminPermission('manage_users'), adminController.deleteSupportTicket);
+adminRouter.get('/support/tickets', requireAdminPermission('manage_support'), adminController.listSupportTickets);
+adminRouter.patch('/support/tickets/:id', requireAdminPermission('manage_support'), adminController.updateSupportTicket);
+adminRouter.delete('/support/tickets/:id', requireAdminPermission('manage_support'), adminController.deleteSupportTicket);
 
 export { adminRouter };

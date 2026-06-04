@@ -35,6 +35,9 @@ type AppHomeScreenProps = {
   dictionary: Dictionary;
 };
 
+/** Max cards per top-providers slideshow slide (must match API home limit). */
+const TOP_HOME_SLIDE_LIMIT = 3;
+
 const dedupeById = <T extends { id: string }>(items: T[]): T[] => {
   const seen = new Set<string>();
   return items.filter((item) => {
@@ -313,9 +316,9 @@ export const AppHomeScreen = ({ locale, dictionary }: AppHomeScreenProps) => {
       profilesApiClient.getTopCraftsmen(),
       profilesApiClient.getTopBusinesses(),
     ]).then(([experts, craftsmen, businesses]) => {
-      setTopExperts(experts);
-      setTopCraftsmen(craftsmen);
-      setTopBusinesses(businesses);
+      setTopExperts(experts.slice(0, TOP_HOME_SLIDE_LIMIT));
+      setTopCraftsmen(craftsmen.slice(0, TOP_HOME_SLIDE_LIMIT));
+      setTopBusinesses(businesses.slice(0, TOP_HOME_SLIDE_LIMIT));
     });
   }, []);
 
@@ -648,7 +651,7 @@ export const AppHomeScreen = ({ locale, dictionary }: AppHomeScreenProps) => {
               <h2 className="home-section-title">{d.topExperts}</h2>
               <div className="home-top-cards-grid home-top-cards-grid--scroll">
                 {topExperts.length > 0
-                  ? topExperts.map((expert) => (
+                  ? topExperts.slice(0, TOP_HOME_SLIDE_LIMIT).map((expert) => (
                       <div
                         key={expert.userId}
                         role="button"
@@ -706,7 +709,7 @@ export const AppHomeScreen = ({ locale, dictionary }: AppHomeScreenProps) => {
               <h2 className="home-section-title">{d.topCraftsmen}</h2>
               <div className="home-top-cards-grid home-top-cards-grid--scroll">
                 {topCraftsmen.length > 0
-                  ? topCraftsmen.map((craftsman) => (
+                  ? topCraftsmen.slice(0, TOP_HOME_SLIDE_LIMIT).map((craftsman) => (
                       <div
                         key={craftsman.userId}
                         role="button"
@@ -770,7 +773,7 @@ export const AppHomeScreen = ({ locale, dictionary }: AppHomeScreenProps) => {
               <h2 className="home-section-title">{d.topBusinesses}</h2>
               <div className="home-top-cards-grid home-top-cards-grid--scroll">
                 {topBusinesses.length > 0
-                  ? topBusinesses.map((biz) => (
+                  ? topBusinesses.slice(0, TOP_HOME_SLIDE_LIMIT).map((biz) => (
                       <div
                         key={biz.userId}
                         role="button"

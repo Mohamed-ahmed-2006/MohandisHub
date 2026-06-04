@@ -25,6 +25,7 @@ export const VERIFICATION_DOCS_BUCKET = 'verification-docs';
 
 /** Supabase public URL pattern: .../storage/v1/object/public/{bucket}/{path} */
 const PUBLIC_OBJECT_URL_RE = /\/storage\/v1\/object\/public\/([^/]+)\/(.+)$/;
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 /**
  * Extract storage object path for our public `uploads` bucket from a full URL, or null if not a match.
@@ -74,6 +75,22 @@ export function resolvePublicUploadRef(
   const local = parseLocalUploadsBasenameFromUrl(url);
   if (local) return { kind: 'local', basename: local };
   return null;
+}
+
+/** Extract a private upload id from `/api/upload/private/:id` or an absolute API URL. */
+export function parsePrivateUploadIdFromUrl(url: string): string | null {
+  const u = url.trim();
+  if (!u) return null;
+  try {
+    const parsed = new URL(u, 'http://localhost');
+    const path = parsed.pathname.replace(/\/+$/, '');
+    const m = path.match(/^\/api\/upload\/private\/([^/]+)$/);
+    if (!m) return null;
+    const id = m[1]!;
+    return UUID_RE.test(id) ? id : null;
+  } catch {
+    return null;
+  }
 }
 
 export async function deleteObjectsFromBucket(bucket: string, paths: string[]): Promise<void> {
