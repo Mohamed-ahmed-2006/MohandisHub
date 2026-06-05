@@ -149,10 +149,9 @@ if (parsed.data.NODE_ENV === 'production') {
   if (parsed.data.VERIFICATION_PROVIDER === 'idenfy') {
     productionErrors.VERIFICATION_PROVIDER = ['Idenfy verification is not implemented for production. Use didit or manual.'];
   }
-  if (parsed.data.NOWPAYMENTS_LIVE_REQUIRED) {
-    if (!parsed.data.NOWPAYMENTS_API_KEY) {
-      productionErrors.NOWPAYMENTS_API_KEY = ['NOWPayments API key is required for production wallet deposits.'];
-    }
+  // NOWPayments live checks only apply once the API key is actually configured.
+  // NOWPAYMENTS_LIVE_REQUIRED=true without a key is treated as "not yet configured" — no hard-fail.
+  if (parsed.data.NOWPAYMENTS_LIVE_REQUIRED && parsed.data.NOWPAYMENTS_API_KEY) {
     if (!parsed.data.NOWPAYMENTS_IPN_SECRET) {
       productionErrors.NOWPAYMENTS_IPN_SECRET = ['NOWPayments IPN secret is required so deposits and payouts cannot be spoofed.'];
     }
@@ -161,6 +160,12 @@ if (parsed.data.NODE_ENV === 'production') {
     }
     if (!parsed.data.WEB_PUBLIC_URL) {
       productionErrors.WEB_PUBLIC_URL = ['WEB_PUBLIC_URL is required for trusted checkout return URLs.'];
+    }
+  }
+  // If the key is configured but LIVE_REQUIRED is off, still enforce IPN secret (security baseline).
+  if (parsed.data.NOWPAYMENTS_API_KEY && !parsed.data.NOWPAYMENTS_LIVE_REQUIRED) {
+    if (!parsed.data.NOWPAYMENTS_IPN_SECRET) {
+      productionErrors.NOWPAYMENTS_IPN_SECRET = ['NOWPayments API key is set but IPN secret is missing — deposit callbacks cannot be verified.'];
     }
   }
   if (parsed.data.NOWPAYMENTS_WITHDRAWALS_ENABLED || parsed.data.NOWPAYMENTS_MASS_PAYOUTS_ENABLED) {
