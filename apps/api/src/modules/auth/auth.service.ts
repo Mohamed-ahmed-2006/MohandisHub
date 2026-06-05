@@ -183,7 +183,7 @@ export class AuthService {
     meta?: { deviceInfo?: string | undefined; ipAddress?: string | undefined },
   ): Promise<{ user: AuthUser; tokens: AuthTokens; newRefreshToken: string }> {
     const tokenHash = hashToken(rawRefreshToken);
-    const storedToken = await this.authRepository.findRefreshTokenByHash(tokenHash);
+    const storedToken = await this.authRepository.findAnyRefreshTokenByHash(tokenHash);
 
     if (!storedToken) {
       throw new HttpError({
@@ -193,8 +193,30 @@ export class AuthService {
       });
     }
 
-    // Token rotation: revoke the old one
-    await this.authRepository.revokeRefreshToken(storedToken.id);
+    // Reuse detection: a token that exists but is already revoked (or expired)
+    // means someone replayed a rotated token. Revoke the entire family so a
+    // stolen token cannot keep minting access tokens.
+    if (storedToken.revoked_at !== null || storedToken.expires_at.getTime() <= Date.now()) {
+      await this.authRepository.revokeTokenFamily(storedToken.family_id);
+      throw new HttpError({
+        statusCode: 401,
+        code: 'INVALID_REFRESH_TOKEN',
+        message: 'Refresh token is invalid or expired.',
+      });
+    }
+
+    // Token rotation: atomically revoke the old one. If the conditional update
+    // affects zero rows, a concurrent request already rotated this token, so we
+    // treat it as reuse and revoke the family rather than minting a duplicate.
+    const rotated = await this.authRepository.revokeRefreshTokenIfActive(storedToken.id);
+    if (!rotated) {
+      await this.authRepository.revokeTokenFamily(storedToken.family_id);
+      throw new HttpError({
+        statusCode: 401,
+        code: 'INVALID_REFRESH_TOKEN',
+        message: 'Refresh token is invalid or expired.',
+      });
+    }
 
     const userRow = await this.authRepository.findUserById(storedToken.user_id);
     if (!userRow || !userRow.is_active) {
@@ -290,7 +312,11 @@ export class AuthService {
 
     return {
       message: 'If your email is registered, a password reset link has been sent.',
-      ...(env.OTP_EMAIL_PROVIDER === 'console' ? { devResetLink: resetUrl } : {}),
+      // Only ever expose the raw reset link outside production, and only when the
+      // console email provider is in use (local dev without real email delivery).
+      ...(env.NODE_ENV !== 'production' && env.OTP_EMAIL_PROVIDER === 'console'
+        ? { devResetLink: resetUrl }
+        : {}),
     };
   }
 

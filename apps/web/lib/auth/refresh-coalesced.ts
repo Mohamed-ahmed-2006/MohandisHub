@@ -5,7 +5,7 @@ import { authApiClient, isApiClientError } from '@/lib/auth/client';
 const FATAL_REFRESH_CODES = new Set(['INVALID_REFRESH_TOKEN', 'NO_REFRESH_TOKEN']);
 
 export type CoalescedRefreshResult =
-  | { kind: 'success'; user: AuthUser; accessToken: string }
+  | { kind: 'success'; user: AuthUser; accessToken: string; expiresIn: number }
   | { kind: 'fatal' }
   | { kind: 'transient' };
 
@@ -25,6 +25,7 @@ async function runRefreshRequest(): Promise<CoalescedRefreshResult> {
       kind: 'success',
       user: data.user,
       accessToken: data.tokens.accessToken,
+      expiresIn: data.tokens.expiresIn,
     };
   } catch (err) {
     return classifyRefreshFailure(err) === 'fatal' ? { kind: 'fatal' } : { kind: 'transient' };

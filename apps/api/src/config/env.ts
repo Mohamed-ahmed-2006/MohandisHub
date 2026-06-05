@@ -84,6 +84,20 @@ const envSchema = z.object({
   NOWPAYMENTS_ALLOWED_PAY_CURRENCIES: z.string().optional(),
   NOWPAYMENTS_LIVE_REQUIRED: z.coerce.boolean().default(true),
 
+  // Paymob — EGP card/wallet deposits + payout/disbursement (no FX; EGP-native)
+  PAYMOB_SECRET_KEY: z.string().optional(),
+  PAYMOB_PUBLIC_KEY: z.string().optional(),
+  PAYMOB_HMAC_SECRET: z.string().optional(),
+  // Comma-separated integration ids enabled on the Paymob unified intention.
+  PAYMOB_INTEGRATION_IDS: z.string().optional(),
+  PAYMOB_API_BASE_URL: z.string().url().default('https://accept.paymob.com'),
+  PAYMOB_DEPOSITS_ENABLED: z.coerce.boolean().default(false),
+  PAYMOB_WITHDRAWALS_ENABLED: z.coerce.boolean().default(false),
+  // Payout/disbursement API (separate Paymob product/credentials).
+  PAYMOB_PAYOUT_CLIENT_ID: z.string().optional(),
+  PAYMOB_PAYOUT_CLIENT_SECRET: z.string().optional(),
+  PAYMOB_PAYOUT_BASE_URL: z.string().url().default('https://stagingpayouts.paymobsolutions.com'),
+
   // Agora RTC
   AGORA_APP_ID: z.string().optional(),
   AGORA_APP_CERTIFICATE: z.string().optional(),
@@ -158,6 +172,22 @@ if (parsed.data.NODE_ENV === 'production') {
     }
     if (!parsed.data.NOWPAYMENTS_AUTH_EMAIL || !parsed.data.NOWPAYMENTS_AUTH_PASSWORD) {
       productionErrors.NOWPAYMENTS_AUTH_EMAIL = ['NOWPayments auth email/password are required for mass-payout withdrawals.'];
+    }
+  }
+  if (parsed.data.PAYMOB_DEPOSITS_ENABLED) {
+    if (!parsed.data.PAYMOB_SECRET_KEY || !parsed.data.PAYMOB_PUBLIC_KEY) {
+      productionErrors.PAYMOB_SECRET_KEY = ['Paymob secret + public keys are required when PAYMOB_DEPOSITS_ENABLED=true.'];
+    }
+    if (!parsed.data.PAYMOB_HMAC_SECRET) {
+      productionErrors.PAYMOB_HMAC_SECRET = ['Paymob HMAC secret is required so deposit callbacks cannot be spoofed.'];
+    }
+    if (!parsed.data.PAYMOB_INTEGRATION_IDS) {
+      productionErrors.PAYMOB_INTEGRATION_IDS = ['At least one Paymob integration id is required for the unified checkout.'];
+    }
+  }
+  if (parsed.data.PAYMOB_WITHDRAWALS_ENABLED) {
+    if (!parsed.data.PAYMOB_PAYOUT_CLIENT_ID || !parsed.data.PAYMOB_PAYOUT_CLIENT_SECRET) {
+      productionErrors.PAYMOB_PAYOUT_CLIENT_ID = ['Paymob payout client id/secret are required when PAYMOB_WITHDRAWALS_ENABLED=true.'];
     }
   }
   if (Object.keys(productionErrors).length > 0) {

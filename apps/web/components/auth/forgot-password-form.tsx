@@ -43,7 +43,9 @@ export const ForgotPasswordForm = ({ locale, dictionary }: ForgotPasswordFormPro
     try {
       const response = await authApiClient.forgotPassword({ email: trimmedEmail });
       setStatusMessage(dictionary.forgotPassword.successMessage);
-      if (response.devResetLink) {
+      // Defense in depth: never render a reset link in production even if the
+      // backend were to return one.
+      if (response.devResetLink && process.env.NODE_ENV !== 'production') {
         setDevResetLink(response.devResetLink);
         setStatusVariant('info');
       } else {

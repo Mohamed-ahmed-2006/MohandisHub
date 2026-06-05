@@ -45,6 +45,7 @@ function getDefaultAppStatus(): AppStatus {
     globalAnnouncement: null,
     commissionPercent: 10,
     commissionMinEgp: 0,
+    minTransactionEgp: 0,
     commissionReceiverId: '00000000-0000-0000-0000-000000000001',
     reservationAcceptanceFee: 0,
     reservationVoiceMinuteRate: 1,

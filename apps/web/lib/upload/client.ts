@@ -1,4 +1,5 @@
-import { authApiClient } from '@/lib/auth/client';
+import { coalescedRefresh } from '@/lib/auth/refresh-coalesced';
+import { sessionStore } from '@/lib/auth/session-store';
 import { getApiBaseUrl } from '@/lib/env';
 
 type UploadResponse = { data: { url: string; filename: string; originalName: string } };
@@ -79,10 +80,6 @@ export async function getPrivateFileOpenableUrl(
   // IMPORTANT: fetch private uploads through Next.js proxy (same-origin)
   // to avoid browser CORS issues when the API host is different.
   const proxyUrl = `/api/proxy/private-upload?path=${encodeURIComponent(privatePathOrId)}`;
-  console.warn('[getPrivateFileOpenableUrl] start', {
-    proxyUrl,
-    privatePathOrIdPrefix: privatePathOrId.slice(0, 60),
-  });
   const fetchWithToken = async (token: string): Promise<Response> => {
     return fetch(proxyUrl, {
       headers: {
@@ -94,30 +91,23 @@ export async function getPrivateFileOpenableUrl(
   };
 
   let res = await fetchWithToken(accessToken);
-  console.warn('[getPrivateFileOpenableUrl] proxy response initial', {
-    status: res.status,
-  });
 
   if (res.status === 401) {
-    // Access token may expire while admin is open; try refreshing once.
-    try {
-      console.warn('[getPrivateFileOpenableUrl] proxy 401 -> refreshing token once');
-      const refreshed = await authApiClient.refresh();
-      const newToken = refreshed.tokens.accessToken;
-      res = await fetchWithToken(newToken);
-    } catch {
-      // Keep original error handling below.
+    // Access token may expire while admin is open. Refresh once via the shared
+    // coalesced refresh (so we do not race other refreshes) and persist the new
+    // token so the rest of the app keeps using a valid one.
+    const result = await coalescedRefresh();
+    if (result.kind === 'success') {
+      sessionStore.setAccessToken(result.accessToken);
+      res = await fetchWithToken(result.accessToken);
     }
   }
-
-  console.warn('[getPrivateFileOpenableUrl] proxy response final', { status: res.status });
 
   if (res.status === 401) {
     throw new Error('Session expired. Please log out and log in again.');
   }
 
   if (!res.ok) {
-    console.warn('[getPrivateFileOpenableUrl] proxy fetch not ok', { status: res.status });
     const body = (await res.json().catch(() => ({}))) as { error?: { message?: string } } | Record<string, unknown>;
     const message =
       typeof body === 'object' &&
@@ -130,18 +120,7 @@ export async function getPrivateFileOpenableUrl(
   }
 
   const blob = await res.blob();
-  console.warn('[getPrivateFileOpenableUrl] blob meta', {
-    proxyUrl,
-    finalStatus: res.status,
-    responseContentType: res.headers.get('content-type'),
-    responseContentLength: res.headers.get('content-length'),
-    blobType: blob.type,
-    blobSize: blob.size,
-  });
   const blobUrl = URL.createObjectURL(blob);
-  console.warn('[getPrivateFileOpenableUrl] created blob url', {
-    blobUrlPrefix: blobUrl.slice(0, 20),
-  });
   setTimeout(() => URL.revokeObjectURL(blobUrl), 5 * 60 * 1000);
   return blobUrl;
 }

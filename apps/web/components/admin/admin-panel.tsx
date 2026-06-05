@@ -102,7 +102,16 @@ export const AdminPanel = ({ locale, dictionary }: AdminPanelProps) => {
     }
   }, [activeTab, filteredTabs]);
 
-  if (!isReady || !authUser || !accessToken) {
+  // Never render the admin surface for non-admins, unverified users, or while
+  // auth state is settling. The redirect happens in the effect above; until it
+  // completes we show only the skeleton so no admin UI ever paints.
+  if (
+    !isReady ||
+    !authUser ||
+    !accessToken ||
+    !authGuard.emailVerified ||
+    !authUser.isAdmin
+  ) {
     return (
       <main className="admin-panel-main">
         <Container className="admin-panel-container">

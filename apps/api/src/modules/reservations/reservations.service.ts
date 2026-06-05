@@ -15,7 +15,10 @@ import type {
   ReservationSlot,
   ReservationTimelineEvent,
 } from '@mohandishub/shared';
-import { canManageReservationAvailability } from '@mohandishub/shared';
+import {
+  canManageReservationAvailability,
+  computeCommissionSplit,
+} from '@mohandishub/shared';
 import type { PoolClient } from 'pg';
 
 import { env } from '../../config/env.js';
@@ -572,6 +575,14 @@ export class ReservationsService {
       }
     }
     const expertPrice = Math.max(0, toMoney(servicePrice + reservationModePrice));
+    const minTransactionEgp = status.minTransactionEgp ?? 0;
+    if (minTransactionEgp > 0 && expertPrice > 0 && expertPrice <= minTransactionEgp) {
+      throw new HttpError({
+        statusCode: 400,
+        code: 'RESERVATION_AMOUNT_BELOW_MINIMUM',
+        message: `Reservation price must be greater than the minimum transaction amount (${minTransactionEgp} EGP) so the provider payout stays positive after commission.`,
+      });
+    }
     const adminMinuteRate =
       input.mode === 'online'
         ? input.onlineType === 'video'
@@ -2253,14 +2264,15 @@ export class ReservationsService {
             client,
           );
         } else {
-          if (reservation.fixed_price_hold_id) {
-            await this.walletRepo.captureHoldInTransaction(
-              client,
-              reservation.fixed_price_hold_id,
-              'Interview cancellation without refund',
-              { reservationId },
-            );
-          }
+          // Customer forfeits the interview fee. Route it to the provider minus
+          // platform commission (same split as a completed payout) instead of
+          // capturing the hold to nowhere. releaseExpertFixedPayout captures the
+          // held funds idempotently and credits provider + platform.
+          await this.releaseExpertFixedPayout(
+            client,
+            reservation,
+            'Interview cancellation without refund',
+          );
           capturedAmount = priceAmount;
           settlementStatus = priceAmount > 0 ? 'cancelled_no_refund' : settlementStatus;
           outcome = 'cancelled_no_refund';
@@ -3296,12 +3308,13 @@ export class ReservationsService {
     if (!holdId) return;
     const hold = await this.walletRepo.findWalletHoldById(holdId);
     if (!hold) return;
-    if (hold.status === 'released' || hold.status === 'cancelled') return;
-    if (hold.status === 'held') {
-      await this.walletRepo.captureHoldInTransaction(client, holdId, reason, {
-        reservationId: reservation.id,
-      });
-    }
+    // Idempotency: only a hold still in `held` state should ever be captured and
+    // paid out. If it is already captured/released/cancelled, the payout has run
+    // (or the funds are gone) and re-crediting would mint duplicate payouts.
+    if (hold.status !== 'held') return;
+    await this.walletRepo.captureHoldInTransaction(client, holdId, reason, {
+      reservationId: reservation.id,
+    });
 
     const amount = toNumber(reservation.expert_price_amount);
     if (amount <= 0) return;
@@ -3311,11 +3324,14 @@ export class ReservationsService {
       providerWallet = await this.walletRepo.createForUser(reservation.provider_id);
     }
     const settings = await this.settingsService.getAppStatus();
-    const commission = Math.max(
-      amount * (settings.commissionPercent / 100),
+    // Single source of truth: caps commission at the held amount so the provider
+    // payout can never go negative and the platform can never be credited more
+    // than the customer paid.
+    const { commission, providerAmount } = computeCommissionSplit(
+      amount,
+      settings.commissionPercent,
       settings.commissionMinEgp,
     );
-    const providerAmount = Math.max(0, amount - commission);
     const receiverId = settings.commissionReceiverId || PLATFORM_USER_ID;
     const platformWalletId = await this.walletRepo.getOrCreateCommissionWallet(client, receiverId);
 
@@ -3738,6 +3754,17 @@ export class ReservationsService {
       await client.query('BEGIN');
       const reservationForUpdate = await this.findReservationForUpdate(client, reservationId);
       if (!reservationForUpdate) {
+        await client.query('ROLLBACK');
+        return;
+      }
+      // Guard against re-settling an already-finalized reservation (stale
+      // disconnect_auto_release_at). Only active/in-progress reservations should
+      // be auto-released here.
+      if (
+        reservationForUpdate.status === 'completed' ||
+        reservationForUpdate.status === 'cancelled' ||
+        !reservationForUpdate.disconnect_auto_release_at
+      ) {
         await client.query('ROLLBACK');
         return;
       }

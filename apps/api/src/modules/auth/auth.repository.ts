@@ -346,9 +346,38 @@ export class AuthRepository {
     return rows[0] ?? null;
   }
 
+  /**
+   * Look up a refresh token by hash regardless of revoked/expired state. Used by
+   * rotation to distinguish "unknown token" from "known but already revoked"
+   * (the latter signals reuse and must trigger family revocation).
+   */
+  async findAnyRefreshTokenByHash(tokenHash: string): Promise<RefreshTokenRow | null> {
+    const { rows } = await this.db.query<RefreshTokenRow>(
+      `SELECT * FROM refresh_tokens WHERE token_hash = $1 LIMIT 1`,
+      [tokenHash],
+    );
+    return rows[0] ?? null;
+  }
+
   /** Revoke a single refresh token. */
   async revokeRefreshToken(tokenId: string): Promise<void> {
     await this.db.query('UPDATE refresh_tokens SET revoked_at = now() WHERE id = $1', [tokenId]);
+  }
+
+  /**
+   * Atomically revoke a refresh token only if it is currently active. Returns
+   * true if THIS call performed the revocation. If it returns false, the token
+   * was already revoked/expired (a concurrent rotation or a reuse attempt won
+   * the race), so the caller must not mint a new token.
+   */
+  async revokeRefreshTokenIfActive(tokenId: string): Promise<boolean> {
+    const { rowCount } = await this.db.query(
+      `UPDATE refresh_tokens
+          SET revoked_at = now()
+        WHERE id = $1 AND revoked_at IS NULL AND expires_at > now()`,
+      [tokenId],
+    );
+    return (rowCount ?? 0) > 0;
   }
 
   /** Revoke ALL tokens in the same family (token-reuse detection). */

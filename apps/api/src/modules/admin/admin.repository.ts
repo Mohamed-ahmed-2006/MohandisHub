@@ -5,6 +5,7 @@
 import type { Pool } from 'pg';
 
 import { getPool } from '../../db/pool.js';
+import { HttpError } from '../../utils/http-error.js';
 
 import type {
   BidActivityRow,
@@ -596,6 +597,24 @@ export class AdminRepository {
       const sign = type === 'withdrawal' ? -1 : 1;
       const delta = amount * sign;
 
+      // Lock the row and prevent debit-style adjustments from driving the
+      // balance negative.
+      const { rows: lockRows } = await client.query<{ balance: string }>(
+        `SELECT balance::text FROM wallets WHERE id = $1 FOR UPDATE`,
+        [walletId],
+      );
+      if (lockRows.length === 0) {
+        throw new Error('Wallet not found');
+      }
+      const currentBalance = parseFloat(lockRows[0]!.balance);
+      if (delta < 0 && currentBalance + delta < 0) {
+        throw new HttpError({
+          statusCode: 400,
+          code: 'INSUFFICIENT_BALANCE',
+          message: `Adjustment would make the wallet balance negative (current ${currentBalance}, delta ${delta}).`,
+        });
+      }
+
       const { rows: walletRows } = await client.query<{ balance: string }>(
         `UPDATE wallets SET balance = balance + $2 WHERE id = $1 RETURNING balance::text`,
         [walletId, delta],
@@ -630,7 +649,18 @@ export class AdminRepository {
       if (origRows.length === 0) throw new Error('Transaction not found or already reversed');
       const orig = origRows[0]!;
 
-      const sign = ['deposit', 'bonus', 'refund'].includes(orig.type) ? -1 : 1;
+      // Reversal must undo the balance effect of the original transaction.
+      // Credit types increased the balance, so reversing them subtracts (-1).
+      // Debit types decreased the balance, so reversing them adds (+1).
+      //   credits: deposit, bonus, refund, commission, release, adjustment
+      //   debits:  withdrawal, hold, payment*
+      // (*) `payment` is used for BOTH customer debits and provider-payout
+      // credits, so it is treated as a debit-reversal here — correct for the
+      // common case of reversing a customer charge. Reversing a provider-payout
+      // `payment` cannot be disambiguated by type alone and would need a signed
+      // ledger column to handle fully.
+      const creditTypes = ['deposit', 'bonus', 'refund', 'commission', 'release', 'adjustment'];
+      const sign = creditTypes.includes(orig.type) ? -1 : 1;
       const reverseAmount = parseFloat(orig.amount) * sign;
 
       const { rows: walletRows } = await client.query<{ balance: string }>(

@@ -35,6 +35,7 @@ export type AppSettingsRow = {
   global_announcement: string | null;
   commission_percent?: string;
   commission_min_egp?: string;
+  min_transaction_egp?: string;
   commission_receiver_id?: string;
   reservation_acceptance_fee?: string;
   reservation_voice_minute_rate?: string;
@@ -82,6 +83,7 @@ export type AppSettingsUpdate = Partial<{
   global_announcement: string | null;
   commission_percent: number;
   commission_min_egp: number;
+  min_transaction_egp: number;
   commission_receiver_id: string;
   reservation_acceptance_fee: number;
   reservation_voice_minute_rate: number;
@@ -141,6 +143,7 @@ export class SettingsRepository {
     globalAnnouncement: 'global_announcement',
     commissionPercent: 'commission_percent',
     commissionMinEgp: 'commission_min_egp',
+    minTransactionEgp: 'min_transaction_egp',
     commissionReceiverId: 'commission_receiver_id',
     reservationAcceptanceFee: 'reservation_acceptance_fee',
     reservationVoiceMinuteRate: 'reservation_voice_minute_rate',

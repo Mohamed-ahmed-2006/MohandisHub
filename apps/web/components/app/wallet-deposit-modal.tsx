@@ -37,12 +37,14 @@ export const WalletDepositModal = ({
     typeof status.platformInstapayDisplay === 'object' &&
     Object.keys(status.platformInstapayDisplay as object).length > 0;
   const instapayDepositAllowed = isPaymentMethodEnabled(pm, 'deposit_instapay') && instapayConfigured;
+  const paymobEnabledEnv = process.env.NEXT_PUBLIC_PAYMOB_ENABLED === 'true';
+  const paymobDepositAllowed = isPaymentMethodEnabled(pm, 'deposit_paymob') && paymobEnabledEnv;
   const canDeposit =
     !depositsPaused &&
-    (!cryptoDisabled || !cardDisabled || instapayDepositAllowed);
+    (!cryptoDisabled || !cardDisabled || instapayDepositAllowed || paymobDepositAllowed);
 
   const [step, setStep] = useState<'choose' | 'amount' | 'instapay'>('choose');
-  const [method, setMethod] = useState<'crypto' | 'card' | 'instapay'>('crypto');
+  const [method, setMethod] = useState<'crypto' | 'card' | 'instapay' | 'paymob'>('crypto');
   const [amount, setAmount] = useState('');
   const [senderAccount, setSenderAccount] = useState('');
   const [payCurrency, setPayCurrency] = useState('USDTTRC20');
@@ -98,7 +100,7 @@ export const WalletDepositModal = ({
     return () => clearTimeout(timer);
   }, [accessToken, method, step, amount, payCurrency]);
 
-  const handleMethodClick = (nextMethod: 'crypto' | 'card' | 'instapay') => {
+  const handleMethodClick = (nextMethod: 'crypto' | 'card' | 'instapay' | 'paymob') => {
     setMethod(nextMethod);
     setStep(nextMethod === 'instapay' ? 'instapay' : 'amount');
     setError(null);
@@ -124,7 +126,7 @@ export const WalletDepositModal = ({
       const result = await walletApiClient.createDepositCheckout(accessToken, {
         amount: num,
         currency: 'EGP',
-        method: method as 'crypto' | 'card',
+        method: method as 'crypto' | 'card' | 'paymob',
         ...(method === 'crypto' ? { payCurrency } : {}),
         ...(returnUrl ? { returnUrl } : {}),
       });
@@ -140,7 +142,10 @@ export const WalletDepositModal = ({
             : isApiClientError(err) && err.code === 'CRYPTO_AMOUNT_TOO_LOW'
               ? err.message
             : isApiClientError(err) &&
-                (err.code === 'CARD_DEPOSITS_DISABLED' || err.code === 'CRYPTO_DEPOSITS_DISABLED')
+                (err.code === 'CARD_DEPOSITS_DISABLED' ||
+                  err.code === 'CRYPTO_DEPOSITS_DISABLED' ||
+                  err.code === 'PAYMOB_DEPOSITS_DISABLED' ||
+                  err.code === 'PAYMOB_NOT_CONFIGURED')
               ? err.message
               : d.depositError;
       setError(msg);
@@ -248,6 +253,16 @@ export const WalletDepositModal = ({
                   <span className="deposit-option-action">{d.instapayOptionHint}</span>
                 </button>
               )}
+              {paymobDepositAllowed && (
+                <button
+                  type="button"
+                  className="deposit-option-card"
+                  onClick={() => handleMethodClick('paymob')}
+                >
+                  <span className="deposit-option-label">{d.paymobOptionLabel}</span>
+                  <span className="deposit-option-action">{d.paymobOptionHint}</span>
+                </button>
+              )}
             </div>
           </>
         ) : step === 'instapay' ? (
@@ -351,7 +366,9 @@ export const WalletDepositModal = ({
                   ? d.depositRedirecting
                   : method === 'card'
                     ? d.depositPayWithCard
-                    : d.depositPayWithCrypto}
+                    : method === 'paymob'
+                      ? d.paymobPay
+                      : d.depositPayWithCrypto}
               </button>
             </div>
           </form>

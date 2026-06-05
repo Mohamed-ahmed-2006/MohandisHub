@@ -56,11 +56,11 @@ function parseDepositBody(body: unknown): CreateDepositCheckoutBody {
       message: 'Use POST /api/wallet/deposits/instapay for InstaPay deposits.',
     });
   }
-  if (method !== 'crypto' && method !== 'card') {
+  if (method !== 'crypto' && method !== 'card' && method !== 'paymob') {
     throw new HttpError({
       statusCode: 400,
       code: 'INVALID_METHOD',
-      message: 'Deposit method must be crypto or card.',
+      message: 'Deposit method must be crypto, card, or paymob.',
     });
   }
 
@@ -77,7 +77,8 @@ function parseDepositBody(body: unknown): CreateDepositCheckoutBody {
 function parseWithdrawalBody(body: unknown): CreateWithdrawalRequestBody {
   const source = body && typeof body === 'object' ? (body as Record<string, unknown>) : {};
   const methodRaw = source.method;
-  const method = methodRaw === 'instapay' ? 'instapay' : 'crypto';
+  const method: CreateWithdrawalRequestBody['method'] =
+    methodRaw === 'instapay' ? 'instapay' : methodRaw === 'paymob' ? 'paymob' : 'crypto';
   const amountRaw = source.amountEgp ?? source.amount;
   const amountEgp =
     typeof amountRaw === 'number'
@@ -98,6 +99,12 @@ function parseWithdrawalBody(body: unknown): CreateWithdrawalRequestBody {
       : {}),
     ...(typeof source.saveInstapayRecipient === 'boolean'
       ? { saveInstapayRecipient: source.saveInstapayRecipient }
+      : {}),
+    ...(typeof source.paymobRecipient === 'string'
+      ? { paymobRecipient: source.paymobRecipient }
+      : {}),
+    ...(typeof source.savePaymobRecipient === 'boolean'
+      ? { savePaymobRecipient: source.savePaymobRecipient }
       : {}),
   };
 }
@@ -344,6 +351,12 @@ const createWithdrawal = asyncHandler(async (req, res) => {
     ...(payload.saveInstapayRecipient !== undefined
       ? { saveInstapayRecipient: payload.saveInstapayRecipient }
       : {}),
+    ...(payload.paymobRecipient !== undefined
+      ? { paymobRecipient: payload.paymobRecipient }
+      : {}),
+    ...(payload.savePaymobRecipient !== undefined
+      ? { savePaymobRecipient: payload.savePaymobRecipient }
+      : {}),
   });
   const response: ApiSuccessBody<WithdrawalRequest> = { ok: true, data: result };
   res.status(201).json(response);
@@ -427,6 +440,17 @@ async function nowPaymentsPayoutIpn(req: Request, res: Response, next: NextFunct
   }
 }
 
+async function paymobDepositWebhook(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const rawBody = extractRawBody(req.body);
+    const hmac = typeof req.query.hmac === 'string' ? req.query.hmac : null;
+    await walletService.handlePaymobDepositWebhook(rawBody, hmac);
+    res.status(200).json({ ok: true });
+  } catch (error) {
+    next(error);
+  }
+}
+
 async function nowPaymentsIpn(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
     const rawBody = extractRawBody(req.body);
@@ -469,4 +493,5 @@ export const walletController = {
   nowPaymentsIpn,
   nowPaymentsDepositIpn,
   nowPaymentsPayoutIpn,
+  paymobDepositWebhook,
 };

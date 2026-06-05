@@ -53,6 +53,22 @@ export const errorHandler: ErrorRequestHandler = (error, req, res, next) => {
     return;
   }
 
+  // Well-known wallet errors thrown as plain Errors from the repository layer
+  // (e.g. spending from a frozen wallet). Map to a clean client status before
+  // the generic unhandled-error logging/Sentry path to avoid noise.
+  if (error instanceof Error && error.message === 'WALLET_FROZEN') {
+    const body: ApiErrorBody = {
+      ok: false,
+      error: {
+        code: 'WALLET_FROZEN',
+        message: 'This wallet is frozen. Please contact support.',
+        ...(requestId ? { requestId } : {}),
+      },
+    };
+    res.status(403).json(body);
+    return;
+  }
+
   logger.error('Unhandled error', {
     requestId,
     error: error instanceof Error ? error.message : 'Unknown error',

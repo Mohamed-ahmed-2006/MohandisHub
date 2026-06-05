@@ -63,9 +63,11 @@ export const WalletSettingsScreen = (_props: WalletSettingsScreenProps) => {
   const [withdrawAddress, setWithdrawAddress] = useState('');
   const [withdrawExtraId, setWithdrawExtraId] = useState('');
   const [withdrawSaveAddress, setWithdrawSaveAddress] = useState(true);
-  const [withdrawMethod, setWithdrawMethod] = useState<'crypto' | 'instapay'>('crypto');
+  const [withdrawMethod, setWithdrawMethod] = useState<'crypto' | 'instapay' | 'paymob'>('crypto');
   const [instapayRecipient, setInstapayRecipient] = useState('');
   const [withdrawSaveInstapay, setWithdrawSaveInstapay] = useState(true);
+  const [paymobRecipient, setPaymobRecipient] = useState('');
+  const [withdrawSavePaymob, setWithdrawSavePaymob] = useState(true);
   const [cryptoQuote, setCryptoQuote] = useState<{ crypto: number; currency: string } | null>(null);
   const [withdrawCode, setWithdrawCode] = useState('');
   const [activeWithdrawalId, setActiveWithdrawalId] = useState<string | null>(null);
@@ -76,9 +78,11 @@ export const WalletSettingsScreen = (_props: WalletSettingsScreenProps) => {
   const canWithdraw = authUser?.role ? canRequestWithdrawal(authUser.role) : false;
   const { status: appStatus } = useAppStatus();
   const pm = appStatus?.paymentMethodsEnabled ?? {};
+  const paymobEnabledEnv = process.env.NEXT_PUBLIC_PAYMOB_ENABLED === 'true';
   const showWithdrawCrypto = isPaymentMethodEnabled(pm, 'withdrawal_crypto');
   const showWithdrawInstapay = isPaymentMethodEnabled(pm, 'withdrawal_instapay');
-  const anyWithdrawMethod = showWithdrawCrypto || showWithdrawInstapay;
+  const showWithdrawPaymob = isPaymentMethodEnabled(pm, 'withdrawal_paymob') && paymobEnabledEnv;
+  const anyWithdrawMethod = showWithdrawCrypto || showWithdrawInstapay || showWithdrawPaymob;
 
   const depositResult = useMemo(() => {
     const value = searchParams.get('deposit');
@@ -136,12 +140,13 @@ export const WalletSettingsScreen = (_props: WalletSettingsScreenProps) => {
   }, [accessToken, loadData]);
 
   useEffect(() => {
-    if (showWithdrawCrypto && !showWithdrawInstapay) {
-      setWithdrawMethod('crypto');
-    } else if (!showWithdrawCrypto && showWithdrawInstapay) {
-      setWithdrawMethod('instapay');
-    }
-  }, [showWithdrawCrypto, showWithdrawInstapay]);
+    const enabled: Array<'crypto' | 'instapay' | 'paymob'> = [
+      ...(showWithdrawInstapay ? (['instapay'] as const) : []),
+      ...(showWithdrawPaymob ? (['paymob'] as const) : []),
+      ...(showWithdrawCrypto ? (['crypto'] as const) : []),
+    ];
+    setWithdrawMethod((current) => (enabled.includes(current) ? current : enabled[0] ?? 'instapay'));
+  }, [showWithdrawCrypto, showWithdrawInstapay, showWithdrawPaymob]);
 
   useEffect(() => {
     if (!accessToken) return;
@@ -177,6 +182,10 @@ export const WalletSettingsScreen = (_props: WalletSettingsScreenProps) => {
       setWithdrawError('InstaPay recipient phone or account is required.');
       return;
     }
+    if (withdrawMethod === 'paymob' && !paymobRecipient.trim()) {
+      setWithdrawError('Paymob payout recipient is required.');
+      return;
+    }
 
     setWithdrawBusy(true);
     setWithdrawError(null);
@@ -192,10 +201,15 @@ export const WalletSettingsScreen = (_props: WalletSettingsScreenProps) => {
               ...(withdrawExtraId.trim() ? { extraId: withdrawExtraId.trim() } : {}),
               saveAddress: withdrawSaveAddress,
             }
-          : {
-              instapayRecipient: instapayRecipient.trim(),
-              saveInstapayRecipient: withdrawSaveInstapay,
-            }),
+          : withdrawMethod === 'paymob'
+            ? {
+                paymobRecipient: paymobRecipient.trim(),
+                savePaymobRecipient: withdrawSavePaymob,
+              }
+            : {
+                instapayRecipient: instapayRecipient.trim(),
+                saveInstapayRecipient: withdrawSaveInstapay,
+              }),
       });
       setActiveWithdrawalId(created.id);
       setWithdrawCode('');
@@ -304,7 +318,7 @@ export const WalletSettingsScreen = (_props: WalletSettingsScreenProps) => {
                   manually and usually take 1-5 business days to complete.
                 </p>
 
-                {showWithdrawCrypto && showWithdrawInstapay && (
+                {[showWithdrawInstapay, showWithdrawPaymob, showWithdrawCrypto].filter(Boolean).length > 1 && (
                   <div className="wallet-settings-form" style={{ marginBottom: 12 }}>
                     <label className="wallet-settings-form-label">
                       Method
@@ -312,13 +326,16 @@ export const WalletSettingsScreen = (_props: WalletSettingsScreenProps) => {
                         className="wallet-settings-input"
                         value={withdrawMethod}
                         onChange={(e) => {
-                          setWithdrawMethod(e.target.value as 'crypto' | 'instapay');
+                          setWithdrawMethod(e.target.value as 'crypto' | 'instapay' | 'paymob');
                           setCryptoQuote(null);
                           setWithdrawError(null);
                         }}
                       >
-                        <option value="crypto">Crypto (NOWPayments)</option>
-                        <option value="instapay">InstaPay (manual, 1-5 business days)</option>
+                        {showWithdrawInstapay && (
+                          <option value="instapay">InstaPay (manual, 1-5 business days)</option>
+                        )}
+                        {showWithdrawPaymob && <option value="paymob">Paymob</option>}
+                        {showWithdrawCrypto && <option value="crypto">Crypto (NOWPayments)</option>}
                       </select>
                     </label>
                   </div>
@@ -463,6 +480,29 @@ export const WalletSettingsScreen = (_props: WalletSettingsScreenProps) => {
                 </>
               )}
 
+              {withdrawMethod === 'paymob' && showWithdrawPaymob && (
+                <>
+                  <label className="wallet-settings-form-label">
+                    Paymob payout recipient (wallet / account)
+                    <input
+                      type="text"
+                      className="wallet-settings-input"
+                      value={paymobRecipient}
+                      onChange={(event) => setPaymobRecipient(event.target.value)}
+                      required
+                    />
+                  </label>
+                  <label className="wallet-settings-checkbox">
+                    <input
+                      type="checkbox"
+                      checked={withdrawSavePaymob}
+                      onChange={(event) => setWithdrawSavePaymob(event.target.checked)}
+                    />
+                    Save Paymob recipient
+                  </label>
+                </>
+              )}
+
               <button type="submit" className="wallet-settings-primary" disabled={withdrawBusy}>
                 {withdrawBusy ? 'Submitting...' : 'Create withdrawal'}
               </button>
@@ -518,11 +558,19 @@ export const WalletSettingsScreen = (_props: WalletSettingsScreenProps) => {
                           ? ` → ~${item.destinationCryptoAmount} ${item.destinationCurrency}`
                           : item.method === 'instapay'
                             ? ' → InstaPay'
-                            : ''}
+                            : item.method === 'paymob'
+                              ? ' → Paymob'
+                              : ''}
                       </p>
                       <p className="wallet-settings-history-meta">
                         {new Date(item.createdAt).toLocaleString(locale)}
                       </p>
+                      {item.rejectionReason &&
+                        (item.status === 'rejected' || item.status === 'blocked' || item.status === 'failed') && (
+                          <p className="wallet-settings-history-meta">
+                            Reason: {item.rejectionReason}
+                          </p>
+                        )}
                       {item.method === 'instapay' && item.status === 'awaiting_transfer' && accessToken && (
                         <button
                           type="button"

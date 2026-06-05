@@ -182,6 +182,7 @@ export const updateSettingsSchema = z.object({
   globalAnnouncement: z.string().max(1000).nullable().optional(),
   commissionPercent: z.number().min(0).max(100).optional(),
   commissionMinEgp: z.number().min(0).optional(),
+  minTransactionEgp: z.number().min(0).optional(),
   commissionReceiverId: z.string().uuid().optional(),
   reservationAcceptanceFee: z.number().min(0).optional(),
   reservationVoiceMinuteRate: z.number().min(0).optional(),

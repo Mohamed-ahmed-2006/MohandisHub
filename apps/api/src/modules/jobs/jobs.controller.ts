@@ -42,7 +42,7 @@ const submitMilestoneSchema = z.object({
 });
 
 const applicationMessageSchema = z.object({
-  content: z.string().min(1),
+  content: z.string().min(1).max(5000),
 });
 
 const updateApplicationStatusSchema = z.object({

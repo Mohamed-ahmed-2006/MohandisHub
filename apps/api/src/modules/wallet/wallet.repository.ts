@@ -94,6 +94,8 @@ type WithdrawalRequestRow = {
   source_amount_egp: string | null;
   payout_crypto_amount: string | null;
   instapay_recipient: string | null;
+  paymob_recipient: string | null;
+  paymob_payout_reference: string | null;
   admin_proof_upload_id: string | null;
   rate_snapshot: Record<string, unknown>;
   reviewed_by: string | null;
@@ -146,7 +148,8 @@ export class WalletRepository {
   private withdrawalSelectColumns = `id, user_id, wallet_id, hold_id, amount::text, currency, payout_address,
     payout_extra_id, status, provider, provider_batch_withdrawal_id, provider_withdrawal_id, provider_status,
     provider_error, provider_payload, verification_required, verified_at, processed_at, failed_at,
-    withdrawal_method, source_amount_egp::text, payout_crypto_amount::text, instapay_recipient, admin_proof_upload_id,
+    withdrawal_method, source_amount_egp::text, payout_crypto_amount::text, instapay_recipient,
+    paymob_recipient, paymob_payout_reference, admin_proof_upload_id,
     rate_snapshot, reviewed_by, reviewed_at, rejection_reason,
     created_at, updated_at`;
 
@@ -234,6 +237,25 @@ export class WalletRepository {
       [userId, walletId, amount, currency, orderId, provider, providerInvoiceId, JSON.stringify(providerPayload)],
     );
     return rows[0]!;
+  }
+
+  async getUserBillingInfo(
+    userId: string,
+  ): Promise<{ email: string | null; displayName: string | null; phone: string | null }> {
+    const { rows } = await this.db.query<{
+      email: string | null;
+      display_name: string | null;
+      phone: string | null;
+    }>(
+      `SELECT email, display_name, phone FROM users WHERE id = $1`,
+      [userId],
+    );
+    const row = rows[0];
+    return {
+      email: row?.email ?? null,
+      displayName: row?.display_name ?? null,
+      phone: row?.phone ?? null,
+    };
   }
 
   async findDepositRequestByOrderId(orderId: string): Promise<DepositRequestRow | null> {
@@ -688,13 +710,18 @@ export class WalletRepository {
     const client = await this.db.connect();
     try {
       await client.query('BEGIN');
-      const { rows: walletRows } = await client.query<{ balance: string; id: string }>(
-        `SELECT id, balance::text FROM wallets WHERE id = $1 FOR UPDATE`,
-        [walletId],
-      );
+      const { rows: walletRows } = await client.query<{
+        balance: string;
+        id: string;
+        is_frozen: boolean;
+      }>(`SELECT id, balance::text, is_frozen FROM wallets WHERE id = $1 FOR UPDATE`, [walletId]);
       if (walletRows.length === 0) {
         await client.query('ROLLBACK');
         throw new Error('Wallet not found');
+      }
+      if (walletRows[0]!.is_frozen) {
+        await client.query('ROLLBACK');
+        throw new Error('WALLET_FROZEN');
       }
       const currentBalance = parseFloat(walletRows[0]!.balance);
       if (currentBalance < amount) {
@@ -773,11 +800,12 @@ export class WalletRepository {
     referenceType: string,
     referenceId: string | null,
   ): Promise<string> {
-    const { rows: lockRows } = await client.query<{ balance: string }>(
-      `SELECT balance::text FROM wallets WHERE id = $1 FOR UPDATE`,
+    const { rows: lockRows } = await client.query<{ balance: string; is_frozen: boolean }>(
+      `SELECT balance::text, is_frozen FROM wallets WHERE id = $1 FOR UPDATE`,
       [walletId],
     );
     if (lockRows.length === 0) throw new Error('Wallet not found');
+    if (lockRows[0]!.is_frozen) throw new Error('WALLET_FROZEN');
     const currentBalance = parseFloat(lockRows[0]!.balance);
     if (currentBalance < amount) throw new Error('INSUFFICIENT_BALANCE');
     const balanceAfter = currentBalance - amount;
@@ -859,11 +887,12 @@ export class WalletRepository {
     referenceId: string | null,
     metadata: Record<string, unknown> = {},
   ): Promise<WalletHoldRow> {
-    const { rows: lockRows } = await client.query<{ balance: string }>(
-      `SELECT balance::text FROM wallets WHERE id = $1 FOR UPDATE`,
+    const { rows: lockRows } = await client.query<{ balance: string; is_frozen: boolean }>(
+      `SELECT balance::text, is_frozen FROM wallets WHERE id = $1 FOR UPDATE`,
       [walletId],
     );
     if (lockRows.length === 0) throw new Error('Wallet not found');
+    if (lockRows[0]!.is_frozen) throw new Error('WALLET_FROZEN');
     const currentBalance = parseFloat(lockRows[0]!.balance);
     if (currentBalance < amount) throw new Error('INSUFFICIENT_BALANCE');
     const balanceAfter = currentBalance - amount;
@@ -1020,9 +1049,10 @@ export class WalletRepository {
     payoutExtraId?: string | null;
     payoutCryptoAmount: number | null;
     verificationRequired: boolean;
-    provider: 'nowpayments' | 'instapay_manual';
-    withdrawalMethod: 'crypto' | 'instapay';
+    provider: 'nowpayments' | 'instapay_manual' | 'paymob';
+    withdrawalMethod: 'crypto' | 'instapay' | 'paymob';
     instapayRecipient?: string | null;
+    paymobRecipient?: string | null;
     initialStatus: 'pending_verification' | 'awaiting_transfer' | 'processing';
     rateSnapshot?: Record<string, unknown>;
     providerPayload?: Record<string, unknown>;
@@ -1059,10 +1089,10 @@ export class WalletRepository {
         `INSERT INTO withdrawal_requests (
           user_id, wallet_id, hold_id, amount, currency, payout_address, payout_extra_id,
           status, provider, verification_required, provider_payload,
-          withdrawal_method, source_amount_egp, payout_crypto_amount, instapay_recipient, rate_snapshot
+          withdrawal_method, source_amount_egp, payout_crypto_amount, instapay_recipient, paymob_recipient, rate_snapshot
         )
         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::jsonb,
-          $12, $13, $14, $15, $16::jsonb)
+          $12, $13, $14, $15, $16, $17::jsonb)
         RETURNING ${this.withdrawalSelectColumns}`,
         [
           params.userId,
@@ -1080,6 +1110,7 @@ export class WalletRepository {
           params.amountEgp,
           params.payoutCryptoAmount,
           params.instapayRecipient ?? null,
+          params.paymobRecipient ?? null,
           JSON.stringify(params.rateSnapshot ?? {}),
         ],
       );
@@ -1165,6 +1196,32 @@ export class WalletRepository {
         params.providerStatus ?? null,
         params.providerPayload ? JSON.stringify(params.providerPayload) : null,
         params.status,
+      ],
+    );
+    return rows[0] ?? null;
+  }
+
+  async markWithdrawalPaymobPayoutStarted(params: {
+    withdrawalId: string;
+    payoutReference: string;
+    providerStatus?: string | null;
+    providerPayload?: Record<string, unknown>;
+  }): Promise<WithdrawalRequestRow | null> {
+    const { rows } = await this.db.query<WithdrawalRequestRow>(
+      `UPDATE withdrawal_requests
+       SET paymob_payout_reference = $2,
+           provider_status = COALESCE($3, provider_status),
+           provider_payload = provider_payload || COALESCE($4::jsonb, '{}'::jsonb),
+           provider_error = NULL,
+           status = 'processing',
+           updated_at = now()
+       WHERE id = $1
+       RETURNING ${this.withdrawalSelectColumns}`,
+      [
+        params.withdrawalId,
+        params.payoutReference,
+        params.providerStatus ?? null,
+        params.providerPayload ? JSON.stringify(params.providerPayload) : null,
       ],
     );
     return rows[0] ?? null;
@@ -1562,14 +1619,16 @@ export class WalletRepository {
     crypto_payout_currency: string | null;
     crypto_payout_address: string | null;
     crypto_payout_extra_id: string | null;
+    paymob_recipient: string | null;
   } | null> {
     const { rows } = await this.db.query<{
       instapay_phone: string | null;
       crypto_payout_currency: string | null;
       crypto_payout_address: string | null;
       crypto_payout_extra_id: string | null;
+      paymob_recipient: string | null;
     }>(
-      `SELECT instapay_phone, crypto_payout_currency, crypto_payout_address, crypto_payout_extra_id
+      `SELECT instapay_phone, crypto_payout_currency, crypto_payout_address, crypto_payout_extra_id, paymob_recipient
        FROM user_payout_preferences WHERE user_id = $1`,
       [userId],
     );
@@ -1582,16 +1641,19 @@ export class WalletRepository {
     crypto_payout_currency: string | null;
     crypto_payout_address: string | null;
     crypto_payout_extra_id: string | null;
+    paymob_recipient: string | null;
   }): Promise<void> {
     await this.db.query(
       `INSERT INTO user_payout_preferences (
-        user_id, instapay_phone, crypto_payout_currency, crypto_payout_address, crypto_payout_extra_id, updated_at
-      ) VALUES ($1, $2, $3, $4, $5, now())
+        user_id, instapay_phone, crypto_payout_currency, crypto_payout_address, crypto_payout_extra_id,
+        paymob_recipient, updated_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, now())
       ON CONFLICT (user_id) DO UPDATE SET
         instapay_phone = EXCLUDED.instapay_phone,
         crypto_payout_currency = EXCLUDED.crypto_payout_currency,
         crypto_payout_address = EXCLUDED.crypto_payout_address,
         crypto_payout_extra_id = EXCLUDED.crypto_payout_extra_id,
+        paymob_recipient = EXCLUDED.paymob_recipient,
         updated_at = now()`,
       [
         params.userId,
@@ -1599,6 +1661,7 @@ export class WalletRepository {
         params.crypto_payout_currency,
         params.crypto_payout_address,
         params.crypto_payout_extra_id,
+        params.paymob_recipient,
       ],
     );
   }

@@ -23,8 +23,10 @@ export const KNOWN_PAYMENT_METHOD_KEYS = [
   'deposit_crypto',
   'deposit_card',
   'deposit_instapay',
+  'deposit_paymob',
   'withdrawal_crypto',
   'withdrawal_instapay',
+  'withdrawal_paymob',
 ] as const;
 
 export type KnownPaymentMethodKey = (typeof KNOWN_PAYMENT_METHOD_KEYS)[number];
@@ -33,7 +35,7 @@ export type PaymentMethodFlow = 'deposit' | 'withdrawal';
 export type PaymentMethodDefinition = {
   key: KnownPaymentMethodKey;
   flow: PaymentMethodFlow;
-  provider: 'nowpayments' | 'instapay_manual';
+  provider: 'nowpayments' | 'instapay_manual' | 'paymob';
   defaultEnabled: boolean;
   launchRecommended: boolean;
 };
@@ -65,11 +67,18 @@ export const PAYMENT_METHOD_DEFINITIONS: readonly PaymentMethodDefinition[] = [
     launchRecommended: true,
   },
   {
+    key: 'deposit_paymob',
+    flow: 'deposit',
+    provider: 'paymob',
+    defaultEnabled: false,
+    launchRecommended: false,
+  },
+  {
     key: 'withdrawal_crypto',
     flow: 'withdrawal',
     provider: 'nowpayments',
-    defaultEnabled: true,
-    launchRecommended: true,
+    defaultEnabled: false,
+    launchRecommended: false,
   },
   {
     key: 'withdrawal_instapay',
@@ -77,6 +86,13 @@ export const PAYMENT_METHOD_DEFINITIONS: readonly PaymentMethodDefinition[] = [
     provider: 'instapay_manual',
     defaultEnabled: true,
     launchRecommended: true,
+  },
+  {
+    key: 'withdrawal_paymob',
+    flow: 'withdrawal',
+    provider: 'paymob',
+    defaultEnabled: false,
+    launchRecommended: false,
   },
 ] as const;
 
@@ -140,6 +156,8 @@ export type AppSettings = {
   globalAnnouncement: string | null;
   commissionPercent: number;
   commissionMinEgp: number;
+  /** Minimum paid transaction amount (EGP) for bids/reservations (0 = no floor). */
+  minTransactionEgp: number;
   commissionReceiverId: string;
   reservationAcceptanceFee: number;
   reservationVoiceMinuteRate: number;
@@ -193,6 +211,8 @@ export type AppStatus = {
   globalAnnouncement: string | null;
   commissionPercent: number;
   commissionMinEgp: number;
+  /** Minimum paid transaction amount (EGP) for bids/reservations (0 = no floor). */
+  minTransactionEgp: number;
   commissionReceiverId: string;
   reservationAcceptanceFee: number;
   reservationVoiceMinuteRate: number;
@@ -234,6 +254,7 @@ export type UpdateAppSettingsBody = Partial<{
   globalAnnouncement: string | null;
   commissionPercent: number;
   commissionMinEgp: number;
+  minTransactionEgp: number;
   commissionReceiverId: string;
   reservationAcceptanceFee: number;
   reservationVoiceMinuteRate: number;

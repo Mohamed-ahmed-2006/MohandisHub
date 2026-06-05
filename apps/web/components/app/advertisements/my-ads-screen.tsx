@@ -1,5 +1,6 @@
 'use client';
 
+import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { useAuth } from '@/components/auth/auth-provider';
@@ -11,6 +12,7 @@ import {
   type Advertisement,
 } from '@/lib/advertisements/client';
 import { toAbsoluteAssetUrl } from '@/lib/asset-url';
+import { buildLocalePath } from '@/lib/i18n/path';
 import type { Dictionary, Locale } from '@/lib/i18n/types';
 import { uploadFile } from '@/lib/upload/client';
 
@@ -30,7 +32,8 @@ const STATUS_COLORS: Record<AdStatus, string> = {
 };
 
 export const MyAdsScreen = ({ locale, dictionary }: MyAdsScreenProps) => {
-  const { accessToken, authUser } = useAuth();
+  const router = useRouter();
+  const { accessToken, authUser, isAuthenticated, isReady, authGuard } = useAuth();
   const [rows, setRows] = useState<Advertisement[]>([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -85,6 +88,17 @@ export const MyAdsScreen = ({ locale, dictionary }: MyAdsScreenProps) => {
     void load();
   }, [load]);
 
+  useEffect(() => {
+    if (!isReady) return;
+    if (!isAuthenticated || !authUser) {
+      router.replace(`${buildLocalePath(locale, '/auth')}?mode=login`);
+      return;
+    }
+    if (!authGuard.emailVerified) {
+      router.replace(buildLocalePath(locale, '/verify-email'));
+    }
+  }, [isReady, isAuthenticated, authUser, authGuard.emailVerified, locale, router]);
+
   const durationDays = useMemo(() => {
     const parsed = Number.parseInt(form.durationDays, 10);
     if (!Number.isFinite(parsed) || parsed < 1) return 1;
@@ -103,6 +117,12 @@ export const MyAdsScreen = ({ locale, dictionary }: MyAdsScreenProps) => {
     return new Date(plannedStartAt.getTime() + durationDays * 24 * 60 * 60 * 1000);
   }, [plannedStartAt, durationDays]);
   const totalCost = useMemo(() => Math.max(0, adControls.pricePerDay * durationDays), [adControls.pricePerDay, durationDays]);
+
+  // Do not render app content to unauthenticated/unverified users; the effect
+  // above redirects them. Show nothing until auth state is settled.
+  if (!isReady || !isAuthenticated || !authUser || !authGuard.emailVerified) {
+    return <main className="myads-main" />;
+  }
 
   if (!canUse) {
     return (

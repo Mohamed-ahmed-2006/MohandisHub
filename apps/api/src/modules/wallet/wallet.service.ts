@@ -24,6 +24,15 @@ import {
   verifyNowPaymentsIpnSignature,
   verifyPayout,
 } from '../../lib/nowpayments.client.js';
+import {
+  authenticatePaymobPayout,
+  createPaymobDisbursement,
+  createPaymobIntention,
+  isPaymobDepositConfigured,
+  isPaymobPayoutConfigured,
+  PaymobNotConfiguredError,
+  verifyPaymobHmac,
+} from '../../lib/paymob.client.js';
 import { HttpError } from '../../utils/http-error.js';
 import { NotificationsService } from '../notifications/notifications.service.js';
 import { SettingsService } from '../settings/settings.service.js';
@@ -48,7 +57,7 @@ const MIN_CRYPTO_DEPOSIT_PROVIDER_USD = 10;
 
 type CreateDepositCheckoutInput = {
   amount: number;
-  method: 'crypto' | 'card';
+  method: 'crypto' | 'card' | 'paymob';
   currency?: string;
   payCurrency?: string;
   returnUrl?: string;
@@ -61,7 +70,7 @@ type EstimateDepositInput = {
 };
 
 type CreateWithdrawalInput = {
-  method: 'crypto' | 'instapay';
+  method: 'crypto' | 'instapay' | 'paymob';
   amountEgp: number;
   currency?: string;
   address?: string;
@@ -69,6 +78,8 @@ type CreateWithdrawalInput = {
   saveAddress?: boolean;
   instapayRecipient?: string;
   saveInstapayRecipient?: boolean;
+  paymobRecipient?: string;
+  savePaymobRecipient?: boolean;
 };
 
 type UserPayoutPreferences = Awaited<ReturnType<WalletRepository['getUserPayoutPreferences']>>;
@@ -266,6 +277,10 @@ export class WalletService {
       });
     }
 
+    if (input.method === 'paymob') {
+      return this.createPaymobDepositCheckout(userId, input, status.paymentMethodsEnabled);
+    }
+
     if (!env.NOWPAYMENTS_API_KEY) {
       throw new HttpError({
         statusCode: 503,
@@ -362,6 +377,148 @@ export class WalletService {
       method: input.method,
       provider: 'nowpayments',
     };
+  }
+
+  private async createPaymobDepositCheckout(
+    userId: string,
+    input: CreateDepositCheckoutInput,
+    paymentMethodsEnabled: Record<string, boolean>,
+  ): Promise<DepositCheckoutResponse> {
+    if (!isPaymentMethodEnabled(paymentMethodsEnabled, 'deposit_paymob')) {
+      throw new HttpError({
+        statusCode: 503,
+        code: 'PAYMOB_DEPOSITS_DISABLED',
+        message: 'Paymob deposits are not available.',
+      });
+    }
+    if (!isPaymobDepositConfigured()) {
+      throw new HttpError({
+        statusCode: 503,
+        code: 'PAYMOB_NOT_CONFIGURED',
+        message: 'Paymob is not configured yet.',
+      });
+    }
+
+    const wallet = await this.getOrCreateWallet(userId);
+    // Paymob is EGP-native: no FX, store the EGP amount directly.
+    const orderId = `pm_dep_${wallet.id.replace(/-/g, '')}_${Date.now()}`.slice(0, 128);
+    const webBase = this.resolveTrustedWebReturnBase(input.returnUrl);
+    const apiBase = (env.API_PUBLIC_URL || `http://localhost:${env.PORT}`).replace(/\/$/, '');
+    const redirectionUrl = this.withQueryParams(webBase, { deposit: 'success', order_id: orderId });
+    const notificationUrl = `${apiBase}/api/wallet/paymob/webhook`;
+
+    const billing = await this.repo.getUserBillingInfo(userId);
+    const billingData = this.toPaymobBillingData(billing);
+
+    try {
+      const intention = await createPaymobIntention({
+        amountEgp: input.amount,
+        specialReference: orderId,
+        billingData,
+        notificationUrl,
+        redirectionUrl,
+      });
+
+      await this.repo.createDepositRequest(
+        userId,
+        wallet.id,
+        input.amount,
+        'EGP',
+        orderId,
+        'paymob',
+        intention.intentionId || null,
+        {
+          method: 'paymob',
+          requested_price_amount: input.amount,
+          requested_price_currency: 'EGP',
+          paymob_intention_id: intention.intentionId,
+        },
+      );
+
+      return {
+        checkoutUrl: intention.checkoutUrl,
+        orderId,
+        method: 'paymob',
+        provider: 'paymob',
+      };
+    } catch (error) {
+      if (error instanceof PaymobNotConfiguredError) {
+        throw new HttpError({
+          statusCode: 503,
+          code: 'PAYMOB_NOT_CONFIGURED',
+          message: 'Paymob is not configured yet.',
+        });
+      }
+      throw new HttpError({
+        statusCode: 502,
+        code: 'PAYMENT_GATEWAY_ERROR',
+        message: 'Could not create Paymob checkout link.',
+      });
+    }
+  }
+
+  private toPaymobBillingData(billing: {
+    email: string | null;
+    displayName: string | null;
+    phone: string | null;
+  }): { first_name: string; last_name: string; email: string; phone_number: string } {
+    const nameParts = (billing.displayName ?? '').trim().split(/\s+/).filter(Boolean);
+    const firstName = nameParts[0] || 'MohandisHub';
+    const lastName = nameParts.slice(1).join(' ') || 'User';
+    return {
+      first_name: firstName,
+      last_name: lastName,
+      email: billing.email || 'NA',
+      phone_number: billing.phone || 'NA',
+    };
+  }
+
+  /**
+   * Paymob deposit callback. Verifies HMAC, then idempotently credits EGP on a
+   * successful transaction. No FX (Paymob is EGP-native).
+   */
+  async handlePaymobDepositWebhook(rawBody: string, hmac: string | null): Promise<void> {
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(rawBody);
+    } catch {
+      throw new HttpError({ statusCode: 400, code: 'INVALID_WEBHOOK', message: 'Invalid Paymob payload.' });
+    }
+    const payload = (parsed ?? {}) as Record<string, unknown>;
+    const transaction = (payload.obj ?? {}) as Record<string, unknown>;
+
+    if (!verifyPaymobHmac(transaction, hmac)) {
+      throw new HttpError({ statusCode: 401, code: 'INVALID_SIGNATURE', message: 'Invalid Paymob signature.' });
+    }
+
+    const order = (transaction.order ?? {}) as Record<string, unknown>;
+    const orderId =
+      (typeof order.merchant_order_id === 'string' && order.merchant_order_id) || null;
+    if (!orderId) return;
+
+    const success = transaction.success === true;
+    const transactionId =
+      typeof transaction.id === 'string' || typeof transaction.id === 'number'
+        ? String(transaction.id)
+        : null;
+
+    if (!success) {
+      const dep = await this.repo.findDepositRequestByOrderId(orderId);
+      if (dep && dep.status === 'pending') {
+        await this.repo.updateDepositRequestStatus(orderId, 'failed');
+      }
+      return;
+    }
+
+    await this.repo.creditDepositIfPendingByOrderId({
+      orderId,
+      providerStatus: 'finished',
+      referenceType: 'paymob',
+      referenceId: null,
+      description: 'Wallet deposit via Paymob',
+      providerPaymentId: transactionId,
+      providerPayload: { paymob_transaction_id: transactionId, paymob: transaction },
+    });
   }
 
   async handleNowPaymentsDepositIpn(rawBody: string, signatureHeader: string): Promise<void> {
@@ -542,6 +699,13 @@ export class WalletService {
         message: 'Crypto withdrawals are not available.',
       });
     }
+    if (input.method === 'paymob' && !isPaymentMethodEnabled(status.paymentMethodsEnabled, 'withdrawal_paymob')) {
+      throw new HttpError({
+        statusCode: 503,
+        code: 'PAYMOB_WITHDRAWALS_DISABLED',
+        message: 'Paymob withdrawals are not available.',
+      });
+    }
 
     const prefs = await this.repo.getUserPayoutPreferences(userId);
     const profilePayout =
@@ -591,6 +755,58 @@ export class WalletService {
         this.rethrowWalletCreateErrors(error);
       }
       return this.toWithdrawalRequest(created);
+    }
+
+    if (input.method === 'paymob') {
+      const recipient = (input.paymobRecipient || prefs?.paymob_recipient || '').trim();
+      if (!recipient) {
+        throw new HttpError({
+          statusCode: 400,
+          code: 'MISSING_PAYMOB_RECIPIENT',
+          message: 'Paymob payout recipient is required.',
+        });
+      }
+
+      if (input.savePaymobRecipient === true) {
+        await this.persistPayoutPrefs(userId, role, {
+          paymob_recipient: recipient,
+          prefs,
+          profilePayout,
+        });
+      }
+
+      let created: WithdrawalRequestRow;
+      try {
+        created = await this.repo.createWithdrawalRequestWithHold({
+          userId,
+          amountEgp: input.amountEgp,
+          payoutCurrency: 'EGP',
+          payoutAddress: null,
+          payoutExtraId: null,
+          payoutCryptoAmount: null,
+          verificationRequired: false,
+          provider: 'paymob',
+          withdrawalMethod: 'paymob',
+          paymobRecipient: recipient,
+          initialStatus: 'processing',
+          rateSnapshot: {},
+          providerPayload: { created_via: 'wallet_withdrawal_paymob' },
+        });
+      } catch (error) {
+        this.rethrowWalletCreateErrors(error);
+      }
+
+      if (!env.PAYMOB_WITHDRAWALS_ENABLED || !isPaymobPayoutConfigured()) {
+        const blocked = await this.repo.setWithdrawalBlocked({
+          withdrawalId: created.id,
+          error: 'Paymob payouts are not configured yet.',
+          providerStatus: 'blocked',
+        });
+        return this.toWithdrawalRequest(blocked ?? created);
+      }
+
+      const started = await this.tryStartPaymobPayout(created, recipient);
+      return this.toWithdrawalRequest(started);
     }
 
     const payoutCurrency = (
@@ -708,6 +924,7 @@ export class WalletService {
       crypto_currency?: string;
       crypto_address?: string;
       crypto_extra_id?: string | null;
+      paymob_recipient?: string;
       prefs: UserPayoutPreferences;
       profilePayout: IndividualProviderPayoutSettings;
     },
@@ -722,6 +939,7 @@ export class WalletService {
         patch.crypto_extra_id !== undefined
           ? patch.crypto_extra_id
           : (p?.crypto_payout_extra_id ?? null),
+      paymob_recipient: patch.paymob_recipient ?? p?.paymob_recipient ?? null,
     });
 
     if (role !== 'business' && patch.crypto_currency && patch.crypto_address) {
@@ -1192,6 +1410,40 @@ export class WalletService {
     }
   }
 
+  private async tryStartPaymobPayout(
+    row: WithdrawalRequestRow,
+    recipient: string,
+  ): Promise<WithdrawalRequestRow> {
+    try {
+      const token = await authenticatePaymobPayout();
+      const disbursement = await createPaymobDisbursement(token, {
+        amountEgp: parseFloat(row.source_amount_egp ?? row.amount),
+        recipient,
+        reference: row.id,
+      });
+      const updated = await this.repo.markWithdrawalPaymobPayoutStarted({
+        withdrawalId: row.id,
+        payoutReference: disbursement.reference,
+        providerStatus: disbursement.status,
+        providerPayload: { paymob_disbursement: disbursement },
+      });
+      return updated ?? row;
+    } catch (error) {
+      const message =
+        error instanceof PaymobNotConfiguredError
+          ? 'Paymob payouts are not configured yet.'
+          : error instanceof Error
+            ? error.message
+            : 'Failed to start Paymob payout.';
+      const blocked = await this.repo.setWithdrawalBlocked({
+        withdrawalId: row.id,
+        error: message,
+        providerStatus: 'blocked',
+      });
+      return blocked ?? row;
+    }
+  }
+
   private async tryStartPayout(row: WithdrawalRequestRow): Promise<WithdrawalRequestRow> {
     if (!env.NOWPAYMENTS_API_KEY) {
       return (
@@ -1403,7 +1655,11 @@ export class WalletService {
       holdId: row.hold_id,
       sourceAmountEgp: sourceEgp,
       sourceCurrency: 'EGP',
-      method: (row.withdrawal_method === 'instapay' ? 'instapay' : 'crypto') as WithdrawalRequest['method'],
+      method: (row.withdrawal_method === 'instapay'
+        ? 'instapay'
+        : row.withdrawal_method === 'paymob'
+          ? 'paymob'
+          : 'crypto') as WithdrawalRequest['method'],
       destinationCurrency: row.currency,
       destinationCryptoAmount: destCrypto,
       payoutAddress: row.payout_address,

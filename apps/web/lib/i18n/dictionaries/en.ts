@@ -931,8 +931,10 @@ export const enDictionary: Dictionary = {
         deposit_crypto: 'Deposits: cryptocurrency (NOWPayments)',
         deposit_card: 'Deposits: card / Stripe (future)',
         deposit_instapay: 'Deposits: InstaPay (manual)',
+        deposit_paymob: 'Deposits: Paymob (card / wallet, EGP)',
         withdrawal_crypto: 'Withdrawals: cryptocurrency (NOWPayments)',
         withdrawal_instapay: 'Withdrawals: InstaPay (manual)',
+        withdrawal_paymob: 'Withdrawals: Paymob (automated payout)',
       },
       disableCryptoDeposits: 'Disable crypto deposits',
       disableCryptoDepositsDesc: 'Hide/block Cryptomus deposits.',
@@ -978,6 +980,9 @@ export const enDictionary: Dictionary = {
       commissionPercentDesc: 'Platform commission percentage (0–100) on bid/booking payments.',
       commissionMinEgp: 'Min commission (EGP)',
       commissionMinEgpDesc: 'Minimum commission amount in EGP per transaction.',
+      minTransactionEgp: 'Min transaction amount (EGP)',
+      minTransactionEgpDesc:
+        'Minimum paid amount (EGP) for bids/reservations so the provider nets a positive payout after commission. 0 = no floor.',
       dangerZone: 'Danger zone',
     factoryReset: 'Factory reset',
     factoryResetWarning:
@@ -1195,6 +1200,9 @@ export const enDictionary: Dictionary = {
     depositError: 'Could not create payment. Try again.',
     instapayOptionLabel: 'InstaPay',
     instapayOptionHint: 'Manual transfer + proof (1-5 business days)',
+    paymobOptionLabel: 'Paymob',
+    paymobOptionHint: 'Pay by card or wallet in EGP',
+    paymobPay: 'Pay with Paymob',
     instapayInstructions:
       'Transfer the amount below to the platform InstaPay account, then upload your receipt. InstaPay deposits are reviewed manually and usually take 1-5 business days to complete.',
     instapayAmountLabel: 'Amount (EGP)',

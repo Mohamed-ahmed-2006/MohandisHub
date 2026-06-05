@@ -51,21 +51,32 @@ const clearSessionState = (
   window.localStorage.removeItem(AUTH_SESSION_HINT_KEY);
 };
 
+/** Refresh this many milliseconds before the access token actually expires. */
+const PROACTIVE_REFRESH_LEAD_MS = 60_000;
+
 export const AuthProvider = ({ children }: AuthProviderProps) => {
   const [authUser, setAuthUser] = useState<AuthUser | null>(null);
   const [accessToken, setAccessToken] = useState<string | null>(null);
   const [isReady, setIsReady] = useState(false);
+  // Epoch ms at which the current access token expires (null when unknown).
+  const [tokenExpiresAt, setTokenExpiresAt] = useState<number | null>(null);
 
-  const setSessionToken = useCallback((token: string | null) => {
+  const setSessionToken = useCallback((token: string | null, expiresInSeconds?: number) => {
     if (token) {
       sessionStore.setAccessToken(token);
       setAccessToken(token);
+      setTokenExpiresAt(
+        typeof expiresInSeconds === 'number' && expiresInSeconds > 0
+          ? Date.now() + expiresInSeconds * 1000
+          : null,
+      );
       window.localStorage.setItem(AUTH_SESSION_HINT_KEY, '1');
       return;
     }
 
     sessionStore.clear();
     setAccessToken(null);
+    setTokenExpiresAt(null);
     window.localStorage.removeItem(AUTH_SESSION_HINT_KEY);
   }, []);
 
@@ -74,6 +85,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
 
     if (result.kind === 'fatal') {
       clearSessionState(setAccessToken, setAuthUser);
+      setTokenExpiresAt(null);
       return null;
     }
 
@@ -81,7 +93,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       return null;
     }
 
-    setSessionToken(result.accessToken);
+    setSessionToken(result.accessToken, result.expiresIn);
     setAuthUser(result.user);
     authUserCache.set(result.user);
 
@@ -108,7 +120,21 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     }
 
     void (async () => {
-      await refreshSession();
+      const token = await refreshSession();
+
+      // A transient failure (network blip / 5xx) leaves the session hint in
+      // place but yields no token. Retry once before giving up so a flaky
+      // network on reload does not look like a logout.
+      if (
+        !token &&
+        isMounted &&
+        window.localStorage.getItem(AUTH_SESSION_HINT_KEY) === '1'
+      ) {
+        await new Promise((resolve) => setTimeout(resolve, 1500));
+        if (isMounted) {
+          await refreshSession();
+        }
+      }
 
       if (isMounted) {
         setIsReady(true);
@@ -124,17 +150,32 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     const onVisibility = () => {
       if (document.visibilityState !== 'visible') return;
       if (window.localStorage.getItem(AUTH_SESSION_HINT_KEY) !== '1') return;
-      if (accessToken) return;
+      // Refresh when we have no token, or when the current one is expired or
+      // about to expire. Coalescing dedupes concurrent refreshes.
+      const expiringSoon =
+        tokenExpiresAt !== null && Date.now() >= tokenExpiresAt - PROACTIVE_REFRESH_LEAD_MS;
+      if (accessToken && !expiringSoon) return;
       void refreshSession();
     };
     document.addEventListener('visibilitychange', onVisibility);
     return () => document.removeEventListener('visibilitychange', onVisibility);
-  }, [refreshSession, accessToken]);
+  }, [refreshSession, accessToken, tokenExpiresAt]);
+
+  // Proactively refresh the access token shortly before it expires so a tab
+  // left open does not start returning 401s.
+  useEffect(() => {
+    if (!accessToken || tokenExpiresAt === null) return;
+    const delay = Math.max(0, tokenExpiresAt - Date.now() - PROACTIVE_REFRESH_LEAD_MS);
+    const timer = setTimeout(() => {
+      void refreshSession();
+    }, delay);
+    return () => clearTimeout(timer);
+  }, [accessToken, tokenExpiresAt, refreshSession]);
 
   const login = useCallback(
     async (input: LoginBody): Promise<AuthUser> => {
       const result = await authApiClient.login(input);
-      setSessionToken(result.tokens.accessToken);
+      setSessionToken(result.tokens.accessToken, result.tokens.expiresIn);
 
       const me = await authApiClient.me(result.tokens.accessToken);
       setAuthUser(me);
@@ -148,7 +189,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   const register = useCallback(
     async (input: RegisterInput): Promise<AuthUser> => {
       const result = await authApiClient.register(input);
-      setSessionToken(result.tokens.accessToken);
+      setSessionToken(result.tokens.accessToken, result.tokens.expiresIn);
 
       const me = await authApiClient.me(result.tokens.accessToken);
       setAuthUser(me);

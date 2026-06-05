@@ -67,12 +67,12 @@ export type WalletHold = {
 };
 
 /** Checkout-only; InstaPay uses POST /api/wallet/deposits/instapay */
-export type DepositMethod = 'crypto' | 'card' | 'instapay';
+export type DepositMethod = 'crypto' | 'card' | 'instapay' | 'paymob';
 
 export type CreateDepositCheckoutBody = {
   amount: number;
   currency?: string;
-  method: 'crypto' | 'card';
+  method: 'crypto' | 'card' | 'paymob';
   payCurrency?: string;
   returnUrl?: string;
 };
@@ -80,8 +80,8 @@ export type CreateDepositCheckoutBody = {
 export type DepositCheckoutResponse = {
   checkoutUrl: string;
   orderId: string;
-  method: 'crypto' | 'card';
-  provider: 'nowpayments';
+  method: 'crypto' | 'card' | 'paymob';
+  provider: 'nowpayments' | 'paymob';
 };
 
 export type SubmitInstapayDepositBody = {
@@ -128,7 +128,7 @@ export type WithdrawalRequestStatus =
   | 'cancelled'
   | 'blocked';
 
-export type WithdrawalMethod = 'crypto' | 'instapay';
+export type WithdrawalMethod = 'crypto' | 'instapay' | 'paymob';
 
 export type WithdrawalRequest = {
   id: string;
@@ -174,6 +174,9 @@ export type CreateWithdrawalRequestBody = {
   /** InstaPay method: recipient phone/account */
   instapayRecipient?: string;
   saveInstapayRecipient?: boolean;
+  /** Paymob method: payout recipient (wallet/bank/instapay account as configured). */
+  paymobRecipient?: string;
+  savePaymobRecipient?: boolean;
 };
 
 export type WithdrawalQuoteResponse = {
@@ -181,4 +184,26 @@ export type WithdrawalQuoteResponse = {
   payoutCurrency: string;
   quotedCryptoAmount: number;
   rateSnapshot: Record<string, unknown>;
+};
+
+// ---------------------------------------------------------------------------
+// Commission math — single source of truth shared by API and frontend.
+// ---------------------------------------------------------------------------
+
+/**
+ * Compute how a paid `amount` (in EGP) splits between the platform commission
+ * and the provider payout. The commission is `max(amount * percent%, minEgp)`
+ * but is always capped at `amount`, so the provider payout can never go
+ * negative and the platform can never receive more than the customer paid.
+ */
+export const computeCommissionSplit = (
+  amount: number,
+  commissionPercent: number,
+  commissionMinEgp: number,
+): { commission: number; providerAmount: number } => {
+  const safeAmount = Number.isFinite(amount) && amount > 0 ? amount : 0;
+  const percentPart = safeAmount * (commissionPercent / 100);
+  const commission = Math.min(safeAmount, Math.max(percentPart, commissionMinEgp));
+  const providerAmount = Math.max(0, safeAmount - commission);
+  return { commission, providerAmount };
 };

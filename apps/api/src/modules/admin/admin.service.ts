@@ -30,6 +30,7 @@ import type {
 } from '@mohandishub/shared';
 import { normalizePlanAllowedRoles } from '@mohandishub/shared';
 
+import { invalidateUserStatusCache } from '../../middleware/user-status-cache.js';
 import { HttpError } from '../../utils/http-error.js';
 import { AuthRepository } from '../auth/auth.repository.js';
 import { NotificationsService } from '../notifications/notifications.service.js';
@@ -177,14 +178,24 @@ export class AdminService {
     if (!deleted) {
       throw new HttpError({ statusCode: 404, code: 'USER_NOT_FOUND', message: 'User not found.' });
     }
+    // Cut off existing sessions/tokens immediately.
+    await this.authRepository.revokeAllUserTokens(userId);
+    invalidateUserStatusCache(userId);
   }
 
   async activateUser(userId: string): Promise<AdminUserListItem> {
-    return this.updateUser(userId, { isActive: true });
+    const result = await this.updateUser(userId, { isActive: true });
+    invalidateUserStatusCache(userId);
+    return result;
   }
 
   async deactivateUser(userId: string): Promise<AdminUserListItem> {
-    return this.updateUser(userId, { isActive: false });
+    const result = await this.updateUser(userId, { isActive: false });
+    // Revoke refresh tokens and drop the cached status so the user loses access
+    // immediately rather than waiting for the access token to expire.
+    await this.authRepository.revokeAllUserTokens(userId);
+    invalidateUserStatusCache(userId);
+    return result;
   }
 
   async sendVerificationEmail(userId: string): Promise<{ sent: true; destination: string }> {
@@ -480,6 +491,7 @@ export class AdminService {
       throw new HttpError({ statusCode: 404, code: 'USER_NOT_FOUND', message: 'User not found.' });
     }
     await this.authRepository.revokeAllUserTokens(userId);
+    invalidateUserStatusCache(userId);
     return { revoked: true };
   }
 

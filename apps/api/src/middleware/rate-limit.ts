@@ -21,11 +21,59 @@ export const apiRateLimiter = rateLimit({
 });
 
 /**
- * Stricter limit for /auth and /otp per IP (default: 2000 / 10 min). Override with AUTH_RATE_LIMIT_* env.
+ * Broad limit for non-sensitive /auth and /otp traffic per IP (refresh, logout,
+ * me) which is called frequently by normal UI usage (default: 2000 / 10 min).
+ * Override with AUTH_RATE_LIMIT_* env.
  */
 export const authRateLimiter = rateLimit({
   windowMs: AUTH_WINDOW_MS,
   max: AUTH_MAX,
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+const FIFTEEN_MIN_MS = 15 * 60 * 1000;
+const ONE_HOUR_MS = 60 * 60 * 1000;
+
+/**
+ * Strict limiter for credential submission (login). Protects against password
+ * spraying / credential stuffing. Default: 10 attempts / 15 min / IP.
+ */
+export const loginRateLimiter = rateLimit({
+  windowMs: FIFTEEN_MIN_MS,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  skipSuccessfulRequests: true,
+});
+
+/**
+ * Strict limiter for account creation. Default: 5 / hour / IP.
+ */
+export const registerRateLimiter = rateLimit({
+  windowMs: ONE_HOUR_MS,
+  max: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+/**
+ * Strict limiter for password-reset request/confirm. Default: 5 / hour / IP.
+ */
+export const passwordResetRateLimiter = rateLimit({
+  windowMs: ONE_HOUR_MS,
+  max: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+/**
+ * Strict limiter for OTP send/verify to throttle code guessing and email/SMS
+ * spam. Default: 10 / 15 min / IP.
+ */
+export const otpRateLimiter = rateLimit({
+  windowMs: FIFTEEN_MIN_MS,
+  max: 10,
   standardHeaders: true,
   legacyHeaders: false,
 });

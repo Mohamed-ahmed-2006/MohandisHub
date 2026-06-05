@@ -29,6 +29,11 @@ export const ComingSoonPage = ({ locale, dictionary, title }: ComingSoonPageProp
     }
   }, [isReady, isAuthenticated, authUser, authGuard.emailVerified, locale, router]);
 
+  // Avoid flashing protected content before the redirect runs.
+  if (!isReady || !isAuthenticated || !authUser || !authGuard.emailVerified) {
+    return <main className="mh-coming-soon-main" />;
+  }
+
   return (
     <main className="mh-coming-soon-main">
       <Container className="profile-screen-container">

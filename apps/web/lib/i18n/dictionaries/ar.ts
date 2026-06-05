@@ -918,8 +918,10 @@ export const arDictionary: Dictionary = {
         deposit_crypto: 'إيداع: عملات مشفرة (NOWPayments)',
         deposit_card: 'إيداع: بطاقة (NOWPayments fiat)',
         deposit_instapay: 'إيداع: إنستاباي (يدوي)',
+        deposit_paymob: 'إيداع: باي موب (بطاقة/محفظة بالجنيه)',
         withdrawal_crypto: 'سحب: عملات مشفرة',
         withdrawal_instapay: 'سحب: إنستاباي (يدوي)',
+        withdrawal_paymob: 'سحب: باي موب (تلقائي)',
       },
       disableCryptoDeposits: 'تعطيل الإيداعات بالعملات',
       disableCryptoDepositsDesc: 'إخفاء/منع إيداعات Cryptomus.',
@@ -965,6 +967,9 @@ export const arDictionary: Dictionary = {
       commissionPercentDesc: 'نسبة عمولة المنصة (0–100) على مدفوعات العروض والحجوزات.',
       commissionMinEgp: 'الحد الأدنى للعمولة (ج.م)',
       commissionMinEgpDesc: 'الحد الأدنى لمبلغ العمولة بالجنيه المصري لكل معاملة.',
+      minTransactionEgp: 'الحد الأدنى لمبلغ المعاملة (ج.م)',
+      minTransactionEgpDesc:
+        'الحد الأدنى للمبلغ المدفوع (ج.م) للعروض والحجوزات حتى يبقى صافي مستحقات مقدم الخدمة موجبًا بعد العمولة. 0 = بدون حد أدنى.',
       dangerZone: 'منطقة الخطر',
       factoryReset: 'إعادة ضبط المصنع',
       factoryResetWarning:
@@ -1183,6 +1188,9 @@ export const arDictionary: Dictionary = {
     depositError: 'تعذر إنشاء الدفع. حاول مرة أخرى.',
     instapayOptionLabel: 'إنستاباي',
     instapayOptionHint: 'تحويل يدوي + إثبات',
+    paymobOptionLabel: 'باي موب',
+    paymobOptionHint: 'ادفع بالبطاقة أو المحفظة بالجنيه المصري',
+    paymobPay: 'الدفع عبر باي موب',
     instapayInstructions:
       'حوّل المبلغ أدناه إلى حساب إنستاباي للمنصة، ثم ارفع إيصال الدفع.',
     instapayAmountLabel: 'المبلغ (ج.م)',

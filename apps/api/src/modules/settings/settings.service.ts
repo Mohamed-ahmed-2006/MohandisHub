@@ -84,6 +84,7 @@ export class SettingsService {
       globalAnnouncement: row.global_announcement,
       commissionPercent: parseFloat(row.commission_percent ?? '10'),
       commissionMinEgp: parseFloat(row.commission_min_egp ?? '0'),
+      minTransactionEgp: parseFloat(row.min_transaction_egp ?? '0'),
       commissionReceiverId:
         row.commission_receiver_id ?? '00000000-0000-0000-0000-000000000001',
       reservationAcceptanceFee: parseFloat(row.reservation_acceptance_fee ?? '0'),
@@ -148,6 +149,7 @@ export class SettingsService {
     if (partial.globalAnnouncement !== undefined) dbPartial.global_announcement = partial.globalAnnouncement;
     if (partial.commissionPercent !== undefined) dbPartial.commission_percent = partial.commissionPercent;
     if (partial.commissionMinEgp !== undefined) dbPartial.commission_min_egp = partial.commissionMinEgp;
+    if (partial.minTransactionEgp !== undefined) dbPartial.min_transaction_egp = partial.minTransactionEgp;
     if (partial.commissionReceiverId !== undefined)
       dbPartial.commission_receiver_id = partial.commissionReceiverId;
     if (partial.reservationAcceptanceFee !== undefined)
@@ -247,6 +249,7 @@ export class SettingsService {
       globalAnnouncement: row.global_announcement,
       commissionPercent: parseFloat(row.commission_percent ?? '10'),
       commissionMinEgp: parseFloat(row.commission_min_egp ?? '0'),
+      minTransactionEgp: parseFloat(row.min_transaction_egp ?? '0'),
       commissionReceiverId:
         row.commission_receiver_id ?? '00000000-0000-0000-0000-000000000001',
       reservationAcceptanceFee: parseFloat(row.reservation_acceptance_fee ?? '0'),
@@ -304,6 +307,7 @@ export class SettingsService {
       globalAnnouncement: null,
       commissionPercent: 10,
       commissionMinEgp: 0,
+      minTransactionEgp: 0,
       commissionReceiverId: '00000000-0000-0000-0000-000000000001',
       reservationAcceptanceFee: 0,
       reservationVoiceMinuteRate: 1,

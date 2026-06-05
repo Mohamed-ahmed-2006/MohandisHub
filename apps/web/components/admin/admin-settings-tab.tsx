@@ -508,6 +508,25 @@ export const AdminSettingsTab = ({ dictionary, accessToken, refreshSession }: Pr
         </div>
         <div className="admin-settings-row">
           <div className="admin-settings-label-wrap">
+            <label className="admin-settings-label">{d.minTransactionEgp}</label>
+            <span className="admin-settings-desc">{d.minTransactionEgpDesc}</span>
+          </div>
+          <input
+            type="number"
+            min={0}
+            step={0.01}
+            className="admin-settings-input admin-settings-input--number"
+            defaultValue={settings.minTransactionEgp}
+            onBlur={(e) =>
+              handleNumberChange(
+                'minTransactionEgp',
+                e.target.value === '' ? 0 : parseFloat(e.target.value) ?? 0,
+              )
+            }
+          />
+        </div>
+        <div className="admin-settings-row">
+          <div className="admin-settings-label-wrap">
             <label className="admin-settings-label">Commission receiver user ID</label>
             <span className="admin-settings-desc">
               {tr(

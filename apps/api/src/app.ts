@@ -60,6 +60,13 @@ export const createApp = () => {
       void walletController.nowPaymentsPayoutIpn(req, res, next);
     },
   );
+  app.use(
+    '/api/wallet/paymob/webhook',
+    express.raw({ type: 'application/json' }),
+    (req, res, next) => {
+      void walletController.paymobDepositWebhook(req, res, next);
+    },
+  );
   app.use(express.json({ limit: '1mb' }));
   app.use(cookieParser());
 

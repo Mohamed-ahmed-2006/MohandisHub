@@ -1,4 +1,7 @@
-import type { EffectivePlanLimits } from '@mohandishub/shared';
+import {
+  computeCommissionSplit,
+  type EffectivePlanLimits,
+} from '@mohandishub/shared';
 import type { PoolClient } from 'pg';
 
 import { getPool } from '../../db/pool.js';
@@ -225,6 +228,14 @@ export class NeedsService {
         statusCode: 400,
         code: 'SELF_BID',
         message: 'You cannot bid on your own need.',
+      });
+    }
+    const minTransactionEgp = status.minTransactionEgp ?? 0;
+    if (minTransactionEgp > 0 && input.amount <= minTransactionEgp) {
+      throw new HttpError({
+        statusCode: 400,
+        code: 'BID_AMOUNT_BELOW_MINIMUM',
+        message: `Bid amount must be greater than the minimum transaction amount (${minTransactionEgp} EGP) so your payout stays positive after commission.`,
       });
     }
     let bidderLimitsForMeter: EffectivePlanLimits | undefined;
@@ -537,8 +548,14 @@ export class NeedsService {
       const amount = parseFloat(bid.amount);
       const commissionPercent = status.commissionPercent ?? 10;
       const commissionMinEgp = status.commissionMinEgp ?? 0;
-      const commission = Math.max(amount * (commissionPercent / 100), commissionMinEgp);
-      const expertAmount = amount - commission;
+      // Single source of truth for the split. Caps commission at `amount` so the
+      // expert payout can never be negative and the platform can never be
+      // credited more than the customer paid.
+      const { commission, providerAmount: expertAmount } = computeCommissionSplit(
+        amount,
+        commissionPercent,
+        commissionMinEgp,
+      );
 
       const customerWallet = await this.walletRepo.findByUserId(need.customer_id);
       if (!customerWallet) {
