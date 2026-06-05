@@ -82,7 +82,9 @@ const envSchema = z.object({
   NOWPAYMENTS_WITHDRAWAL_MIN_AMOUNT: z.coerce.number().positive().default(20),
   NOWPAYMENTS_WITHDRAWAL_DEFAULT_CURRENCY: z.string().default('USDTTRC20'),
   NOWPAYMENTS_ALLOWED_PAY_CURRENCIES: z.string().optional(),
-  NOWPAYMENTS_LIVE_REQUIRED: z.coerce.boolean().default(true),
+  // When true, production startup requires NOWPayments deposit keys + public URLs.
+  // Keep false until crypto/card deposits are enabled and keys are configured.
+  NOWPAYMENTS_LIVE_REQUIRED: z.coerce.boolean().default(false),
 
   // Paymob — EGP card/wallet deposits + payout/disbursement (no FX; EGP-native)
   PAYMOB_SECRET_KEY: z.string().optional(),
@@ -183,6 +185,12 @@ if (parsed.data.NODE_ENV === 'production') {
     }
     if (!parsed.data.PAYMOB_INTEGRATION_IDS) {
       productionErrors.PAYMOB_INTEGRATION_IDS = ['At least one Paymob integration id is required for the unified checkout.'];
+    }
+    if (!parsed.data.API_PUBLIC_URL) {
+      productionErrors.API_PUBLIC_URL = ['API_PUBLIC_URL is required for Paymob deposit webhook callbacks.'];
+    }
+    if (!parsed.data.WEB_PUBLIC_URL) {
+      productionErrors.WEB_PUBLIC_URL = ['WEB_PUBLIC_URL is required for Paymob checkout return URLs.'];
     }
   }
   if (parsed.data.PAYMOB_WITHDRAWALS_ENABLED) {

@@ -58,7 +58,7 @@ services:
       - key: NOWPAYMENTS_IPN_SECRET
         sync: false
       - key: NOWPAYMENTS_LIVE_REQUIRED
-        value: true
+        value: false
       - key: NOWPAYMENTS_WITHDRAWALS_ENABLED
         sync: false
       - key: NOWPAYMENTS_MASS_PAYOUTS_ENABLED
@@ -129,7 +129,7 @@ services:
       - key: NOWPAYMENTS_IPN_SECRET
         sync: false
       - key: NOWPAYMENTS_LIVE_REQUIRED
-        value: true
+        value: false
       - key: NOWPAYMENTS_WITHDRAWALS_ENABLED
         sync: false
       - key: NOWPAYMENTS_MASS_PAYOUTS_ENABLED
