@@ -106,7 +106,7 @@ mediaRouter.post(
         startsAt: row.starts_at,
         endsAt: row.ends_at,
       },
-      ip: req.ip ?? (req.socket?.remoteAddress ?? undefined) ?? null,
+      ip: req.ip ?? req.socket?.remoteAddress ?? null,
     });
     res.status(201).json({ ok: true, data: row } satisfies ApiSuccessBody<typeof row>);
   }),
@@ -156,7 +156,7 @@ mediaRouter.patch(
         startsAt: row.starts_at,
         endsAt: row.ends_at,
       },
-      ip: req.ip ?? (req.socket?.remoteAddress ?? undefined) ?? null,
+      ip: req.ip ?? req.socket?.remoteAddress ?? null,
     });
     res.json({ ok: true, data: row } satisfies ApiSuccessBody<typeof row>);
   }),
@@ -184,7 +184,7 @@ mediaRouter.delete(
       resourceType: 'media_asset',
       resourceId: mediaId,
       details: { deleted: true },
-      ip: req.ip ?? (req.socket?.remoteAddress ?? undefined) ?? null,
+      ip: req.ip ?? req.socket?.remoteAddress ?? null,
     });
     res.json({ ok: true, data: { deleted: true } } satisfies ApiSuccessBody<{ deleted: boolean }>);
   }),

@@ -6,8 +6,7 @@
     "rootDir": "src",
     "outDir": "dist",
     "lib": ["ES2022"],
-    "types": ["node", "vitest/globals"],
-    "baseUrl": "."
+    "types": ["node", "vitest/globals"]
   },
   "include": ["src/**/*.ts", "src/**/*.d.ts"]
 }

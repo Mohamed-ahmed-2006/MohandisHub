@@ -469,7 +469,7 @@ const adjustBalance = asyncHandler(async (req, res) => {
     resourceType: 'wallet',
     resourceId: input.userId,
     details: { type: input.type, amount: input.amount },
-    ip: req.ip ?? (req.socket?.remoteAddress ?? undefined) ?? null,
+    ip: requestIp(req),
   });
   const response: ApiSuccessBody<Transaction> = { ok: true, data: txn };
   res.status(201).json(response);
@@ -716,7 +716,7 @@ const factoryReset = asyncHandler(async (req, res) => {
     action: 'factory_reset',
     resourceType: 'app',
     details: { usersDeleted },
-    ip: req.ip ?? (req.socket?.remoteAddress ?? undefined) ?? null,
+    ip: requestIp(req),
   });
   const response: ApiSuccessBody<{ usersDeleted: number }> = { ok: true, data: { usersDeleted } };
   res.json(response);
