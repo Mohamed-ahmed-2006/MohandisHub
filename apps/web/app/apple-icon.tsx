@@ -25,7 +25,6 @@ export default function AppleIcon() {
             borderRadius: 36,
           }}
         >
-          {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={logoSrc} alt="" width={inner} height={inner} style={{ objectFit: 'contain' }} />
         </div>
       ),

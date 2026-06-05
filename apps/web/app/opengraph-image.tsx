@@ -26,7 +26,6 @@ export default function OpenGraphImage() {
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: 28, marginBottom: 36 }}>
           {logoSrc ? (
-            // eslint-disable-next-line @next/next/no-img-element
             <img src={logoSrc} alt="" width={88} height={88} style={{ objectFit: 'contain' }} />
           ) : (
             <div

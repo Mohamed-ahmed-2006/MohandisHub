@@ -1,0 +1,3368 @@
+﻿-- MohandisHub Supabase migrations for manual SQL Editor execution
+-- Generated from supabase/migrations in filename order on 2026-06-05 00:08:49 +03:00.
+-- IMPORTANT:
+-- 1. Run sections in order, from top to bottom.
+-- 2. If your database already has some migrations applied, do not rerun old non-idempotent sections unless you know they are safe.
+-- 3. Prefer the Supabase CLI when available; this file is for manual fallback only.
+
+
+
+-- ============================================================================
+-- MIGRATION: 20240101000001_auth_schema.sql
+-- ============================================================================
+
+-- ============================================================================
+-- MohandisHub Auth Schema â€” v001
+-- Designed for a Vezeeta-style engineering marketplace with 3 roles:
+--   customer  â†’ requests services / posts jobs
+--   expert    â†’ freelance engineer, requires identity verification
+--   business  â†’ company profile, requires business verification
+-- ============================================================================
+
+-- Enable pgcrypto for gen_random_uuid() if not already enabled
+CREATE EXTENSION IF NOT EXISTS "pgcrypto";
+
+-- --------------------------------------------------------------------------
+-- 1. Core users table â€” role-agnostic identity
+-- --------------------------------------------------------------------------
+CREATE TABLE users (
+  id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  email           VARCHAR(255) UNIQUE NOT NULL,
+  password_hash   VARCHAR(255) NOT NULL,
+  phone           VARCHAR(20),
+  display_name    VARCHAR(100) NOT NULL,
+  avatar_url      TEXT,
+  date_of_birth   DATE,
+  primary_role    VARCHAR(20) NOT NULL
+                    CHECK (primary_role IN ('customer', 'expert', 'business')),
+  email_verified_at   TIMESTAMPTZ,
+  phone_verified_at   TIMESTAMPTZ,
+  is_active       BOOLEAN NOT NULL DEFAULT true,
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+  CONSTRAINT chk_users_min_age
+    CHECK (date_of_birth IS NULL OR date_of_birth <= (CURRENT_DATE - INTERVAL '20 years'))
+);
+
+CREATE INDEX idx_users_email ON users (email);
+CREATE INDEX idx_users_primary_role ON users (primary_role);
+
+-- --------------------------------------------------------------------------
+-- 2. Refresh tokens â€” session management with token rotation
+-- --------------------------------------------------------------------------
+CREATE TABLE refresh_tokens (
+  id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id     UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  token_hash  VARCHAR(255) NOT NULL,           -- SHA-256 of the opaque token
+  family_id   UUID NOT NULL,                   -- groups rotated tokens (detect reuse)
+  device_info TEXT,
+  ip_address  INET,
+  expires_at  TIMESTAMPTZ NOT NULL,
+  revoked_at  TIMESTAMPTZ,
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX idx_refresh_tokens_user_id    ON refresh_tokens (user_id);
+CREATE INDEX idx_refresh_tokens_token_hash ON refresh_tokens (token_hash);
+CREATE INDEX idx_refresh_tokens_family_id  ON refresh_tokens (family_id);
+
+-- --------------------------------------------------------------------------
+-- 3. Customer profiles
+-- --------------------------------------------------------------------------
+CREATE TABLE customer_profiles (
+  id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id     UUID UNIQUE NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  address     TEXT,
+  city        VARCHAR(100),
+  country     VARCHAR(100) DEFAULT 'Egypt',
+  preferences JSONB DEFAULT '{}',
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- --------------------------------------------------------------------------
+-- 4. Expert profiles â€” individual engineers / freelancers
+-- --------------------------------------------------------------------------
+CREATE TABLE expert_profiles (
+  id                    UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id               UUID UNIQUE NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  title                 VARCHAR(200),        -- e.g. "Senior Mechanical Engineer"
+  bio                   TEXT,
+  specializations       TEXT[] DEFAULT '{}',  -- e.g. {"mechanical","hvac","plumbing"}
+  years_of_experience   SMALLINT,
+  hourly_rate           NUMERIC(10, 2),
+  city                  VARCHAR(100),
+  country               VARCHAR(100) DEFAULT 'Egypt',
+  availability_status   VARCHAR(20) DEFAULT 'available'
+                          CHECK (availability_status IN ('available', 'busy', 'offline')),
+  verification_status   VARCHAR(20) NOT NULL DEFAULT 'unverified'
+                          CHECK (verification_status IN (
+                            'unverified', 'pending', 'under_review', 'verified', 'rejected'
+                          )),
+  verified_at           TIMESTAMPTZ,
+  created_at            TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at            TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX idx_expert_profiles_verification ON expert_profiles (verification_status);
+CREATE INDEX idx_expert_profiles_specializations ON expert_profiles USING GIN (specializations);
+
+-- --------------------------------------------------------------------------
+-- 5. Business profiles â€” companies
+-- --------------------------------------------------------------------------
+CREATE TABLE business_profiles (
+  id                      UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id                 UUID UNIQUE NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  company_name            VARCHAR(200) NOT NULL,
+  trade_license_number    VARCHAR(100),
+  tax_id                  VARCHAR(100),
+  industry                VARCHAR(100),
+  company_size            VARCHAR(20)
+                            CHECK (company_size IN ('1-10', '11-50', '51-200', '201-500', '500+')),
+  website                 VARCHAR(255),
+  city                    VARCHAR(100),
+  country                 VARCHAR(100) DEFAULT 'Egypt',
+  description             TEXT,
+  verification_status     VARCHAR(20) NOT NULL DEFAULT 'unverified'
+                            CHECK (verification_status IN (
+                              'unverified', 'pending', 'under_review', 'verified', 'rejected'
+                            )),
+  verified_at             TIMESTAMPTZ,
+  created_at              TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at              TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX idx_business_profiles_verification ON business_profiles (verification_status);
+
+-- --------------------------------------------------------------------------
+-- 6. Verification requests â€” audit trail for KYC / KYB
+-- --------------------------------------------------------------------------
+CREATE TABLE verification_requests (
+  id                    UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id               UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  provider              VARCHAR(50) NOT NULL,          -- 'idenfy', 'manual', etc.
+  provider_session_id   VARCHAR(255),                  -- external provider reference
+  request_type          VARCHAR(20) NOT NULL
+                          CHECK (request_type IN ('identity', 'business')),
+  status                VARCHAR(20) NOT NULL DEFAULT 'initiated'
+                          CHECK (status IN (
+                            'initiated', 'submitted', 'approved', 'rejected', 'expired'
+                          )),
+  document_refs         JSONB DEFAULT '[]',            -- uploaded doc references
+  provider_response     JSONB,                         -- raw provider callback data
+  reviewer_notes        TEXT,
+  reviewed_by           UUID REFERENCES users(id),     -- admin who reviewed (manual)
+  expires_at            TIMESTAMPTZ,
+  created_at            TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at            TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX idx_verification_user_id ON verification_requests (user_id);
+CREATE INDEX idx_verification_status  ON verification_requests (status);
+
+-- --------------------------------------------------------------------------
+-- 7. Trigger: auto-update updated_at
+-- --------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION trigger_set_updated_at()
+RETURNS TRIGGER AS $$
+BEGIN
+  NEW.updated_at = now();
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER set_users_updated_at
+  BEFORE UPDATE ON users
+  FOR EACH ROW EXECUTE FUNCTION trigger_set_updated_at();
+
+CREATE TRIGGER set_customer_profiles_updated_at
+  BEFORE UPDATE ON customer_profiles
+  FOR EACH ROW EXECUTE FUNCTION trigger_set_updated_at();
+
+CREATE TRIGGER set_expert_profiles_updated_at
+  BEFORE UPDATE ON expert_profiles
+  FOR EACH ROW EXECUTE FUNCTION trigger_set_updated_at();
+
+CREATE TRIGGER set_business_profiles_updated_at
+  BEFORE UPDATE ON business_profiles
+  FOR EACH ROW EXECUTE FUNCTION trigger_set_updated_at();
+
+CREATE TRIGGER set_verification_requests_updated_at
+  BEFORE UPDATE ON verification_requests
+  FOR EACH ROW EXECUTE FUNCTION trigger_set_updated_at();
+
+
+
+
+-- ============================================================================
+-- MIGRATION: 20240101000002_otp_schema.sql
+-- ============================================================================
+
+-- ============================================================================
+-- MohandisHub OTP Schema â€” v002
+-- 6-digit verification codes for email and phone
+-- ============================================================================
+
+-- --------------------------------------------------------------------------
+-- 1. Verification codes table â€” stores OTP codes with rate-limiting support
+-- --------------------------------------------------------------------------
+CREATE TABLE verification_codes (
+  id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id         UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  channel         VARCHAR(10) NOT NULL
+                    CHECK (channel IN ('email', 'phone')),
+  destination     VARCHAR(255) NOT NULL,        -- email address or phone number
+  code_hash       VARCHAR(255) NOT NULL,        -- SHA-256 of the 6-digit code
+  attempts        SMALLINT NOT NULL DEFAULT 0,  -- how many wrong guesses so far
+  max_attempts    SMALLINT NOT NULL DEFAULT 5,  -- lock after N wrong guesses
+  verified_at     TIMESTAMPTZ,
+  expires_at      TIMESTAMPTZ NOT NULL,
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX idx_verification_codes_user_channel
+  ON verification_codes (user_id, channel, created_at DESC);
+
+CREATE INDEX idx_verification_codes_destination
+  ON verification_codes (destination, created_at DESC);
+
+-- --------------------------------------------------------------------------
+-- 2. Rate-limit table â€” prevents OTP spam (per user + channel)
+-- --------------------------------------------------------------------------
+CREATE TABLE otp_rate_limits (
+  id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id         UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  channel         VARCHAR(10) NOT NULL
+                    CHECK (channel IN ('email', 'phone')),
+  sent_count      SMALLINT NOT NULL DEFAULT 1,
+  window_start    TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE (user_id, channel)
+);
+
+
+
+
+-- ============================================================================
+-- MIGRATION: 20240101000003_users_birth_date.sql
+-- ============================================================================
+
+-- ============================================================================
+-- MohandisHub â€” v003: Add date_of_birth to users
+-- Enforces minimum age of 20 years at the database level
+-- ============================================================================
+
+ALTER TABLE users
+  ADD COLUMN date_of_birth DATE;
+
+-- Database-level constraint: user must be at least 20 years old
+ALTER TABLE users
+  ADD CONSTRAINT chk_users_min_age
+    CHECK (date_of_birth IS NULL OR date_of_birth <= (CURRENT_DATE - INTERVAL '20 years'));
+
+
+
+
+-- ============================================================================
+-- MIGRATION: 20240101000004_enhanced_profiles.sql
+-- ============================================================================
+
+-- ============================================================================
+-- MohandisHub â€” v004: Enhanced profiles, identity documents, academic records
+--
+-- SPLITS verification into two tracks:
+--   1. Identity verification  â†’  national ID / driving license / passport
+--      (can be auto-verified via Idenfy or manual admin review)
+--   2. Academic / career verification  â†’  degrees, certificates
+--      (always admin-reviewed)
+--
+-- Also enriches expert_profiles & business_profiles with more fields.
+-- ============================================================================
+
+-- --------------------------------------------------------------------------
+-- 1. Identity documents â€” national ID, driving license, passport
+--    Used by: experts (personal), business owners (personal)
+-- --------------------------------------------------------------------------
+CREATE TABLE identity_documents (
+  id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id           UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  document_type     VARCHAR(30) NOT NULL
+                      CHECK (document_type IN ('national_id', 'driving_license', 'passport')),
+  document_number   VARCHAR(100),               -- encrypted / masked in production
+  full_name_on_doc  VARCHAR(200) NOT NULL,
+  date_of_birth     DATE,
+  nationality       VARCHAR(100) DEFAULT 'Egyptian',
+  front_image_url   TEXT,                        -- storage bucket path
+  back_image_url    TEXT,                        -- storage bucket path (not for passport)
+  selfie_image_url  TEXT,                        -- holding-doc selfie
+  provider          VARCHAR(50),                 -- 'idenfy', 'manual', null
+  provider_ref      VARCHAR(255),                -- external session/scan ID
+  status            VARCHAR(20) NOT NULL DEFAULT 'pending'
+                      CHECK (status IN ('pending', 'under_review', 'approved', 'rejected', 'expired')),
+  rejection_reason  TEXT,
+  reviewed_by       UUID REFERENCES users(id),   -- admin who reviewed
+  reviewed_at       TIMESTAMPTZ,
+  expires_at        TIMESTAMPTZ,                 -- document expiry date
+  created_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at        TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX idx_identity_docs_user    ON identity_documents (user_id);
+CREATE INDEX idx_identity_docs_status  ON identity_documents (status);
+
+-- --------------------------------------------------------------------------
+-- 2. Academic records â€” degrees, certifications
+--    Used by: experts only (admin-reviewed)
+-- --------------------------------------------------------------------------
+CREATE TABLE academic_records (
+  id                    UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id               UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  record_type           VARCHAR(30) NOT NULL
+                          CHECK (record_type IN ('degree', 'diploma', 'certificate', 'license')),
+  title                 VARCHAR(300) NOT NULL,      -- "BSc Mechanical Engineering"
+  institution           VARCHAR(300) NOT NULL,      -- "Cairo University"
+  field_of_study        VARCHAR(200),               -- "Mechanical Engineering"
+  graduation_year       SMALLINT,
+  grade                 VARCHAR(50),                -- "Excellent", "Very Good", "3.8 GPA"
+  certificate_image_url TEXT,                        -- scanned certificate
+  transcript_image_url  TEXT,                        -- optional transcript
+  status                VARCHAR(20) NOT NULL DEFAULT 'pending'
+                          CHECK (status IN ('pending', 'under_review', 'approved', 'rejected')),
+  rejection_reason      TEXT,
+  reviewed_by           UUID REFERENCES users(id),
+  reviewed_at           TIMESTAMPTZ,
+  created_at            TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at            TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX idx_academic_records_user   ON academic_records (user_id);
+CREATE INDEX idx_academic_records_status ON academic_records (status);
+
+-- --------------------------------------------------------------------------
+-- 3. Enhance expert_profiles with more career/personal fields
+-- --------------------------------------------------------------------------
+ALTER TABLE expert_profiles
+  ADD COLUMN headline             VARCHAR(300),           -- short tagline
+  ADD COLUMN linkedin_url         VARCHAR(500),
+  ADD COLUMN portfolio_url        VARCHAR(500),
+  ADD COLUMN languages            TEXT[] DEFAULT '{}',    -- e.g. {"Arabic","English"}
+  ADD COLUMN education_summary    TEXT,                   -- free-text summary
+  ADD COLUMN employer             VARCHAR(200),           -- current employer
+  ADD COLUMN job_title            VARCHAR(200),           -- current position
+  ADD COLUMN certifications_count SMALLINT DEFAULT 0,
+  ADD COLUMN identity_verified    BOOLEAN NOT NULL DEFAULT false,
+  ADD COLUMN academic_verified    BOOLEAN NOT NULL DEFAULT false;
+
+-- --------------------------------------------------------------------------
+-- 4. Enhance business_profiles with owner + company details
+-- --------------------------------------------------------------------------
+ALTER TABLE business_profiles
+  ADD COLUMN owner_full_name      VARCHAR(200),           -- boss / owner name
+  ADD COLUMN owner_title          VARCHAR(100),           -- "CEO", "Managing Director"
+  ADD COLUMN owner_email          VARCHAR(255),           -- owner personal/work email
+  ADD COLUMN owner_phone          VARCHAR(20),
+  ADD COLUMN company_email        VARCHAR(255),           -- official company email
+  ADD COLUMN company_phone        VARCHAR(20),
+  ADD COLUMN commercial_register  VARCHAR(100),           -- Ø³Ø¬Ù„ ØªØ¬Ø§Ø±ÙŠ
+  ADD COLUMN address              TEXT,
+  ADD COLUMN logo_url             TEXT,
+  ADD COLUMN social_facebook      VARCHAR(500),
+  ADD COLUMN social_linkedin      VARCHAR(500),
+  ADD COLUMN social_twitter       VARCHAR(500),
+  ADD COLUMN employees_count      SMALLINT,
+  ADD COLUMN founded_year         SMALLINT,
+  ADD COLUMN identity_verified    BOOLEAN NOT NULL DEFAULT false,  -- owner identity
+  ADD COLUMN business_verified    BOOLEAN NOT NULL DEFAULT false;  -- company docs
+
+-- --------------------------------------------------------------------------
+-- 5. Admin reviews â€” unified audit trail for any verification decision
+-- --------------------------------------------------------------------------
+CREATE TABLE admin_reviews (
+  id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  reviewer_id       UUID NOT NULL REFERENCES users(id),  -- the admin
+  target_user_id    UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  review_type       VARCHAR(30) NOT NULL
+                      CHECK (review_type IN ('identity', 'academic', 'business_docs')),
+  target_table      VARCHAR(50) NOT NULL,                -- 'identity_documents', 'academic_records', etc.
+  target_record_id  UUID NOT NULL,                       -- PK of the reviewed row
+  decision          VARCHAR(20) NOT NULL
+                      CHECK (decision IN ('approved', 'rejected')),
+  notes             TEXT,
+  created_at        TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX idx_admin_reviews_target_user ON admin_reviews (target_user_id);
+CREATE INDEX idx_admin_reviews_reviewer    ON admin_reviews (reviewer_id);
+
+-- --------------------------------------------------------------------------
+-- 6. Add admin role to users check constraint
+-- --------------------------------------------------------------------------
+ALTER TABLE users
+  DROP CONSTRAINT users_primary_role_check;
+
+ALTER TABLE users
+  ADD CONSTRAINT users_primary_role_check
+    CHECK (primary_role IN ('customer', 'expert', 'business', 'admin'));
+
+-- --------------------------------------------------------------------------
+-- 7. Triggers for new tables
+-- --------------------------------------------------------------------------
+CREATE TRIGGER set_identity_documents_updated_at
+  BEFORE UPDATE ON identity_documents
+  FOR EACH ROW EXECUTE FUNCTION trigger_set_updated_at();
+
+CREATE TRIGGER set_academic_records_updated_at
+  BEFORE UPDATE ON academic_records
+  FOR EACH ROW EXECUTE FUNCTION trigger_set_updated_at();
+
+
+
+
+-- ============================================================================
+-- MIGRATION: 20240101000005_user_extended_fields.sql
+-- ============================================================================
+
+-- ============================================================================
+-- MohandisHub â€” v005: Add missing columns referenced by auth repository
+--
+-- Adds: plans table, user columns for phone_code, nationality, plan_id,
+--       accepted_terms_at, terms_version, deleted_at, last_login_at
+-- ============================================================================
+
+-- --------------------------------------------------------------------------
+-- 1. Plans table â€” subscription / tier lookup
+-- --------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS plans (
+  id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  slug        VARCHAR(50) UNIQUE NOT NULL DEFAULT 'free',
+  name        VARCHAR(100) NOT NULL DEFAULT 'Free',
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+INSERT INTO plans (slug, name)
+VALUES ('free', 'Free')
+ON CONFLICT (slug) DO NOTHING;
+
+-- --------------------------------------------------------------------------
+-- 2. Add missing columns to users table
+-- --------------------------------------------------------------------------
+ALTER TABLE users
+  ADD COLUMN IF NOT EXISTS phone_code        VARCHAR(6),
+  ADD COLUMN IF NOT EXISTS nationality       VARCHAR(3),
+  ADD COLUMN IF NOT EXISTS plan_id           UUID REFERENCES plans(id),
+  ADD COLUMN IF NOT EXISTS accepted_terms_at TIMESTAMPTZ,
+  ADD COLUMN IF NOT EXISTS terms_version     VARCHAR(20),
+  ADD COLUMN IF NOT EXISTS deleted_at        TIMESTAMPTZ,
+  ADD COLUMN IF NOT EXISTS last_login_at     TIMESTAMPTZ;
+
+
+
+
+-- ============================================================================
+-- MIGRATION: 20240101000006_pending_email.sql
+-- ============================================================================
+
+-- ============================================================================
+-- MohandisHub â€” v006: Add pending email change support
+-- ============================================================================
+
+ALTER TABLE users
+  ADD COLUMN IF NOT EXISTS pending_email          VARCHAR(255),
+  ADD COLUMN IF NOT EXISTS pending_email_token    VARCHAR(255),
+  ADD COLUMN IF NOT EXISTS pending_email_expires  TIMESTAMPTZ;
+
+
+
+
+-- ============================================================================
+-- MIGRATION: 20240101000007_plans_expansion.sql
+-- ============================================================================
+
+-- ============================================================================
+-- MohandisHub â€” v007: Expand plans table with pricing, billing, and features
+-- ============================================================================
+
+ALTER TABLE plans
+  ADD COLUMN IF NOT EXISTS description    TEXT,
+  ADD COLUMN IF NOT EXISTS price          NUMERIC(10,2) NOT NULL DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS currency       VARCHAR(3)    NOT NULL DEFAULT 'EGP',
+  ADD COLUMN IF NOT EXISTS billing_cycle  VARCHAR(20)   DEFAULT 'monthly'
+    CHECK (billing_cycle IN ('monthly', 'quarterly', 'yearly', 'one_time')),
+  ADD COLUMN IF NOT EXISTS duration_days  INTEGER,
+  ADD COLUMN IF NOT EXISTS trial_days     INTEGER       DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS max_services   INTEGER,
+  ADD COLUMN IF NOT EXISTS max_projects   INTEGER,
+  ADD COLUMN IF NOT EXISTS features       JSONB         DEFAULT '[]',
+  ADD COLUMN IF NOT EXISTS is_active      BOOLEAN       NOT NULL DEFAULT true,
+  ADD COLUMN IF NOT EXISTS sort_order     SMALLINT      DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS updated_at     TIMESTAMPTZ   NOT NULL DEFAULT now();
+
+CREATE TRIGGER set_plans_updated_at
+  BEFORE UPDATE ON plans
+  FOR EACH ROW
+  EXECUTE FUNCTION trigger_set_updated_at();
+
+
+
+
+-- ============================================================================
+-- MIGRATION: 20240101000008_wallet_transactions.sql
+-- ============================================================================
+
+-- ============================================================================
+-- MohandisHub â€” v008: Wallets and transactions
+-- ============================================================================
+
+-- --------------------------------------------------------------------------
+-- 1. Wallets â€” one per user
+-- --------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS wallets (
+  id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id     UUID UNIQUE NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  balance     NUMERIC(12,2) NOT NULL DEFAULT 0.00,
+  currency    VARCHAR(3)    NOT NULL DEFAULT 'EGP',
+  is_frozen   BOOLEAN       NOT NULL DEFAULT false,
+  created_at  TIMESTAMPTZ   NOT NULL DEFAULT now(),
+  updated_at  TIMESTAMPTZ   NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_wallets_user_id ON wallets(user_id);
+
+CREATE TRIGGER set_wallets_updated_at
+  BEFORE UPDATE ON wallets
+  FOR EACH ROW
+  EXECUTE FUNCTION trigger_set_updated_at();
+
+-- --------------------------------------------------------------------------
+-- 2. Transactions â€” ledger of all wallet movements
+-- --------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS transactions (
+  id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  wallet_id       UUID          NOT NULL REFERENCES wallets(id),
+  user_id         UUID          NOT NULL REFERENCES users(id),
+  type            VARCHAR(30)   NOT NULL
+    CHECK (type IN ('deposit', 'withdrawal', 'payment', 'refund', 'adjustment', 'bonus')),
+  amount          NUMERIC(12,2) NOT NULL,
+  balance_after   NUMERIC(12,2) NOT NULL,
+  status          VARCHAR(20)   NOT NULL DEFAULT 'completed'
+    CHECK (status IN ('pending', 'completed', 'failed', 'reversed')),
+  description     TEXT,
+  reference_type  VARCHAR(30),
+  reference_id    UUID,
+  metadata        JSONB         DEFAULT '{}',
+  created_by      UUID          REFERENCES users(id),
+  created_at      TIMESTAMPTZ   NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_transactions_wallet_id ON transactions(wallet_id);
+CREATE INDEX IF NOT EXISTS idx_transactions_user_id   ON transactions(user_id);
+CREATE INDEX IF NOT EXISTS idx_transactions_type      ON transactions(type);
+CREATE INDEX IF NOT EXISTS idx_transactions_status    ON transactions(status);
+CREATE INDEX IF NOT EXISTS idx_transactions_created   ON transactions(created_at);
+
+
+
+
+-- ============================================================================
+-- MIGRATION: 20240101000009_services.sql
+-- ============================================================================
+
+-- ============================================================================
+-- MohandisHub â€” v009: Service categories (with i18n columns) and services
+-- ============================================================================
+
+-- --------------------------------------------------------------------------
+-- 1. Service categories â€” admin-managed, bilingual
+-- --------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS service_categories (
+  id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name_en         VARCHAR(100)  NOT NULL,
+  name_ar         VARCHAR(100)  NOT NULL,
+  slug            VARCHAR(100)  UNIQUE NOT NULL,
+  description_en  TEXT,
+  description_ar  TEXT,
+  icon            VARCHAR(50),
+  parent_id       UUID          REFERENCES service_categories(id) ON DELETE SET NULL,
+  sort_order      SMALLINT      DEFAULT 0,
+  is_active       BOOLEAN       NOT NULL DEFAULT true,
+  created_at      TIMESTAMPTZ   NOT NULL DEFAULT now(),
+  updated_at      TIMESTAMPTZ   NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_service_categories_slug   ON service_categories(slug);
+CREATE INDEX IF NOT EXISTS idx_service_categories_parent ON service_categories(parent_id);
+
+CREATE TRIGGER set_service_categories_updated_at
+  BEFORE UPDATE ON service_categories
+  FOR EACH ROW
+  EXECUTE FUNCTION trigger_set_updated_at();
+
+-- Seed engineering-focused categories
+INSERT INTO service_categories (name_en, name_ar, slug, icon, sort_order) VALUES
+  ('Structural Engineering',  'Ø§Ù„Ù‡Ù†Ø¯Ø³Ø© Ø§Ù„Ø¥Ù†Ø´Ø§Ø¦ÙŠØ©',   'structural-engineering',  'building',    1),
+  ('Electrical Engineering',  'Ø§Ù„Ù‡Ù†Ø¯Ø³Ø© Ø§Ù„ÙƒÙ‡Ø±Ø¨Ø§Ø¦ÙŠØ©',   'electrical-engineering',  'zap',         2),
+  ('Civil Engineering',       'Ø§Ù„Ù‡Ù†Ø¯Ø³Ø© Ø§Ù„Ù…Ø¯Ù†ÙŠØ©',      'civil-engineering',       'road',        3),
+  ('Mechanical Engineering',  'Ø§Ù„Ù‡Ù†Ø¯Ø³Ø© Ø§Ù„Ù…ÙŠÙƒØ§Ù†ÙŠÙƒÙŠØ©',  'mechanical-engineering',  'cog',         4),
+  ('Architectural Design',    'Ø§Ù„ØªØµÙ…ÙŠÙ… Ø§Ù„Ù…Ø¹Ù…Ø§Ø±ÙŠ',     'architectural-design',    'drafting',    5),
+  ('Consultation',            'Ø§Ø³ØªØ´Ø§Ø±Ø©',              'consultation',            'message',     6),
+  ('Site Visit',              'Ø²ÙŠØ§Ø±Ø© Ù…ÙˆÙ‚Ø¹',           'site-visit',              'map-pin',     7),
+  ('Inspection',              'ÙØ­Øµ ÙˆÙ…Ø¹Ø§ÙŠÙ†Ø©',          'inspection',              'search',      8),
+  ('Project Management',      'Ø¥Ø¯Ø§Ø±Ø© Ø§Ù„Ù…Ø´Ø§Ø±ÙŠØ¹',       'project-management',      'clipboard',   9),
+  ('HVAC',                    'ØªÙƒÙŠÙŠÙ ÙˆØªØ¨Ø±ÙŠØ¯',         'hvac',                    'thermometer', 10),
+  ('Plumbing',                'Ø§Ù„Ø³Ø¨Ø§ÙƒØ©',              'plumbing',                'droplet',     11),
+  ('Surveying',               'Ø§Ù„Ù…Ø³Ø§Ø­Ø©',              'surveying',               'compass',     12)
+ON CONFLICT (slug) DO NOTHING;
+
+-- --------------------------------------------------------------------------
+-- 2. Services â€” provider offerings
+-- --------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS services (
+  id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  provider_id       UUID          NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  category_id       UUID          REFERENCES service_categories(id) ON DELETE SET NULL,
+  title             VARCHAR(300)  NOT NULL,
+  description       TEXT,
+  price             NUMERIC(10,2),
+  price_type        VARCHAR(20)   DEFAULT 'fixed'
+    CHECK (price_type IN ('fixed', 'hourly', 'negotiable')),
+  currency          VARCHAR(3)    DEFAULT 'EGP',
+  delivery_time_days SMALLINT,
+  status            VARCHAR(20)   NOT NULL DEFAULT 'draft'
+    CHECK (status IN ('draft', 'pending_review', 'active', 'paused', 'rejected', 'archived')),
+  rejection_reason  TEXT,
+  reviewed_by       UUID          REFERENCES users(id),
+  reviewed_at       TIMESTAMPTZ,
+  tags              TEXT[]        DEFAULT '{}',
+  images            TEXT[]        DEFAULT '{}',
+  is_featured       BOOLEAN       NOT NULL DEFAULT false,
+  view_count        INTEGER       DEFAULT 0,
+  order_count       INTEGER       DEFAULT 0,
+  avg_rating        NUMERIC(3,2),
+  city              VARCHAR(100),
+  area              VARCHAR(100),
+  country           VARCHAR(100)  DEFAULT 'Egypt',
+  created_at        TIMESTAMPTZ   NOT NULL DEFAULT now(),
+  updated_at        TIMESTAMPTZ   NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_services_provider   ON services(provider_id);
+CREATE INDEX IF NOT EXISTS idx_services_category   ON services(category_id);
+CREATE INDEX IF NOT EXISTS idx_services_status     ON services(status);
+CREATE INDEX IF NOT EXISTS idx_services_city       ON services(city);
+CREATE INDEX IF NOT EXISTS idx_services_featured   ON services(is_featured) WHERE is_featured = true;
+CREATE INDEX IF NOT EXISTS idx_services_tags       ON services USING GIN(tags);
+
+CREATE TRIGGER set_services_updated_at
+  BEFORE UPDATE ON services
+  FOR EACH ROW
+  EXECUTE FUNCTION trigger_set_updated_at();
+
+
+
+
+-- ============================================================================
+-- MIGRATION: 20240101000010_deposit_requests.sql
+-- ============================================================================
+
+-- ============================================================================
+-- MohandisHub â€” v010: Deposit requests (for Cryptomus / crypto)
+-- ============================================================================
+
+CREATE TABLE IF NOT EXISTS deposit_requests (
+  id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id         UUID          NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  wallet_id       UUID          NOT NULL REFERENCES wallets(id) ON DELETE CASCADE,
+  amount          NUMERIC(12,2) NOT NULL,
+  currency        VARCHAR(3)    NOT NULL DEFAULT 'EGP',
+  order_id        VARCHAR(128)  UNIQUE NOT NULL,
+  cryptomus_uuid  VARCHAR(255),
+  status          VARCHAR(20)   NOT NULL DEFAULT 'pending'
+    CHECK (status IN ('pending', 'paid', 'expired', 'failed', 'cancelled')),
+  created_at      TIMESTAMPTZ   NOT NULL DEFAULT now(),
+  updated_at      TIMESTAMPTZ   NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_deposit_requests_order_id ON deposit_requests(order_id);
+CREATE INDEX IF NOT EXISTS idx_deposit_requests_user_id ON deposit_requests(user_id);
+CREATE INDEX IF NOT EXISTS idx_deposit_requests_status ON deposit_requests(status);
+
+CREATE TRIGGER set_deposit_requests_updated_at
+  BEFORE UPDATE ON deposit_requests
+  FOR EACH ROW
+  EXECUTE FUNCTION trigger_set_updated_at();
+
+
+
+
+-- ============================================================================
+-- MIGRATION: 20240101000011_password_reset_tokens.sql
+-- ============================================================================
+
+-- ============================================================================
+-- MohandisHub â€” v011: Password reset token fields
+-- ============================================================================
+
+ALTER TABLE users
+  ADD COLUMN IF NOT EXISTS password_reset_token   VARCHAR(255),
+  ADD COLUMN IF NOT EXISTS password_reset_expires TIMESTAMPTZ;
+
+CREATE INDEX IF NOT EXISTS idx_users_password_reset_token
+  ON users (password_reset_token);
+
+
+
+
+-- ============================================================================
+-- MIGRATION: 20240101000012_chat.sql
+-- ============================================================================
+
+-- Chat conversations and messages
+CREATE TABLE IF NOT EXISTS conversations (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  participant_a UUID NOT NULL REFERENCES users(id),
+  participant_b UUID NOT NULL REFERENCES users(id),
+  status VARCHAR(20) NOT NULL DEFAULT 'ongoing' CHECK (status IN ('ongoing', 'closed')),
+  last_message_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE (participant_a, participant_b)
+);
+
+CREATE TABLE IF NOT EXISTS messages (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  conversation_id UUID NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+  sender_id UUID NOT NULL REFERENCES users(id),
+  body TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_conversations_participant_a ON conversations(participant_a);
+CREATE INDEX IF NOT EXISTS idx_conversations_participant_b ON conversations(participant_b);
+CREATE INDEX IF NOT EXISTS idx_messages_conversation ON messages(conversation_id, created_at);
+
+
+
+
+-- ============================================================================
+-- MIGRATION: 20240101000013_needs_bids.sql
+-- ============================================================================
+
+-- Customer needs and expert bids
+CREATE TABLE IF NOT EXISTS needs (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  customer_id UUID NOT NULL REFERENCES users(id),
+  title VARCHAR(300) NOT NULL,
+  description TEXT NOT NULL,
+  category_id UUID REFERENCES service_categories(id),
+  budget_type VARCHAR(10) NOT NULL DEFAULT 'fixed' CHECK (budget_type IN ('fixed', 'hourly')),
+  budget_amount DECIMAL(12,2) NOT NULL,
+  currency VARCHAR(10) NOT NULL DEFAULT 'EGP',
+  timeline_days INT,
+  city VARCHAR(100),
+  country VARCHAR(100),
+  status VARCHAR(20) NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'closed', 'awarded')),
+  awarded_bid_id UUID,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS bids (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  need_id UUID NOT NULL REFERENCES needs(id) ON DELETE CASCADE,
+  expert_id UUID NOT NULL REFERENCES users(id),
+  amount DECIMAL(12,2) NOT NULL,
+  currency VARCHAR(10) NOT NULL DEFAULT 'EGP',
+  message TEXT NOT NULL,
+  delivery_days INT,
+  status VARCHAR(20) NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'accepted', 'rejected')),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE (need_id, expert_id)
+);
+
+ALTER TABLE needs ADD CONSTRAINT fk_awarded_bid FOREIGN KEY (awarded_bid_id) REFERENCES bids(id);
+
+CREATE INDEX IF NOT EXISTS idx_needs_customer ON needs(customer_id);
+CREATE INDEX IF NOT EXISTS idx_needs_status ON needs(status);
+CREATE INDEX IF NOT EXISTS idx_bids_need ON bids(need_id);
+CREATE INDEX IF NOT EXISTS idx_bids_expert ON bids(expert_id);
+
+
+
+
+-- ============================================================================
+-- MIGRATION: 20240101000014_is_admin_and_plans_backfill.sql
+-- ============================================================================
+
+-- ============================================================================
+-- MohandisHub â€” v014: is_admin flag + plans backfill
+--
+-- 1. Add is_admin boolean so users can be admin + customer/expert/business
+-- 2. Migrate existing primary_role='admin' users to is_admin=true, primary_role='customer'
+-- 3. Update primary_role CHECK to exclude 'admin' (admin is now a flag)
+-- 4. Backfill plans table: ensure free plan has defaults for 007 columns
+-- ============================================================================
+
+-- --------------------------------------------------------------------------
+-- 1. Add is_admin to users
+-- --------------------------------------------------------------------------
+ALTER TABLE users
+  ADD COLUMN IF NOT EXISTS is_admin BOOLEAN NOT NULL DEFAULT false;
+
+-- --------------------------------------------------------------------------
+-- 2. Migrate existing admin users: set is_admin=true, primary_role='customer'
+-- --------------------------------------------------------------------------
+UPDATE users
+SET is_admin = true, primary_role = 'customer'
+WHERE primary_role = 'admin';
+
+-- --------------------------------------------------------------------------
+-- 3. Update primary_role CHECK to exclude 'admin'
+-- --------------------------------------------------------------------------
+ALTER TABLE users DROP CONSTRAINT IF EXISTS users_primary_role_check;
+ALTER TABLE users
+  ADD CONSTRAINT users_primary_role_check
+  CHECK (primary_role IN ('customer', 'expert', 'business'));
+
+-- --------------------------------------------------------------------------
+-- 4. Backfill plans: ensure free plan has 007 columns (only if 007 was run)
+-- --------------------------------------------------------------------------
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'plans' AND column_name = 'price') THEN
+    UPDATE plans
+    SET
+      price = COALESCE(price, 0),
+      currency = COALESCE(currency, 'EGP'),
+      billing_cycle = COALESCE(billing_cycle, 'monthly'),
+      is_active = COALESCE(is_active, true),
+      sort_order = COALESCE(sort_order, 0),
+      updated_at = COALESCE(updated_at, created_at, now())
+    WHERE slug = 'free'
+      AND (price IS NULL OR currency IS NULL OR billing_cycle IS NULL OR is_active IS NULL OR sort_order IS NULL OR updated_at IS NULL);
+  END IF;
+END $$;
+
+
+
+
+-- ============================================================================
+-- MIGRATION: 20240101000015_needs_reference_url.sql
+-- ============================================================================
+
+-- Optional link/screenshot URL for needs
+ALTER TABLE needs ADD COLUMN IF NOT EXISTS reference_url VARCHAR(500);
+
+
+
+
+-- ============================================================================
+-- MIGRATION: 20240101000016_needs_reference_url_text.sql
+-- ============================================================================
+
+-- Allow storing JSON array of URLs (up to 5)
+ALTER TABLE needs ALTER COLUMN reference_url TYPE TEXT;
+
+
+
+
+-- ============================================================================
+-- MIGRATION: 20240101000017_plans_schema_repair.sql
+-- ============================================================================
+
+-- ============================================================================
+-- MohandisHub - v017: Repair plans schema for admin CRUD compatibility
+-- ============================================================================
+
+-- Ensure the table exists for environments that skipped old migrations.
+CREATE TABLE IF NOT EXISTS plans (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  slug VARCHAR(50) UNIQUE NOT NULL DEFAULT 'free',
+  name VARCHAR(100) NOT NULL DEFAULT 'Free',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+ALTER TABLE plans
+  ADD COLUMN IF NOT EXISTS description TEXT,
+  ADD COLUMN IF NOT EXISTS price NUMERIC(10, 2),
+  ADD COLUMN IF NOT EXISTS currency VARCHAR(3),
+  ADD COLUMN IF NOT EXISTS billing_cycle VARCHAR(20),
+  ADD COLUMN IF NOT EXISTS duration_days INTEGER,
+  ADD COLUMN IF NOT EXISTS trial_days INTEGER,
+  ADD COLUMN IF NOT EXISTS max_services INTEGER,
+  ADD COLUMN IF NOT EXISTS max_projects INTEGER,
+  ADD COLUMN IF NOT EXISTS features JSONB,
+  ADD COLUMN IF NOT EXISTS is_active BOOLEAN,
+  ADD COLUMN IF NOT EXISTS sort_order SMALLINT,
+  ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ;
+
+-- Normalize nullable legacy rows and restore defaults/constraints expected by API.
+ALTER TABLE plans ALTER COLUMN price SET DEFAULT 0;
+UPDATE plans SET price = 0 WHERE price IS NULL;
+ALTER TABLE plans ALTER COLUMN price SET NOT NULL;
+
+ALTER TABLE plans ALTER COLUMN currency SET DEFAULT 'EGP';
+UPDATE plans SET currency = 'EGP' WHERE currency IS NULL;
+ALTER TABLE plans ALTER COLUMN currency SET NOT NULL;
+
+ALTER TABLE plans ALTER COLUMN billing_cycle SET DEFAULT 'monthly';
+UPDATE plans
+SET billing_cycle = 'monthly'
+WHERE billing_cycle IS NULL
+  OR billing_cycle NOT IN ('monthly', 'quarterly', 'yearly', 'one_time');
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_constraint
+    WHERE conname = 'plans_billing_cycle_check'
+      AND conrelid = 'plans'::regclass
+  ) THEN
+    ALTER TABLE plans
+      ADD CONSTRAINT plans_billing_cycle_check
+      CHECK (billing_cycle IN ('monthly', 'quarterly', 'yearly', 'one_time'));
+  END IF;
+END $$;
+
+ALTER TABLE plans ALTER COLUMN trial_days SET DEFAULT 0;
+UPDATE plans SET trial_days = 0 WHERE trial_days IS NULL;
+
+ALTER TABLE plans ALTER COLUMN features SET DEFAULT '[]'::jsonb;
+UPDATE plans SET features = '[]'::jsonb WHERE features IS NULL;
+
+ALTER TABLE plans ALTER COLUMN is_active SET DEFAULT true;
+UPDATE plans SET is_active = true WHERE is_active IS NULL;
+ALTER TABLE plans ALTER COLUMN is_active SET NOT NULL;
+
+ALTER TABLE plans ALTER COLUMN sort_order SET DEFAULT 0;
+UPDATE plans SET sort_order = 0 WHERE sort_order IS NULL;
+
+ALTER TABLE plans ALTER COLUMN updated_at SET DEFAULT now();
+UPDATE plans SET updated_at = COALESCE(updated_at, created_at, now()) WHERE updated_at IS NULL;
+ALTER TABLE plans ALTER COLUMN updated_at SET NOT NULL;
+
+-- Keep updated_at in sync for admin edits.
+CREATE OR REPLACE FUNCTION trigger_set_updated_at()
+RETURNS TRIGGER AS $$
+BEGIN
+  NEW.updated_at = now();
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_trigger
+    WHERE tgname = 'set_plans_updated_at'
+      AND tgrelid = 'plans'::regclass
+  ) THEN
+    CREATE TRIGGER set_plans_updated_at
+      BEFORE UPDATE ON plans
+      FOR EACH ROW EXECUTE FUNCTION trigger_set_updated_at();
+  END IF;
+END $$;
+
+-- Ensure at least one baseline plan exists.
+INSERT INTO plans (slug, name, price, currency, billing_cycle, trial_days, features, is_active, sort_order, updated_at)
+VALUES ('free', 'Free', 0, 'EGP', 'monthly', 0, '[]'::jsonb, true, 0, now())
+ON CONFLICT (slug) DO NOTHING;
+
+
+
+
+-- ============================================================================
+-- MIGRATION: 20240101000018_app_settings.sql
+-- ============================================================================
+
+-- ============================================================================
+-- MohandisHub - v018: App settings table for admin-controlled app-wide flags
+-- ============================================================================
+
+CREATE TABLE IF NOT EXISTS app_settings (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  maintenance_mode BOOLEAN NOT NULL DEFAULT false,
+  maintenance_message TEXT,
+  signups_locked BOOLEAN NOT NULL DEFAULT false,
+  deposits_paused BOOLEAN NOT NULL DEFAULT false,
+  money_movements_paused BOOLEAN NOT NULL DEFAULT false,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_by UUID REFERENCES users(id),
+
+  -- Phase 2
+  lock_logins BOOLEAN NOT NULL DEFAULT false,
+  disable_crypto_deposits BOOLEAN NOT NULL DEFAULT false,
+  disable_card_deposits BOOLEAN NOT NULL DEFAULT false,
+  min_deposit_amount NUMERIC(10, 2),
+  max_deposit_amount NUMERIC(10, 2),
+  pause_plan_subscriptions BOOLEAN NOT NULL DEFAULT false,
+  pause_needs BOOLEAN NOT NULL DEFAULT false,
+  pause_bids BOOLEAN NOT NULL DEFAULT false,
+  pause_award_bids BOOLEAN NOT NULL DEFAULT false,
+  pause_uploads BOOLEAN NOT NULL DEFAULT false,
+  pause_verification_submissions BOOLEAN NOT NULL DEFAULT false,
+  pause_chat BOOLEAN NOT NULL DEFAULT false,
+  pause_otp_emails BOOLEAN NOT NULL DEFAULT false,
+  feature_needs_enabled BOOLEAN NOT NULL DEFAULT true,
+  feature_plans_enabled BOOLEAN NOT NULL DEFAULT true,
+  feature_wallet_enabled BOOLEAN NOT NULL DEFAULT true,
+  global_announcement TEXT
+);
+
+-- Ensure exactly one row
+DO $$
+DECLARE
+  row_count INTEGER;
+BEGIN
+  SELECT COUNT(*) INTO row_count FROM app_settings;
+  IF row_count = 0 THEN
+    INSERT INTO app_settings (maintenance_mode, signups_locked, deposits_paused, money_movements_paused)
+    VALUES (false, false, false, false);
+  END IF;
+END $$;
+
+
+
+
+-- ============================================================================
+-- MIGRATION: 20240101000019_commission_settings.sql
+-- ============================================================================
+
+-- ============================================================================
+-- MohandisHub â€” v019: Commission settings for bid/booking payments
+-- ============================================================================
+
+ALTER TABLE app_settings
+  ADD COLUMN IF NOT EXISTS commission_percent NUMERIC(5,2) NOT NULL DEFAULT 10.00,
+  ADD COLUMN IF NOT EXISTS commission_min_egp NUMERIC(10,2) NOT NULL DEFAULT 0;
+
+
+
+
+-- ============================================================================
+-- MIGRATION: 20240101000020_bid_payment.sql
+-- ============================================================================
+
+-- ============================================================================
+-- MohandisHub â€” v020: Bid payment flow (wallet debit/credit + commission)
+-- ============================================================================
+
+-- 1. Add 'commission' to transactions type
+ALTER TABLE transactions DROP CONSTRAINT IF EXISTS transactions_type_check;
+ALTER TABLE transactions ADD CONSTRAINT transactions_type_check
+  CHECK (type IN ('deposit', 'withdrawal', 'payment', 'refund', 'adjustment', 'bonus', 'commission'));
+
+-- 2. Add paid_at and payment_transaction_id to bids
+ALTER TABLE bids
+  ADD COLUMN IF NOT EXISTS paid_at TIMESTAMPTZ,
+  ADD COLUMN IF NOT EXISTS payment_transaction_id UUID REFERENCES transactions(id);
+
+-- 3. Platform user and wallet for commission accumulation
+INSERT INTO users (id, email, password_hash, display_name, primary_role)
+VALUES (
+  '00000000-0000-0000-0000-000000000001',
+  'platform@mohandishub.internal',
+  'no-login',
+  'Platform',
+  'customer'
+)
+ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO wallets (user_id)
+SELECT '00000000-0000-0000-0000-000000000001'
+WHERE NOT EXISTS (SELECT 1 FROM wallets WHERE user_id = '00000000-0000-0000-0000-000000000001');
+
+
+
+
+-- ============================================================================
+-- MIGRATION: 20240101000021_bookings.sql
+-- ============================================================================
+
+-- ============================================================================
+-- MohandisHub â€” v021: Bookings table (service/need bookings)
+-- ============================================================================
+
+CREATE TABLE IF NOT EXISTS bookings (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  customer_id UUID NOT NULL REFERENCES users(id),
+  provider_id UUID NOT NULL REFERENCES users(id),
+  service_id UUID REFERENCES services(id) ON DELETE SET NULL,
+  need_id UUID REFERENCES needs(id) ON DELETE SET NULL,
+  amount NUMERIC(12,2) NOT NULL,
+  currency VARCHAR(10) NOT NULL DEFAULT 'EGP',
+  commission_amount NUMERIC(12,2) NOT NULL DEFAULT 0,
+  provider_amount NUMERIC(12,2) NOT NULL,
+  status VARCHAR(30) NOT NULL DEFAULT 'pending_payment'
+    CHECK (status IN (
+      'pending_payment', 'paid', 'scheduled', 'in_progress',
+      'completed', 'cancelled', 'refunded'
+    )),
+  slot_start_at TIMESTAMPTZ,
+  slot_end_at TIMESTAMPTZ,
+  payment_transaction_id UUID REFERENCES transactions(id),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  CONSTRAINT chk_bookings_need_or_service CHECK (need_id IS NOT NULL OR service_id IS NOT NULL)
+);
+
+CREATE INDEX IF NOT EXISTS idx_bookings_customer ON bookings(customer_id);
+CREATE INDEX IF NOT EXISTS idx_bookings_provider ON bookings(provider_id);
+CREATE INDEX IF NOT EXISTS idx_bookings_service ON bookings(service_id);
+CREATE INDEX IF NOT EXISTS idx_bookings_need ON bookings(need_id);
+CREATE INDEX IF NOT EXISTS idx_bookings_status ON bookings(status);
+CREATE INDEX IF NOT EXISTS idx_bookings_slot_start ON bookings(slot_start_at);
+
+CREATE TRIGGER set_bookings_updated_at
+  BEFORE UPDATE ON bookings
+  FOR EACH ROW
+  EXECUTE FUNCTION trigger_set_updated_at();
+
+
+
+
+-- ============================================================================
+-- MIGRATION: 20240101000022_availability_slots.sql
+-- ============================================================================
+
+-- ============================================================================
+-- MohandisHub â€” v022: Availability slots for provider calendar
+-- ============================================================================
+
+CREATE TABLE IF NOT EXISTS availability_slots (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  provider_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  start_at TIMESTAMPTZ NOT NULL,
+  end_at TIMESTAMPTZ NOT NULL,
+  status VARCHAR(20) NOT NULL DEFAULT 'available'
+    CHECK (status IN ('available', 'booked', 'blocked')),
+  booking_id UUID REFERENCES bookings(id) ON DELETE SET NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  CONSTRAINT chk_slot_end_after_start CHECK (end_at > start_at)
+);
+
+CREATE TRIGGER set_availability_slots_updated_at
+  BEFORE UPDATE ON availability_slots
+  FOR EACH ROW
+  EXECUTE FUNCTION trigger_set_updated_at();
+
+CREATE INDEX IF NOT EXISTS idx_availability_slots_provider ON availability_slots(provider_id);
+CREATE INDEX IF NOT EXISTS idx_availability_slots_start ON availability_slots(start_at);
+CREATE INDEX IF NOT EXISTS idx_availability_slots_status ON availability_slots(status);
+
+
+
+
+-- ============================================================================
+-- MIGRATION: 20240101000023_reviews.sql
+-- ============================================================================
+
+-- ============================================================================
+-- MohandisHub â€” v023: Reviews and ratings
+-- ============================================================================
+
+CREATE TABLE IF NOT EXISTS reviews (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  reviewer_id UUID NOT NULL REFERENCES users(id),
+  target_user_id UUID NOT NULL REFERENCES users(id),
+  target_type VARCHAR(20) NOT NULL CHECK (target_type IN ('expert', 'business')),
+  booking_id UUID REFERENCES bookings(id),
+  need_id UUID REFERENCES needs(id),
+  rating SMALLINT NOT NULL CHECK (rating >= 1 AND rating <= 5),
+  comment TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  CONSTRAINT chk_review_reference CHECK (booking_id IS NOT NULL OR need_id IS NOT NULL)
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_reviews_booking_unique ON reviews(booking_id) WHERE booking_id IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_reviews_need_unique ON reviews(need_id) WHERE need_id IS NOT NULL;
+
+CREATE INDEX IF NOT EXISTS idx_reviews_target ON reviews(target_user_id);
+CREATE INDEX IF NOT EXISTS idx_reviews_reviewer ON reviews(reviewer_id);
+
+
+
+
+-- ============================================================================
+-- MIGRATION: 20240101000024_need_status_completed.sql
+-- ============================================================================
+
+-- ============================================================================
+-- MohandisHub â€” v024: Add 'completed' status to needs for order lifecycle
+-- ============================================================================
+
+ALTER TABLE needs DROP CONSTRAINT IF EXISTS needs_status_check;
+ALTER TABLE needs ADD CONSTRAINT needs_status_check
+  CHECK (status IN ('open', 'closed', 'awarded', 'in_progress', 'completed'));
+
+
+
+
+-- ============================================================================
+-- MIGRATION: 20240101000030_jobs_and_bids_upgrades.sql
+-- ============================================================================
+
+-- Jobs system
+CREATE TABLE IF NOT EXISTS jobs (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  business_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  title VARCHAR(300) NOT NULL,
+  description TEXT NOT NULL,
+  requirements TEXT,
+  salary_range VARCHAR(100),
+  status VARCHAR(20) NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'closed')),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS job_applications (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  job_id UUID NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
+  expert_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  cover_letter TEXT,
+  status VARCHAR(20) NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'reviewed', 'accepted', 'rejected')),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE (job_id, expert_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_jobs_business ON jobs(business_id);
+CREATE INDEX IF NOT EXISTS idx_job_apps_job ON job_applications(job_id);
+CREATE INDEX IF NOT EXISTS idx_job_apps_expert ON job_applications(expert_id);
+
+-- Bid Messages for inline Pre-Award Chat
+CREATE TABLE IF NOT EXISTS bid_messages (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  bid_id UUID NOT NULL REFERENCES bids(id) ON DELETE CASCADE,
+  sender_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  content TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_bid_messages_bid ON bid_messages(bid_id);
+
+-- Alter Services for is_negotiable
+ALTER TABLE services DROP CONSTRAINT IF EXISTS services_price_type_check;
+ALTER TABLE services ADD COLUMN IF NOT EXISTS is_negotiable BOOLEAN NOT NULL DEFAULT false;
+UPDATE services SET is_negotiable = true, price_type = 'fixed' WHERE price_type = 'negotiable';
+ALTER TABLE services ADD CONSTRAINT services_price_type_check CHECK (price_type IN ('fixed', 'hourly'));
+
+-- Alter Bids for estimated_hours
+ALTER TABLE bids ADD COLUMN IF NOT EXISTS estimated_hours INT;
+
+
+
+-- ============================================================================
+-- MIGRATION: 20240101000031_chat_read_receipts.sql
+-- ============================================================================
+
+-- Chat read receipts
+ALTER TABLE conversations ADD COLUMN IF NOT EXISTS participant_a_last_read_at TIMESTAMPTZ DEFAULT now();
+ALTER TABLE conversations ADD COLUMN IF NOT EXISTS participant_b_last_read_at TIMESTAMPTZ DEFAULT now();
+
+ALTER TABLE bids ADD COLUMN IF NOT EXISTS expert_last_read_at TIMESTAMPTZ DEFAULT now();
+ALTER TABLE bids ADD COLUMN IF NOT EXISTS customer_last_read_at TIMESTAMPTZ DEFAULT now();
+
+
+
+-- ============================================================================
+-- MIGRATION: 20260309101419_new-migration.sql
+-- ============================================================================
+
+-- ============================================================================
+-- MohandisHub - v032: Reservation V2 + Wallet Holds + Legacy booking migration
+-- ============================================================================
+
+-- --------------------------------------------------------------------------
+-- 1) App settings for reservation pricing
+-- --------------------------------------------------------------------------
+ALTER TABLE app_settings
+  ADD COLUMN IF NOT EXISTS reservation_acceptance_fee NUMERIC(10,2) NOT NULL DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS reservation_voice_minute_rate NUMERIC(10,2) NOT NULL DEFAULT 1,
+  ADD COLUMN IF NOT EXISTS reservation_video_minute_rate NUMERIC(10,2) NOT NULL DEFAULT 2,
+  ADD COLUMN IF NOT EXISTS reservation_min_prejoin_minutes INT NOT NULL DEFAULT 5;
+
+-- --------------------------------------------------------------------------
+-- 2) Transactions type extension for hold/release ledger entries
+-- --------------------------------------------------------------------------
+ALTER TABLE transactions DROP CONSTRAINT IF EXISTS transactions_type_check;
+ALTER TABLE transactions ADD CONSTRAINT transactions_type_check
+  CHECK (
+    type IN (
+      'deposit',
+      'withdrawal',
+      'payment',
+      'refund',
+      'adjustment',
+      'bonus',
+      'commission',
+      'hold',
+      'release'
+    )
+  );
+
+-- --------------------------------------------------------------------------
+-- 3) Wallet holds
+-- --------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS wallet_holds (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  wallet_id UUID NOT NULL REFERENCES wallets(id) ON DELETE CASCADE,
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  amount NUMERIC(12,2) NOT NULL CHECK (amount >= 0),
+  currency VARCHAR(10) NOT NULL DEFAULT 'EGP',
+  status VARCHAR(20) NOT NULL DEFAULT 'held'
+    CHECK (status IN ('held', 'released', 'captured', 'cancelled')),
+  reference_type VARCHAR(40) NOT NULL DEFAULT 'reservation',
+  reference_id UUID,
+  metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  released_at TIMESTAMPTZ,
+  captured_at TIMESTAMPTZ
+);
+
+CREATE INDEX IF NOT EXISTS idx_wallet_holds_wallet ON wallet_holds(wallet_id);
+CREATE INDEX IF NOT EXISTS idx_wallet_holds_user ON wallet_holds(user_id);
+CREATE INDEX IF NOT EXISTS idx_wallet_holds_status ON wallet_holds(status);
+CREATE INDEX IF NOT EXISTS idx_wallet_holds_ref ON wallet_holds(reference_type, reference_id);
+
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM pg_proc WHERE proname = 'trigger_set_updated_at'
+  ) AND NOT EXISTS (
+    SELECT 1 FROM pg_trigger
+    WHERE tgname = 'set_wallet_holds_updated_at'
+      AND tgrelid = 'wallet_holds'::regclass
+  ) THEN
+    CREATE TRIGGER set_wallet_holds_updated_at
+      BEFORE UPDATE ON wallet_holds
+      FOR EACH ROW EXECUTE FUNCTION trigger_set_updated_at();
+  END IF;
+END $$;
+
+-- --------------------------------------------------------------------------
+-- 4) Reservation provider profile
+-- --------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS reservation_profiles (
+  provider_id UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  auto_accept BOOLEAN NOT NULL DEFAULT false,
+  online_voice_price NUMERIC(12,2) NOT NULL DEFAULT 0,
+  online_video_price NUMERIC(12,2) NOT NULL DEFAULT 0,
+  offline_price NUMERIC(12,2) NOT NULL DEFAULT 0,
+  currency VARCHAR(10) NOT NULL DEFAULT 'EGP',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM pg_proc WHERE proname = 'trigger_set_updated_at'
+  ) AND NOT EXISTS (
+    SELECT 1 FROM pg_trigger
+    WHERE tgname = 'set_reservation_profiles_updated_at'
+      AND tgrelid = 'reservation_profiles'::regclass
+  ) THEN
+    CREATE TRIGGER set_reservation_profiles_updated_at
+      BEFORE UPDATE ON reservation_profiles
+      FOR EACH ROW EXECUTE FUNCTION trigger_set_updated_at();
+  END IF;
+END $$;
+
+-- --------------------------------------------------------------------------
+-- 5) Reservation slots and reservations
+-- --------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS reservation_slots (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  provider_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  start_at TIMESTAMPTZ NOT NULL,
+  end_at TIMESTAMPTZ NOT NULL,
+  status VARCHAR(20) NOT NULL DEFAULT 'available'
+    CHECK (status IN ('available', 'booked', 'blocked')),
+  supports_online BOOLEAN NOT NULL DEFAULT true,
+  supports_offline BOOLEAN NOT NULL DEFAULT true,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  CONSTRAINT chk_reservation_slot_end_after_start CHECK (end_at > start_at)
+);
+
+CREATE INDEX IF NOT EXISTS idx_reservation_slots_provider ON reservation_slots(provider_id);
+CREATE INDEX IF NOT EXISTS idx_reservation_slots_start ON reservation_slots(start_at);
+CREATE INDEX IF NOT EXISTS idx_reservation_slots_status ON reservation_slots(status);
+
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM pg_proc WHERE proname = 'trigger_set_updated_at'
+  ) AND NOT EXISTS (
+    SELECT 1 FROM pg_trigger
+    WHERE tgname = 'set_reservation_slots_updated_at'
+      AND tgrelid = 'reservation_slots'::regclass
+  ) THEN
+    CREATE TRIGGER set_reservation_slots_updated_at
+      BEFORE UPDATE ON reservation_slots
+      FOR EACH ROW EXECUTE FUNCTION trigger_set_updated_at();
+  END IF;
+END $$;
+
+CREATE TABLE IF NOT EXISTS reservations (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  customer_id UUID NOT NULL REFERENCES users(id),
+  provider_id UUID NOT NULL REFERENCES users(id),
+  service_id UUID REFERENCES services(id) ON DELETE SET NULL,
+  slot_id UUID REFERENCES reservation_slots(id) ON DELETE SET NULL,
+  mode VARCHAR(20) NOT NULL CHECK (mode IN ('online', 'offline')),
+  online_type VARCHAR(20) CHECK (online_type IN ('voice', 'video')),
+  status VARCHAR(40) NOT NULL DEFAULT 'pending'
+    CHECK (status IN (
+      'pending',
+      'accepted',
+      'rejected',
+      'awaiting_start',
+      'in_session',
+      'waiting_customer_done',
+      'completed',
+      'cancelled',
+      'disputed',
+      'expired'
+    )),
+  requested_start_at TIMESTAMPTZ NOT NULL,
+  requested_end_at TIMESTAMPTZ NOT NULL,
+  expert_price_amount NUMERIC(12,2) NOT NULL DEFAULT 0,
+  currency VARCHAR(10) NOT NULL DEFAULT 'EGP',
+  admin_acceptance_fee NUMERIC(12,2) NOT NULL DEFAULT 0,
+  admin_minute_rate NUMERIC(12,2) NOT NULL DEFAULT 0,
+  fixed_price_hold_id UUID REFERENCES wallet_holds(id) ON DELETE SET NULL,
+  rejection_reason TEXT,
+  auto_rejected BOOLEAN NOT NULL DEFAULT false,
+  suggested_slots JSONB NOT NULL DEFAULT '[]'::jsonb,
+  conversation_id UUID REFERENCES conversations(id) ON DELETE SET NULL,
+  legacy_booking_id UUID,
+  final_location_text TEXT,
+  final_location_lat NUMERIC(10,7),
+  final_location_lng NUMERIC(10,7),
+  accepted_at TIMESTAMPTZ,
+  started_at TIMESTAMPTZ,
+  ended_at TIMESTAMPTZ,
+  completed_at TIMESTAMPTZ,
+  last_disconnect_at TIMESTAMPTZ,
+  customer_done_due_at TIMESTAMPTZ,
+  disconnect_auto_release_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  CONSTRAINT chk_reservation_end_after_start CHECK (requested_end_at > requested_start_at),
+  CONSTRAINT chk_online_type_for_online CHECK (
+    (mode = 'online' AND online_type IS NOT NULL)
+    OR (mode = 'offline' AND online_type IS NULL)
+  )
+);
+
+CREATE INDEX IF NOT EXISTS idx_reservations_customer ON reservations(customer_id);
+CREATE INDEX IF NOT EXISTS idx_reservations_provider ON reservations(provider_id);
+CREATE INDEX IF NOT EXISTS idx_reservations_service ON reservations(service_id);
+CREATE INDEX IF NOT EXISTS idx_reservations_slot ON reservations(slot_id);
+CREATE INDEX IF NOT EXISTS idx_reservations_status ON reservations(status);
+CREATE INDEX IF NOT EXISTS idx_reservations_start ON reservations(requested_start_at);
+CREATE INDEX IF NOT EXISTS idx_reservations_legacy_booking ON reservations(legacy_booking_id);
+
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM pg_proc WHERE proname = 'trigger_set_updated_at'
+  ) AND NOT EXISTS (
+    SELECT 1 FROM pg_trigger
+    WHERE tgname = 'set_reservations_updated_at'
+      AND tgrelid = 'reservations'::regclass
+  ) THEN
+    CREATE TRIGGER set_reservations_updated_at
+      BEFORE UPDATE ON reservations
+      FOR EACH ROW EXECUTE FUNCTION trigger_set_updated_at();
+  END IF;
+END $$;
+
+-- --------------------------------------------------------------------------
+-- 6) Offline proposals/check-ins + online call/session + disputes
+-- --------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS reservation_location_proposals (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  reservation_id UUID NOT NULL REFERENCES reservations(id) ON DELETE CASCADE,
+  proposed_by UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  location_text TEXT NOT NULL,
+  lat NUMERIC(10,7),
+  lng NUMERIC(10,7),
+  status VARCHAR(20) NOT NULL DEFAULT 'pending'
+    CHECK (status IN ('pending', 'accepted', 'rejected')),
+  responded_by UUID REFERENCES users(id) ON DELETE SET NULL,
+  responded_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_res_loc_prop_reservation ON reservation_location_proposals(reservation_id);
+
+CREATE TABLE IF NOT EXISTS reservation_checkin_codes (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  reservation_id UUID NOT NULL REFERENCES reservations(id) ON DELETE CASCADE,
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  code VARCHAR(12) NOT NULL,
+  expires_at TIMESTAMPTZ NOT NULL,
+  verified_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE (reservation_id, user_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_res_checkin_reservation ON reservation_checkin_codes(reservation_id);
+
+CREATE TABLE IF NOT EXISTS reservation_call_sessions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  reservation_id UUID NOT NULL UNIQUE REFERENCES reservations(id) ON DELETE CASCADE,
+  agora_channel VARCHAR(200) NOT NULL,
+  status VARCHAR(20) NOT NULL DEFAULT 'pending'
+    CHECK (status IN ('pending', 'active', 'paused', 'ended')),
+  started_at TIMESTAMPTZ,
+  ended_at TIMESTAMPTZ,
+  paused_at TIMESTAMPTZ,
+  billing_started_at TIMESTAMPTZ,
+  billing_paused_at TIMESTAMPTZ,
+  last_billed_at TIMESTAMPTZ,
+  billed_minutes INTEGER NOT NULL DEFAULT 0,
+  extension_status VARCHAR(20) NOT NULL DEFAULT 'none'
+    CHECK (extension_status IN ('none', 'pending', 'approved', 'rejected')),
+  extension_requested_by UUID REFERENCES users(id) ON DELETE SET NULL,
+  extension_until TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_res_call_sessions_reservation ON reservation_call_sessions(reservation_id);
+
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM pg_proc WHERE proname = 'trigger_set_updated_at'
+  ) AND NOT EXISTS (
+    SELECT 1 FROM pg_trigger
+    WHERE tgname = 'set_reservation_call_sessions_updated_at'
+      AND tgrelid = 'reservation_call_sessions'::regclass
+  ) THEN
+    CREATE TRIGGER set_reservation_call_sessions_updated_at
+      BEFORE UPDATE ON reservation_call_sessions
+      FOR EACH ROW EXECUTE FUNCTION trigger_set_updated_at();
+  END IF;
+END $$;
+
+CREATE TABLE IF NOT EXISTS reservation_call_participants (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  call_session_id UUID NOT NULL REFERENCES reservation_call_sessions(id) ON DELETE CASCADE,
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  agora_uid INTEGER NOT NULL,
+  joined_at TIMESTAMPTZ,
+  left_at TIMESTAMPTZ,
+  is_connected BOOLEAN NOT NULL DEFAULT false,
+  last_seen_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE (call_session_id, user_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_res_call_participants_session ON reservation_call_participants(call_session_id);
+
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM pg_proc WHERE proname = 'trigger_set_updated_at'
+  ) AND NOT EXISTS (
+    SELECT 1 FROM pg_trigger
+    WHERE tgname = 'set_reservation_call_participants_updated_at'
+      AND tgrelid = 'reservation_call_participants'::regclass
+  ) THEN
+    CREATE TRIGGER set_reservation_call_participants_updated_at
+      BEFORE UPDATE ON reservation_call_participants
+      FOR EACH ROW EXECUTE FUNCTION trigger_set_updated_at();
+  END IF;
+END $$;
+
+CREATE TABLE IF NOT EXISTS reservation_disputes (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  reservation_id UUID NOT NULL REFERENCES reservations(id) ON DELETE CASCADE,
+  opened_by UUID REFERENCES users(id) ON DELETE SET NULL,
+  reason VARCHAR(40) NOT NULL
+    CHECK (reason IN ('customer_report', 'timeout_no_done', 'manual', 'system')),
+  description TEXT,
+  status VARCHAR(30) NOT NULL DEFAULT 'open'
+    CHECK (status IN (
+      'open',
+      'resolved_customer',
+      'resolved_provider',
+      'resolved_partial',
+      'dismissed'
+    )),
+  resolution_notes TEXT,
+  resolved_by UUID REFERENCES users(id) ON DELETE SET NULL,
+  resolved_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_res_disputes_reservation ON reservation_disputes(reservation_id);
+CREATE INDEX IF NOT EXISTS idx_res_disputes_status ON reservation_disputes(status);
+
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM pg_proc WHERE proname = 'trigger_set_updated_at'
+  ) AND NOT EXISTS (
+    SELECT 1 FROM pg_trigger
+    WHERE tgname = 'set_reservation_disputes_updated_at'
+      AND tgrelid = 'reservation_disputes'::regclass
+  ) THEN
+    CREATE TRIGGER set_reservation_disputes_updated_at
+      BEFORE UPDATE ON reservation_disputes
+      FOR EACH ROW EXECUTE FUNCTION trigger_set_updated_at();
+  END IF;
+END $$;
+
+-- --------------------------------------------------------------------------
+-- 7) Legacy bookings/slots migration into Reservation V2
+-- --------------------------------------------------------------------------
+INSERT INTO reservation_profiles (provider_id)
+SELECT DISTINCT provider_id
+FROM services
+WHERE provider_id IS NOT NULL
+ON CONFLICT (provider_id) DO NOTHING;
+
+INSERT INTO reservation_profiles (provider_id)
+SELECT DISTINCT provider_id
+FROM bookings
+WHERE provider_id IS NOT NULL
+ON CONFLICT (provider_id) DO NOTHING;
+
+INSERT INTO reservation_slots (
+  provider_id,
+  start_at,
+  end_at,
+  status,
+  supports_online,
+  supports_offline
+)
+SELECT
+  a.provider_id,
+  a.start_at,
+  a.end_at,
+  CASE a.status
+    WHEN 'available' THEN 'available'
+    WHEN 'blocked' THEN 'blocked'
+    ELSE 'booked'
+  END,
+  true,
+  true
+FROM availability_slots a
+ON CONFLICT DO NOTHING;
+
+INSERT INTO reservations (
+  customer_id,
+  provider_id,
+  service_id,
+  mode,
+  online_type,
+  status,
+  requested_start_at,
+  requested_end_at,
+  expert_price_amount,
+  currency,
+  admin_acceptance_fee,
+  admin_minute_rate,
+  accepted_at,
+  started_at,
+  completed_at,
+  legacy_booking_id
+)
+SELECT
+  b.customer_id,
+  b.provider_id,
+  b.service_id,
+  'online',
+  'voice',
+  CASE b.status
+    WHEN 'pending_payment' THEN 'pending'
+    WHEN 'paid' THEN 'accepted'
+    WHEN 'scheduled' THEN 'awaiting_start'
+    WHEN 'in_progress' THEN 'in_session'
+    WHEN 'completed' THEN 'completed'
+    WHEN 'cancelled' THEN 'cancelled'
+    WHEN 'refunded' THEN 'cancelled'
+    ELSE 'pending'
+  END,
+  COALESCE(b.slot_start_at, b.created_at),
+  COALESCE(b.slot_end_at, b.created_at + interval '1 hour'),
+  b.amount,
+  b.currency,
+  b.commission_amount,
+  0,
+  CASE WHEN b.status IN ('paid', 'scheduled', 'in_progress', 'completed') THEN b.updated_at ELSE NULL END,
+  CASE WHEN b.status IN ('in_progress', 'completed') THEN b.updated_at ELSE NULL END,
+  CASE WHEN b.status = 'completed' THEN b.updated_at ELSE NULL END,
+  b.id
+FROM bookings b
+ON CONFLICT DO NOTHING;
+
+UPDATE reservations r
+SET slot_id = s.id
+FROM reservation_slots s
+WHERE r.slot_id IS NULL
+  AND s.provider_id = r.provider_id
+  AND s.start_at <= r.requested_start_at
+  AND s.end_at >= r.requested_end_at;
+
+ALTER TABLE reviews DROP CONSTRAINT IF EXISTS reviews_booking_id_fkey;
+ALTER TABLE reviews ADD COLUMN IF NOT EXISTS reservation_id UUID REFERENCES reservations(id) ON DELETE SET NULL;
+
+UPDATE reviews rv
+SET reservation_id = r.id
+FROM reservations r
+WHERE rv.booking_id IS NOT NULL
+  AND r.legacy_booking_id = rv.booking_id
+  AND rv.reservation_id IS NULL;
+
+-- --------------------------------------------------------------------------
+-- 8) Final cutover: drop old booking/availability schema
+-- --------------------------------------------------------------------------
+DROP TABLE IF EXISTS availability_slots;
+DROP TABLE IF EXISTS bookings;
+
+
+
+
+-- ============================================================================
+-- MIGRATION: 20260309102000_job_milestones_and_submissions.sql
+-- ============================================================================
+
+-- Job Milestones and Submissions
+CREATE TABLE IF NOT EXISTS job_milestones (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  job_application_id UUID NOT NULL REFERENCES job_applications(id) ON DELETE CASCADE,
+  title VARCHAR(300) NOT NULL,
+  amount DECIMAL(10,2) NOT NULL,
+  status VARCHAR(20) NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'active', 'submitted', 'approved', 'rejected')),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_job_milestones_app ON job_milestones(job_application_id);
+
+CREATE TABLE IF NOT EXISTS job_submissions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  milestone_id UUID NOT NULL REFERENCES job_milestones(id) ON DELETE CASCADE,
+  submission_notes TEXT,
+  attachments JSONB DEFAULT '[]'::jsonb,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_job_submissions_milestone ON job_submissions(milestone_id);
+
+
+
+
+-- ============================================================================
+-- MIGRATION: 20260309103000_job_application_messages.sql
+-- ============================================================================
+
+-- Job Application Messages
+CREATE TABLE IF NOT EXISTS job_application_messages (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  job_application_id UUID NOT NULL REFERENCES job_applications(id) ON DELETE CASCADE,
+  sender_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  content TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_job_app_msgs_app ON job_application_messages(job_application_id);
+
+
+
+
+-- ============================================================================
+-- MIGRATION: 20260309104000_commission_receiver_id.sql
+-- ============================================================================
+
+ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS commission_receiver_id UUID REFERENCES users(id) DEFAULT '00000000-0000-0000-0000-000000000001';
+
+
+
+
+-- ============================================================================
+-- MIGRATION: 20260309152948_add_admin_permissions.sql
+-- ============================================================================
+
+ALTER TABLE users ADD COLUMN IF NOT EXISTS admin_permissions JSONB DEFAULT '[]'::jsonb;
+
+
+
+
+-- ============================================================================
+-- MIGRATION: 20260309201500_reservation_hardening.sql
+-- ============================================================================
+
+-- ============================================================================
+-- MohandisHub - Reservation V2 hardening (lifecycle, overlaps, billing precision)
+-- ============================================================================
+
+CREATE EXTENSION IF NOT EXISTS btree_gist;
+
+ALTER TABLE reservations
+  ADD COLUMN IF NOT EXISTS done_prompted_at TIMESTAMPTZ;
+
+CREATE INDEX IF NOT EXISTS idx_reservations_disconnect_due
+  ON reservations(disconnect_auto_release_at)
+  WHERE disconnect_auto_release_at IS NOT NULL;
+
+CREATE INDEX IF NOT EXISTS idx_reservations_customer_done_due
+  ON reservations(customer_done_due_at)
+  WHERE customer_done_due_at IS NOT NULL;
+
+CREATE INDEX IF NOT EXISTS idx_reservations_done_prompt_due
+  ON reservations(customer_done_due_at)
+  WHERE customer_done_due_at IS NOT NULL
+    AND done_prompted_at IS NULL
+    AND status = 'waiting_customer_done';
+
+WITH ranked_slots AS (
+  SELECT
+    s.id,
+    s.provider_id,
+    s.start_at,
+    s.end_at,
+    s.created_at,
+    ROW_NUMBER() OVER (
+      PARTITION BY s.provider_id
+      ORDER BY s.start_at ASC, s.end_at ASC, s.created_at ASC, s.id ASC
+    ) AS slot_order
+  FROM reservation_slots s
+  WHERE s.status IN ('available', 'booked')
+), conflicting_later_slots AS (
+  SELECT later.id
+  FROM ranked_slots later
+  WHERE EXISTS (
+    SELECT 1
+    FROM ranked_slots earlier
+    WHERE earlier.provider_id = later.provider_id
+      AND earlier.slot_order < later.slot_order
+      AND tstzrange(earlier.start_at, earlier.end_at, '[)')
+        && tstzrange(later.start_at, later.end_at, '[)')
+  )
+)
+UPDATE reservation_slots s
+SET status = 'blocked',
+    updated_at = now()
+WHERE s.id IN (SELECT id FROM conflicting_later_slots);
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_constraint
+    WHERE conname = 'reservation_slots_no_overlap_active'
+  ) THEN
+    ALTER TABLE reservation_slots
+      ADD CONSTRAINT reservation_slots_no_overlap_active
+      EXCLUDE USING gist (
+        provider_id WITH =,
+        tstzrange(start_at, end_at, '[)') WITH &&
+      )
+      WHERE (status IN ('available', 'booked'));
+  END IF;
+END $$;
+
+ALTER TABLE reservation_call_sessions
+  ADD COLUMN IF NOT EXISTS billed_seconds INTEGER NOT NULL DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS customer_carry_milli_piaster BIGINT NOT NULL DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS provider_carry_milli_piaster BIGINT NOT NULL DEFAULT 0;
+
+UPDATE reservation_call_sessions
+SET billed_seconds = GREATEST(billed_seconds, billed_minutes * 60)
+WHERE billed_minutes > 0;
+
+
+
+
+-- ============================================================================
+-- MIGRATION: 20260309233000_freelance_hardening.sql
+-- ============================================================================
+
+-- ============================================================================
+-- MohandisHub - Freelance hardening (single accepted winner invariants)
+-- ============================================================================
+
+-- Keep at most one accepted bid per need before adding the unique index.
+WITH ranked_accepted_bids AS (
+  SELECT
+    b.id,
+    ROW_NUMBER() OVER (
+      PARTITION BY b.need_id
+      ORDER BY
+        (b.id = n.awarded_bid_id) DESC,
+        ((b.payment_transaction_id IS NOT NULL) OR (b.paid_at IS NOT NULL)) DESC,
+        b.updated_at DESC,
+        b.created_at DESC,
+        b.id DESC
+    ) AS rn
+  FROM bids b
+  LEFT JOIN needs n ON n.id = b.need_id
+  WHERE b.status = 'accepted'
+)
+UPDATE bids b
+SET status = 'rejected',
+    updated_at = now()
+FROM ranked_accepted_bids r
+WHERE b.id = r.id
+  AND r.rn > 1;
+
+-- Realign awarded_bid_id with the accepted bid, when present.
+-- (CTE used because UPDATE...FROM LATERAL cannot reference the target table.)
+WITH ranked_accepted AS (
+  SELECT
+    n.id AS need_id,
+    (
+      SELECT b.id
+      FROM bids b
+      WHERE b.need_id = n.id
+        AND b.status = 'accepted'
+      ORDER BY
+        (b.id = n.awarded_bid_id) DESC,
+        ((b.payment_transaction_id IS NOT NULL) OR (b.paid_at IS NOT NULL)) DESC,
+        b.updated_at DESC,
+        b.created_at DESC,
+        b.id DESC
+      LIMIT 1
+    ) AS best_accepted_id
+  FROM needs n
+  WHERE n.awarded_bid_id IS NOT NULL
+)
+UPDATE needs n
+SET awarded_bid_id = r.best_accepted_id,
+    updated_at = now()
+FROM ranked_accepted r
+WHERE n.id = r.need_id
+  AND n.awarded_bid_id IS DISTINCT FROM r.best_accepted_id;
+
+UPDATE needs n
+SET awarded_bid_id = NULL,
+    updated_at = now()
+WHERE n.awarded_bid_id IS NOT NULL
+  AND NOT EXISTS (
+    SELECT 1
+    FROM bids b
+    WHERE b.id = n.awarded_bid_id
+      AND b.status = 'accepted'
+  );
+
+CREATE UNIQUE INDEX IF NOT EXISTS uniq_bids_one_accepted_per_need
+  ON bids(need_id)
+  WHERE status = 'accepted';
+
+-- Keep at most one accepted job application per job before adding the unique index.
+WITH ranked_accepted_applications AS (
+  SELECT
+    a.id,
+    ROW_NUMBER() OVER (
+      PARTITION BY a.job_id
+      ORDER BY
+        EXISTS (
+          SELECT 1
+          FROM job_milestones m
+          WHERE m.job_application_id = a.id
+        ) DESC,
+        a.updated_at DESC,
+        a.created_at DESC,
+        a.id DESC
+    ) AS rn
+  FROM job_applications a
+  WHERE a.status = 'accepted'
+)
+UPDATE job_applications a
+SET status = 'rejected',
+    updated_at = now()
+FROM ranked_accepted_applications r
+WHERE a.id = r.id
+  AND r.rn > 1;
+
+CREATE UNIQUE INDEX IF NOT EXISTS uniq_job_applications_one_accepted_per_job
+  ON job_applications(job_id)
+  WHERE status = 'accepted';
+
+
+
+
+-- ============================================================================
+-- MIGRATION: 20260310100000_expert_identity_verification_method.sql
+-- ============================================================================
+
+-- Add identity_verification_method to expert_profiles so we can tell how identity was verified:
+-- 'didit' = KYC via Didit (or other provider in verification_requests), 'manual' = admin-reviewed identity_documents
+ALTER TABLE expert_profiles
+  ADD COLUMN IF NOT EXISTS identity_verification_method VARCHAR(20) NULL
+    CHECK (identity_verification_method IS NULL OR identity_verification_method IN ('didit', 'manual'));
+
+COMMENT ON COLUMN expert_profiles.identity_verification_method IS 'How identity was verified: didit = external KYC (Didit), manual = admin-reviewed identity_documents';
+
+
+
+
+-- ============================================================================
+-- MIGRATION: 20260311170000_nowpayments_wallet_withdrawals.sql
+-- ============================================================================
+
+-- ============================================================================
+-- MohandisHub - v033: NOWPayments deposits + freelancer withdrawals
+-- ============================================================================
+
+-- --------------------------------------------------------------------------
+-- 1) Deposit requests: provider metadata for NOWPayments
+-- --------------------------------------------------------------------------
+ALTER TABLE deposit_requests
+  ADD COLUMN IF NOT EXISTS provider VARCHAR(40) NOT NULL DEFAULT 'legacy',
+  ADD COLUMN IF NOT EXISTS provider_payment_id VARCHAR(255),
+  ADD COLUMN IF NOT EXISTS provider_invoice_id VARCHAR(255),
+  ADD COLUMN IF NOT EXISTS provider_purchase_id VARCHAR(255),
+  ADD COLUMN IF NOT EXISTS provider_parent_payment_id VARCHAR(255),
+  ADD COLUMN IF NOT EXISTS provider_status VARCHAR(40),
+  ADD COLUMN IF NOT EXISTS provider_payload JSONB NOT NULL DEFAULT '{}'::jsonb,
+  ADD COLUMN IF NOT EXISTS paid_at TIMESTAMPTZ;
+
+CREATE INDEX IF NOT EXISTS idx_deposit_requests_provider
+  ON deposit_requests(provider);
+CREATE INDEX IF NOT EXISTS idx_deposit_requests_provider_payment
+  ON deposit_requests(provider_payment_id);
+
+-- --------------------------------------------------------------------------
+-- 2) Expert payout settings (used by freelancer withdrawals)
+-- --------------------------------------------------------------------------
+ALTER TABLE expert_profiles
+  ADD COLUMN IF NOT EXISTS payout_currency VARCHAR(20),
+  ADD COLUMN IF NOT EXISTS payout_address TEXT,
+  ADD COLUMN IF NOT EXISTS payout_extra_id VARCHAR(255),
+  ADD COLUMN IF NOT EXISTS payout_updated_at TIMESTAMPTZ;
+
+CREATE INDEX IF NOT EXISTS idx_expert_profiles_payout_currency
+  ON expert_profiles(payout_currency);
+
+-- --------------------------------------------------------------------------
+-- 3) Withdrawal requests: async lifecycle tracking + idempotency
+-- --------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS withdrawal_requests (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  wallet_id UUID NOT NULL REFERENCES wallets(id) ON DELETE CASCADE,
+  hold_id UUID REFERENCES wallet_holds(id) ON DELETE SET NULL,
+  amount NUMERIC(12,2) NOT NULL CHECK (amount > 0),
+  currency VARCHAR(20) NOT NULL,
+  payout_address TEXT,
+  payout_extra_id VARCHAR(255),
+  status VARCHAR(30) NOT NULL DEFAULT 'pending_verification'
+    CHECK (
+      status IN (
+        'pending_verification',
+        'processing',
+        'finished',
+        'failed',
+        'rejected',
+        'cancelled',
+        'blocked'
+      )
+    ),
+  provider VARCHAR(40) NOT NULL DEFAULT 'nowpayments',
+  provider_batch_withdrawal_id VARCHAR(255),
+  provider_withdrawal_id VARCHAR(255),
+  provider_status VARCHAR(40),
+  provider_error TEXT,
+  provider_payload JSONB NOT NULL DEFAULT '{}'::jsonb,
+  verification_required BOOLEAN NOT NULL DEFAULT true,
+  verified_at TIMESTAMPTZ,
+  processed_at TIMESTAMPTZ,
+  failed_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_withdrawal_requests_user
+  ON withdrawal_requests(user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_withdrawal_requests_status
+  ON withdrawal_requests(status);
+CREATE INDEX IF NOT EXISTS idx_withdrawal_requests_batch
+  ON withdrawal_requests(provider_batch_withdrawal_id);
+CREATE INDEX IF NOT EXISTS idx_withdrawal_requests_withdrawal
+  ON withdrawal_requests(provider_withdrawal_id);
+
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM pg_proc WHERE proname = 'trigger_set_updated_at'
+  ) AND NOT EXISTS (
+    SELECT 1 FROM pg_trigger
+    WHERE tgname = 'set_withdrawal_requests_updated_at'
+      AND tgrelid = 'withdrawal_requests'::regclass
+  ) THEN
+    CREATE TRIGGER set_withdrawal_requests_updated_at
+      BEFORE UPDATE ON withdrawal_requests
+      FOR EACH ROW EXECUTE FUNCTION trigger_set_updated_at();
+  END IF;
+END $$;
+
+
+
+
+-- ============================================================================
+-- MIGRATION: 20260311200000_wallet_currency_usd.sql
+-- ============================================================================
+
+-- ============================================================================
+-- MohandisHub - v034: Wallet currency default to USD
+-- ============================================================================
+
+ALTER TABLE wallets
+  ALTER COLUMN currency SET DEFAULT 'USD';
+
+UPDATE wallets
+SET currency = 'USD'
+WHERE currency = 'EGP';
+
+
+
+
+-- ============================================================================
+-- MIGRATION: 20260312000000_reviews_customer_and_unique.sql
+-- ============================================================================
+
+-- Allow reviews targeting customers (provider reviews customer after reservation).
+-- One review per reservation per reviewer (customer can review provider, provider can review customer).
+
+ALTER TABLE reviews DROP CONSTRAINT IF EXISTS reviews_target_type_check;
+ALTER TABLE reviews ADD CONSTRAINT reviews_target_type_check
+  CHECK (target_type IN ('expert', 'business', 'customer'));
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_reviews_reservation_reviewer_unique
+  ON reviews(reservation_id, reviewer_id)
+  WHERE reservation_id IS NOT NULL;
+
+
+
+
+-- ============================================================================
+-- MIGRATION: 20260312000001_review_reports_disputes.sql
+-- ============================================================================
+
+-- Review reports: any user can report a review (inappropriate, fake, spam, etc.)
+CREATE TABLE IF NOT EXISTS review_reports (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  review_id UUID NOT NULL REFERENCES reviews(id) ON DELETE CASCADE,
+  reporter_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  reason VARCHAR(50) NOT NULL CHECK (reason IN ('inappropriate', 'fake', 'spam', 'other')),
+  comment TEXT,
+  status VARCHAR(20) NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'dismissed', 'upheld')),
+  reviewed_by UUID REFERENCES users(id) ON DELETE SET NULL,
+  reviewed_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_review_reports_review ON review_reports(review_id);
+CREATE INDEX IF NOT EXISTS idx_review_reports_status ON review_reports(status);
+
+-- Review disputes: the reviewed user (target) can dispute a review
+CREATE TABLE IF NOT EXISTS review_disputes (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  review_id UUID NOT NULL REFERENCES reviews(id) ON DELETE CASCADE,
+  disputer_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  reason TEXT NOT NULL,
+  status VARCHAR(20) NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'dismissed', 'upheld')),
+  reviewed_by UUID REFERENCES users(id) ON DELETE SET NULL,
+  reviewed_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_review_disputes_review ON review_disputes(review_id);
+CREATE INDEX IF NOT EXISTS idx_review_disputes_status ON review_disputes(status);
+
+-- Allow admins to hide a review when upholding a report or dispute
+ALTER TABLE reviews ADD COLUMN IF NOT EXISTS hidden BOOLEAN NOT NULL DEFAULT false;
+CREATE INDEX IF NOT EXISTS idx_reviews_hidden ON reviews(hidden) WHERE hidden = true;
+
+
+
+
+-- ============================================================================
+-- MIGRATION: 20260312000002_platform_verified_badge.sql
+-- ============================================================================
+
+-- Platform verification badge: earned when profile is complete and user has deposited >= 1000 EGP.
+ALTER TABLE users ADD COLUMN IF NOT EXISTS platform_verified_at TIMESTAMPTZ;
+
+COMMENT ON COLUMN users.platform_verified_at IS 'Set when user earns the platform verification badge (profile complete + 1000 EGP deposit).';
+
+
+
+
+-- ============================================================================
+-- MIGRATION: 20260312000003_chat_upgrade.sql
+-- ============================================================================
+
+-- Chat upgrade: reply, message types (text/image/voice/link/location), attachment, soft delete
+
+ALTER TABLE messages
+  ADD COLUMN IF NOT EXISTS reply_to_id UUID REFERENCES messages(id) ON DELETE SET NULL,
+  ADD COLUMN IF NOT EXISTS message_type VARCHAR(20) NOT NULL DEFAULT 'text'
+    CHECK (message_type IN ('text', 'image', 'voice', 'link', 'location')),
+  ADD COLUMN IF NOT EXISTS attachment_url TEXT,
+  ADD COLUMN IF NOT EXISTS link_url TEXT,
+  ADD COLUMN IF NOT EXISTS location_lat NUMERIC,
+  ADD COLUMN IF NOT EXISTS location_lng NUMERIC,
+  ADD COLUMN IF NOT EXISTS location_label TEXT,
+  ADD COLUMN IF NOT EXISTS deleted_for_sender BOOLEAN NOT NULL DEFAULT false,
+  ADD COLUMN IF NOT EXISTS deleted_for_everyone BOOLEAN NOT NULL DEFAULT false;
+
+-- Allow empty body for non-text types (e.g. location with label only)
+ALTER TABLE messages ALTER COLUMN body DROP NOT NULL;
+UPDATE messages SET body = '' WHERE body IS NULL;
+ALTER TABLE messages ALTER COLUMN body SET DEFAULT '';
+
+CREATE INDEX IF NOT EXISTS idx_messages_reply_to ON messages(reply_to_id);
+
+
+
+
+-- ============================================================================
+-- MIGRATION: 20260313000001_notifications.sql
+-- ============================================================================
+
+-- Notifications: stored per-user, with read state and optional payload.
+CREATE TABLE IF NOT EXISTS notifications (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  type TEXT NOT NULL,
+  title TEXT NOT NULL,
+  message TEXT NOT NULL,
+  payload JSONB,
+  read_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_notifications_user_created ON notifications (user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_notifications_user_read ON notifications (user_id, read_at) WHERE read_at IS NULL;
+
+COMMENT ON TABLE notifications IS 'In-app notifications; delivered in real time via Socket.IO and persisted for history.';
+
+
+
+
+-- ============================================================================
+-- MIGRATION: 20260313000002_platform_verified_comment_usd.sql
+-- ============================================================================
+
+-- Align platform_verified_at comment with implementation (wallet is USD).
+COMMENT ON COLUMN users.platform_verified_at IS 'Set when user earns the platform verification badge (profile complete + 1000 USD deposit).';
+
+
+
+
+-- ============================================================================
+-- MIGRATION: 20260313160000_jobs_hiring_interviews.sql
+-- ============================================================================
+
+-- MohandisHub - Hiring applications + interview reservations
+
+ALTER TABLE app_settings
+  ADD COLUMN IF NOT EXISTS job_interview_fee_amount NUMERIC(10,2) NOT NULL DEFAULT 0;
+
+ALTER TABLE jobs
+  ADD COLUMN IF NOT EXISTS application_fee_amount NUMERIC(12,2) NOT NULL DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS interview_enabled BOOLEAN NOT NULL DEFAULT false,
+  ADD COLUMN IF NOT EXISTS interview_instructions TEXT;
+
+ALTER TABLE job_applications
+  ADD COLUMN IF NOT EXISTS submission_type VARCHAR(30) NOT NULL DEFAULT 'profile_snapshot',
+  ADD COLUMN IF NOT EXISTS profile_snapshot JSONB,
+  ADD COLUMN IF NOT EXISTS cv_file_url TEXT,
+  ADD COLUMN IF NOT EXISTS application_fee_amount NUMERIC(12,2) NOT NULL DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS application_commission_amount NUMERIC(12,2) NOT NULL DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS business_payout_amount NUMERIC(12,2) NOT NULL DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS interview_invitation_sent_at TIMESTAMPTZ,
+  ADD COLUMN IF NOT EXISTS interview_reservation_id UUID;
+
+ALTER TABLE job_applications DROP CONSTRAINT IF EXISTS job_applications_status_check;
+ALTER TABLE job_applications
+  ADD CONSTRAINT job_applications_status_check
+  CHECK (
+    status IN (
+      'pending',
+      'reviewed',
+      'interview_invited',
+      'interview_booked',
+      'interview_completed',
+      'accepted',
+      'rejected'
+    )
+  );
+
+ALTER TABLE job_applications DROP CONSTRAINT IF EXISTS job_applications_submission_type_check;
+ALTER TABLE job_applications
+  ADD CONSTRAINT job_applications_submission_type_check
+  CHECK (submission_type IN ('profile_snapshot', 'cv_upload'));
+
+ALTER TABLE reservation_slots
+  ADD COLUMN IF NOT EXISTS purpose VARCHAR(30) NOT NULL DEFAULT 'service',
+  ADD COLUMN IF NOT EXISTS job_id UUID REFERENCES jobs(id) ON DELETE CASCADE;
+
+ALTER TABLE reservation_slots DROP CONSTRAINT IF EXISTS reservation_slots_purpose_check;
+ALTER TABLE reservation_slots
+  ADD CONSTRAINT reservation_slots_purpose_check
+  CHECK (purpose IN ('service', 'job_interview'));
+
+UPDATE reservation_slots SET purpose = 'service' WHERE purpose IS NULL;
+
+ALTER TABLE reservations
+  ADD COLUMN IF NOT EXISTS purpose VARCHAR(30) NOT NULL DEFAULT 'service',
+  ADD COLUMN IF NOT EXISTS job_id UUID REFERENCES jobs(id) ON DELETE SET NULL,
+  ADD COLUMN IF NOT EXISTS job_application_id UUID REFERENCES job_applications(id) ON DELETE SET NULL;
+
+ALTER TABLE reservations DROP CONSTRAINT IF EXISTS reservations_purpose_check;
+ALTER TABLE reservations
+  ADD CONSTRAINT reservations_purpose_check
+  CHECK (purpose IN ('service', 'job_interview'));
+
+UPDATE reservations SET purpose = 'service' WHERE purpose IS NULL;
+
+CREATE INDEX IF NOT EXISTS idx_reservation_slots_purpose_job
+ON reservation_slots(purpose, job_id, provider_id, start_at);
+
+CREATE INDEX IF NOT EXISTS idx_reservations_purpose_job
+ON reservations(purpose, job_id, job_application_id);
+
+CREATE UNIQUE INDEX IF NOT EXISTS uniq_active_job_interview_reservation_per_application
+ON reservations(job_application_id)
+WHERE purpose = 'job_interview'
+  AND job_application_id IS NOT NULL
+  AND status IN ('pending', 'accepted', 'awaiting_start', 'in_session', 'waiting_customer_done');
+
+ALTER TABLE job_applications
+  ADD CONSTRAINT job_applications_interview_reservation_id_fkey
+  FOREIGN KEY (interview_reservation_id)
+  REFERENCES reservations(id)
+  ON DELETE SET NULL;
+
+CREATE OR REPLACE FUNCTION sync_job_application_from_interview_reservation()
+RETURNS trigger AS $$
+BEGIN
+  IF NEW.purpose <> 'job_interview' OR NEW.job_application_id IS NULL THEN
+    RETURN NEW;
+  END IF;
+
+  IF NEW.status IN ('accepted', 'awaiting_start', 'in_session', 'waiting_customer_done') THEN
+    UPDATE job_applications
+    SET status = 'interview_booked',
+        interview_reservation_id = NEW.id,
+        updated_at = now()
+    WHERE id = NEW.job_application_id
+      AND status <> 'accepted';
+  ELSIF NEW.status = 'completed' THEN
+    UPDATE job_applications
+    SET status = 'interview_completed',
+        interview_reservation_id = NEW.id,
+        updated_at = now()
+    WHERE id = NEW.job_application_id
+      AND status <> 'accepted';
+  ELSIF NEW.status IN ('rejected', 'cancelled', 'expired') THEN
+    UPDATE job_applications
+    SET status = 'interview_invited',
+        interview_reservation_id = NULL,
+        updated_at = now()
+    WHERE id = NEW.job_application_id
+      AND status NOT IN ('accepted', 'rejected');
+  END IF;
+
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_sync_job_application_from_interview_reservation ON reservations;
+CREATE TRIGGER trg_sync_job_application_from_interview_reservation
+AFTER INSERT OR UPDATE OF status ON reservations
+FOR EACH ROW
+EXECUTE FUNCTION sync_job_application_from_interview_reservation();
+
+
+
+
+-- ============================================================================
+-- MIGRATION: 20260313193000_reservations_production_grade.sql
+-- ============================================================================
+
+-- MohandisHub - Reservation production hardening
+
+ALTER TABLE reservations
+  ADD COLUMN IF NOT EXISTS policy_snapshot JSONB NOT NULL DEFAULT '{}'::jsonb,
+  ADD COLUMN IF NOT EXISTS cancelled_at TIMESTAMPTZ,
+  ADD COLUMN IF NOT EXISTS cancelled_by UUID REFERENCES users(id) ON DELETE SET NULL,
+  ADD COLUMN IF NOT EXISTS cancellation_actor VARCHAR(20),
+  ADD COLUMN IF NOT EXISTS cancellation_reason_code VARCHAR(50),
+  ADD COLUMN IF NOT EXISTS cancellation_effective_outcome VARCHAR(50),
+  ADD COLUMN IF NOT EXISTS refund_amount NUMERIC(12,2) NOT NULL DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS captured_amount NUMERIC(12,2) NOT NULL DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS penalty_amount NUMERIC(12,2) NOT NULL DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS refund_status VARCHAR(30) NOT NULL DEFAULT 'none',
+  ADD COLUMN IF NOT EXISTS settlement_status VARCHAR(40) NOT NULL DEFAULT 'unsettled';
+
+ALTER TABLE reservations DROP CONSTRAINT IF EXISTS reservations_cancellation_actor_check;
+ALTER TABLE reservations
+  ADD CONSTRAINT reservations_cancellation_actor_check
+  CHECK (
+    cancellation_actor IS NULL OR cancellation_actor IN ('customer', 'provider', 'admin', 'system')
+  );
+
+ALTER TABLE reservations DROP CONSTRAINT IF EXISTS reservations_refund_status_check;
+ALTER TABLE reservations
+  ADD CONSTRAINT reservations_refund_status_check
+  CHECK (
+    refund_status IN ('none', 'pending', 'succeeded', 'failed')
+  );
+
+ALTER TABLE reservations DROP CONSTRAINT IF EXISTS reservations_settlement_status_check;
+ALTER TABLE reservations
+  ADD CONSTRAINT reservations_settlement_status_check
+  CHECK (
+    settlement_status IN (
+      'unsettled',
+      'held',
+      'released_to_provider',
+      'refunded_to_customer',
+      'cancelled_no_refund',
+      'partially_refunded'
+    )
+  );
+
+CREATE INDEX IF NOT EXISTS idx_reservations_cancelled_at ON reservations(cancelled_at);
+CREATE INDEX IF NOT EXISTS idx_reservations_settlement_status ON reservations(settlement_status);
+
+CREATE TABLE IF NOT EXISTS reservation_events (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  reservation_id UUID NOT NULL REFERENCES reservations(id) ON DELETE CASCADE,
+  event_type VARCHAR(50) NOT NULL,
+  actor_id UUID REFERENCES users(id) ON DELETE SET NULL,
+  metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_reservation_events_reservation_id_created_at
+  ON reservation_events(reservation_id, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS reservation_action_idempotency (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  actor_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  action VARCHAR(60) NOT NULL,
+  idempotency_key VARCHAR(255) NOT NULL,
+  reservation_id UUID REFERENCES reservations(id) ON DELETE CASCADE,
+  response_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE(actor_id, action, idempotency_key)
+);
+
+CREATE INDEX IF NOT EXISTS idx_reservation_action_idempotency_reservation
+  ON reservation_action_idempotency(reservation_id, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS reservation_action_failures (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  reservation_id UUID REFERENCES reservations(id) ON DELETE CASCADE,
+  action_type VARCHAR(60) NOT NULL,
+  actor_id UUID REFERENCES users(id) ON DELETE SET NULL,
+  error_code VARCHAR(80),
+  error_message TEXT NOT NULL,
+  metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+  resolved_at TIMESTAMPTZ,
+  last_replayed_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_reservation_action_failures_open
+  ON reservation_action_failures(resolved_at, created_at DESC);
+
+
+
+
+-- ============================================================================
+-- MIGRATION: 20260314000001_plans_currency_usd.sql
+-- ============================================================================
+
+-- ============================================================================
+-- MohandisHub - Plans currency default to USD (platform currency)
+-- ============================================================================
+
+ALTER TABLE plans
+  ALTER COLUMN currency SET DEFAULT 'USD';
+
+UPDATE plans
+SET currency = 'USD'
+WHERE currency = 'EGP';
+
+
+
+
+-- ============================================================================
+-- MIGRATION: 20260314000002_plan_subscriptions.sql
+-- ============================================================================
+
+-- ============================================================================
+-- MohandisHub - Plan subscriptions (period + expiry)
+-- ============================================================================
+
+CREATE TABLE IF NOT EXISTS plan_subscriptions (
+  id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id    UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  plan_id    UUID NOT NULL REFERENCES plans(id) ON DELETE CASCADE,
+  starts_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+  ends_at    TIMESTAMPTZ NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_plan_subscriptions_user_id ON plan_subscriptions(user_id);
+CREATE INDEX IF NOT EXISTS idx_plan_subscriptions_ends_at ON plan_subscriptions(ends_at);
+
+COMMENT ON TABLE plan_subscriptions IS 'User plan subscription periods; current plan is the one with ends_at > now() (latest by ends_at).';
+
+
+
+
+-- ============================================================================
+-- MIGRATION: 20260314000003_plan_limits.sql
+-- ============================================================================
+
+-- ============================================================================
+-- MohandisHub - Plan limits (feature toggles and numeric limits per plan)
+-- ============================================================================
+
+ALTER TABLE plans
+  ADD COLUMN IF NOT EXISTS plan_limits JSONB NOT NULL DEFAULT '{}';
+
+COMMENT ON COLUMN plans.plan_limits IS 'Structured limits and flags: max_services, max_needs, max_jobs, can_priority_listing, bids_visible_to_customer (all|top_n|premium_first), etc.';
+
+
+
+
+-- ============================================================================
+-- MIGRATION: 20260315000000_business_onboarding_completed_at.sql
+-- ============================================================================
+
+-- Business onboarding completion milestone â€” backend-backed so completion is persisted
+ALTER TABLE business_profiles
+  ADD COLUMN IF NOT EXISTS onboarding_completed_at TIMESTAMPTZ;
+
+
+
+
+-- ============================================================================
+-- MIGRATION: 20260316000000_storage_buckets.sql
+-- ============================================================================
+
+-- ============================================================================
+-- MohandisHub - Storage buckets for Supabase Storage
+-- ============================================================================
+-- Creates buckets: uploads (general), verification-docs (KYC/verification).
+-- When using Supabase Storage, set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY
+-- in the API env and use the upload API; files are stored here instead of local disk.
+-- ============================================================================
+
+INSERT INTO storage.buckets (id, name, public)
+VALUES
+  ('uploads', 'uploads', true),
+  ('verification-docs', 'verification-docs', false)
+ON CONFLICT (id) DO NOTHING;
+
+
+
+
+-- ============================================================================
+-- MIGRATION: 20260316000001_audit_log.sql
+-- ============================================================================
+
+-- ============================================================================
+-- MohandisHub - Audit log for sensitive and admin actions
+-- ============================================================================
+-- Used for: admin user role change, wallet adjust, verification approve/reject,
+-- and other critical actions. Do not log PII in details; use resource_id for reference.
+-- ============================================================================
+
+CREATE TABLE IF NOT EXISTS audit_log (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  actor_id UUID REFERENCES users(id) ON DELETE SET NULL,
+  action VARCHAR(100) NOT NULL,
+  resource_type VARCHAR(50) NOT NULL,
+  resource_id VARCHAR(255),
+  details JSONB,
+  ip INET,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_audit_log_actor_id ON audit_log (actor_id);
+CREATE INDEX IF NOT EXISTS idx_audit_log_action ON audit_log (action);
+CREATE INDEX IF NOT EXISTS idx_audit_log_resource ON audit_log (resource_type, resource_id);
+CREATE INDEX IF NOT EXISTS idx_audit_log_created_at ON audit_log (created_at DESC);
+
+
+
+
+-- ============================================================================
+-- MIGRATION: 20260317000000_private_uploads.sql
+-- ============================================================================
+
+-- ============================================================================
+-- Private uploads: store path + owner for sensitive files (verification, CV).
+-- Served via GET /api/upload/private/:id with auth; no public URLs returned.
+-- ============================================================================
+
+CREATE TABLE IF NOT EXISTS private_uploads (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  storage_path TEXT NOT NULL,
+  bucket TEXT NOT NULL DEFAULT 'verification-docs',
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  original_name TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_private_uploads_user_id ON private_uploads (user_id);
+
+
+
+
+-- ============================================================================
+-- MIGRATION: 20260318000000_support_tickets.sql
+-- ============================================================================
+
+-- Support / ticket center: tickets and messages
+CREATE TABLE IF NOT EXISTS support_tickets (
+  id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id           UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  subject           VARCHAR(500) NOT NULL,
+  status            VARCHAR(30) NOT NULL DEFAULT 'open'
+    CHECK (status IN ('open', 'in_progress', 'waiting_reply', 'resolved', 'closed')),
+  assigned_to       UUID REFERENCES users(id) ON DELETE SET NULL,
+  created_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at        TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_support_tickets_user ON support_tickets(user_id);
+CREATE INDEX IF NOT EXISTS idx_support_tickets_status ON support_tickets(status);
+CREATE INDEX IF NOT EXISTS idx_support_tickets_assigned ON support_tickets(assigned_to);
+CREATE INDEX IF NOT EXISTS idx_support_tickets_updated ON support_tickets(updated_at DESC);
+
+CREATE TABLE IF NOT EXISTS support_ticket_messages (
+  id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  ticket_id  UUID NOT NULL REFERENCES support_tickets(id) ON DELETE CASCADE,
+  author_id  UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  body       TEXT NOT NULL,
+  is_staff   BOOLEAN NOT NULL DEFAULT false,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_support_ticket_messages_ticket ON support_ticket_messages(ticket_id);
+
+COMMENT ON TABLE support_tickets IS 'User support tickets';
+COMMENT ON TABLE support_ticket_messages IS 'Messages (thread) per ticket';
+
+
+
+
+-- ============================================================================
+-- MIGRATION: 20260318000001_favorites.sql
+-- ============================================================================
+
+-- Saved / favorites: user can save providers (expert/business) or services
+CREATE TABLE IF NOT EXISTS favorites (
+  id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id    UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  target_type VARCHAR(20) NOT NULL CHECK (target_type IN ('provider', 'service')),
+  target_id  UUID NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE(user_id, target_type, target_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_favorites_user ON favorites(user_id);
+CREATE INDEX IF NOT EXISTS idx_favorites_target ON favorites(target_type, target_id);
+
+COMMENT ON TABLE favorites IS 'User saved providers or services';
+
+
+
+
+-- ============================================================================
+-- MIGRATION: 20260318000002_business_teams.sql
+-- ============================================================================
+
+-- Team accounts for businesses: one business can have multiple members
+CREATE TABLE IF NOT EXISTS business_teams (
+  id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  business_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  name        VARCHAR(200),
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS business_members (
+  id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  team_id    UUID NOT NULL REFERENCES business_teams(id) ON DELETE CASCADE,
+  user_id    UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  role       VARCHAR(30) NOT NULL DEFAULT 'member' CHECK (role IN ('owner', 'manager', 'member', 'viewer')),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE(team_id, user_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_business_teams_business ON business_teams(business_id);
+CREATE INDEX IF NOT EXISTS idx_business_members_team ON business_members(team_id);
+CREATE INDEX IF NOT EXISTS idx_business_members_user ON business_members(user_id);
+
+COMMENT ON TABLE business_teams IS 'Business team (one per business for now)';
+COMMENT ON TABLE business_members IS 'Team members with roles';
+
+
+
+
+-- ============================================================================
+-- MIGRATION: 20260318000003_coupons.sql
+-- ============================================================================
+
+-- Promotions / coupons (stub for first-booking or plan discount)
+CREATE TABLE IF NOT EXISTS coupons (
+  id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  code         VARCHAR(50) NOT NULL UNIQUE,
+  type         VARCHAR(30) NOT NULL DEFAULT 'fixed' CHECK (type IN ('fixed', 'percent')),
+  value        NUMERIC(10,2) NOT NULL,
+  currency     VARCHAR(3) DEFAULT 'USD',
+  valid_from   TIMESTAMPTZ NOT NULL DEFAULT now(),
+  valid_until   TIMESTAMPTZ,
+  max_uses     INTEGER,
+  use_count    INTEGER NOT NULL DEFAULT 0,
+  created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at   TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_coupons_code ON coupons(code);
+COMMENT ON TABLE coupons IS 'Promo codes for discounts (expand with redemption tracking)';
+
+
+
+
+-- ============================================================================
+-- MIGRATION: 20260318000004_support_ticket_attachments.sql
+-- ============================================================================
+
+-- Add optional attachment URLs to support ticket messages (e.g. from POST /api/upload)
+ALTER TABLE support_ticket_messages
+  ADD COLUMN IF NOT EXISTS attachment_urls TEXT[] DEFAULT '{}';
+
+COMMENT ON COLUMN support_ticket_messages.attachment_urls IS 'Public URLs of attached images/files (from upload API)';
+
+
+
+
+-- ============================================================================
+-- MIGRATION: 20260318000005_craftsman_role.sql
+-- ============================================================================
+
+-- ============================================================================
+-- MohandisHub - v048: craftsman role and craftsman profiles
+-- ============================================================================
+
+-- --------------------------------------------------------------------------
+-- 1) Allow craftsman as a primary role
+-- --------------------------------------------------------------------------
+ALTER TABLE users DROP CONSTRAINT IF EXISTS users_primary_role_check;
+ALTER TABLE users
+  ADD CONSTRAINT users_primary_role_check
+  CHECK (primary_role IN ('customer', 'expert', 'business', 'craftsman'));
+
+-- --------------------------------------------------------------------------
+-- 2) Individual provider profile for craftsmen
+-- --------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS craftsman_profiles (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID UNIQUE NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  trade VARCHAR(150),
+  title VARCHAR(200),
+  headline VARCHAR(300),
+  bio TEXT,
+  specializations TEXT[] NOT NULL DEFAULT '{}',
+  years_of_experience SMALLINT,
+  hourly_rate NUMERIC(10, 2),
+  city VARCHAR(100),
+  country VARCHAR(100) NOT NULL DEFAULT 'Egypt',
+  availability_status VARCHAR(20) NOT NULL DEFAULT 'available'
+    CHECK (availability_status IN ('available', 'busy', 'offline')),
+  workshop_name VARCHAR(200),
+  workshop_address TEXT,
+  workshop_latitude NUMERIC(9, 6),
+  workshop_longitude NUMERIC(9, 6),
+  verification_status VARCHAR(20) NOT NULL DEFAULT 'unverified'
+    CHECK (verification_status IN ('unverified', 'pending', 'under_review', 'verified', 'rejected')),
+  verified_at TIMESTAMPTZ,
+  identity_verified BOOLEAN NOT NULL DEFAULT false,
+  identity_verification_method VARCHAR(20)
+    CHECK (identity_verification_method IS NULL OR identity_verification_method IN ('didit', 'manual')),
+  payout_currency VARCHAR(20),
+  payout_address TEXT,
+  payout_extra_id VARCHAR(255),
+  payout_updated_at TIMESTAMPTZ,
+  onboarding_completed_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_craftsman_profiles_verification
+  ON craftsman_profiles (verification_status);
+CREATE INDEX IF NOT EXISTS idx_craftsman_profiles_specializations
+  ON craftsman_profiles USING GIN (specializations);
+CREATE INDEX IF NOT EXISTS idx_craftsman_profiles_payout_currency
+  ON craftsman_profiles (payout_currency);
+
+COMMENT ON TABLE craftsman_profiles IS 'Individual trade-service providers such as mechanics, plumbers, welders, and blacksmiths.';
+COMMENT ON COLUMN craftsman_profiles.workshop_address IS 'Private workshop address. Public views should expose only city/area level location.';
+
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM pg_proc WHERE proname = 'trigger_set_updated_at'
+  ) AND NOT EXISTS (
+    SELECT 1 FROM pg_trigger
+    WHERE tgname = 'set_craftsman_profiles_updated_at'
+      AND tgrelid = 'craftsman_profiles'::regclass
+  ) THEN
+    CREATE TRIGGER set_craftsman_profiles_updated_at
+      BEFORE UPDATE ON craftsman_profiles
+      FOR EACH ROW EXECUTE FUNCTION trigger_set_updated_at();
+  END IF;
+END $$;
+
+-- --------------------------------------------------------------------------
+-- 3) Allow reviews for craftsmen
+-- --------------------------------------------------------------------------
+ALTER TABLE reviews DROP CONSTRAINT IF EXISTS reviews_target_type_check;
+ALTER TABLE reviews
+  ADD CONSTRAINT reviews_target_type_check
+  CHECK (target_type IN ('expert', 'business', 'craftsman', 'customer'));
+
+
+
+
+-- ============================================================================
+-- MIGRATION: 20260321120000_wallet_egp_instapay_fx.sql
+-- ============================================================================
+
+-- ============================================================================
+-- MohandisHub â€” EGP-primary wallet, InstaPay manual rails, FX settings, USDâ†’EGP migration
+-- ============================================================================
+
+-- --------------------------------------------------------------------------
+-- 1) App settings: FX, platform InstaPay, migration bookkeeping
+-- --------------------------------------------------------------------------
+ALTER TABLE app_settings
+  ADD COLUMN IF NOT EXISTS wallet_egp_per_usdt_deposit NUMERIC(18, 6),
+  ADD COLUMN IF NOT EXISTS wallet_egp_per_usdt_withdrawal NUMERIC(18, 6),
+  ADD COLUMN IF NOT EXISTS platform_instapay_display JSONB NOT NULL DEFAULT '{}'::jsonb,
+  ADD COLUMN IF NOT EXISTS wallet_usd_to_egp_migration_rate NUMERIC(18, 6) DEFAULT 48.5,
+  ADD COLUMN IF NOT EXISTS wallet_migration_usd_to_egp_applied BOOLEAN NOT NULL DEFAULT false;
+
+COMMENT ON COLUMN app_settings.wallet_egp_per_usdt_deposit IS 'EGP credited per 1 USDT (or stablecoin unit) on crypto deposit settlement';
+COMMENT ON COLUMN app_settings.wallet_egp_per_usdt_withdrawal IS 'EGP debited per 1 USDT when quoting crypto withdrawal from EGP balance';
+COMMENT ON COLUMN app_settings.platform_instapay_display IS 'JSON shown to users for manual InstaPay deposits (phone, name, bank, instructions)';
+
+CREATE TABLE IF NOT EXISTS app_settings_wallet_audit (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  admin_id UUID REFERENCES users (id) ON DELETE SET NULL,
+  field_key TEXT NOT NULL,
+  old_value JSONB,
+  new_value JSONB,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_app_settings_wallet_audit_created ON app_settings_wallet_audit (created_at DESC);
+
+-- --------------------------------------------------------------------------
+-- 2) User payout preferences (expert / craftsman / business)
+-- --------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS user_payout_preferences (
+  user_id UUID PRIMARY KEY REFERENCES users (id) ON DELETE CASCADE,
+  instapay_phone VARCHAR(64),
+  crypto_payout_currency VARCHAR(32),
+  crypto_payout_address TEXT,
+  crypto_payout_extra_id VARCHAR(255),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- --------------------------------------------------------------------------
+-- 3) deposit_requests â€” manual InstaPay + review + FX snapshot
+-- --------------------------------------------------------------------------
+ALTER TABLE deposit_requests
+  ADD COLUMN IF NOT EXISTS proof_upload_id UUID REFERENCES private_uploads (id) ON DELETE SET NULL,
+  ADD COLUMN IF NOT EXISTS destination_account_snapshot JSONB NOT NULL DEFAULT '{}'::jsonb,
+  ADD COLUMN IF NOT EXISTS reviewed_by UUID REFERENCES users (id) ON DELETE SET NULL,
+  ADD COLUMN IF NOT EXISTS reviewed_at TIMESTAMPTZ,
+  ADD COLUMN IF NOT EXISTS rejection_reason TEXT,
+  ADD COLUMN IF NOT EXISTS credited_transaction_id UUID REFERENCES transactions (id) ON DELETE SET NULL,
+  ADD COLUMN IF NOT EXISTS rate_snapshot JSONB NOT NULL DEFAULT '{}'::jsonb,
+  ADD COLUMN IF NOT EXISTS credited_amount_egp NUMERIC(12, 2);
+
+ALTER TABLE deposit_requests DROP CONSTRAINT IF EXISTS deposit_requests_status_check;
+ALTER TABLE deposit_requests ADD CONSTRAINT deposit_requests_status_check CHECK (
+  status IN (
+    'pending',
+    'paid',
+    'expired',
+    'failed',
+    'cancelled',
+    'pending_review',
+    'rejected'
+  )
+);
+
+-- --------------------------------------------------------------------------
+-- 4) withdrawal_requests â€” EGP source + crypto payout amount + InstaPay + proof
+-- --------------------------------------------------------------------------
+ALTER TABLE withdrawal_requests
+  ADD COLUMN IF NOT EXISTS withdrawal_method VARCHAR(20) NOT NULL DEFAULT 'crypto',
+  ADD COLUMN IF NOT EXISTS source_amount_egp NUMERIC(12, 2),
+  ADD COLUMN IF NOT EXISTS payout_crypto_amount NUMERIC(24, 8),
+  ADD COLUMN IF NOT EXISTS instapay_recipient VARCHAR(128),
+  ADD COLUMN IF NOT EXISTS admin_proof_upload_id UUID REFERENCES private_uploads (id) ON DELETE SET NULL,
+  ADD COLUMN IF NOT EXISTS rate_snapshot JSONB NOT NULL DEFAULT '{}'::jsonb,
+  ADD COLUMN IF NOT EXISTS reviewed_by UUID REFERENCES users (id) ON DELETE SET NULL,
+  ADD COLUMN IF NOT EXISTS reviewed_at TIMESTAMPTZ,
+  ADD COLUMN IF NOT EXISTS rejection_reason TEXT;
+
+ALTER TABLE withdrawal_requests DROP CONSTRAINT IF EXISTS withdrawal_requests_status_check;
+ALTER TABLE withdrawal_requests ADD CONSTRAINT withdrawal_requests_status_check CHECK (
+  status IN (
+    'pending_verification',
+    'processing',
+    'finished',
+    'failed',
+    'rejected',
+    'cancelled',
+    'blocked',
+    'awaiting_transfer'
+  )
+);
+
+-- --------------------------------------------------------------------------
+-- 5) One-time USD â†’ EGP migration (wallets + transactions linked to USD wallets)
+-- --------------------------------------------------------------------------
+DO $$
+DECLARE
+  r NUMERIC(18, 6);
+  applied BOOLEAN;
+  settings_count INT;
+BEGIN
+  SELECT COUNT(*) INTO settings_count FROM app_settings;
+  IF settings_count = 0 THEN
+    RAISE NOTICE 'app_settings empty; skip USDâ†’EGP migration';
+    RETURN;
+  END IF;
+
+  SELECT
+    COALESCE(wallet_usd_to_egp_migration_rate, 48.5),
+    COALESCE(wallet_migration_usd_to_egp_applied, false)
+  INTO r, applied
+  FROM app_settings
+  LIMIT 1;
+
+  IF applied IS TRUE THEN
+    RETURN;
+  END IF;
+
+  UPDATE transactions t
+  SET
+    amount = ROUND((t.amount::numeric * r), 2),
+    balance_after = ROUND((t.balance_after::numeric * r), 2),
+    metadata = COALESCE(t.metadata, '{}'::jsonb)
+      || jsonb_build_object(
+        'migrated_usd_to_egp',
+        true,
+        'migration_rate_egp_per_usd',
+        r,
+        'migration_applied_at',
+        to_jsonb (now())
+      )
+  FROM wallets w
+  WHERE
+    t.wallet_id = w.id
+    AND w.currency = 'USD';
+
+  UPDATE wallets
+  SET
+    balance = ROUND(balance::numeric * r, 2),
+    currency = 'EGP'
+  WHERE
+    currency = 'USD';
+
+  UPDATE wallets
+  SET currency = 'EGP'
+  WHERE
+    currency IS NOT NULL
+    AND currency <> 'EGP';
+
+  UPDATE deposit_requests
+  SET
+    amount = ROUND(amount::numeric * r, 2),
+    currency = 'EGP'
+  WHERE
+    currency = 'USD';
+
+  UPDATE app_settings
+  SET wallet_migration_usd_to_egp_applied = true;
+
+  RAISE NOTICE 'wallet USDâ†’EGP migration applied at rate %', r;
+END $$;
+
+
+
+
+-- ============================================================================
+-- MIGRATION: 20260401120000_feature_hourly_pricing_enabled.sql
+-- ============================================================================
+
+-- Hourly pricing visibility: admin + App Status (default true = no behavior change until toggled off)
+ALTER TABLE app_settings
+  ADD COLUMN IF NOT EXISTS feature_hourly_pricing_enabled BOOLEAN NOT NULL DEFAULT true;
+
+COMMENT ON COLUMN app_settings.feature_hourly_pricing_enabled IS
+  'When false, hourly pricing is hidden in the web app and API rejects hourly payloads.';
+
+
+
+
+-- ============================================================================
+-- MIGRATION: 20260405120000_support_ticket_category.sql
+-- ============================================================================
+
+-- Ticket category for bug reports, suggestions, etc.
+ALTER TABLE support_tickets
+  ADD COLUMN IF NOT EXISTS category VARCHAR(30) NOT NULL DEFAULT 'other';
+
+ALTER TABLE support_tickets
+  DROP CONSTRAINT IF EXISTS support_tickets_category_check;
+
+ALTER TABLE support_tickets
+  ADD CONSTRAINT support_tickets_category_check
+  CHECK (category IN ('bug', 'suggestion', 'error', 'other'));
+
+COMMENT ON COLUMN support_tickets.category IS 'User-facing ticket type: bug, suggestion, error, other';
+
+
+
+
+-- ============================================================================
+-- MIGRATION: 20260405140000_app_settings_sidebar_hidden_hrefs.sql
+-- ============================================================================
+
+-- Admin-controlled: hide specific app sidebar links (stored as JSON array of href strings).
+ALTER TABLE app_settings
+  ADD COLUMN IF NOT EXISTS sidebar_hidden_hrefs JSONB NOT NULL DEFAULT '[]'::jsonb;
+
+COMMENT ON COLUMN app_settings.sidebar_hidden_hrefs IS 'JSON array of /app/... hrefs to omit from the in-app sidebar';
+
+
+
+
+-- ============================================================================
+-- MIGRATION: 20260405160000_plans_allowed_roles.sql
+-- ============================================================================
+
+-- ============================================================================
+-- MohandisHub â€” Plans: which primary roles may see and subscribe to each plan
+-- ============================================================================
+
+ALTER TABLE plans
+  ADD COLUMN IF NOT EXISTS allowed_roles TEXT[] NOT NULL DEFAULT ARRAY['customer', 'expert', 'business', 'craftsman']::text[];
+
+COMMENT ON COLUMN plans.allowed_roles IS 'Primary roles that may list and subscribe to this plan; enforced in API.';
+
+UPDATE plans
+SET allowed_roles = ARRAY['customer', 'expert', 'business', 'craftsman']::text[]
+WHERE allowed_roles IS NULL OR cardinality(allowed_roles) = 0;
+
+
+
+
+-- ============================================================================
+-- MIGRATION: 20260405180000_retention_upload_governance.sql
+-- ============================================================================
+
+-- Retention policy, upload limits, sweep log, moderation audit, bid attachment column
+
+ALTER TABLE app_settings
+  ADD COLUMN IF NOT EXISTS retention_policy JSONB NOT NULL DEFAULT '{}'::jsonb,
+  ADD COLUMN IF NOT EXISTS retention_alerts JSONB NOT NULL DEFAULT '{}'::jsonb,
+  ADD COLUMN IF NOT EXISTS max_public_upload_bytes INTEGER,
+  ADD COLUMN IF NOT EXISTS public_upload_allowed_mimes JSONB,
+  ADD COLUMN IF NOT EXISTS supabase_storage_dashboard_url TEXT;
+
+COMMENT ON COLUMN app_settings.retention_policy IS 'Per-category retention toggles/values; merged with env ceilings in API';
+COMMENT ON COLUMN app_settings.retention_alerts IS 'JSON: webhookUrl, alertEmail, deleteCountThresholds by category key';
+
+CREATE TABLE IF NOT EXISTS retention_sweep_log (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  started_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  finished_at TIMESTAMPTZ,
+  dry_run BOOLEAN NOT NULL DEFAULT false,
+  results JSONB NOT NULL DEFAULT '{}'::jsonb,
+  error TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_retention_sweep_log_started ON retention_sweep_log (started_at DESC);
+
+CREATE TABLE IF NOT EXISTS admin_moderation_log (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  admin_user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  action VARCHAR(80) NOT NULL,
+  entity_type VARCHAR(80),
+  entity_id UUID,
+  detail JSONB,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_admin_moderation_log_created ON admin_moderation_log (created_at DESC);
+
+ALTER TABLE bid_messages ADD COLUMN IF NOT EXISTS attachment_url TEXT;
+
+
+
+
+-- ============================================================================
+-- MIGRATION: 20260405200000_user_plan_usage_counters.sql
+-- ============================================================================
+
+-- Metered plan usage per user per feature per billing/calendar window (distinct from concurrent inventory caps).
+
+CREATE TABLE IF NOT EXISTS user_plan_usage_counters (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+  feature_key text NOT NULL,
+  period_start timestamptz NOT NULL,
+  period_end timestamptz NOT NULL,
+  count integer NOT NULL DEFAULT 0,
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT user_plan_usage_counters_user_feature_period UNIQUE (user_id, feature_key, period_start)
+);
+
+CREATE INDEX IF NOT EXISTS idx_user_plan_usage_counters_user_feature
+  ON user_plan_usage_counters (user_id, feature_key);
+
+COMMENT ON TABLE user_plan_usage_counters IS 'Counts metered plan actions per user per time window (see plans.plan_limits.usageQuotas).';
+
+
+
+
+-- ============================================================================
+-- MIGRATION: 20260406170000_app_settings_payment_methods_enabled.sql
+-- ============================================================================
+
+-- Per-method visibility for wallet deposits/withdrawals (admin-controlled).
+ALTER TABLE app_settings
+  ADD COLUMN IF NOT EXISTS payment_methods_enabled JSONB NOT NULL DEFAULT '{}'::jsonb;
+
+UPDATE app_settings
+SET payment_methods_enabled = jsonb_build_object(
+  'deposit_crypto', NOT disable_crypto_deposits,
+  'deposit_card', NOT disable_card_deposits,
+  'deposit_instapay', true,
+  'withdrawal_crypto', true,
+  'withdrawal_instapay', true
+)
+WHERE payment_methods_enabled = '{}'::jsonb;
+
+
+
+
+-- ============================================================================
+-- MIGRATION: 20260409123000_advertisements_adcenter.sql
+-- ============================================================================
+
+CREATE TABLE IF NOT EXISTS advertisement_plans (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name_en TEXT NOT NULL,
+  name_ar TEXT,
+  duration_days INT NOT NULL CHECK (duration_days > 0),
+  price NUMERIC(12,2) NOT NULL CHECK (price >= 0),
+  currency TEXT NOT NULL DEFAULT 'EGP',
+  description_en TEXT,
+  description_ar TEXT,
+  is_active BOOLEAN NOT NULL DEFAULT true,
+  admin_override_allowed BOOLEAN NOT NULL DEFAULT true,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS ad_pricing_rules (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name TEXT NOT NULL,
+  is_active BOOLEAN NOT NULL DEFAULT true,
+  role_scope TEXT[] NOT NULL DEFAULT '{}',
+  country_scope TEXT[] NOT NULL DEFAULT '{}',
+  city_scope TEXT[] NOT NULL DEFAULT '{}',
+  category_scope UUID[] NOT NULL DEFAULT '{}',
+  min_duration_days INT,
+  max_duration_days INT,
+  price_multiplier NUMERIC(8,4) NOT NULL DEFAULT 1.0,
+  flat_fee NUMERIC(12,2) NOT NULL DEFAULT 0,
+  starts_at TIMESTAMPTZ,
+  ends_at TIMESTAMPTZ,
+  priority INT NOT NULL DEFAULT 0,
+  created_by UUID REFERENCES users(id),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS advertisements (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  advertiser_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  ad_plan_id UUID REFERENCES advertisement_plans(id) ON DELETE SET NULL,
+  title_en TEXT NOT NULL,
+  title_ar TEXT,
+  description_en TEXT,
+  description_ar TEXT,
+  image_url TEXT NOT NULL,
+  cta_text_en TEXT,
+  cta_text_ar TEXT,
+  link_type TEXT NOT NULL CHECK (link_type IN ('profile', 'service', 'need', 'external')),
+  link_target TEXT,
+  status TEXT NOT NULL DEFAULT 'pending_payment'
+    CHECK (status IN ('pending_payment', 'active', 'expired', 'cancelled', 'paused_by_admin')),
+  amount_paid NUMERIC(12,2),
+  starts_at TIMESTAMPTZ,
+  expires_at TIMESTAMPTZ,
+  priority INT NOT NULL DEFAULT 0,
+  target_roles TEXT[] NOT NULL DEFAULT '{}',
+  target_countries TEXT[] NOT NULL DEFAULT '{}',
+  target_cities TEXT[] NOT NULL DEFAULT '{}',
+  target_categories UUID[] NOT NULL DEFAULT '{}',
+  target_languages TEXT[] NOT NULL DEFAULT '{}',
+  target_min_budget NUMERIC(12,2),
+  target_max_budget NUMERIC(12,2),
+  admin_forced_starts_at TIMESTAMPTZ,
+  admin_forced_expires_at TIMESTAMPTZ,
+  admin_status_reason TEXT,
+  admin_price_override NUMERIC(12,2),
+  impressions INT NOT NULL DEFAULT 0,
+  clicks INT NOT NULL DEFAULT 0,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_advertisements_status_expires
+  ON advertisements(status, expires_at);
+CREATE INDEX IF NOT EXISTS idx_advertisements_advertiser
+  ON advertisements(advertiser_id);
+CREATE INDEX IF NOT EXISTS idx_advertisements_target_roles
+  ON advertisements USING GIN(target_roles);
+CREATE INDEX IF NOT EXISTS idx_advertisements_target_countries
+  ON advertisements USING GIN(target_countries);
+CREATE INDEX IF NOT EXISTS idx_advertisements_target_cities
+  ON advertisements USING GIN(target_cities);
+CREATE INDEX IF NOT EXISTS idx_advertisements_target_categories
+  ON advertisements USING GIN(target_categories);
+CREATE INDEX IF NOT EXISTS idx_advertisements_target_languages
+  ON advertisements USING GIN(target_languages);
+
+INSERT INTO advertisement_plans (name_en, name_ar, duration_days, price, currency, description_en, description_ar)
+SELECT 'Starter 7 Days', 'Ø®Ø·Ø© 7 Ø£ÙŠØ§Ù…', 7, 150, 'EGP', 'Basic promotion for one week', 'Ø¥Ø¹Ù„Ø§Ù† Ø£Ø³Ø§Ø³ÙŠ Ù„Ù…Ø¯Ø© Ø£Ø³Ø¨ÙˆØ¹'
+WHERE NOT EXISTS (SELECT 1 FROM advertisement_plans);
+
+
+
+
+
+-- ============================================================================
+-- MIGRATION: 20260411120000_fix_reviews_check_constraint.sql
+-- ============================================================================
+
+-- Fix: allow reviews that reference only a reservation_id (no legacy booking_id).
+-- The original constraint required booking_id or need_id to be non-null,
+-- but reservations created after the migration to the reservations system
+-- have no legacy_booking_id, causing INSERT to fail with a CHECK violation.
+
+ALTER TABLE reviews DROP CONSTRAINT IF EXISTS chk_review_reference;
+ALTER TABLE reviews ADD CONSTRAINT chk_review_reference
+  CHECK (reservation_id IS NOT NULL OR booking_id IS NOT NULL OR need_id IS NOT NULL);
+
+
+
+
+-- ============================================================================
+-- MIGRATION: 20260411140000_price_negotiations.sql
+-- ============================================================================
+
+-- Price negotiations between customers and providers for negotiable services
+
+CREATE TABLE IF NOT EXISTS price_negotiations (
+  id                 UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  service_id         UUID NOT NULL REFERENCES services(id) ON DELETE CASCADE,
+  customer_id        UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  provider_id        UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  status             VARCHAR(20) NOT NULL DEFAULT 'pending'
+    CHECK (status IN ('pending', 'accepted', 'rejected', 'expired', 'cancelled', 'consumed')),
+  original_price     NUMERIC(12,2),
+  agreed_price       NUMERIC(12,2),
+  latest_amount      NUMERIC(12,2) NOT NULL,
+  latest_offered_by  UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  currency           VARCHAR(3) NOT NULL DEFAULT 'EGP',
+  expires_at         TIMESTAMPTZ NOT NULL,
+  agreed_valid_until TIMESTAMPTZ,
+  created_at         TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at         TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_price_negotiations_customer ON price_negotiations(customer_id);
+CREATE INDEX IF NOT EXISTS idx_price_negotiations_provider ON price_negotiations(provider_id);
+CREATE INDEX IF NOT EXISTS idx_price_negotiations_service ON price_negotiations(service_id);
+CREATE INDEX IF NOT EXISTS idx_price_negotiations_status ON price_negotiations(status);
+
+-- One active (pending) negotiation per customer per service
+CREATE UNIQUE INDEX IF NOT EXISTS uq_price_negotiations_pending_customer_service
+  ON price_negotiations(service_id, customer_id)
+  WHERE status = 'pending';
+
+CREATE TABLE IF NOT EXISTS price_negotiation_rounds (
+  id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  negotiation_id   UUID NOT NULL REFERENCES price_negotiations(id) ON DELETE CASCADE,
+  offered_by       UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  amount           NUMERIC(12,2) NOT NULL,
+  message          TEXT,
+  created_at       TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_price_negotiation_rounds_negotiation
+  ON price_negotiation_rounds(negotiation_id, created_at);
+
+
+
+
+-- ============================================================================
+-- MIGRATION: 20260604170000_disable_card_deposits_launch_default.sql
+-- ============================================================================
+
+-- Launch default: Stripe/card deposits are not in use yet.
+-- Keep NOWPayments crypto and manual InstaPay rails enabled, and preserve any future keys.
+ALTER TABLE app_settings
+  ALTER COLUMN payment_methods_enabled SET DEFAULT jsonb_build_object(
+    'deposit_crypto', true,
+    'deposit_card', false,
+    'deposit_instapay', true,
+    'withdrawal_crypto', true,
+    'withdrawal_instapay', true
+  );
+
+UPDATE app_settings
+SET payment_methods_enabled =
+      COALESCE(payment_methods_enabled, '{}'::jsonb)
+      || jsonb_build_object('deposit_card', false),
+    disable_card_deposits = true
+WHERE COALESCE(payment_methods_enabled ->> 'deposit_card', 'true') = 'true';
+
+
+

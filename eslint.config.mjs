@@ -72,4 +72,16 @@ export default [
       '@typescript-eslint/triple-slash-reference': 'off',
     },
   },
+  {
+    files: [
+      'apps/web/app/icon.tsx',
+      'apps/web/app/apple-icon.tsx',
+      'apps/web/app/opengraph-image.tsx',
+      'apps/web/app/twitter-image.tsx',
+      'apps/web/app/*/icon.tsx',
+    ],
+    rules: {
+      '@next/next/no-img-element': 'off',
+    },
+  },
 ];
