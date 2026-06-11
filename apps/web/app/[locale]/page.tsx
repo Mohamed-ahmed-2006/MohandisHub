@@ -65,7 +65,10 @@ const HomePage = async ({ params }: HomePageProps) => {
               <p className="home-page-hero-description">{dictionary.home.description}</p>
               <HomePageHeroCta locale={typedLocale} dictionary={dictionary} />
             </div>
-            <aside className="home-page-hero-banner mh-animate-fade-up mh-stagger-2" aria-hidden="true">
+            <aside
+              className="home-page-hero-banner mh-animate-fade-up mh-stagger-2"
+              aria-hidden="true"
+            >
               <Image
                 src="/assets/herosection.png"
                 alt=""
@@ -146,7 +149,9 @@ const HomePage = async ({ params }: HomePageProps) => {
           </HomePageJoinSectionGate>
         )}
 
-        {(dictionary.home.trustTitle || dictionary.home.metricsTitle || dictionary.home.faqTitle) && (
+        {(dictionary.home.trustTitle ||
+          dictionary.home.metricsTitle ||
+          dictionary.home.faqTitle) && (
           <section className="home-page-section home-page-trust-faq-section">
             <div className="home-page-trust-faq-layout">
               <aside className="home-page-trust-visual">
@@ -204,7 +209,9 @@ const HomePage = async ({ params }: HomePageProps) => {
                         <li className="home-page-trust-item">{dictionary.home.trustPayments}</li>
                       )}
                       {dictionary.home.trustCancellation && (
-                        <li className="home-page-trust-item">{dictionary.home.trustCancellation}</li>
+                        <li className="home-page-trust-item">
+                          {dictionary.home.trustCancellation}
+                        </li>
                       )}
                     </ul>
                   </>
@@ -216,12 +223,14 @@ const HomePage = async ({ params }: HomePageProps) => {
                     <div className="home-page-faq-block">
                       <h2 className="home-page-section-title">{dictionary.home.faqTitle}</h2>
                       <ul className="home-page-faq-list">
-                        {dictionary.home.faqItems.map((item: { question: string; answer: string }, i: number) => (
-                          <li key={i} className="home-page-faq-item">
-                            <strong className="home-page-faq-question">{item.question}</strong>
-                            <p className="home-page-faq-answer">{item.answer}</p>
-                          </li>
-                        ))}
+                        {dictionary.home.faqItems.map(
+                          (item: { question: string; answer: string }, i: number) => (
+                            <li key={i} className="home-page-faq-item">
+                              <strong className="home-page-faq-question">{item.question}</strong>
+                              <p className="home-page-faq-answer">{item.answer}</p>
+                            </li>
+                          ),
+                        )}
                       </ul>
                     </div>
                   )}
@@ -232,10 +241,7 @@ const HomePage = async ({ params }: HomePageProps) => {
 
         <footer className="home-page-footer">
           <p className="home-page-footer-copy">{dictionary.home.footerText}</p>
-          <nav
-            className="home-page-footer-nav"
-            aria-label={dictionary.home.footerLegalNavAria}
-          >
+          <nav className="home-page-footer-nav" aria-label={dictionary.home.footerLegalNavAria}>
             <Link className="home-page-footer-link" href={buildLocalePath(typedLocale, '/privacy')}>
               {dictionary.home.footerPrivacy}
             </Link>

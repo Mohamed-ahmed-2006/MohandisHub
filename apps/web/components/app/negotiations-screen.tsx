@@ -60,10 +60,7 @@ export function NegotiationsScreen({ locale, dictionary }: Props) {
           <h1 className="dashboard-section-title">
             {np.inboxPageTitle ?? np.providerSectionTitle ?? 'Price negotiations'}
           </h1>
-          <Link
-            href={buildLocalePath(locale, '/app/services')}
-            className="dashboard-link-btn"
-          >
+          <Link href={buildLocalePath(locale, '/app/services')} className="dashboard-link-btn">
             {nav.myServices ?? 'My Services'}
           </Link>
         </div>
@@ -71,11 +68,7 @@ export function NegotiationsScreen({ locale, dictionary }: Props) {
           {np.inboxPageHint ??
             'Respond to customer offers here. This inbox is separate from your service listings.'}
         </p>
-        <ProviderNegotiationsPanel
-          accessToken={accessToken}
-          dictionary={dictionary}
-          embedInPage
-        />
+        <ProviderNegotiationsPanel accessToken={accessToken} dictionary={dictionary} embedInPage />
       </Container>
     </main>
   );

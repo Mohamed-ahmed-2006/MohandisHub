@@ -5,6 +5,7 @@ type AuthModeSwitchProps = {
   loginLabel: string;
   registerLabel: string;
   onModeChange: (nextMode: AuthMode) => void;
+  controlsPrefix?: string;
 };
 
 const modeOptions: AuthMode[] = ['login', 'register'];
@@ -14,6 +15,7 @@ export const AuthModeSwitch = ({
   loginLabel,
   registerLabel,
   onModeChange,
+  controlsPrefix,
 }: AuthModeSwitchProps) => {
   return (
     <div className="auth-mode-switch" role="tablist" aria-label="Auth mode selection">
@@ -33,6 +35,7 @@ export const AuthModeSwitch = ({
             onClick={() => onModeChange(option)}
             role="tab"
             aria-selected={mode === option}
+            {...(controlsPrefix ? { 'aria-controls': `${controlsPrefix}-${option}-panel` } : {})}
             suppressHydrationWarning
           >
             {option === 'login' ? loginLabel : registerLabel}

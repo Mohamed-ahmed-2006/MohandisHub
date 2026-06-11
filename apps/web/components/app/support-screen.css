@@ -84,7 +84,9 @@
   cursor: pointer;
   background: hsl(var(--primary));
   color: hsl(var(--primary-foreground));
-  transition: filter 0.15s ease, transform 0.12s ease;
+  transition:
+    filter 0.15s ease,
+    transform 0.12s ease;
 }
 
 .support-inbox__new:hover:not(:disabled) {

@@ -1,6 +1,6 @@
 'use client';
 
-import type { AdminUserListItem, PaginatedResponse } from '@mohandishub/shared';
+import type { AdminPermission, AdminUserListItem, PaginatedResponse } from '@mohandishub/shared';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 
@@ -13,10 +13,15 @@ type Props = {
   dictionary: Dictionary;
   accessToken: string;
   refreshSession: () => Promise<string | null>;
-  adminPermissions: string[];
+  adminPermissions: AdminPermission[];
 };
 
-export const AdminUsersTab = ({ dictionary, accessToken, refreshSession, adminPermissions }: Props) => {
+export const AdminUsersTab = ({
+  dictionary,
+  accessToken,
+  refreshSession,
+  adminPermissions,
+}: Props) => {
   const [data, setData] = useState<PaginatedResponse<AdminUserListItem> | null>(null);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -157,7 +162,10 @@ export const AdminUsersTab = ({ dictionary, accessToken, refreshSession, adminPe
                     <td>
                       <span className="admin-badge">{user.primaryRole}</span>
                       {user.incompleteBusinessSignup ? (
-                        <span className="admin-badge admin-badge--warn" title={d.badgeIncompleteBusiness}>
+                        <span
+                          className="admin-badge admin-badge--warn"
+                          title={d.badgeIncompleteBusiness}
+                        >
                           {d.badgeIncompleteBusiness}
                         </span>
                       ) : null}

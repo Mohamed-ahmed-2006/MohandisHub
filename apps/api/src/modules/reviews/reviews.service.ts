@@ -197,12 +197,7 @@ export class ReviewsService {
     page: number,
     limit: number,
   ) {
-    const { rows, total } = await this.repo.listByTarget(
-      targetUserId,
-      targetType,
-      page,
-      limit,
-    );
+    const { rows, total } = await this.repo.listByTarget(targetUserId, targetType, page, limit);
     return {
       items: rows.map(toReview),
       total,
@@ -277,7 +272,11 @@ export class ReviewsService {
     const { rows } = await this.repo.listReports(1, 1000, 'all');
     const report = rows.find((r) => r.id === reportId);
     if (!report) {
-      throw new HttpError({ statusCode: 404, code: 'REPORT_NOT_FOUND', message: 'Report not found.' });
+      throw new HttpError({
+        statusCode: 404,
+        code: 'REPORT_NOT_FOUND',
+        message: 'Report not found.',
+      });
     }
     await this.repo.updateReportStatus(reportId, decision, adminId);
     if (decision === 'upheld' && hideReview) {
@@ -305,7 +304,11 @@ export class ReviewsService {
     const { rows } = await this.repo.listDisputes(1, 1000, 'all');
     const dispute = rows.find((d) => d.id === disputeId);
     if (!dispute) {
-      throw new HttpError({ statusCode: 404, code: 'DISPUTE_NOT_FOUND', message: 'Dispute not found.' });
+      throw new HttpError({
+        statusCode: 404,
+        code: 'DISPUTE_NOT_FOUND',
+        message: 'Dispute not found.',
+      });
     }
     await this.repo.updateDisputeStatus(disputeId, decision, adminId);
     if (decision === 'upheld' && hideReview) {

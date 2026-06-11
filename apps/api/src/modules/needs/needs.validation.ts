@@ -19,10 +19,7 @@ export const createNeedSchema = z.object({
     .union([z.string().url().max(500), z.literal('')])
     .optional()
     .transform((v) => (v === '' || v == null ? undefined : v)),
-  referenceUrls: z
-    .array(z.string().url().max(500))
-    .max(5)
-    .optional(),
+  referenceUrls: z.array(z.string().url().max(500)).max(5).optional(),
 });
 export type CreateNeedInput = z.infer<typeof createNeedSchema>;
 

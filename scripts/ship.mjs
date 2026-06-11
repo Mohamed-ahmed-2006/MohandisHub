@@ -77,4 +77,6 @@ if (dbUrl) {
   run('supabase db push');
 }
 
-console.log('\n🎉 Ship completed: checks, build, and migrations all passed. You can now commit and push.');
+console.log(
+  '\n🎉 Ship completed: checks, build, and migrations all passed. You can now commit and push.',
+);

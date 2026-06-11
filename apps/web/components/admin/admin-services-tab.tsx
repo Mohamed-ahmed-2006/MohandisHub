@@ -121,7 +121,7 @@ export const AdminServicesTab = ({ dictionary, accessToken }: Props) => {
                       </span>
                     </td>
                     <td>{svc.categoryNameEn ?? '—'}</td>
-                      <td>{svc.price != null ? `${svc.price} ${svc.currency ?? 'EGP'}` : '—'}</td>
+                    <td>{svc.price != null ? `${svc.price} ${svc.currency ?? 'EGP'}` : '—'}</td>
                     <td>
                       <span
                         className={`admin-badge admin-badge--${svc.status === 'active' ? 'active' : svc.status === 'rejected' ? 'rejected' : 'pending'}`}
@@ -129,7 +129,13 @@ export const AdminServicesTab = ({ dictionary, accessToken }: Props) => {
                         {statusLabel(svc.status)}
                       </span>
                     </td>
-                    <td>{svc.isFeatured ? <Star size={16} aria-hidden style={{ verticalAlign: 'middle' }} /> : '—'}</td>
+                    <td>
+                      {svc.isFeatured ? (
+                        <Star size={16} aria-hidden style={{ verticalAlign: 'middle' }} />
+                      ) : (
+                        '—'
+                      )}
+                    </td>
                     <td>
                       <div className="admin-actions-row">
                         {svc.status === 'pending_review' && (

@@ -237,7 +237,9 @@
   background: hsl(var(--background));
   font-size: 0.9rem;
   color: hsl(var(--foreground));
-  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
 }
 
 .chat-input:focus {
@@ -260,7 +262,9 @@
   cursor: pointer;
   font-size: 0.85rem;
   flex-shrink: 0;
-  transition: filter 0.15s ease, transform 0.1s ease;
+  transition:
+    filter 0.15s ease,
+    transform 0.1s ease;
 }
 
 .chat-send-btn:hover:not(:disabled) {

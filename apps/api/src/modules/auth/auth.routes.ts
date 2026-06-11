@@ -10,6 +10,7 @@ import {
   passwordResetRateLimiter,
   registerRateLimiter,
 } from '../../middleware/rate-limit.js';
+import { requireTrustedAuthOrigin } from '../../middleware/require-trusted-auth-origin.js';
 
 import { authController } from './auth.controller.js';
 
@@ -20,8 +21,8 @@ authRouter.post('/register', registerRateLimiter, authController.register);
 authRouter.post('/login', loginRateLimiter, authController.login);
 authRouter.post('/forgot-password', passwordResetRateLimiter, authController.forgotPassword);
 authRouter.post('/reset-password', passwordResetRateLimiter, authController.resetPassword);
-authRouter.post('/refresh', authController.refresh);
-authRouter.post('/logout', authController.logout);
+authRouter.post('/refresh', requireTrustedAuthOrigin, authController.refresh);
+authRouter.post('/logout', requireTrustedAuthOrigin, authController.logout);
 
 // Protected routes
 authRouter.get('/me', authenticate, authController.me);

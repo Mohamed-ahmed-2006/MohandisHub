@@ -2,10 +2,7 @@ import type { PoolClient } from 'pg';
 
 import { getPool } from '../../db/pool.js';
 
-import type {
-  AdPricingRuleRow,
-  AdvertisementRow,
-} from './advertisements.types.js';
+import type { AdPricingRuleRow, AdvertisementRow } from './advertisements.types.js';
 import type {
   AdminAdControlsInput,
   AdminPricingOverrideInput,
@@ -129,7 +126,21 @@ export class AdvertisementsRepository {
     return rows[0] ?? null;
   }
 
-  async listMyAds(advertiserId: string, query: ListAdsQueryInput): Promise<{ rows: AdvertisementRow[]; total: number }> {
+  async findAdForUpdate(client: PoolClient, id: string): Promise<AdvertisementRow | null> {
+    const { rows } = await client.query<AdvertisementRow>(
+      `SELECT *
+       FROM advertisements
+       WHERE id = $1
+       FOR UPDATE`,
+      [id],
+    );
+    return rows[0] ?? null;
+  }
+
+  async listMyAds(
+    advertiserId: string,
+    query: ListAdsQueryInput,
+  ): Promise<{ rows: AdvertisementRow[]; total: number }> {
     const offset = (query.page - 1) * query.limit;
     const statusFilter = query.status ? `AND status = $4` : '';
     const args = query.status
@@ -197,7 +208,9 @@ export class AdvertisementsRepository {
       ...(input.targetRoles !== undefined ? { target_roles: input.targetRoles } : {}),
       ...(input.targetCountries !== undefined ? { target_countries: input.targetCountries } : {}),
       ...(input.targetCities !== undefined ? { target_cities: input.targetCities } : {}),
-      ...(input.targetCategories !== undefined ? { target_categories: input.targetCategories } : {}),
+      ...(input.targetCategories !== undefined
+        ? { target_categories: input.targetCategories }
+        : {}),
       ...(input.targetLanguages !== undefined ? { target_languages: input.targetLanguages } : {}),
       ...(input.targetMinBudget !== undefined ? { target_min_budget: input.targetMinBudget } : {}),
       ...(input.targetMaxBudget !== undefined ? { target_max_budget: input.targetMaxBudget } : {}),
@@ -214,7 +227,27 @@ export class AdvertisementsRepository {
   }
 
   async cancelAd(id: string): Promise<void> {
-    await getPool().query(`UPDATE advertisements SET status = 'cancelled', updated_at = now() WHERE id = $1`, [id]);
+    await getPool().query(
+      `UPDATE advertisements SET status = 'cancelled', updated_at = now() WHERE id = $1`,
+      [id],
+    );
+  }
+
+  async cancelAdInTx(
+    client: PoolClient,
+    id: string,
+    reason: string,
+  ): Promise<AdvertisementRow | null> {
+    const { rows } = await client.query<AdvertisementRow>(
+      `UPDATE advertisements
+       SET status = 'cancelled',
+           admin_status_reason = $2,
+           updated_at = now()
+       WHERE id = $1
+       RETURNING *`,
+      [id, reason],
+    );
+    return rows[0] ?? null;
   }
 
   async expireStaleAds(): Promise<void> {
@@ -255,7 +288,10 @@ export class AdvertisementsRepository {
     );
   }
 
-  async applyAdminSchedule(id: string, input: AdminScheduleInput): Promise<AdvertisementRow | null> {
+  async applyAdminSchedule(
+    id: string,
+    input: AdminScheduleInput,
+  ): Promise<AdvertisementRow | null> {
     const { rows } = await getPool().query<AdvertisementRow>(
       `UPDATE advertisements
        SET admin_forced_starts_at = $2,
@@ -269,7 +305,10 @@ export class AdvertisementsRepository {
     return rows[0] ?? null;
   }
 
-  async applyAdminPricingOverride(id: string, input: AdminPricingOverrideInput): Promise<AdvertisementRow | null> {
+  async applyAdminPricingOverride(
+    id: string,
+    input: AdminPricingOverrideInput,
+  ): Promise<AdvertisementRow | null> {
     const { rows } = await getPool().query<AdvertisementRow>(
       `UPDATE advertisements SET admin_price_override = $2, updated_at = now() WHERE id = $1 RETURNING *`,
       [id, input.amount],
@@ -284,7 +323,10 @@ export class AdvertisementsRepository {
     return rows;
   }
 
-  async createPricingRule(createdBy: string, input: CreatePricingRuleInput): Promise<AdPricingRuleRow> {
+  async createPricingRule(
+    createdBy: string,
+    input: CreatePricingRuleInput,
+  ): Promise<AdPricingRuleRow> {
     const { rows } = await getPool().query<AdPricingRuleRow>(
       `INSERT INTO ad_pricing_rules (
         name, is_active, role_scope, country_scope, city_scope, category_scope,
@@ -313,7 +355,10 @@ export class AdvertisementsRepository {
     return rows[0]!;
   }
 
-  async updatePricingRule(id: string, input: UpdatePricingRuleInput): Promise<AdPricingRuleRow | null> {
+  async updatePricingRule(
+    id: string,
+    input: UpdatePricingRuleInput,
+  ): Promise<AdPricingRuleRow | null> {
     const fields: Record<string, unknown> = {
       ...(input.name !== undefined ? { name: input.name } : {}),
       ...(input.isActive !== undefined ? { is_active: input.isActive } : {}),
@@ -347,7 +392,9 @@ export class AdvertisementsRepository {
   }
 
   async disablePricingRule(id: string): Promise<void> {
-    await getPool().query(`UPDATE ad_pricing_rules SET is_active = false, updated_at = now() WHERE id = $1`, [id]);
+    await getPool().query(
+      `UPDATE ad_pricing_rules SET is_active = false, updated_at = now() WHERE id = $1`,
+      [id],
+    );
   }
 }
-

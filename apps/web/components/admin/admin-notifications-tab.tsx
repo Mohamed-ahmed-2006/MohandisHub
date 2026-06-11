@@ -41,7 +41,12 @@ export const AdminNotificationsTab = ({ dictionary, accessToken, refreshSession 
           .map((s) => s.trim())
           .filter(Boolean);
         if (userIds.length === 0) {
-          setError(tr('Enter at least one user ID when targeting specific users.', 'أدخل معرف مستخدم واحدًا على الأقل عند الاستهداف بمستخدمين محددين.'));
+          setError(
+            tr(
+              'Enter at least one user ID when targeting specific users.',
+              'أدخل معرف مستخدم واحدًا على الأقل عند الاستهداف بمستخدمين محددين.',
+            ),
+          );
           return;
         }
       }
@@ -76,7 +81,11 @@ export const AdminNotificationsTab = ({ dictionary, accessToken, refreshSession 
         setMessage('');
         setUserIdsText('');
       } catch (err: unknown) {
-        setError(isApiClientError(err) ? err.message : tr('Failed to send notification.', 'فشل إرسال الإشعار.'));
+        setError(
+          isApiClientError(err)
+            ? err.message
+            : tr('Failed to send notification.', 'فشل إرسال الإشعار.'),
+        );
       } finally {
         setSending(false);
       }
@@ -127,14 +136,20 @@ export const AdminNotificationsTab = ({ dictionary, accessToken, refreshSession 
         {target === 'users' && (
           <div className="admin-form-group">
             <label className="admin-form-label">
-              {tr('User IDs (one per line or comma-separated)', 'معرفات المستخدم (واحد بكل سطر أو مفصولة بفاصلة)')}
+              {tr(
+                'User IDs (one per line or comma-separated)',
+                'معرفات المستخدم (واحد بكل سطر أو مفصولة بفاصلة)',
+              )}
             </label>
             <textarea
               value={userIdsText}
               onChange={(e) => setUserIdsText(e.target.value)}
               className="admin-form-textarea"
               rows={4}
-              placeholder={tr('e.g. 550e8400-e29b-41d4-a716-446655440000', 'مثال: 550e8400-e29b-41d4-a716-446655440000')}
+              placeholder={tr(
+                'e.g. 550e8400-e29b-41d4-a716-446655440000',
+                'مثال: 550e8400-e29b-41d4-a716-446655440000',
+              )}
             />
           </div>
         )}
@@ -165,8 +180,16 @@ export const AdminNotificationsTab = ({ dictionary, accessToken, refreshSession 
           />
         </div>
 
-        {error && <div className="admin-form-error" role="alert">{error}</div>}
-        {success && <div className="admin-form-success" role="status">{success}</div>}
+        {error && (
+          <div className="admin-form-error" role="alert">
+            {error}
+          </div>
+        )}
+        {success && (
+          <div className="admin-form-success" role="status">
+            {success}
+          </div>
+        )}
 
         <button type="submit" className="admin-btn admin-btn-primary" disabled={sending}>
           {sending ? tr('Sending...', 'جارٍ الإرسال...') : sendLabel}

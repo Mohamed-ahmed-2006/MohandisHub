@@ -50,10 +50,12 @@ describe('notifications demo endpoint hardening', () => {
     };
     const service = new NotificationsService(repo as never);
 
-    await expect(service.createForUser('user-1', {
-      type: 'demo',
-      title: 'Test',
-      message: 'Message',
-    })).rejects.toBe(missingTableError);
+    await expect(
+      service.createForUser('user-1', {
+        type: 'demo',
+        title: 'Test',
+        message: 'Message',
+      }),
+    ).rejects.toBe(missingTableError);
   });
 });

@@ -106,10 +106,9 @@ export class ReviewsRepository {
   }
 
   async findByNeed(needId: string): Promise<ReviewRow | null> {
-    const { rows } = await getPool().query<ReviewRow>(
-      `SELECT * FROM reviews WHERE need_id = $1`,
-      [needId],
-    );
+    const { rows } = await getPool().query<ReviewRow>(`SELECT * FROM reviews WHERE need_id = $1`, [
+      needId,
+    ]);
     return rows[0] ?? null;
   }
 
@@ -131,7 +130,9 @@ export class ReviewsRepository {
   }
 
   async findById(reviewId: string): Promise<ReviewRow | null> {
-    const { rows } = await getPool().query<ReviewRow>(`SELECT * FROM reviews WHERE id = $1`, [reviewId]);
+    const { rows } = await getPool().query<ReviewRow>(`SELECT * FROM reviews WHERE id = $1`, [
+      reviewId,
+    ]);
     return rows[0] ?? null;
   }
 
@@ -148,7 +149,11 @@ export class ReviewsRepository {
     return rows[0]!;
   }
 
-  async createDispute(data: { reviewId: string; disputerId: string; reason: string }): Promise<{ id: string }> {
+  async createDispute(data: {
+    reviewId: string;
+    disputerId: string;
+    reason: string;
+  }): Promise<{ id: string }> {
     const { rows } = await getPool().query<{ id: string }>(
       `INSERT INTO review_disputes (review_id, disputer_id, reason) VALUES ($1, $2, $3) RETURNING id`,
       [data.reviewId, data.disputerId, data.reason],
@@ -156,7 +161,11 @@ export class ReviewsRepository {
     return rows[0]!;
   }
 
-  async listReports(page: number, limit: number, statusFilter?: 'pending' | 'all'): Promise<{
+  async listReports(
+    page: number,
+    limit: number,
+    statusFilter?: 'pending' | 'all',
+  ): Promise<{
     rows: Array<{
       id: string;
       review_id: string;
@@ -173,10 +182,7 @@ export class ReviewsRepository {
     total: number;
   }> {
     const offset = (page - 1) * limit;
-    const params =
-      statusFilter === 'pending'
-        ? [limit, offset, 'pending']
-        : [limit, offset];
+    const params = statusFilter === 'pending' ? [limit, offset, 'pending'] : [limit, offset];
     const { rows } = await getPool().query(
       `SELECT rr.id, rr.review_id, rr.reporter_id, rr.reason, rr.comment, rr.status, rr.created_at,
               r.rating AS review_rating, r.comment AS review_comment, r.target_user_id,
@@ -199,7 +205,11 @@ export class ReviewsRepository {
     return { rows: rows as never[], total };
   }
 
-  async listDisputes(page: number, limit: number, statusFilter?: 'pending' | 'all'): Promise<{
+  async listDisputes(
+    page: number,
+    limit: number,
+    statusFilter?: 'pending' | 'all',
+  ): Promise<{
     rows: Array<{
       id: string;
       review_id: string;
@@ -215,10 +225,7 @@ export class ReviewsRepository {
     total: number;
   }> {
     const offset = (page - 1) * limit;
-    const params =
-      statusFilter === 'pending'
-        ? [limit, offset, 'pending']
-        : [limit, offset];
+    const params = statusFilter === 'pending' ? [limit, offset, 'pending'] : [limit, offset];
     const { rows } = await getPool().query(
       `SELECT rd.id, rd.review_id, rd.disputer_id, rd.reason, rd.status, rd.created_at,
               r.rating AS review_rating, r.comment AS review_comment, r.target_user_id,

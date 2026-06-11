@@ -16,6 +16,7 @@ import {
 import { authenticate } from '../../middleware/authenticate.js';
 import { loadAdminFromDb } from '../../middleware/load-admin-from-db.js';
 import { requireEmailVerified } from '../../middleware/require-email-verified.js';
+import { hasAdminPermission } from '../../middleware/require-role.js';
 import { asyncHandler } from '../../utils/async-handler.js';
 import { HttpError } from '../../utils/http-error.js';
 import { SettingsService } from '../settings/settings.service.js';
@@ -227,7 +228,9 @@ uploadRouter.post(
     } else {
       const diskFile = req.file as Express.Multer.File & { path?: string; filename?: string };
       const srcPath = diskFile.path;
-      const filename = diskFile.filename ?? `${Date.now()}-${Math.random().toString(36).slice(2, 10)}${path.extname(req.file.originalname)}`;
+      const filename =
+        diskFile.filename ??
+        `${Date.now()}-${Math.random().toString(36).slice(2, 10)}${path.extname(req.file.originalname)}`;
       if (!srcPath || !filename) {
         throw new HttpError({
           statusCode: 400,
@@ -278,11 +281,9 @@ function canAdminReadPrivateUpload(user: {
   isAdmin?: boolean;
   adminPermissions?: string[];
 }): boolean {
-  if (user.isAdmin !== true) return false;
-  if (!user.adminPermissions || user.adminPermissions.length === 0) return true;
   return (
-    user.adminPermissions.includes('manage_verifications') ||
-    user.adminPermissions.includes('manage_transactions')
+    hasAdminPermission(user, 'manage_verifications') ||
+    hasAdminPermission(user, 'manage_transactions')
   );
 }
 

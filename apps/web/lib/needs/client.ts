@@ -1,3 +1,4 @@
+import { fetchWithAuthRetry } from '@/lib/auth/fetch-with-auth-retry';
 import { getApiBaseUrl } from '@/lib/env';
 
 export type Need = {
@@ -48,14 +49,18 @@ export type BidMessage = {
 };
 
 async function apiReq<T>(path: string, token: string, opts?: RequestInit): Promise<T> {
-  const res = await fetch(`${getApiBaseUrl()}${path}`, {
-    ...opts,
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`,
-      ...(opts?.headers ?? {}),
+  const res = await fetchWithAuthRetry(
+    `${getApiBaseUrl()}${path}`,
+    {
+      ...opts,
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+        ...(opts?.headers ?? {}),
+      },
     },
-  });
+    token,
+  );
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
     const err = body as { error?: { message?: string; details?: unknown } };
@@ -113,7 +118,7 @@ export const needsApiClient = {
       `/api/needs/${needId}/bids/${bidId}/pay`,
       token,
       {
-      method: 'POST',
+        method: 'POST',
       },
     ),
 

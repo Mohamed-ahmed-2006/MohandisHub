@@ -18,12 +18,15 @@ export const createReservationSlotSchema = z
   .refine((d) => new Date(d.endAt) > new Date(d.startAt), {
     message: 'endAt must be after startAt',
   })
-  .refine((d) => {
-    const durationMs = new Date(d.endAt).getTime() - new Date(d.startAt).getTime();
-    return Number.isFinite(durationMs) && durationMs <= 24 * 60 * 60 * 1000;
-  }, {
-    message: 'Slot duration must be 24 hours or less.',
-  })
+  .refine(
+    (d) => {
+      const durationMs = new Date(d.endAt).getTime() - new Date(d.startAt).getTime();
+      return Number.isFinite(durationMs) && durationMs <= 24 * 60 * 60 * 1000;
+    },
+    {
+      message: 'Slot duration must be 24 hours or less.',
+    },
+  )
   .refine((d) => (d.supportsOnline ?? true) || (d.supportsOffline ?? true), {
     message: 'Enable at least online or offline for the slot so customers can book.',
   });
@@ -138,13 +141,11 @@ export const endCallSchema = z.object({
 export const renewCallTokenSchema = z.object({}).strict();
 
 export const resolveDisputeSchema = z.object({
-  status: z.enum([
-    'resolved_customer',
-    'resolved_provider',
-    'resolved_partial',
-    'dismissed',
-  ]),
-  resolutionNotes: z.string().max(4000).optional(),
+  status: z.enum(['resolved_customer', 'resolved_provider', 'resolved_partial', 'dismissed']),
+  resolutionNotes: z.string().trim().min(1).max(4000),
+  settlementOutcome: z.enum(['refund', 'release', 'split', 'none']).optional(),
+  customerRefundAmount: z.number().min(0).optional(),
+  providerReleaseAmount: z.number().min(0).optional(),
 });
 
 export type UpsertReservationProfileInput = z.infer<typeof upsertReservationProfileSchema>;

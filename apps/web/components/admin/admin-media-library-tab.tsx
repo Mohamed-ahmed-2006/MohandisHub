@@ -132,7 +132,12 @@ export function AdminMediaLibraryTab({ dictionary, accessToken, refreshSession }
             accept="image/*"
             onChange={(e) => setFile(e.target.files?.[0] ?? null)}
           />
-          <button type="button" className="admin-btn admin-btn--primary" disabled={saving || !file || !title.trim()} onClick={() => void onCreate()}>
+          <button
+            type="button"
+            className="admin-btn admin-btn--primary"
+            disabled={saving || !file || !title.trim()}
+            onClick={() => void onCreate()}
+          >
             {saving ? (dictionary.common?.loading ?? 'Loading...') : 'Upload asset'}
           </button>
         </div>
@@ -170,10 +175,18 @@ export function AdminMediaLibraryTab({ dictionary, accessToken, refreshSession }
                 <td>{asset.sort_order}</td>
                 <td>
                   <div className="admin-actions-row">
-                    <button type="button" className="admin-btn admin-btn--small" onClick={() => void onToggle(asset)}>
+                    <button
+                      type="button"
+                      className="admin-btn admin-btn--small"
+                      onClick={() => void onToggle(asset)}
+                    >
                       {asset.active ? 'Hide' : 'Show'}
                     </button>
-                    <button type="button" className="admin-btn admin-btn--danger admin-btn--small" onClick={() => void onDelete(asset)}>
+                    <button
+                      type="button"
+                      className="admin-btn admin-btn--danger admin-btn--small"
+                      onClick={() => void onDelete(asset)}
+                    >
                       Delete
                     </button>
                   </div>

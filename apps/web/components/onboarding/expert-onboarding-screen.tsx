@@ -161,7 +161,13 @@ export const ExpertOnboardingScreen = ({ locale, dictionary }: Props) => {
     } finally {
       setSaving(false);
     }
-  }, [accessToken, withdrawableManualDocId, loadKycStatus, updateAuthUser, dictionary.profile.saveError]);
+  }, [
+    accessToken,
+    withdrawableManualDocId,
+    loadKycStatus,
+    updateAuthUser,
+    dictionary.profile.saveError,
+  ]);
 
   useEffect(() => {
     if (!accessToken) return;
@@ -170,7 +176,9 @@ export const ExpertOnboardingScreen = ({ locale, dictionary }: Props) => {
       try {
         const [profile, verification, academicRecords, identityDocs] = await Promise.all([
           profilesApiClient.getExpertProfile(accessToken),
-          verificationApiClient.getStatus(accessToken).catch(() => ({ verificationStatus: 'unverified' as const })),
+          verificationApiClient
+            .getStatus(accessToken)
+            .catch(() => ({ verificationStatus: 'unverified' as const })),
           profilesApiClient.getAcademicRecords(accessToken).catch(() => []),
           profilesApiClient.getIdentityDocuments(accessToken).catch(() => []),
         ]);
@@ -190,8 +198,10 @@ export const ExpertOnboardingScreen = ({ locale, dictionary }: Props) => {
         setHasActiveIdentitySubmission(hasPendingIdentitySubmission);
         const identityDone =
           verification.verificationStatus === 'verified' || hasPendingIdentitySubmission;
-        const hasApprovedAcademicRecord = Array.isArray(academicRecords) && academicRecords.some((r) => r.status === 'approved');
-        const hasRejectedAcademic = Array.isArray(academicRecords) && academicRecords.some((r) => r.status === 'rejected');
+        const hasApprovedAcademicRecord =
+          Array.isArray(academicRecords) && academicRecords.some((r) => r.status === 'approved');
+        const hasRejectedAcademic =
+          Array.isArray(academicRecords) && academicRecords.some((r) => r.status === 'rejected');
         setDocumentRejectedResubmit(Boolean(hasRejectedAcademic && !hasApprovedAcademicRecord));
         // Rejected identity (from admin review): show KYC step to resubmit
         if (authUser?.verificationStatus === 'rejected') {
@@ -339,7 +349,11 @@ export const ExpertOnboardingScreen = ({ locale, dictionary }: Props) => {
     try {
       const base = (getApiBaseUrl() || '').replace(/\/$/, '');
       const toFullUrl = (url: string) =>
-        url.startsWith('http') ? url : base ? `${base}${url.startsWith('/') ? '' : '/'}${url}` : url;
+        url.startsWith('http')
+          ? url
+          : base
+            ? `${base}${url.startsWith('/') ? '' : '/'}${url}`
+            : url;
 
       const [frontRes, backRes, selfieRes] = await Promise.all([
         uploadPrivateFile(accessToken, manualFrontFile),
@@ -371,9 +385,14 @@ export const ExpertOnboardingScreen = ({ locale, dictionary }: Props) => {
     e.preventDefault();
     if (!accessToken) return;
     if (!certificateFile) {
-      setError(dict.documentsForm.certificateImageLabel
-        ? `${dict.documentsForm.certificateImageLabel} ${tr('is required.', 'مطلوب.')}`
-        : tr('Please upload your certificate or degree document.', 'يرجى رفع الشهادة أو وثيقة الدرجة العلمية.'));
+      setError(
+        dict.documentsForm.certificateImageLabel
+          ? `${dict.documentsForm.certificateImageLabel} ${tr('is required.', 'مطلوب.')}`
+          : tr(
+              'Please upload your certificate or degree document.',
+              'يرجى رفع الشهادة أو وثيقة الدرجة العلمية.',
+            ),
+      );
       return;
     }
     setSaving(true);
@@ -382,11 +401,13 @@ export const ExpertOnboardingScreen = ({ locale, dictionary }: Props) => {
     const recordType =
       (form.elements.namedItem('recordType') as HTMLSelectElement)?.value || 'degree';
     const title = (form.elements.namedItem('recordTitle') as HTMLInputElement)?.value || '';
-    const institution = (form.elements.namedItem('institution') as HTMLInputElement)?.value?.trim() || '';
+    const institution =
+      (form.elements.namedItem('institution') as HTMLInputElement)?.value?.trim() || '';
 
     if (!title || !institution) {
       setError(
-        dictionary.profile.saveError || tr('Please select degree and institution.', 'يرجى اختيار الدرجة والمؤسسة.'),
+        dictionary.profile.saveError ||
+          tr('Please select degree and institution.', 'يرجى اختيار الدرجة والمؤسسة.'),
       );
       setSaving(false);
       return;
@@ -395,7 +416,11 @@ export const ExpertOnboardingScreen = ({ locale, dictionary }: Props) => {
     try {
       const base = (getApiBaseUrl() || '').replace(/\/$/, '');
       const toFullUrl = (url: string) =>
-        url.startsWith('http') ? url : base ? `${base}${url.startsWith('/') ? '' : '/'}${url}` : url;
+        url.startsWith('http')
+          ? url
+          : base
+            ? `${base}${url.startsWith('/') ? '' : '/'}${url}`
+            : url;
 
       const [certRes, transcriptRes] = await Promise.all([
         uploadPrivateFile(accessToken, certificateFile),
@@ -467,9 +492,7 @@ export const ExpertOnboardingScreen = ({ locale, dictionary }: Props) => {
                   name="title"
                   className="onboarding-input"
                   placeholder={dict.profileForm.titlePlaceholder}
-                  defaultValue={
-                    expertProfile?.title?.trim() || authUser?.displayName || ''
-                  }
+                  defaultValue={expertProfile?.title?.trim() || authUser?.displayName || ''}
                   required
                 />
               </div>
@@ -495,7 +518,14 @@ export const ExpertOnboardingScreen = ({ locale, dictionary }: Props) => {
                     )}
                 </p>
                 {avatarPreviewUrl && (
-                  <div style={{ maxWidth: '12rem', borderRadius: '1rem', overflow: 'hidden', border: '1px solid hsl(var(--border))' }}>
+                  <div
+                    style={{
+                      maxWidth: '12rem',
+                      borderRadius: '1rem',
+                      overflow: 'hidden',
+                      border: '1px solid hsl(var(--border))',
+                    }}
+                  >
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
                       src={avatarPreviewUrl}
@@ -503,7 +533,12 @@ export const ExpertOnboardingScreen = ({ locale, dictionary }: Props) => {
                         (dict.profileForm as { avatarLabel?: string }).avatarLabel ??
                         tr('Profile picture', 'الصورة الشخصية')
                       }
-                      style={{ display: 'block', width: '100%', maxHeight: '12rem', objectFit: 'cover' }}
+                      style={{
+                        display: 'block',
+                        width: '100%',
+                        maxHeight: '12rem',
+                        objectFit: 'cover',
+                      }}
                     />
                   </div>
                 )}
@@ -685,7 +720,9 @@ export const ExpertOnboardingScreen = ({ locale, dictionary }: Props) => {
                 <div className="onboarding-error">{dict.kycRejected}</div>
               )}
 
-              {(kycStatus === 'unverified' || kycStatus === 'rejected' || authUser?.verificationStatus === 'rejected') && (
+              {(kycStatus === 'unverified' ||
+                kycStatus === 'rejected' ||
+                authUser?.verificationStatus === 'rejected') && (
                 <div className="onboarding-kyc-options">
                   {!kycMode ? (
                     <>
@@ -708,95 +745,106 @@ export const ExpertOnboardingScreen = ({ locale, dictionary }: Props) => {
                       </button>
                     </>
                   ) : (
-                <form className="onboarding-form" onSubmit={(e) => void handleManualKyc(e)}>
-                  <p className="onboarding-description">
-                    {dict.documentsForm.identityDescription}{' '}
-                    {tr(
-                      'You must take a live photo of yourself and a photo of your ID (National ID, passport, or driving license). Upload or take live pictures.',
-                      'يجب التقاط صورة مباشرة لك وصورة لبطاقة الهوية (بطاقة رقم قومي أو جواز سفر أو رخصة قيادة). يمكنك الرفع أو الالتقاط المباشر.',
-                    )}
-                  </p>
-                  {dictionary.verification?.verificationTimeNote && (
-                    <p className="onboarding-description onboarding-verification-note">
-                      {dictionary.verification.verificationTimeNote}
-                    </p>
-                  )}
-                  <div className="onboarding-field">
-                    <label className="onboarding-label">
-                      {dict.documentsForm.documentTypeLabel}
-                    </label>
-                    <select name="documentType" className="onboarding-input">
-                      <option value="national_id">
-                        {dictionary.verification.identityDocTypes.nationalId}
-                      </option>
-                      <option value="passport">
-                        {dictionary.verification.identityDocTypes.passport}
-                      </option>
-                      <option value="driving_license">
-                        {dictionary.verification.identityDocTypes.drivingLicense}
-                      </option>
-                    </select>
-                  </div>
-                  <div className="onboarding-field">
-                    <label className="onboarding-label">
-                      {dict.documentsForm.fullNameOnDocLabel}
-                    </label>
-                    <input type="text" name="fullNameOnDoc" className="onboarding-input" required />
-                  </div>
-                  <div className="onboarding-field">
-                    <ImageUploadOrCapture
-                      label={dict.documentsForm.frontImageLabel}
-                      onImage={(f) => setManualFrontFile(f)}
-                      onClear={() => setManualFrontFile(null)}
-                      onError={setError}
-                      required
-                      disabled={saving}
-                    />
-                  </div>
-                  <div className="onboarding-field">
-                    <ImageUploadOrCapture
-                      label={dict.documentsForm.backImageLabel}
-                      onImage={(f) => setManualBackFile(f)}
-                      onClear={() => setManualBackFile(null)}
-                      onError={setError}
-                      required={false}
-                      disabled={saving}
-                    />
-                    <p className="onboarding-description" style={{ marginTop: '0.25rem', fontSize: '0.8rem' }}>
-                      {tr(
-                        'Required for National ID and Driving License. Skip for passport.',
-                        'مطلوب للبطاقة القومية ورخصة القيادة. يمكن تجاوزه في حالة جواز السفر.',
+                    <form className="onboarding-form" onSubmit={(e) => void handleManualKyc(e)}>
+                      <p className="onboarding-description">
+                        {dict.documentsForm.identityDescription}{' '}
+                        {tr(
+                          'You must take a live photo of yourself and a photo of your ID (National ID, passport, or driving license). Upload or take live pictures.',
+                          'يجب التقاط صورة مباشرة لك وصورة لبطاقة الهوية (بطاقة رقم قومي أو جواز سفر أو رخصة قيادة). يمكنك الرفع أو الالتقاط المباشر.',
+                        )}
+                      </p>
+                      {dictionary.verification?.verificationTimeNote && (
+                        <p className="onboarding-description onboarding-verification-note">
+                          {dictionary.verification.verificationTimeNote}
+                        </p>
                       )}
-                    </p>
-                  </div>
-                  <div className="onboarding-field">
-                    <LiveCapture
-                      facingMode="user"
-                      label={dict.documentsForm.selfieImageLabel}
-                      onCapture={(f) => setManualSelfieFile(f)}
-                      onClear={() => setManualSelfieFile(null)}
-                      onError={setError}
-                      required
-                      disabled={saving}
-                    />
-                    <p className="onboarding-description" style={{ marginTop: '0.25rem', fontSize: '0.8rem' }}>
-                      {tr(
-                        'You must take a live photo of yourself now. No uploads allowed for selfie.',
-                        'يجب التقاط صورة مباشرة لك الآن. لا يُسمح برفع ملف سيلفي.',
-                      )}
-                    </p>
-                  </div>
-                  <button type="submit" className="onboarding-cta-button" disabled={saving}>
-                    {saving ? dictionary.auth.common.loading : dictionary.common.submit}
-                  </button>
-                  <button
-                    type="button"
-                    className="onboarding-back-button"
-                    onClick={() => setKycMode(null)}
-                  >
-                    {dictionary.common.back}
-                  </button>
-                </form>
+                      <div className="onboarding-field">
+                        <label className="onboarding-label">
+                          {dict.documentsForm.documentTypeLabel}
+                        </label>
+                        <select name="documentType" className="onboarding-input">
+                          <option value="national_id">
+                            {dictionary.verification.identityDocTypes.nationalId}
+                          </option>
+                          <option value="passport">
+                            {dictionary.verification.identityDocTypes.passport}
+                          </option>
+                          <option value="driving_license">
+                            {dictionary.verification.identityDocTypes.drivingLicense}
+                          </option>
+                        </select>
+                      </div>
+                      <div className="onboarding-field">
+                        <label className="onboarding-label">
+                          {dict.documentsForm.fullNameOnDocLabel}
+                        </label>
+                        <input
+                          type="text"
+                          name="fullNameOnDoc"
+                          className="onboarding-input"
+                          required
+                        />
+                      </div>
+                      <div className="onboarding-field">
+                        <ImageUploadOrCapture
+                          label={dict.documentsForm.frontImageLabel}
+                          onImage={(f) => setManualFrontFile(f)}
+                          onClear={() => setManualFrontFile(null)}
+                          onError={setError}
+                          required
+                          disabled={saving}
+                        />
+                      </div>
+                      <div className="onboarding-field">
+                        <ImageUploadOrCapture
+                          label={dict.documentsForm.backImageLabel}
+                          onImage={(f) => setManualBackFile(f)}
+                          onClear={() => setManualBackFile(null)}
+                          onError={setError}
+                          required={false}
+                          disabled={saving}
+                        />
+                        <p
+                          className="onboarding-description"
+                          style={{ marginTop: '0.25rem', fontSize: '0.8rem' }}
+                        >
+                          {tr(
+                            'Required for National ID and Driving License. Skip for passport.',
+                            'مطلوب للبطاقة القومية ورخصة القيادة. يمكن تجاوزه في حالة جواز السفر.',
+                          )}
+                        </p>
+                      </div>
+                      <div className="onboarding-field">
+                        <LiveCapture
+                          facingMode="user"
+                          label={dict.documentsForm.selfieImageLabel}
+                          onCapture={(f) => setManualSelfieFile(f)}
+                          onClear={() => setManualSelfieFile(null)}
+                          onError={setError}
+                          required
+                          disabled={saving}
+                        />
+                        <p
+                          className="onboarding-description"
+                          style={{ marginTop: '0.25rem', fontSize: '0.8rem' }}
+                        >
+                          {tr(
+                            'You must take a live photo of yourself now. No uploads allowed for selfie.',
+                            'يجب التقاط صورة مباشرة لك الآن. لا يُسمح برفع ملف سيلفي.',
+                          )}
+                        </p>
+                      </div>
+                      <button type="submit" className="onboarding-cta-button" disabled={saving}>
+                        {saving ? dictionary.auth.common.loading : dictionary.common.submit}
+                      </button>
+                      <button
+                        type="button"
+                        className="onboarding-back-button"
+                        onClick={() => setKycMode(null)}
+                      >
+                        {dictionary.common.back}
+                      </button>
+                    </form>
                   )}
                 </div>
               )}
@@ -821,13 +869,13 @@ export const ExpertOnboardingScreen = ({ locale, dictionary }: Props) => {
               {kycStatus !== 'verified' &&
                 !hasActiveIdentitySubmission &&
                 authUser?.verificationStatus !== 'rejected' && (
-                <p className="onboarding-hint">
-                  {tr(
-                    'Complete identity verification or submit for manual review before continuing.',
-                    'أكمل التحقق من الهوية أو قدّم للمراجعة اليدوية قبل المتابعة.',
-                  )}
-                </p>
-              )}
+                  <p className="onboarding-hint">
+                    {tr(
+                      'Complete identity verification or submit for manual review before continuing.',
+                      'أكمل التحقق من الهوية أو قدّم للمراجعة اليدوية قبل المتابعة.',
+                    )}
+                  </p>
+                )}
             </div>
           )}
 

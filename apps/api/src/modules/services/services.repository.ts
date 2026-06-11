@@ -156,8 +156,7 @@ export class ServicesRepository {
       price_desc: 's.price DESC NULLS LAST, s.created_at DESC',
       completed_count: 's.order_count DESC NULLS LAST, s.created_at DESC',
     };
-    const orderClause =
-      sortMap[filters.sort ?? ''] ?? 's.is_featured DESC, s.created_at DESC';
+    const orderClause = sortMap[filters.sort ?? ''] ?? 's.is_featured DESC, s.created_at DESC';
 
     const offset = (page - 1) * limit;
     params.push(limit, offset);
@@ -182,7 +181,10 @@ export class ServicesRepository {
   }
 
   /** Rule-based recommendations: top-rated active services, optionally by category. */
-  async getRecommendedServices(limit: number = 10, categoryId?: string): Promise<ServiceSearchRow[]> {
+  async getRecommendedServices(
+    limit: number = 10,
+    categoryId?: string,
+  ): Promise<ServiceSearchRow[]> {
     const conditions: string[] = ["s.status = 'active'"];
     const params: unknown[] = [];
     let idx = 1;
@@ -421,10 +423,10 @@ export class ServicesRepository {
   }
 
   async deleteService(serviceId: string, providerId: string): Promise<boolean> {
-    const { rowCount } = await this.db.query(`DELETE FROM services WHERE id = $1 AND provider_id = $2`, [
-      serviceId,
-      providerId,
-    ]);
+    const { rowCount } = await this.db.query(
+      `DELETE FROM services WHERE id = $1 AND provider_id = $2`,
+      [serviceId, providerId],
+    );
     return (rowCount ?? 0) > 0;
   }
 }

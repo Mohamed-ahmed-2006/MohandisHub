@@ -65,14 +65,19 @@ export class ChatRepository {
     return (rows[0] as ConversationRow) ?? null;
   }
 
-  async getMessages(conversationId: string, limit = 50, offset = 0, userId?: string): Promise<MessageRow[]> {
+  async getMessages(
+    conversationId: string,
+    limit = 50,
+    offset = 0,
+    userId?: string,
+  ): Promise<MessageRow[]> {
     if (userId) {
       await getPool().query(
         `UPDATE conversations 
          SET participant_a_last_read_at = CASE WHEN participant_a = $1 THEN now() ELSE participant_a_last_read_at END,
              participant_b_last_read_at = CASE WHEN participant_b = $1 THEN now() ELSE participant_b_last_read_at END
          WHERE id = $2`,
-        [userId, conversationId]
+        [userId, conversationId],
       );
     }
     const { rows } = await getPool().query(

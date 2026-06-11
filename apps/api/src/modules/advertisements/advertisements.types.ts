@@ -55,4 +55,3 @@ export type AdvertisementRow = {
   updated_at: string;
   advertiser_name?: string;
 };
-

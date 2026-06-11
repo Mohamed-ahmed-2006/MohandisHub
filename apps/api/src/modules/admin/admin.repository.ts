@@ -642,12 +642,25 @@ export class AdminRepository {
     try {
       await client.query('BEGIN');
 
-      const { rows: origRows } = await client.query<TransactionRow>(
-        `UPDATE transactions SET status = 'reversed' WHERE id = $1 AND status = 'completed' RETURNING *`,
+      const { rows: existingReversal } = await client.query<TransactionRow>(
+        `SELECT * FROM transactions
+         WHERE reference_type = 'reversal' AND reference_id = $1 AND status = 'completed'
+         ORDER BY created_at DESC
+         LIMIT 1`,
         [txnId],
       );
-      if (origRows.length === 0) throw new Error('Transaction not found or already reversed');
+      if (existingReversal[0]) {
+        await client.query('COMMIT');
+        return existingReversal[0];
+      }
+
+      const { rows: origRows } = await client.query<TransactionRow>(
+        `SELECT * FROM transactions WHERE id = $1 FOR UPDATE`,
+        [txnId],
+      );
+      if (origRows.length === 0) throw new Error('Transaction not found');
       const orig = origRows[0]!;
+      if (orig.status !== 'completed') throw new Error('Transaction not reversible');
 
       // Reversal must undo the balance effect of the original transaction.
       // Credit types increased the balance, so reversing them subtracts (-1).
@@ -660,14 +673,23 @@ export class AdminRepository {
       // `payment` cannot be disambiguated by type alone and would need a signed
       // ledger column to handle fully.
       const creditTypes = ['deposit', 'bonus', 'refund', 'commission', 'release', 'adjustment'];
-      const sign = creditTypes.includes(orig.type) ? -1 : 1;
+      const isProviderPayoutPayment =
+        orig.type === 'payment' && /\bpayout\b/i.test(orig.description ?? '');
+      const sign = creditTypes.includes(orig.type) || isProviderPayoutPayment ? -1 : 1;
       const reverseAmount = parseFloat(orig.amount) * sign;
 
       const { rows: walletRows } = await client.query<{ balance: string }>(
-        `UPDATE wallets SET balance = balance + $2 WHERE id = $1 RETURNING balance::text`,
+        `UPDATE wallets
+         SET balance = balance + $2
+         WHERE id = $1 AND balance + $2 >= 0
+         RETURNING balance::text`,
         [orig.wallet_id, reverseAmount],
       );
+      if (walletRows.length === 0) {
+        throw new Error('Reversal would create a negative wallet balance');
+      }
       const newBalance = walletRows[0]!.balance;
+      await client.query(`UPDATE transactions SET status = 'reversed' WHERE id = $1`, [txnId]);
 
       const { rows: txnRows } = await client.query<TransactionRow>(
         `INSERT INTO transactions (wallet_id, user_id, type, amount, balance_after, status, description, reference_type, reference_id, created_by)

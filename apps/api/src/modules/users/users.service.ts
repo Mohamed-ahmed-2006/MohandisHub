@@ -1,7 +1,7 @@
 import { createHash, randomInt } from 'node:crypto';
 
 import type { AuthUser, VerificationStatus } from '@mohandishub/shared';
-import { isVerifiableRole } from '@mohandishub/shared';
+import { isVerifiableRole, normalizeAdminPermissions } from '@mohandishub/shared';
 
 import { env } from '../../config/env.js';
 import { logger } from '../../config/logger.js';
@@ -22,6 +22,7 @@ import type { UserSummary } from './users.types.js';
 import type { UpdateAccountInput } from './users.validation.js';
 
 const EMAIL_CHANGE_TTL_MINUTES = 10;
+const EMAIL_CHANGE_MAX_CONFIRM_ATTEMPTS = 5;
 
 export class UsersService {
   public constructor(
@@ -151,8 +152,26 @@ export class UsersService {
       });
     }
 
+    if (pending.pending_email_attempts >= EMAIL_CHANGE_MAX_CONFIRM_ATTEMPTS) {
+      await this.authRepository.clearPendingEmail(userId);
+      throw new HttpError({
+        statusCode: 429,
+        code: 'EMAIL_CHANGE_ATTEMPTS_EXCEEDED',
+        message: 'Too many incorrect codes. Request a new email change code.',
+      });
+    }
+
     const inputHash = createHash('sha256').update(code.trim()).digest('hex');
     if (inputHash !== pending.pending_email_token) {
+      const attempts = await this.authRepository.incrementPendingEmailAttempts(userId);
+      if (attempts >= EMAIL_CHANGE_MAX_CONFIRM_ATTEMPTS) {
+        await this.authRepository.clearPendingEmail(userId);
+        throw new HttpError({
+          statusCode: 429,
+          code: 'EMAIL_CHANGE_ATTEMPTS_EXCEEDED',
+          message: 'Too many incorrect codes. Request a new email change code.',
+        });
+      }
       throw new HttpError({
         statusCode: 400,
         code: 'INVALID_CODE',
@@ -214,7 +233,7 @@ export class UsersService {
       dateOfBirth: user.date_of_birth ? user.date_of_birth.toISOString().slice(0, 10) : null,
       role: user.primary_role,
       isAdmin: user.is_admin === true,
-      adminPermissions: Array.isArray(user.admin_permissions) ? user.admin_permissions : [],
+      adminPermissions: normalizeAdminPermissions(user.admin_permissions),
       plan: user.plan_slug,
       emailVerified: user.email_verified_at !== null,
       verificationStatus,

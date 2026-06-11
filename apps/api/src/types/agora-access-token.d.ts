@@ -15,4 +15,3 @@ declare module 'agora-access-token' {
     ): string;
   }
 }
-

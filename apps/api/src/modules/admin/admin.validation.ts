@@ -2,7 +2,7 @@
 // Admin module - Zod validation schemas
 // ---------------------------------------------------------------------------
 
-import { MANAGED_SIDEBAR_HREFS } from '@mohandishub/shared';
+import { ADMIN_PERMISSIONS, MANAGED_SIDEBAR_HREFS } from '@mohandishub/shared';
 import { z } from 'zod';
 
 import {
@@ -26,7 +26,7 @@ export const updateUserSchema = z.object({
   isActive: z.boolean().optional(),
   primaryRole: z.enum(['customer', 'expert', 'business', 'craftsman']).optional(),
   isAdmin: z.boolean().optional(),
-  adminPermissions: z.array(z.string()).optional(),
+  adminPermissions: z.array(z.enum(ADMIN_PERMISSIONS)).optional(),
   planId: z.string().uuid().nullable().optional(),
 });
 
@@ -197,8 +197,7 @@ export const updateSettingsSchema = z.object({
     .array(z.string())
     .optional()
     .refine(
-      (arr) =>
-        !arr || arr.every((h) => (MANAGED_SIDEBAR_HREFS as readonly string[]).includes(h)),
+      (arr) => !arr || arr.every((h) => (MANAGED_SIDEBAR_HREFS as readonly string[]).includes(h)),
       { message: 'sidebarHiddenHrefs must only contain managed sidebar paths' },
     ),
   paymentMethodsEnabled: z.record(z.string(), z.boolean()).optional(),
@@ -214,6 +213,11 @@ export const rejectManualInstapayDepositSchema = z.object({
 
 export const completeManualInstapayWithdrawalSchema = z.object({
   proofUploadId: z.string().uuid(),
+});
+
+export const completePaymobWithdrawalSchema = z.object({
+  providerReference: z.string().max(255).optional(),
+  note: z.string().max(1000).optional(),
 });
 
 export const rejectManualInstapayWithdrawalSchema = z.object({
@@ -236,5 +240,10 @@ export type RejectServiceInput = z.infer<typeof rejectServiceSchema>;
 export type UpdateSettingsInput = z.infer<typeof updateSettingsSchema>;
 export type ApproveManualInstapayDepositInput = z.infer<typeof approveManualInstapayDepositSchema>;
 export type RejectManualInstapayDepositInput = z.infer<typeof rejectManualInstapayDepositSchema>;
-export type CompleteManualInstapayWithdrawalInput = z.infer<typeof completeManualInstapayWithdrawalSchema>;
-export type RejectManualInstapayWithdrawalInput = z.infer<typeof rejectManualInstapayWithdrawalSchema>;
+export type CompleteManualInstapayWithdrawalInput = z.infer<
+  typeof completeManualInstapayWithdrawalSchema
+>;
+export type CompletePaymobWithdrawalInput = z.infer<typeof completePaymobWithdrawalSchema>;
+export type RejectManualInstapayWithdrawalInput = z.infer<
+  typeof rejectManualInstapayWithdrawalSchema
+>;

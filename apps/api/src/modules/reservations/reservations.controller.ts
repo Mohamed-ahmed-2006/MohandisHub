@@ -35,7 +35,10 @@ function reservationAdminRole(user: { role?: string; isAdmin?: boolean }): strin
   return user.isAdmin ? 'admin' : (user.role ?? 'customer');
 }
 
-function requestIp(req: { ip?: string | undefined; socket?: { remoteAddress?: string | undefined } }): string | null {
+function requestIp(req: {
+  ip?: string | undefined;
+  socket?: { remoteAddress?: string | undefined };
+}): string | null {
   return req.ip ?? req.socket?.remoteAddress ?? null;
 }
 
@@ -511,7 +514,11 @@ const reconcileReservation = asyncHandler(async (req, res) => {
       message: 'reservationId is required.',
     });
   }
-  const data = await svc.reconcileReservationMoney(user.id, reservationAdminRole(user), reservationId);
+  const data = await svc.reconcileReservationMoney(
+    user.id,
+    reservationAdminRole(user),
+    reservationId,
+  );
   await logAudit({
     actorId: user.id,
     action: 'admin.reservation.reconcile',

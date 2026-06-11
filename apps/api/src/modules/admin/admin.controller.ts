@@ -23,6 +23,7 @@ import type {
   UpdateAppSettingsBody,
 } from '@mohandishub/shared';
 
+import { hasAdminPermission } from '../../middleware/require-role.js';
 import { asyncHandler } from '../../utils/async-handler.js';
 import { HttpError } from '../../utils/http-error.js';
 import { logAudit } from '../audit/audit.service.js';
@@ -37,6 +38,7 @@ import type {
   ApproveManualInstapayDepositInput,
   ChangeUserEmailInput,
   CompleteManualInstapayWithdrawalInput,
+  CompletePaymobWithdrawalInput,
   CreateCategoryInput,
   CreatePlanInput,
   RejectManualInstapayDepositInput,
@@ -56,6 +58,7 @@ import {
   approveManualInstapayDepositSchema,
   changeUserEmailSchema,
   completeManualInstapayWithdrawalSchema,
+  completePaymobWithdrawalSchema,
   createCategorySchema,
   createPlanSchema,
   rejectManualInstapayDepositSchema,
@@ -90,7 +93,10 @@ function getAdminId(req: { user?: { id: string } | undefined }): string {
   return req.user.id;
 }
 
-function requestIp(req: { ip?: string | undefined; socket?: { remoteAddress?: string | undefined } }): string | null {
+function requestIp(req: {
+  ip?: string | undefined;
+  socket?: { remoteAddress?: string | undefined };
+}): string | null {
   return req.ip ?? req.socket?.remoteAddress ?? null;
 }
 
@@ -126,10 +132,7 @@ function hasPermission(
   req: { user?: { isAdmin?: boolean; adminPermissions?: string[] } },
   permission: string,
 ): boolean {
-  const user = req.user;
-  if (!user?.isAdmin) return false;
-  if (!user.adminPermissions || user.adminPermissions.length === 0) return true;
-  return user.adminPermissions.includes(permission);
+  return req.user ? hasAdminPermission(req.user, permission) : false;
 }
 
 function parseValidation<T>(
@@ -248,18 +251,28 @@ const getUserActivity = asyncHandler(async (req, res) => {
 
   const page = parseInt(req.query.page as string, 10) || 1;
   const limit = Math.min(parseInt(req.query.limit as string, 10) || 10, 50);
-  const result = await adminService.getUserActivity(
-    req.params.id!,
-    parsedType.data,
-    page,
-    limit,
-  );
+  const result = await adminService.getUserActivity(req.params.id!, parsedType.data, page, limit);
   const response: ApiSuccessBody<typeof result> = { ok: true, data: result };
   res.json(response);
 });
 
 const updateUser = asyncHandler(async (req, res) => {
   const input = parseValidation<UpdateUserInput>(updateUserSchema, req.body);
+  const changesAdminPower = input.isAdmin !== undefined || input.adminPermissions !== undefined;
+  if (changesAdminPower && !hasPermission(req, 'super_admin')) {
+    throw new HttpError({
+      statusCode: 403,
+      code: 'SUPER_ADMIN_REQUIRED',
+      message: 'Only a super admin can change admin status or admin permissions.',
+    });
+  }
+  if (changesAdminPower && req.params.id === getAdminId(req)) {
+    throw new HttpError({
+      statusCode: 403,
+      code: 'SELF_ADMIN_CHANGE_FORBIDDEN',
+      message: 'Super admins cannot change their own admin status or permissions.',
+    });
+  }
   const user = await adminService.updateUser(req.params.id!, input);
   const changedFields = definedKeys(input as Record<string, unknown>);
   if (changedFields.length > 0) {
@@ -318,7 +331,10 @@ const verifyEmail = asyncHandler(async (req, res) => {
 });
 
 const updateUserExpertProfile = asyncHandler(async (req, res) => {
-  const input = parseValidation<UpdateExpertProfileByAdminInput>(updateExpertProfileSchema, req.body);
+  const input = parseValidation<UpdateExpertProfileByAdminInput>(
+    updateExpertProfileSchema,
+    req.body,
+  );
   const profile = await adminService.updateExpertProfileAsAdmin(req.params.id!, input);
   const response: ApiSuccessBody<ExpertProfile> = { ok: true, data: profile };
   res.json(response);
@@ -494,11 +510,17 @@ const approveManualInstapayDeposit = asyncHandler(async (req, res) => {
     req.body,
   );
   const row = await adminService.approveManualInstapayDeposit(req.params.id!, adminId, input);
-  await logAdminAction(req, 'admin.wallet.manual_deposit.approve', 'manual_deposit', req.params.id!, {
-    creditedAmountEgp: input.creditedAmountEgp,
-    userId: row.userId,
-    status: row.status,
-  });
+  await logAdminAction(
+    req,
+    'admin.wallet.manual_deposit.approve',
+    'manual_deposit',
+    req.params.id!,
+    {
+      creditedAmountEgp: input.creditedAmountEgp,
+      userId: row.userId,
+      status: row.status,
+    },
+  );
   res.json({ ok: true, data: row });
 });
 
@@ -509,11 +531,17 @@ const rejectManualInstapayDeposit = asyncHandler(async (req, res) => {
     req.body,
   );
   const row = await adminService.rejectManualInstapayDeposit(req.params.id!, adminId, input);
-  await logAdminAction(req, 'admin.wallet.manual_deposit.reject', 'manual_deposit', req.params.id!, {
-    reason: input.reason,
-    userId: row.userId,
-    status: row.status,
-  });
+  await logAdminAction(
+    req,
+    'admin.wallet.manual_deposit.reject',
+    'manual_deposit',
+    req.params.id!,
+    {
+      reason: input.reason,
+      userId: row.userId,
+      status: row.status,
+    },
+  );
   res.json({ ok: true, data: row });
 });
 
@@ -536,11 +564,38 @@ const completeManualInstapayWithdrawal = asyncHandler(async (req, res) => {
     req.body,
   );
   const row = await adminService.completeManualInstapayWithdrawal(req.params.id!, adminId, input);
-  await logAdminAction(req, 'admin.wallet.manual_withdrawal.complete', 'manual_withdrawal', req.params.id!, {
-    proofUploadId: input.proofUploadId,
-    userId: row.userId,
-    status: row.status,
-  });
+  await logAdminAction(
+    req,
+    'admin.wallet.manual_withdrawal.complete',
+    'manual_withdrawal',
+    req.params.id!,
+    {
+      proofUploadId: input.proofUploadId,
+      userId: row.userId,
+      status: row.status,
+    },
+  );
+  res.json({ ok: true, data: row });
+});
+
+const completePaymobWithdrawal = asyncHandler(async (req, res) => {
+  const adminId = getAdminId(req);
+  const input = parseValidation<CompletePaymobWithdrawalInput>(
+    completePaymobWithdrawalSchema,
+    req.body,
+  );
+  const row = await adminService.completePaymobWithdrawal(req.params.id!, adminId, input);
+  await logAdminAction(
+    req,
+    'admin.wallet.paymob_withdrawal.complete',
+    'withdrawal',
+    req.params.id!,
+    {
+      providerReference: input.providerReference ?? null,
+      userId: row.userId,
+      status: row.status,
+    },
+  );
   res.json({ ok: true, data: row });
 });
 
@@ -551,11 +606,17 @@ const rejectManualInstapayWithdrawal = asyncHandler(async (req, res) => {
     req.body,
   );
   const row = await adminService.rejectManualInstapayWithdrawal(req.params.id!, adminId, input);
-  await logAdminAction(req, 'admin.wallet.manual_withdrawal.reject', 'manual_withdrawal', req.params.id!, {
-    reason: input.reason,
-    userId: row.userId,
-    status: row.status,
-  });
+  await logAdminAction(
+    req,
+    'admin.wallet.manual_withdrawal.reject',
+    'manual_withdrawal',
+    req.params.id!,
+    {
+      reason: input.reason,
+      userId: row.userId,
+      status: row.status,
+    },
+  );
   res.json({ ok: true, data: row });
 });
 
@@ -700,9 +761,13 @@ const updateSettings = asyncHandler(async (req, res) => {
   await logAdminAction(req, 'admin.settings.update', 'app_settings', settings.id, {
     changedFields,
     before: before
-      ? Object.fromEntries(changedFields.map((key) => [key, before[key as keyof AppSettings] ?? null]))
+      ? Object.fromEntries(
+          changedFields.map((key) => [key, before[key as keyof AppSettings] ?? null]),
+        )
       : null,
-    after: Object.fromEntries(changedFields.map((key) => [key, settings[key as keyof AppSettings] ?? null])),
+    after: Object.fromEntries(
+      changedFields.map((key) => [key, settings[key as keyof AppSettings] ?? null]),
+    ),
   });
   const response: ApiSuccessBody<AppSettings> = { ok: true, data: settings };
   res.json(response);
@@ -785,7 +850,11 @@ const updateSupportTicket = asyncHandler(async (req, res) => {
   const ticketId = req.params.id as string;
   const body = (req.body || {}) as { status?: string; assignedTo?: string | null };
   if (body.status != null) {
-    await supportService.updateStatus(ticketId, body.status as 'open' | 'in_progress' | 'waiting_reply' | 'resolved' | 'closed', adminId);
+    await supportService.updateStatus(
+      ticketId,
+      body.status as 'open' | 'in_progress' | 'waiting_reply' | 'resolved' | 'closed',
+      adminId,
+    );
   }
   if (body.assignedTo !== undefined) {
     await supportService.assign(ticketId, body.assignedTo ?? null, adminId);
@@ -803,9 +872,15 @@ const deleteSupportTicket = asyncHandler(async (req, res) => {
   const ticketId = req.params.id as string;
   const deleted = await supportService.deleteTicket(ticketId);
   if (!deleted) {
-    throw new HttpError({ statusCode: 404, code: 'TICKET_NOT_FOUND', message: 'Ticket not found.' });
+    throw new HttpError({
+      statusCode: 404,
+      code: 'TICKET_NOT_FOUND',
+      message: 'Ticket not found.',
+    });
   }
-  await logAdminAction(req, 'admin.support_ticket.delete', 'support_ticket', ticketId, { deleted: true });
+  await logAdminAction(req, 'admin.support_ticket.delete', 'support_ticket', ticketId, {
+    deleted: true,
+  });
   res.json({ ok: true, data: { id: ticketId } });
 });
 
@@ -840,6 +915,7 @@ export const adminController = {
   rejectManualInstapayDeposit,
   listManualInstapayWithdrawals,
   completeManualInstapayWithdrawal,
+  completePaymobWithdrawal,
   rejectManualInstapayWithdrawal,
   reverseTransaction,
   listServices,

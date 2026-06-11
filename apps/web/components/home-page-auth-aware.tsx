@@ -55,7 +55,9 @@ export function HomePageNavAuth({ locale, dictionary }: BaseProps) {
     return (
       <nav className="home-page-nav-actions" aria-busy={restoring}>
         {restoring ? (
-          <span className="home-page-session-restoring">{dictionary.auth.common.sessionRestoring}</span>
+          <span className="home-page-session-restoring">
+            {dictionary.auth.common.sessionRestoring}
+          </span>
         ) : (
           guestNav(locale, dictionary)
         )}

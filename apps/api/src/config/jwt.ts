@@ -2,7 +2,7 @@
 // JWT helpers — sign / verify access & refresh tokens
 // ---------------------------------------------------------------------------
 
-import { createHash, randomBytes } from 'node:crypto';
+import { createHmac, randomBytes } from 'node:crypto';
 
 import type { AccessTokenPayload } from '@mohandishub/shared';
 import jwt from 'jsonwebtoken';
@@ -25,8 +25,9 @@ export const verifyAccessToken = (token: string): AccessTokenPayload =>
 /** Generate a cryptographically-random opaque refresh token. */
 export const generateRefreshToken = (): string => randomBytes(48).toString('base64url');
 
-/** Hash a raw refresh token with SHA-256 for safe DB storage. */
-export const hashToken = (raw: string): string => createHash('sha256').update(raw).digest('hex');
+/** Hash an opaque session/reset token with a server secret before DB storage. */
+export const hashToken = (raw: string): string =>
+  createHmac('sha256', env.JWT_REFRESH_SECRET).update(raw).digest('hex');
 
 /** Get an expiry date for refresh tokens. */
 export const getRefreshTokenExpiry = (): Date => {

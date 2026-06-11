@@ -1,5 +1,6 @@
 import type { ApiSuccessBody } from '@mohandishub/shared';
 
+import { fetchWithAuthRetry } from '@/lib/auth/fetch-with-auth-retry';
 import { getApiBaseUrl } from '@/lib/env';
 
 export type ActivityItem = {
@@ -26,9 +27,13 @@ export async function getMyActivity(
   page = 1,
   limit = 20,
 ): Promise<ActivityListResponse> {
-  const res = await fetch(`${getApiBaseUrl()}/api/users/me/activity?page=${page}&limit=${limit}`, {
-    headers: { Authorization: `Bearer ${accessToken}` },
-  });
+  const res = await fetchWithAuthRetry(
+    `${getApiBaseUrl()}/api/users/me/activity?page=${page}&limit=${limit}`,
+    {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    },
+    accessToken,
+  );
   if (!res.ok) throw new Error('Failed to fetch activity');
   const json = (await res.json()) as ApiSuccessBody<ActivityListResponse>;
   return json.data;

@@ -284,7 +284,11 @@ export const AdminRetentionTab = ({ dictionary, accessToken, refreshSession }: P
   const runSweep = async (dryRun: boolean) => {
     setRunMsg(null);
     try {
-      const res = await adminApiClient.postRetentionRun(accessToken, { dryRun }, { refreshSession });
+      const res = await adminApiClient.postRetentionRun(
+        accessToken,
+        { dryRun },
+        { refreshSession },
+      );
       setRunMsg(JSON.stringify(res, null, 2));
       await load();
     } catch (e: unknown) {
@@ -401,7 +405,12 @@ export const AdminRetentionTab = ({ dictionary, accessToken, refreshSession }: P
           {tr('Next scheduled worker sweep is dry-run only', 'المسح القادم تجريبي فقط')}
         </label>
         <div style={{ marginTop: 12, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          <button type="button" className="admin-btn" disabled={saving} onClick={() => void savePolicy()}>
+          <button
+            type="button"
+            className="admin-btn"
+            disabled={saving}
+            onClick={() => void savePolicy()}
+          >
             {tr('Save policy', 'حفظ السياسة')}
           </button>
           <button type="button" className="admin-btn" onClick={() => void runSweep(true)}>
@@ -419,14 +428,19 @@ export const AdminRetentionTab = ({ dictionary, accessToken, refreshSession }: P
       </section>
 
       <section className="admin-settings-section">
-        <h3 className="admin-settings-section-title">{tr('Categories (env = ceiling)', 'الفئات')}</h3>
+        <h3 className="admin-settings-section-title">
+          {tr('Categories (env = ceiling)', 'الفئات')}
+        </h3>
         <p className="admin-settings-desc admin-settings-desc--block admin-retention-section-hint">
           {tr(
             'Each row is one database/storage cleanup job. Start with conservative values and one category at a time if unsure.',
             'كل صف يمثل نوع حذف. ابدأ بقيم حذرة وفعّل فئة واحدة إن لم تكن متأكداً.',
           )}
         </p>
-        <table className="admin-retention-table" style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
+        <table
+          className="admin-retention-table"
+          style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}
+        >
           <thead>
             <tr>
               <th style={{ textAlign: 'left', padding: 4 }}>{tr('Category', 'الفئة')}</th>
@@ -466,7 +480,9 @@ export const AdminRetentionTab = ({ dictionary, accessToken, refreshSession }: P
                       className="admin-settings-input admin-settings-input--number"
                       style={{ width: 88 }}
                       value={cfg.value}
-                      onChange={(e) => setCategory(c.key, { value: parseInt(e.target.value, 10) || 0 })}
+                      onChange={(e) =>
+                        setCategory(c.key, { value: parseInt(e.target.value, 10) || 0 })
+                      }
                     />
                   </td>
                   <td style={{ padding: 4 }}>
@@ -481,10 +497,10 @@ export const AdminRetentionTab = ({ dictionary, accessToken, refreshSession }: P
                       <option value="days">days</option>
                     </select>
                   </td>
-                  <td style={{ textAlign: 'right', padding: 4 }}>
-                    {effectiveHours[c.key] ?? '—'}
+                  <td style={{ textAlign: 'right', padding: 4 }}>{effectiveHours[c.key] ?? '—'}</td>
+                  <td style={{ padding: 4, fontSize: 12 }}>
+                    {envVal !== undefined ? String(envVal) : '—'}
                   </td>
-                  <td style={{ padding: 4, fontSize: 12 }}>{envVal !== undefined ? String(envVal) : '—'}</td>
                 </tr>
               );
             })}
@@ -516,7 +532,12 @@ export const AdminRetentionTab = ({ dictionary, accessToken, refreshSession }: P
             onChange={(e) => setAlertsField('alertEmail', e.target.value)}
           />
         </div>
-        <button type="button" className="admin-btn" disabled={saving} onClick={() => void saveAlerts()}>
+        <button
+          type="button"
+          className="admin-btn"
+          disabled={saving}
+          onClick={() => void saveAlerts()}
+        >
           {tr('Save alerts', 'حفظ')}
         </button>
       </section>

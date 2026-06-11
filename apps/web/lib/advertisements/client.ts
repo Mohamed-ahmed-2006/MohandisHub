@@ -1,3 +1,4 @@
+import { fetchWithAuthRetry } from '@/lib/auth/fetch-with-auth-retry';
 import { getApiBaseUrl } from '@/lib/env';
 
 type ApiSuccess<T> = { ok: true; data: T };
@@ -47,15 +48,19 @@ type ApiOpts = {
 };
 
 async function apiReq<T>(path: string, opts: ApiOpts): Promise<T> {
-  const response = await fetch(`${getApiBaseUrl()}${path}`, {
-    method: opts.method ?? 'GET',
-    credentials: 'include',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${opts.token}`,
+  const response = await fetchWithAuthRetry(
+    `${getApiBaseUrl()}${path}`,
+    {
+      method: opts.method ?? 'GET',
+      credentials: 'include',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${opts.token}`,
+      },
+      ...(opts.body !== undefined ? { body: JSON.stringify(opts.body) } : {}),
     },
-    ...(opts.body !== undefined ? { body: JSON.stringify(opts.body) } : {}),
-  });
+    opts.token,
+  );
   if (!response.ok) {
     if (response.status === 404 && opts.allow404As !== undefined) {
       return opts.allow404As as T;
@@ -71,7 +76,10 @@ async function apiReq<T>(path: string, opts: ApiOpts): Promise<T> {
 }
 
 export const advertisementsApiClient = {
-  getActiveAds: (token: string, params?: { locale?: string; city?: string; country?: string; role?: string }) => {
+  getActiveAds: (
+    token: string,
+    params?: { locale?: string; city?: string; country?: string; role?: string },
+  ) => {
     const qs = new URLSearchParams();
     if (params?.locale) qs.set('locale', params.locale);
     if (params?.city) qs.set('city', params.city);
@@ -139,9 +147,22 @@ export const advertisementsApiClient = {
     token: string,
     adId: string,
     body: { status: 'active' | 'paused_by_admin' | 'cancelled'; reason?: string },
-  ) => apiReq<Advertisement>(`/api/advertisements/admin/${adId}/status`, { method: 'PUT', token, body }),
-  adminSchedule: (token: string, adId: string, body: { startsAt?: string | null; expiresAt?: string | null; reason?: string }) =>
-    apiReq<Advertisement>(`/api/advertisements/admin/${adId}/schedule`, { method: 'POST', token, body }),
+  ) =>
+    apiReq<Advertisement>(`/api/advertisements/admin/${adId}/status`, {
+      method: 'PUT',
+      token,
+      body,
+    }),
+  adminSchedule: (
+    token: string,
+    adId: string,
+    body: { startsAt?: string | null; expiresAt?: string | null; reason?: string },
+  ) =>
+    apiReq<Advertisement>(`/api/advertisements/admin/${adId}/schedule`, {
+      method: 'POST',
+      token,
+      body,
+    }),
   adminPricingOverride: (token: string, adId: string, amount: number) =>
     apiReq<Advertisement>(`/api/advertisements/admin/${adId}/pricing`, {
       method: 'PUT',

@@ -245,14 +245,22 @@ export const CustomerDashboard = ({
         : undefined;
 
     if (title.length < 3) {
-      setError(tr('Please enter a title with at least 3 characters.', 'يرجى إدخال عنوان لا يقل عن 3 أحرف.'));
+      setError(
+        tr(
+          'Please enter a title with at least 3 characters.',
+          'يرجى إدخال عنوان لا يقل عن 3 أحرف.',
+        ),
+      );
       setSaving(false);
       return;
     }
 
     if (description.length < 10) {
       setError(
-        tr('Please enter a description with at least 10 characters.', 'يرجى إدخال وصف لا يقل عن 10 أحرف.'),
+        tr(
+          'Please enter a description with at least 10 characters.',
+          'يرجى إدخال وصف لا يقل عن 10 أحرف.',
+        ),
       );
       setSaving(false);
       return;
@@ -277,7 +285,9 @@ export const CustomerDashboard = ({
     }
 
     if (timelineDaysValue && timelineDays == null) {
-      setError(tr('Please enter a timeline between 1 and 365 days.', 'يرجى إدخال مدة بين 1 و 365 يومًا.'));
+      setError(
+        tr('Please enter a timeline between 1 and 365 days.', 'يرجى إدخال مدة بين 1 و 365 يومًا.'),
+      );
       setSaving(false);
       return;
     }
@@ -313,7 +323,10 @@ export const CustomerDashboard = ({
       setUploadedFiles([]);
       setError(null);
       setFieldErrors(null);
-      addToast(dictionary.common.success ?? 'Success', d.needCreated ?? 'Need created. Experts can now submit bids.');
+      addToast(
+        dictionary.common.success ?? 'Success',
+        d.needCreated ?? 'Need created. Experts can now submit bids.',
+      );
       void loadNeeds();
       void loadPlanUsage();
     } catch (err) {
@@ -450,8 +463,7 @@ export const CustomerDashboard = ({
                   <p className="dashboard-plan-usage-metered">{planDict.usageMeteredTitle}</p>
                   <ul className="dashboard-plan-usage-quota-list">
                     {planUsage.usageQuotas.map((q) => {
-                      const label =
-                        planDict[`quotaFeature_${q.featureKey}`] ?? q.featureKey;
+                      const label = planDict[`quotaFeature_${q.featureKey}`] ?? q.featureKey;
                       const ends = new Date(q.periodEndsAt).toLocaleDateString(
                         locale === 'ar' ? 'ar-EG' : undefined,
                         { year: 'numeric', month: 'short', day: 'numeric' },
@@ -463,9 +475,7 @@ export const CustomerDashboard = ({
                         .replace('{max}', String(q.maxPerPeriod))
                         .replace('{remaining}', String(q.remaining))
                         .replace('{ends}', ends);
-                      return (
-                        <li key={q.featureKey}>{row}</li>
-                      );
+                      return <li key={q.featureKey}>{row}</li>;
                     })}
                   </ul>
                 </>
@@ -512,141 +522,142 @@ export const CustomerDashboard = ({
               )}
               <div className="dashboard-need-main">
                 <section className="dashboard-need-card">
-                  <h4 className="dashboard-need-card-title">{tr('Need details', 'تفاصيل الحاجة')}</h4>
+                  <h4 className="dashboard-need-card-title">
+                    {tr('Need details', 'تفاصيل الحاجة')}
+                  </h4>
                   <div className="dashboard-form-grid">
-                      <div className="dashboard-form-field dashboard-form-field--full">
-                        <label className="dashboard-form-label">
-                          {d.titlePlaceholder ?? 'Title'}
-                        </label>
-                        <input
-                          name="title"
-                          className="dashboard-input"
-                          placeholder={d.titlePlaceholder ?? 'Title'}
-                          minLength={3}
-                          required
-                        />
-                      </div>
-                      <div className="dashboard-form-field dashboard-form-field--full">
-                        <label className="dashboard-form-label">
-                          {d.descPlaceholder ?? 'Describe what you need...'}
-                        </label>
-                        <textarea
-                          name="description"
-                          className="dashboard-textarea dashboard-textarea--tall"
-                          placeholder={d.descPlaceholder ?? 'Describe what you need...'}
-                          minLength={10}
-                          required
-                        />
-                      </div>
-                      <div className="dashboard-form-field">
-                        <label className="dashboard-form-label">
-                          {d.anyCategory ?? 'Category'}
-                        </label>
-                        <select
-                          name="categoryId"
-                          className="dashboard-select dashboard-select--modal"
-                          required
-                        >
-                          <option value="">{d.chooseCategory ?? tr('Choose category', 'اختر الفئة')}</option>
-                          {categories.map((c) => (
-                            <option key={c.id} value={c.id}>
-                              {categoryName(c)}
+                    <div className="dashboard-form-field dashboard-form-field--full">
+                      <label className="dashboard-form-label">
+                        {d.titlePlaceholder ?? 'Title'}
+                      </label>
+                      <input
+                        name="title"
+                        className="dashboard-input"
+                        placeholder={d.titlePlaceholder ?? 'Title'}
+                        minLength={3}
+                        required
+                      />
+                    </div>
+                    <div className="dashboard-form-field dashboard-form-field--full">
+                      <label className="dashboard-form-label">
+                        {d.descPlaceholder ?? 'Describe what you need...'}
+                      </label>
+                      <textarea
+                        name="description"
+                        className="dashboard-textarea dashboard-textarea--tall"
+                        placeholder={d.descPlaceholder ?? 'Describe what you need...'}
+                        minLength={10}
+                        required
+                      />
+                    </div>
+                    <div className="dashboard-form-field">
+                      <label className="dashboard-form-label">{d.anyCategory ?? 'Category'}</label>
+                      <select
+                        name="categoryId"
+                        className="dashboard-select dashboard-select--modal"
+                        required
+                      >
+                        <option value="">
+                          {d.chooseCategory ?? tr('Choose category', 'اختر الفئة')}
+                        </option>
+                        {categories.map((c) => (
+                          <option key={c.id} value={c.id}>
+                            {categoryName(c)}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="dashboard-form-field">
+                      <label className="dashboard-form-label">
+                        {d.locationType ?? tr('Location', 'الموقع')}
+                      </label>
+                      <select name="location" className="dashboard-select dashboard-select--modal">
+                        <option value="">{d.chooseLocation ?? tr('Choose...', 'اختر...')}</option>
+                        <option value="Online">
+                          {d.locationOnlineRemote ?? tr('Online / Remote', 'أونلاين / عن بعد')}
+                        </option>
+                        {cities
+                          .filter((c) => c !== 'Online' && c !== 'Remote')
+                          .map((c) => (
+                            <option key={c} value={c}>
+                              {c}
                             </option>
                           ))}
-                        </select>
-                      </div>
+                      </select>
+                    </div>
+                    <div className="dashboard-form-field dashboard-form-field--full">
+                      <label className="dashboard-form-label">{tr('Country', 'الدولة')}</label>
+                      <input
+                        name="country"
+                        className="dashboard-input"
+                        placeholder={tr('Country', 'الدولة')}
+                        value={postNeedCountry}
+                        onChange={(e) => setPostNeedCountry(e.target.value)}
+                        disabled
+                      />
+                    </div>
+                    {hourlyPricingEnabled ? (
                       <div className="dashboard-form-field">
                         <label className="dashboard-form-label">
-                          {d.locationType ?? tr('Location', 'الموقع')}
+                          {d.budgetType ?? tr('Budget type', 'نوع الميزانية')}
                         </label>
                         <select
-                          name="location"
+                          name="budgetType"
                           className="dashboard-select dashboard-select--modal"
+                          required
                         >
-                          <option value="">{d.chooseLocation ?? tr('Choose...', 'اختر...')}</option>
-                          <option value="Online">{d.locationOnlineRemote ?? tr('Online / Remote', 'أونلاين / عن بعد')}</option>
-                          {cities
-                            .filter((c) => c !== 'Online' && c !== 'Remote')
-                            .map((c) => (
-                              <option key={c} value={c}>
-                                {c}
-                              </option>
-                            ))}
+                          <option value="fixed">{d.fixed ?? 'Fixed'}</option>
+                          <option value="hourly">{d.hourly ?? 'Hourly'}</option>
                         </select>
                       </div>
-                      <div className="dashboard-form-field dashboard-form-field--full">
-                        <label className="dashboard-form-label">{tr('Country', 'الدولة')}</label>
+                    ) : (
+                      <input type="hidden" name="budgetType" value="fixed" />
+                    )}
+                    <div className="dashboard-form-field">
+                      <label className="dashboard-form-label">
+                        {d.budgetPlaceholder ?? 'Budget amount'}
+                      </label>
+                      <input
+                        name="budgetAmount"
+                        type="number"
+                        min="1"
+                        step="0.01"
+                        className="dashboard-input"
+                        placeholder={d.budgetPlaceholder ?? 'Budget amount'}
+                        required
+                      />
+                    </div>
+                    <div className="dashboard-form-field">
+                      <label className="dashboard-form-label">
+                        {d.timelinePlaceholder ?? 'Timeline (days)'}
+                      </label>
+                      <input
+                        name="timelineDays"
+                        type="number"
+                        min="1"
+                        max="365"
+                        className="dashboard-input"
+                        placeholder={d.timelinePlaceholder ?? 'Timeline (days)'}
+                      />
+                    </div>
+                    <div className="dashboard-form-field dashboard-form-field--full">
+                      <label className="dashboard-form-label">
+                        {dictionary.common.upload} /{' '}
+                        {d.linkOrScreenshotPlaceholder ?? 'Link (optional)'}
+                      </label>
+                      <p className="dashboard-form-hint dashboard-form-hint--spaced">
+                        {tr(
+                          'Up to 5 images or 1 video. You can remove any from the list below.',
+                          'حتى 5 صور أو فيديو واحد. يمكنك إزالة أي ملف من القائمة أدناه.',
+                        )}
+                      </p>
+                      <div className="dashboard-form-upload-row">
                         <input
-                          name="country"
-                          className="dashboard-input"
-                          placeholder={tr('Country', 'الدولة')}
-                          value={postNeedCountry}
-                          onChange={(e) => setPostNeedCountry(e.target.value)}
-                          disabled
-                        />
-                      </div>
-                      {hourlyPricingEnabled ? (
-                        <div className="dashboard-form-field">
-                          <label className="dashboard-form-label">
-                            {d.budgetType ?? tr('Budget type', 'نوع الميزانية')}
-                          </label>
-                          <select
-                            name="budgetType"
-                            className="dashboard-select dashboard-select--modal"
-                            required
-                          >
-                            <option value="fixed">{d.fixed ?? 'Fixed'}</option>
-                            <option value="hourly">{d.hourly ?? 'Hourly'}</option>
-                          </select>
-                        </div>
-                      ) : (
-                        <input type="hidden" name="budgetType" value="fixed" />
-                      )}
-                      <div className="dashboard-form-field">
-                        <label className="dashboard-form-label">
-                          {d.budgetPlaceholder ?? 'Budget amount'}
-                        </label>
-                        <input
-                          name="budgetAmount"
-                          type="number"
-                          min="1"
-                          step="0.01"
-                          className="dashboard-input"
-                          placeholder={d.budgetPlaceholder ?? 'Budget amount'}
-                          required
-                        />
-                      </div>
-                      <div className="dashboard-form-field">
-                        <label className="dashboard-form-label">
-                          {d.timelinePlaceholder ?? 'Timeline (days)'}
-                        </label>
-                        <input
-                          name="timelineDays"
-                          type="number"
-                          min="1"
-                          max="365"
-                          className="dashboard-input"
-                          placeholder={d.timelinePlaceholder ?? 'Timeline (days)'}
-                        />
-                      </div>
-                      <div className="dashboard-form-field dashboard-form-field--full">
-                        <label className="dashboard-form-label">
-                          {dictionary.common.upload} /{' '}
-                          {d.linkOrScreenshotPlaceholder ?? 'Link (optional)'}
-                        </label>
-                        <p className="dashboard-form-hint dashboard-form-hint--spaced">
-                          {tr(
-                            'Up to 5 images or 1 video. You can remove any from the list below.',
-                            'حتى 5 صور أو فيديو واحد. يمكنك إزالة أي ملف من القائمة أدناه.',
-                          )}
-                        </p>
-                        <div className="dashboard-form-upload-row">
-                          <input
-                            type="file"
-                            accept="image/jpeg,image/png,image/webp,application/pdf,video/mp4,video/webm"
-                            className="dashboard-input dashboard-input--file"
-                            onChange={(e) => {
-                              void (async () => {
+                          type="file"
+                          accept="image/jpeg,image/png,image/webp,application/pdf,video/mp4,video/webm"
+                          className="dashboard-input dashboard-input--file"
+                          onChange={(e) => {
+                            void (async () => {
                               const file = e.target.files?.[0];
                               if (!file) return;
                               const fileIsVideo = isVideoFile(file);
@@ -678,7 +689,10 @@ export const CustomerDashboard = ({
                               }
                               if (!fileIsVideo && uploadedFiles.length >= maxImages) {
                                 setError(
-                                  tr(`Maximum ${maxImages} images.`, `الحد الأقصى ${maxImages} صور.`),
+                                  tr(
+                                    `Maximum ${maxImages} images.`,
+                                    `الحد الأقصى ${maxImages} صور.`,
+                                  ),
                                 );
                                 e.target.value = '';
                                 return;
@@ -702,56 +716,65 @@ export const CustomerDashboard = ({
                                   setUploadedFiles((prev) => [...prev, item].slice(-maxImages));
                                 }
                               } catch (err) {
-                                setError(err instanceof Error ? err.message : tr('Upload failed', 'فشل رفع الملف'));
+                                setError(
+                                  err instanceof Error
+                                    ? err.message
+                                    : tr('Upload failed', 'فشل رفع الملف'),
+                                );
                               } finally {
                                 setUploading(false);
                                 e.target.value = '';
                               }
-                              })();
-                            }}
-                            disabled={uploading}
-                          />
-                          <input
-                            name="referenceUrl"
-                            type="url"
-                            className="dashboard-input"
-                            placeholder={
-                              d.linkOrScreenshotPlaceholder ?? tr('Or paste link (optional)', 'أو الصق رابطًا (اختياري)')
-                            }
-                            defaultValue=""
-                          />
-                        </div>
-                        {uploadedFiles.length > 0 && (
-                          <ul className="dashboard-upload-list">
-                            {uploadedFiles.map((item) => (
-                              <li key={item.url} className="dashboard-upload-item">
-                                <span className="dashboard-upload-name" title={item.url}>
-                                  {item.displayName}
-                                </span>
-                                <button
-                                  type="button"
-                                  className="dashboard-link-btn"
-                                  onClick={() =>
-                                    setUploadedFiles((prev) =>
-                                      prev.filter((f) => f.url !== item.url),
-                                    )
-                                  }
-                                >
-                                  {d.remove ?? 'Remove'}
-                                </button>
-                              </li>
-                            ))}
-                          </ul>
-                        )}
+                            })();
+                          }}
+                          disabled={uploading}
+                        />
+                        <input
+                          name="referenceUrl"
+                          type="url"
+                          className="dashboard-input"
+                          placeholder={
+                            d.linkOrScreenshotPlaceholder ??
+                            tr('Or paste link (optional)', 'أو الصق رابطًا (اختياري)')
+                          }
+                          defaultValue=""
+                        />
                       </div>
+                      {uploadedFiles.length > 0 && (
+                        <ul className="dashboard-upload-list">
+                          {uploadedFiles.map((item) => (
+                            <li key={item.url} className="dashboard-upload-item">
+                              <span className="dashboard-upload-name" title={item.url}>
+                                {item.displayName}
+                              </span>
+                              <button
+                                type="button"
+                                className="dashboard-link-btn"
+                                onClick={() =>
+                                  setUploadedFiles((prev) => prev.filter((f) => f.url !== item.url))
+                                }
+                              >
+                                {d.remove ?? 'Remove'}
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
                     </div>
-                  </section>
+                  </div>
+                </section>
                 <section className="dashboard-need-card dashboard-need-card--summary">
                   <h4 className="dashboard-need-card-title">
                     {d.beforePublishing ?? tr('Before publishing', 'قبل النشر')}
                   </h4>
                   <ul className="dashboard-need-checklist">
-                    <li>{d.checklistItem1 ?? tr('State deliverables and constraints clearly.', 'حدد المخرجات والقيود بوضوح.')}</li>
+                    <li>
+                      {d.checklistItem1 ??
+                        tr(
+                          'State deliverables and constraints clearly.',
+                          'حدد المخرجات والقيود بوضوح.',
+                        )}
+                    </li>
                     <li>
                       {d.checklistItem2 ??
                         tr(
@@ -1012,10 +1035,7 @@ export const CustomerDashboard = ({
 
       {selectedNeed && (
         <div className="plan-modal-overlay" onClick={() => setSelectedNeed(null)}>
-          <div
-            className="plan-modal plan-modal--bids"
-            onClick={(e) => e.stopPropagation()}
-          >
+          <div className="plan-modal plan-modal--bids" onClick={(e) => e.stopPropagation()}>
             <h3 className="plan-modal-title">
               {d.bidsFor ?? 'Bids for'}: {selectedNeed.title}
             </h3>
@@ -1038,11 +1058,15 @@ export const CustomerDashboard = ({
                     </div>
                     {bid.status === 'pending' && (
                       <div className="dashboard-bid-actions">
-                        {bid.has_unread && <span className="dashboard-badge dashboard-badge--unread">New Message</span>}
+                        {bid.has_unread && (
+                          <span className="dashboard-badge dashboard-badge--unread">
+                            New Message
+                          </span>
+                        )}
                         <button
                           type="button"
                           className="dashboard-primary-btn dashboard-primary-btn--sm"
-                            onClick={() => void handleAward(bid.id)}
+                          onClick={() => void handleAward(bid.id)}
                         >
                           {d.award ?? 'Award'}
                         </button>
@@ -1071,15 +1095,14 @@ export const CustomerDashboard = ({
                 ))}
               </div>
             )}
-            
+
             {chatBidId && (
               <div className="dashboard-need-chat">
                 <h4 className="dashboard-need-chat-title">Pre-Award Chat</h4>
                 <div className="dashboard-need-chat-messages">
                   {messages.map((m) => (
                     <div key={m.id} className="dashboard-need-chat-message">
-                      <strong>{m.sender_name}</strong>:{' '}
-                      <span>{m.content}</span>
+                      <strong>{m.sender_name}</strong>: <span>{m.content}</span>
                       {m.attachment_url ? (
                         <button
                           type="button"
@@ -1103,11 +1126,20 @@ export const CustomerDashboard = ({
                   ))}
                   {messages.length === 0 && <p className="dashboard-empty">No messages yet.</p>}
                 </div>
-                <form onSubmit={(e) => { void sendMsg(e); }} className="dashboard-need-chat-form">
+                <form
+                  onSubmit={(e) => {
+                    void sendMsg(e);
+                  }}
+                  className="dashboard-need-chat-form"
+                >
                   {bidChatAttachmentUrl ? (
                     <div className="dashboard-need-chat-pending">
                       {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={bidChatAttachmentUrl} alt="" className="dashboard-need-chat-attach-thumb" />
+                      <img
+                        src={bidChatAttachmentUrl}
+                        alt=""
+                        className="dashboard-need-chat-attach-thumb"
+                      />
                       <button
                         type="button"
                         className="dashboard-link-btn"

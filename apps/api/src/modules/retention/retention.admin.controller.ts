@@ -94,7 +94,10 @@ export const patchRetentionGovernance = asyncHandler(async (req, res) => {
   }
 
   if (body.maxPublicUploadBytes !== undefined) {
-    if (body.maxPublicUploadBytes != null && body.maxPublicUploadBytes > env.PUBLIC_UPLOAD_MAX_BYTES_CEILING) {
+    if (
+      body.maxPublicUploadBytes != null &&
+      body.maxPublicUploadBytes > env.PUBLIC_UPLOAD_MAX_BYTES_CEILING
+    ) {
       throw new HttpError({
         statusCode: 400,
         code: 'ABOVE_CEILING',

@@ -4,6 +4,7 @@ import compression from 'compression';
 import cookieParser from 'cookie-parser';
 import cors from 'cors';
 import express from 'express';
+import helmet from 'helmet';
 
 import { getAllowedCorsOrigins, isCorsOriginAllowed } from './config/cors.js';
 import { env } from './config/env.js';
@@ -25,6 +26,12 @@ export const createApp = () => {
   }
 
   app.disable('x-powered-by');
+  app.use(
+    helmet({
+      crossOriginResourcePolicy: { policy: 'cross-origin' },
+      contentSecurityPolicy: false,
+    }),
+  );
   app.use(requestIdMiddleware);
   app.use(requestLoggingMiddleware);
   app.use(compression());

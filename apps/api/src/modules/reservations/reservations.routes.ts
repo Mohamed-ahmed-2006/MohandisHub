@@ -12,7 +12,11 @@ const reservationsRouter = Router();
 
 reservationsRouter.use(authenticate, requireEmailVerified);
 
-reservationsRouter.get('/profile/me', requireRole('expert', 'business', 'craftsman'), reservationsController.getMyProfile);
+reservationsRouter.get(
+  '/profile/me',
+  requireRole('expert', 'business', 'craftsman'),
+  reservationsController.getMyProfile,
+);
 reservationsRouter.patch(
   '/profile/me',
   requireRole('expert', 'business', 'craftsman'),
@@ -100,12 +104,18 @@ reservationsRouter.get(
   '/:reservationId/offline/checkin-codes',
   reservationsController.getOfflineCheckinCodes,
 );
-reservationsRouter.post('/:reservationId/offline/checkin', reservationsController.confirmOfflineCheckin);
+reservationsRouter.post(
+  '/:reservationId/offline/checkin',
+  reservationsController.confirmOfflineCheckin,
+);
 reservationsRouter.post('/:reservationId/finish', reservationsController.finishReservation);
 
 reservationsRouter.post('/:reservationId/call/join', reservationsController.joinCall);
 reservationsRouter.post('/:reservationId/call/heartbeat', reservationsController.callHeartbeat);
-reservationsRouter.post('/:reservationId/call/extension', reservationsController.decideCallExtension);
+reservationsRouter.post(
+  '/:reservationId/call/extension',
+  reservationsController.decideCallExtension,
+);
 reservationsRouter.post('/:reservationId/call/end', reservationsController.endCall);
 reservationsRouter.post('/:reservationId/call/renew-token', reservationsController.renewCallToken);
 reservationsRouter.get('/:reservationId/call/snapshot', reservationsController.getCallSnapshot);

@@ -1,5 +1,4 @@
-import { coalescedRefresh } from '@/lib/auth/refresh-coalesced';
-import { sessionStore } from '@/lib/auth/session-store';
+import { fetchWithAuthRetry } from '@/lib/auth/fetch-with-auth-retry';
 import { getApiBaseUrl } from '@/lib/env';
 
 type UploadResponse = { data: { url: string; filename: string; originalName: string } };
@@ -11,11 +10,15 @@ export async function uploadFile(
   const formData = new FormData();
   formData.append('file', file);
 
-  const res = await fetch(`${getApiBaseUrl()}/api/upload`, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${accessToken}` },
-    body: formData,
-  });
+  const res = await fetchWithAuthRetry(
+    `${getApiBaseUrl()}/api/upload`,
+    {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${accessToken}` },
+      body: formData,
+    },
+    accessToken,
+  );
 
   if (!res.ok) {
     const body = (await res.json().catch(() => ({}))) as { error?: { message?: string } };
@@ -34,11 +37,15 @@ export async function uploadPrivateFile(
   const formData = new FormData();
   formData.append('file', file);
 
-  const res = await fetch(`${getApiBaseUrl()}/api/upload/private`, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${accessToken}` },
-    body: formData,
-  });
+  const res = await fetchWithAuthRetry(
+    `${getApiBaseUrl()}/api/upload/private`,
+    {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${accessToken}` },
+      body: formData,
+    },
+    accessToken,
+  );
 
   if (!res.ok) {
     const body = (await res.json().catch(() => ({}))) as { error?: { message?: string } };
@@ -56,10 +63,16 @@ export async function getPrivateFileUrl(
 ): Promise<string> {
   const base = getApiBaseUrl();
   const path = privatePathOrId.startsWith('/') ? privatePathOrId : `/${privatePathOrId}`;
-  const url = path.startsWith('/api/') ? `${base}${path}` : `${base}/api/upload/private/${privatePathOrId}`;
-  const res = await fetch(url, {
-    headers: { Accept: 'application/json', Authorization: `Bearer ${accessToken}` },
-  });
+  const url = path.startsWith('/api/')
+    ? `${base}${path}`
+    : `${base}/api/upload/private/${privatePathOrId}`;
+  const res = await fetchWithAuthRetry(
+    url,
+    {
+      headers: { Accept: 'application/json', Authorization: `Bearer ${accessToken}` },
+    },
+    accessToken,
+  );
   if (!res.ok) {
     const body = (await res.json().catch(() => ({}))) as { error?: { message?: string } };
     throw new Error(body?.error?.message ?? 'Could not load file');
@@ -80,35 +93,26 @@ export async function getPrivateFileOpenableUrl(
   // IMPORTANT: fetch private uploads through Next.js proxy (same-origin)
   // to avoid browser CORS issues when the API host is different.
   const proxyUrl = `/api/proxy/private-upload?path=${encodeURIComponent(privatePathOrId)}`;
-  const fetchWithToken = async (token: string): Promise<Response> => {
-    return fetch(proxyUrl, {
+  const res = await fetchWithAuthRetry(
+    proxyUrl,
+    {
       headers: {
-        Authorization: `Bearer ${token}`,
+        Authorization: `Bearer ${accessToken}`,
         Accept: 'image/*, application/pdf, */*',
       },
       credentials: 'include',
-    });
-  };
-
-  let res = await fetchWithToken(accessToken);
-
-  if (res.status === 401) {
-    // Access token may expire while admin is open. Refresh once via the shared
-    // coalesced refresh (so we do not race other refreshes) and persist the new
-    // token so the rest of the app keeps using a valid one.
-    const result = await coalescedRefresh();
-    if (result.kind === 'success') {
-      sessionStore.setAccessToken(result.accessToken);
-      res = await fetchWithToken(result.accessToken);
-    }
-  }
+    },
+    accessToken,
+  );
 
   if (res.status === 401) {
     throw new Error('Session expired. Please log out and log in again.');
   }
 
   if (!res.ok) {
-    const body = (await res.json().catch(() => ({}))) as { error?: { message?: string } } | Record<string, unknown>;
+    const body = (await res.json().catch(() => ({}))) as
+      | { error?: { message?: string } }
+      | Record<string, unknown>;
     const message =
       typeof body === 'object' &&
       body &&

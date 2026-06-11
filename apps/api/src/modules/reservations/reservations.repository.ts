@@ -443,6 +443,20 @@ export class ReservationsRepository {
     return rows;
   }
 
+  async findPendingReservationForExpiry(
+    reservationId: string,
+    poolClient: PoolClient,
+  ): Promise<ReservationRow | null> {
+    const { rows } = await poolClient.query<ReservationRow>(
+      `SELECT *
+       FROM reservations
+       WHERE id = $1 AND status = 'pending'
+       FOR UPDATE`,
+      [reservationId],
+    );
+    return rows[0] ?? null;
+  }
+
   async findReservationById(id: string): Promise<ReservationRow | null> {
     const pool = getPool();
     const hasJobIdColumn = await pool
@@ -645,7 +659,13 @@ export class ReservationsRepository {
       `INSERT INTO reservation_location_proposals (reservation_id, proposed_by, location_text, lat, lng)
        VALUES ($1, $2, $3, $4, $5)
        RETURNING *`,
-      [input.reservationId, input.proposedBy, input.locationText, input.lat ?? null, input.lng ?? null],
+      [
+        input.reservationId,
+        input.proposedBy,
+        input.locationText,
+        input.lat ?? null,
+        input.lng ?? null,
+      ],
     );
     return rows[0]!;
   }
@@ -740,9 +760,7 @@ export class ReservationsRepository {
     return rows[0] ?? null;
   }
 
-  async getCheckinStates(
-    reservationId: string,
-  ): Promise<ReservationCheckinCodeRow[]> {
+  async getCheckinStates(reservationId: string): Promise<ReservationCheckinCodeRow[]> {
     const { rows } = await getPool().query<ReservationCheckinCodeRow>(
       `SELECT * FROM reservation_checkin_codes WHERE reservation_id = $1`,
       [reservationId],
@@ -891,15 +909,29 @@ export class ReservationsRepository {
     return rows[0]!;
   }
 
-  async getOpenDisputeByReservation(
-    reservationId: string,
-  ): Promise<ReservationDisputeRow | null> {
+  async getOpenDisputeByReservation(reservationId: string): Promise<ReservationDisputeRow | null> {
     const { rows } = await getPool().query<ReservationDisputeRow>(
       `SELECT * FROM reservation_disputes
        WHERE reservation_id = $1 AND status = 'open'
        ORDER BY created_at DESC
        LIMIT 1`,
       [reservationId],
+    );
+    return rows[0] ?? null;
+  }
+
+  async findDisputeById(
+    disputeId: string,
+    client?: PoolClient,
+  ): Promise<ReservationDisputeRow | null> {
+    const db = client ?? getPool();
+    const { rows } = await db.query<ReservationDisputeRow>(
+      `SELECT *
+       FROM reservation_disputes
+       WHERE id = $1
+       LIMIT 1
+       ${client ? 'FOR UPDATE' : ''}`,
+      [disputeId],
     );
     return rows[0] ?? null;
   }
@@ -938,11 +970,13 @@ export class ReservationsRepository {
     status: string,
     resolutionNotes: string | null,
     resolvedBy: string,
+    client?: PoolClient,
   ): Promise<ReservationDisputeRow | null> {
-    const { rows } = await getPool().query<ReservationDisputeRow>(
+    const db = client ?? getPool();
+    const { rows } = await db.query<ReservationDisputeRow>(
       `UPDATE reservation_disputes
        SET status = $2, resolution_notes = $3, resolved_by = $4, resolved_at = now(), updated_at = now()
-       WHERE id = $1
+       WHERE id = $1 AND status = 'open'
        RETURNING *`,
       [disputeId, status, resolutionNotes, resolvedBy],
     );
@@ -996,6 +1030,23 @@ export class ReservationsRepository {
          AND action = $2
          AND idempotency_key = $3
        LIMIT 1`,
+      [actorId, action, idempotencyKey],
+    );
+    return rows[0] ?? null;
+  }
+
+  async reserveActionIdempotency(
+    actorId: string,
+    action: string,
+    idempotencyKey: string,
+  ): Promise<ReservationActionIdempotencyRow | null> {
+    const { rows } = await getPool().query<ReservationActionIdempotencyRow>(
+      `INSERT INTO reservation_action_idempotency (
+         actor_id, action, idempotency_key, response_json
+       )
+       VALUES ($1, $2, $3, '{}'::jsonb)
+       ON CONFLICT (actor_id, action, idempotency_key) DO NOTHING
+       RETURNING *`,
       [actorId, action, idempotencyKey],
     );
     return rows[0] ?? null;

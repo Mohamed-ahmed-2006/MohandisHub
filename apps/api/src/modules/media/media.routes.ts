@@ -40,7 +40,11 @@ mediaRouter.get(
   asyncHandler(async (req, res) => {
     const parsed = usageTypeSchema.safeParse(req.query.usageType);
     if (!parsed.success) {
-      throw new HttpError({ statusCode: 400, code: 'INVALID_USAGE_TYPE', message: 'Invalid usage type.' });
+      throw new HttpError({
+        statusCode: 400,
+        code: 'INVALID_USAGE_TYPE',
+        message: 'Invalid usage type.',
+      });
     }
     const rows = await listActiveMediaAssets(parsed.data);
     res.json({ ok: true, data: rows } satisfies ApiSuccessBody<typeof rows>);
@@ -60,7 +64,11 @@ mediaRouter.get(
     if (typeof usageRaw === 'string' && usageRaw.length > 0) {
       const parsed = usageTypeSchema.safeParse(usageRaw);
       if (!parsed.success) {
-        throw new HttpError({ statusCode: 400, code: 'INVALID_USAGE_TYPE', message: 'Invalid usage type.' });
+        throw new HttpError({
+          statusCode: 400,
+          code: 'INVALID_USAGE_TYPE',
+          message: 'Invalid usage type.',
+        });
       }
       usageType = parsed.data;
     }
@@ -79,7 +87,11 @@ mediaRouter.post(
   asyncHandler(async (req, res) => {
     const parsed = createSchema.safeParse(req.body);
     if (!parsed.success) {
-      throw new HttpError({ statusCode: 400, code: 'VALIDATION_ERROR', message: 'Invalid media payload.' });
+      throw new HttpError({
+        statusCode: 400,
+        code: 'VALIDATION_ERROR',
+        message: 'Invalid media payload.',
+      });
     }
     const payload = parsed.data;
     const row = await createMediaAsset({
@@ -122,11 +134,19 @@ mediaRouter.patch(
   asyncHandler(async (req, res) => {
     const mediaId = req.params.id;
     if (!mediaId) {
-      throw new HttpError({ statusCode: 400, code: 'MEDIA_ID_REQUIRED', message: 'Media id is required.' });
+      throw new HttpError({
+        statusCode: 400,
+        code: 'MEDIA_ID_REQUIRED',
+        message: 'Media id is required.',
+      });
     }
     const parsed = updateSchema.safeParse(req.body);
     if (!parsed.success) {
-      throw new HttpError({ statusCode: 400, code: 'VALIDATION_ERROR', message: 'Invalid media payload.' });
+      throw new HttpError({
+        statusCode: 400,
+        code: 'VALIDATION_ERROR',
+        message: 'Invalid media payload.',
+      });
     }
     const payload = parsed.data;
     const row = await updateMediaAsset(mediaId, {
@@ -136,11 +156,19 @@ mediaRouter.patch(
       ...(payload.imageUrl !== undefined ? { imageUrl: payload.imageUrl } : {}),
       ...(payload.active !== undefined ? { active: payload.active } : {}),
       ...(payload.sortOrder !== undefined ? { sortOrder: payload.sortOrder } : {}),
-      ...(payload.startsAt !== undefined ? { startsAt: payload.startsAt ? new Date(payload.startsAt) : null } : {}),
-      ...(payload.endsAt !== undefined ? { endsAt: payload.endsAt ? new Date(payload.endsAt) : null } : {}),
+      ...(payload.startsAt !== undefined
+        ? { startsAt: payload.startsAt ? new Date(payload.startsAt) : null }
+        : {}),
+      ...(payload.endsAt !== undefined
+        ? { endsAt: payload.endsAt ? new Date(payload.endsAt) : null }
+        : {}),
     });
     if (!row) {
-      throw new HttpError({ statusCode: 404, code: 'MEDIA_NOT_FOUND', message: 'Media asset not found.' });
+      throw new HttpError({
+        statusCode: 404,
+        code: 'MEDIA_NOT_FOUND',
+        message: 'Media asset not found.',
+      });
     }
     await logAudit({
       actorId: req.user?.id ?? null,
@@ -172,11 +200,19 @@ mediaRouter.delete(
   asyncHandler(async (req, res) => {
     const mediaId = req.params.id;
     if (!mediaId) {
-      throw new HttpError({ statusCode: 400, code: 'MEDIA_ID_REQUIRED', message: 'Media id is required.' });
+      throw new HttpError({
+        statusCode: 400,
+        code: 'MEDIA_ID_REQUIRED',
+        message: 'Media id is required.',
+      });
     }
     const deleted = await deleteMediaAsset(mediaId);
     if (!deleted) {
-      throw new HttpError({ statusCode: 404, code: 'MEDIA_NOT_FOUND', message: 'Media asset not found.' });
+      throw new HttpError({
+        statusCode: 404,
+        code: 'MEDIA_NOT_FOUND',
+        message: 'Media asset not found.',
+      });
     }
     await logAudit({
       actorId: req.user?.id ?? null,

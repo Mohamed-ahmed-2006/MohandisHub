@@ -18,6 +18,7 @@ import type {
 
 import { ApiClientRequestError } from '../auth/client';
 
+import { fetchWithAuthRetry } from '@/lib/auth/fetch-with-auth-retry';
 import { getApiBaseUrl } from '@/lib/env';
 
 type ApiRequestOptions = {
@@ -42,15 +43,19 @@ const apiRequest = async <T>({
   body,
   accessToken,
 }: ApiRequestOptions): Promise<T> => {
-  const response = await fetch(`${getApiBaseUrl()}${path}`, {
-    method,
-    credentials: 'include',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${accessToken}`,
+  const response = await fetchWithAuthRetry(
+    `${getApiBaseUrl()}${path}`,
+    {
+      method,
+      credentials: 'include',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${accessToken}`,
+      },
+      ...(body ? { body: JSON.stringify(body) } : {}),
     },
-    ...(body ? { body: JSON.stringify(body) } : {}),
-  });
+    accessToken,
+  );
 
   if (!response.ok) {
     const rawErrorBody: unknown = await response.json().catch(() => null);
@@ -111,12 +116,19 @@ export type TopCraftsman = {
   workshopName: string | null;
 };
 
-async function getPublicProfileFetch(userId: string, accessToken?: string): Promise<PublicUserProfile> {
-  const response = await fetch(`${getApiBaseUrl()}/api/profiles/public/${userId}`, {
-    method: 'GET',
-    credentials: 'include',
-    headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {},
-  });
+async function getPublicProfileFetch(
+  userId: string,
+  accessToken?: string,
+): Promise<PublicUserProfile> {
+  const response = await fetchWithAuthRetry(
+    `${getApiBaseUrl()}/api/profiles/public/${userId}`,
+    {
+      method: 'GET',
+      credentials: 'include',
+      headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {},
+    },
+    accessToken,
+  );
   if (!response.ok) {
     const raw: unknown = await response.json().catch(() => null);
     if (isApiErrorBody(raw)) {

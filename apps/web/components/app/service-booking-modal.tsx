@@ -40,7 +40,9 @@ const getStartOfToday = (): Date => {
 };
 
 const isSameDay = (a: Date, b: Date): boolean =>
-  a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+  a.getFullYear() === b.getFullYear() &&
+  a.getMonth() === b.getMonth() &&
+  a.getDate() === b.getDate();
 
 function formatSlot(slot: ReservationSlot, localeTag?: string): string {
   const start = new Date(slot.startAt);
@@ -104,8 +106,9 @@ export const ServiceBookingModal = ({
         reservationsApiClient.getProviderProfile(accessToken, service.providerId),
       ]);
 
-      const upcomingSlots = dedupeSlotsById(slotsRes.items)
-        .sort((a, b) => new Date(a.startAt).getTime() - new Date(b.startAt).getTime());
+      const upcomingSlots = dedupeSlotsById(slotsRes.items).sort(
+        (a, b) => new Date(a.startAt).getTime() - new Date(b.startAt).getTime(),
+      );
 
       setSlots(upcomingSlots);
       setProfile(profileRes);
@@ -229,13 +232,16 @@ export const ServiceBookingModal = ({
     );
   const noFilteredSlots =
     serviceBookingCopy?.noFilteredSlots ??
-    tr('No available slots match the selected filter.', 'لا توجد مواعيد متاحة تطابق الفلتر المحدد.');
+    tr(
+      'No available slots match the selected filter.',
+      'لا توجد مواعيد متاحة تطابق الفلتر المحدد.',
+    );
   const modePrice =
     mode === 'offline'
-      ? profile?.offlinePrice ?? null
+      ? (profile?.offlinePrice ?? null)
       : onlineType === 'video'
-        ? profile?.onlineVideoPrice ?? null
-        : profile?.onlineVoicePrice ?? null;
+        ? (profile?.onlineVideoPrice ?? null)
+        : (profile?.onlineVoicePrice ?? null);
   const platformFee = Math.max(0, status?.reservationAcceptanceFee ?? 0);
   const servicePrice =
     agreedServicePrice != null && Number.isFinite(agreedServicePrice)
@@ -265,7 +271,7 @@ export const ServiceBookingModal = ({
           {profile?.verificationBadgeEarned && (
             <span
               className="profile-screen-badge profile-screen-badge_verified"
-              style={{ marginLeft: '0.5rem' }}
+              style={{ marginInlineStart: '0.5rem' }}
               title="Complete profile and 1000 EGP total deposits."
             >
               {tr('Platform verified', 'موثّق من المنصة')}
@@ -276,12 +282,21 @@ export const ServiceBookingModal = ({
           <div className="service-booking-gallery">
             {(service.images ?? []).map((u) => (
               // eslint-disable-next-line @next/next/no-img-element
-              <img key={u} src={toAbsoluteAssetUrl(u)} alt="" className="service-booking-gallery-img" />
+              <img
+                key={u}
+                src={toAbsoluteAssetUrl(u)}
+                alt=""
+                className="service-booking-gallery-img"
+              />
             ))}
           </div>
         )}
 
-        {service.price != null && <p className="service-booking-price">{service.price} {service.currency ?? 'EGP'}</p>}
+        {service.price != null && (
+          <p className="service-booking-price">
+            {service.price} {service.currency ?? 'EGP'}
+          </p>
+        )}
 
         <div className="service-booking-mode-row">
           {modeReady ? (
@@ -337,11 +352,19 @@ export const ServiceBookingModal = ({
         )}
         {totalPrice != null && (
           <div className="reservation-note-box" style={{ marginBottom: '0.75rem' }}>
-            <p>{tr('Service price', 'سعر الخدمة')}: {servicePrice.toFixed(2)} EGP</p>
-            <p>{tr('Reservation type price', 'سعر نوع الحجز')}: {modePrice!.toFixed(2)} EGP</p>
-            <p>{tr('Platform fee', 'رسوم المنصة')}: {platformFee.toFixed(2)} EGP</p>
             <p>
-              <strong>{tr('Total', 'الإجمالي')}: {totalPrice.toFixed(2)} EGP</strong>
+              {tr('Service price', 'سعر الخدمة')}: {servicePrice.toFixed(2)} EGP
+            </p>
+            <p>
+              {tr('Reservation type price', 'سعر نوع الحجز')}: {modePrice!.toFixed(2)} EGP
+            </p>
+            <p>
+              {tr('Platform fee', 'رسوم المنصة')}: {platformFee.toFixed(2)} EGP
+            </p>
+            <p>
+              <strong>
+                {tr('Total', 'الإجمالي')}: {totalPrice.toFixed(2)} EGP
+              </strong>
             </p>
           </div>
         )}
@@ -376,9 +399,7 @@ export const ServiceBookingModal = ({
               className="dashboard-select service-booking-filter-select"
               value={slotFilter}
               onChange={(e) =>
-                setSlotFilter(
-                  e.target.value as 'today' | 'next7Days' | 'thisMonth' | 'allUpcoming',
-                )
+                setSlotFilter(e.target.value as 'today' | 'next7Days' | 'thisMonth' | 'allUpcoming')
               }
             >
               <option value="today">{tr('Today', 'اليوم')}</option>
@@ -389,7 +410,10 @@ export const ServiceBookingModal = ({
             <p style={{ margin: 0, fontSize: '0.85rem', color: 'hsl(var(--muted-foreground))' }}>
               {slotFilter === 'allUpcoming'
                 ? tr('Showing upcoming slots from now.', 'عرض المواعيد القادمة من الآن.')
-                : tr('Showing available slots for the selected range.', 'عرض المواعيد المتاحة للنطاق المحدد.')}
+                : tr(
+                    'Showing available slots for the selected range.',
+                    'عرض المواعيد المتاحة للنطاق المحدد.',
+                  )}
             </p>
           </div>
 
@@ -418,7 +442,11 @@ export const ServiceBookingModal = ({
         {error && <p className="service-booking-error">{error}</p>}
 
         <div className="service-booking-actions">
-          <button type="button" className="dashboard-btn dashboard-btn--secondary" onClick={onClose}>
+          <button
+            type="button"
+            className="dashboard-btn dashboard-btn--secondary"
+            onClick={onClose}
+          >
             {common.back ?? 'Back'}
           </button>
           <button

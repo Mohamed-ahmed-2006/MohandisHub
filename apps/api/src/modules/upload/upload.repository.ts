@@ -35,7 +35,10 @@ export async function findPrivateUploadById(id: string): Promise<PrivateUploadRo
 }
 
 /** True if the user is the business owner of a job that has an application with this upload as CV. */
-export async function isJobOwnerOfApplicationWithCv(userId: string, uploadId: string): Promise<boolean> {
+export async function isJobOwnerOfApplicationWithCv(
+  userId: string,
+  uploadId: string,
+): Promise<boolean> {
   const db = getPool();
   const prefix = `/api/upload/private/${uploadId}`;
   const { rows } = await db.query<{ n: number }>(

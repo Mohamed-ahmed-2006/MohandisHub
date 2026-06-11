@@ -42,7 +42,9 @@ function toHmacValue(value: unknown): string {
 }
 
 function computeExpectedHmac(transaction: Record<string, unknown>, secret: string): string {
-  const concatenated = HMAC_FIELDS.map((field) => toHmacValue(readPath(transaction, field))).join('');
+  const concatenated = HMAC_FIELDS.map((field) => toHmacValue(readPath(transaction, field))).join(
+    '',
+  );
   return createHmac('sha512', secret).update(concatenated).digest('hex');
 }
 
@@ -104,7 +106,9 @@ describe('paymob.client', () => {
     const mod = await import('../lib/paymob.client.js');
 
     expect(mod.isPaymobPayoutConfigured()).toBe(false);
-    await expect(mod.authenticatePaymobPayout()).rejects.toBeInstanceOf(mod.PaymobNotConfiguredError);
+    await expect(mod.authenticatePaymobPayout()).rejects.toBeInstanceOf(
+      mod.PaymobNotConfiguredError,
+    );
   });
 
   it('verifies the transaction-callback HMAC over the canonical field order', async () => {

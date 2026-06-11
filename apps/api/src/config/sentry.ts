@@ -19,7 +19,8 @@ export function captureException(
   Sentry.withScope((scope) => {
     if (context?.requestId !== undefined && context.requestId !== '')
       scope.setTag('requestId', context.requestId);
-    if (context?.userId !== undefined && context.userId !== '') scope.setTag('userId', context.userId);
+    if (context?.userId !== undefined && context.userId !== '')
+      scope.setTag('userId', context.userId);
     Sentry.captureException(error);
   });
 }

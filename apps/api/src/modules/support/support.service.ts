@@ -81,17 +81,33 @@ export class SupportService {
     return this.toTicket(ticket);
   }
 
-  async getTicket(ticketId: string, userId: string, isAdmin: boolean): Promise<SupportTicket | null> {
+  async getTicket(
+    ticketId: string,
+    userId: string,
+    isAdmin: boolean,
+  ): Promise<SupportTicket | null> {
     const ticket = await this.repo.getTicketById(ticketId);
     if (!ticket) return null;
     if (!isAdmin && ticket.user_id !== userId) return null;
     return this.toTicket(ticket);
   }
 
-  async listMyTickets(userId: string, page: number, limit: number): Promise<{ items: SupportTicket[]; total: number; page: number; limit: number; totalPages: number }> {
+  async listMyTickets(
+    userId: string,
+    page: number,
+    limit: number,
+  ): Promise<{
+    items: SupportTicket[];
+    total: number;
+    page: number;
+    limit: number;
+    totalPages: number;
+  }> {
     const offset = (page - 1) * limit;
     const { rows, total } = await this.repo.listTicketsByUser(userId, limit, offset);
-    const messageCounts = await Promise.all(rows.map((r) => this.repo.listMessages(r.id).then((msgs) => msgs.length)));
+    const messageCounts = await Promise.all(
+      rows.map((r) => this.repo.listMessages(r.id).then((msgs) => msgs.length)),
+    );
     const items = rows.map((r, i) => this.toTicket(r, { messageCount: messageCounts[i] ?? 0 }));
     return {
       items,
@@ -102,7 +118,11 @@ export class SupportService {
     };
   }
 
-  async listMessages(ticketId: string, userId: string, isAdmin: boolean): Promise<SupportTicketMessage[]> {
+  async listMessages(
+    ticketId: string,
+    userId: string,
+    isAdmin: boolean,
+  ): Promise<SupportTicketMessage[]> {
     const ticket = await this.repo.getTicketById(ticketId);
     if (!ticket) return [];
     if (!isAdmin && ticket.user_id !== userId) return [];
@@ -119,7 +139,11 @@ export class SupportService {
   ): Promise<SupportTicketMessage> {
     const ticket = await this.repo.getTicketById(ticketId);
     if (!ticket) {
-      throw new HttpError({ statusCode: 404, code: 'TICKET_NOT_FOUND', message: 'Ticket not found.' });
+      throw new HttpError({
+        statusCode: 404,
+        code: 'TICKET_NOT_FOUND',
+        message: 'Ticket not found.',
+      });
     }
     if (!isStaff && ticket.user_id !== userId) {
       throw new HttpError({ statusCode: 403, code: 'FORBIDDEN', message: 'Not your ticket.' });
@@ -138,12 +162,20 @@ export class SupportService {
     return this.toMessage(msg);
   }
 
-  async updateStatus(ticketId: string, status: SupportTicketStatus, _adminId: string): Promise<SupportTicket | null> {
+  async updateStatus(
+    ticketId: string,
+    status: SupportTicketStatus,
+    _adminId: string,
+  ): Promise<SupportTicket | null> {
     const updated = await this.repo.updateTicketStatus(ticketId, status);
     return updated ? this.toTicket(updated) : null;
   }
 
-  async assign(ticketId: string, assignedTo: string | null, _adminId: string): Promise<SupportTicket | null> {
+  async assign(
+    ticketId: string,
+    assignedTo: string | null,
+    _adminId: string,
+  ): Promise<SupportTicket | null> {
     const updated = await this.repo.assignTicket(ticketId, assignedTo);
     return updated ? this.toTicket(updated) : null;
   }
@@ -162,7 +194,9 @@ export class SupportService {
     const offset = (page - 1) * limit;
     const { rows, total } = await this.repo.listAllTickets(filters, limit, offset);
     const items = rows.map((r) => {
-      const ticket = this.toTicket(r, { messageCount: r.message_count != null ? parseInt(r.message_count, 10) : 0 });
+      const ticket = this.toTicket(r, {
+        messageCount: r.message_count != null ? parseInt(r.message_count, 10) : 0,
+      });
       return { ...ticket, ...(r.user_email != null ? { userEmail: r.user_email } : {}) };
     });
     return {

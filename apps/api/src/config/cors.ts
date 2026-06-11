@@ -7,7 +7,10 @@ const splitOrigins = (value: string | undefined): string[] =>
     .filter(Boolean);
 
 export const getAllowedCorsOrigins = (): string[] => {
-  const allowedOrigins = [...splitOrigins(env.CORS_ORIGIN), ...splitOrigins(env.CORS_EXTRA_ORIGINS)];
+  const allowedOrigins = [
+    ...splitOrigins(env.CORS_ORIGIN),
+    ...splitOrigins(env.CORS_EXTRA_ORIGINS),
+  ];
 
   // Allow local dev origins automatically only outside production. Production can still opt in
   // temporarily through CORS_EXTRA_ORIGINS, but credentialed localhost CORS must not be a default.
@@ -23,5 +26,7 @@ export const getAllowedCorsOrigins = (): string[] => {
   return Array.from(new Set(allowedOrigins));
 };
 
-export const isCorsOriginAllowed = (origin: string | undefined, allowedOrigins = getAllowedCorsOrigins()): boolean =>
-  !origin || allowedOrigins.includes(origin);
+export const isCorsOriginAllowed = (
+  origin: string | undefined,
+  allowedOrigins = getAllowedCorsOrigins(),
+): boolean => !origin || allowedOrigins.includes(origin);

@@ -2,16 +2,17 @@ import { readFileSync } from 'node:fs';
 
 import { describe, expect, it } from 'vitest';
 
-const readSource = (relative: string): string => readFileSync(new URL(relative, import.meta.url), 'utf8');
+const readSource = (relative: string): string =>
+  readFileSync(new URL(relative, import.meta.url), 'utf8');
 
 describe('launch surface hardening', () => {
   it('does not expose the business team stub as a production API feature', () => {
     const apiRoutes = readSource('../routes/index.ts');
     const roadmap = readSource('../../../../docs/FEATURE_ROADMAP_STATUS_AND_TESTING.md');
 
-    expect(apiRoutes).not.toContain("businessTeamsRouter");
+    expect(apiRoutes).not.toContain('businessTeamsRouter');
     expect(apiRoutes).not.toContain("apiRouter.use('/business/team'");
-    expect(roadmap).toContain('Team accounts for businesses** | Deferred');
+    expect(roadmap).toMatch(/Team accounts for businesses\*\*\s+\|\s+Deferred/);
     expect(roadmap).toContain('Do not advertise team seats as an active launch feature');
   });
 
@@ -19,17 +20,32 @@ describe('launch surface hardening', () => {
     const apiRoutes = readSource('../routes/index.ts');
     const sharedIndex = readSource('../../../../packages/shared/src/index.ts');
 
-    expect(apiRoutes).not.toContain("bookingsRouter");
+    expect(apiRoutes).not.toContain('bookingsRouter');
     expect(apiRoutes).not.toContain("apiRouter.use('/bookings'");
-    expect(sharedIndex).not.toContain("./bookings.js");
+    expect(sharedIndex).not.toContain('./bookings.js');
   });
 
   it('keeps the production worker blueprint compatible with production env guards', () => {
     const renderBlueprint = readSource('../../../../render.yaml');
+    const apiSection =
+      renderBlueprint.split('name: mohandishub-api')[1]?.split('name: mohandishub-worker')[0] ?? '';
     const workerSection = renderBlueprint.split('name: mohandishub-worker')[1] ?? '';
 
+    expect(apiSection).not.toContain('plan: free');
+    expect(apiSection).toContain('plan: starter');
+    expect(apiSection).toContain('key: TRUST_PROXY');
+    expect(apiSection).toContain('value: 1');
+    expect(apiSection).not.toContain('key: JWT_SECRET\n        generateValue: true');
+    expect(apiSection).not.toContain('key: JWT_REFRESH_SECRET\n        generateValue: true');
+    expect(apiSection).toContain('key: JWT_SECRET');
+    expect(apiSection).toContain('sync: false');
+    expect(workerSection).not.toContain('plan: free');
+    expect(workerSection).toContain('plan: starter');
     expect(workerSection).toContain('key: NODE_ENV');
     expect(workerSection).toContain('value: production');
+    expect(workerSection).toContain('key: TRUST_PROXY');
+    expect(workerSection).toContain('value: 1');
+    expect(workerSection).toContain('key: SENTRY_DSN');
     expect(workerSection).toContain('key: OTP_EMAIL_PROVIDER');
     expect(workerSection).toContain('value: brevo');
     expect(workerSection).toContain('key: VERIFICATION_PROVIDER');
@@ -47,7 +63,8 @@ describe('launch surface hardening', () => {
   it('fails production startup when NOWPayments launch prerequisites are missing', () => {
     const envSource = readSource('../config/env.ts');
     const renderBlueprint = readSource('../../../../render.yaml');
-    const apiSection = renderBlueprint.split('name: mohandishub-api')[1]?.split('name: mohandishub-worker')[0] ?? '';
+    const apiSection =
+      renderBlueprint.split('name: mohandishub-api')[1]?.split('name: mohandishub-worker')[0] ?? '';
 
     expect(envSource).toContain('NOWPAYMENTS_LIVE_REQUIRED');
     expect(envSource).toContain('NOWPAYMENTS_API_KEY = [');
@@ -63,6 +80,40 @@ describe('launch surface hardening', () => {
     expect(apiSection).toContain('key: NOWPAYMENTS_MASS_PAYOUTS_ENABLED');
     expect(apiSection).toContain('key: NOWPAYMENTS_AUTH_EMAIL');
     expect(apiSection).toContain('key: NOWPAYMENTS_AUTH_PASSWORD');
+  });
+
+  it('keeps Paymob disabled by default but ready for explicit production credentials', () => {
+    const envExample = readSource('../../.env.example');
+    const envSource = readSource('../config/env.ts');
+    const renderBlueprint = readSource('../../../../render.yaml');
+    const apiSection =
+      renderBlueprint.split('name: mohandishub-api')[1]?.split('name: mohandishub-worker')[0] ?? '';
+
+    expect(envExample).toContain('PAYMOB_DEPOSITS_ENABLED=false');
+    expect(envExample).toContain('PAYMOB_WITHDRAWALS_ENABLED=false');
+    expect(envExample).toContain('Do not use staging URLs in production.');
+    expect(envExample).not.toContain(
+      'PAYMOB_PAYOUT_BASE_URL=https://stagingpayouts.paymobsolutions.com',
+    );
+    expect(envSource).toContain(
+      'Paymob production withdrawals must not use a staging payout endpoint.',
+    );
+    expect(apiSection).toContain('key: PAYMOB_SECRET_KEY');
+    expect(apiSection).toContain('key: PAYMOB_HMAC_SECRET');
+    expect(apiSection).toContain('key: PAYMOB_PAYOUT_CLIENT_ID');
+    expect(apiSection).toContain('key: PAYMOB_PAYOUT_BASE_URL');
+    expect(apiSection).toContain('key: PAYMOB_DEPOSITS_ENABLED');
+    expect(apiSection).toContain('value: false');
+  });
+
+  it('guards manual production migration pushes behind an explicit confirmation', () => {
+    const migrationScript = readSource('../../../../scripts/push-migrations.mjs');
+
+    expect(migrationScript).toContain('CONFIRM_PRODUCTION_MIGRATION');
+    expect(migrationScript).toContain('I_UNDERSTAND_RUN_PRODUCTION_MIGRATIONS');
+    expect(migrationScript).toContain(
+      'Refusing to push migrations to a production-looking database URL.',
+    );
   });
 
   it('does not allow credentialed localhost CORS by default in production', () => {

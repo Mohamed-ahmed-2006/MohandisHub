@@ -75,7 +75,10 @@ export class ServicesService {
     };
   }
 
-  async getRecommendedServices(limit: number = 10, categoryId?: string): Promise<ServiceSearchResult[]> {
+  async getRecommendedServices(
+    limit: number = 10,
+    categoryId?: string,
+  ): Promise<ServiceSearchResult[]> {
     const rows = await this.repo.getRecommendedServices(limit, categoryId);
     return rows.map((r) => this.toSearchResult(r));
   }
@@ -93,7 +96,11 @@ export class ServicesService {
     return this.toService(row);
   }
 
-  async createService(providerId: string, providerRole: UserRole, input: CreateServiceInput): Promise<Service> {
+  async createService(
+    providerId: string,
+    providerRole: UserRole,
+    input: CreateServiceInput,
+  ): Promise<Service> {
     const appStatus = await this.settingsService.getAppStatus();
     if (appStatus.featureHourlyPricingEnabled === false && input.priceType === 'hourly') {
       throw new HttpError({
@@ -122,7 +129,11 @@ export class ServicesService {
       const q = planLimits.usageQuotas.new_services_per_period;
       if (q) {
         const { start } = await this.usageQuotaService.resolvePeriodBounds(providerId, q.period);
-        const used = await this.usageQuotaService.getCountForWindow(providerId, 'new_services_per_period', start);
+        const used = await this.usageQuotaService.getCountForWindow(
+          providerId,
+          'new_services_per_period',
+          start,
+        );
         if (used >= q.maxPerPeriod) {
           throw new HttpError({
             statusCode: 403,

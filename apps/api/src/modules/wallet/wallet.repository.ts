@@ -59,6 +59,9 @@ type DepositRequestRow = {
   credited_transaction_id: string | null;
   rate_snapshot: Record<string, unknown>;
   credited_amount_egp: string | null;
+  paymob_intention_id: string | null;
+  paymob_order_id: string | null;
+  paymob_transaction_id: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -143,6 +146,7 @@ export class WalletRepository {
     provider_status, provider_payload, paid_at,
     proof_upload_id, destination_account_snapshot, reviewed_by, reviewed_at, rejection_reason,
     credited_transaction_id, rate_snapshot, credited_amount_egp::text,
+    paymob_intention_id, paymob_order_id, paymob_transaction_id,
     created_at, updated_at`;
 
   private withdrawalSelectColumns = `id, user_id, wallet_id, hold_id, amount::text, currency, payout_address,
@@ -175,6 +179,16 @@ export class WalletRepository {
 
   async createForUser(userId: string): Promise<WalletRow> {
     const { rows } = await this.db.query<WalletRow>(
+      `INSERT INTO wallets (user_id, currency) VALUES ($1, 'EGP')
+       ON CONFLICT (user_id) DO UPDATE SET user_id = wallets.user_id
+       RETURNING id, user_id, balance::text, currency, is_frozen, created_at, updated_at`,
+      [userId],
+    );
+    return rows[0]!;
+  }
+
+  async getOrCreateUserWalletInTransaction(client: PoolClient, userId: string): Promise<WalletRow> {
+    const { rows } = await client.query<WalletRow>(
       `INSERT INTO wallets (user_id, currency) VALUES ($1, 'EGP')
        ON CONFLICT (user_id) DO UPDATE SET user_id = wallets.user_id
        RETURNING id, user_id, balance::text, currency, is_frozen, created_at, updated_at`,
@@ -228,13 +242,36 @@ export class WalletRepository {
     providerInvoiceId: string | null = null,
     providerPayload: Record<string, unknown> = {},
   ): Promise<DepositRequestRow> {
+    const paymobIntentionId =
+      typeof providerPayload.paymob_intention_id === 'string'
+        ? providerPayload.paymob_intention_id
+        : null;
+    const paymobOrderId =
+      typeof providerPayload.paymob_order_id === 'string' ? providerPayload.paymob_order_id : null;
+    const paymobTransactionId =
+      typeof providerPayload.paymob_transaction_id === 'string'
+        ? providerPayload.paymob_transaction_id
+        : null;
     const { rows } = await this.db.query<DepositRequestRow>(
       `INSERT INTO deposit_requests (
-        user_id, wallet_id, amount, currency, order_id, provider, provider_invoice_id, provider_payload
+        user_id, wallet_id, amount, currency, order_id, provider, provider_invoice_id, provider_payload,
+        paymob_intention_id, paymob_order_id, paymob_transaction_id
       )
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9, $10, $11)
        RETURNING ${this.depositSelectColumns}`,
-      [userId, walletId, amount, currency, orderId, provider, providerInvoiceId, JSON.stringify(providerPayload)],
+      [
+        userId,
+        walletId,
+        amount,
+        currency,
+        orderId,
+        provider,
+        providerInvoiceId,
+        JSON.stringify(providerPayload),
+        paymobIntentionId,
+        paymobOrderId,
+        paymobTransactionId,
+      ],
     );
     return rows[0]!;
   }
@@ -246,10 +283,7 @@ export class WalletRepository {
       email: string | null;
       display_name: string | null;
       phone: string | null;
-    }>(
-      `SELECT email, display_name, phone FROM users WHERE id = $1`,
-      [userId],
-    );
+    }>(`SELECT email, display_name, phone FROM users WHERE id = $1`, [userId]);
     const row = rows[0];
     return {
       email: row?.email ?? null,
@@ -288,6 +322,8 @@ export class WalletRepository {
     providerInvoiceId?: string | null;
     providerPurchaseId?: string | null;
     providerParentPaymentId?: string | null;
+    paymobOrderId?: string | null;
+    paymobTransactionId?: string | null;
     providerPayload?: Record<string, unknown>;
   }): Promise<DepositRequestRow | null> {
     const { rows } = await this.db.query<DepositRequestRow>(
@@ -298,6 +334,8 @@ export class WalletRepository {
            provider_purchase_id = COALESCE($5, provider_purchase_id),
            provider_parent_payment_id = COALESCE($6, provider_parent_payment_id),
            provider_payload = provider_payload || COALESCE($7::jsonb, '{}'::jsonb),
+           paymob_order_id = COALESCE($8, paymob_order_id),
+           paymob_transaction_id = COALESCE($9, paymob_transaction_id),
            updated_at = now()
        WHERE order_id = $1
        RETURNING ${this.depositSelectColumns}`,
@@ -309,6 +347,8 @@ export class WalletRepository {
         params.providerPurchaseId ?? null,
         params.providerParentPaymentId ?? null,
         params.providerPayload ? JSON.stringify(params.providerPayload) : null,
+        params.paymobOrderId ?? null,
+        params.paymobTransactionId ?? null,
       ],
     );
     return rows[0] ?? null;
@@ -431,7 +471,11 @@ export class WalletRepository {
         [params.depositId],
       );
       const deposit = depRows[0] ?? null;
-      if (!deposit || deposit.provider !== 'instapay_manual' || deposit.status !== 'pending_review') {
+      if (
+        !deposit ||
+        deposit.provider !== 'instapay_manual' ||
+        deposit.status !== 'pending_review'
+      ) {
         await client.query('ROLLBACK');
         return { ok: false, row: deposit };
       }
@@ -509,6 +553,8 @@ export class WalletRepository {
     providerInvoiceId?: string | null;
     providerPurchaseId?: string | null;
     providerParentPaymentId?: string | null;
+    paymobOrderId?: string | null;
+    paymobTransactionId?: string | null;
     providerPayload?: Record<string, unknown>;
     /** When set, credit this EGP amount instead of deposit row amount (FX conversion). */
     creditAmountEgp?: number;
@@ -538,6 +584,8 @@ export class WalletRepository {
              provider_purchase_id = COALESCE($5, provider_purchase_id),
              provider_parent_payment_id = COALESCE($6, provider_parent_payment_id),
              provider_payload = provider_payload || COALESCE($7::jsonb, '{}'::jsonb),
+             paymob_order_id = COALESCE($8, paymob_order_id),
+             paymob_transaction_id = COALESCE($9, paymob_transaction_id),
              updated_at = now()
          WHERE id = $1`,
         [
@@ -548,6 +596,8 @@ export class WalletRepository {
           params.providerPurchaseId ?? null,
           params.providerParentPaymentId ?? null,
           params.providerPayload ? JSON.stringify(params.providerPayload) : null,
+          params.paymobOrderId ?? null,
+          params.paymobTransactionId ?? null,
         ],
       );
 
@@ -588,6 +638,8 @@ export class WalletRepository {
         provider_payment_id: params.providerPaymentId ?? null,
         provider_invoice_id: params.providerInvoiceId ?? null,
         provider_purchase_id: params.providerPurchaseId ?? null,
+        paymob_order_id: params.paymobOrderId ?? null,
+        paymob_transaction_id: params.paymobTransactionId ?? null,
         ...(params.rateSnapshot ? { rate_snapshot: params.rateSnapshot } : {}),
       };
       const { rows: txIns } = await client.query<{ id: string }>(
@@ -635,7 +687,15 @@ export class WalletRepository {
     referenceType: string,
     referenceId: string | null,
   ): Promise<void> {
-    return this.creditWithType(walletId, userId, amount, 'deposit', description, referenceType, referenceId);
+    return this.creditWithType(
+      walletId,
+      userId,
+      amount,
+      'deposit',
+      description,
+      referenceType,
+      referenceId,
+    );
   }
 
   /** Credit wallet with a specific transaction type (e.g. deposit, payment, commission) */
@@ -668,7 +728,7 @@ export class WalletRepository {
         throw new Error('Wallet not found');
       }
       const balanceAfter = parseFloat(walletRows[0]!.balance);
-      
+
       // Check schema if reference_id is UUID or text. It's usually text, but if it was defined as UUID, we need to pass NULL if it's not a valid UUID.
       // In MohandisHub schema it is defined as: reference_id UUID
       // So if referenceId is a Stripe string like 'cs_test_...', we cannot store it here without a cast error.
@@ -687,7 +747,17 @@ export class WalletRepository {
       await client.query(
         `INSERT INTO transactions (wallet_id, user_id, type, amount, balance_after, status, description, reference_type, reference_id, metadata)
          VALUES ($1, $2, $3, $4, $5, 'completed', $6, $7, $8, $9)`,
-        [walletId, userId, txType, amount, balanceAfter, description, referenceType, validReferenceId, extraMetadata],
+        [
+          walletId,
+          userId,
+          txType,
+          amount,
+          balanceAfter,
+          description,
+          referenceType,
+          validReferenceId,
+          extraMetadata,
+        ],
       );
       await client.query('COMMIT');
     } catch (e) {
@@ -729,10 +799,10 @@ export class WalletRepository {
         throw new Error('INSUFFICIENT_BALANCE');
       }
       const balanceAfter = currentBalance - amount;
-      await client.query(
-        `UPDATE wallets SET balance = balance - $1 WHERE id = $2`,
-        [amount, walletId],
-      );
+      await client.query(`UPDATE wallets SET balance = balance - $1 WHERE id = $2`, [
+        amount,
+        walletId,
+      ]);
 
       let validReferenceId: string | null = null;
       let extraMetadata = {};
@@ -749,7 +819,16 @@ export class WalletRepository {
         `INSERT INTO transactions (wallet_id, user_id, type, amount, balance_after, status, description, reference_type, reference_id, metadata)
          VALUES ($1, $2, 'payment', $3, $4, 'completed', $5, $6, $7, $8)
          RETURNING id`,
-        [walletId, userId, amount, balanceAfter, description, referenceType, validReferenceId, extraMetadata],
+        [
+          walletId,
+          userId,
+          amount,
+          balanceAfter,
+          description,
+          referenceType,
+          validReferenceId,
+          extraMetadata,
+        ],
       );
       await client.query('COMMIT');
       return txRows[0]!.id;
@@ -825,7 +904,16 @@ export class WalletRepository {
     const { rows: txRows } = await client.query<{ id: string }>(
       `INSERT INTO transactions (wallet_id, user_id, type, amount, balance_after, status, description, reference_type, reference_id, metadata)
        VALUES ($1, $2, 'payment', $3, $4, 'completed', $5, $6, $7, $8) RETURNING id`,
-      [walletId, userId, amount, balanceAfter, description, referenceType, validReferenceId, extraMetadata],
+      [
+        walletId,
+        userId,
+        amount,
+        balanceAfter,
+        description,
+        referenceType,
+        validReferenceId,
+        extraMetadata,
+      ],
     );
     return txRows[0]!.id;
   }
@@ -862,7 +950,17 @@ export class WalletRepository {
     await client.query(
       `INSERT INTO transactions (wallet_id, user_id, type, amount, balance_after, status, description, reference_type, reference_id, metadata)
        VALUES ($1, $2, $3, $4, $5, 'completed', $6, $7, $8, $9)`,
-      [walletId, userId, txType, amount, balanceAfter, description, referenceType, validReferenceId, extraMetadata],
+      [
+        walletId,
+        userId,
+        txType,
+        amount,
+        balanceAfter,
+        description,
+        referenceType,
+        validReferenceId,
+        extraMetadata,
+      ],
     );
   }
 
@@ -1115,7 +1213,10 @@ export class WalletRepository {
         ],
       );
       const row = rows[0]!;
-      await client.query(`UPDATE wallet_holds SET reference_id = $2 WHERE id = $1`, [hold.id, row.id]);
+      await client.query(`UPDATE wallet_holds SET reference_id = $2 WHERE id = $1`, [
+        hold.id,
+        row.id,
+      ]);
       await client.query('COMMIT');
       return row;
     } catch (e) {
@@ -1247,9 +1348,14 @@ export class WalletRepository {
         return null;
       }
       if (row.hold_id) {
-        await this.releaseHoldInTransaction(client, row.hold_id, 'Withdrawal blocked — funds released', {
-          block_reason: params.error,
-        });
+        await this.releaseHoldInTransaction(
+          client,
+          row.hold_id,
+          'Withdrawal blocked — funds released',
+          {
+            block_reason: params.error,
+          },
+        );
       }
       const { rows } = await client.query<WithdrawalRequestRow>(
         `UPDATE withdrawal_requests
@@ -1291,11 +1397,7 @@ export class WalletRepository {
            updated_at = now()
        WHERE id = $1
        RETURNING ${this.withdrawalSelectColumns}`,
-      [
-        withdrawalId,
-        providerStatus,
-        providerPayload ? JSON.stringify(providerPayload) : null,
-      ],
+      [withdrawalId, providerStatus, providerPayload ? JSON.stringify(providerPayload) : null],
     );
     return rows[0] ?? null;
   }
@@ -1333,7 +1435,11 @@ export class WalletRepository {
              provider_payload = provider_payload || COALESCE($3::jsonb, '{}'::jsonb),
              updated_at = now()
          WHERE id = $1`,
-        [row.id, params.providerStatus, params.providerPayload ? JSON.stringify(params.providerPayload) : null],
+        [
+          row.id,
+          params.providerStatus,
+          params.providerPayload ? JSON.stringify(params.providerPayload) : null,
+        ],
       );
 
       const terminalStatuses = new Set(['finished', 'failed', 'rejected', 'cancelled']);
@@ -1344,7 +1450,11 @@ export class WalletRepository {
           [row.id],
         );
         await client.query('COMMIT');
-        return { updated: false, status: refreshed[0]?.status ?? row.status, row: refreshed[0] ?? row };
+        return {
+          updated: false,
+          status: refreshed[0]?.status ?? row.status,
+          row: refreshed[0] ?? row,
+        };
       }
 
       const normalizedProviderStatus = params.providerStatus.toLowerCase();
@@ -1359,7 +1469,9 @@ export class WalletRepository {
           [row.wallet_id],
         );
         const balanceAfter = parseFloat(walletRows[0]?.balance ?? '0');
-        const ref = this.splitReferenceId(row.provider_withdrawal_id ?? params.withdrawalId ?? null);
+        const ref = this.splitReferenceId(
+          row.provider_withdrawal_id ?? params.withdrawalId ?? null,
+        );
         const metadata = {
           ...ref.metadata,
           provider_batch_withdrawal_id: row.provider_batch_withdrawal_id,
@@ -1516,7 +1628,10 @@ export class WalletRepository {
           egpDebit,
           balanceAfter,
           'Freelancer withdrawal (InstaPay)',
-          JSON.stringify({ withdrawal_request_id: row.id, admin_proof_upload_id: params.proofUploadId }),
+          JSON.stringify({
+            withdrawal_request_id: row.id,
+            admin_proof_upload_id: params.proofUploadId,
+          }),
           params.adminId,
         ],
       );
@@ -1527,6 +1642,82 @@ export class WalletRepository {
          WHERE id = $1
          RETURNING ${this.withdrawalSelectColumns}`,
         [params.withdrawalId, params.proofUploadId, params.adminId],
+      );
+      await client.query('COMMIT');
+      return out[0] ?? null;
+    } catch (e) {
+      await client.query('ROLLBACK');
+      throw e;
+    } finally {
+      client.release();
+    }
+  }
+
+  async completePaymobWithdrawalByAdmin(params: {
+    withdrawalId: string;
+    adminId: string;
+    providerReference?: string | null;
+    note?: string | null;
+  }): Promise<WithdrawalRequestRow | null> {
+    const client = await this.db.connect();
+    try {
+      await client.query('BEGIN');
+      const { rows: wrRows } = await client.query<WithdrawalRequestRow>(
+        `SELECT ${this.withdrawalSelectColumns}
+         FROM withdrawal_requests WHERE id = $1 FOR UPDATE`,
+        [params.withdrawalId],
+      );
+      const row = wrRows[0] ?? null;
+      if (!row || row.withdrawal_method !== 'paymob' || row.status !== 'processing') {
+        await client.query('ROLLBACK');
+        return null;
+      }
+      if (row.hold_id) {
+        await this.captureHoldInTransaction(client, row.hold_id, 'Paymob withdrawal completed', {
+          paymob_payout_reference: params.providerReference ?? row.paymob_payout_reference,
+          note: params.note ?? null,
+        });
+      }
+      const { rows: walletRows } = await client.query<{ balance: string }>(
+        `SELECT balance::text FROM wallets WHERE id = $1`,
+        [row.wallet_id],
+      );
+      const balanceAfter = parseFloat(walletRows[0]?.balance ?? '0');
+      const egpDebit = parseFloat(row.source_amount_egp ?? row.amount);
+      const reference = this.splitReferenceId(
+        params.providerReference ?? row.paymob_payout_reference,
+      );
+      await client.query(
+        `INSERT INTO transactions (
+          wallet_id, user_id, type, amount, balance_after, status, description, reference_type, reference_id, metadata, created_by
+        ) VALUES ($1, $2, 'withdrawal', $3, $4, 'completed', $5, 'paymob_payout', $6, $7::jsonb, $8)`,
+        [
+          row.wallet_id,
+          row.user_id,
+          egpDebit,
+          balanceAfter,
+          'Freelancer withdrawal (Paymob)',
+          reference.validReferenceId,
+          JSON.stringify({
+            ...reference.metadata,
+            withdrawal_request_id: row.id,
+            paymob_payout_reference: params.providerReference ?? row.paymob_payout_reference,
+            note: params.note ?? null,
+          }),
+          params.adminId,
+        ],
+      );
+      const { rows: out } = await client.query<WithdrawalRequestRow>(
+        `UPDATE withdrawal_requests
+         SET status = 'finished',
+             processed_at = now(),
+             paymob_payout_reference = COALESCE($2, paymob_payout_reference),
+             reviewed_by = $3,
+             reviewed_at = now(),
+             updated_at = now()
+         WHERE id = $1
+         RETURNING ${this.withdrawalSelectColumns}`,
+        [params.withdrawalId, params.providerReference ?? null, params.adminId],
       );
       await client.query('COMMIT');
       return out[0] ?? null;
@@ -1557,7 +1748,12 @@ export class WalletRepository {
         return null;
       }
       if (row.hold_id) {
-        await this.releaseHoldInTransaction(client, row.hold_id, 'InstaPay withdrawal rejected', {});
+        await this.releaseHoldInTransaction(
+          client,
+          row.hold_id,
+          'InstaPay withdrawal rejected',
+          {},
+        );
       }
       const { rows } = await client.query<WithdrawalRequestRow>(
         `UPDATE withdrawal_requests
@@ -1595,7 +1791,12 @@ export class WalletRepository {
         return null;
       }
       if (row.hold_id) {
-        await this.releaseHoldInTransaction(client, row.hold_id, 'User cancelled InstaPay withdrawal', {});
+        await this.releaseHoldInTransaction(
+          client,
+          row.hold_id,
+          'User cancelled InstaPay withdrawal',
+          {},
+        );
       }
       const { rows } = await client.query<WithdrawalRequestRow>(
         `UPDATE withdrawal_requests

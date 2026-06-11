@@ -83,7 +83,11 @@ export const AdminReviewReportsTab = ({ dictionary, accessToken }: Props) => {
     else void loadDisputes().finally(() => setLoading(false));
   }, [subTab, loadReports, loadDisputes]);
 
-  const handleResolveReport = async (reportId: string, decision: 'dismissed' | 'upheld', hideReview: boolean) => {
+  const handleResolveReport = async (
+    reportId: string,
+    decision: 'dismissed' | 'upheld',
+    hideReview: boolean,
+  ) => {
     setResolvingId(reportId);
     try {
       await adminApiClient.resolveReviewReport(accessToken, reportId, { decision, hideReview });
@@ -93,7 +97,11 @@ export const AdminReviewReportsTab = ({ dictionary, accessToken }: Props) => {
     }
   };
 
-  const handleResolveDispute = async (disputeId: string, decision: 'dismissed' | 'upheld', hideReview: boolean) => {
+  const handleResolveDispute = async (
+    disputeId: string,
+    decision: 'dismissed' | 'upheld',
+    hideReview: boolean,
+  ) => {
     setResolvingId(disputeId);
     try {
       await adminApiClient.resolveReviewDispute(accessToken, disputeId, { decision, hideReview });
@@ -125,7 +133,7 @@ export const AdminReviewReportsTab = ({ dictionary, accessToken }: Props) => {
           value={statusFilter}
           onChange={(e) => setStatusFilter(e.target.value as 'pending' | 'all')}
           className="dashboard-input"
-          style={{ marginLeft: 'auto' }}
+          style={{ marginInlineStart: 'auto' }}
         >
           <option value="pending">Pending only</option>
           <option value="all">All</option>
@@ -140,16 +148,25 @@ export const AdminReviewReportsTab = ({ dictionary, accessToken }: Props) => {
           ) : (
             reports.map((r) => (
               <li key={r.id} className="admin-card" style={{ padding: '1rem' }}>
-                <p><strong>Review:</strong> {r.review_rating}★ {r.review_comment ?? '(no comment)'}</p>
-                <p><strong>Reporter:</strong> {r.reporter_name} · Reason: {r.reason}{r.comment ? ` · ${r.comment}` : ''}</p>
-                <p className="dashboard-card-meta">{new Date(r.created_at).toLocaleString()} · Status: {r.status}</p>
+                <p>
+                  <strong>Review:</strong> {r.review_rating}★ {r.review_comment ?? '(no comment)'}
+                </p>
+                <p>
+                  <strong>Reporter:</strong> {r.reporter_name} · Reason: {r.reason}
+                  {r.comment ? ` · ${r.comment}` : ''}
+                </p>
+                <p className="dashboard-card-meta">
+                  {new Date(r.created_at).toLocaleString()} · Status: {r.status}
+                </p>
                 {r.status === 'pending' && (
                   <div className="calendar-booking-actions" style={{ marginTop: '0.5rem' }}>
                     <button
                       type="button"
                       className="dashboard-btn dashboard-btn--small dashboard-btn--secondary"
                       disabled={resolvingId === r.id}
-                      onClick={() => { void handleResolveReport(r.id, 'dismissed', false); }}
+                      onClick={() => {
+                        void handleResolveReport(r.id, 'dismissed', false);
+                      }}
                     >
                       Dismiss
                     </button>
@@ -157,7 +174,9 @@ export const AdminReviewReportsTab = ({ dictionary, accessToken }: Props) => {
                       type="button"
                       className="dashboard-btn dashboard-btn--small dashboard-btn--primary"
                       disabled={resolvingId === r.id}
-                      onClick={() => { void handleResolveReport(r.id, 'upheld', false); }}
+                      onClick={() => {
+                        void handleResolveReport(r.id, 'upheld', false);
+                      }}
                     >
                       Uphold
                     </button>
@@ -165,7 +184,9 @@ export const AdminReviewReportsTab = ({ dictionary, accessToken }: Props) => {
                       type="button"
                       className="dashboard-btn dashboard-btn--small dashboard-btn--danger"
                       disabled={resolvingId === r.id}
-                      onClick={() => { void handleResolveReport(r.id, 'upheld', true); }}
+                      onClick={() => {
+                        void handleResolveReport(r.id, 'upheld', true);
+                      }}
                     >
                       Uphold &amp; hide review
                     </button>
@@ -182,16 +203,24 @@ export const AdminReviewReportsTab = ({ dictionary, accessToken }: Props) => {
           ) : (
             disputes.map((d) => (
               <li key={d.id} className="admin-card" style={{ padding: '1rem' }}>
-                <p><strong>Review:</strong> {d.review_rating}★ {d.review_comment ?? '(no comment)'}</p>
-                <p><strong>Disputer:</strong> {d.disputer_name} · Reason: {d.reason}</p>
-                <p className="dashboard-card-meta">{new Date(d.created_at).toLocaleString()} · Status: {d.status}</p>
+                <p>
+                  <strong>Review:</strong> {d.review_rating}★ {d.review_comment ?? '(no comment)'}
+                </p>
+                <p>
+                  <strong>Disputer:</strong> {d.disputer_name} · Reason: {d.reason}
+                </p>
+                <p className="dashboard-card-meta">
+                  {new Date(d.created_at).toLocaleString()} · Status: {d.status}
+                </p>
                 {d.status === 'pending' && (
                   <div className="calendar-booking-actions" style={{ marginTop: '0.5rem' }}>
                     <button
                       type="button"
                       className="dashboard-btn dashboard-btn--small dashboard-btn--secondary"
                       disabled={resolvingId === d.id}
-                      onClick={() => { void handleResolveDispute(d.id, 'dismissed', false); }}
+                      onClick={() => {
+                        void handleResolveDispute(d.id, 'dismissed', false);
+                      }}
                     >
                       Dismiss
                     </button>
@@ -199,7 +228,9 @@ export const AdminReviewReportsTab = ({ dictionary, accessToken }: Props) => {
                       type="button"
                       className="dashboard-btn dashboard-btn--small dashboard-btn--primary"
                       disabled={resolvingId === d.id}
-                      onClick={() => { void handleResolveDispute(d.id, 'upheld', false); }}
+                      onClick={() => {
+                        void handleResolveDispute(d.id, 'upheld', false);
+                      }}
                     >
                       Uphold
                     </button>
@@ -207,7 +238,9 @@ export const AdminReviewReportsTab = ({ dictionary, accessToken }: Props) => {
                       type="button"
                       className="dashboard-btn dashboard-btn--small dashboard-btn--danger"
                       disabled={resolvingId === d.id}
-                      onClick={() => { void handleResolveDispute(d.id, 'upheld', true); }}
+                      onClick={() => {
+                        void handleResolveDispute(d.id, 'upheld', true);
+                      }}
                     >
                       Uphold &amp; hide review
                     </button>

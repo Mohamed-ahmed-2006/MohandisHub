@@ -75,7 +75,9 @@ export const AppAvatarMenu = ({
             <span className="app-avatar-dropdown-name-row">
               <span className="app-avatar-dropdown-name">{displayName}</span>
               {planProBadge ? (
-                <span className="app-plan-badge app-plan-badge--pro">{dictionary.plan.badgePro}</span>
+                <span className="app-plan-badge app-plan-badge--pro">
+                  {dictionary.plan.badgePro}
+                </span>
               ) : null}
               {planTrustedBusinessBadge ? (
                 <span className="app-plan-badge app-plan-badge--trusted">

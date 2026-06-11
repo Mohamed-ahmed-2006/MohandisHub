@@ -1,6 +1,10 @@
 'use client';
 
-import type { SupportTicket, SupportTicketCategory, SupportTicketMessage } from '@mohandishub/shared';
+import type {
+  SupportTicket,
+  SupportTicketCategory,
+  SupportTicketMessage,
+} from '@mohandishub/shared';
 import { ChevronLeft } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 
@@ -17,11 +21,22 @@ type Props = {
   refreshSession?: () => Promise<string | null>;
 };
 
-const STATUS_OPTIONS: SupportTicket['status'][] = ['open', 'in_progress', 'waiting_reply', 'resolved', 'closed'];
+const STATUS_OPTIONS: SupportTicket['status'][] = [
+  'open',
+  'in_progress',
+  'waiting_reply',
+  'resolved',
+  'closed',
+];
 
 const CATEGORY_OPTIONS: SupportTicketCategory[] = ['bug', 'suggestion', 'error', 'other'];
 
-const buildTicketListParams = (page: number, limit: number, statusFilter: string, categoryFilter: string) => ({
+const buildTicketListParams = (
+  page: number,
+  limit: number,
+  statusFilter: string,
+  categoryFilter: string,
+) => ({
   page,
   limit,
   ...(statusFilter ? { status: statusFilter } : {}),
@@ -48,7 +63,10 @@ function statusOptionLabel(status: SupportTicket['status'], st: Record<string, s
   }
 }
 
-function categoryCellLabel(cat: SupportTicketCategory | undefined, st: Record<string, string>): string {
+function categoryCellLabel(
+  cat: SupportTicketCategory | undefined,
+  st: Record<string, string>,
+): string {
   const c = cat ?? 'other';
   switch (c) {
     case 'bug':
@@ -148,7 +166,11 @@ export const AdminSupportTab = ({ dictionary, accessToken, refreshSession }: Pro
     if (!window.confirm(st.deleteConfirm ?? 'Delete this ticket?')) return;
     setDeleting(true);
     try {
-      await adminApiClient.deleteSupportTicket(accessToken, ticketId, buildAdminClientOptions(refreshSession));
+      await adminApiClient.deleteSupportTicket(
+        accessToken,
+        ticketId,
+        buildAdminClientOptions(refreshSession),
+      );
       if (selectedTicket?.id === ticketId) {
         setSelectedTicket(null);
       }
@@ -188,23 +210,35 @@ export const AdminSupportTab = ({ dictionary, accessToken, refreshSession }: Pro
           onClick={() => setSelectedTicket(null)}
           style={{ marginBottom: '1rem' }}
         >
-          <ChevronLeft size={16} style={{ marginRight: '0.35rem' }} aria-hidden />
+          <ChevronLeft size={16} style={{ marginInlineEnd: '0.35rem' }} aria-hidden />
           Back to list
         </button>
         <div className="admin-user-card" style={{ marginBottom: '1rem' }}>
           <p style={{ margin: '0 0 0.35rem', fontWeight: 600 }}>{selectedTicket.subject}</p>
           <p className="dashboard-card-meta" style={{ margin: 0 }}>
-            {categoryCellLabel(selectedTicket.category, st)} · {selectedTicket.userEmail ?? selectedTicket.userId} ·{' '}
+            {categoryCellLabel(selectedTicket.category, st)} ·{' '}
+            {selectedTicket.userEmail ?? selectedTicket.userId} ·{' '}
             <span className="admin-badge admin-badge--pending">
               {statusOptionLabel(selectedTicket.status, st)}
             </span>
           </p>
-          <div style={{ marginTop: '0.75rem', display: 'flex', flexWrap: 'wrap', gap: '0.5rem', alignItems: 'center' }}>
+          <div
+            style={{
+              marginTop: '0.75rem',
+              display: 'flex',
+              flexWrap: 'wrap',
+              gap: '0.5rem',
+              alignItems: 'center',
+            }}
+          >
             <select
               className="admin-form-select admin-form-select--inline"
               value={selectedTicket.status}
               onChange={(e) =>
-                void handleStatusChange(selectedTicket.id, e.target.value as SupportTicket['status'])
+                void handleStatusChange(
+                  selectedTicket.id,
+                  e.target.value as SupportTicket['status'],
+                )
               }
             >
               {STATUS_OPTIONS.map((s) => (
@@ -243,13 +277,24 @@ export const AdminSupportTab = ({ dictionary, accessToken, refreshSession }: Pro
           {messagesLoading ? (
             <p className="dashboard-empty">{d.loading}</p>
           ) : (
-            <ul style={{ listStyle: 'none', padding: 0, margin: '0 0 1rem', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+            <ul
+              style={{
+                listStyle: 'none',
+                padding: 0,
+                margin: '0 0 1rem',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '0.75rem',
+              }}
+            >
               {messages.map((m) => (
                 <li
                   key={m.id}
                   style={{
                     padding: '0.75rem',
-                    background: m.isStaff ? 'hsl(var(--primary) / 0.08)' : 'hsl(var(--muted) / 0.4)',
+                    background: m.isStaff
+                      ? 'hsl(var(--primary) / 0.08)'
+                      : 'hsl(var(--muted) / 0.4)',
                     borderRadius: 8,
                     borderLeft: m.isStaff ? '3px solid hsl(var(--primary))' : undefined,
                   }}
@@ -259,9 +304,19 @@ export const AdminSupportTab = ({ dictionary, accessToken, refreshSession }: Pro
                   </p>
                   <p style={{ margin: 0, whiteSpace: 'pre-wrap' }}>{m.body}</p>
                   {m.attachmentUrls?.length ? (
-                    <div className="dashboard-card-media" style={{ marginTop: '0.5rem', display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+                    <div
+                      className="dashboard-card-media"
+                      style={{
+                        marginTop: '0.5rem',
+                        display: 'flex',
+                        flexWrap: 'wrap',
+                        gap: '0.5rem',
+                      }}
+                    >
                       {m.attachmentUrls.map((u) => {
-                        const src = u.startsWith('http') ? u : `${getApiBaseUrl()}${u.startsWith('/') ? '' : '/'}${u}`;
+                        const src = u.startsWith('http')
+                          ? u
+                          : `${getApiBaseUrl()}${u.startsWith('/') ? '' : '/'}${u}`;
                         return (
                           <a
                             key={u}
@@ -271,7 +326,12 @@ export const AdminSupportTab = ({ dictionary, accessToken, refreshSession }: Pro
                             className="dashboard-card-media-thumb"
                           >
                             {/* eslint-disable-next-line @next/next/no-img-element */}
-                            <img src={src} alt={st.attachmentAlt ?? 'Attachment'} width={80} height={80} />
+                            <img
+                              src={src}
+                              alt={st.attachmentAlt ?? 'Attachment'}
+                              width={80}
+                              height={80}
+                            />
                           </a>
                         );
                       })}
@@ -367,16 +427,14 @@ export const AdminSupportTab = ({ dictionary, accessToken, refreshSession }: Pro
               </thead>
               <tbody>
                 {tickets.map((t) => (
-                  <tr
-                    key={t.id}
-                    style={{ cursor: 'pointer' }}
-                    onClick={() => setSelectedTicket(t)}
-                  >
+                  <tr key={t.id} style={{ cursor: 'pointer' }} onClick={() => setSelectedTicket(t)}>
                     <td>{t.subject}</td>
                     <td>{categoryCellLabel(t.category, st)}</td>
                     <td>{t.userEmail ?? t.userId}</td>
                     <td>
-                      <span className="admin-badge admin-badge--pending">{statusOptionLabel(t.status, st)}</span>
+                      <span className="admin-badge admin-badge--pending">
+                        {statusOptionLabel(t.status, st)}
+                      </span>
                     </td>
                     <td>{t.messageCount ?? 0}</td>
                     <td>{new Date(t.updatedAt).toLocaleString()}</td>
@@ -397,7 +455,7 @@ export const AdminSupportTab = ({ dictionary, accessToken, refreshSession }: Pro
                       <button
                         type="button"
                         className="admin-btn admin-btn--small"
-                        style={{ marginLeft: '0.35rem' }}
+                        style={{ marginInlineStart: '0.35rem' }}
                         onClick={() => setSelectedTicket(t)}
                       >
                         View & reply
@@ -405,7 +463,7 @@ export const AdminSupportTab = ({ dictionary, accessToken, refreshSession }: Pro
                       <button
                         type="button"
                         className="admin-btn admin-btn--small"
-                        style={{ marginLeft: '0.35rem' }}
+                        style={{ marginInlineStart: '0.35rem' }}
                         disabled={deleting}
                         onClick={() => void handleDeleteTicket(t.id)}
                       >

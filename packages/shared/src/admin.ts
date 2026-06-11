@@ -14,6 +14,40 @@ import type {
 } from './profiles.js';
 import type { UserRole } from './roles.js';
 
+export const ADMIN_PERMISSIONS = [
+  'super_admin',
+  'manage_users',
+  'manage_plans',
+  'manage_transactions',
+  'manage_services',
+  'manage_verifications',
+  'manage_notifications',
+  'manage_support',
+  'manage_media',
+  'manage_settings',
+  'manage_retention',
+  'manage_ads',
+  'manage_ad_pricing',
+  'manage_ad_scheduling',
+  'manage_ad_targeting',
+] as const;
+
+export type AdminPermission = (typeof ADMIN_PERMISSIONS)[number];
+
+export const isAdminPermission = (permission: string): permission is AdminPermission =>
+  (ADMIN_PERMISSIONS as readonly string[]).includes(permission);
+
+export const normalizeAdminPermissions = (permissions: unknown): AdminPermission[] => {
+  if (!Array.isArray(permissions)) return [];
+  return [
+    ...new Set(
+      permissions.filter(
+        (p): p is AdminPermission => typeof p === 'string' && isAdminPermission(p),
+      ),
+    ),
+  ];
+};
+
 export type PaginationParams = {
   page?: number;
   limit?: number;
@@ -49,7 +83,7 @@ export type AdminUserListItem = {
   phone: string | null;
   primaryRole: UserRole;
   isAdmin: boolean;
-  adminPermissions?: string[];
+  adminPermissions?: AdminPermission[];
   isActive: boolean;
   emailVerifiedAt: string | null;
   planSlug: string | null;
@@ -80,7 +114,7 @@ export type AdminUpdateUserBody = {
   isActive?: boolean;
   primaryRole?: UserRole;
   isAdmin?: boolean;
-  adminPermissions?: string[];
+  adminPermissions?: AdminPermission[];
   planId?: string | null;
 };
 

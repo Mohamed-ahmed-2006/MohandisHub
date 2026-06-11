@@ -133,9 +133,7 @@ export class PlansService {
           ? Number(limits.maxServices)
           : row.max_services,
       maxNeeds:
-        limits.maxNeeds !== undefined && limits.maxNeeds !== null
-          ? Number(limits.maxNeeds)
-          : null,
+        limits.maxNeeds !== undefined && limits.maxNeeds !== null ? Number(limits.maxNeeds) : null,
       maxJobs:
         limits.maxJobs !== undefined && limits.maxJobs !== null
           ? Number(limits.maxJobs)
@@ -285,6 +283,25 @@ export class PlansService {
       });
     }
 
+    const { rows: activeSubscriptionRows } = await pool.query<{ plan_id: string; ends_at: string }>(
+      `SELECT plan_id, ends_at
+       FROM plan_subscriptions
+       WHERE user_id = $1 AND ends_at > now()
+       ORDER BY ends_at DESC
+       LIMIT 1`,
+      [userId],
+    );
+    const activeSubscription = activeSubscriptionRows[0] ?? null;
+    if (activeSubscription?.plan_id === planId) {
+      return {
+        plan: this.toPlan(planRow),
+        walletBalance: parseFloat(
+          (await this.walletRepo.findWalletByUserId(userId))?.balance ?? '0',
+        ),
+        subscriptionEndsAt: activeSubscription.ends_at,
+      };
+    }
+
     const price = parseFloat(planRow.price as string);
 
     const wallet = await this.walletRepo.findWalletByUserId(userId);
@@ -307,8 +324,8 @@ export class PlansService {
     const billingCycle = (planRow.billing_cycle as string) ?? 'monthly';
     const durationDays =
       billingCycle === 'one_time'
-        ? (planRow.duration_days as number) ?? 365
-        : BILLING_CYCLE_DAYS[billingCycle] ?? 30;
+        ? ((planRow.duration_days as number) ?? 365)
+        : (BILLING_CYCLE_DAYS[billingCycle] ?? 30);
     const startsAt = new Date();
     const endsAt = new Date(startsAt);
     endsAt.setDate(endsAt.getDate() + durationDays);
@@ -381,9 +398,7 @@ export class PlansService {
       role === 'customer' || role === 'expert' || role === 'craftsman' || role === 'business'
         ? role
         : null;
-    const quotaLines = quotaRole
-      ? await this.buildUsageQuotaLines(userId, quotaRole, limits)
-      : [];
+    const quotaLines = quotaRole ? await this.buildUsageQuotaLines(userId, quotaRole, limits) : [];
 
     if (role === 'customer') {
       const { rows } = await pool.query<{ c: string }>(

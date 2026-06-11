@@ -5,8 +5,13 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState } 
 
 import { authUserCache } from '@/lib/auth/auth-cache';
 import { authApiClient } from '@/lib/auth/client';
+import {
+  AUTH_SESSION_REFRESHED_EVENT,
+  type AuthSessionRefreshedEventDetail,
+} from '@/lib/auth/fetch-with-auth-retry';
 import { coalescedRefresh } from '@/lib/auth/refresh-coalesced';
 import { sessionStore } from '@/lib/auth/session-store';
+import { disconnectChatSocket } from '@/lib/chat/socket';
 
 type RegisterRole = Exclude<UserRole, 'admin'>;
 
@@ -35,6 +40,7 @@ const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
 /** localStorage key: set when user has logged in; used to attempt refresh on reload. */
 export const AUTH_SESSION_HINT_KEY = 'mohandishub-has-session';
+export const AUTH_SESSION_COOKIE_KEY = 'mohandishub-session';
 
 type AuthProviderProps = {
   children: React.ReactNode;
@@ -44,11 +50,13 @@ const clearSessionState = (
   setAccessToken: (value: string | null) => void,
   setAuthUser: (value: AuthUser | null) => void,
 ): void => {
+  disconnectChatSocket();
   sessionStore.clear();
   setAccessToken(null);
   setAuthUser(null);
   authUserCache.clear();
   window.localStorage.removeItem(AUTH_SESSION_HINT_KEY);
+  document.cookie = `${AUTH_SESSION_COOKIE_KEY}=; Max-Age=0; Path=/; SameSite=Lax`;
 };
 
 /** Refresh this many milliseconds before the access token actually expires. */
@@ -71,6 +79,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
           : null,
       );
       window.localStorage.setItem(AUTH_SESSION_HINT_KEY, '1');
+      document.cookie = `${AUTH_SESSION_COOKIE_KEY}=1; Max-Age=2592000; Path=/; SameSite=Lax`;
       return;
     }
 
@@ -78,6 +87,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     setAccessToken(null);
     setTokenExpiresAt(null);
     window.localStorage.removeItem(AUTH_SESSION_HINT_KEY);
+    document.cookie = `${AUTH_SESSION_COOKIE_KEY}=; Max-Age=0; Path=/; SameSite=Lax`;
   }, []);
 
   const refreshSession = useCallback(async (): Promise<string | null> => {
@@ -125,11 +135,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       // A transient failure (network blip / 5xx) leaves the session hint in
       // place but yields no token. Retry once before giving up so a flaky
       // network on reload does not look like a logout.
-      if (
-        !token &&
-        isMounted &&
-        window.localStorage.getItem(AUTH_SESSION_HINT_KEY) === '1'
-      ) {
+      if (!token && isMounted && window.localStorage.getItem(AUTH_SESSION_HINT_KEY) === '1') {
         await new Promise((resolve) => setTimeout(resolve, 1500));
         if (isMounted) {
           await refreshSession();
@@ -160,6 +166,23 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     document.addEventListener('visibilitychange', onVisibility);
     return () => document.removeEventListener('visibilitychange', onVisibility);
   }, [refreshSession, accessToken, tokenExpiresAt]);
+
+  useEffect(() => {
+    const onSessionRefreshed = (event: Event) => {
+      const detail = (event as CustomEvent<AuthSessionRefreshedEventDetail>).detail;
+      if (!detail) return;
+      if (detail.kind === 'fatal') {
+        clearSessionState(setAccessToken, setAuthUser);
+        setTokenExpiresAt(null);
+        return;
+      }
+      setSessionToken(detail.accessToken, detail.expiresIn);
+      setAuthUser(detail.user);
+      authUserCache.set(detail.user);
+    };
+    window.addEventListener(AUTH_SESSION_REFRESHED_EVENT, onSessionRefreshed);
+    return () => window.removeEventListener(AUTH_SESSION_REFRESHED_EVENT, onSessionRefreshed);
+  }, [setSessionToken]);
 
   // Proactively refresh the access token shortly before it expires so a tab
   // left open does not start returning 401s.

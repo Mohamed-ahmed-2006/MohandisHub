@@ -4,6 +4,7 @@ import { NextResponse } from 'next/server';
 import { DEFAULT_LOCALE, isSupportedLocale } from './lib/i18n/config';
 
 const LANGUAGE_COOKIE_KEY = 'mohandishub-language';
+const AUTH_SESSION_COOKIE_KEY = 'mohandishub-session';
 
 const resolveLocaleFromHeader = (acceptLanguage: string | null): 'en' | 'ar' | null => {
   if (!acceptLanguage) {
@@ -42,6 +43,14 @@ export function middleware(request: NextRequest) {
   }
 
   if (maybeLocale && isSupportedLocale(maybeLocale)) {
+    if (segments[1] === 'app' && !request.cookies.get(AUTH_SESSION_COOKIE_KEY)?.value) {
+      const url = request.nextUrl.clone();
+      url.pathname = `/${maybeLocale}/auth`;
+      url.search = '';
+      url.searchParams.set('mode', 'login');
+      url.searchParams.set('next', pathname + request.nextUrl.search);
+      return NextResponse.redirect(url);
+    }
     return NextResponse.next();
   }
 

@@ -23,8 +23,7 @@ export function resolvePublicAssetUrl(url: string | null | undefined): string | 
   // - `//localhost:4000/uploads/...` (scheme-less URLs sometimes stored by backends)
   if (LOCAL_API_HOST_RE.test(trimmed) || trimmed.startsWith('//')) {
     try {
-      const parsed =
-        trimmed.startsWith('//') ? new URL(`http:${trimmed}`) : new URL(trimmed);
+      const parsed = trimmed.startsWith('//') ? new URL(`http:${trimmed}`) : new URL(trimmed);
       const isLocal = parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1';
       if (!isLocal) return trimmed;
 

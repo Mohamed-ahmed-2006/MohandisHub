@@ -198,7 +198,9 @@
 }
 
 .button-link-primary {
-  box-shadow: 0 14px 28px -16px hsl(var(--accent) / 0.85), var(--elevation-1);
+  box-shadow:
+    0 14px 28px -16px hsl(var(--accent) / 0.85),
+    var(--elevation-1);
   background-color: hsl(var(--accent));
   color: hsl(var(--primary-foreground));
 }

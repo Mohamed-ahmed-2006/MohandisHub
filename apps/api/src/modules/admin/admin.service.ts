@@ -28,7 +28,7 @@ import type {
   Transaction,
   WithdrawalRequest,
 } from '@mohandishub/shared';
-import { normalizePlanAllowedRoles } from '@mohandishub/shared';
+import { normalizeAdminPermissions, normalizePlanAllowedRoles } from '@mohandishub/shared';
 
 import { invalidateUserStatusCache } from '../../middleware/user-status-cache.js';
 import { HttpError } from '../../utils/http-error.js';
@@ -58,6 +58,7 @@ import type {
   AdjustBalanceInput,
   ChangeUserEmailInput,
   CompleteManualInstapayWithdrawalInput,
+  CompletePaymobWithdrawalInput,
   CreateCategoryInput,
   CreatePlanInput,
   RejectManualInstapayDepositInput,
@@ -155,13 +156,24 @@ export class AdminService {
     if (input.primaryRole !== undefined) dbFields.primary_role = input.primaryRole;
     if (input.isAdmin !== undefined) dbFields.is_admin = input.isAdmin;
     if (input.adminPermissions !== undefined)
-      dbFields.admin_permissions = Array.isArray(input.adminPermissions) ? input.adminPermissions : [];
+      dbFields.admin_permissions = Array.isArray(input.adminPermissions)
+        ? input.adminPermissions
+        : [];
     if (input.planId !== undefined) dbFields.plan_id = input.planId;
+    const revokeExistingSessions =
+      input.isAdmin !== undefined ||
+      input.adminPermissions !== undefined ||
+      input.primaryRole !== undefined ||
+      input.isActive === false;
 
     if (Object.keys(dbFields).length === 0) {
       const existing = await this.repo.getUserById(userId);
       if (!existing) {
-        throw new HttpError({ statusCode: 404, code: 'USER_NOT_FOUND', message: 'User not found.' });
+        throw new HttpError({
+          statusCode: 404,
+          code: 'USER_NOT_FOUND',
+          message: 'User not found.',
+        });
       }
       return this.toUserListItem(existing);
     }
@@ -169,6 +181,10 @@ export class AdminService {
     const row = await this.repo.updateUser(userId, dbFields);
     if (!row) {
       throw new HttpError({ statusCode: 404, code: 'USER_NOT_FOUND', message: 'User not found.' });
+    }
+    if (revokeExistingSessions) {
+      await this.authRepository.revokeAllUserTokens(userId);
+      invalidateUserStatusCache(userId);
     }
     return this.toUserListItem(row);
   }
@@ -214,7 +230,11 @@ export class AdminService {
 
   async getUserOverview(
     userId: string,
-    options?: { includeVerification?: boolean; includeTransactions?: boolean; recentLimit?: number },
+    options?: {
+      includeVerification?: boolean;
+      includeTransactions?: boolean;
+      recentLimit?: number;
+    },
   ): Promise<AdminUserOverview> {
     const row = await this.repo.getUserDetail(userId);
     if (!row) {
@@ -243,15 +263,23 @@ export class AdminService {
       }
     };
 
-    const [needsCount, bidsCount, jobsCount, jobApplicationsCount, bookingsCount, transactionsCount] =
-      await Promise.all([
-        safeCount(() => this.repo.countNeedsByUser(userId)),
-        safeCount(() => this.repo.countBidsByUser(userId)),
-        safeCount(() => this.repo.countJobsByUser(userId)),
-        safeCount(() => this.repo.countJobApplicationsByUser(userId)),
-        safeCount(() => this.repo.countBookingsByUser(userId)),
-        includeTransactions ? safeCount(() => this.repo.countTransactions({ userId })) : Promise.resolve(0),
-      ]);
+    const [
+      needsCount,
+      bidsCount,
+      jobsCount,
+      jobApplicationsCount,
+      bookingsCount,
+      transactionsCount,
+    ] = await Promise.all([
+      safeCount(() => this.repo.countNeedsByUser(userId)),
+      safeCount(() => this.repo.countBidsByUser(userId)),
+      safeCount(() => this.repo.countJobsByUser(userId)),
+      safeCount(() => this.repo.countJobApplicationsByUser(userId)),
+      safeCount(() => this.repo.countBookingsByUser(userId)),
+      includeTransactions
+        ? safeCount(() => this.repo.countTransactions({ userId }))
+        : Promise.resolve(0),
+    ]);
 
     const [needsRows, bidsRows, jobsRows, jobApplicationsRows, bookingsRows, transactionsRows] =
       await Promise.all([
@@ -527,6 +555,8 @@ export class AdminService {
     if (!row) {
       throw new HttpError({ statusCode: 404, code: 'USER_NOT_FOUND', message: 'User not found.' });
     }
+    await this.authRepository.revokeAllUserTokens(userId);
+    invalidateUserStatusCache(userId);
 
     let verificationEmailSent = false;
     if (input.sendVerificationEmail === true) {
@@ -601,7 +631,11 @@ export class AdminService {
     try {
       const row = await this.repo.updatePlan(planId, dbFields);
       if (!row) {
-        throw new HttpError({ statusCode: 404, code: 'PLAN_NOT_FOUND', message: 'Plan not found.' });
+        throw new HttpError({
+          statusCode: 404,
+          code: 'PLAN_NOT_FOUND',
+          message: 'Plan not found.',
+        });
       }
       return this.toPlan(row);
     } catch (err: unknown) {
@@ -613,7 +647,11 @@ export class AdminService {
     try {
       const deleted = await this.repo.softDeletePlan(planId);
       if (!deleted) {
-        throw new HttpError({ statusCode: 404, code: 'PLAN_NOT_FOUND', message: 'Plan not found.' });
+        throw new HttpError({
+          statusCode: 404,
+          code: 'PLAN_NOT_FOUND',
+          message: 'Plan not found.',
+        });
       }
     } catch (err: unknown) {
       this.throwPlanDbError(err);
@@ -923,7 +961,7 @@ export class AdminService {
       phone: row.phone,
       primaryRole: row.primary_role as AdminUserListItem['primaryRole'],
       isAdmin: row.is_admin === true,
-      adminPermissions: Array.isArray(row.admin_permissions) ? row.admin_permissions : [],
+      adminPermissions: normalizeAdminPermissions(row.admin_permissions),
       isActive: row.is_active,
       emailVerifiedAt: row.email_verified_at,
       planSlug: row.plan_slug,
@@ -1168,6 +1206,17 @@ export class AdminService {
       adminId,
       input.proofUploadId,
     );
+  }
+
+  async completePaymobWithdrawal(
+    withdrawalId: string,
+    adminId: string,
+    input: CompletePaymobWithdrawalInput,
+  ): Promise<WithdrawalRequest> {
+    return this.walletService.completePaymobWithdrawalAdmin(withdrawalId, adminId, {
+      providerReference: input.providerReference ?? null,
+      note: input.note ?? null,
+    });
   }
 
   async rejectManualInstapayWithdrawal(

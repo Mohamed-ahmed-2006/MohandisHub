@@ -35,9 +35,11 @@ const profilesService = new ProfilesService();
 
 // ── Helpers ──────────────────────────────────────────────────────────────
 
-function requireAuth(req: {
-  user?: { id: string; role: string; isAdmin?: boolean };
-}): { id: string; role: string; isAdmin?: boolean } {
+function requireAuth(req: { user?: { id: string; role: string; isAdmin?: boolean } }): {
+  id: string;
+  role: string;
+  isAdmin?: boolean;
+} {
   if (!req.user) {
     throw new HttpError({
       statusCode: 401,
@@ -48,9 +50,11 @@ function requireAuth(req: {
   return req.user;
 }
 
-function requireAdmin(req: {
-  user?: { id: string; role: string; isAdmin?: boolean };
-}): { id: string; role: string; isAdmin?: boolean } {
+function requireAdmin(req: { user?: { id: string; role: string; isAdmin?: boolean } }): {
+  id: string;
+  role: string;
+  isAdmin?: boolean;
+} {
   const user = requireAuth(req);
   if (user.isAdmin !== true) {
     throw new HttpError({ statusCode: 403, code: 'FORBIDDEN', message: 'Admin access required.' });

@@ -129,7 +129,11 @@ const getReceipt = asyncHandler(async (req, res) => {
   const user = getUser(req);
   const transactionId = req.params.id;
   if (!transactionId) {
-    throw new HttpError({ statusCode: 400, code: 'VALIDATION_ERROR', message: 'Transaction ID required.' });
+    throw new HttpError({
+      statusCode: 400,
+      code: 'VALIDATION_ERROR',
+      message: 'Transaction ID required.',
+    });
   }
   const receipt = await walletService.getReceipt(user.id, transactionId);
   if (!receipt) {
@@ -163,7 +167,8 @@ const getDepositEstimate = asyncHandler(async (req, res) => {
     });
   }
 
-  const currencyFrom = typeof req.query.currencyFrom === 'string' ? req.query.currencyFrom : undefined;
+  const currencyFrom =
+    typeof req.query.currencyFrom === 'string' ? req.query.currencyFrom : undefined;
   const currencyTo = typeof req.query.currencyTo === 'string' ? req.query.currencyTo : undefined;
   const estimate = await walletService.estimateDeposit({
     amount,
@@ -192,7 +197,8 @@ const createDepositCheckout = asyncHandler(async (req, res) => {
 
 const createLegacyCryptoDeposit = asyncHandler(async (req, res) => {
   const user = getUser(req);
-  const source = req.body && typeof req.body === 'object' ? (req.body as Record<string, unknown>) : {};
+  const source =
+    req.body && typeof req.body === 'object' ? (req.body as Record<string, unknown>) : {};
   const amountRaw = source.amount;
   const amount =
     typeof amountRaw === 'number'
@@ -221,7 +227,8 @@ const createLegacyCryptoDeposit = asyncHandler(async (req, res) => {
 
 const createLegacyCardDeposit = asyncHandler(async (req, res) => {
   const user = getUser(req);
-  const source = req.body && typeof req.body === 'object' ? (req.body as Record<string, unknown>) : {};
+  const source =
+    req.body && typeof req.body === 'object' ? (req.body as Record<string, unknown>) : {};
   const amountRaw = source.amount;
   const amount =
     typeof amountRaw === 'number'
@@ -260,9 +267,7 @@ const getWithdrawalQuote = asyncHandler(async (req, res) => {
         ? amountRaw
         : NaN;
   const payoutCurrency =
-    typeof req.query.payoutCurrency === 'string'
-      ? req.query.payoutCurrency
-      : undefined;
+    typeof req.query.payoutCurrency === 'string' ? req.query.payoutCurrency : undefined;
   if (!payoutCurrency) {
     throw new HttpError({
       statusCode: 400,
@@ -290,10 +295,8 @@ const submitInstapayDeposit = asyncHandler(async (req, res) => {
       : typeof amountRaw === 'string'
         ? parseFloat(amountRaw)
         : NaN;
-  const proofUploadId =
-    typeof body?.proofUploadId === 'string' ? body.proofUploadId.trim() : '';
-  const senderAccount =
-    typeof body?.senderAccount === 'string' ? body.senderAccount.trim() : '';
+  const proofUploadId = typeof body?.proofUploadId === 'string' ? body.proofUploadId.trim() : '';
+  const senderAccount = typeof body?.senderAccount === 'string' ? body.senderAccount.trim() : '';
   if (!proofUploadId) {
     throw new HttpError({
       statusCode: 400,
@@ -351,9 +354,7 @@ const createWithdrawal = asyncHandler(async (req, res) => {
     ...(payload.saveInstapayRecipient !== undefined
       ? { saveInstapayRecipient: payload.saveInstapayRecipient }
       : {}),
-    ...(payload.paymobRecipient !== undefined
-      ? { paymobRecipient: payload.paymobRecipient }
-      : {}),
+    ...(payload.paymobRecipient !== undefined ? { paymobRecipient: payload.paymobRecipient } : {}),
     ...(payload.savePaymobRecipient !== undefined
       ? { savePaymobRecipient: payload.savePaymobRecipient }
       : {}),
@@ -369,7 +370,11 @@ const cancelWithdrawal = asyncHandler(async (req, res) => {
   }
   const withdrawalId = (req.params.withdrawalId ?? '').trim();
   if (!withdrawalId) {
-    throw new HttpError({ statusCode: 400, code: 'INVALID_REQUEST', message: 'withdrawalId required.' });
+    throw new HttpError({
+      statusCode: 400,
+      code: 'INVALID_REQUEST',
+      message: 'withdrawalId required.',
+    });
   }
   const result = await walletService.cancelInstapayWithdrawal(user.id, withdrawalId);
   const response: ApiSuccessBody<WithdrawalRequest> = { ok: true, data: result };
@@ -418,7 +423,11 @@ const listWithdrawals = asyncHandler(async (req, res) => {
   res.json(response);
 });
 
-async function nowPaymentsDepositIpn(req: Request, res: Response, next: NextFunction): Promise<void> {
+async function nowPaymentsDepositIpn(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
   try {
     const rawBody = extractRawBody(req.body);
     const signature = (req.headers['x-nowpayments-sig'] as string) ?? '';
@@ -429,7 +438,11 @@ async function nowPaymentsDepositIpn(req: Request, res: Response, next: NextFunc
   }
 }
 
-async function nowPaymentsPayoutIpn(req: Request, res: Response, next: NextFunction): Promise<void> {
+async function nowPaymentsPayoutIpn(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
   try {
     const rawBody = extractRawBody(req.body);
     const signature = (req.headers['x-nowpayments-sig'] as string) ?? '';
@@ -440,7 +453,11 @@ async function nowPaymentsPayoutIpn(req: Request, res: Response, next: NextFunct
   }
 }
 
-async function paymobDepositWebhook(req: Request, res: Response, next: NextFunction): Promise<void> {
+async function paymobDepositWebhook(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
   try {
     const rawBody = extractRawBody(req.body);
     const hmac = typeof req.query.hmac === 'string' ? req.query.hmac : null;

@@ -16,4 +16,3 @@ const AdvertisementsPage = async ({ params }: AdvertisementsPageProps) => {
 };
 
 export default AdvertisementsPage;
-

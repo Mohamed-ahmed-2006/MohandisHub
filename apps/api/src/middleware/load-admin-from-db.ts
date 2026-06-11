@@ -32,7 +32,9 @@ export const loadAdminFromDb: RequestHandler = (req, _res, next) => {
       (req as { user: { isAdmin: boolean; adminPermissions?: string[] } }).user = {
         ...req.user!,
         isAdmin: rows[0]?.is_admin === true,
-        adminPermissions: Array.isArray(rows[0]?.admin_permissions) ? rows[0].admin_permissions : [],
+        adminPermissions: Array.isArray(rows[0]?.admin_permissions)
+          ? rows[0].admin_permissions
+          : [],
       };
 
       next();

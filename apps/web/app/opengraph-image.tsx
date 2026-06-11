@@ -11,65 +11,63 @@ export default function OpenGraphImage() {
   const logoSrc = getBrandLogoDataUrl();
 
   return new ImageResponse(
-    (
-      <div
-        style={{
-          width: '100%',
-          height: '100%',
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'flex-start',
-          justifyContent: 'center',
-          padding: 72,
-          background: 'linear-gradient(135deg, #fff7ed 0%, #ffedd5 40%, #fed7aa 100%)',
-        }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', gap: 28, marginBottom: 36 }}>
-          {logoSrc ? (
-            <img src={logoSrc} alt="" width={88} height={88} style={{ objectFit: 'contain' }} />
-          ) : (
-            <div
-              style={{
-                width: 88,
-                height: 88,
-                borderRadius: 20,
-                background: BRAND_ACCENT_HEX,
-                color: 'white',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontSize: 44,
-                fontWeight: 700,
-              }}
-            >
-              M
-            </div>
-          )}
-          <span
+    <div
+      style={{
+        width: '100%',
+        height: '100%',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'flex-start',
+        justifyContent: 'center',
+        padding: 72,
+        background: 'linear-gradient(135deg, #fff7ed 0%, #ffedd5 40%, #fed7aa 100%)',
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', gap: 28, marginBottom: 36 }}>
+        {logoSrc ? (
+          <img src={logoSrc} alt="" width={88} height={88} style={{ objectFit: 'contain' }} />
+        ) : (
+          <div
             style={{
-              fontSize: 56,
-              fontWeight: 800,
-              letterSpacing: '-0.04em',
-              color: '#1c1917',
+              width: 88,
+              height: 88,
+              borderRadius: 20,
+              background: BRAND_ACCENT_HEX,
+              color: 'white',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: 44,
+              fontWeight: 700,
             }}
           >
-            MohandisHub
-          </span>
-        </div>
-        <p
+            M
+          </div>
+        )}
+        <span
           style={{
-            margin: 0,
-            maxWidth: 900,
-            fontSize: 32,
-            lineHeight: 1.35,
-            color: '#44403c',
-            fontWeight: 500,
+            fontSize: 56,
+            fontWeight: 800,
+            letterSpacing: '-0.04em',
+            color: '#1c1917',
           }}
         >
-          Engineering services marketplace connecting customers, experts, and businesses.
-        </p>
+          MohandisHub
+        </span>
       </div>
-    ),
+      <p
+        style={{
+          margin: 0,
+          maxWidth: 900,
+          fontSize: 32,
+          lineHeight: 1.35,
+          color: '#44403c',
+          fontWeight: 500,
+        }}
+      >
+        Engineering services marketplace connecting customers, experts, and businesses.
+      </p>
+    </div>,
     { ...size },
   );
 }

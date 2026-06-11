@@ -13,15 +13,26 @@ import { createTicketSchema, replySchema } from './support.validation.js';
 const supportService = new SupportService();
 
 function requireUser(req: { user?: { id: string; isAdmin?: boolean } }) {
-  if (!req.user) throw new HttpError({ statusCode: 401, code: 'UNAUTHORIZED', message: 'Auth required.' });
+  if (!req.user)
+    throw new HttpError({ statusCode: 401, code: 'UNAUTHORIZED', message: 'Auth required.' });
   return req.user;
 }
 
-function parseBody<T>(schema: { safeParse: (d: unknown) => { success: boolean; data?: T; error?: { flatten: () => unknown } } }, body: unknown): T {
+function parseBody<T>(
+  schema: {
+    safeParse: (d: unknown) => { success: boolean; data?: T; error?: { flatten: () => unknown } };
+  },
+  body: unknown,
+): T {
   const r = schema.safeParse(body);
   if (!r.success) {
     const details = r.error?.flatten();
-    throw new HttpError({ statusCode: 400, code: 'VALIDATION_ERROR', message: 'Invalid input.', ...(details ? { details } : {}) });
+    throw new HttpError({
+      statusCode: 400,
+      code: 'VALIDATION_ERROR',
+      message: 'Invalid input.',
+      ...(details ? { details } : {}),
+    });
   }
   return r.data as T;
 }
@@ -48,16 +59,28 @@ const listMyTickets = asyncHandler(async (req, res) => {
 
 const getTicket = asyncHandler(async (req, res) => {
   const user = requireUser(req);
-  const ticket = await supportService.getTicket(req.params.ticketId!, user.id, user.isAdmin ?? false);
+  const ticket = await supportService.getTicket(
+    req.params.ticketId!,
+    user.id,
+    user.isAdmin ?? false,
+  );
   if (!ticket) {
-    throw new HttpError({ statusCode: 404, code: 'TICKET_NOT_FOUND', message: 'Ticket not found.' });
+    throw new HttpError({
+      statusCode: 404,
+      code: 'TICKET_NOT_FOUND',
+      message: 'Ticket not found.',
+    });
   }
   res.json({ ok: true, data: ticket });
 });
 
 const listMessages = asyncHandler(async (req, res) => {
   const user = requireUser(req);
-  const messages = await supportService.listMessages(req.params.ticketId!, user.id, user.isAdmin ?? false);
+  const messages = await supportService.listMessages(
+    req.params.ticketId!,
+    user.id,
+    user.isAdmin ?? false,
+  );
   res.json({ ok: true, data: messages });
 });
 

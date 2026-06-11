@@ -87,7 +87,9 @@ export const UNIVERSITY_COUNTRY_CODES = Object.keys(
 
 /** Get countries that have university data, for the institution select */
 export function getCountriesWithUniversities(): { code: string; nameEn: string; nameAr: string }[] {
-  return COUNTRIES.filter((c) =>
-    UNIVERSITY_COUNTRY_CODES.includes(c.code),
-  ).map((c) => ({ code: c.code, nameEn: c.nameEn, nameAr: c.nameAr }));
+  return COUNTRIES.filter((c) => UNIVERSITY_COUNTRY_CODES.includes(c.code)).map((c) => ({
+    code: c.code,
+    nameEn: c.nameEn,
+    nameAr: c.nameAr,
+  }));
 }

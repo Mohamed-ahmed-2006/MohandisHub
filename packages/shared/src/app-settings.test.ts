@@ -17,19 +17,27 @@ describe('payment method settings', () => {
       withdrawal_instapay: true,
       withdrawal_paymob: false,
     });
-    expect(PAYMENT_METHOD_DEFINITIONS.find((method) => method.key === 'deposit_card')).toMatchObject({
+    expect(
+      PAYMENT_METHOD_DEFINITIONS.find((method) => method.key === 'deposit_card'),
+    ).toMatchObject({
       defaultEnabled: false,
       launchRecommended: false,
     });
-    expect(PAYMENT_METHOD_DEFINITIONS.find((method) => method.key === 'deposit_paymob')).toMatchObject({
+    expect(
+      PAYMENT_METHOD_DEFINITIONS.find((method) => method.key === 'deposit_paymob'),
+    ).toMatchObject({
       defaultEnabled: false,
       launchRecommended: false,
     });
-    expect(PAYMENT_METHOD_DEFINITIONS.find((method) => method.key === 'withdrawal_paymob')).toMatchObject({
+    expect(
+      PAYMENT_METHOD_DEFINITIONS.find((method) => method.key === 'withdrawal_paymob'),
+    ).toMatchObject({
       defaultEnabled: false,
       launchRecommended: false,
     });
-    expect(PAYMENT_METHOD_DEFINITIONS.find((method) => method.key === 'withdrawal_crypto')).toMatchObject({
+    expect(
+      PAYMENT_METHOD_DEFINITIONS.find((method) => method.key === 'withdrawal_crypto'),
+    ).toMatchObject({
       defaultEnabled: false,
       launchRecommended: false,
     });

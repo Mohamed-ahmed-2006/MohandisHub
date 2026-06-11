@@ -41,7 +41,10 @@ export const MyAdsScreen = ({ locale, dictionary }: MyAdsScreenProps) => {
   const [success, setSuccess] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [showForm, setShowForm] = useState(false);
-  const [adControls, setAdControls] = useState<AdminAdControls>({ acceptAds: true, pricePerDay: 0 });
+  const [adControls, setAdControls] = useState<AdminAdControls>({
+    acceptAds: true,
+    pricePerDay: 0,
+  });
 
   const [form, setForm] = useState({
     durationDays: '7',
@@ -63,9 +66,7 @@ export const MyAdsScreen = ({ locale, dictionary }: MyAdsScreenProps) => {
   const tr = (en: string, ar: string) => (isAr ? ar : en);
 
   const canUse =
-    authUser?.role === 'expert' ||
-    authUser?.role === 'business' ||
-    authUser?.role === 'craftsman';
+    authUser?.role === 'expert' || authUser?.role === 'business' || authUser?.role === 'craftsman';
 
   const load = useCallback(async () => {
     if (!accessToken) return;
@@ -116,7 +117,10 @@ export const MyAdsScreen = ({ locale, dictionary }: MyAdsScreenProps) => {
   const plannedEndAt = useMemo(() => {
     return new Date(plannedStartAt.getTime() + durationDays * 24 * 60 * 60 * 1000);
   }, [plannedStartAt, durationDays]);
-  const totalCost = useMemo(() => Math.max(0, adControls.pricePerDay * durationDays), [adControls.pricePerDay, durationDays]);
+  const totalCost = useMemo(
+    () => Math.max(0, adControls.pricePerDay * durationDays),
+    [adControls.pricePerDay, durationDays],
+  );
 
   // Do not render app content to unauthenticated/unverified users; the effect
   // above redirects them. Show nothing until auth state is settled.
@@ -200,9 +204,7 @@ export const MyAdsScreen = ({ locale, dictionary }: MyAdsScreenProps) => {
   const previewTitle = isAr
     ? form.titleAr || form.titleEn || tr('Your ad title', 'عنوان إعلانك')
     : form.titleEn || tr('Your ad title', 'عنوان إعلانك');
-  const previewDesc = isAr
-    ? form.descriptionAr || form.descriptionEn
-    : form.descriptionEn;
+  const previewDesc = isAr ? form.descriptionAr || form.descriptionEn : form.descriptionEn;
   const previewCta = isAr
     ? form.ctaTextAr || form.ctaTextEn || tr('Open', 'افتح')
     : form.ctaTextEn || tr('Open', 'افتح');
@@ -274,7 +276,9 @@ export const MyAdsScreen = ({ locale, dictionary }: MyAdsScreenProps) => {
       )}
       {!adControls.acceptAds && (
         <div className="myads-msg myads-msg--error">
-          <span>{tr('Ads are currently disabled by admin.', 'الإعلانات متوقفة حاليا من الإدارة.')}</span>
+          <span>
+            {tr('Ads are currently disabled by admin.', 'الإعلانات متوقفة حاليا من الإدارة.')}
+          </span>
         </div>
       )}
 
@@ -289,9 +293,7 @@ export const MyAdsScreen = ({ locale, dictionary }: MyAdsScreenProps) => {
               </h2>
 
               <fieldset className="myads-fieldset">
-                <legend className="myads-legend">
-                  {tr('Campaign timing', 'مدة الحملة')}
-                </legend>
+                <legend className="myads-legend">{tr('Campaign timing', 'مدة الحملة')}</legend>
                 <div className="myads-field">
                   <label className="myads-label">{tr('Duration (days)', 'المدة (بالأيام)')}</label>
                   <input
@@ -304,7 +306,9 @@ export const MyAdsScreen = ({ locale, dictionary }: MyAdsScreenProps) => {
                   />
                 </div>
                 <div className="myads-field">
-                  <label className="myads-label">{tr('Start date & time', 'تاريخ ووقت البداية')}</label>
+                  <label className="myads-label">
+                    {tr('Start date & time', 'تاريخ ووقت البداية')}
+                  </label>
                   <input
                     type="datetime-local"
                     className="dashboard-input"
@@ -330,9 +334,7 @@ export const MyAdsScreen = ({ locale, dictionary }: MyAdsScreenProps) => {
                   />
                 </div>
                 <div className="myads-field">
-                  <label className="myads-label">
-                    {tr('Title (Arabic)', 'العنوان (عربي)')}
-                  </label>
+                  <label className="myads-label">{tr('Title (Arabic)', 'العنوان (عربي)')}</label>
                   <input
                     className="dashboard-input"
                     dir="rtl"
@@ -355,9 +357,7 @@ export const MyAdsScreen = ({ locale, dictionary }: MyAdsScreenProps) => {
                     />
                   </div>
                   <div className="myads-field">
-                    <label className="myads-label">
-                      {tr('Description (AR)', 'الوصف (عربي)')}
-                    </label>
+                    <label className="myads-label">{tr('Description (AR)', 'الوصف (عربي)')}</label>
                     <textarea
                       className="dashboard-textarea"
                       rows={3}
@@ -372,9 +372,7 @@ export const MyAdsScreen = ({ locale, dictionary }: MyAdsScreenProps) => {
 
               {/* Image */}
               <fieldset className="myads-fieldset">
-                <legend className="myads-legend">
-                  {tr('Banner Image', 'صورة الإعلان')} *
-                </legend>
+                <legend className="myads-legend">{tr('Banner Image', 'صورة الإعلان')} *</legend>
                 <div className="myads-upload-area">
                   {resolvedImageUrl ? (
                     <div className="myads-upload-preview">
@@ -414,12 +412,12 @@ export const MyAdsScreen = ({ locale, dictionary }: MyAdsScreenProps) => {
 
               {/* CTA + Link */}
               <fieldset className="myads-fieldset">
-                <legend className="myads-legend">
-                  {tr('Call to Action', 'زر الإجراء')}
-                </legend>
+                <legend className="myads-legend">{tr('Call to Action', 'زر الإجراء')}</legend>
                 <div className="myads-field-row">
                   <div className="myads-field">
-                    <label className="myads-label">{tr('Button text (EN)', 'نص الزر (إنجليزي)')}</label>
+                    <label className="myads-label">
+                      {tr('Button text (EN)', 'نص الزر (إنجليزي)')}
+                    </label>
                     <input
                       className="dashboard-input"
                       placeholder={tr('e.g. Book now', 'مثلا: احجز الآن')}
@@ -429,7 +427,9 @@ export const MyAdsScreen = ({ locale, dictionary }: MyAdsScreenProps) => {
                     />
                   </div>
                   <div className="myads-field">
-                    <label className="myads-label">{tr('Button text (AR)', 'نص الزر (عربي)')}</label>
+                    <label className="myads-label">
+                      {tr('Button text (AR)', 'نص الزر (عربي)')}
+                    </label>
                     <input
                       className="dashboard-input"
                       dir="rtl"
@@ -441,7 +441,9 @@ export const MyAdsScreen = ({ locale, dictionary }: MyAdsScreenProps) => {
                   </div>
                 </div>
                 <div className="myads-field">
-                  <label className="myads-label">{tr('Where does the ad link to?', 'إلى أين يوجه الإعلان؟')}</label>
+                  <label className="myads-label">
+                    {tr('Where does the ad link to?', 'إلى أين يوجه الإعلان؟')}
+                  </label>
                   <select
                     className="dashboard-select"
                     value={form.linkType}
@@ -459,9 +461,7 @@ export const MyAdsScreen = ({ locale, dictionary }: MyAdsScreenProps) => {
                 </div>
                 {form.linkType !== 'profile' && (
                   <div className="myads-field">
-                    <label className="myads-label">
-                      {tr('Target ID', 'المعرف المستهدف')}
-                    </label>
+                    <label className="myads-label">{tr('Target ID', 'المعرف المستهدف')}</label>
                     <input
                       className="dashboard-input"
                       placeholder={tr('Service or need ID', 'معرف الخدمة أو الحاجة')}
@@ -477,9 +477,7 @@ export const MyAdsScreen = ({ locale, dictionary }: MyAdsScreenProps) => {
                 <span className="myads-price-summary-label">
                   {tr('Billing & timeline', 'الفوترة والجدول')}
                 </span>
-                <span className="myads-price-summary-value">
-                  {totalCost.toFixed(2)} EGP
-                </span>
+                <span className="myads-price-summary-value">{totalCost.toFixed(2)} EGP</span>
                 <span className="myads-price-summary-note">
                   {tr(
                     `Deducted from wallet immediately on create · runs for ${durationDays} days`,
@@ -487,8 +485,8 @@ export const MyAdsScreen = ({ locale, dictionary }: MyAdsScreenProps) => {
                   )}
                 </span>
                 <span className="myads-price-summary-note">
-                  {tr('Price/day', 'سعر اليوم')}: {adControls.pricePerDay.toFixed(2)} EGP × {durationDays}{' '}
-                  {tr('days', 'يوم')}
+                  {tr('Price/day', 'سعر اليوم')}: {adControls.pricePerDay.toFixed(2)} EGP ×{' '}
+                  {durationDays} {tr('days', 'يوم')}
                 </span>
                 <span className="myads-price-summary-note">
                   {tr('Starts', 'يبدأ')}: {plannedStartAt.toLocaleString(isAr ? 'ar-EG' : 'en-US')}
@@ -517,18 +515,14 @@ export const MyAdsScreen = ({ locale, dictionary }: MyAdsScreenProps) => {
                   className="dashboard-btn dashboard-btn--primary"
                   disabled={submitting || !form.imageUrl || !form.titleEn || !adControls.acceptAds}
                 >
-                  {submitting
-                    ? c.loading ?? 'Loading...'
-                    : tr('Create Ad', 'إنشاء الإعلان')}
+                  {submitting ? (c.loading ?? 'Loading...') : tr('Create Ad', 'إنشاء الإعلان')}
                 </button>
               </div>
             </form>
 
             {/* Live Preview Column */}
             <div className="myads-preview-card">
-              <h3 className="myads-preview-card-title">
-                {tr('Live Preview', 'معاينة مباشرة')}
-              </h3>
+              <h3 className="myads-preview-card-title">{tr('Live Preview', 'معاينة مباشرة')}</h3>
               <p className="myads-preview-hint">
                 {tr(
                   'This is how your ad will appear in the home screen slideshow.',
@@ -650,10 +644,7 @@ const AdCard = ({ ad, locale, statusLabel, d, tr }: AdCardProps) => {
 
   return (
     <article className="myads-ad-card">
-      <div
-        className="myads-ad-card-banner"
-        style={{ backgroundImage: `url(${resolvedImg})` }}
-      />
+      <div className="myads-ad-card-banner" style={{ backgroundImage: `url(${resolvedImg})` }} />
       <div className="myads-ad-card-body">
         <div className="myads-ad-card-head">
           <h3 className="myads-ad-card-title">{title}</h3>
@@ -672,9 +663,7 @@ const AdCard = ({ ad, locale, statusLabel, d, tr }: AdCardProps) => {
           </div>
           <div className="myads-stat">
             <span className="myads-stat-value">
-              {ad.impressions > 0
-                ? `${((ad.clicks / ad.impressions) * 100).toFixed(1)}%`
-                : '—'}
+              {ad.impressions > 0 ? `${((ad.clicks / ad.impressions) * 100).toFixed(1)}%` : '—'}
             </span>
             <span className="myads-stat-label">CTR</span>
           </div>

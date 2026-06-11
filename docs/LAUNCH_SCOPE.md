@@ -1,8 +1,8 @@
 # Launch scope
 
-- **In scope:** Auth, onboarding (customer / expert / business), needs and bids, jobs, reservations and bookings, wallet (NOWPayments deposits + withdrawals), chat, admin (users, verification, settings, plans, notifications), profile, KYC (Didit + manual), Agora calls.
-- **Placeholders (Coming soon):** Business dashboard "Orders" and "Analytics" tabs show "Coming soon." They remain in nav; no 404. Can be implemented post-launch (Orders = list of service orders; Analytics = stub or minimal metrics).
-- **Out of scope for launch:** Stripe/Cryptomus/Paymob (integrate later), full company document upload (verification-docs bucket exists; UI can be added later).
+- **In scope:** Auth, onboarding (customer / expert / business), needs and bids, jobs, reservations and bookings, wallet (NOWPayments deposits + withdrawals, Paymob code path disabled until live keys), chat, admin (users, verification, settings, plans, notifications), profile, KYC (Didit + manual), Agora calls, provider orders, provider analytics.
+- **Deferred after stabilization:** Business team seats/invites, coupon redemption UI, SMS/WhatsApp delivery, and full company document upload UI.
+- **Live-operation blocker:** Paymob live checkout/payout verification waits for account activation and real env keys. The integration should remain disabled until those values are present.
 
 ## Permission audit
 
@@ -13,4 +13,4 @@
 
 - **Idempotency:** Reservation create and key actions use `reservation_action_idempotency`; wallet IPN handlers should be idempotent.
 - **Wallet balance:** Debit paths check/throw on insufficient balance; low-balance auto-end for calls exists.
-- **Cancel-after-complete, double-submit, expired sessions, negative amounts:** Validate in QA; add explicit checks where gaps are found.
+- **Cancel-after-complete, double-submit, expired sessions, negative amounts:** Covered by service checks and QA scenarios; regressions should be fixed before launch.

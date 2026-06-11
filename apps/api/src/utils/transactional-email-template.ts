@@ -51,7 +51,9 @@ export const buildTransactionalEmailHtml = (input: TransactionalEmailTemplateInp
   const logoUrl = resolveEmailLogoUrl();
   const preheader = escapeHtml(input.preheader);
   const title = escapeHtml(input.title);
-  const greeting = input.greeting ? `<p style="margin:0 0 16px;color:#1c1e21;font-size:16px;line-height:24px;">${escapeHtml(input.greeting)}</p>` : '';
+  const greeting = input.greeting
+    ? `<p style="margin:0 0 16px;color:#1c1e21;font-size:16px;line-height:24px;">${escapeHtml(input.greeting)}</p>`
+    : '';
   const introLines = input.introLines
     .map(
       (line) =>

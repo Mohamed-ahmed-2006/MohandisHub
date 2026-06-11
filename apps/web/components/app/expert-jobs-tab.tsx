@@ -1,6 +1,7 @@
 'use client';
 
 import type { Job } from '@mohandishub/shared';
+import { useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 
 import { ExpertApplications } from './jobs/expert-applications';
@@ -12,6 +13,7 @@ import { uploadPrivateFile } from '@/lib/upload/client';
 
 export const ExpertJobsTab = ({ accessToken }: { accessToken: string }) => {
   const { addToast } = useToast();
+  const searchParams = useSearchParams();
   const [jobs, setJobs] = useState<Job[]>([]);
   const [loading, setLoading] = useState(true);
   const [applyJob, setApplyJob] = useState<Job | null>(null);
@@ -33,6 +35,13 @@ export const ExpertJobsTab = ({ accessToken }: { accessToken: string }) => {
   useEffect(() => {
     void loadJobs();
   }, [loadJobs]);
+
+  useEffect(() => {
+    const jobId = searchParams.get('job');
+    if (!jobId || loading || applyJob?.id === jobId) return;
+    const job = jobs.find((item) => item.id === jobId);
+    if (job) setApplyJob(job);
+  }, [applyJob?.id, jobs, loading, searchParams]);
 
   const handleApply = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -134,11 +143,17 @@ export const ExpertJobsTab = ({ accessToken }: { accessToken: string }) => {
                 required
               />
               <div className="dashboard-form-row">
-                <button type="button" className="plan-modal-cancel" onClick={() => setApplyJob(null)}>
+                <button
+                  type="button"
+                  className="plan-modal-cancel"
+                  onClick={() => setApplyJob(null)}
+                >
                   Cancel
                 </button>
                 <button type="submit" className="dashboard-primary-btn" disabled={applying}>
-                  {applying ? '...' : `Pay ${applyJob.applicationFeeAmount.toFixed(2)} EGP and submit`}
+                  {applying
+                    ? '...'
+                    : `Pay ${applyJob.applicationFeeAmount.toFixed(2)} EGP and submit`}
                 </button>
               </div>
             </form>

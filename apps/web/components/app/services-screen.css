@@ -4,12 +4,11 @@
   overflow: auto;
   border-radius: 1.1rem;
   border: 1px solid hsl(var(--border));
-  background:
-    linear-gradient(
-      180deg,
-      hsl(var(--surface-elevated)),
-      color-mix(in srgb, hsl(var(--card)) 84%, transparent)
-    );
+  background: linear-gradient(
+    180deg,
+    hsl(var(--surface-elevated)),
+    color-mix(in srgb, hsl(var(--card)) 84%, transparent)
+  );
   box-shadow: var(--shadow-soft-lg);
 }
 

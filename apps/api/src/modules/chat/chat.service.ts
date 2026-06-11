@@ -21,7 +21,8 @@ export class ChatService {
         throw new HttpError({
           statusCode: 503,
           code: 'SCHEMA_OUTDATED',
-          message: 'Database schema is out of date. Please run migrations in the API folder: npm run migrate',
+          message:
+            'Database schema is out of date. Please run migrations in the API folder: npm run migrate',
         });
       }
       throw err;
@@ -40,7 +41,10 @@ export class ChatService {
     if (conv.participant_a !== userId && conv.participant_b !== userId) {
       throw new HttpError({ statusCode: 403, code: 'FORBIDDEN', message: 'Not a participant.' });
     }
-    return { messages: await this.repo.getMessages(conversationId, 50, 0, userId), status: conv.status };
+    return {
+      messages: await this.repo.getMessages(conversationId, 50, 0, userId),
+      status: conv.status,
+    };
   }
 
   async sendMessage(userId: string, conversationId: string, input: SendMessageInput) {
@@ -157,7 +161,12 @@ export class ChatService {
       });
     }
     const ok = await this.repo.deleteForEveryone(messageId, userId);
-    if (!ok) throw new HttpError({ statusCode: 404, code: 'MESSAGE_NOT_FOUND', message: 'Message not found.' });
+    if (!ok)
+      throw new HttpError({
+        statusCode: 404,
+        code: 'MESSAGE_NOT_FOUND',
+        message: 'Message not found.',
+      });
     return { deleted: true, scope: 'for_everyone' as const };
   }
 

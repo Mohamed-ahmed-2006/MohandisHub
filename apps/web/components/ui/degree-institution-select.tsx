@@ -4,11 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 
 import { COUNTRIES } from '@/lib/data/countries';
 import { DEGREES } from '@/lib/data/degrees';
-import {
-  getUniversitiesByCountry,
-  getUniversityName,
-  type Locale,
-} from '@/lib/data/universities';
+import { getUniversitiesByCountry, getUniversityName, type Locale } from '@/lib/data/universities';
 import { getCountryFromIp } from '@/lib/geo/ip-geo';
 
 type Props = {
@@ -107,12 +103,7 @@ export function DegreeInstitutionSelect({
             style={{ marginTop: '0.5rem' }}
           />
         )}
-        <input
-          type="hidden"
-          name={institutionName}
-          value={effectiveInstitution}
-          readOnly
-        />
+        <input type="hidden" name={institutionName} value={effectiveInstitution} readOnly />
       </div>
     </>
   );

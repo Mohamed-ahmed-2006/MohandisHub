@@ -154,7 +154,9 @@ export class VerificationRepository {
         ? ', identity_verification_method = $3'
         : '';
 
-    const params = identityVerificationMethod ? [status, userId, identityVerificationMethod] : [status, userId];
+    const params = identityVerificationMethod
+      ? [status, userId, identityVerificationMethod]
+      : [status, userId];
     await this.db.query(
       `UPDATE ${table}
        SET verification_status = $1, verified_at = ${verifiedAt}${identityVerified}${methodSet}

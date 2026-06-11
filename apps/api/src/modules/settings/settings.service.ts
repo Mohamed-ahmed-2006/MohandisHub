@@ -85,8 +85,7 @@ export class SettingsService {
       commissionPercent: parseFloat(row.commission_percent ?? '10'),
       commissionMinEgp: parseFloat(row.commission_min_egp ?? '0'),
       minTransactionEgp: parseFloat(row.min_transaction_egp ?? '0'),
-      commissionReceiverId:
-        row.commission_receiver_id ?? '00000000-0000-0000-0000-000000000001',
+      commissionReceiverId: row.commission_receiver_id ?? '00000000-0000-0000-0000-000000000001',
       reservationAcceptanceFee: parseFloat(row.reservation_acceptance_fee ?? '0'),
       reservationVoiceMinuteRate: parseFloat(row.reservation_voice_minute_rate ?? '1'),
       reservationVideoMinuteRate: parseFloat(row.reservation_video_minute_rate ?? '2'),
@@ -112,7 +111,10 @@ export class SettingsService {
     };
   }
 
-  async updateSettings(partial: UpdateAppSettingsBody, adminId?: string): Promise<AppSettings | null> {
+  async updateSettings(
+    partial: UpdateAppSettingsBody,
+    adminId?: string,
+  ): Promise<AppSettings | null> {
     if (
       partial.maxPublicUploadBytes != null &&
       partial.maxPublicUploadBytes > env.PUBLIC_UPLOAD_MAX_BYTES_CEILING
@@ -125,31 +127,44 @@ export class SettingsService {
     }
     const dbPartial: Parameters<SettingsRepository['update']>[0] = {};
     if (partial.maintenanceMode !== undefined) dbPartial.maintenance_mode = partial.maintenanceMode;
-    if (partial.maintenanceMessage !== undefined) dbPartial.maintenance_message = partial.maintenanceMessage;
+    if (partial.maintenanceMessage !== undefined)
+      dbPartial.maintenance_message = partial.maintenanceMessage;
     if (partial.signupsLocked !== undefined) dbPartial.signups_locked = partial.signupsLocked;
     if (partial.depositsPaused !== undefined) dbPartial.deposits_paused = partial.depositsPaused;
-    if (partial.moneyMovementsPaused !== undefined) dbPartial.money_movements_paused = partial.moneyMovementsPaused;
+    if (partial.moneyMovementsPaused !== undefined)
+      dbPartial.money_movements_paused = partial.moneyMovementsPaused;
     if (adminId !== undefined) dbPartial.updated_by = adminId;
     if (partial.lockLogins !== undefined) dbPartial.lock_logins = partial.lockLogins;
-    if (partial.minDepositAmount !== undefined) dbPartial.min_deposit_amount = partial.minDepositAmount;
-    if (partial.maxDepositAmount !== undefined) dbPartial.max_deposit_amount = partial.maxDepositAmount;
-    if (partial.pausePlanSubscriptions !== undefined) dbPartial.pause_plan_subscriptions = partial.pausePlanSubscriptions;
+    if (partial.minDepositAmount !== undefined)
+      dbPartial.min_deposit_amount = partial.minDepositAmount;
+    if (partial.maxDepositAmount !== undefined)
+      dbPartial.max_deposit_amount = partial.maxDepositAmount;
+    if (partial.pausePlanSubscriptions !== undefined)
+      dbPartial.pause_plan_subscriptions = partial.pausePlanSubscriptions;
     if (partial.pauseNeeds !== undefined) dbPartial.pause_needs = partial.pauseNeeds;
     if (partial.pauseBids !== undefined) dbPartial.pause_bids = partial.pauseBids;
     if (partial.pauseAwardBids !== undefined) dbPartial.pause_award_bids = partial.pauseAwardBids;
     if (partial.pauseUploads !== undefined) dbPartial.pause_uploads = partial.pauseUploads;
-    if (partial.pauseVerificationSubmissions !== undefined) dbPartial.pause_verification_submissions = partial.pauseVerificationSubmissions;
+    if (partial.pauseVerificationSubmissions !== undefined)
+      dbPartial.pause_verification_submissions = partial.pauseVerificationSubmissions;
     if (partial.pauseChat !== undefined) dbPartial.pause_chat = partial.pauseChat;
     if (partial.pauseOtpEmails !== undefined) dbPartial.pause_otp_emails = partial.pauseOtpEmails;
-    if (partial.featureNeedsEnabled !== undefined) dbPartial.feature_needs_enabled = partial.featureNeedsEnabled;
-    if (partial.featurePlansEnabled !== undefined) dbPartial.feature_plans_enabled = partial.featurePlansEnabled;
-    if (partial.featureWalletEnabled !== undefined) dbPartial.feature_wallet_enabled = partial.featureWalletEnabled;
+    if (partial.featureNeedsEnabled !== undefined)
+      dbPartial.feature_needs_enabled = partial.featureNeedsEnabled;
+    if (partial.featurePlansEnabled !== undefined)
+      dbPartial.feature_plans_enabled = partial.featurePlansEnabled;
+    if (partial.featureWalletEnabled !== undefined)
+      dbPartial.feature_wallet_enabled = partial.featureWalletEnabled;
     if (partial.featureHourlyPricingEnabled !== undefined)
       dbPartial.feature_hourly_pricing_enabled = partial.featureHourlyPricingEnabled;
-    if (partial.globalAnnouncement !== undefined) dbPartial.global_announcement = partial.globalAnnouncement;
-    if (partial.commissionPercent !== undefined) dbPartial.commission_percent = partial.commissionPercent;
-    if (partial.commissionMinEgp !== undefined) dbPartial.commission_min_egp = partial.commissionMinEgp;
-    if (partial.minTransactionEgp !== undefined) dbPartial.min_transaction_egp = partial.minTransactionEgp;
+    if (partial.globalAnnouncement !== undefined)
+      dbPartial.global_announcement = partial.globalAnnouncement;
+    if (partial.commissionPercent !== undefined)
+      dbPartial.commission_percent = partial.commissionPercent;
+    if (partial.commissionMinEgp !== undefined)
+      dbPartial.commission_min_egp = partial.commissionMinEgp;
+    if (partial.minTransactionEgp !== undefined)
+      dbPartial.min_transaction_egp = partial.minTransactionEgp;
     if (partial.commissionReceiverId !== undefined)
       dbPartial.commission_receiver_id = partial.commissionReceiverId;
     if (partial.reservationAcceptanceFee !== undefined)
@@ -250,8 +265,7 @@ export class SettingsService {
       commissionPercent: parseFloat(row.commission_percent ?? '10'),
       commissionMinEgp: parseFloat(row.commission_min_egp ?? '0'),
       minTransactionEgp: parseFloat(row.min_transaction_egp ?? '0'),
-      commissionReceiverId:
-        row.commission_receiver_id ?? '00000000-0000-0000-0000-000000000001',
+      commissionReceiverId: row.commission_receiver_id ?? '00000000-0000-0000-0000-000000000001',
       reservationAcceptanceFee: parseFloat(row.reservation_acceptance_fee ?? '0'),
       reservationVoiceMinuteRate: parseFloat(row.reservation_voice_minute_rate ?? '1'),
       reservationVideoMinuteRate: parseFloat(row.reservation_video_minute_rate ?? '2'),

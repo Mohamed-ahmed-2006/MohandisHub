@@ -9,7 +9,17 @@ const reviewsRouter = Router();
 
 reviewsRouter.post('/', authenticate, requireEmailVerified, reviewsController.create);
 reviewsRouter.get('/', authenticate, requireEmailVerified, reviewsController.list);
-reviewsRouter.post('/:reviewId/report', authenticate, requireEmailVerified, reviewsController.report);
-reviewsRouter.post('/:reviewId/dispute', authenticate, requireEmailVerified, reviewsController.dispute);
+reviewsRouter.post(
+  '/:reviewId/report',
+  authenticate,
+  requireEmailVerified,
+  reviewsController.report,
+);
+reviewsRouter.post(
+  '/:reviewId/dispute',
+  authenticate,
+  requireEmailVerified,
+  reviewsController.dispute,
+);
 
 export { reviewsRouter };

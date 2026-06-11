@@ -1,7 +1,8 @@
-
 'use client';
 
+import { normalizeAdminPermissions } from '@mohandishub/shared';
 import type {
+  AdminPermission,
   AdminChangeUserEmailBody,
   AdminReviewHistoryItem,
   AdminUpdateUserBody,
@@ -21,7 +22,7 @@ type Props = {
   dictionary: Dictionary;
   accessToken: string;
   refreshSession: () => Promise<string | null>;
-  adminPermissions: string[];
+  adminPermissions: AdminPermission[];
   userId: string | null;
   onClose: () => void;
   onSuccess: () => void;
@@ -35,7 +36,7 @@ type AccountForm = {
   dateOfBirth: string;
   primaryRole: 'customer' | 'expert' | 'craftsman' | 'business';
   isAdmin: boolean;
-  adminPermissions: string[];
+  adminPermissions: AdminPermission[];
   planId: string;
 };
 
@@ -47,9 +48,8 @@ type AdjustForm = {
 
 const opts = (refreshSession: () => Promise<string | null>) => ({ refreshSession });
 
-const hasPermission = (permissions: string[], permission: string): boolean => {
-  if (permissions.length === 0) return true;
-  return permissions.includes(permission);
+const hasPermission = (permissions: readonly string[], permission: string): boolean => {
+  return permissions.includes('super_admin') || permissions.includes(permission);
 };
 
 /** API may return ISO datetimes; <input type="date"> and admin PATCH expect yyyy-MM-dd. */
@@ -83,10 +83,15 @@ const formatPrimitive = (value: unknown, fallback = '-'): string => {
   return fallback;
 };
 
-type AdminPermissionDef = { id: string; label: string; hint: string };
+type AdminPermissionDef = { id: AdminPermission; label: string; hint: string };
 
 /** If i18n is missing permissionDefs (stale cache), keep assignable permissions in sync with admin.routes.ts */
 const FALLBACK_ADMIN_PERMISSION_DEFS: AdminPermissionDef[] = [
+  {
+    id: 'super_admin',
+    label: 'Super admin',
+    hint: 'Full platform access, including granting and revoking admin permissions.',
+  },
   {
     id: 'manage_users',
     label: 'Users',
@@ -98,15 +103,27 @@ const FALLBACK_ADMIN_PERMISSION_DEFS: AdminPermissionDef[] = [
     label: 'Transactions & wallet rails',
     hint: 'Ledger, adjustments, wallet rails.',
   },
-  { id: 'manage_services', label: 'Services & categories', hint: 'Service approval and categories.' },
+  {
+    id: 'manage_services',
+    label: 'Services & categories',
+    hint: 'Service approval and categories.',
+  },
   {
     id: 'manage_verifications',
     label: 'Verifications & reviews',
     hint: 'KYC queues and review moderation.',
   },
   { id: 'manage_notifications', label: 'Notifications', hint: 'Send admin notifications.' },
-  { id: 'manage_support', label: 'Support', hint: 'Support ticket assignment, status, and deletion.' },
-  { id: 'manage_media', label: 'Media library', hint: 'Create, edit, schedule, and delete public media assets.' },
+  {
+    id: 'manage_support',
+    label: 'Support',
+    hint: 'Support ticket assignment, status, and deletion.',
+  },
+  {
+    id: 'manage_media',
+    label: 'Media library',
+    hint: 'Create, edit, schedule, and delete public media assets.',
+  },
   { id: 'manage_settings', label: 'App settings', hint: 'Feature flags, pauses, upload policy.' },
   {
     id: 'manage_retention',
@@ -114,8 +131,21 @@ const FALLBACK_ADMIN_PERMISSION_DEFS: AdminPermissionDef[] = [
     hint: 'Retention sweeps, logs export, moderation actions.',
   },
   { id: 'manage_ads', label: 'Advertisements', hint: 'View and moderate ad campaigns.' },
-  { id: 'manage_ad_pricing', label: 'Ad pricing', hint: 'Set ad pricing and campaign price overrides.' },
-  { id: 'manage_ad_scheduling', label: 'Ad scheduling', hint: 'Set campaign start and end windows.' },
+  {
+    id: 'manage_ad_pricing',
+    label: 'Ad pricing',
+    hint: 'Set ad pricing and campaign price overrides.',
+  },
+  {
+    id: 'manage_ad_scheduling',
+    label: 'Ad scheduling',
+    hint: 'Set campaign start and end windows.',
+  },
+  {
+    id: 'manage_ad_targeting',
+    label: 'Ad targeting',
+    hint: 'Control ad targeting and relevance policy.',
+  },
 ];
 
 function readPermissionDefsFromUser360(user360: unknown): AdminPermissionDef[] {
@@ -126,8 +156,11 @@ function readPermissionDefsFromUser360(user360: unknown): AdminPermissionDef[] {
   for (const item of raw) {
     if (!item || typeof item !== 'object') continue;
     const o = item as Record<string, unknown>;
-    if (typeof o.id !== 'string' || typeof o.label !== 'string' || typeof o.hint !== 'string') continue;
-    out.push({ id: o.id, label: o.label, hint: o.hint });
+    if (typeof o.id !== 'string' || typeof o.label !== 'string' || typeof o.hint !== 'string')
+      continue;
+    const [id] = normalizeAdminPermissions([o.id]);
+    if (!id) continue;
+    out.push({ id, label: o.label, hint: o.hint });
   }
   return out.length > 0 ? out : FALLBACK_ADMIN_PERMISSION_DEFS;
 }
@@ -188,9 +221,9 @@ export const AdminUserDetailModal = ({
   } | null>(null);
 
   const [previewImage, setPreviewImage] = useState<{ url: string; title: string } | null>(null);
-  const [verificationReviewHistory, setVerificationReviewHistory] = useState<AdminReviewHistoryItem[]>(
-    [],
-  );
+  const [verificationReviewHistory, setVerificationReviewHistory] = useState<
+    AdminReviewHistoryItem[]
+  >([]);
   const [verificationReviewHistoryLoading, setVerificationReviewHistoryLoading] = useState(false);
 
   const d = dictionary.admin.users;
@@ -238,7 +271,7 @@ export const AdminUserDetailModal = ({
         primaryRole:
           overviewData.user.primaryRole === 'admin' ? 'customer' : overviewData.user.primaryRole,
         isAdmin: overviewData.user.isAdmin,
-        adminPermissions: overviewData.user.adminPermissions ?? [],
+        adminPermissions: normalizeAdminPermissions(overviewData.user.adminPermissions),
         planId,
       });
 
@@ -363,7 +396,12 @@ export const AdminUserDetailModal = ({
         );
       } else if (account.primaryRole === 'business') {
         const body = JSON.parse(businessJson) as Record<string, unknown>;
-        await adminApiClient.updateBusinessProfile(accessToken, user.id, body, opts(refreshSession));
+        await adminApiClient.updateBusinessProfile(
+          accessToken,
+          user.id,
+          body,
+          opts(refreshSession),
+        );
       }
       await loadOverview();
       onSuccess();
@@ -564,7 +602,10 @@ export const AdminUserDetailModal = ({
     if (!user) return 'U';
     const parts = user.displayName.split(' ').filter(Boolean);
     if (parts.length === 0) return 'U';
-    return parts.slice(0, 2).map((part) => part[0]?.toUpperCase() ?? '').join('');
+    return parts
+      .slice(0, 2)
+      .map((part) => part[0]?.toUpperCase() ?? '')
+      .join('');
   }, [user]);
 
   if (!userId) return null;
@@ -586,458 +627,1106 @@ export const AdminUserDetailModal = ({
           onClick={(e) => e.stopPropagation()}
           role="dialog"
         >
-        {loading ? (
-          <p className="admin-empty">{dictionary.admin.loading}</p>
-        ) : !user ? (
-          <p className="admin-empty">{d.noUsers}</p>
-        ) : (
-          <>
-            <header className="admin-user-modal-header">
-              <div className="admin-user-modal-identity">
-                <span className="admin-user-modal-avatar" aria-hidden>
-                  {userInitials}
-                </span>
-                <div>
-                  <h2 className="admin-modal-title">{user.displayName}</h2>
-                  <p className="admin-user-modal-subtitle">{user.email}</p>
-                  <div className="admin-user-modal-chips">
-                    <span className="admin-badge">{user.primaryRole}</span>
-                    {user.isAdmin && <span className="admin-badge admin-badge--admin">Admin</span>}
-                    <span className={`admin-badge ${user.isActive ? 'admin-badge--active' : 'admin-badge--inactive'}`}>
-                      {user.isActive ? d.active : d.inactive}
-                    </span>
-                    <span className="admin-badge">{ud.emailVerified}: {user.emailVerifiedAt ? ud.yes : ud.no}</span>
-                    <span className="admin-badge">{u360?.labels?.walletFrozen ?? 'Wallet Frozen'}: {user.walletFrozen ? ud.yes : ud.no}</span>
+          {loading ? (
+            <p className="admin-empty">{dictionary.admin.loading}</p>
+          ) : !user ? (
+            <p className="admin-empty">{d.noUsers}</p>
+          ) : (
+            <>
+              <header className="admin-user-modal-header">
+                <div className="admin-user-modal-identity">
+                  <span className="admin-user-modal-avatar" aria-hidden>
+                    {userInitials}
+                  </span>
+                  <div>
+                    <h2 className="admin-modal-title">{user.displayName}</h2>
+                    <p className="admin-user-modal-subtitle">{user.email}</p>
+                    <div className="admin-user-modal-chips">
+                      <span className="admin-badge">{user.primaryRole}</span>
+                      {user.isAdmin && (
+                        <span className="admin-badge admin-badge--admin">Admin</span>
+                      )}
+                      <span
+                        className={`admin-badge ${user.isActive ? 'admin-badge--active' : 'admin-badge--inactive'}`}
+                      >
+                        {user.isActive ? d.active : d.inactive}
+                      </span>
+                      <span className="admin-badge">
+                        {ud.emailVerified}: {user.emailVerifiedAt ? ud.yes : ud.no}
+                      </span>
+                      <span className="admin-badge">
+                        {u360?.labels?.walletFrozen ?? 'Wallet Frozen'}:{' '}
+                        {user.walletFrozen ? ud.yes : ud.no}
+                      </span>
+                    </div>
                   </div>
                 </div>
-              </div>
-              <button type="button" className="admin-btn admin-btn--small" onClick={onClose}>
-                {dictionary.common.back}
-              </button>
-            </header>
-
-            <div className="admin-user360-tabs">
-              {[
-                { id: 'overview' as const, label: u360?.tabs?.overview ?? 'Overview' },
-                { id: 'account' as const, label: u360?.tabs?.account ?? 'Account' },
-                { id: 'roleProfile' as const, label: u360?.tabs?.roleProfile ?? 'Role Profile' },
-                { id: 'verification' as const, label: u360?.tabs?.verification ?? 'Verification' },
-                { id: 'activity' as const, label: u360?.tabs?.activity ?? 'Activity' },
-                { id: 'security' as const, label: u360?.tabs?.security ?? 'Security' },
-              ].map((tab) => (
-                <button
-                  key={tab.id}
-                  type="button"
-                  className={`admin-user360-tab ${activeTab === tab.id ? 'admin-user360-tab--active' : ''}`}
-                  onClick={() => {
-                    setActiveTab(tab.id);
-                    if (tab.id === 'activity') setActivityPage(1);
-                  }}
-                >
-                  {tab.label}
+                <button type="button" className="admin-btn admin-btn--small" onClick={onClose}>
+                  {dictionary.common.back}
                 </button>
-              ))}
-            </div>
+              </header>
 
-            <div className="admin-user360-content">
-              {activeTab === 'overview' && (
-                <div className="admin-user360-grid">
-                  <section className="admin-user-card admin-user360-span-2">
-                    <h3 className="admin-user-card-title">{ud.basicInfo}</h3>
-                    <div className="admin-user-field-grid">
-                      <div className="admin-user-field"><span className="admin-user-field-label">{ud.phone}</span><span className="admin-user-field-value">{user.phone ?? '-'}</span></div>
-                      <div className="admin-user-field"><span className="admin-user-field-label">{u360?.labels?.phoneCode ?? 'Phone code'}</span><span className="admin-user-field-value">{user.phoneCode ?? '-'}</span></div>
-                      <div className="admin-user-field"><span className="admin-user-field-label">{ud.nationality}</span><span className="admin-user-field-value">{user.nationality ?? '-'}</span></div>
-                      <div className="admin-user-field"><span className="admin-user-field-label">{ud.dateOfBirth}</span><span className="admin-user-field-value">{formatDate(user.dateOfBirth)}</span></div>
-                      <div className="admin-user-field"><span className="admin-user-field-label">{ud.lastLogin}</span><span className="admin-user-field-value">{formatDateTime(user.lastLoginAt)}</span></div>
-                      <div className="admin-user-field"><span className="admin-user-field-label">{ud.createdAt}</span><span className="admin-user-field-value">{formatDate(user.createdAt)}</span></div>
-                      <div className="admin-user-field"><span className="admin-user-field-label">{d.plan}</span><span className="admin-user-field-value">{user.planName ?? '-'}</span></div>
-            <div className="admin-user-field"><span className="admin-user-field-label">{ud.wallet}</span><span className="admin-user-field-value">{user.walletBalance != null ? `${user.walletBalance.toFixed(2)} ${user.walletCurrency ?? 'EGP'}` : '-'}</span></div>
-                    </div>
-                  </section>
+              <div className="admin-user360-tabs">
+                {[
+                  { id: 'overview' as const, label: u360?.tabs?.overview ?? 'Overview' },
+                  { id: 'account' as const, label: u360?.tabs?.account ?? 'Account' },
+                  { id: 'roleProfile' as const, label: u360?.tabs?.roleProfile ?? 'Role Profile' },
+                  {
+                    id: 'verification' as const,
+                    label: u360?.tabs?.verification ?? 'Verification',
+                  },
+                  { id: 'activity' as const, label: u360?.tabs?.activity ?? 'Activity' },
+                  { id: 'security' as const, label: u360?.tabs?.security ?? 'Security' },
+                ].map((tab) => (
+                  <button
+                    key={tab.id}
+                    type="button"
+                    className={`admin-user360-tab ${activeTab === tab.id ? 'admin-user360-tab--active' : ''}`}
+                    onClick={() => {
+                      setActiveTab(tab.id);
+                      if (tab.id === 'activity') setActivityPage(1);
+                    }}
+                  >
+                    {tab.label}
+                  </button>
+                ))}
+              </div>
 
-                  <section className="admin-user-card admin-user360-span-2">
-                    <h3 className="admin-user-card-title">{u360?.labels?.activityCounts ?? 'Activity Counts'}</h3>
-                    <div className="admin-user360-counters">
-                      <div className="admin-user360-counter"><span>Needs</span><strong>{currentOverview.activityCounts.needs}</strong></div>
-                      <div className="admin-user360-counter"><span>Bids</span><strong>{currentOverview.activityCounts.bids}</strong></div>
-                      <div className="admin-user360-counter"><span>Jobs</span><strong>{currentOverview.activityCounts.jobs}</strong></div>
-                      <div className="admin-user360-counter"><span>Applications</span><strong>{currentOverview.activityCounts.jobApplications}</strong></div>
-                      <div className="admin-user360-counter"><span>Bookings</span><strong>{currentOverview.activityCounts.bookings}</strong></div>
-                      {canManageTransactions && <div className="admin-user360-counter"><span>Transactions</span><strong>{currentOverview.activityCounts.transactions}</strong></div>}
-                    </div>
-                  </section>
-                </div>
-              )}
-
-              {activeTab === 'account' && (
-                <section className="admin-user-card">
-                  <h3 className="admin-user-card-title">{u360?.account?.title ?? 'Account Controls'}</h3>
-                  <div className="admin-user360-form-grid">
-                    <label className="admin-form-group"><span className="admin-form-label">{ud.displayName}</span><input className="admin-form-input" value={account.displayName} onChange={(e) => setAccount((prev) => ({ ...prev, displayName: e.target.value }))} /></label>
-                    <label className="admin-form-group"><span className="admin-form-label">{ud.phone}</span><input className="admin-form-input" value={account.phone} onChange={(e) => setAccount((prev) => ({ ...prev, phone: e.target.value }))} /></label>
-                    <label className="admin-form-group"><span className="admin-form-label">{u360?.labels?.phoneCode ?? 'Phone code'}</span><input className="admin-form-input" value={account.phoneCode} onChange={(e) => setAccount((prev) => ({ ...prev, phoneCode: e.target.value }))} /></label>
-                    <label className="admin-form-group"><span className="admin-form-label">{ud.nationality}</span><input className="admin-form-input" value={account.nationality} onChange={(e) => setAccount((prev) => ({ ...prev, nationality: e.target.value }))} /></label>
-                    <label className="admin-form-group"><span className="admin-form-label">{ud.dateOfBirth}</span><input type="date" className="admin-form-input" value={account.dateOfBirth} onChange={(e) => setAccount((prev) => ({ ...prev, dateOfBirth: e.target.value }))} /></label>
-                    <label className="admin-form-group"><span className="admin-form-label">{d.role}</span><select className="admin-form-select" value={account.primaryRole} onChange={(e) => setAccount((prev) => ({ ...prev, primaryRole: e.target.value as AccountForm['primaryRole'] }))}><option value="customer">Customer</option><option value="expert">Expert</option><option value="craftsman">Craftsman</option><option value="business">Business</option></select></label>
-                    <label className="admin-form-group"><span className="admin-form-label">{ud.adminFlag}</span><select className="admin-form-select" value={account.isAdmin ? 'yes' : 'no'} onChange={(e) => setAccount((prev) => ({ ...prev, isAdmin: e.target.value === 'yes' }))}><option value="no">{ud.no}</option><option value="yes">{ud.yes}</option></select></label>
-                    {canManagePlans && <label className="admin-form-group"><span className="admin-form-label">{d.plan}</span><select className="admin-form-select" value={account.planId} onChange={(e) => setAccount((prev) => ({ ...prev, planId: e.target.value }))}><option value="">- None -</option>{plans.map((plan) => <option key={plan.id} value={plan.id}>{plan.name}</option>)}</select></label>}
-                  </div>
-
-                  {account.isAdmin && (
-                    <div className="admin-user360-permissions">
-                      {adminPermissionsIntro ? (
-                        <p className="admin-user360-note">{adminPermissionsIntro}</p>
-                      ) : null}
-                      <p className="admin-form-label">{u360?.labels?.permissions ?? 'Permissions'}</p>
-                      <div className="admin-user360-permissions-list">
-                        {permissionDefs.map((permission) => (
-                          <label key={permission.id} className="admin-permission-row">
-                            <span className="admin-permission-row-head">
-                              <input
-                                type="checkbox"
-                                checked={account.adminPermissions.includes(permission.id)}
-                                onChange={(e) =>
-                                  setAccount((prev) => ({
-                                    ...prev,
-                                    adminPermissions: e.target.checked
-                                      ? [...prev.adminPermissions, permission.id]
-                                      : prev.adminPermissions.filter((id) => id !== permission.id),
-                                  }))
-                                }
-                              />
-                              <span className="admin-permission-label">{permission.label}</span>
-                            </span>
-                            <span className="admin-permission-hint">{permission.hint}</span>
-                          </label>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  <div className="admin-modal-actions">
-                    <button type="button" className="admin-btn admin-btn--primary" disabled={!canManageUsers || actionLoading === 'saveAccount'} onClick={() => void handleSaveAccount()}>{dictionary.common.save}</button>
-                  </div>
-                </section>
-              )}
-
-              {activeTab === 'roleProfile' && (
-                <section className="admin-user-card">
-                  <h3 className="admin-user-card-title">{u360?.roleProfile?.title ?? 'Role Profile'}</h3>
-                  {account.primaryRole === 'customer' ? (
-                    <p className="admin-empty">{u360?.roleProfile?.customerOnly ?? 'Customer account has no role profile.'}</p>
-                  ) : (
-                    <>
-                      <p className="admin-user360-note">{u360?.roleProfile?.jsonHint ?? 'Edit all profile fields as JSON.'}</p>
-                      <textarea className="admin-user360-json" value={account.primaryRole === 'expert' ? expertJson : account.primaryRole === 'craftsman' ? craftsmanJson : businessJson} onChange={(e) => (account.primaryRole === 'expert' ? setExpertJson(e.target.value) : account.primaryRole === 'craftsman' ? setCraftsmanJson(e.target.value) : setBusinessJson(e.target.value))} />
-                      {roleProfileError && <p className="admin-error-banner">{roleProfileError}</p>}
-                      <div className="admin-modal-actions">
-                        <button type="button" className="admin-btn admin-btn--primary" disabled={!canManageUsers || actionLoading === 'saveRoleProfile'} onClick={() => void handleSaveRoleProfile()}>{dictionary.common.save}</button>
-                      </div>
-                    </>
-                  )}
-                </section>
-              )}
-
-              {activeTab === 'verification' && (
-                <div className="admin-user360-grid">
-                  {currentOverview.expertProfile && (
+              <div className="admin-user360-content">
+                {activeTab === 'overview' && (
+                  <div className="admin-user360-grid">
                     <section className="admin-user-card admin-user360-span-2">
-                      <h3 className="admin-user-card-title">Expert verification</h3>
-                      <p className="admin-user360-item-meta">
-                        Status: <span className="admin-badge">{currentOverview.expertProfile.verificationStatus}</span>
-                        {currentOverview.expertProfile.identityVerificationMethod != null && (
-                          <> · Identity: {currentOverview.expertProfile.identityVerificationMethod === 'didit' ? 'Didit (KYC)' : 'Manual review'}</>
-                        )}
-                      </p>
-                      <p className="admin-user360-item-meta" style={{ fontSize: '0.85rem', color: 'var(--text-soft)' }}>
-                        {currentOverview.expertProfile.verificationStatus === 'under_review' && 'Under review = identity and/or academic submitted, awaiting admin approval.'}
-                        {currentOverview.expertProfile.verificationStatus === 'verified' && 'Fully verified (identity + academic approved).'}
-                      </p>
+                      <h3 className="admin-user-card-title">{ud.basicInfo}</h3>
+                      <div className="admin-user-field-grid">
+                        <div className="admin-user-field">
+                          <span className="admin-user-field-label">{ud.phone}</span>
+                          <span className="admin-user-field-value">{user.phone ?? '-'}</span>
+                        </div>
+                        <div className="admin-user-field">
+                          <span className="admin-user-field-label">
+                            {u360?.labels?.phoneCode ?? 'Phone code'}
+                          </span>
+                          <span className="admin-user-field-value">{user.phoneCode ?? '-'}</span>
+                        </div>
+                        <div className="admin-user-field">
+                          <span className="admin-user-field-label">{ud.nationality}</span>
+                          <span className="admin-user-field-value">{user.nationality ?? '-'}</span>
+                        </div>
+                        <div className="admin-user-field">
+                          <span className="admin-user-field-label">{ud.dateOfBirth}</span>
+                          <span className="admin-user-field-value">
+                            {formatDate(user.dateOfBirth)}
+                          </span>
+                        </div>
+                        <div className="admin-user-field">
+                          <span className="admin-user-field-label">{ud.lastLogin}</span>
+                          <span className="admin-user-field-value">
+                            {formatDateTime(user.lastLoginAt)}
+                          </span>
+                        </div>
+                        <div className="admin-user-field">
+                          <span className="admin-user-field-label">{ud.createdAt}</span>
+                          <span className="admin-user-field-value">
+                            {formatDate(user.createdAt)}
+                          </span>
+                        </div>
+                        <div className="admin-user-field">
+                          <span className="admin-user-field-label">{d.plan}</span>
+                          <span className="admin-user-field-value">{user.planName ?? '-'}</span>
+                        </div>
+                        <div className="admin-user-field">
+                          <span className="admin-user-field-label">{ud.wallet}</span>
+                          <span className="admin-user-field-value">
+                            {user.walletBalance != null
+                              ? `${user.walletBalance.toFixed(2)} ${user.walletCurrency ?? 'EGP'}`
+                              : '-'}
+                          </span>
+                        </div>
+                      </div>
                     </section>
-                  )}
-                  {currentOverview.craftsmanProfile && (
+
                     <section className="admin-user-card admin-user360-span-2">
-                      <h3 className="admin-user-card-title">Craftsman verification</h3>
-                      <p className="admin-user360-item-meta">
-                        Status: <span className="admin-badge">{currentOverview.craftsmanProfile.verificationStatus}</span>
-                        {currentOverview.craftsmanProfile.identityVerificationMethod != null && (
-                          <> · Identity: {currentOverview.craftsmanProfile.identityVerificationMethod === 'didit' ? 'Didit (KYC)' : 'Manual review'}</>
+                      <h3 className="admin-user-card-title">
+                        {u360?.labels?.activityCounts ?? 'Activity Counts'}
+                      </h3>
+                      <div className="admin-user360-counters">
+                        <div className="admin-user360-counter">
+                          <span>Needs</span>
+                          <strong>{currentOverview.activityCounts.needs}</strong>
+                        </div>
+                        <div className="admin-user360-counter">
+                          <span>Bids</span>
+                          <strong>{currentOverview.activityCounts.bids}</strong>
+                        </div>
+                        <div className="admin-user360-counter">
+                          <span>Jobs</span>
+                          <strong>{currentOverview.activityCounts.jobs}</strong>
+                        </div>
+                        <div className="admin-user360-counter">
+                          <span>Applications</span>
+                          <strong>{currentOverview.activityCounts.jobApplications}</strong>
+                        </div>
+                        <div className="admin-user360-counter">
+                          <span>Bookings</span>
+                          <strong>{currentOverview.activityCounts.bookings}</strong>
+                        </div>
+                        {canManageTransactions && (
+                          <div className="admin-user360-counter">
+                            <span>Transactions</span>
+                            <strong>{currentOverview.activityCounts.transactions}</strong>
+                          </div>
                         )}
-                      </p>
-                      <p className="admin-user360-item-meta" style={{ fontSize: '0.85rem', color: 'var(--text-soft)' }}>
-                        {currentOverview.craftsmanProfile.verificationStatus === 'under_review' && 'Under review = identity submitted and awaiting admin approval.'}
-                        {currentOverview.craftsmanProfile.verificationStatus === 'verified' && 'Identity verification approved.'}
-                      </p>
+                      </div>
                     </section>
-                  )}
-                  <section className="admin-user-card admin-user360-span-2">
-                    <h3 className="admin-user-card-title">{u360?.verification?.identityTitle ?? 'Identity Documents'}</h3>
-                    {currentOverview.identityDocuments.length === 0 ? <p className="admin-empty">{u360?.verification?.empty ?? 'No documents.'}</p> : (
-                      <div className="admin-user360-list">
-                        {currentOverview.identityDocuments.map((doc) => (
-                          <article key={doc.id} className="admin-user360-item">
-                            <div className="admin-user360-item-head"><strong>{doc.fullNameOnDoc}</strong><span className="admin-badge">{doc.status}</span></div>
-                            <p className="admin-user360-item-meta">{doc.documentType} | {doc.documentNumber ?? '-'}</p>
-                            <div className="admin-user360-links">
-                              {doc.frontImageUrl && (
-                                <button type="button" className="admin-link-btn" onClick={() => setPreviewImage({ url: doc.frontImageUrl!, title: 'Document front' })}>Front</button>
-                              )}
-                              {doc.backImageUrl && (
-                                <button type="button" className="admin-link-btn" onClick={() => setPreviewImage({ url: doc.backImageUrl!, title: 'Document back' })}>Back</button>
-                              )}
-                              {doc.selfieImageUrl && (
-                                <button type="button" className="admin-link-btn" onClick={() => setPreviewImage({ url: doc.selfieImageUrl!, title: 'Selfie' })}>Selfie</button>
-                              )}
-                            </div>
-                            {canManageVerifications && (doc.status === 'pending' || doc.status === 'under_review') && <div className="admin-actions-row"><button type="button" className="admin-btn admin-btn--small admin-btn--success" disabled={actionLoading === `identity-${doc.id}`} onClick={() => void reviewIdentity(doc.id, 'approved')}>{dictionary.admin.approve}</button><button type="button" className="admin-btn admin-btn--small admin-btn--danger" disabled={actionLoading === `identity-${doc.id}`} onClick={() => void reviewIdentity(doc.id, 'rejected')}>{dictionary.admin.reject}</button></div>}
-                          </article>
-                        ))}
-                      </div>
-                    )}
-                  </section>
+                  </div>
+                )}
 
-                  <section className="admin-user-card admin-user360-span-2">
-                    <h3 className="admin-user-card-title">{u360?.verification?.academicTitle ?? 'Academic Records'}</h3>
-                    {currentOverview.academicRecords.length === 0 ? <p className="admin-empty">{u360?.verification?.empty ?? 'No records.'}</p> : (
-                      <div className="admin-user360-list">
-                        {currentOverview.academicRecords.map((record) => (
-                          <article key={record.id} className="admin-user360-item">
-                            <div className="admin-user360-item-head"><strong>{record.title}</strong><span className="admin-badge">{record.status}</span></div>
-                            <p className="admin-user360-item-meta">{record.recordType} | {record.institution}</p>
-                            <div className="admin-user360-links">
-                              {record.certificateImageUrl && (
-                                <button type="button" className="admin-link-btn" onClick={() => setPreviewImage({ url: record.certificateImageUrl!, title: 'Certificate' })}>Certificate</button>
-                              )}
-                              {record.transcriptImageUrl && (
-                                <button type="button" className="admin-link-btn" onClick={() => setPreviewImage({ url: record.transcriptImageUrl!, title: 'Transcript' })}>Transcript</button>
-                              )}
-                            </div>
-                            {canManageVerifications && (record.status === 'pending' || record.status === 'under_review') && <div className="admin-actions-row"><button type="button" className="admin-btn admin-btn--small admin-btn--success" disabled={actionLoading === `academic-${record.id}`} onClick={() => void reviewAcademic(record.id, 'approved')}>{dictionary.admin.approve}</button><button type="button" className="admin-btn admin-btn--small admin-btn--danger" disabled={actionLoading === `academic-${record.id}`} onClick={() => void reviewAcademic(record.id, 'rejected')}>{dictionary.admin.reject}</button></div>}
-                          </article>
-                        ))}
-                      </div>
-                    )}
-                  </section>
-
-                  <section className="admin-user-card admin-user360-span-2">
-                    <h3 className="admin-user-card-title">{u360?.verification?.businessTitle ?? 'Business Verification'}</h3>
-                    {!currentOverview.businessProfile ? <p className="admin-empty">{u360?.verification?.businessMissing ?? 'No business profile.'}</p> : (
-                      <>
-                        <p
-                          className="admin-user360-item-meta"
-                          style={{ fontSize: '0.85rem', color: 'var(--text-soft)', marginBottom: '0.5rem' }}
+                {activeTab === 'account' && (
+                  <section className="admin-user-card">
+                    <h3 className="admin-user-card-title">
+                      {u360?.account?.title ?? 'Account Controls'}
+                    </h3>
+                    <div className="admin-user360-form-grid">
+                      <label className="admin-form-group">
+                        <span className="admin-form-label">{ud.displayName}</span>
+                        <input
+                          className="admin-form-input"
+                          value={account.displayName}
+                          onChange={(e) =>
+                            setAccount((prev) => ({ ...prev, displayName: e.target.value }))
+                          }
+                        />
+                      </label>
+                      <label className="admin-form-group">
+                        <span className="admin-form-label">{ud.phone}</span>
+                        <input
+                          className="admin-form-input"
+                          value={account.phone}
+                          onChange={(e) =>
+                            setAccount((prev) => ({ ...prev, phone: e.target.value }))
+                          }
+                        />
+                      </label>
+                      <label className="admin-form-group">
+                        <span className="admin-form-label">
+                          {u360?.labels?.phoneCode ?? 'Phone code'}
+                        </span>
+                        <input
+                          className="admin-form-input"
+                          value={account.phoneCode}
+                          onChange={(e) =>
+                            setAccount((prev) => ({ ...prev, phoneCode: e.target.value }))
+                          }
+                        />
+                      </label>
+                      <label className="admin-form-group">
+                        <span className="admin-form-label">{ud.nationality}</span>
+                        <input
+                          className="admin-form-input"
+                          value={account.nationality}
+                          onChange={(e) =>
+                            setAccount((prev) => ({ ...prev, nationality: e.target.value }))
+                          }
+                        />
+                      </label>
+                      <label className="admin-form-group">
+                        <span className="admin-form-label">{ud.dateOfBirth}</span>
+                        <input
+                          type="date"
+                          className="admin-form-input"
+                          value={account.dateOfBirth}
+                          onChange={(e) =>
+                            setAccount((prev) => ({ ...prev, dateOfBirth: e.target.value }))
+                          }
+                        />
+                      </label>
+                      <label className="admin-form-group">
+                        <span className="admin-form-label">{d.role}</span>
+                        <select
+                          className="admin-form-select"
+                          value={account.primaryRole}
+                          onChange={(e) =>
+                            setAccount((prev) => ({
+                              ...prev,
+                              primaryRole: e.target.value as AccountForm['primaryRole'],
+                            }))
+                          }
                         >
-                          {(u360?.verification as { businessApproveHint?: string } | undefined)
-                            ?.businessApproveHint ??
-                            'Approve marks company details (KYB) as reviewed. Verified status requires owner identity approved and a logo on file.'}
+                          <option value="customer">Customer</option>
+                          <option value="expert">Expert</option>
+                          <option value="craftsman">Craftsman</option>
+                          <option value="business">Business</option>
+                        </select>
+                      </label>
+                      <label className="admin-form-group">
+                        <span className="admin-form-label">{ud.adminFlag}</span>
+                        <select
+                          className="admin-form-select"
+                          value={account.isAdmin ? 'yes' : 'no'}
+                          onChange={(e) =>
+                            setAccount((prev) => ({ ...prev, isAdmin: e.target.value === 'yes' }))
+                          }
+                        >
+                          <option value="no">{ud.no}</option>
+                          <option value="yes">{ud.yes}</option>
+                        </select>
+                      </label>
+                      {canManagePlans && (
+                        <label className="admin-form-group">
+                          <span className="admin-form-label">{d.plan}</span>
+                          <select
+                            className="admin-form-select"
+                            value={account.planId}
+                            onChange={(e) =>
+                              setAccount((prev) => ({ ...prev, planId: e.target.value }))
+                            }
+                          >
+                            <option value="">- None -</option>
+                            {plans.map((plan) => (
+                              <option key={plan.id} value={plan.id}>
+                                {plan.name}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                      )}
+                    </div>
+
+                    {account.isAdmin && (
+                      <div className="admin-user360-permissions">
+                        {adminPermissionsIntro ? (
+                          <p className="admin-user360-note">{adminPermissionsIntro}</p>
+                        ) : null}
+                        <p className="admin-form-label">
+                          {u360?.labels?.permissions ?? 'Permissions'}
                         </p>
-                        <p className="admin-user360-item-meta">{u360?.verification?.status ?? 'Status'}: {currentOverview.businessProfile.verificationStatus}</p>
-                        <div className="admin-user-field-grid" style={{ marginBottom: '0.5rem' }}>
-                          <div className="admin-user-field">
-                            <span className="admin-user-field-label">
-                              {(u360?.verification as { businessKybApproved?: string } | undefined)
-                                ?.businessKybApproved ?? 'Company docs (KYB)'}
-                            </span>
-                            <span className="admin-user-field-value">
-                              {currentOverview.businessProfile.businessVerified
-                                ? ((u360?.verification as { yes?: string } | undefined)?.yes ?? 'Yes')
-                                : ((u360?.verification as { no?: string } | undefined)?.no ?? 'No')}
-                            </span>
-                          </div>
-                          <div className="admin-user-field">
-                            <span className="admin-user-field-label">
-                              {(u360?.verification as { businessOwnerIdentity?: string } | undefined)
-                                ?.businessOwnerIdentity ?? 'Owner identity'}
-                            </span>
-                            <span className="admin-user-field-value">
-                              {currentOverview.businessProfile.identityVerified
-                                ? ((u360?.verification as { yes?: string } | undefined)?.yes ?? 'Yes')
-                                : ((u360?.verification as { no?: string } | undefined)?.no ?? 'No')}
-                            </span>
-                          </div>
-                          <div className="admin-user-field">
-                            <span className="admin-user-field-label">
-                              {(u360?.verification as { businessLogoOnFile?: string } | undefined)
-                                ?.businessLogoOnFile ?? 'Logo on file'}
-                            </span>
-                            <span className="admin-user-field-value">
-                              {currentOverview.businessProfile.logoUrl?.trim()
-                                ? ((u360?.verification as { yes?: string } | undefined)?.yes ?? 'Yes')
-                                : ((u360?.verification as { no?: string } | undefined)?.no ?? 'No')}
-                            </span>
-                          </div>
+                        <div className="admin-user360-permissions-list">
+                          {permissionDefs.map((permission) => (
+                            <label key={permission.id} className="admin-permission-row">
+                              <span className="admin-permission-row-head">
+                                <input
+                                  type="checkbox"
+                                  checked={account.adminPermissions.includes(permission.id)}
+                                  onChange={(e) =>
+                                    setAccount((prev) => ({
+                                      ...prev,
+                                      adminPermissions: e.target.checked
+                                        ? [...prev.adminPermissions, permission.id]
+                                        : prev.adminPermissions.filter(
+                                            (id) => id !== permission.id,
+                                          ),
+                                    }))
+                                  }
+                                />
+                                <span className="admin-permission-label">{permission.label}</span>
+                              </span>
+                              <span className="admin-permission-hint">{permission.hint}</span>
+                            </label>
+                          ))}
                         </div>
-                        {currentOverview.businessProfile.logoUrl && (
-                          <div className="admin-user360-links" style={{ marginBottom: '0.75rem' }}>
-                            <button
-                              type="button"
-                              className="admin-link-btn"
-                              onClick={() => setPreviewImage({ url: currentOverview.businessProfile!.logoUrl!, title: 'Company logo' })}
-                            >
-                              {(u360?.verification as { companyLogo?: string } | undefined)?.companyLogo ??
-                                'View company logo'}
-                            </button>
-                          </div>
+                      </div>
+                    )}
+
+                    <div className="admin-modal-actions">
+                      <button
+                        type="button"
+                        className="admin-btn admin-btn--primary"
+                        disabled={!canManageUsers || actionLoading === 'saveAccount'}
+                        onClick={() => void handleSaveAccount()}
+                      >
+                        {dictionary.common.save}
+                      </button>
+                    </div>
+                  </section>
+                )}
+
+                {activeTab === 'roleProfile' && (
+                  <section className="admin-user-card">
+                    <h3 className="admin-user-card-title">
+                      {u360?.roleProfile?.title ?? 'Role Profile'}
+                    </h3>
+                    {account.primaryRole === 'customer' ? (
+                      <p className="admin-empty">
+                        {u360?.roleProfile?.customerOnly ?? 'Customer account has no role profile.'}
+                      </p>
+                    ) : (
+                      <>
+                        <p className="admin-user360-note">
+                          {u360?.roleProfile?.jsonHint ?? 'Edit all profile fields as JSON.'}
+                        </p>
+                        <textarea
+                          className="admin-user360-json"
+                          value={
+                            account.primaryRole === 'expert'
+                              ? expertJson
+                              : account.primaryRole === 'craftsman'
+                                ? craftsmanJson
+                                : businessJson
+                          }
+                          onChange={(e) =>
+                            account.primaryRole === 'expert'
+                              ? setExpertJson(e.target.value)
+                              : account.primaryRole === 'craftsman'
+                                ? setCraftsmanJson(e.target.value)
+                                : setBusinessJson(e.target.value)
+                          }
+                        />
+                        {roleProfileError && (
+                          <p className="admin-error-banner">{roleProfileError}</p>
                         )}
-                        <div className="admin-user-field-grid" style={{ marginBottom: '0.75rem' }}>
-                          <div className="admin-user-field">
-                            <span className="admin-user-field-label">Company</span>
-                            <span className="admin-user-field-value">{currentOverview.businessProfile.companyName ?? '-'}</span>
-                          </div>
-                          <div className="admin-user-field">
-                            <span className="admin-user-field-label">Trade license</span>
-                            <span className="admin-user-field-value">{currentOverview.businessProfile.tradeLicenseNumber ?? '-'}</span>
-                          </div>
-                          <div className="admin-user-field">
-                            <span className="admin-user-field-label">Tax ID</span>
-                            <span className="admin-user-field-value">{currentOverview.businessProfile.taxId ?? '-'}</span>
-                          </div>
-                          <div className="admin-user-field">
-                            <span className="admin-user-field-label">Commercial register</span>
-                            <span className="admin-user-field-value">{currentOverview.businessProfile.commercialRegister ?? '-'}</span>
-                          </div>
-                          <div className="admin-user-field">
-                            <span className="admin-user-field-label">City</span>
-                            <span className="admin-user-field-value">{currentOverview.businessProfile.city ?? '-'}</span>
-                          </div>
-                          <div className="admin-user-field">
-                            <span className="admin-user-field-label">Country</span>
-                            <span className="admin-user-field-value">{currentOverview.businessProfile.country ?? '-'}</span>
-                          </div>
+                        <div className="admin-modal-actions">
+                          <button
+                            type="button"
+                            className="admin-btn admin-btn--primary"
+                            disabled={!canManageUsers || actionLoading === 'saveRoleProfile'}
+                            onClick={() => void handleSaveRoleProfile()}
+                          >
+                            {dictionary.common.save}
+                          </button>
                         </div>
-                        {canManageVerifications && <div className="admin-actions-row"><button type="button" className="admin-btn admin-btn--small admin-btn--success" disabled={actionLoading === 'business-review'} onClick={() => void reviewBusiness('approved')}>{dictionary.admin.approve}</button><button type="button" className="admin-btn admin-btn--small admin-btn--danger" disabled={actionLoading === 'business-review'} onClick={() => void reviewBusiness('rejected')}>{dictionary.admin.reject}</button></div>}
                       </>
                     )}
                   </section>
+                )}
 
-                  {canManageVerifications && (
+                {activeTab === 'verification' && (
+                  <div className="admin-user360-grid">
+                    {currentOverview.expertProfile && (
+                      <section className="admin-user-card admin-user360-span-2">
+                        <h3 className="admin-user-card-title">Expert verification</h3>
+                        <p className="admin-user360-item-meta">
+                          Status:{' '}
+                          <span className="admin-badge">
+                            {currentOverview.expertProfile.verificationStatus}
+                          </span>
+                          {currentOverview.expertProfile.identityVerificationMethod != null && (
+                            <>
+                              {' '}
+                              · Identity:{' '}
+                              {currentOverview.expertProfile.identityVerificationMethod === 'didit'
+                                ? 'Didit (KYC)'
+                                : 'Manual review'}
+                            </>
+                          )}
+                        </p>
+                        <p
+                          className="admin-user360-item-meta"
+                          style={{ fontSize: '0.85rem', color: 'var(--text-soft)' }}
+                        >
+                          {currentOverview.expertProfile.verificationStatus === 'under_review' &&
+                            'Under review = identity and/or academic submitted, awaiting admin approval.'}
+                          {currentOverview.expertProfile.verificationStatus === 'verified' &&
+                            'Fully verified (identity + academic approved).'}
+                        </p>
+                      </section>
+                    )}
+                    {currentOverview.craftsmanProfile && (
+                      <section className="admin-user-card admin-user360-span-2">
+                        <h3 className="admin-user-card-title">Craftsman verification</h3>
+                        <p className="admin-user360-item-meta">
+                          Status:{' '}
+                          <span className="admin-badge">
+                            {currentOverview.craftsmanProfile.verificationStatus}
+                          </span>
+                          {currentOverview.craftsmanProfile.identityVerificationMethod != null && (
+                            <>
+                              {' '}
+                              · Identity:{' '}
+                              {currentOverview.craftsmanProfile.identityVerificationMethod ===
+                              'didit'
+                                ? 'Didit (KYC)'
+                                : 'Manual review'}
+                            </>
+                          )}
+                        </p>
+                        <p
+                          className="admin-user360-item-meta"
+                          style={{ fontSize: '0.85rem', color: 'var(--text-soft)' }}
+                        >
+                          {currentOverview.craftsmanProfile.verificationStatus === 'under_review' &&
+                            'Under review = identity submitted and awaiting admin approval.'}
+                          {currentOverview.craftsmanProfile.verificationStatus === 'verified' &&
+                            'Identity verification approved.'}
+                        </p>
+                      </section>
+                    )}
                     <section className="admin-user-card admin-user360-span-2">
                       <h3 className="admin-user-card-title">
-                        {vh?.title ?? 'Verification review history'}
+                        {u360?.verification?.identityTitle ?? 'Identity Documents'}
                       </h3>
-                      <p
-                        className="admin-user360-item-meta"
-                        style={{ fontSize: '0.85rem', color: 'var(--text-soft)', marginBottom: '0.75rem' }}
-                      >
-                        {vh?.hint ??
-                          'Past approve/reject actions for this user (including older document record IDs if they resubmitted).'}
-                      </p>
-                      {verificationReviewHistoryLoading ? (
-                        <p className="admin-empty">{dictionary.admin.loading}</p>
-                      ) : verificationReviewHistory.length === 0 ? (
-                        <p className="admin-empty">{vh?.empty ?? 'No past admin reviews yet.'}</p>
+                      {currentOverview.identityDocuments.length === 0 ? (
+                        <p className="admin-empty">
+                          {u360?.verification?.empty ?? 'No documents.'}
+                        </p>
                       ) : (
-                        <div className="admin-table-wrapper">
-                          <table className="admin-table">
-                            <thead>
-                              <tr>
-                                <th>{vh?.date ?? 'Date'}</th>
-                                <th>{vh?.reviewer ?? 'Reviewer'}</th>
-                                <th>{vh?.type ?? 'Type'}</th>
-                                <th>{vh?.decision ?? 'Decision'}</th>
-                                <th>{vh?.recordId ?? 'Record ID'}</th>
-                                <th>{vh?.notes ?? 'Notes'}</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {verificationReviewHistory.map((row) => (
-                                <tr key={row.id}>
-                                  <td>{formatDateTime(row.createdAt)}</td>
-                                  <td>{row.reviewerDisplayName ?? `${row.reviewerId.slice(0, 8)}…`}</td>
-                                  <td>
-                                    {row.reviewType === 'identity'
-                                      ? (vh?.typeIdentity ?? 'Identity document')
-                                      : row.reviewType === 'academic'
-                                        ? (vh?.typeAcademic ?? 'Academic record')
-                                        : (vh?.typeBusiness ?? 'Business verification')}
-                                  </td>
-                                  <td>
-                                    <span
-                                      className={`admin-badge ${row.decision === 'approved' ? 'admin-badge--completed' : 'admin-badge--rejected'}`}
+                        <div className="admin-user360-list">
+                          {currentOverview.identityDocuments.map((doc) => (
+                            <article key={doc.id} className="admin-user360-item">
+                              <div className="admin-user360-item-head">
+                                <strong>{doc.fullNameOnDoc}</strong>
+                                <span className="admin-badge">{doc.status}</span>
+                              </div>
+                              <p className="admin-user360-item-meta">
+                                {doc.documentType} | {doc.documentNumber ?? '-'}
+                              </p>
+                              <div className="admin-user360-links">
+                                {doc.frontImageUrl && (
+                                  <button
+                                    type="button"
+                                    className="admin-link-btn"
+                                    onClick={() =>
+                                      setPreviewImage({
+                                        url: doc.frontImageUrl!,
+                                        title: 'Document front',
+                                      })
+                                    }
+                                  >
+                                    Front
+                                  </button>
+                                )}
+                                {doc.backImageUrl && (
+                                  <button
+                                    type="button"
+                                    className="admin-link-btn"
+                                    onClick={() =>
+                                      setPreviewImage({
+                                        url: doc.backImageUrl!,
+                                        title: 'Document back',
+                                      })
+                                    }
+                                  >
+                                    Back
+                                  </button>
+                                )}
+                                {doc.selfieImageUrl && (
+                                  <button
+                                    type="button"
+                                    className="admin-link-btn"
+                                    onClick={() =>
+                                      setPreviewImage({ url: doc.selfieImageUrl!, title: 'Selfie' })
+                                    }
+                                  >
+                                    Selfie
+                                  </button>
+                                )}
+                              </div>
+                              {canManageVerifications &&
+                                (doc.status === 'pending' || doc.status === 'under_review') && (
+                                  <div className="admin-actions-row">
+                                    <button
+                                      type="button"
+                                      className="admin-btn admin-btn--small admin-btn--success"
+                                      disabled={actionLoading === `identity-${doc.id}`}
+                                      onClick={() => void reviewIdentity(doc.id, 'approved')}
                                     >
-                                      {row.decision === 'approved'
-                                        ? (vh?.approved ?? 'Approved')
-                                        : (vh?.rejected ?? 'Rejected')}
-                                    </span>
-                                  </td>
-                                  <td style={{ fontSize: '0.75rem', wordBreak: 'break-all' }}>
-                                    {row.targetRecordId}
-                                  </td>
-                                  <td>{row.notes?.trim() ? row.notes : '—'}</td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
+                                      {dictionary.admin.approve}
+                                    </button>
+                                    <button
+                                      type="button"
+                                      className="admin-btn admin-btn--small admin-btn--danger"
+                                      disabled={actionLoading === `identity-${doc.id}`}
+                                      onClick={() => void reviewIdentity(doc.id, 'rejected')}
+                                    >
+                                      {dictionary.admin.reject}
+                                    </button>
+                                  </div>
+                                )}
+                            </article>
+                          ))}
                         </div>
                       )}
                     </section>
-                  )}
-                </div>
-              )}
 
-              {activeTab === 'activity' && (
-                <section className="admin-user-card">
-                  <h3 className="admin-user-card-title">{u360?.activity?.title ?? 'Activity'}</h3>
-                  <div className="admin-user360-activity-types">
-                    {activityTypes.map((type) => (
-                      <button key={type} type="button" className={`admin-btn admin-btn--small ${activityType === type ? 'admin-btn--primary' : ''}`} onClick={() => { setActivityType(type); setActivityPage(1); }}>
-                        {u360?.activity?.types?.[type] ?? type}
-                      </button>
-                    ))}
-                  </div>
-
-                  {activityLoading ? <p className="admin-empty">{dictionary.admin.loading}</p> : !activityData || activityData.items.length === 0 ? <p className="admin-empty">{u360?.activity?.empty ?? 'No activity.'}</p> : (
-                    <div className="admin-table-wrapper">
-                      <table className="admin-table">
-                        <thead><tr><th>ID</th><th>Title</th><th>Status</th><th>Amount</th><th>Created</th></tr></thead>
-                        <tbody>
-                          {activityData.items.map((item) => (
-                            <tr key={String(item.id)}>
-                              <td>{formatPrimitive(item.id)}</td>
-                              <td>{formatPrimitive(item.title ?? item.needTitle ?? item.jobTitle ?? item.serviceTitle ?? item.type)}</td>
-                              <td>{formatPrimitive(item.status)}</td>
-                              <td>{item.amount != null ? `${Number(item.amount).toFixed(2)} ${formatPrimitive(item.currency, '')}` : '-'}</td>
-                              <td>{formatDateTime((item.createdAt as string | null) ?? null)}</td>
-                            </tr>
+                    <section className="admin-user-card admin-user360-span-2">
+                      <h3 className="admin-user-card-title">
+                        {u360?.verification?.academicTitle ?? 'Academic Records'}
+                      </h3>
+                      {currentOverview.academicRecords.length === 0 ? (
+                        <p className="admin-empty">{u360?.verification?.empty ?? 'No records.'}</p>
+                      ) : (
+                        <div className="admin-user360-list">
+                          {currentOverview.academicRecords.map((record) => (
+                            <article key={record.id} className="admin-user360-item">
+                              <div className="admin-user360-item-head">
+                                <strong>{record.title}</strong>
+                                <span className="admin-badge">{record.status}</span>
+                              </div>
+                              <p className="admin-user360-item-meta">
+                                {record.recordType} | {record.institution}
+                              </p>
+                              <div className="admin-user360-links">
+                                {record.certificateImageUrl && (
+                                  <button
+                                    type="button"
+                                    className="admin-link-btn"
+                                    onClick={() =>
+                                      setPreviewImage({
+                                        url: record.certificateImageUrl!,
+                                        title: 'Certificate',
+                                      })
+                                    }
+                                  >
+                                    Certificate
+                                  </button>
+                                )}
+                                {record.transcriptImageUrl && (
+                                  <button
+                                    type="button"
+                                    className="admin-link-btn"
+                                    onClick={() =>
+                                      setPreviewImage({
+                                        url: record.transcriptImageUrl!,
+                                        title: 'Transcript',
+                                      })
+                                    }
+                                  >
+                                    Transcript
+                                  </button>
+                                )}
+                              </div>
+                              {canManageVerifications &&
+                                (record.status === 'pending' ||
+                                  record.status === 'under_review') && (
+                                  <div className="admin-actions-row">
+                                    <button
+                                      type="button"
+                                      className="admin-btn admin-btn--small admin-btn--success"
+                                      disabled={actionLoading === `academic-${record.id}`}
+                                      onClick={() => void reviewAcademic(record.id, 'approved')}
+                                    >
+                                      {dictionary.admin.approve}
+                                    </button>
+                                    <button
+                                      type="button"
+                                      className="admin-btn admin-btn--small admin-btn--danger"
+                                      disabled={actionLoading === `academic-${record.id}`}
+                                      onClick={() => void reviewAcademic(record.id, 'rejected')}
+                                    >
+                                      {dictionary.admin.reject}
+                                    </button>
+                                  </div>
+                                )}
+                            </article>
                           ))}
-                        </tbody>
-                      </table>
+                        </div>
+                      )}
+                    </section>
+
+                    <section className="admin-user-card admin-user360-span-2">
+                      <h3 className="admin-user-card-title">
+                        {u360?.verification?.businessTitle ?? 'Business Verification'}
+                      </h3>
+                      {!currentOverview.businessProfile ? (
+                        <p className="admin-empty">
+                          {u360?.verification?.businessMissing ?? 'No business profile.'}
+                        </p>
+                      ) : (
+                        <>
+                          <p
+                            className="admin-user360-item-meta"
+                            style={{
+                              fontSize: '0.85rem',
+                              color: 'var(--text-soft)',
+                              marginBottom: '0.5rem',
+                            }}
+                          >
+                            {(u360?.verification as { businessApproveHint?: string } | undefined)
+                              ?.businessApproveHint ??
+                              'Approve marks company details (KYB) as reviewed. Verified status requires owner identity approved and a logo on file.'}
+                          </p>
+                          <p className="admin-user360-item-meta">
+                            {u360?.verification?.status ?? 'Status'}:{' '}
+                            {currentOverview.businessProfile.verificationStatus}
+                          </p>
+                          <div className="admin-user-field-grid" style={{ marginBottom: '0.5rem' }}>
+                            <div className="admin-user-field">
+                              <span className="admin-user-field-label">
+                                {(
+                                  u360?.verification as { businessKybApproved?: string } | undefined
+                                )?.businessKybApproved ?? 'Company docs (KYB)'}
+                              </span>
+                              <span className="admin-user-field-value">
+                                {currentOverview.businessProfile.businessVerified
+                                  ? ((u360?.verification as { yes?: string } | undefined)?.yes ??
+                                    'Yes')
+                                  : ((u360?.verification as { no?: string } | undefined)?.no ??
+                                    'No')}
+                              </span>
+                            </div>
+                            <div className="admin-user-field">
+                              <span className="admin-user-field-label">
+                                {(
+                                  u360?.verification as
+                                    | { businessOwnerIdentity?: string }
+                                    | undefined
+                                )?.businessOwnerIdentity ?? 'Owner identity'}
+                              </span>
+                              <span className="admin-user-field-value">
+                                {currentOverview.businessProfile.identityVerified
+                                  ? ((u360?.verification as { yes?: string } | undefined)?.yes ??
+                                    'Yes')
+                                  : ((u360?.verification as { no?: string } | undefined)?.no ??
+                                    'No')}
+                              </span>
+                            </div>
+                            <div className="admin-user-field">
+                              <span className="admin-user-field-label">
+                                {(u360?.verification as { businessLogoOnFile?: string } | undefined)
+                                  ?.businessLogoOnFile ?? 'Logo on file'}
+                              </span>
+                              <span className="admin-user-field-value">
+                                {currentOverview.businessProfile.logoUrl?.trim()
+                                  ? ((u360?.verification as { yes?: string } | undefined)?.yes ??
+                                    'Yes')
+                                  : ((u360?.verification as { no?: string } | undefined)?.no ??
+                                    'No')}
+                              </span>
+                            </div>
+                          </div>
+                          {currentOverview.businessProfile.logoUrl && (
+                            <div
+                              className="admin-user360-links"
+                              style={{ marginBottom: '0.75rem' }}
+                            >
+                              <button
+                                type="button"
+                                className="admin-link-btn"
+                                onClick={() =>
+                                  setPreviewImage({
+                                    url: currentOverview.businessProfile!.logoUrl!,
+                                    title: 'Company logo',
+                                  })
+                                }
+                              >
+                                {(u360?.verification as { companyLogo?: string } | undefined)
+                                  ?.companyLogo ?? 'View company logo'}
+                              </button>
+                            </div>
+                          )}
+                          <div
+                            className="admin-user-field-grid"
+                            style={{ marginBottom: '0.75rem' }}
+                          >
+                            <div className="admin-user-field">
+                              <span className="admin-user-field-label">Company</span>
+                              <span className="admin-user-field-value">
+                                {currentOverview.businessProfile.companyName ?? '-'}
+                              </span>
+                            </div>
+                            <div className="admin-user-field">
+                              <span className="admin-user-field-label">Trade license</span>
+                              <span className="admin-user-field-value">
+                                {currentOverview.businessProfile.tradeLicenseNumber ?? '-'}
+                              </span>
+                            </div>
+                            <div className="admin-user-field">
+                              <span className="admin-user-field-label">Tax ID</span>
+                              <span className="admin-user-field-value">
+                                {currentOverview.businessProfile.taxId ?? '-'}
+                              </span>
+                            </div>
+                            <div className="admin-user-field">
+                              <span className="admin-user-field-label">Commercial register</span>
+                              <span className="admin-user-field-value">
+                                {currentOverview.businessProfile.commercialRegister ?? '-'}
+                              </span>
+                            </div>
+                            <div className="admin-user-field">
+                              <span className="admin-user-field-label">City</span>
+                              <span className="admin-user-field-value">
+                                {currentOverview.businessProfile.city ?? '-'}
+                              </span>
+                            </div>
+                            <div className="admin-user-field">
+                              <span className="admin-user-field-label">Country</span>
+                              <span className="admin-user-field-value">
+                                {currentOverview.businessProfile.country ?? '-'}
+                              </span>
+                            </div>
+                          </div>
+                          {canManageVerifications && (
+                            <div className="admin-actions-row">
+                              <button
+                                type="button"
+                                className="admin-btn admin-btn--small admin-btn--success"
+                                disabled={actionLoading === 'business-review'}
+                                onClick={() => void reviewBusiness('approved')}
+                              >
+                                {dictionary.admin.approve}
+                              </button>
+                              <button
+                                type="button"
+                                className="admin-btn admin-btn--small admin-btn--danger"
+                                disabled={actionLoading === 'business-review'}
+                                onClick={() => void reviewBusiness('rejected')}
+                              >
+                                {dictionary.admin.reject}
+                              </button>
+                            </div>
+                          )}
+                        </>
+                      )}
+                    </section>
+
+                    {canManageVerifications && (
+                      <section className="admin-user-card admin-user360-span-2">
+                        <h3 className="admin-user-card-title">
+                          {vh?.title ?? 'Verification review history'}
+                        </h3>
+                        <p
+                          className="admin-user360-item-meta"
+                          style={{
+                            fontSize: '0.85rem',
+                            color: 'var(--text-soft)',
+                            marginBottom: '0.75rem',
+                          }}
+                        >
+                          {vh?.hint ??
+                            'Past approve/reject actions for this user (including older document record IDs if they resubmitted).'}
+                        </p>
+                        {verificationReviewHistoryLoading ? (
+                          <p className="admin-empty">{dictionary.admin.loading}</p>
+                        ) : verificationReviewHistory.length === 0 ? (
+                          <p className="admin-empty">{vh?.empty ?? 'No past admin reviews yet.'}</p>
+                        ) : (
+                          <div className="admin-table-wrapper">
+                            <table className="admin-table">
+                              <thead>
+                                <tr>
+                                  <th>{vh?.date ?? 'Date'}</th>
+                                  <th>{vh?.reviewer ?? 'Reviewer'}</th>
+                                  <th>{vh?.type ?? 'Type'}</th>
+                                  <th>{vh?.decision ?? 'Decision'}</th>
+                                  <th>{vh?.recordId ?? 'Record ID'}</th>
+                                  <th>{vh?.notes ?? 'Notes'}</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {verificationReviewHistory.map((row) => (
+                                  <tr key={row.id}>
+                                    <td>{formatDateTime(row.createdAt)}</td>
+                                    <td>
+                                      {row.reviewerDisplayName ?? `${row.reviewerId.slice(0, 8)}…`}
+                                    </td>
+                                    <td>
+                                      {row.reviewType === 'identity'
+                                        ? (vh?.typeIdentity ?? 'Identity document')
+                                        : row.reviewType === 'academic'
+                                          ? (vh?.typeAcademic ?? 'Academic record')
+                                          : (vh?.typeBusiness ?? 'Business verification')}
+                                    </td>
+                                    <td>
+                                      <span
+                                        className={`admin-badge ${row.decision === 'approved' ? 'admin-badge--completed' : 'admin-badge--rejected'}`}
+                                      >
+                                        {row.decision === 'approved'
+                                          ? (vh?.approved ?? 'Approved')
+                                          : (vh?.rejected ?? 'Rejected')}
+                                      </span>
+                                    </td>
+                                    <td style={{ fontSize: '0.75rem', wordBreak: 'break-all' }}>
+                                      {row.targetRecordId}
+                                    </td>
+                                    <td>{row.notes?.trim() ? row.notes : '—'}</td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        )}
+                      </section>
+                    )}
+                  </div>
+                )}
+
+                {activeTab === 'activity' && (
+                  <section className="admin-user-card">
+                    <h3 className="admin-user-card-title">{u360?.activity?.title ?? 'Activity'}</h3>
+                    <div className="admin-user360-activity-types">
+                      {activityTypes.map((type) => (
+                        <button
+                          key={type}
+                          type="button"
+                          className={`admin-btn admin-btn--small ${activityType === type ? 'admin-btn--primary' : ''}`}
+                          onClick={() => {
+                            setActivityType(type);
+                            setActivityPage(1);
+                          }}
+                        >
+                          {u360?.activity?.types?.[type] ?? type}
+                        </button>
+                      ))}
                     </div>
-                  )}
 
-                  {activityData && activityData.totalPages > 1 && (
-                    <div className="admin-pagination">
-                      <button type="button" className="admin-btn admin-btn--small" disabled={activityPage <= 1} onClick={() => setActivityPage((prev) => prev - 1)}>{'<-'}</button>
-                      <span className="admin-pagination-info">{activityData.page} / {activityData.totalPages}</span>
-                      <button type="button" className="admin-btn admin-btn--small" disabled={activityPage >= activityData.totalPages} onClick={() => setActivityPage((prev) => prev + 1)}>{'->'}</button>
+                    {activityLoading ? (
+                      <p className="admin-empty">{dictionary.admin.loading}</p>
+                    ) : !activityData || activityData.items.length === 0 ? (
+                      <p className="admin-empty">{u360?.activity?.empty ?? 'No activity.'}</p>
+                    ) : (
+                      <div className="admin-table-wrapper">
+                        <table className="admin-table">
+                          <thead>
+                            <tr>
+                              <th>ID</th>
+                              <th>Title</th>
+                              <th>Status</th>
+                              <th>Amount</th>
+                              <th>Created</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {activityData.items.map((item) => (
+                              <tr key={String(item.id)}>
+                                <td>{formatPrimitive(item.id)}</td>
+                                <td>
+                                  {formatPrimitive(
+                                    item.title ??
+                                      item.needTitle ??
+                                      item.jobTitle ??
+                                      item.serviceTitle ??
+                                      item.type,
+                                  )}
+                                </td>
+                                <td>{formatPrimitive(item.status)}</td>
+                                <td>
+                                  {item.amount != null
+                                    ? `${Number(item.amount).toFixed(2)} ${formatPrimitive(item.currency, '')}`
+                                    : '-'}
+                                </td>
+                                <td>{formatDateTime((item.createdAt as string | null) ?? null)}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+
+                    {activityData && activityData.totalPages > 1 && (
+                      <div className="admin-pagination">
+                        <button
+                          type="button"
+                          className="admin-btn admin-btn--small"
+                          disabled={activityPage <= 1}
+                          onClick={() => setActivityPage((prev) => prev - 1)}
+                        >
+                          {'<-'}
+                        </button>
+                        <span className="admin-pagination-info">
+                          {activityData.page} / {activityData.totalPages}
+                        </span>
+                        <button
+                          type="button"
+                          className="admin-btn admin-btn--small"
+                          disabled={activityPage >= activityData.totalPages}
+                          onClick={() => setActivityPage((prev) => prev + 1)}
+                        >
+                          {'->'}
+                        </button>
+                      </div>
+                    )}
+                  </section>
+                )}
+
+                {activeTab === 'security' && (
+                  <section className="admin-user-card">
+                    <h3 className="admin-user-card-title">
+                      {u360?.security?.title ?? 'Security Actions'}
+                    </h3>
+                    <div className="admin-user360-security-block">
+                      <p className="admin-user-field-label">
+                        {u360?.security?.forceLogout ?? 'Force logout all sessions'}
+                      </p>
+                      <button
+                        type="button"
+                        className="admin-btn admin-btn--small"
+                        disabled={!canManageUsers || actionLoading === 'forceLogout'}
+                        onClick={() => void handleForceLogout()}
+                      >
+                        {u360?.security?.forceLogoutBtn ?? 'Force Logout'}
+                      </button>
                     </div>
-                  )}
-                </section>
-              )}
+                    <div className="admin-user360-security-block">
+                      <p className="admin-user-field-label">
+                        {u360?.security?.changeEmail ?? 'Change email'}
+                      </p>
+                      <div className="admin-inline-edit">
+                        <input
+                          type="email"
+                          className="admin-form-input"
+                          value={changeEmail.newEmail}
+                          onChange={(e) =>
+                            setChangeEmail((prev) => ({ ...prev, newEmail: e.target.value }))
+                          }
+                          placeholder={u360?.security?.newEmailPlaceholder ?? 'new@email.com'}
+                        />
+                        <label className="admin-inline-checkbox">
+                          <input
+                            type="checkbox"
+                            checked={changeEmail.sendVerificationEmail}
+                            onChange={(e) =>
+                              setChangeEmail((prev) => ({
+                                ...prev,
+                                sendVerificationEmail: e.target.checked,
+                              }))
+                            }
+                          />
+                          {u360?.security?.sendVerification ?? 'Send verification'}
+                        </label>
+                        <button
+                          type="button"
+                          className="admin-btn admin-btn--small admin-btn--primary"
+                          disabled={!canManageUsers || actionLoading === 'changeEmail'}
+                          onClick={() => void handleChangeEmail()}
+                        >
+                          {u360?.security?.changeEmailBtn ?? 'Update Email'}
+                        </button>
+                      </div>
+                    </div>
+                    {!user.emailVerifiedAt && (
+                      <div className="admin-user360-security-block">
+                        <p className="admin-user-field-label">
+                          {u360?.security?.emailVerification ?? 'Email verification controls'}
+                        </p>
+                        <div className="admin-actions-row">
+                          <button
+                            type="button"
+                            className="admin-btn admin-btn--small"
+                            disabled={!canManageUsers || actionLoading === 'sendVerification'}
+                            onClick={() => void handleSendVerification()}
+                          >
+                            {ud.sendVerificationEmail}
+                          </button>
+                          <button
+                            type="button"
+                            className="admin-btn admin-btn--small admin-btn--success"
+                            disabled={!canManageUsers || actionLoading === 'verifyEmail'}
+                            onClick={() => void handleVerifyEmail()}
+                          >
+                            {ud.verifyEmail}
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                    {canManageTransactions && (
+                      <div className="admin-user360-security-block">
+                        <p className="admin-user-field-label">
+                          {u360?.security?.walletFreeze ?? 'Wallet freeze / unfreeze'}
+                        </p>
+                        <button
+                          type="button"
+                          className={`admin-btn admin-btn--small ${user.walletFrozen ? 'admin-btn--success' : 'admin-btn--danger'}`}
+                          disabled={actionLoading === 'freeze'}
+                          onClick={() => void handleWalletFreezeToggle()}
+                        >
+                          {user.walletFrozen
+                            ? (u360?.security?.unfreezeBtn ?? 'Unfreeze Wallet')
+                            : (u360?.security?.freezeBtn ?? 'Freeze Wallet')}
+                        </button>
+                      </div>
+                    )}
+                    {canManageTransactions && (
+                      <div className="admin-user360-security-block">
+                        <p className="admin-user-field-label">{ud.adjustBalance}</p>
+                        {showAdjust ? (
+                          <div className="admin-user-wallet-form">
+                            <select
+                              className="admin-form-select"
+                              value={adjustForm.type}
+                              onChange={(e) =>
+                                setAdjustForm((prev) => ({
+                                  ...prev,
+                                  type: e.target.value as AdjustForm['type'],
+                                }))
+                              }
+                            >
+                              <option value="deposit">Deposit</option>
+                              <option value="withdrawal">Withdrawal</option>
+                              <option value="adjustment">Adjustment</option>
+                              <option value="bonus">Bonus</option>
+                            </select>
+                            <input
+                              type="number"
+                              className="admin-form-input"
+                              value={adjustForm.amount || ''}
+                              onChange={(e) =>
+                                setAdjustForm((prev) => ({
+                                  ...prev,
+                                  amount: Number(e.target.value) || 0,
+                                }))
+                              }
+                            />
+                            <input
+                              className="admin-form-input"
+                              value={adjustForm.description}
+                              onChange={(e) =>
+                                setAdjustForm((prev) => ({ ...prev, description: e.target.value }))
+                              }
+                            />
+                            <div className="admin-inline-edit">
+                              <button
+                                type="button"
+                                className="admin-btn admin-btn--small admin-btn--primary"
+                                disabled={actionLoading === 'adjust' || adjustForm.amount <= 0}
+                                onClick={() => void handleAdjustBalance()}
+                              >
+                                {dictionary.common.save}
+                              </button>
+                              <button
+                                type="button"
+                                className="admin-btn admin-btn--small"
+                                onClick={() => setShowAdjust(false)}
+                              >
+                                {dictionary.common.back}
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <button
+                            type="button"
+                            className="admin-btn admin-btn--small"
+                            onClick={() => setShowAdjust(true)}
+                          >
+                            {ud.adjustBalance}
+                          </button>
+                        )}
+                      </div>
+                    )}
+                    <div className="admin-user360-security-block">
+                      <p className="admin-user-field-label">
+                        {u360?.security?.accountStatus ?? 'Account status controls'}
+                      </p>
+                      <div className="admin-actions-row">
+                        <button
+                          type="button"
+                          className={`admin-btn admin-btn--small ${user.isActive ? '' : 'admin-btn--success'}`}
+                          disabled={!canManageUsers || actionLoading === 'activate'}
+                          onClick={() => void handleActivateDeactivate()}
+                        >
+                          {user.isActive ? d.deactivate : d.activate}
+                        </button>
+                        <button
+                          type="button"
+                          className="admin-btn admin-btn--small admin-btn--danger"
+                          disabled={!canManageUsers || actionLoading === 'delete'}
+                          onClick={() => void handleDelete()}
+                        >
+                          {d.delete}
+                        </button>
+                      </div>
+                    </div>
+                  </section>
+                )}
+              </div>
+            </>
+          )}
 
-              {activeTab === 'security' && (
-                <section className="admin-user-card">
-                  <h3 className="admin-user-card-title">{u360?.security?.title ?? 'Security Actions'}</h3>
-                  <div className="admin-user360-security-block"><p className="admin-user-field-label">{u360?.security?.forceLogout ?? 'Force logout all sessions'}</p><button type="button" className="admin-btn admin-btn--small" disabled={!canManageUsers || actionLoading === 'forceLogout'} onClick={() => void handleForceLogout()}>{u360?.security?.forceLogoutBtn ?? 'Force Logout'}</button></div>
-                  <div className="admin-user360-security-block"><p className="admin-user-field-label">{u360?.security?.changeEmail ?? 'Change email'}</p><div className="admin-inline-edit"><input type="email" className="admin-form-input" value={changeEmail.newEmail} onChange={(e) => setChangeEmail((prev) => ({ ...prev, newEmail: e.target.value }))} placeholder={u360?.security?.newEmailPlaceholder ?? 'new@email.com'} /><label className="admin-inline-checkbox"><input type="checkbox" checked={changeEmail.sendVerificationEmail} onChange={(e) => setChangeEmail((prev) => ({ ...prev, sendVerificationEmail: e.target.checked }))} />{u360?.security?.sendVerification ?? 'Send verification'}</label><button type="button" className="admin-btn admin-btn--small admin-btn--primary" disabled={!canManageUsers || actionLoading === 'changeEmail'} onClick={() => void handleChangeEmail()}>{u360?.security?.changeEmailBtn ?? 'Update Email'}</button></div></div>
-                  {!user.emailVerifiedAt && <div className="admin-user360-security-block"><p className="admin-user-field-label">{u360?.security?.emailVerification ?? 'Email verification controls'}</p><div className="admin-actions-row"><button type="button" className="admin-btn admin-btn--small" disabled={!canManageUsers || actionLoading === 'sendVerification'} onClick={() => void handleSendVerification()}>{ud.sendVerificationEmail}</button><button type="button" className="admin-btn admin-btn--small admin-btn--success" disabled={!canManageUsers || actionLoading === 'verifyEmail'} onClick={() => void handleVerifyEmail()}>{ud.verifyEmail}</button></div></div>}
-                  {canManageTransactions && <div className="admin-user360-security-block"><p className="admin-user-field-label">{u360?.security?.walletFreeze ?? 'Wallet freeze / unfreeze'}</p><button type="button" className={`admin-btn admin-btn--small ${user.walletFrozen ? 'admin-btn--success' : 'admin-btn--danger'}`} disabled={actionLoading === 'freeze'} onClick={() => void handleWalletFreezeToggle()}>{user.walletFrozen ? (u360?.security?.unfreezeBtn ?? 'Unfreeze Wallet') : (u360?.security?.freezeBtn ?? 'Freeze Wallet')}</button></div>}
-                  {canManageTransactions && <div className="admin-user360-security-block"><p className="admin-user-field-label">{ud.adjustBalance}</p>{showAdjust ? <div className="admin-user-wallet-form"><select className="admin-form-select" value={adjustForm.type} onChange={(e) => setAdjustForm((prev) => ({ ...prev, type: e.target.value as AdjustForm['type'] }))}><option value="deposit">Deposit</option><option value="withdrawal">Withdrawal</option><option value="adjustment">Adjustment</option><option value="bonus">Bonus</option></select><input type="number" className="admin-form-input" value={adjustForm.amount || ''} onChange={(e) => setAdjustForm((prev) => ({ ...prev, amount: Number(e.target.value) || 0 }))} /><input className="admin-form-input" value={adjustForm.description} onChange={(e) => setAdjustForm((prev) => ({ ...prev, description: e.target.value }))} /><div className="admin-inline-edit"><button type="button" className="admin-btn admin-btn--small admin-btn--primary" disabled={actionLoading === 'adjust' || adjustForm.amount <= 0} onClick={() => void handleAdjustBalance()}>{dictionary.common.save}</button><button type="button" className="admin-btn admin-btn--small" onClick={() => setShowAdjust(false)}>{dictionary.common.back}</button></div></div> : <button type="button" className="admin-btn admin-btn--small" onClick={() => setShowAdjust(true)}>{ud.adjustBalance}</button>}</div>}
-                  <div className="admin-user360-security-block"><p className="admin-user-field-label">{u360?.security?.accountStatus ?? 'Account status controls'}</p><div className="admin-actions-row"><button type="button" className={`admin-btn admin-btn--small ${user.isActive ? '' : 'admin-btn--success'}`} disabled={!canManageUsers || actionLoading === 'activate'} onClick={() => void handleActivateDeactivate()}>{user.isActive ? d.deactivate : d.activate}</button><button type="button" className="admin-btn admin-btn--small admin-btn--danger" disabled={!canManageUsers || actionLoading === 'delete'} onClick={() => void handleDelete()}>{d.delete}</button></div></div>
-                </section>
-              )}
-            </div>
-          </>
-        )}
-
-        <div className="admin-user-modal-footer">
-          <button type="button" className="admin-btn" onClick={onClose}>
-            {dictionary.common.back}
-          </button>
+          <div className="admin-user-modal-footer">
+            <button type="button" className="admin-btn" onClick={onClose}>
+              {dictionary.common.back}
+            </button>
+          </div>
         </div>
       </div>
-    </div>
     </>
   );
 };

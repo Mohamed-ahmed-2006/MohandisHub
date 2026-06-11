@@ -212,6 +212,7 @@ const AppShellInner = ({ children }: AppShellProps) => {
                   accessToken={accessToken}
                   dictionary={dictionary}
                   locale={locale}
+                  refreshSession={refreshSession}
                   {...(authUser?.role ? { userRole: authUser.role } : {})}
                 />
                 {(wallet != null || accessToken) && walletFeatureEnabled && (
@@ -295,7 +296,7 @@ const AppShellInner = ({ children }: AppShellProps) => {
             <button
               type="button"
               style={{
-                marginLeft: '12px',
+                marginInlineStart: '12px',
                 background: 'transparent',
                 border: 'none',
                 color: 'white',

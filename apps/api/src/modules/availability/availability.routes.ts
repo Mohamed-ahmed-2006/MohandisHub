@@ -8,7 +8,12 @@ import { availabilityController } from './availability.controller.js';
 const availabilityRouter = Router();
 
 availabilityRouter.get('/slots', authenticate, requireEmailVerified, availabilityController.list);
-availabilityRouter.post('/slots', authenticate, requireEmailVerified, availabilityController.create);
+availabilityRouter.post(
+  '/slots',
+  authenticate,
+  requireEmailVerified,
+  availabilityController.create,
+);
 availabilityRouter.post(
   '/slots/bulk',
   authenticate,

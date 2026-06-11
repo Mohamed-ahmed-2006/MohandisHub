@@ -1,5 +1,6 @@
 import { env } from '../../config/env.js';
 import { logger } from '../../config/logger.js';
+import { captureException } from '../../config/sentry.js';
 import { hasDatabaseConfig } from '../../db/pool.js';
 
 import { RetentionService } from './retention.service.js';
@@ -36,6 +37,7 @@ export const startRetentionWorker = (): RetentionWorkerHandle => {
         }
       }
     } catch (error) {
+      captureException(error);
       logger.error('Retention sweep failed', {
         error: error instanceof Error ? error.message : 'Unknown error',
       });

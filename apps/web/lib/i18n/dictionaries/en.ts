@@ -121,8 +121,14 @@ export const enDictionary: Dictionary = {
     trustCancellation: 'Clear cancellation — policies shown before you book.',
     testimonialsTitle: 'What people say',
     testimonials: [
-      { quote: 'Found a qualified engineer within a day. Smooth process from bid to completion.', author: 'Customer' },
-      { quote: 'The platform brings serious projects. Worth the verification step.', author: 'Expert' },
+      {
+        quote: 'Found a qualified engineer within a day. Smooth process from bid to completion.',
+        author: 'Customer',
+      },
+      {
+        quote: 'The platform brings serious projects. Worth the verification step.',
+        author: 'Expert',
+      },
     ],
     metricsTitle: 'Platform at a glance',
     metricsExperts: 'Verified experts',
@@ -130,13 +136,21 @@ export const enDictionary: Dictionary = {
     metricsCustomers: 'Customers served',
     faqTitle: 'Frequently asked questions',
     faqItems: [
-      { question: 'How do I get verified as an expert?', answer: 'Complete onboarding, submit your ID and credentials. Our team reviews and approves so customers can trust your profile.' },
-      { question: 'When do I pay for a booking?', answer: 'Funds are held when you book. They are released to the provider when you mark the session done, or refunded if cancelled within the policy.' },
+      {
+        question: 'How do I get verified as an expert?',
+        answer:
+          'Complete onboarding, submit your ID and credentials. Our team reviews and approves so customers can trust your profile.',
+      },
+      {
+        question: 'When do I pay for a booking?',
+        answer:
+          'Funds are held when you book. They are released to the provider when you mark the session done, or refunded if cancelled within the policy.',
+      },
     ],
   },
   login: {
     title: 'Log in',
-    description: 'Authentication flow is coming soon.',
+    description: 'Log in to access your workspace, wallet, bookings, messages, and admin tools.',
   },
   onboarding: {
     role: {
@@ -154,7 +168,8 @@ export const enDictionary: Dictionary = {
         },
         craftsman: {
           title: 'Craftsman',
-          description: 'Offer practical field services like mechanics, plumbing, welding, and fabrication.',
+          description:
+            'Offer practical field services like mechanics, plumbing, welding, and fabrication.',
         },
         business: {
           title: 'Business',
@@ -203,7 +218,7 @@ export const enDictionary: Dictionary = {
         specializationsLabel: 'Specializations',
         specializationsHint: 'Comma-separated, e.g. mechanical, HVAC, plumbing',
         yearsOfExperienceLabel: 'Years of experience',
-    hourlyRateLabel: 'Hourly rate (EGP)',
+        hourlyRateLabel: 'Hourly rate (EGP)',
         cityLabel: 'City',
         countryLabel: 'Country',
         employerLabel: 'Current employer',
@@ -319,7 +334,8 @@ export const enDictionary: Dictionary = {
       profilePhotoRequiredError: 'Upload a profile picture before continuing.',
       manualKycMissingFilesError:
         'Upload the front of the document, upload the back when required, and take a live selfie to continue.',
-      kycRequirementsHint: 'Complete identity verification or submit manual review before continuing.',
+      kycRequirementsHint:
+        'Complete identity verification or submit manual review before continuing.',
       kycDividerOr: 'or',
     },
     business: {
@@ -356,7 +372,8 @@ export const enDictionary: Dictionary = {
         identityTitle: 'Identity document',
         identityDescription: 'Upload a government-issued ID for the company representative.',
         businessDocsTitle: 'Business documents',
-        businessDocsDescription: 'Your company registration details are submitted with your profile.',
+        businessDocsDescription:
+          'Your company registration details are submitted with your profile.',
         companyUploadComingSoon:
           'Company document uploads (such as a trade license scan) will be available in Profile → Documents after onboarding is complete.',
         businessDocsCompanyInfo:
@@ -481,38 +498,104 @@ export const enDictionary: Dictionary = {
   /** Optional per-type copy; falls back to API title/message when missing (e.g. admin broadcasts). */
   notificationTemplates: {
     job_application: { title: 'New application', message: 'Someone applied to your job post.' },
-    job_interview_booked: { title: 'Interview booked', message: 'An interview was scheduled for a job application.' },
-    application_status: { title: 'Application update', message: 'Your job application status changed.' },
-    milestone_submitted: { title: 'Milestone submitted', message: 'A milestone was submitted for review.' },
+    job_interview_booked: {
+      title: 'Interview booked',
+      message: 'An interview was scheduled for a job application.',
+    },
+    application_status: {
+      title: 'Application update',
+      message: 'Your job application status changed.',
+    },
+    milestone_submitted: {
+      title: 'Milestone submitted',
+      message: 'A milestone was submitted for review.',
+    },
     milestone_reviewed: { title: 'Milestone reviewed', message: 'Your milestone was reviewed.' },
     new_message: { title: 'New message', message: 'New message on a job application.' },
-    reservation_created: { title: 'New reservation', message: 'You have a new reservation request or update.' },
-    reservation_accepted: { title: 'Reservation accepted', message: 'Your reservation request was accepted.' },
-    reservation_rejected: { title: 'Reservation declined', message: 'A reservation request was declined or became unavailable.' },
-    reservation_cancelled: { title: 'Reservation cancelled', message: 'A reservation was cancelled.' },
-    reservation_completed: { title: 'Reservation completed', message: 'A reservation was marked completed.' },
-    reservation_started: { title: 'Session started', message: 'Your reservation session has started.' },
-    reservation_disputed: { title: 'Reservation disputed', message: 'A reservation was reported and is under review.' },
-    reservation_dispute_resolved: { title: 'Dispute resolved', message: 'A reservation dispute was resolved by an admin.' },
-    reservation_expired: { title: 'Reservation expired', message: 'A pending reservation expired before a response.' },
-    reservation_location_proposed: { title: 'Location proposal', message: 'The other party proposed a meeting location.' },
-    price_negotiation: { title: 'Price negotiation', message: 'There is an update on a price negotiation.' },
+    reservation_created: {
+      title: 'New reservation',
+      message: 'You have a new reservation request or update.',
+    },
+    reservation_accepted: {
+      title: 'Reservation accepted',
+      message: 'Your reservation request was accepted.',
+    },
+    reservation_rejected: {
+      title: 'Reservation declined',
+      message: 'A reservation request was declined or became unavailable.',
+    },
+    reservation_cancelled: {
+      title: 'Reservation cancelled',
+      message: 'A reservation was cancelled.',
+    },
+    reservation_completed: {
+      title: 'Reservation completed',
+      message: 'A reservation was marked completed.',
+    },
+    reservation_started: {
+      title: 'Session started',
+      message: 'Your reservation session has started.',
+    },
+    reservation_disputed: {
+      title: 'Reservation disputed',
+      message: 'A reservation was reported and is under review.',
+    },
+    reservation_dispute_resolved: {
+      title: 'Dispute resolved',
+      message: 'A reservation dispute was resolved by an admin.',
+    },
+    reservation_expired: {
+      title: 'Reservation expired',
+      message: 'A pending reservation expired before a response.',
+    },
+    reservation_location_proposed: {
+      title: 'Location proposal',
+      message: 'The other party proposed a meeting location.',
+    },
+    price_negotiation: {
+      title: 'Price negotiation',
+      message: 'There is an update on a price negotiation.',
+    },
     need_bid_received: { title: 'New bid', message: 'You received a new bid on your need.' },
     need_bid_awarded: { title: 'Bid awarded', message: 'Your bid was awarded.' },
-    need_bid_rejected: { title: 'Bid not selected', message: 'Your bid was not selected for this need.' },
+    need_bid_rejected: {
+      title: 'Bid not selected',
+      message: 'Your bid was not selected for this need.',
+    },
     need_bid_paid: { title: 'Bid paid', message: 'The customer paid your awarded bid.' },
     need_closed: { title: 'Need closed', message: 'A need you bid on was closed.' },
     service_approved: { title: 'Service approved', message: 'Your service listing was approved.' },
     service_rejected: { title: 'Service rejected', message: 'Your service listing was rejected.' },
-    service_paused_by_admin: { title: 'Service paused', message: 'An administrator paused one of your services.' },
+    service_paused_by_admin: {
+      title: 'Service paused',
+      message: 'An administrator paused one of your services.',
+    },
     review_received: { title: 'New review', message: 'You received a new review.' },
     review_report_resolved: { title: 'Report update', message: 'Your review report was resolved.' },
-    review_dispute_resolved: { title: 'Dispute update', message: 'Your review dispute was resolved.' },
-    wallet_deposit_approved: { title: 'Deposit approved', message: 'Your manual deposit was approved.' },
-    wallet_deposit_rejected: { title: 'Deposit rejected', message: 'Your manual deposit was rejected.' },
-    wallet_withdrawal_completed: { title: 'Withdrawal completed', message: 'Your withdrawal was completed.' },
-    wallet_withdrawal_rejected: { title: 'Withdrawal failed', message: 'Your withdrawal could not be completed.' },
-    wallet_deposit_confirmed: { title: 'Deposit confirmed', message: 'Your wallet deposit was credited.' },
+    review_dispute_resolved: {
+      title: 'Dispute update',
+      message: 'Your review dispute was resolved.',
+    },
+    wallet_deposit_approved: {
+      title: 'Deposit approved',
+      message: 'Your manual deposit was approved.',
+    },
+    wallet_deposit_rejected: {
+      title: 'Deposit rejected',
+      message: 'Your manual deposit was rejected.',
+    },
+    wallet_withdrawal_completed: {
+      title: 'Withdrawal completed',
+      message: 'Your withdrawal was completed.',
+    },
+    wallet_withdrawal_rejected: {
+      title: 'Withdrawal failed',
+      message: 'Your withdrawal could not be completed.',
+    },
+    wallet_deposit_confirmed: {
+      title: 'Deposit confirmed',
+      message: 'Your wallet deposit was credited.',
+    },
     chat_message: { title: 'New message', message: 'You have a new chat message.' },
   },
   chatPage: {
@@ -560,8 +643,8 @@ export const enDictionary: Dictionary = {
     logout: 'Log out',
     helpSupport: 'Help & Support',
     balanceTitle: 'Balance',
-    balanceTopUp: 'Top up (soon)',
-    balanceStubNote: 'Wallet integration is coming soon.',
+    balanceTopUp: 'Top up balance',
+    balanceStubNote: 'Use Wallet to review deposits, withdrawals, holds, and payment status.',
     welcome: 'Welcome',
     genericRoleDescription: 'Manage your engineering service workflow from one place.',
     catalogFallbackNotice: 'Showing default catalog while service data is being refreshed.',
@@ -766,8 +849,13 @@ export const enDictionary: Dictionary = {
             permissions: 'Permissions',
           },
           adminPermissionsIntro:
-            'Checked boxes grant only those areas. Leave all unchecked for full access (super-admin). Scoped admins need explicit permissions to see each admin tab.',
+            'Checked boxes grant only those areas. Super admin is explicit; leaving all boxes unchecked grants no scoped access.',
           permissionDefs: [
+            {
+              id: 'super_admin',
+              label: 'Super admin',
+              hint: 'Full platform access, including granting and revoking admin status and permissions.',
+            },
             {
               id: 'manage_users',
               label: 'Users',
@@ -923,7 +1011,8 @@ export const enDictionary: Dictionary = {
       depositsPaused: 'Pause deposits',
       depositsPausedDesc: 'Block all wallet deposit methods.',
       moneyMovementsPaused: 'Pause all money movements',
-      moneyMovementsPausedDesc: 'Block deposits, plan subscriptions, and admin balance adjustments.',
+      moneyMovementsPausedDesc:
+        'Block deposits, plan subscriptions, and admin balance adjustments.',
       paymentMethodsSection: 'Payment methods (wallet)',
       paymentMethodsSectionDesc:
         'Turn each method on or off for users. Launch default is NOWPayments crypto + manual InstaPay on, card off. Hidden methods disappear from deposit/withdraw screens and are rejected by the API. Future provider keys are preserved.',
@@ -984,12 +1073,12 @@ export const enDictionary: Dictionary = {
       minTransactionEgpDesc:
         'Minimum paid amount (EGP) for bids/reservations so the provider nets a positive payout after commission. 0 = no floor.',
       dangerZone: 'Danger zone',
-    factoryReset: 'Factory reset',
-    factoryResetWarning:
-      'Factory reset permanently removes all user accounts and their data except the platform and your admin account. This cannot be undone.',
-    factoryResetConfirmPhraseLabel: 'Type "FACTORY RESET" to confirm',
-    factoryResetConfirm: 'Confirm factory reset',
-    factoryResetSuccess: 'Factory reset complete. All other accounts have been removed.',
+      factoryReset: 'Factory reset',
+      factoryResetWarning:
+        'Factory reset permanently removes all user accounts and their data except the platform and your admin account. This cannot be undone.',
+      factoryResetConfirmPhraseLabel: 'Type "FACTORY RESET" to confirm',
+      factoryResetConfirm: 'Confirm factory reset',
+      factoryResetSuccess: 'Factory reset complete. All other accounts have been removed.',
     },
     plansMgmt: {
       title: 'Plan Management',
@@ -1012,7 +1101,8 @@ export const enDictionary: Dictionary = {
       maxProjects: 'Max Projects',
       maxNeeds: 'Max Needs',
       maxJobs: 'Max Jobs',
-      planModalHint: 'Hover or long-press (i) icons for help. Limit sections match the roles you select.',
+      planModalHint:
+        'Hover or long-press (i) icons for help. Limit sections match the roles you select.',
       planModalSectionDetails: 'Details & pricing',
       planLimits: 'Plan limits & privileges',
       canPriorityListing: 'Priority listing',
@@ -1033,7 +1123,8 @@ export const enDictionary: Dictionary = {
       maxBusinessServices: 'Max business services',
       maxTeamSlots: 'Max team slots',
       canBusinessFeatured: 'Featured company listing',
-      selectRolesForLimits: 'Select at least one role above to show plan limit options for that audience.',
+      selectRolesForLimits:
+        'Select at least one role above to show plan limit options for that audience.',
       bidsOrderingHint:
         'When plans are enabled, customers see bids ordered like freelance marketplaces: priority proposals first, then paid plans, then oldest first.',
       bidsVisibleOptionAll: 'Show all bids (smart order)',
@@ -1069,19 +1160,16 @@ export const enDictionary: Dictionary = {
         'Total job posts the business can have. Counts all jobs until you add status filters in code.',
       hintMaxBusinessServices:
         'Cap on company service listings. If empty, the general max services value applies for businesses.',
-      hintMaxTeamSlots:
-        'Reserved for team-member limits; wire into API when you add teams.',
-      hintCanBusinessFeatured:
-        'Reserved for promoting the company in listings when implemented.',
-      hintCanTrustedBusinessBadge:
-        'Shows a Trusted badge next to the business name in the app.',
+      hintMaxTeamSlots: 'Reserved for team-member limits; wire into API when you add teams.',
+      hintCanBusinessFeatured: 'Reserved for promoting the company in listings when implemented.',
+      hintCanTrustedBusinessBadge: 'Shows a Trusted badge next to the business name in the app.',
       hintName: 'Display name on plan cards and checkout.',
       hintSlug: 'Stable ID in URLs and APIs (lowercase, no spaces).',
       hintPrice: 'Amount deducted from the subscriber wallet when they pay for this plan.',
       hintDescription: 'Optional longer text; some screens can show it under the plan name.',
-      hintBillingCycle: 'Renewal rhythm (or one-time). The wallet is charged again on each renewal.',
-      hintFeatures:
-        'Comma-separated bullets shown on the plan card in the app.',
+      hintBillingCycle:
+        'Renewal rhythm (or one-time). The wallet is charged again on each renewal.',
+      hintFeatures: 'Comma-separated bullets shown on the plan card in the app.',
       usageQuotasSection: 'Metered usage (per period)',
       usageQuotasIntro:
         'Optional caps on how many times certain actions can happen in a window. Billing cycle uses the subscriber’s active subscription dates; if they only have a free plan, the window matches the calendar month. Unused quota does not roll over.',
@@ -1100,8 +1188,7 @@ export const enDictionary: Dictionary = {
         'Counts each new service row the provider creates in the window (draft or submitted).',
       hintQuota_new_bids_per_period:
         'Counts each new bid the expert or craftsman places in the window.',
-      hintQuota_new_jobs_per_period:
-        'Counts each new job the business creates in the window.',
+      hintQuota_new_jobs_per_period: 'Counts each new job the business creates in the window.',
     },
     txns: {
       title: 'Transaction Management',
@@ -1223,7 +1310,7 @@ export const enDictionary: Dictionary = {
   },
   servicesPage: {
     title: 'My Services',
-    noServices: 'You haven\'t added any services yet.',
+    noServices: "You haven't added any services yet.",
     addFirstService: 'Add your first service to start receiving orders.',
     addService: 'Add Service',
     createService: 'Create Service',
@@ -1270,8 +1357,7 @@ export const enDictionary: Dictionary = {
     usageTitle: 'Your plan usage',
     usageConcurrentNote:
       'These are live slots, not monthly limits. Finishing or closing work frees capacity.',
-    usageNeeds:
-      'Active needs: {used} of {max} ({remaining} remaining).',
+    usageNeeds: 'Active needs: {used} of {max} ({remaining} remaining).',
     usageNeedsUnlimited: 'Active needs: {used} (no cap on your plan).',
     usageServices: 'Service listings: {used} of {max} ({remaining} left).',
     usageServicesUnlimited: 'Service listings: {used} (no cap).',
@@ -1284,8 +1370,7 @@ export const enDictionary: Dictionary = {
     usageMeteredTitle: 'Metered actions (this period)',
     usageMeteredIntro:
       'These counts reset when the period ends (subscription renewal or calendar month, as configured on your plan).',
-    usageQuotaLine:
-      '{label}: {used} of {max} ({remaining} left). Period ends {ends}.',
+    usageQuotaLine: '{label}: {used} of {max} ({remaining} left). Period ends {ends}.',
     quotaFeature_new_needs_per_period: 'New needs posted',
     quotaFeature_new_services_per_period: 'New services created',
     quotaFeature_new_bids_per_period: 'New bids placed',
@@ -1302,7 +1387,7 @@ export const enDictionary: Dictionary = {
     budgetPlaceholder: 'Budget amount',
     timelinePlaceholder: 'Timeline (days)',
     submitNeed: 'Submit',
-    noNeeds: 'You haven\'t posted any needs yet. Post your first need!',
+    noNeeds: "You haven't posted any needs yet. Post your first need!",
     bidsCount: 'Bids',
     viewBids: 'View Bids',
     awarded: 'Awarded',
@@ -1445,16 +1530,18 @@ export const enDictionary: Dictionary = {
       resubmit: 'Resubmit',
       goToVerification: 'Complete verification',
       withdrawPendingIdentity: 'Remove submission',
-      withdrawSuccess:
-        'Submission removed. You can send a new verification when you are ready.',
+      withdrawSuccess: 'Submission removed. You can send a new verification when you are ready.',
       companyDetailsTitle: 'Company details',
-      companyDetailsHint: 'Registration details submitted with your business profile. Admin may use these for verification.',
+      companyDetailsHint:
+        'Registration details submitted with your business profile. Admin may use these for verification.',
       tradeLicense: 'Trade license',
       taxId: 'Tax ID',
       commercialRegister: 'Commercial register',
       notSubmitted: 'Not submitted',
-      companyUploadComingSoon: 'Upload of company document files (e.g. trade license scan) will be available in Profile → Documents after you complete onboarding.',
-      companyUploadNote: 'Upload of company document files (e.g. trade license scan) will be available here in a future update.',
+      companyUploadComingSoon:
+        'Upload of company document files (e.g. trade license scan) will be available in Profile → Documents after you complete onboarding.',
+      companyUploadNote:
+        'Upload of company document files (e.g. trade license scan) will be available here in a future update.',
     },
     reviews: {
       sectionTitle: 'Reviews',
@@ -1628,7 +1715,8 @@ export const enDictionary: Dictionary = {
     fixedInterviewPrice: 'Fixed interview price',
     fixedReservationPrice: 'Fixed reservation price',
     minuteFeeGlobalLine: 'Minute fee (global): {amount} / min (split 50/50)',
-    interviewFixedPriceNote: 'Interview calls use a fixed price only. No per-minute billing applies.',
+    interviewFixedPriceNote:
+      'Interview calls use a fixed price only. No per-minute billing applies.',
     fixedPriceHoldActive: 'Fixed price hold: Active',
     deductionPendingHold: 'Deduction status: Pending hold (will be held on Reserve).',
     settlementLine: 'Settlement: {description}',
@@ -1652,8 +1740,7 @@ export const enDictionary: Dictionary = {
     offline: 'Offline',
     onlineTypeVideo: 'video',
     onlineTypeVoice: 'voice',
-    sessionStatusLine:
-      'Session: {status} — Duration: {minutes} {durationUnit}',
+    sessionStatusLine: 'Session: {status} — Duration: {minutes} {durationUnit}',
     offlineInterviewTitle: 'Offline Interview',
     offlineMeetingTitle: 'Offline Meeting',
     agreedLocationLine: 'Agreed location: {text}',
@@ -1700,8 +1787,10 @@ export const enDictionary: Dictionary = {
     cancelPreviewPending: 'Cancelling now will close the request without additional charges.',
     cancelPreviewInterviewCustomer:
       'Cancelling this interview usually keeps the interview fee captured unless the business or platform failed.',
-    cancelPreviewInterviewProvider: 'Cancelling this interview returns the interview fee to the expert.',
-    cancelPreviewNoPolicy: 'Cancellation outcome will be applied from the reservation policy snapshot.',
+    cancelPreviewInterviewProvider:
+      'Cancelling this interview returns the interview fee to the expert.',
+    cancelPreviewNoPolicy:
+      'Cancellation outcome will be applied from the reservation policy snapshot.',
     cancelPreviewCustomerFree:
       'Free cancellation window is still open. The fixed reservation hold will be refunded.',
     cancelPreviewCustomerLate:

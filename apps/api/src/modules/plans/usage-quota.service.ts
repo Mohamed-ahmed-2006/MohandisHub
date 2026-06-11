@@ -1,4 +1,8 @@
-import type { PlanUsageQuotaDef, UsageQuotaFeatureKey, UsageQuotaPeriodType } from '@mohandishub/shared';
+import type {
+  PlanUsageQuotaDef,
+  UsageQuotaFeatureKey,
+  UsageQuotaPeriodType,
+} from '@mohandishub/shared';
 
 import { getPool } from '../../db/pool.js';
 import { HttpError } from '../../utils/http-error.js';
@@ -57,7 +61,11 @@ export class UsageQuotaService {
   /**
    * Increments metered use after all other validations passed. No-op if `def` is missing.
    */
-  async consumeIfConfigured(userId: string, featureKey: UsageQuotaFeatureKey, def?: PlanUsageQuotaDef) {
+  async consumeIfConfigured(
+    userId: string,
+    featureKey: UsageQuotaFeatureKey,
+    def?: PlanUsageQuotaDef,
+  ) {
     if (!def || def.maxPerPeriod < 1) return;
 
     const { start, end } = await this.resolvePeriodBounds(userId, def.period);

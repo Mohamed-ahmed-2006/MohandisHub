@@ -125,7 +125,11 @@ export class ProfilesRepository {
 
   async updateCustomerProfile(
     userId: string,
-    fields: { city?: string | null | undefined; country?: string | null | undefined; contactPreference?: string | null | undefined },
+    fields: {
+      city?: string | null | undefined;
+      country?: string | null | undefined;
+      contactPreference?: string | null | undefined;
+    },
   ): Promise<CustomerProfileRow | null> {
     const updates: string[] = [];
     const values: unknown[] = [];
@@ -139,7 +143,9 @@ export class ProfilesRepository {
       values.push(fields.country);
     }
     if (fields.contactPreference !== undefined) {
-      updates.push(`preferences = COALESCE(preferences, '{}'::jsonb) || jsonb_build_object('contactPreference', $${idx++}::text)`);
+      updates.push(
+        `preferences = COALESCE(preferences, '{}'::jsonb) || jsonb_build_object('contactPreference', $${idx++}::text)`,
+      );
       values.push(fields.contactPreference);
     }
     if (updates.length === 0) return this.findCustomerProfile(userId);
@@ -290,7 +296,10 @@ export class ProfilesRepository {
   }
 
   /** Removes a user-owned submission only while it is still pending review (not approved/rejected). */
-  async deleteIdentityDocumentIfPending(userId: string, docId: string): Promise<IdentityDocumentRow | null> {
+  async deleteIdentityDocumentIfPending(
+    userId: string,
+    docId: string,
+  ): Promise<IdentityDocumentRow | null> {
     const { rows } = await this.db.query<IdentityDocumentRow>(
       `DELETE FROM identity_documents
        WHERE id = $1 AND user_id = $2 AND status IN ('pending', 'under_review')
@@ -475,10 +484,10 @@ export class ProfilesRepository {
   }
 
   async setCraftsmanIdentityVerified(userId: string, verified: boolean): Promise<void> {
-    await this.db.query(
-      'UPDATE craftsman_profiles SET identity_verified = $1 WHERE user_id = $2',
-      [verified, userId],
-    );
+    await this.db.query('UPDATE craftsman_profiles SET identity_verified = $1 WHERE user_id = $2', [
+      verified,
+      userId,
+    ]);
   }
 
   async setCraftsmanIdentityVerificationMethod(
@@ -619,9 +628,7 @@ export class ProfilesRepository {
       }
     >
   > {
-    const { rows } = await this.db.query<
-      AdminReviewRow & { reviewer_display_name: string | null }
-    >(
+    const { rows } = await this.db.query<AdminReviewRow & { reviewer_display_name: string | null }>(
       `SELECT ar.id, ar.reviewer_id, ar.target_user_id, ar.review_type, ar.target_table,
               ar.target_record_id, ar.decision, ar.notes, ar.created_at,
               COALESCE(NULLIF(TRIM(rev.display_name), ''), rev.email) AS reviewer_display_name
@@ -685,9 +692,7 @@ export class ProfilesRepository {
   }
 
   /** For public profile: active user with display name and avatar. */
-  async findActiveUserById(
-    userId: string,
-  ): Promise<{
+  async findActiveUserById(userId: string): Promise<{
     id: string;
     display_name: string;
     avatar_url: string | null;

@@ -2,18 +2,27 @@ import type { ApiErrorBody, ApiSuccessBody, NotificationListResponse } from '@mo
 
 import { ApiClientRequestError } from '../auth/client';
 
+import { fetchWithAuthRetry } from '@/lib/auth/fetch-with-auth-retry';
 import { getApiBaseUrl } from '@/lib/env';
 
-async function requestJson<T>(accessToken: string, path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(`${getApiBaseUrl()}${path}`, {
-    ...init,
-    credentials: 'include',
-    headers: {
-      ...(init?.headers as Record<string, string>),
-      Authorization: `Bearer ${accessToken}`,
-      ...(init?.method !== 'GET' && init?.body ? { 'Content-Type': 'application/json' } : {}),
+type RequestOptions = RequestInit & {
+  refreshSession?: () => Promise<string | null>;
+};
+
+async function fetchJson<T>(accessToken: string, path: string, init?: RequestInit): Promise<T> {
+  const response = await fetchWithAuthRetry(
+    `${getApiBaseUrl()}${path}`,
+    {
+      ...init,
+      credentials: 'include',
+      headers: {
+        ...(init?.headers as Record<string, string>),
+        Authorization: `Bearer ${accessToken}`,
+        ...(init?.method !== 'GET' && init?.body ? { 'Content-Type': 'application/json' } : {}),
+      },
     },
-  });
+    accessToken,
+  );
 
   if (!response.ok) {
     const rawErrorBody: unknown = await response.json().catch(() => null);
@@ -37,8 +46,22 @@ async function requestJson<T>(accessToken: string, path: string, init?: RequestI
   return bodyJson.data;
 }
 
+async function requestJson<T>(
+  accessToken: string,
+  path: string,
+  init?: RequestOptions,
+): Promise<T> {
+  const requestInit: RequestInit = { ...(init ?? {}) };
+  delete (requestInit as RequestOptions).refreshSession;
+  return fetchJson<T>(accessToken, path, requestInit);
+}
+
 export const notificationsApiClient = {
-  getNotifications: (accessToken: string, params?: { page?: number; limit?: number }) => {
+  getNotifications: (
+    accessToken: string,
+    params?: { page?: number; limit?: number },
+    options?: { refreshSession?: () => Promise<string | null> },
+  ) => {
     const query = new URLSearchParams();
     if (params?.page) query.set('page', String(params.page));
     if (params?.limit) query.set('limit', String(params.limit));
@@ -46,27 +69,43 @@ export const notificationsApiClient = {
     return requestJson<NotificationListResponse>(
       accessToken,
       `/api/notifications${qs ? `?${qs}` : ''}`,
+      options,
     );
   },
 
-  getUnreadCount: (accessToken: string) =>
-    requestJson<{ unreadCount: number }>(accessToken, '/api/notifications/unread-count'),
+  getUnreadCount: (
+    accessToken: string,
+    options?: { refreshSession?: () => Promise<string | null> },
+  ) =>
+    requestJson<{ unreadCount: number }>(accessToken, '/api/notifications/unread-count', options),
 
-  markAsRead: (accessToken: string, id: string) =>
+  markAsRead: (
+    accessToken: string,
+    id: string,
+    options?: { refreshSession?: () => Promise<string | null> },
+  ) =>
     requestJson<{ updated: boolean }>(accessToken, `/api/notifications/${id}/read`, {
       method: 'PATCH',
+      ...options,
     }),
 
-  markAllAsRead: (accessToken: string) =>
+  markAllAsRead: (
+    accessToken: string,
+    options?: { refreshSession?: () => Promise<string | null> },
+  ) =>
     requestJson<{ updated: number }>(accessToken, '/api/notifications/read-all', {
       method: 'PATCH',
+      ...options,
     }),
 
   /** Create a demo notification for the current user. */
-  sendDemo: (accessToken: string) =>
-    requestJson<{ id: string; type: string; title: string; message: string; readAt: string | null; createdAt: string }>(
-      accessToken,
-      '/api/notifications/demo',
-      { method: 'POST' },
-    ),
+  sendDemo: (accessToken: string, options?: { refreshSession?: () => Promise<string | null> }) =>
+    requestJson<{
+      id: string;
+      type: string;
+      title: string;
+      message: string;
+      readAt: string | null;
+      createdAt: string;
+    }>(accessToken, '/api/notifications/demo', { method: 'POST', ...options }),
 };

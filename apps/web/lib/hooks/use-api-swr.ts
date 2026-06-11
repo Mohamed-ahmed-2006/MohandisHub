@@ -5,7 +5,6 @@ import useSWR from 'swr';
 import { authApiClient } from '@/lib/auth/client';
 import { walletApiClient } from '@/lib/wallet/client';
 
-
 const AUTH_ME_KEY = 'api/auth/me';
 const WALLET_ME_KEY = 'api/wallet/me';
 

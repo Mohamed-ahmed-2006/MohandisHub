@@ -121,8 +121,11 @@
   border: 1px solid hsl(var(--border));
   border-radius: var(--radius-lg);
   padding: 1rem;
-  background:
-    linear-gradient(145deg, hsl(var(--surface-strong)) 0%, color-mix(in srgb, hsl(var(--accent)) 8%, hsl(var(--surface-strong))) 100%);
+  background: linear-gradient(
+    145deg,
+    hsl(var(--surface-strong)) 0%,
+    color-mix(in srgb, hsl(var(--accent)) 8%, hsl(var(--surface-strong))) 100%
+  );
   box-shadow: var(--shadow-soft-lg);
 }
 
@@ -511,11 +514,47 @@
   .home-page-navbar {
     top: 0.75rem;
     border-radius: 1.1rem;
+    align-items: stretch;
+    flex-wrap: wrap;
+    gap: 0.65rem;
     padding-inline: 0.85rem;
   }
 
+  .home-page-brand {
+    flex: 1 0 100%;
+    justify-content: center;
+  }
+
   .home-page-navbar-right {
+    width: 100%;
+    min-width: 0;
+    justify-content: space-between;
     gap: 0.4rem;
+  }
+
+  .home-page-header-controls {
+    flex: 0 0 auto;
+  }
+
+  .home-page-header-controls .theme-toggle-label {
+    display: none;
+  }
+
+  .home-page-nav-actions {
+    flex: 1 1 auto;
+    min-width: 0;
+    justify-content: flex-end;
+    gap: 0.4rem;
+  }
+
+  [dir='rtl'] .home-page-nav-actions {
+    justify-content: flex-start;
+  }
+
+  .home-page-nav-actions .button-link {
+    min-height: 2.35rem;
+    padding: 0.58rem 0.78rem;
+    font-size: 0.8rem;
   }
 
   .home-page-hero-actions {

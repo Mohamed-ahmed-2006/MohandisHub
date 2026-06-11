@@ -124,7 +124,10 @@ export async function syncVerificationStatusForRequiredImage(
     ]);
     if (!profile) return;
 
-    const effectiveStatus = getEffectiveExpertVerificationStatus(profile, Boolean(avatarUrl?.trim()));
+    const effectiveStatus = getEffectiveExpertVerificationStatus(
+      profile,
+      Boolean(avatarUrl?.trim()),
+    );
     if (effectiveStatus !== profile.verification_status) {
       await repo.updateExpertOverallStatus(userId, effectiveStatus);
     }

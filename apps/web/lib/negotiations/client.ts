@@ -8,17 +8,22 @@ import type {
 } from '@mohandishub/shared';
 
 import { ApiClientRequestError } from '@/lib/auth/client';
+import { fetchWithAuthRetry } from '@/lib/auth/fetch-with-auth-retry';
 import { getApiBaseUrl } from '@/lib/env';
 
 async function apiReq<T>(path: string, token: string, opts?: RequestInit): Promise<T> {
-  const res = await fetch(`${getApiBaseUrl()}${path}`, {
-    ...opts,
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`,
-      ...(opts?.headers ?? {}),
+  const res = await fetchWithAuthRetry(
+    `${getApiBaseUrl()}${path}`,
+    {
+      ...opts,
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+        ...(opts?.headers ?? {}),
+      },
     },
-  });
+    token,
+  );
   if (!res.ok) {
     const rawErrorBody: unknown = await res.json().catch(() => null);
     const maybeError = rawErrorBody as ApiErrorBody | null;
@@ -66,8 +71,15 @@ export const negotiationsApiClient = {
   get: (token: string, id: string): Promise<NegotiationDetailResponse> =>
     apiReq(`/api/negotiations/${id}`, token),
 
-  respond: (token: string, id: string, body: RespondNegotiationBody): Promise<NegotiationDetailResponse> =>
-    apiReq(`/api/negotiations/${id}/respond`, token, { method: 'POST', body: JSON.stringify(body) }),
+  respond: (
+    token: string,
+    id: string,
+    body: RespondNegotiationBody,
+  ): Promise<NegotiationDetailResponse> =>
+    apiReq(`/api/negotiations/${id}/respond`, token, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
 
   cancel: (token: string, id: string): Promise<NegotiationDetailResponse> =>
     apiReq(`/api/negotiations/${id}/cancel`, token, { method: 'POST', body: JSON.stringify({}) }),

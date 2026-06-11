@@ -1,5 +1,6 @@
 import type { Review } from '@mohandishub/shared';
 
+import { fetchWithAuthRetry } from '@/lib/auth/fetch-with-auth-retry';
 import { getApiBaseUrl } from '@/lib/env';
 
 type ReviewListResponse = {
@@ -11,14 +12,18 @@ type ReviewListResponse = {
 };
 
 async function apiReq<T>(path: string, accessToken: string, opts?: RequestInit): Promise<T> {
-  const res = await fetch(`${getApiBaseUrl()}${path}`, {
-    ...opts,
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${accessToken}`,
-      ...(opts?.headers ?? {}),
+  const res = await fetchWithAuthRetry(
+    `${getApiBaseUrl()}${path}`,
+    {
+      ...opts,
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${accessToken}`,
+        ...(opts?.headers ?? {}),
+      },
     },
-  });
+    accessToken,
+  );
   if (!res.ok) {
     const err = (await res.json().catch(() => ({}))) as { error?: { message?: string } };
     throw new Error(err?.error?.message ?? 'Request failed');

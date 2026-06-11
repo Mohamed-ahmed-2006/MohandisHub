@@ -147,7 +147,8 @@ export const ChatScreen = ({ locale, dictionary }: Props) => {
       };
       const onMessageDeleted = (payload: { messageId: string; scope: string }) => {
         setMessages((prev) => {
-          if (payload.scope === 'for_everyone') return prev.filter((m) => m.id !== payload.messageId);
+          if (payload.scope === 'for_everyone')
+            return prev.filter((m) => m.id !== payload.messageId);
           return prev.filter((m) => !(m.id === payload.messageId && m.sender_id === authUser?.id));
         });
       };
@@ -286,18 +287,32 @@ export const ChatScreen = ({ locale, dictionary }: Props) => {
                     className="chat-conv-name-btn"
                     onClick={(e) => {
                       e.stopPropagation();
-                      openProfileModal(conv.other_user_id, { displayName: conv.other_display_name });
+                      openProfileModal(conv.other_user_id, {
+                        displayName: conv.other_display_name,
+                      });
                     }}
                   >
                     {conv.other_display_name}
                   </button>
                   {conv.last_message_body && (
-                    <span className="chat-conv-preview" style={{ fontWeight: conv.has_unread ? 700 : 400 }}>
+                    <span
+                      className="chat-conv-preview"
+                      style={{ fontWeight: conv.has_unread ? 700 : 400 }}
+                    >
                       {conv.last_message_body}
                     </span>
                   )}
-                  {conv.has_unread && <span className="chat-conv-badge" style={{ background: 'hsl(var(--destructive))', color: '#fff' }}>{t.newBadge ?? 'New'}</span>}
-                  {conv.status === 'closed' && <span className="chat-conv-badge">{t.closedBadge ?? 'Closed'}</span>}
+                  {conv.has_unread && (
+                    <span
+                      className="chat-conv-badge"
+                      style={{ background: 'hsl(var(--destructive))', color: '#fff' }}
+                    >
+                      {t.newBadge ?? 'New'}
+                    </span>
+                  )}
+                  {conv.status === 'closed' && (
+                    <span className="chat-conv-badge">{t.closedBadge ?? 'Closed'}</span>
+                  )}
                 </div>
               ))
             )}
@@ -305,7 +320,9 @@ export const ChatScreen = ({ locale, dictionary }: Props) => {
 
           <section className="chat-messages-area">
             {!activeConvId ? (
-              <p className="chat-no-conv">{t.selectConversation ?? 'Select a conversation to start chatting.'}</p>
+              <p className="chat-no-conv">
+                {t.selectConversation ?? 'Select a conversation to start chatting.'}
+              </p>
             ) : (
               <>
                 {activeConv && (
@@ -321,7 +338,9 @@ export const ChatScreen = ({ locale, dictionary }: Props) => {
                     >
                       {activeConv.other_display_name}
                     </button>
-                    {isClosed && <span className="chat-closed-badge">{t.closedBadge ?? 'Closed'}</span>}
+                    {isClosed && (
+                      <span className="chat-closed-badge">{t.closedBadge ?? 'Closed'}</span>
+                    )}
                   </div>
                 )}
                 <div className="chat-messages-list">
@@ -345,7 +364,9 @@ export const ChatScreen = ({ locale, dictionary }: Props) => {
                           const touch = e.changedTouches[0];
                           if (touch) {
                             const now = Date.now();
-                            const t = (e.target as HTMLElement).closest('.chat-msg') as unknown as { _touchStart?: number } | null;
+                            const t = (e.target as HTMLElement).closest('.chat-msg') as unknown as {
+                              _touchStart?: number;
+                            } | null;
                             if (t?._touchStart != null && now - t._touchStart > 500) {
                               setContextMessageId(m.id);
                               setContextMenuPos({ x: touch.clientX, y: touch.clientY });
@@ -353,7 +374,9 @@ export const ChatScreen = ({ locale, dictionary }: Props) => {
                           }
                         }}
                         onTouchStart={(e) => {
-                          const t = (e.target as HTMLElement).closest('.chat-msg') as unknown as { _touchStart?: number } | null;
+                          const t = (e.target as HTMLElement).closest('.chat-msg') as unknown as {
+                            _touchStart?: number;
+                          } | null;
                           if (t) t._touchStart = Date.now();
                         }}
                       >
@@ -361,19 +384,22 @@ export const ChatScreen = ({ locale, dictionary }: Props) => {
                           <div className="chat-msg-reply-preview">
                             <span className="chat-msg-reply-author">{replyToMsg.sender_name}</span>
                             <span className="chat-msg-reply-body">
-                              {(replyToMsg.message_type === 'link' && (replyToMsg.link_url || replyToMsg.body))
-                                ? (replyToMsg.body?.trim() || replyToMsg.link_url || '[Link]')
+                              {replyToMsg.message_type === 'link' &&
+                              (replyToMsg.link_url || replyToMsg.body)
+                                ? replyToMsg.body?.trim() || replyToMsg.link_url || '[Link]'
                                 : replyToMsg.message_type === 'location'
-                                  ? (replyToMsg.location_label?.trim() || '[Location]')
+                                  ? replyToMsg.location_label?.trim() || '[Location]'
                                   : (replyToMsg.body ?? '').slice(0, 60)}
-                              {((replyToMsg.body ?? '').length > 60 ? '…' : '')}
+                              {(replyToMsg.body ?? '').length > 60 ? '…' : ''}
                             </span>
                           </div>
                         )}
                         {type === 'link' && m.link_url && (
                           <>
                             {body.trim() && (
-                              <span className="chat-msg-body">{renderTextWithLinks(body.trim())}</span>
+                              <span className="chat-msg-body">
+                                {renderTextWithLinks(body.trim())}
+                              </span>
                             )}
                             <a
                               href={m.link_url}
@@ -389,10 +415,7 @@ export const ChatScreen = ({ locale, dictionary }: Props) => {
                           <span className="chat-msg-body">
                             {m.location_label?.trim() && `${m.location_label}\n`}
                             <a
-                              href={formatLocationUrl(
-                                m.location_lat ?? 0,
-                                m.location_lng ?? 0,
-                              )}
+                              href={formatLocationUrl(m.location_lat ?? 0, m.location_lng ?? 0)}
                               target="_blank"
                               rel="noopener noreferrer"
                               className="chat-msg-link-block"
@@ -410,7 +433,11 @@ export const ChatScreen = ({ locale, dictionary }: Props) => {
                                   src={m.attachment_url}
                                   alt=""
                                   className="chat-msg-img"
-                                  style={{ maxWidth: '200px', maxHeight: '200px', borderRadius: 'var(--radius)' }}
+                                  style={{
+                                    maxWidth: '200px',
+                                    maxHeight: '200px',
+                                    borderRadius: 'var(--radius)',
+                                  }}
                                 />
                               </a>
                             )}
@@ -439,70 +466,80 @@ export const ChatScreen = ({ locale, dictionary }: Props) => {
                   })}
                   <div ref={messagesEndRef} />
                 </div>
-                {contextMenuPos && contextMessageId && (() => {
-                  const msg = messages.find((m) => m.id === contextMessageId);
-                  if (!msg) return null;
-                  const isMine = msg.sender_id === authUser.id;
-                  const copyText =
-                    msg.message_type === 'link'
-                      ? (msg.body?.trim() || msg.link_url || '')
-                      : msg.message_type === 'location'
-                        ? (msg.location_label?.trim() || '')
-                        : msg.body ?? '';
-                  return (
-                    <div
-                      ref={contextMenuRef}
-                      className="chat-context-menu"
-                      style={{ left: contextMenuPos.x, top: contextMenuPos.y }}
-                    >
-                      <button
-                        type="button"
-                        className="chat-context-menu-btn"
-                        onClick={() => {
-                          setReplyingTo(msg);
-                          setContextMessageId(null);
-                          setContextMenuPos(null);
-                        }}
+                {contextMenuPos &&
+                  contextMessageId &&
+                  (() => {
+                    const msg = messages.find((m) => m.id === contextMessageId);
+                    if (!msg) return null;
+                    const isMine = msg.sender_id === authUser.id;
+                    const copyText =
+                      msg.message_type === 'link'
+                        ? msg.body?.trim() || msg.link_url || ''
+                        : msg.message_type === 'location'
+                          ? msg.location_label?.trim() || ''
+                          : (msg.body ?? '');
+                    return (
+                      <div
+                        ref={contextMenuRef}
+                        className="chat-context-menu"
+                        style={{ left: contextMenuPos.x, top: contextMenuPos.y }}
                       >
-                        {t.reply}
-                      </button>
-                      {copyText && (
                         <button
                           type="button"
                           className="chat-context-menu-btn"
-                          onClick={() => handleCopyMessage(copyText)}
+                          onClick={() => {
+                            setReplyingTo(msg);
+                            setContextMessageId(null);
+                            setContextMenuPos(null);
+                          }}
                         >
-                          {t.copy}
+                          {t.reply}
                         </button>
-                      )}
-                      {isMine && (
-                        <>
+                        {copyText && (
                           <button
                             type="button"
                             className="chat-context-menu-btn"
-                            onClick={() => { void handleDeleteMessage(contextMessageId, 'for_me'); }}
+                            onClick={() => handleCopyMessage(copyText)}
                           >
-                            {t.deleteForMe}
+                            {t.copy}
                           </button>
-                          <button
-                            type="button"
-                            className="chat-context-menu-btn chat-context-menu-btn--danger"
-                            onClick={() => { void handleDeleteMessage(contextMessageId, 'for_everyone'); }}
-                          >
-                            {t.deleteForEveryone}
-                          </button>
-                        </>
-                      )}
-                    </div>
-                  );
-                })()}
+                        )}
+                        {isMine && (
+                          <>
+                            <button
+                              type="button"
+                              className="chat-context-menu-btn"
+                              onClick={() => {
+                                void handleDeleteMessage(contextMessageId, 'for_me');
+                              }}
+                            >
+                              {t.deleteForMe}
+                            </button>
+                            <button
+                              type="button"
+                              className="chat-context-menu-btn chat-context-menu-btn--danger"
+                              onClick={() => {
+                                void handleDeleteMessage(contextMessageId, 'for_everyone');
+                              }}
+                            >
+                              {t.deleteForEveryone}
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    );
+                  })()}
                 {isClosed ? (
-                  <div className="chat-closed-notice">{t.conversationClosed ?? 'This conversation is closed.'}</div>
+                  <div className="chat-closed-notice">
+                    {t.conversationClosed ?? 'This conversation is closed.'}
+                  </div>
                 ) : (
                   <>
                     {replyingTo && (
                       <div className="chat-reply-preview">
-                        <span>{t.replyingTo} {replyingTo.sender_name}</span>
+                        <span>
+                          {t.replyingTo} {replyingTo.sender_name}
+                        </span>
                         <button
                           type="button"
                           className="chat-reply-cancel"
@@ -539,19 +576,29 @@ export const ChatScreen = ({ locale, dictionary }: Props) => {
                           className="dashboard-btn dashboard-btn--primary"
                           onClick={() => {
                             void (async () => {
-                              const urlInput = document.getElementById('chat-share-link-url') as HTMLInputElement | null;
-                              const capInput = document.getElementById('chat-share-link-caption') as HTMLInputElement | null;
+                              const urlInput = document.getElementById(
+                                'chat-share-link-url',
+                              ) as HTMLInputElement | null;
+                              const capInput = document.getElementById(
+                                'chat-share-link-caption',
+                              ) as HTMLInputElement | null;
                               const url = urlInput?.value?.trim();
                               if (!url || !accessToken || !activeConvId || sending) return;
                               setSending(true);
                               try {
-                                const msg = await chatApiClient.sendMessage(accessToken, activeConvId, {
-                                  messageType: 'link',
-                                  linkUrl: url,
-                                  body: capInput?.value?.trim() ?? '',
-                                  ...(replyingTo ? { replyToId: replyingTo.id } : {}),
-                                });
-                                setMessages((prev) => (prev.some((m) => m.id === msg.id) ? prev : [...prev, msg]));
+                                const msg = await chatApiClient.sendMessage(
+                                  accessToken,
+                                  activeConvId,
+                                  {
+                                    messageType: 'link',
+                                    linkUrl: url,
+                                    body: capInput?.value?.trim() ?? '',
+                                    ...(replyingTo ? { replyToId: replyingTo.id } : {}),
+                                  },
+                                );
+                                setMessages((prev) =>
+                                  prev.some((m) => m.id === msg.id) ? prev : [...prev, msg],
+                                );
                                 setReplyingTo(null);
                                 setShareLinkOpen(false);
                                 if (urlInput) urlInput.value = '';
@@ -601,13 +648,19 @@ export const ChatScreen = ({ locale, dictionary }: Props) => {
                                 void (async () => {
                                   if (!accessToken || !activeConvId) return;
                                   try {
-                                    const msg = await chatApiClient.sendMessage(accessToken, activeConvId, {
-                                      messageType: 'location',
-                                      lat: pos.coords.latitude,
-                                      lng: pos.coords.longitude,
-                                      ...(replyingTo ? { replyToId: replyingTo.id } : {}),
-                                    });
-                                    setMessages((prev) => (prev.some((m) => m.id === msg.id) ? prev : [...prev, msg]));
+                                    const msg = await chatApiClient.sendMessage(
+                                      accessToken,
+                                      activeConvId,
+                                      {
+                                        messageType: 'location',
+                                        lat: pos.coords.latitude,
+                                        lng: pos.coords.longitude,
+                                        ...(replyingTo ? { replyToId: replyingTo.id } : {}),
+                                      },
+                                    );
+                                    setMessages((prev) =>
+                                      prev.some((m) => m.id === msg.id) ? prev : [...prev, msg],
+                                    );
                                     setReplyingTo(null);
                                   } catch {
                                     // ignore

@@ -3,6 +3,20 @@ import { z } from 'zod';
 
 loadEnv();
 
+const booleanEnv = (defaultValue: boolean) =>
+  z
+    .preprocess((value) => {
+      if (value === undefined || value === null || value === '') return undefined;
+      if (typeof value === 'boolean') return value;
+      if (typeof value === 'string') {
+        const normalized = value.trim().toLowerCase();
+        if (['1', 'true', 'yes', 'on'].includes(normalized)) return true;
+        if (['0', 'false', 'no', 'off'].includes(normalized)) return false;
+      }
+      return value;
+    }, z.boolean())
+    .default(defaultValue);
+
 const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   PORT: z.coerce.number().int().positive().default(4000),
@@ -12,6 +26,8 @@ const envSchema = z.object({
   CORS_EXTRA_ORIGINS: z.string().optional(),
   API_PUBLIC_URL: z.string().url().optional(),
   WEB_PUBLIC_URL: z.string().url().optional(),
+  DB_POOL_MAX: z.coerce.number().int().positive().max(50).default(10),
+  DB_IDLE_TIMEOUT_MS: z.coerce.number().int().positive().default(30_000),
 
   // Behind one reverse-proxy hop (Render, nginx, etc.): set TRUST_PROXY=1 so rate limits use the real client IP.
   TRUST_PROXY: z.string().optional(),
@@ -33,9 +49,17 @@ const envSchema = z.object({
    * SameSite=None + Secure on the refresh cookie; see apps/api/src/config/cookies.ts.
    */
   AUTH_CROSS_SITE_REFRESH_COOKIE: z
-    .string()
-    .default('0')
-    .transform((s) => s === '1' || s.toLowerCase() === 'true'),
+    .preprocess((value) => {
+      if (value === undefined || value === null || value === '') return undefined;
+      if (typeof value === 'boolean') return value;
+      if (typeof value === 'string') {
+        const normalized = value.trim().toLowerCase();
+        if (['1', 'true', 'yes', 'on'].includes(normalized)) return true;
+        if (['0', 'false', 'no', 'off'].includes(normalized)) return false;
+      }
+      return value;
+    }, z.boolean())
+    .default(false),
 
   // Verification provider
   VERIFICATION_PROVIDER: z.enum(['didit', 'idenfy', 'manual']).default('manual'),
@@ -74,17 +98,17 @@ const envSchema = z.object({
   NOWPAYMENTS_IPN_SECRET: z.string().optional(),
   NOWPAYMENTS_AUTH_EMAIL: z.string().email().optional(),
   NOWPAYMENTS_AUTH_PASSWORD: z.string().optional(),
-  NOWPAYMENTS_FIAT_ENABLED: z.coerce.boolean().default(false),
-  NOWPAYMENTS_CUSTODY_ENABLED: z.coerce.boolean().default(false),
-  NOWPAYMENTS_MASS_PAYOUTS_ENABLED: z.coerce.boolean().default(false),
-  NOWPAYMENTS_WITHDRAWALS_ENABLED: z.coerce.boolean().default(false),
-  NOWPAYMENTS_MANUAL_PAYOUT_VERIFY: z.coerce.boolean().default(true),
+  NOWPAYMENTS_FIAT_ENABLED: booleanEnv(false),
+  NOWPAYMENTS_CUSTODY_ENABLED: booleanEnv(false),
+  NOWPAYMENTS_MASS_PAYOUTS_ENABLED: booleanEnv(false),
+  NOWPAYMENTS_WITHDRAWALS_ENABLED: booleanEnv(false),
+  NOWPAYMENTS_MANUAL_PAYOUT_VERIFY: booleanEnv(true),
   NOWPAYMENTS_WITHDRAWAL_MIN_AMOUNT: z.coerce.number().positive().default(20),
   NOWPAYMENTS_WITHDRAWAL_DEFAULT_CURRENCY: z.string().default('USDTTRC20'),
   NOWPAYMENTS_ALLOWED_PAY_CURRENCIES: z.string().optional(),
   // When true, production startup requires NOWPayments deposit keys + public URLs.
   // Keep false until crypto/card deposits are enabled and keys are configured.
-  NOWPAYMENTS_LIVE_REQUIRED: z.coerce.boolean().default(false),
+  NOWPAYMENTS_LIVE_REQUIRED: booleanEnv(false),
 
   // Paymob — EGP card/wallet deposits + payout/disbursement (no FX; EGP-native)
   PAYMOB_SECRET_KEY: z.string().optional(),
@@ -93,12 +117,12 @@ const envSchema = z.object({
   // Comma-separated integration ids enabled on the Paymob unified intention.
   PAYMOB_INTEGRATION_IDS: z.string().optional(),
   PAYMOB_API_BASE_URL: z.string().url().default('https://accept.paymob.com'),
-  PAYMOB_DEPOSITS_ENABLED: z.coerce.boolean().default(false),
-  PAYMOB_WITHDRAWALS_ENABLED: z.coerce.boolean().default(false),
+  PAYMOB_DEPOSITS_ENABLED: booleanEnv(false),
+  PAYMOB_WITHDRAWALS_ENABLED: booleanEnv(false),
   // Payout/disbursement API (separate Paymob product/credentials).
   PAYMOB_PAYOUT_CLIENT_ID: z.string().optional(),
   PAYMOB_PAYOUT_CLIENT_SECRET: z.string().optional(),
-  PAYMOB_PAYOUT_BASE_URL: z.string().url().default('https://stagingpayouts.paymobsolutions.com'),
+  PAYMOB_PAYOUT_BASE_URL: z.string().url().optional(),
 
   // Agora RTC
   AGORA_APP_ID: z.string().optional(),
@@ -135,72 +159,190 @@ if (!parsed.success) {
   throw new Error('Environment validation failed');
 }
 
+const looksLikePlaceholderSecret = (value: string): boolean => {
+  const normalized = value.trim().toLowerCase();
+  return (
+    normalized.includes('change-me') ||
+    normalized.includes('changeme') ||
+    normalized.includes('placeholder') ||
+    normalized.includes('your-secret') ||
+    normalized.includes('your_random_secret') ||
+    normalized.includes('replace-me')
+  );
+};
+
 if (parsed.data.NODE_ENV === 'production') {
   const productionErrors: Record<string, string[]> = {};
+  if (looksLikePlaceholderSecret(parsed.data.JWT_SECRET)) {
+    productionErrors.JWT_SECRET = [
+      'JWT_SECRET appears to be a copied placeholder. Generate a unique random production secret.',
+    ];
+  }
+  if (looksLikePlaceholderSecret(parsed.data.JWT_REFRESH_SECRET)) {
+    productionErrors.JWT_REFRESH_SECRET = [
+      'JWT_REFRESH_SECRET appears to be a copied placeholder. Generate a unique random production secret.',
+    ];
+  }
+  if (parsed.data.JWT_SECRET === parsed.data.JWT_REFRESH_SECRET) {
+    productionErrors.JWT_REFRESH_SECRET = [
+      'JWT_REFRESH_SECRET must be different from JWT_SECRET so access-token signing and opaque-token hashing use separate keys.',
+    ];
+  }
+  if (!parsed.data.DATABASE_URL) {
+    productionErrors.DATABASE_URL = ['DATABASE_URL is required in production.'];
+  }
+  if (!parsed.data.API_PUBLIC_URL) {
+    productionErrors.API_PUBLIC_URL = ['API_PUBLIC_URL is required in production.'];
+  }
+  if (!parsed.data.WEB_PUBLIC_URL) {
+    productionErrors.WEB_PUBLIC_URL = ['WEB_PUBLIC_URL is required in production.'];
+  }
+  if (!parsed.data.SENTRY_DSN) {
+    productionErrors.SENTRY_DSN = [
+      'SENTRY_DSN is required in production for API and worker error visibility.',
+    ];
+  }
   if (parsed.data.OTP_EMAIL_PROVIDER === 'console') {
-    productionErrors.OTP_EMAIL_PROVIDER = ['Production must use a real email provider. Set OTP_EMAIL_PROVIDER=brevo.'];
+    productionErrors.OTP_EMAIL_PROVIDER = [
+      'Production must use a real email provider. Set OTP_EMAIL_PROVIDER=brevo.',
+    ];
   }
   if (parsed.data.OTP_EMAIL_PROVIDER === 'sendgrid') {
-    productionErrors.OTP_EMAIL_PROVIDER = ['SendGrid email is not implemented for production. Use brevo or implement SendGrid first.'];
+    productionErrors.OTP_EMAIL_PROVIDER = [
+      'SendGrid email is not implemented for production. Use brevo or implement SendGrid first.',
+    ];
+  }
+  if (parsed.data.OTP_EMAIL_PROVIDER === 'brevo' && !parsed.data.BREVO_API_KEY) {
+    productionErrors.BREVO_API_KEY = [
+      'BREVO_API_KEY is required when OTP_EMAIL_PROVIDER=brevo in production.',
+    ];
   }
   if (parsed.data.OTP_SMS_PROVIDER === 'twilio') {
-    productionErrors.OTP_SMS_PROVIDER = ['Twilio SMS is not implemented for production. Use console only for non-production or implement Twilio first.'];
+    productionErrors.OTP_SMS_PROVIDER = [
+      'Twilio SMS is not implemented for production. Use console only for non-production or implement Twilio first.',
+    ];
   }
   if (parsed.data.VERIFICATION_PROVIDER === 'idenfy') {
-    productionErrors.VERIFICATION_PROVIDER = ['Idenfy verification is not implemented for production. Use didit or manual.'];
+    productionErrors.VERIFICATION_PROVIDER = [
+      'Idenfy verification is not implemented for production. Use didit or manual.',
+    ];
+  }
+  if (parsed.data.VERIFICATION_PROVIDER === 'didit') {
+    if (!parsed.data.DIDIT_API_KEY) {
+      productionErrors.DIDIT_API_KEY = [
+        'DIDIT_API_KEY is required when VERIFICATION_PROVIDER=didit in production.',
+      ];
+    }
+    if (!parsed.data.DIDIT_WEBHOOK_SECRET) {
+      productionErrors.DIDIT_WEBHOOK_SECRET = [
+        'DIDIT_WEBHOOK_SECRET is required when VERIFICATION_PROVIDER=didit in production.',
+      ];
+    }
+    if (!parsed.data.DIDIT_WORKFLOW_ID) {
+      productionErrors.DIDIT_WORKFLOW_ID = [
+        'DIDIT_WORKFLOW_ID is required when VERIFICATION_PROVIDER=didit in production.',
+      ];
+    }
+  }
+  if (!parsed.data.SUPABASE_URL || !parsed.data.SUPABASE_SERVICE_ROLE_KEY) {
+    productionErrors.SUPABASE_URL = [
+      'SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required in production so uploads are not stored on ephemeral disk.',
+    ];
+  }
+  if (parsed.data.RETENTION_UPLOADS_DAYS > 0) {
+    productionErrors.RETENTION_UPLOADS_DAYS = [
+      'RETENTION_UPLOADS_DAYS is not a safe production cleanup path. Use category-specific retention settings for private uploads, need references, and bid attachments.',
+    ];
   }
   // NOWPayments live checks only apply once the API key is actually configured.
   // NOWPAYMENTS_LIVE_REQUIRED=true without a key is treated as "not yet configured" — no hard-fail.
   if (parsed.data.NOWPAYMENTS_LIVE_REQUIRED && parsed.data.NOWPAYMENTS_API_KEY) {
     if (!parsed.data.NOWPAYMENTS_IPN_SECRET) {
-      productionErrors.NOWPAYMENTS_IPN_SECRET = ['NOWPayments IPN secret is required so deposits and payouts cannot be spoofed.'];
+      productionErrors.NOWPAYMENTS_IPN_SECRET = [
+        'NOWPayments IPN secret is required so deposits and payouts cannot be spoofed.',
+      ];
     }
     if (!parsed.data.API_PUBLIC_URL) {
-      productionErrors.API_PUBLIC_URL = ['API_PUBLIC_URL is required for NOWPayments IPN callback URLs.'];
+      productionErrors.API_PUBLIC_URL = [
+        'API_PUBLIC_URL is required for NOWPayments IPN callback URLs.',
+      ];
     }
     if (!parsed.data.WEB_PUBLIC_URL) {
-      productionErrors.WEB_PUBLIC_URL = ['WEB_PUBLIC_URL is required for trusted checkout return URLs.'];
+      productionErrors.WEB_PUBLIC_URL = [
+        'WEB_PUBLIC_URL is required for trusted checkout return URLs.',
+      ];
     }
   }
   // If the key is configured but LIVE_REQUIRED is off, still enforce IPN secret (security baseline).
   if (parsed.data.NOWPAYMENTS_API_KEY && !parsed.data.NOWPAYMENTS_LIVE_REQUIRED) {
     if (!parsed.data.NOWPAYMENTS_IPN_SECRET) {
-      productionErrors.NOWPAYMENTS_IPN_SECRET = ['NOWPayments API key is set but IPN secret is missing — deposit callbacks cannot be verified.'];
+      productionErrors.NOWPAYMENTS_IPN_SECRET = [
+        'NOWPayments API key is set but IPN secret is missing — deposit callbacks cannot be verified.',
+      ];
     }
   }
   if (parsed.data.NOWPAYMENTS_WITHDRAWALS_ENABLED || parsed.data.NOWPAYMENTS_MASS_PAYOUTS_ENABLED) {
-    if (!parsed.data.NOWPAYMENTS_WITHDRAWALS_ENABLED || !parsed.data.NOWPAYMENTS_MASS_PAYOUTS_ENABLED) {
+    if (
+      !parsed.data.NOWPAYMENTS_WITHDRAWALS_ENABLED ||
+      !parsed.data.NOWPAYMENTS_MASS_PAYOUTS_ENABLED
+    ) {
       productionErrors.NOWPAYMENTS_WITHDRAWALS_ENABLED = [
         'NOWPayments crypto withdrawals require both NOWPAYMENTS_WITHDRAWALS_ENABLED=true and NOWPAYMENTS_MASS_PAYOUTS_ENABLED=true.',
       ];
     }
     if (!parsed.data.NOWPAYMENTS_API_KEY) {
-      productionErrors.NOWPAYMENTS_API_KEY = ['NOWPayments API key is required for crypto withdrawals.'];
+      productionErrors.NOWPAYMENTS_API_KEY = [
+        'NOWPayments API key is required for crypto withdrawals.',
+      ];
     }
     if (!parsed.data.NOWPAYMENTS_AUTH_EMAIL || !parsed.data.NOWPAYMENTS_AUTH_PASSWORD) {
-      productionErrors.NOWPAYMENTS_AUTH_EMAIL = ['NOWPayments auth email/password are required for mass-payout withdrawals.'];
+      productionErrors.NOWPAYMENTS_AUTH_EMAIL = [
+        'NOWPayments auth email/password are required for mass-payout withdrawals.',
+      ];
     }
   }
   if (parsed.data.PAYMOB_DEPOSITS_ENABLED) {
     if (!parsed.data.PAYMOB_SECRET_KEY || !parsed.data.PAYMOB_PUBLIC_KEY) {
-      productionErrors.PAYMOB_SECRET_KEY = ['Paymob secret + public keys are required when PAYMOB_DEPOSITS_ENABLED=true.'];
+      productionErrors.PAYMOB_SECRET_KEY = [
+        'Paymob secret + public keys are required when PAYMOB_DEPOSITS_ENABLED=true.',
+      ];
     }
     if (!parsed.data.PAYMOB_HMAC_SECRET) {
-      productionErrors.PAYMOB_HMAC_SECRET = ['Paymob HMAC secret is required so deposit callbacks cannot be spoofed.'];
+      productionErrors.PAYMOB_HMAC_SECRET = [
+        'Paymob HMAC secret is required so deposit callbacks cannot be spoofed.',
+      ];
     }
     if (!parsed.data.PAYMOB_INTEGRATION_IDS) {
-      productionErrors.PAYMOB_INTEGRATION_IDS = ['At least one Paymob integration id is required for the unified checkout.'];
+      productionErrors.PAYMOB_INTEGRATION_IDS = [
+        'At least one Paymob integration id is required for the unified checkout.',
+      ];
     }
     if (!parsed.data.API_PUBLIC_URL) {
-      productionErrors.API_PUBLIC_URL = ['API_PUBLIC_URL is required for Paymob deposit webhook callbacks.'];
+      productionErrors.API_PUBLIC_URL = [
+        'API_PUBLIC_URL is required for Paymob deposit webhook callbacks.',
+      ];
     }
     if (!parsed.data.WEB_PUBLIC_URL) {
-      productionErrors.WEB_PUBLIC_URL = ['WEB_PUBLIC_URL is required for Paymob checkout return URLs.'];
+      productionErrors.WEB_PUBLIC_URL = [
+        'WEB_PUBLIC_URL is required for Paymob checkout return URLs.',
+      ];
     }
   }
   if (parsed.data.PAYMOB_WITHDRAWALS_ENABLED) {
     if (!parsed.data.PAYMOB_PAYOUT_CLIENT_ID || !parsed.data.PAYMOB_PAYOUT_CLIENT_SECRET) {
-      productionErrors.PAYMOB_PAYOUT_CLIENT_ID = ['Paymob payout client id/secret are required when PAYMOB_WITHDRAWALS_ENABLED=true.'];
+      productionErrors.PAYMOB_PAYOUT_CLIENT_ID = [
+        'Paymob payout client id/secret are required when PAYMOB_WITHDRAWALS_ENABLED=true.',
+      ];
+    }
+    if (!parsed.data.PAYMOB_PAYOUT_BASE_URL) {
+      productionErrors.PAYMOB_PAYOUT_BASE_URL = [
+        'PAYMOB_PAYOUT_BASE_URL is required when PAYMOB_WITHDRAWALS_ENABLED=true.',
+      ];
+    }
+    if (parsed.data.PAYMOB_PAYOUT_BASE_URL?.includes('staging')) {
+      productionErrors.PAYMOB_PAYOUT_BASE_URL = [
+        'Paymob production withdrawals must not use a staging payout endpoint.',
+      ];
     }
   }
   if (Object.keys(productionErrors).length > 0) {

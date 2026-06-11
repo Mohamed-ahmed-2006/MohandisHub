@@ -313,7 +313,11 @@ export class JobsRepository {
     return rows[0] ?? null;
   }
 
-  async createMilestone(jobApplicationId: string, title: string, amount: number): Promise<JobMilestoneRow> {
+  async createMilestone(
+    jobApplicationId: string,
+    title: string,
+    amount: number,
+  ): Promise<JobMilestoneRow> {
     const { rows } = await this.db.query<JobMilestoneRow>(
       `INSERT INTO job_milestones (job_application_id, title, amount)
        VALUES ($1, $2, $3)

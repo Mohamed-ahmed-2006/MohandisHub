@@ -36,7 +36,8 @@ export const WalletDepositModal = ({
     status?.platformInstapayDisplay != null &&
     typeof status.platformInstapayDisplay === 'object' &&
     Object.keys(status.platformInstapayDisplay as object).length > 0;
-  const instapayDepositAllowed = isPaymentMethodEnabled(pm, 'deposit_instapay') && instapayConfigured;
+  const instapayDepositAllowed =
+    isPaymentMethodEnabled(pm, 'deposit_instapay') && instapayConfigured;
   const paymobEnabledEnv = process.env.NEXT_PUBLIC_PAYMOB_ENABLED === 'true';
   const paymobDepositAllowed = isPaymentMethodEnabled(pm, 'deposit_paymob') && paymobEnabledEnv;
   const canDeposit =
@@ -141,13 +142,13 @@ export const WalletDepositModal = ({
             ? err.message
             : isApiClientError(err) && err.code === 'CRYPTO_AMOUNT_TOO_LOW'
               ? err.message
-            : isApiClientError(err) &&
-                (err.code === 'CARD_DEPOSITS_DISABLED' ||
-                  err.code === 'CRYPTO_DEPOSITS_DISABLED' ||
-                  err.code === 'PAYMOB_DEPOSITS_DISABLED' ||
-                  err.code === 'PAYMOB_NOT_CONFIGURED')
-              ? err.message
-              : d.depositError;
+              : isApiClientError(err) &&
+                  (err.code === 'CARD_DEPOSITS_DISABLED' ||
+                    err.code === 'CRYPTO_DEPOSITS_DISABLED' ||
+                    err.code === 'PAYMOB_DEPOSITS_DISABLED' ||
+                    err.code === 'PAYMOB_NOT_CONFIGURED')
+                ? err.message
+                : d.depositError;
       setError(msg);
     } finally {
       setLoading(false);
@@ -213,166 +214,179 @@ export const WalletDepositModal = ({
         closeLabel={dictionary.common.close ?? dictionary.common.cancel}
       />
 
-        {!canDeposit ? (
-          <p className="deposit-modal-subtitle">
-            {depositsPaused
-              ? 'Deposits are temporarily paused. Please try again later.'
-              : 'No deposit methods are currently available.'}
-          </p>
-        ) : step === 'choose' ? (
-          <>
-            <p className="deposit-modal-subtitle">{d.chooseMethod}</p>
-            <div className="deposit-options">
-              {!cryptoDisabled && (
-                <button
-                  type="button"
-                  className="deposit-option-card"
-                  onClick={() => handleMethodClick('crypto')}
-                >
-                  <span className="deposit-option-label">{d.crypto}</span>
-                  <span className="deposit-option-action">{d.depositPayWithCrypto}</span>
-                </button>
-              )}
-              {!cardDisabled && (
-                <button
-                  type="button"
-                  className="deposit-option-card"
-                  onClick={() => handleMethodClick('card')}
-                >
-                  <span className="deposit-option-label">{d.creditCard}</span>
-                  <span className="deposit-option-action">{d.depositPayWithCard}</span>
-                </button>
-              )}
-              {instapayDepositAllowed && (
-                <button
-                  type="button"
-                  className="deposit-option-card"
-                  onClick={() => handleMethodClick('instapay')}
-                >
-                  <span className="deposit-option-label">{d.instapayOptionLabel}</span>
-                  <span className="deposit-option-action">{d.instapayOptionHint}</span>
-                </button>
-              )}
-              {paymobDepositAllowed && (
-                <button
-                  type="button"
-                  className="deposit-option-card"
-                  onClick={() => handleMethodClick('paymob')}
-                >
-                  <span className="deposit-option-label">{d.paymobOptionLabel}</span>
-                  <span className="deposit-option-action">{d.paymobOptionHint}</span>
-                </button>
-              )}
-            </div>
-          </>
-        ) : step === 'instapay' ? (
-          <form onSubmit={(e) => void handleInstapaySubmit(e)} className="deposit-form">
-            <p className="deposit-modal-subtitle">{d.instapayInstructions}</p>
-            <pre
-              className="deposit-modal-subtitle"
-              style={{ whiteSpace: 'pre-wrap', fontSize: '0.85rem', maxHeight: 120, overflow: 'auto' }}
-            >
-              {JSON.stringify(status?.platformInstapayDisplay ?? {}, null, 2)}
-            </pre>
-            <label className="deposit-form-label">{d.instapayAmountLabel}</label>
-            <input
-              type="number"
-              step="any"
-              min="1"
-              placeholder="0"
-              className="deposit-form-input"
-              value={amount}
-              onChange={(e) => setAmount(e.target.value)}
-              disabled={loading}
-            />
-            <label className="deposit-form-label" style={{ marginTop: '0.75rem' }}>
-              Sender InstaPay number / account
-            </label>
-            <input
-              type="text"
-              className="deposit-form-input"
-              placeholder="e.g. +2010xxxxxxx or wallet account"
-              value={senderAccount}
-              onChange={(e) => setSenderAccount(e.target.value)}
-              disabled={loading}
-            />
-            <label className="deposit-form-label" style={{ marginTop: '0.75rem' }}>
-              {d.instapayProofLabel}
-            </label>
-            <input type="file" accept="image/*" disabled={loading} />
-            {error && <p className="deposit-form-error">{error}</p>}
-            <div className="deposit-form-actions">
-              <button type="button" className="deposit-form-back" onClick={handleBack} disabled={loading}>
-                {dictionary.common.back}
-              </button>
-              <button type="submit" className="deposit-form-submit" disabled={loading}>
-                {loading ? d.instapaySubmitting : d.instapaySubmit}
-              </button>
-            </div>
-          </form>
-        ) : (
-          <form onSubmit={(e) => void handleSubmit(e)} className="deposit-form">
-            <label className="deposit-form-label">
-              {method === 'card' ? d.depositAmountPlaceholderCard : d.depositAmountPlaceholder}
-            </label>
-            <input
-              type="number"
-              step="any"
-              min="1"
-              placeholder="0"
-              className="deposit-form-input"
-              value={amount}
-              onChange={(e) => setAmount(e.target.value)}
-              disabled={loading}
-            />
-            {method === 'crypto' && (
-              <>
-                <p className="deposit-modal-subtitle" style={{ marginTop: '0.4rem', marginBottom: '0.4rem' }}>
-                  {estimating
-                    ? d.depositEstimating
-                    : estimatedPayAmount != null
-                      ? `${d.depositEstimatedToPay} ${estimatedPayAmount.toFixed(6)} ${payCurrency}`
-                      : d.depositEnterEgpForEstimate}
-                </p>
-                <label className="deposit-form-label" style={{ marginTop: '0.75rem' }}>
-                  {d.depositPayCurrencyLabel}
-                </label>
-                <select
-                  className="deposit-form-input"
-                  value={payCurrency}
-                  onChange={(e) => setPayCurrency(e.target.value)}
-                  disabled={loading}
-                >
-                  {availableCurrencies.map((currency) => (
-                    <option key={currency} value={currency}>
-                      {currency}
-                    </option>
-                  ))}
-                </select>
-              </>
-            )}
-            {error && <p className="deposit-form-error">{error}</p>}
-            <div className="deposit-form-actions">
+      {!canDeposit ? (
+        <p className="deposit-modal-subtitle">
+          {depositsPaused
+            ? 'Deposits are temporarily paused. Please try again later.'
+            : 'No deposit methods are currently available.'}
+        </p>
+      ) : step === 'choose' ? (
+        <>
+          <p className="deposit-modal-subtitle">{d.chooseMethod}</p>
+          <div className="deposit-options">
+            {!cryptoDisabled && (
               <button
                 type="button"
-                className="deposit-form-back"
-                onClick={handleBack}
+                className="deposit-option-card"
+                onClick={() => handleMethodClick('crypto')}
+              >
+                <span className="deposit-option-label">{d.crypto}</span>
+                <span className="deposit-option-action">{d.depositPayWithCrypto}</span>
+              </button>
+            )}
+            {!cardDisabled && (
+              <button
+                type="button"
+                className="deposit-option-card"
+                onClick={() => handleMethodClick('card')}
+              >
+                <span className="deposit-option-label">{d.creditCard}</span>
+                <span className="deposit-option-action">{d.depositPayWithCard}</span>
+              </button>
+            )}
+            {instapayDepositAllowed && (
+              <button
+                type="button"
+                className="deposit-option-card"
+                onClick={() => handleMethodClick('instapay')}
+              >
+                <span className="deposit-option-label">{d.instapayOptionLabel}</span>
+                <span className="deposit-option-action">{d.instapayOptionHint}</span>
+              </button>
+            )}
+            {paymobDepositAllowed && (
+              <button
+                type="button"
+                className="deposit-option-card"
+                onClick={() => handleMethodClick('paymob')}
+              >
+                <span className="deposit-option-label">{d.paymobOptionLabel}</span>
+                <span className="deposit-option-action">{d.paymobOptionHint}</span>
+              </button>
+            )}
+          </div>
+        </>
+      ) : step === 'instapay' ? (
+        <form onSubmit={(e) => void handleInstapaySubmit(e)} className="deposit-form">
+          <p className="deposit-modal-subtitle">{d.instapayInstructions}</p>
+          <pre
+            className="deposit-modal-subtitle"
+            style={{
+              whiteSpace: 'pre-wrap',
+              fontSize: '0.85rem',
+              maxHeight: 120,
+              overflow: 'auto',
+            }}
+          >
+            {JSON.stringify(status?.platformInstapayDisplay ?? {}, null, 2)}
+          </pre>
+          <label className="deposit-form-label">{d.instapayAmountLabel}</label>
+          <input
+            type="number"
+            step="any"
+            min="1"
+            placeholder="0"
+            className="deposit-form-input"
+            value={amount}
+            onChange={(e) => setAmount(e.target.value)}
+            disabled={loading}
+          />
+          <label className="deposit-form-label" style={{ marginTop: '0.75rem' }}>
+            Sender InstaPay number / account
+          </label>
+          <input
+            type="text"
+            className="deposit-form-input"
+            placeholder="e.g. +2010xxxxxxx or wallet account"
+            value={senderAccount}
+            onChange={(e) => setSenderAccount(e.target.value)}
+            disabled={loading}
+          />
+          <label className="deposit-form-label" style={{ marginTop: '0.75rem' }}>
+            {d.instapayProofLabel}
+          </label>
+          <input type="file" accept="image/*" disabled={loading} />
+          {error && <p className="deposit-form-error">{error}</p>}
+          <div className="deposit-form-actions">
+            <button
+              type="button"
+              className="deposit-form-back"
+              onClick={handleBack}
+              disabled={loading}
+            >
+              {dictionary.common.back}
+            </button>
+            <button type="submit" className="deposit-form-submit" disabled={loading}>
+              {loading ? d.instapaySubmitting : d.instapaySubmit}
+            </button>
+          </div>
+        </form>
+      ) : (
+        <form onSubmit={(e) => void handleSubmit(e)} className="deposit-form">
+          <label className="deposit-form-label">
+            {method === 'card' ? d.depositAmountPlaceholderCard : d.depositAmountPlaceholder}
+          </label>
+          <input
+            type="number"
+            step="any"
+            min="1"
+            placeholder="0"
+            className="deposit-form-input"
+            value={amount}
+            onChange={(e) => setAmount(e.target.value)}
+            disabled={loading}
+          />
+          {method === 'crypto' && (
+            <>
+              <p
+                className="deposit-modal-subtitle"
+                style={{ marginTop: '0.4rem', marginBottom: '0.4rem' }}
+              >
+                {estimating
+                  ? d.depositEstimating
+                  : estimatedPayAmount != null
+                    ? `${d.depositEstimatedToPay} ${estimatedPayAmount.toFixed(6)} ${payCurrency}`
+                    : d.depositEnterEgpForEstimate}
+              </p>
+              <label className="deposit-form-label" style={{ marginTop: '0.75rem' }}>
+                {d.depositPayCurrencyLabel}
+              </label>
+              <select
+                className="deposit-form-input"
+                value={payCurrency}
+                onChange={(e) => setPayCurrency(e.target.value)}
                 disabled={loading}
               >
-                {dictionary.common.back}
-              </button>
-              <button type="submit" className="deposit-form-submit" disabled={loading}>
-                {loading
-                  ? d.depositRedirecting
-                  : method === 'card'
-                    ? d.depositPayWithCard
-                    : method === 'paymob'
-                      ? d.paymobPay
-                      : d.depositPayWithCrypto}
-              </button>
-            </div>
-          </form>
-        )}
+                {availableCurrencies.map((currency) => (
+                  <option key={currency} value={currency}>
+                    {currency}
+                  </option>
+                ))}
+              </select>
+            </>
+          )}
+          {error && <p className="deposit-form-error">{error}</p>}
+          <div className="deposit-form-actions">
+            <button
+              type="button"
+              className="deposit-form-back"
+              onClick={handleBack}
+              disabled={loading}
+            >
+              {dictionary.common.back}
+            </button>
+            <button type="submit" className="deposit-form-submit" disabled={loading}>
+              {loading
+                ? d.depositRedirecting
+                : method === 'card'
+                  ? d.depositPayWithCard
+                  : method === 'paymob'
+                    ? d.paymobPay
+                    : d.depositPayWithCrypto}
+            </button>
+          </div>
+        </form>
+      )}
     </Modal>
   );
 };

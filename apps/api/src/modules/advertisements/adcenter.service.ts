@@ -85,4 +85,3 @@ export class AdCenterService {
       .map((x) => x.ad);
   }
 }
-

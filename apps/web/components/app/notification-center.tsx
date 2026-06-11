@@ -13,7 +13,7 @@ import {
   Wrench,
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import {
   getLocalizedNotificationText,
@@ -30,12 +30,10 @@ type Props = {
   dictionary: Dictionary;
   locale: Locale;
   userRole?: string;
+  refreshSession?: () => Promise<string | null>;
 };
 
-function formatTime(
-  iso: string,
-  t: Dictionary['notificationCenter'],
-): string {
+function formatTime(iso: string, t: Dictionary['notificationCenter']): string {
   const d = new Date(iso);
   const now = new Date();
   const diffMs = now.getTime() - d.getTime();
@@ -74,37 +72,54 @@ function NotificationTypeIcon({ type }: { type: string }) {
   return <Bell {...common} aria-hidden />;
 }
 
-export function NotificationCenter({ accessToken, dictionary, locale, userRole }: Props) {
+export function NotificationCenter({
+  accessToken,
+  dictionary,
+  locale,
+  userRole,
+  refreshSession,
+}: Props) {
   const router = useRouter();
   const t = dictionary.notificationCenter;
-  const notificationTemplates = dictionary.notificationTemplates as NotificationTemplates | undefined;
+  const notificationTemplates = dictionary.notificationTemplates as
+    | NotificationTemplates
+    | undefined;
+  const demoNotificationsEnabled = process.env.NODE_ENV !== 'production';
   const [open, setOpen] = useState(false);
   const [items, setItems] = useState<NotificationType[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [loading, setLoading] = useState(false);
   const [sendingDemo, setSendingDemo] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const refreshOptions = useMemo(
+    () => (refreshSession ? { refreshSession } : undefined),
+    [refreshSession],
+  );
 
   const fetchUnreadCount = useCallback(async () => {
     try {
-      const data = await notificationsApiClient.getUnreadCount(accessToken);
+      const data = await notificationsApiClient.getUnreadCount(accessToken, refreshOptions);
       setUnreadCount(data.unreadCount);
     } catch {
       setUnreadCount(0);
     }
-  }, [accessToken]);
+  }, [accessToken, refreshOptions]);
 
   const fetchList = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await notificationsApiClient.getNotifications(accessToken, { page: 1, limit: 20 });
+      const data = await notificationsApiClient.getNotifications(
+        accessToken,
+        { page: 1, limit: 20 },
+        refreshOptions,
+      );
       setItems(data.items);
     } catch {
       setItems([]);
     } finally {
       setLoading(false);
     }
-  }, [accessToken]);
+  }, [accessToken, refreshOptions]);
 
   useEffect(() => {
     void fetchUnreadCount();
@@ -146,7 +161,7 @@ export function NotificationCenter({ accessToken, dictionary, locale, userRole }
   const handleMarkAsRead = useCallback(
     async (id: string) => {
       try {
-        await notificationsApiClient.markAsRead(accessToken, id);
+        await notificationsApiClient.markAsRead(accessToken, id, refreshOptions);
         setItems((prev) =>
           prev.map((n) => (n.id === id ? { ...n, readAt: new Date().toISOString() } : n)),
         );
@@ -155,34 +170,30 @@ export function NotificationCenter({ accessToken, dictionary, locale, userRole }
         /* ignore */
       }
     },
-    [accessToken],
+    [accessToken, refreshOptions],
   );
 
   const handleMarkAllAsRead = useCallback(async () => {
     try {
-      await notificationsApiClient.markAllAsRead(accessToken);
+      await notificationsApiClient.markAllAsRead(accessToken, refreshOptions);
       setUnreadCount(0);
-      setItems((prev) =>
-        prev.map((n) => ({ ...n, readAt: n.readAt ?? new Date().toISOString() })),
-      );
+      setItems((prev) => prev.map((n) => ({ ...n, readAt: n.readAt ?? new Date().toISOString() })));
     } catch {
       /* ignore */
     }
-  }, [accessToken]);
+  }, [accessToken, refreshOptions]);
 
   const handleSendDemo = useCallback(async () => {
     setSendingDemo(true);
     try {
-      const created = await notificationsApiClient.sendDemo(accessToken);
+      const created = await notificationsApiClient.sendDemo(accessToken, refreshOptions);
       const newItem: NotificationType = {
         id: created.id,
         userId: (created as { userId?: string }).userId ?? '',
         type: created.type as NotificationType['type'],
         title: created.title,
         message: created.message,
-        payload:
-          ((created as { payload?: NotificationPayload | null }).payload) ??
-          null,
+        payload: (created as { payload?: NotificationPayload | null }).payload ?? null,
         readAt: created.readAt ?? null,
         createdAt: created.createdAt,
       };
@@ -197,7 +208,7 @@ export function NotificationCenter({ accessToken, dictionary, locale, userRole }
     } finally {
       setSendingDemo(false);
     }
-  }, [accessToken, open, fetchUnreadCount, fetchList]);
+  }, [accessToken, open, fetchUnreadCount, fetchList, refreshOptions]);
 
   return (
     <div className="app-notification-center" ref={dropdownRef}>
@@ -205,7 +216,11 @@ export function NotificationCenter({ accessToken, dictionary, locale, userRole }
         type="button"
         className="app-notification-trigger"
         onClick={() => setOpen((o) => !o)}
-        aria-label={unreadCount > 0 ? t.ariaUnread.replace('{count}', String(unreadCount)) : t.ariaNotifications}
+        aria-label={
+          unreadCount > 0
+            ? t.ariaUnread.replace('{count}', String(unreadCount))
+            : t.ariaNotifications
+        }
         aria-expanded={open}
       >
         <svg
@@ -251,10 +266,8 @@ export function NotificationCenter({ accessToken, dictionary, locale, userRole }
               <p className="app-notification-empty">{t.empty}</p>
             ) : (
               items.map((n) => {
-                const { title: displayTitle, message: displayMessage } = getLocalizedNotificationText(
-                  n,
-                  notificationTemplates,
-                );
+                const { title: displayTitle, message: displayMessage } =
+                  getLocalizedNotificationText(n, notificationTemplates);
                 const targetHref = getNotificationTargetHref(n.type, n.payload, locale);
                 const isNegotiationProvider =
                   n.type === 'price_negotiation' && userRole && PROVIDER_ROLES.has(userRole);
@@ -282,23 +295,27 @@ export function NotificationCenter({ accessToken, dictionary, locale, userRole }
                     <span className="app-notification-item-body">
                       <span className="app-notification-item-title">{displayTitle}</span>
                       <span className="app-notification-item-message">{displayMessage}</span>
-                      <span className="app-notification-item-time">{formatTime(n.createdAt, t)}</span>
+                      <span className="app-notification-item-time">
+                        {formatTime(n.createdAt, t)}
+                      </span>
                     </span>
                   </button>
                 );
               })
             )}
           </div>
-          <div className="app-notification-dropdown-footer">
-            <button
-              type="button"
-              className="app-notification-send-demo"
-              onClick={() => void handleSendDemo()}
-              disabled={sendingDemo}
-            >
-              {sendingDemo ? t.loading : t.sendDemo}
-            </button>
-          </div>
+          {demoNotificationsEnabled && (
+            <div className="app-notification-dropdown-footer">
+              <button
+                type="button"
+                className="app-notification-send-demo"
+                onClick={() => void handleSendDemo()}
+                disabled={sendingDemo}
+              >
+                {sendingDemo ? t.loading : t.sendDemo}
+              </button>
+            </div>
+          )}
         </div>
       )}
     </div>

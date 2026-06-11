@@ -15,10 +15,7 @@ import type {
   ReservationSlot,
   ReservationTimelineEvent,
 } from '@mohandishub/shared';
-import {
-  canManageReservationAvailability,
-  computeCommissionSplit,
-} from '@mohandishub/shared';
+import { canManageReservationAvailability, computeCommissionSplit } from '@mohandishub/shared';
 import type { PoolClient } from 'pg';
 
 import { env } from '../../config/env.js';
@@ -329,8 +326,10 @@ export class ReservationsService {
     this.ensureProviderRole(role);
     const profileUpdates: Parameters<ReservationsRepository['upsertProfile']>[1] = {};
     if (input.autoAccept !== undefined) profileUpdates.autoAccept = input.autoAccept;
-    if (input.onlineVoicePrice !== undefined) profileUpdates.onlineVoicePrice = input.onlineVoicePrice;
-    if (input.onlineVideoPrice !== undefined) profileUpdates.onlineVideoPrice = input.onlineVideoPrice;
+    if (input.onlineVoicePrice !== undefined)
+      profileUpdates.onlineVoicePrice = input.onlineVoicePrice;
+    if (input.onlineVideoPrice !== undefined)
+      profileUpdates.onlineVideoPrice = input.onlineVideoPrice;
     if (input.offlinePrice !== undefined) profileUpdates.offlinePrice = input.offlinePrice;
     if (input.currency !== undefined) profileUpdates.currency = input.currency;
     const profile = await this.repo.upsertProfile(userId, profileUpdates);
@@ -345,7 +344,11 @@ export class ReservationsService {
     to: Date;
     availableOnly: boolean;
   }): Promise<{ items: ReservationSlot[] }> {
-    const providerId = this.resolveProviderIdForSlots(params.userId, params.role, params.providerId);
+    const providerId = this.resolveProviderIdForSlots(
+      params.userId,
+      params.role,
+      params.providerId,
+    );
     const role = params.role ?? 'customer';
     const isSelfProviderView =
       (role === 'expert' || role === 'craftsman' || role === 'business') &&
@@ -477,6 +480,11 @@ export class ReservationsService {
         idempotencyKey,
       );
       if (existing) return existing;
+      await this.reserveReservationActionIdempotency(
+        customerId,
+        'create_reservation',
+        idempotencyKey,
+      );
     }
     const status = await this.settingsService.getAppStatus();
     if (status.moneyMovementsPaused) {
@@ -559,12 +567,13 @@ export class ReservationsService {
         });
       }
       if (input.negotiationId) {
-        const { agreedPrice, currency } = await this.negotiationsSvc.validateNegotiationForReservation(
-          customerId,
-          input.negotiationId,
-          input.serviceId,
-          input.providerId,
-        );
+        const { agreedPrice, currency } =
+          await this.negotiationsSvc.validateNegotiationForReservation(
+            customerId,
+            input.negotiationId,
+            input.serviceId,
+            input.providerId,
+          );
         servicePrice = toMoney(agreedPrice);
         reservationCurrency = currency || service.currency || reservationCurrency;
       } else if (service.price != null) {
@@ -632,12 +641,21 @@ export class ReservationsService {
         await client.query('BEGIN');
         reservation = await this.repo.createReservation(createInput, client);
         await this.repo.createEvent(
-          { reservationId: reservation.id, eventType: 'created', actorId: customerId, metadata: { purpose: 'service', mode: input.mode } },
+          {
+            reservationId: reservation.id,
+            eventType: 'created',
+            actorId: customerId,
+            metadata: { purpose: 'service', mode: input.mode },
+          },
           client,
         );
         await this.ensureFixedPriceHold(client, reservation);
         if (input.negotiationId) {
-          await this.negotiationsSvc.markNegotiationConsumed(input.negotiationId, customerId, client);
+          await this.negotiationsSvc.markNegotiationConsumed(
+            input.negotiationId,
+            customerId,
+            client,
+          );
         }
         await client.query('COMMIT');
       } catch (err) {
@@ -745,6 +763,11 @@ export class ReservationsService {
         params.idempotencyKey,
       );
       if (existing) return existing;
+      await this.reserveReservationActionIdempotency(
+        params.expertId,
+        'book_job_interview',
+        params.idempotencyKey,
+      );
     }
     const status = await this.settingsService.getAppStatus();
     if (status.moneyMovementsPaused) {
@@ -868,7 +891,12 @@ export class ReservationsService {
       role === 'provider' || role === 'expert' || role === 'business' || role === 'craftsman'
         ? 'provider'
         : 'customer';
-    const { rows, total } = await this.repo.listReservationsByUser(userId, normalizedRole, page, limit);
+    const { rows, total } = await this.repo.listReservationsByUser(
+      userId,
+      normalizedRole,
+      page,
+      limit,
+    );
     return {
       items: rows.map(mapReservation),
       total,
@@ -941,7 +969,11 @@ export class ReservationsService {
         message: 'Location proposals are only supported for offline reservations.',
       });
     }
-    if (!['accepted', 'awaiting_start', 'waiting_customer_done', 'in_session'].includes(reservation.status)) {
+    if (
+      !['accepted', 'awaiting_start', 'waiting_customer_done', 'in_session'].includes(
+        reservation.status,
+      )
+    ) {
       throw new HttpError({
         statusCode: 400,
         code: 'INVALID_RESERVATION_STATE',
@@ -972,7 +1004,10 @@ export class ReservationsService {
     return mapLocationProposal(proposal);
   }
 
-  async listLocationProposals(userId: string, reservationId: string): Promise<ReservationLocationProposal[]> {
+  async listLocationProposals(
+    userId: string,
+    reservationId: string,
+  ): Promise<ReservationLocationProposal[]> {
     await this.requireReservationForParticipant(reservationId, userId);
     const proposals = await this.repo.listLocationProposals(reservationId);
     return proposals.map(mapLocationProposal);
@@ -1024,7 +1059,12 @@ export class ReservationsService {
         });
       }
 
-      decided = await this.repo.respondLocationProposal(input.proposalId, input.decision, userId, client);
+      decided = await this.repo.respondLocationProposal(
+        input.proposalId,
+        input.decision,
+        userId,
+        client,
+      );
       if (!decided) {
         const stillExists = await this.repo.getLocationProposalById(input.proposalId);
         throw new HttpError({
@@ -1094,7 +1134,11 @@ export class ReservationsService {
         message: 'Check-in is only supported for offline reservations.',
       });
     }
-    if (!['accepted', 'awaiting_start', 'in_session', 'waiting_customer_done'].includes(reservation.status)) {
+    if (
+      !['accepted', 'awaiting_start', 'in_session', 'waiting_customer_done'].includes(
+        reservation.status,
+      )
+    ) {
       throw new HttpError({
         statusCode: 400,
         code: 'INVALID_RESERVATION_STATE',
@@ -1139,7 +1183,10 @@ export class ReservationsService {
     }
 
     const otherId = this.getOtherParticipantId(reservation, userId);
-    const otherCode = await this.repo.getCheckinCodeByCode(reservationId, input.counterpartyCode.trim());
+    const otherCode = await this.repo.getCheckinCodeByCode(
+      reservationId,
+      input.counterpartyCode.trim(),
+    );
     if (!otherCode || otherCode.user_id !== otherId) {
       throw new HttpError({
         statusCode: 400,
@@ -1274,7 +1321,11 @@ export class ReservationsService {
         disputeId: dispute.id,
         reason: dispute.reason,
       });
-      await this.sendReservationMessage(updatedReservation, 'Reservation was reported and moved to dispute.', userId);
+      await this.sendReservationMessage(
+        updatedReservation,
+        'Reservation was reported and moved to dispute.',
+        userId,
+      );
       const otherDispute = this.getOtherParticipantId(updatedReservation, userId);
       this.notifyUser(
         otherDispute,
@@ -1316,7 +1367,11 @@ export class ReservationsService {
           message: 'Reservation not found.',
         });
       }
-      await this.releaseExpertFixedPayout(client, reservationForUpdate, 'Reservation marked done by customer');
+      await this.releaseExpertFixedPayout(
+        client,
+        reservationForUpdate,
+        'Reservation marked done by customer',
+      );
       await this.repo.updateReservation(
         reservationId,
         {
@@ -1334,7 +1389,11 @@ export class ReservationsService {
         },
         client,
       );
-      await this.syncInterviewApplicationStatus(reservationForUpdate, 'interview_completed', client);
+      await this.syncInterviewApplicationStatus(
+        reservationForUpdate,
+        'interview_completed',
+        client,
+      );
       await this.repo.createEvent(
         {
           reservationId,
@@ -1687,7 +1746,11 @@ export class ReservationsService {
 
       let activeSession = sessionForUpdate;
       if (sessionForUpdate.status === 'active') {
-        const billingResult = await this.billMinutesInTransaction(client, reservationForUpdate, sessionForUpdate);
+        const billingResult = await this.billMinutesInTransaction(
+          client,
+          reservationForUpdate,
+          sessionForUpdate,
+        );
         activeSession = billingResult.session;
         lowBalanceAutoEnded = billingResult.lowBalanceAutoEnded;
       }
@@ -1707,7 +1770,9 @@ export class ReservationsService {
             billingPausedAt: now,
             lastBilledAt: now,
             extensionStatus:
-              activeSession.extension_status === 'none' ? 'pending' : activeSession.extension_status,
+              activeSession.extension_status === 'none'
+                ? 'pending'
+                : activeSession.extension_status,
             extensionRequestedBy:
               activeSession.extension_status === 'none'
                 ? userId
@@ -1739,7 +1804,9 @@ export class ReservationsService {
               },
               client,
             );
-            const releaseAt = new Date(now.getTime() + DISCONNECT_AUTO_RELEASE_HOURS * 60 * MINUTE_MS);
+            const releaseAt = new Date(
+              now.getTime() + DISCONNECT_AUTO_RELEASE_HOURS * 60 * MINUTE_MS,
+            );
             await this.repo.updateReservation(
               reservationId,
               {
@@ -1858,11 +1925,7 @@ export class ReservationsService {
         extensionStatus: 'rejected',
         extensionRequestedBy: null,
       });
-      await this.sendReservationMessage(
-        reservation,
-        'Session extension request rejected.',
-        userId,
-      );
+      await this.sendReservationMessage(reservation, 'Session extension request rejected.', userId);
       return this.getCallSnapshot(userId, reservationId);
     }
 
@@ -1920,7 +1983,11 @@ export class ReservationsService {
       }
 
       if (sessionForUpdate.status === 'active') {
-        const billed = await this.billMinutesInTransaction(client, reservationForUpdate, sessionForUpdate);
+        const billed = await this.billMinutesInTransaction(
+          client,
+          reservationForUpdate,
+          sessionForUpdate,
+        );
         if (billed.lowBalanceAutoEnded) {
           await client.query('COMMIT');
           return this.getCallSnapshot(userId, reservationId);
@@ -1972,7 +2039,11 @@ export class ReservationsService {
         },
         client,
       );
-      await this.syncInterviewApplicationStatus(reservationForUpdate, 'interview_completed', client);
+      await this.syncInterviewApplicationStatus(
+        reservationForUpdate,
+        'interview_completed',
+        client,
+      );
       await this.repo.createEvent(
         {
           reservationId,
@@ -2015,7 +2086,10 @@ export class ReservationsService {
     const session = await this.repo.getCallSessionByReservation(reservationId);
     const participants = session ? await this.repo.listCallParticipants(session.id) : [];
     const settings = await this.settingsService.getAppStatus();
-    const walletState = await this.getWalletMinuteState(reservation, settings.reservationMinPrejoinMinutes);
+    const walletState = await this.getWalletMinuteState(
+      reservation,
+      settings.reservationMinPrejoinMinutes,
+    );
 
     return {
       session: session ? mapCallSession(session) : null,
@@ -2054,16 +2128,21 @@ export class ReservationsService {
   private static readonly PENDING_EXPIRY_DAYS = 7;
 
   private async processExpiredPendingReservations(limit: number): Promise<number> {
-    const cutoff = new Date(Date.now() - ReservationsService.PENDING_EXPIRY_DAYS * 24 * 60 * 60 * 1000);
+    const cutoff = new Date(
+      Date.now() - ReservationsService.PENDING_EXPIRY_DAYS * 24 * 60 * 60 * 1000,
+    );
     const rows = await this.repo.listPendingReservationsCreatedBefore(cutoff, limit);
     if (rows.length === 0) return 0;
     const pool = getPool();
     const client = await pool.connect();
     let processed = 0;
+    const expiredRows: ReservationRow[] = [];
     try {
       await client.query('BEGIN');
       for (const row of rows) {
-        await this.refundFixedHold(client, row, 'Reservation expired (pending too long)');
+        const locked = await this.repo.findPendingReservationForExpiry(row.id, client);
+        if (!locked) continue;
+        await this.refundFixedHold(client, locked, 'Reservation expired (pending too long)');
         const updateFields: {
           status: string;
           settlementStatus?: string;
@@ -2071,20 +2150,22 @@ export class ReservationsService {
         } = {
           status: 'expired',
         };
-        if (row.fixed_price_hold_id) {
+        if (locked.fixed_price_hold_id) {
           updateFields.settlementStatus = 'refunded_to_customer';
           updateFields.refundStatus = 'succeeded';
         }
-        await this.repo.updateReservation(
-          row.id,
-          updateFields,
-          client,
-        );
+        await this.repo.updateReservation(locked.id, updateFields, client);
         await this.repo.createEvent(
-          { reservationId: row.id, eventType: 'rejected', actorId: null, metadata: { reason: 'expired_pending' } },
+          {
+            reservationId: locked.id,
+            eventType: 'rejected',
+            actorId: null,
+            metadata: { reason: 'expired_pending' },
+          },
           client,
         );
         processed++;
+        expiredRows.push(locked);
       }
       await client.query('COMMIT');
     } catch (err) {
@@ -2093,7 +2174,7 @@ export class ReservationsService {
     } finally {
       client.release();
     }
-    for (const row of rows) {
+    for (const row of expiredRows) {
       this.notifyUser(
         row.customer_id,
         'reservation_expired',
@@ -2136,24 +2217,80 @@ export class ReservationsService {
     input: ResolveDisputeInput,
   ): Promise<ReservationDispute> {
     this.ensureAdminRole(userId, role);
-    const dispute = await this.repo.resolveDispute(
-      disputeId,
-      input.status,
-      input.resolutionNotes?.trim() || null,
-      userId,
-    );
-    if (!dispute) {
-      throw new HttpError({
-        statusCode: 404,
-        code: 'DISPUTE_NOT_FOUND',
-        message: 'Dispute not found.',
-      });
+    const pool = getPool();
+    const client = await pool.connect();
+    let dispute: ReservationDisputeRow | null = null;
+    try {
+      await client.query('BEGIN');
+      const existingDispute = await this.repo.findDisputeById(disputeId, client);
+      if (!existingDispute || existingDispute.status !== 'open') {
+        throw new HttpError({
+          statusCode: 404,
+          code: 'DISPUTE_NOT_FOUND',
+          message: 'Open dispute not found.',
+        });
+      }
+      const resRow = await this.findReservationForUpdate(client, existingDispute.reservation_id);
+      if (!resRow) {
+        throw new HttpError({
+          statusCode: 404,
+          code: 'RESERVATION_NOT_FOUND',
+          message: 'Reservation not found for dispute.',
+        });
+      }
+      const settlement = await this.applyDisputeSettlement(client, resRow, input);
+      await this.repo.updateReservation(
+        resRow.id,
+        {
+          status: 'completed',
+          completedAt: new Date(),
+          refundAmount: settlement.refundAmount,
+          capturedAmount: settlement.capturedAmount,
+          refundStatus: settlement.refundAmount > 0 ? 'succeeded' : 'none',
+          settlementStatus: settlement.settlementStatus,
+          customerDoneDueAt: null,
+          donePromptedAt: null,
+          disconnectAutoReleaseAt: null,
+        },
+        client,
+      );
+      await this.repo.createEvent(
+        {
+          reservationId: resRow.id,
+          eventType: 'dispute_resolved',
+          actorId: userId,
+          metadata: {
+            disputeId,
+            status: input.status,
+            reason: input.resolutionNotes.trim(),
+            ...settlement,
+          },
+        },
+        client,
+      );
+      dispute = await this.repo.resolveDispute(
+        disputeId,
+        input.status,
+        input.resolutionNotes.trim(),
+        userId,
+        client,
+      );
+      if (!dispute) {
+        throw new HttpError({
+          statusCode: 404,
+          code: 'DISPUTE_NOT_FOUND',
+          message: 'Open dispute not found.',
+        });
+      }
+      await client.query('COMMIT');
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
     }
-    await this.recordReservationEvent(dispute.reservation_id, 'dispute_resolved', userId, {
-      disputeId: dispute.id,
-      status: dispute.status,
-    });
-    const resRow = await this.repo.findReservationById(dispute.reservation_id);
+
+    const resRow = dispute ? await this.repo.findReservationById(dispute.reservation_id) : null;
     if (resRow) {
       const payloadBase = { reservationId: dispute.reservation_id, disputeId: dispute.id };
       this.notifyUser(
@@ -2467,8 +2604,7 @@ export class ReservationsService {
         mapped,
       );
     }
-    const otherCancel =
-      updated.customer_id === userId ? updated.provider_id : updated.customer_id;
+    const otherCancel = updated.customer_id === userId ? updated.provider_id : updated.customer_id;
     this.notifyUser(
       otherCancel,
       'reservation_cancelled',
@@ -2484,7 +2620,10 @@ export class ReservationsService {
     return mapped;
   }
 
-  async listReservationTimeline(userId: string, reservationId: string): Promise<ReservationTimelineEvent[]> {
+  async listReservationTimeline(
+    userId: string,
+    reservationId: string,
+  ): Promise<ReservationTimelineEvent[]> {
     await this.requireReservationForParticipant(reservationId, userId);
     const rows = await this.repo.listEvents(reservationId);
     return rows.reverse().map(mapTimelineEvent);
@@ -2636,10 +2775,13 @@ export class ReservationsService {
   }
 
   private getPolicySnapshot(reservation: ReservationRow): ReservationPolicySnapshot {
-    return (reservation.policy_snapshot as ReservationPolicySnapshot | null) ?? this.buildPolicySnapshot({
-      purpose: reservation.purpose as Reservation['purpose'],
-      adminAcceptanceFee: toNumber(reservation.admin_acceptance_fee),
-    });
+    return (
+      (reservation.policy_snapshot as ReservationPolicySnapshot | null) ??
+      this.buildPolicySnapshot({
+        purpose: reservation.purpose as Reservation['purpose'],
+        adminAcceptanceFee: toNumber(reservation.admin_acceptance_fee),
+      })
+    );
   }
 
   private async getIdempotentReservationResponse(
@@ -2653,7 +2795,29 @@ export class ReservationsService {
       const reservation = await this.repo.findReservationById(existing.reservation_id);
       if (reservation) return mapReservation(reservation);
     }
+    if (Object.keys(existing.response_json ?? {}).length === 0) {
+      throw new HttpError({
+        statusCode: 409,
+        code: 'IDEMPOTENT_REQUEST_IN_PROGRESS',
+        message: 'This reservation request is already being processed.',
+      });
+    }
     return existing.response_json as Reservation;
+  }
+
+  private async reserveReservationActionIdempotency(
+    actorId: string,
+    action: IdempotentReservationAction,
+    idempotencyKey: string,
+  ): Promise<void> {
+    const reserved = await this.repo.reserveActionIdempotency(actorId, action, idempotencyKey);
+    if (!reserved) {
+      throw new HttpError({
+        statusCode: 409,
+        code: 'IDEMPOTENT_REQUEST_IN_PROGRESS',
+        message: 'This reservation request is already being processed.',
+      });
+    }
   }
 
   private async storeReservationActionIdempotency(
@@ -2804,11 +2968,7 @@ export class ReservationsService {
     }
   }
 
-  private resolveProviderIdForSlots(
-    userId: string,
-    role: string,
-    providerId?: string,
-  ): string {
+  private resolveProviderIdForSlots(userId: string, role: string, providerId?: string): string {
     if (providerId) return providerId;
     if (role === 'expert' || role === 'business' || role === 'craftsman') return userId;
     throw new HttpError({
@@ -2862,11 +3022,25 @@ export class ReservationsService {
     return reservation.customer_id === userId ? reservation.provider_id : reservation.customer_id;
   }
 
-  private displayNameForParticipant(reservation: ReservationRow | Reservation, userId: string): string {
-    if ((reservation as ReservationRow).customer_id === userId || (reservation as Reservation).customerId === userId) {
-      return (reservation as ReservationRow).customer_name ?? (reservation as Reservation).customerName ?? 'Customer';
+  private displayNameForParticipant(
+    reservation: ReservationRow | Reservation,
+    userId: string,
+  ): string {
+    if (
+      (reservation as ReservationRow).customer_id === userId ||
+      (reservation as Reservation).customerId === userId
+    ) {
+      return (
+        (reservation as ReservationRow).customer_name ??
+        (reservation as Reservation).customerName ??
+        'Customer'
+      );
     }
-    return (reservation as ReservationRow).provider_name ?? (reservation as Reservation).providerName ?? 'Provider';
+    return (
+      (reservation as ReservationRow).provider_name ??
+      (reservation as Reservation).providerName ??
+      'Provider'
+    );
   }
 
   private computeAgoraUid(userId: string): number {
@@ -2875,7 +3049,7 @@ export class ReservationsService {
     const numeric = Number.parseInt(slice, 16);
     if (Number.isFinite(numeric) && numeric > 0) {
       const maxInt32 = 2_147_483_647;
-      return (numeric % maxInt32) || 1;
+      return numeric % maxInt32 || 1;
     }
     return randomInt(1, 2_147_483_647);
   }
@@ -3150,7 +3324,9 @@ export class ReservationsService {
         updated.customer_id,
         'reservation_rejected',
         'Reservation rejected',
-        rejectionReason ? `Reason: ${rejectionReason}` : 'The provider declined your reservation request.',
+        rejectionReason
+          ? `Reason: ${rejectionReason}`
+          : 'The provider declined your reservation request.',
         { reservationId: updated.id },
       );
       await this.sendReservationMessage(
@@ -3163,7 +3339,10 @@ export class ReservationsService {
     return mapReservation(updated);
   }
 
-  private async chargeAcceptanceFee(client: PoolClient, reservation: ReservationRow): Promise<void> {
+  private async chargeAcceptanceFee(
+    client: PoolClient,
+    reservation: ReservationRow,
+  ): Promise<void> {
     const fee = toNumber(reservation.admin_acceptance_fee);
     if (fee <= 0) return;
 
@@ -3276,11 +3455,7 @@ export class ReservationsService {
       }
       throw error;
     }
-    await this.repo.updateReservation(
-      reservation.id,
-      { fixedPriceHoldId: hold.id },
-      client,
-    );
+    await this.repo.updateReservation(reservation.id, { fixedPriceHoldId: hold.id }, client);
     return hold.id;
   }
 
@@ -3297,6 +3472,195 @@ export class ReservationsService {
       reservationId: reservation.id,
       reason,
     });
+  }
+
+  private async applyDisputeSettlement(
+    client: PoolClient,
+    reservation: ReservationRow,
+    input: ResolveDisputeInput,
+  ): Promise<{
+    settlementOutcome: 'refund' | 'release' | 'split' | 'none';
+    refundAmount: number;
+    capturedAmount: number;
+    providerReleaseAmount: number;
+    platformCommissionAmount: number;
+    settlementStatus: Reservation['settlementStatus'];
+  }> {
+    const holdAmount = toMoney(toNumber(reservation.expert_price_amount));
+    const settlementOutcome =
+      input.settlementOutcome ?? this.inferDisputeSettlementOutcome(input.status);
+    if (settlementOutcome === 'none' && holdAmount > 0 && reservation.fixed_price_hold_id) {
+      throw new HttpError({
+        statusCode: 400,
+        code: 'DISPUTE_SETTLEMENT_REQUIRED',
+        message: 'A dispute with held funds must be resolved with refund, release, or split.',
+      });
+    }
+    if (settlementOutcome === 'none' || holdAmount <= 0 || !reservation.fixed_price_hold_id) {
+      return {
+        settlementOutcome,
+        refundAmount: 0,
+        capturedAmount: 0,
+        providerReleaseAmount: 0,
+        platformCommissionAmount: 0,
+        settlementStatus: reservation.settlement_status as Reservation['settlementStatus'],
+      };
+    }
+    const currentHold = await this.walletRepo.findWalletHoldById(reservation.fixed_price_hold_id);
+    if (!currentHold || currentHold.status !== 'held') {
+      throw new HttpError({
+        statusCode: 409,
+        code: 'RESERVATION_HOLD_ALREADY_SETTLED',
+        message: 'Reservation hold is already settled.',
+      });
+    }
+
+    if (settlementOutcome === 'refund') {
+      await this.refundFixedHold(client, reservation, 'Dispute resolved with full customer refund');
+      return {
+        settlementOutcome,
+        refundAmount: holdAmount,
+        capturedAmount: 0,
+        providerReleaseAmount: 0,
+        platformCommissionAmount: 0,
+        settlementStatus: 'refunded_to_customer',
+      };
+    }
+
+    if (settlementOutcome === 'release') {
+      const settings = await this.settingsService.getAppStatus();
+      const split = computeCommissionSplit(
+        holdAmount,
+        settings.commissionPercent,
+        settings.commissionMinEgp,
+      );
+      await this.releaseExpertFixedPayout(
+        client,
+        reservation,
+        'Dispute resolved with full provider release',
+      );
+      return {
+        settlementOutcome,
+        refundAmount: 0,
+        capturedAmount: holdAmount,
+        providerReleaseAmount: holdAmount,
+        platformCommissionAmount: split.commission,
+        settlementStatus: 'released_to_provider',
+      };
+    }
+
+    const refundAmount = toMoney(input.customerRefundAmount ?? 0);
+    const providerReleaseAmount = toMoney(input.providerReleaseAmount ?? 0);
+    if (refundAmount <= 0 && providerReleaseAmount <= 0) {
+      throw new HttpError({
+        statusCode: 400,
+        code: 'INVALID_DISPUTE_SPLIT',
+        message:
+          'Custom dispute split requires a customer refund amount or provider release amount.',
+      });
+    }
+    if (refundAmount + providerReleaseAmount > holdAmount + 0.01) {
+      throw new HttpError({
+        statusCode: 400,
+        code: 'INVALID_DISPUTE_SPLIT',
+        message: 'Custom dispute split cannot exceed the held reservation amount.',
+      });
+    }
+
+    await this.walletRepo.captureHoldInTransaction(
+      client,
+      reservation.fixed_price_hold_id,
+      'Dispute resolved with custom split',
+      {
+        reservationId: reservation.id,
+        customerRefundAmount: refundAmount,
+        providerReleaseAmount,
+      },
+    );
+
+    if (refundAmount > 0) {
+      const customerWallet = await this.walletRepo.getOrCreateUserWalletInTransaction(
+        client,
+        reservation.customer_id,
+      );
+      await this.walletRepo.creditWithTypeInTransaction(
+        client,
+        customerWallet.id,
+        reservation.customer_id,
+        refundAmount,
+        'refund',
+        'Reservation dispute split refund',
+        'reservation',
+        reservation.id,
+      );
+    }
+
+    let platformCommissionAmount = 0;
+    if (providerReleaseAmount > 0) {
+      const settings = await this.settingsService.getAppStatus();
+      const split = computeCommissionSplit(
+        providerReleaseAmount,
+        settings.commissionPercent,
+        settings.commissionMinEgp,
+      );
+      platformCommissionAmount = split.commission;
+      const providerWallet = await this.walletRepo.getOrCreateUserWalletInTransaction(
+        client,
+        reservation.provider_id,
+      );
+      if (split.providerAmount > 0) {
+        await this.walletRepo.creditWithTypeInTransaction(
+          client,
+          providerWallet.id,
+          reservation.provider_id,
+          split.providerAmount,
+          'payment',
+          'Reservation dispute split provider release',
+          'reservation',
+          reservation.id,
+        );
+      }
+      if (split.commission > 0) {
+        const receiverId = settings.commissionReceiverId || PLATFORM_USER_ID;
+        const platformWalletId = await this.walletRepo.getOrCreateCommissionWallet(
+          client,
+          receiverId,
+        );
+        await this.walletRepo.creditWithTypeInTransaction(
+          client,
+          platformWalletId,
+          receiverId,
+          split.commission,
+          'commission',
+          'Reservation dispute split commission',
+          'reservation',
+          reservation.id,
+        );
+      }
+    }
+
+    return {
+      settlementOutcome,
+      refundAmount,
+      capturedAmount: providerReleaseAmount,
+      providerReleaseAmount,
+      platformCommissionAmount,
+      settlementStatus:
+        refundAmount > 0 && providerReleaseAmount > 0
+          ? 'partially_refunded'
+          : refundAmount > 0
+            ? 'refunded_to_customer'
+            : 'released_to_provider',
+    };
+  }
+
+  private inferDisputeSettlementOutcome(
+    status: ResolveDisputeInput['status'],
+  ): 'refund' | 'release' | 'split' | 'none' {
+    if (status === 'resolved_customer') return 'refund';
+    if (status === 'resolved_provider') return 'release';
+    if (status === 'resolved_partial') return 'split';
+    return 'release';
   }
 
   private async releaseExpertFixedPayout(
@@ -3413,10 +3777,8 @@ export class ReservationsService {
     const providerRemainingMinutes =
       sideRate > 0 ? Math.floor(providerBalance / sideRate) : Number.MAX_SAFE_INTEGER;
 
-    const customerMeetsRequirement =
-      sideRate <= 0 || customerRemainingMinutes >= minimumMinutes;
-    const providerMeetsRequirement =
-      sideRate <= 0 || providerRemainingMinutes >= minimumMinutes;
+    const customerMeetsRequirement = sideRate <= 0 || customerRemainingMinutes >= minimumMinutes;
+    const providerMeetsRequirement = sideRate <= 0 || providerRemainingMinutes >= minimumMinutes;
 
     return {
       customerRemainingMinutes,
@@ -3460,7 +3822,11 @@ export class ReservationsService {
       return { session, lowBalanceAutoEnded: false };
     }
 
-    const wallets = await this.findWalletsForBilling(client, reservation.customer_id, reservation.provider_id);
+    const wallets = await this.findWalletsForBilling(
+      client,
+      reservation.customer_id,
+      reservation.provider_id,
+    );
     const customerBalanceCents = this.egpToCents(toNumber(wallets.customer.balance));
     const providerBalanceCents = this.egpToCents(toNumber(wallets.provider.balance));
     const sideRateMilliPerMinute = Math.round(sideRatePerMinute * MILLI_PIASTER_PER_EGP);
@@ -3479,7 +3845,10 @@ export class ReservationsService {
       providerBalanceCents,
       elapsedSeconds,
     );
-    const secondsToBill = Math.max(0, Math.min(elapsedSeconds, customerMaxSeconds, providerMaxSeconds));
+    const secondsToBill = Math.max(
+      0,
+      Math.min(elapsedSeconds, customerMaxSeconds, providerMaxSeconds),
+    );
 
     const customerCharge = this.computeSideChargeForSeconds(
       sideRateMilliPerMinute,
@@ -3496,7 +3865,10 @@ export class ReservationsService {
       const customerCost = this.centsToEgp(customerCharge.chargeCents);
       const providerCost = this.centsToEgp(providerCharge.chargeCents);
       const receiverId = await this.getCommissionReceiverId();
-      const platformWalletId = await this.walletRepo.getOrCreateCommissionWallet(client, receiverId);
+      const platformWalletId = await this.walletRepo.getOrCreateCommissionWallet(
+        client,
+        receiverId,
+      );
 
       if (customerCharge.chargeCents > 0) {
         await this.walletRepo.debitWalletInTransaction(
@@ -3532,7 +3904,8 @@ export class ReservationsService {
       );
     }
 
-    const billedSecondsTotal = (session.billed_seconds ?? session.billed_minutes * 60) + secondsToBill;
+    const billedSecondsTotal =
+      (session.billed_seconds ?? session.billed_minutes * 60) + secondsToBill;
     const nextLastBilledAt = new Date(lastBilledAt.getTime() + secondsToBill * SECOND_MS);
     const updatedSession = await this.repo.updateCallSession(
       session.id,
@@ -3557,11 +3930,7 @@ export class ReservationsService {
         },
         client,
       );
-      await this.releaseExpertFixedPayout(
-        client,
-        reservation,
-        'Low balance automatic session end',
-      );
+      await this.releaseExpertFixedPayout(client, reservation, 'Low balance automatic session end');
       await this.repo.updateReservation(
         reservation.id,
         {
@@ -3583,7 +3952,10 @@ export class ReservationsService {
           reservationId: reservation.id,
           eventType: 'hold_captured',
           actorId: null,
-          metadata: { source: 'low_balance_auto_end', amount: toNumber(reservation.expert_price_amount) },
+          metadata: {
+            source: 'low_balance_auto_end',
+            amount: toNumber(reservation.expert_price_amount),
+          },
         },
         client,
       );
@@ -3640,9 +4012,7 @@ export class ReservationsService {
             completedAt: new Date(),
             capturedAmount: toNumber(reservation.expert_price_amount),
             settlementStatus:
-              toNumber(reservation.expert_price_amount) > 0
-                ? 'released_to_provider'
-                : 'unsettled',
+              toNumber(reservation.expert_price_amount) > 0 ? 'released_to_provider' : 'unsettled',
             customerDoneDueAt: null,
             donePromptedAt: null,
             disconnectAutoReleaseAt: null,
@@ -3694,7 +4064,11 @@ export class ReservationsService {
       }
 
       if (notifyReservation && notifyMessage) {
-        await this.sendReservationMessage(notifyReservation, notifyMessage, notifyReservation.provider_id);
+        await this.sendReservationMessage(
+          notifyReservation,
+          notifyMessage,
+          notifyReservation.provider_id,
+        );
       }
     }
     return processed;
@@ -3771,7 +4145,11 @@ export class ReservationsService {
       if (session?.status === 'active') {
         await this.billMinutesInTransaction(client, reservationForUpdate, session);
       }
-      await this.releaseExpertFixedPayout(client, reservationForUpdate, 'Disconnect timeout auto release');
+      await this.releaseExpertFixedPayout(
+        client,
+        reservationForUpdate,
+        'Disconnect timeout auto release',
+      );
       await this.repo.updateReservation(
         reservationId,
         {
@@ -3789,7 +4167,11 @@ export class ReservationsService {
         },
         client,
       );
-      await this.syncInterviewApplicationStatus(reservationForUpdate, 'interview_completed', client);
+      await this.syncInterviewApplicationStatus(
+        reservationForUpdate,
+        'interview_completed',
+        client,
+      );
       if (session) {
         await this.repo.updateCallSession(
           session.id,
@@ -3833,7 +4215,9 @@ export class ReservationsService {
   private async handleOfflineDonePromptIfDue(reservationId: string): Promise<void> {
     const reservation = await this.repo.findReservationById(reservationId);
     if (!reservation) return;
-    const dueAt = reservation.customer_done_due_at ? new Date(reservation.customer_done_due_at) : null;
+    const dueAt = reservation.customer_done_due_at
+      ? new Date(reservation.customer_done_due_at)
+      : null;
     if (!dueAt || Number.isNaN(dueAt.getTime()) || dueAt.getTime() > Date.now()) return;
     if (reservation.status !== 'waiting_customer_done' || reservation.done_prompted_at) return;
 
@@ -3934,7 +4318,10 @@ export class ReservationsService {
     return rows[0] ?? null;
   }
 
-  private async findSlotForUpdate(client: PoolClient, slotId: string): Promise<ReservationSlotRow | null> {
+  private async findSlotForUpdate(
+    client: PoolClient,
+    slotId: string,
+  ): Promise<ReservationSlotRow | null> {
     const { rows } = await client.query<ReservationSlotRow>(
       `SELECT * FROM reservation_slots WHERE id = $1 FOR UPDATE`,
       [slotId],
@@ -4079,8 +4466,7 @@ export class ReservationsService {
   private isSlotOverlapError(error: unknown): boolean {
     const pgError = error as { code?: string; constraint?: string };
     return (
-      pgError?.code === '23P01' ||
-      pgError?.constraint === 'reservation_slots_no_overlap_active'
+      pgError?.code === '23P01' || pgError?.constraint === 'reservation_slots_no_overlap_active'
     );
   }
 
@@ -4089,10 +4475,13 @@ export class ReservationsService {
     body: string,
     actorId: string,
   ): Promise<void> {
-    const conversationId = 'conversation_id' in reservation ? reservation.conversation_id : reservation.conversationId;
+    const conversationId =
+      'conversation_id' in reservation ? reservation.conversation_id : reservation.conversationId;
     if (!conversationId) return;
-    const customerId = 'customer_id' in reservation ? reservation.customer_id : reservation.customerId;
-    const providerId = 'provider_id' in reservation ? reservation.provider_id : reservation.providerId;
+    const customerId =
+      'customer_id' in reservation ? reservation.customer_id : reservation.customerId;
+    const providerId =
+      'provider_id' in reservation ? reservation.provider_id : reservation.providerId;
     const senderId = actorId === customerId || actorId === providerId ? actorId : providerId;
     try {
       const payload: Parameters<ChatRepository['sendMessage']>[2] = {

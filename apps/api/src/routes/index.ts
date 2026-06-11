@@ -30,7 +30,9 @@ import { asyncHandler } from '../utils/async-handler.js';
 
 /** Paths under `/api` that use `authRateLimiter` only — avoid counting them against the global API bucket (login was 429 after normal browsing). */
 function isAuthOrOtpPath(path: string) {
-  return path === '/auth' || path.startsWith('/auth/') || path === '/otp' || path.startsWith('/otp/');
+  return (
+    path === '/auth' || path.startsWith('/auth/') || path === '/otp' || path.startsWith('/otp/')
+  );
 }
 
 /**

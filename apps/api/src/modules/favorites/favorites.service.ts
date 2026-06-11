@@ -16,7 +16,11 @@ export class FavoritesService {
     };
   }
 
-  async add(userId: string, targetType: FavoriteTargetType, targetId: string): Promise<Favorite | null> {
+  async add(
+    userId: string,
+    targetType: FavoriteTargetType,
+    targetId: string,
+  ): Promise<Favorite | null> {
     const row = await this.repo.add(userId, targetType, targetId);
     return row ? this.toFavorite(row) : null;
   }
@@ -30,7 +34,11 @@ export class FavoritesService {
     return rows.map((r) => this.toFavorite(r));
   }
 
-  async isFavorite(userId: string, targetType: FavoriteTargetType, targetId: string): Promise<boolean> {
+  async isFavorite(
+    userId: string,
+    targetType: FavoriteTargetType,
+    targetId: string,
+  ): Promise<boolean> {
     return this.repo.isFavorite(userId, targetType, targetId);
   }
 }

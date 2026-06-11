@@ -1,6 +1,11 @@
 'use client';
 
-import type { Plan, PlanLimits, PlanSubscriberRole, UsageQuotaPeriodType } from '@mohandishub/shared';
+import type {
+  Plan,
+  PlanLimits,
+  PlanSubscriberRole,
+  UsageQuotaPeriodType,
+} from '@mohandishub/shared';
 import {
   DEFAULT_PLAN_ALLOWED_ROLES,
   PLAN_SUBSCRIBER_ROLES,
@@ -24,7 +29,13 @@ const getErrorMessage = (error: unknown, dictionary: Dictionary): string => {
   return dictionary.auth.errors.generic;
 };
 
-function AdminPlanFieldHint({ hints, hintKey }: { hints: Record<string, string>; hintKey: string }) {
+function AdminPlanFieldHint({
+  hints,
+  hintKey,
+}: {
+  hints: Record<string, string>;
+  hintKey: string;
+}) {
   const t = hints[hintKey];
   return t ? <PlanFieldHint text={t} /> : null;
 }
@@ -126,8 +137,9 @@ export const AdminPlansTab = ({ dictionary, accessToken, refreshSession }: Props
       description: plan.description ?? '',
       billingCycle: plan.billingCycle,
       features: plan.features.join(', '),
-      allowedRoles:
-        plan.allowedRoles?.length ? [...plan.allowedRoles] : [...DEFAULT_PLAN_ALLOWED_ROLES],
+      allowedRoles: plan.allowedRoles?.length
+        ? [...plan.allowedRoles]
+        : [...DEFAULT_PLAN_ALLOWED_ROLES],
       planLimits: {
         maxNeeds: limits.maxNeeds ?? null,
         bidsVisibleToCustomer: limits.bidsVisibleToCustomer ?? null,
@@ -171,7 +183,10 @@ export const AdminPlansTab = ({ dictionary, accessToken, refreshSession }: Props
     const planLimits: PlanLimits = {
       maxNeeds: formData.planLimits.maxNeeds ?? null,
       bidsVisibleToCustomer: formData.planLimits.bidsVisibleToCustomer ?? null,
-      bidsVisibleTopN: formData.planLimits.bidsVisibleToCustomer === 'top_n' ? (formData.planLimits.bidsVisibleTopN ?? 3) : null,
+      bidsVisibleTopN:
+        formData.planLimits.bidsVisibleToCustomer === 'top_n'
+          ? (formData.planLimits.bidsVisibleTopN ?? 3)
+          : null,
       maxBidsPerNeed: formData.planLimits.maxBidsPerNeed ?? null,
       maxServices: formData.planLimits.maxServices ?? null,
       maxJobs: formData.planLimits.maxJobs ?? null,
@@ -199,7 +214,9 @@ export const AdminPlansTab = ({ dictionary, accessToken, refreshSession }: Props
       : baseBody;
     try {
       if (editingPlan) {
-        await adminApiClient.updatePlan(accessToken, editingPlan.id, bodyWithDesc, { refreshSession });
+        await adminApiClient.updatePlan(accessToken, editingPlan.id, bodyWithDesc, {
+          refreshSession,
+        });
       } else {
         await adminApiClient.createPlan(accessToken, bodyWithDesc, { refreshSession });
       }
@@ -260,9 +277,10 @@ export const AdminPlansTab = ({ dictionary, accessToken, refreshSession }: Props
                   </td>
                   <td>{plan.billingCycle}</td>
                   <td>
-                    {(plan.allowedRoles?.length ? plan.allowedRoles : DEFAULT_PLAN_ALLOWED_ROLES).join(
-                      ', ',
-                    )}
+                    {(plan.allowedRoles?.length
+                      ? plan.allowedRoles
+                      : DEFAULT_PLAN_ALLOWED_ROLES
+                    ).join(', ')}
                   </td>
                   <td>
                     <span
@@ -323,7 +341,10 @@ export const AdminPlansTab = ({ dictionary, accessToken, refreshSession }: Props
             </header>
 
             <div className="admin-plan-modal__body">
-              <section className="admin-plan-modal__section" aria-labelledby="admin-plan-modal-details">
+              <section
+                className="admin-plan-modal__section"
+                aria-labelledby="admin-plan-modal-details"
+              >
                 <h3 id="admin-plan-modal-details" className="admin-plan-modal__section-title">
                   {d.planModalSectionDetails}
                 </h3>
@@ -373,7 +394,10 @@ export const AdminPlansTab = ({ dictionary, accessToken, refreshSession }: Props
                       className="admin-form-select"
                       value={formData.billingCycle}
                       onChange={(e) =>
-                        setFormData({ ...formData, billingCycle: e.target.value as Plan['billingCycle'] })
+                        setFormData({
+                          ...formData,
+                          billingCycle: e.target.value as Plan['billingCycle'],
+                        })
                       }
                     >
                       <option value="monthly">Monthly</option>
@@ -409,7 +433,10 @@ export const AdminPlansTab = ({ dictionary, accessToken, refreshSession }: Props
                 </div>
               </section>
 
-              <section className="admin-plan-modal__section" aria-labelledby="admin-plan-modal-roles">
+              <section
+                className="admin-plan-modal__section"
+                aria-labelledby="admin-plan-modal-roles"
+              >
                 <h3
                   id="admin-plan-modal-roles"
                   className="admin-plan-modal__section-title admin-plan-modal__section-title--row"
@@ -474,7 +501,10 @@ export const AdminPlansTab = ({ dictionary, accessToken, refreshSession }: Props
                     <p className="admin-plan-limits-intro">{d.planLimitsIntro}</p>
                   </div>
                   <div className="admin-plan-modal__card admin-plan-modal__card--quotas">
-                    <p className="admin-form-label admin-form-label--inline-hint" style={{ marginBottom: '0.35rem' }}>
+                    <p
+                      className="admin-form-label admin-form-label--inline-hint"
+                      style={{ marginBottom: '0.35rem' }}
+                    >
                       <span>{d.usageQuotasSection}</span>
                       <AdminPlanFieldHint hints={hints} hintKey="hintUsageQuotasSection" />
                     </p>
@@ -482,383 +512,434 @@ export const AdminPlansTab = ({ dictionary, accessToken, refreshSession }: Props
                       {d.usageQuotasIntro}
                     </p>
                     <div style={{ display: 'grid', gap: '0.75rem' }}>
-                  {USAGE_QUOTA_FEATURE_KEYS.map((key) => {
-                    const row = formData.planLimits.usageQuotas?.[key];
-                    const label = hints[`quotaFeature_${key}`] ?? key;
-                    return (
-                      <div key={key} className="admin-form-group" style={{ marginBottom: 0 }}>
-                        <label className="admin-form-label admin-form-label--inline-hint">
-                          <span>{label}</span>
-                          <AdminPlanFieldHint hints={hints} hintKey={`hintQuota_${key}`} />
-                        </label>
-                        <div className="admin-plan-modal__quota-toolbar">
-                          <input
-                            type="number"
-                            min={1}
-                            className="admin-form-input"
-                            style={{ maxWidth: 120 }}
-                            placeholder={d.quotaMaxPlaceholder}
-                            value={row?.maxPerPeriod != null && row.maxPerPeriod >= 1 ? row.maxPerPeriod : ''}
-                            onChange={(e) => {
-                              const v = e.target.value === '' ? null : parseInt(e.target.value, 10);
-                              const nextUq = { ...formData.planLimits.usageQuotas };
-                              if (v == null || Number.isNaN(v) || v < 1) {
-                                delete nextUq[key];
-                              } else {
-                                const period: UsageQuotaPeriodType =
-                                  nextUq[key]?.period ?? 'calendar_month';
-                                nextUq[key] = {
-                                  maxPerPeriod: v,
-                                  period,
-                                };
-                              }
-                              setFormData({
-                                ...formData,
-                                planLimits: { ...formData.planLimits, usageQuotas: nextUq },
-                              });
-                            }}
-                          />
-                          <select
-                            className="admin-form-select"
-                            style={{ minWidth: 180 }}
-                            value={row?.period ?? 'calendar_month'}
-                            disabled={!row || row.maxPerPeriod == null || row.maxPerPeriod < 1}
-                            onChange={(e) => {
-                              const p = e.target.value as UsageQuotaPeriodType;
-                              if (row && row.maxPerPeriod >= 1) {
-                                setFormData({
-                                  ...formData,
-                                  planLimits: {
-                                    ...formData.planLimits,
-                                    usageQuotas: {
-                                      ...formData.planLimits.usageQuotas,
-                                      [key]: { ...row, period: p },
-                                    },
-                                  },
-                                });
-                              }
-                            }}
-                          >
-                            <option value="calendar_month">{d.quotaPeriodCalendarMonth}</option>
-                            <option value="billing_cycle">{d.quotaPeriodBillingCycle}</option>
-                          </select>
-                        </div>
-                      </div>
-                    );
-                  })}
+                      {USAGE_QUOTA_FEATURE_KEYS.map((key) => {
+                        const row = formData.planLimits.usageQuotas?.[key];
+                        const label = hints[`quotaFeature_${key}`] ?? key;
+                        return (
+                          <div key={key} className="admin-form-group" style={{ marginBottom: 0 }}>
+                            <label className="admin-form-label admin-form-label--inline-hint">
+                              <span>{label}</span>
+                              <AdminPlanFieldHint hints={hints} hintKey={`hintQuota_${key}`} />
+                            </label>
+                            <div className="admin-plan-modal__quota-toolbar">
+                              <input
+                                type="number"
+                                min={1}
+                                className="admin-form-input"
+                                style={{ maxWidth: 120 }}
+                                placeholder={d.quotaMaxPlaceholder}
+                                value={
+                                  row?.maxPerPeriod != null && row.maxPerPeriod >= 1
+                                    ? row.maxPerPeriod
+                                    : ''
+                                }
+                                onChange={(e) => {
+                                  const v =
+                                    e.target.value === '' ? null : parseInt(e.target.value, 10);
+                                  const nextUq = { ...formData.planLimits.usageQuotas };
+                                  if (v == null || Number.isNaN(v) || v < 1) {
+                                    delete nextUq[key];
+                                  } else {
+                                    const period: UsageQuotaPeriodType =
+                                      nextUq[key]?.period ?? 'calendar_month';
+                                    nextUq[key] = {
+                                      maxPerPeriod: v,
+                                      period,
+                                    };
+                                  }
+                                  setFormData({
+                                    ...formData,
+                                    planLimits: { ...formData.planLimits, usageQuotas: nextUq },
+                                  });
+                                }}
+                              />
+                              <select
+                                className="admin-form-select"
+                                style={{ minWidth: 180 }}
+                                value={row?.period ?? 'calendar_month'}
+                                disabled={!row || row.maxPerPeriod == null || row.maxPerPeriod < 1}
+                                onChange={(e) => {
+                                  const p = e.target.value as UsageQuotaPeriodType;
+                                  if (row && row.maxPerPeriod >= 1) {
+                                    setFormData({
+                                      ...formData,
+                                      planLimits: {
+                                        ...formData.planLimits,
+                                        usageQuotas: {
+                                          ...formData.planLimits.usageQuotas,
+                                          [key]: { ...row, period: p },
+                                        },
+                                      },
+                                    });
+                                  }
+                                }}
+                              >
+                                <option value="calendar_month">{d.quotaPeriodCalendarMonth}</option>
+                                <option value="billing_cycle">{d.quotaPeriodBillingCycle}</option>
+                              </select>
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
 
-            {showCustomerLimits && (
-              <fieldset className="admin-plan-modal__fieldset">
-                <legend className="admin-plan-modal__fieldset-legend">{d.limitsSectionCustomer}</legend>
-                <p className="admin-plan-limits-intro" style={{ marginBottom: '0.75rem' }}>
-                  {d.bidsOrderingHint}
-                </p>
-                <div className="admin-form-group">
-                  <label className="admin-form-label admin-form-label--inline-hint">
-                    <span>{d.maxNeeds}</span>
-                    <AdminPlanFieldHint hints={hints} hintKey="hintMaxNeeds" />
-                  </label>
-                  <input
-                    className="admin-form-input"
-                    type="number"
-                    min={0}
-                    placeholder="Unlimited"
-                    value={formData.planLimits.maxNeeds ?? ''}
-                    onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        planLimits: {
-                          ...formData.planLimits,
-                          maxNeeds: e.target.value === '' ? null : parseInt(e.target.value, 10),
-                        },
-                      })
-                    }
-                  />
-                </div>
-                <div className="admin-form-group">
-                  <label className="admin-form-label admin-form-label--inline-hint">
-                    <span>{d.maxBidsPerNeed}</span>
-                    <AdminPlanFieldHint hints={hints} hintKey="hintMaxBidsPerNeed" />
-                  </label>
-                  <input
-                    className="admin-form-input"
-                    type="number"
-                    min={0}
-                    placeholder="Unlimited"
-                    value={formData.planLimits.maxBidsPerNeed ?? ''}
-                    onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        planLimits: {
-                          ...formData.planLimits,
-                          maxBidsPerNeed: e.target.value === '' ? null : parseInt(e.target.value, 10),
-                        },
-                      })
-                    }
-                  />
-                </div>
-                <div className="admin-form-group">
-                  <label className="admin-form-label admin-form-label--inline-hint">
-                    <span>{d.bidsVisibleToCustomer}</span>
-                    <AdminPlanFieldHint hints={hints} hintKey="hintBidsVisible" />
-                  </label>
-                  <select
-                    className="admin-form-select"
-                    value={formData.planLimits.bidsVisibleToCustomer ?? ''}
-                    onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        planLimits: {
-                          ...formData.planLimits,
-                          bidsVisibleToCustomer: (e.target.value ? e.target.value : null) as PlanLimits['bidsVisibleToCustomer'],
-                        } as PlanLimits,
-                      })
-                    }
-                  >
-                    <option value="">—</option>
-                    <option value="all">{d.bidsVisibleOptionAll}</option>
-                    <option value="priority_first">{d.bidsVisibleOptionPriorityFirst}</option>
-                    <option value="premium_first">{d.bidsVisibleOptionPremiumFirst}</option>
-                    <option value="top_n">{d.bidsVisibleOptionTopN}</option>
-                  </select>
-                </div>
-                {formData.planLimits.bidsVisibleToCustomer === 'top_n' && (
-                  <div className="admin-form-group">
-                    <label className="admin-form-label admin-form-label--inline-hint">
-                      <span>{d.bidsVisibleTopN}</span>
-                      <AdminPlanFieldHint hints={hints} hintKey="hintBidsVisibleTopN" />
-                    </label>
-                    <input
-                      className="admin-form-input"
-                      type="number"
-                      min={1}
-                      value={formData.planLimits.bidsVisibleTopN ?? 3}
-                      onChange={(e) =>
-                        setFormData({
-                          ...formData,
-                          planLimits: {
-                            ...formData.planLimits,
-                            bidsVisibleTopN: parseInt(e.target.value, 10) || 3,
-                          },
-                        })
-                      }
-                    />
-                  </div>
-                )}
-              </fieldset>
-            )}
+                  {showCustomerLimits && (
+                    <fieldset className="admin-plan-modal__fieldset">
+                      <legend className="admin-plan-modal__fieldset-legend">
+                        {d.limitsSectionCustomer}
+                      </legend>
+                      <p className="admin-plan-limits-intro" style={{ marginBottom: '0.75rem' }}>
+                        {d.bidsOrderingHint}
+                      </p>
+                      <div className="admin-form-group">
+                        <label className="admin-form-label admin-form-label--inline-hint">
+                          <span>{d.maxNeeds}</span>
+                          <AdminPlanFieldHint hints={hints} hintKey="hintMaxNeeds" />
+                        </label>
+                        <input
+                          className="admin-form-input"
+                          type="number"
+                          min={0}
+                          placeholder="Unlimited"
+                          value={formData.planLimits.maxNeeds ?? ''}
+                          onChange={(e) =>
+                            setFormData({
+                              ...formData,
+                              planLimits: {
+                                ...formData.planLimits,
+                                maxNeeds:
+                                  e.target.value === '' ? null : parseInt(e.target.value, 10),
+                              },
+                            })
+                          }
+                        />
+                      </div>
+                      <div className="admin-form-group">
+                        <label className="admin-form-label admin-form-label--inline-hint">
+                          <span>{d.maxBidsPerNeed}</span>
+                          <AdminPlanFieldHint hints={hints} hintKey="hintMaxBidsPerNeed" />
+                        </label>
+                        <input
+                          className="admin-form-input"
+                          type="number"
+                          min={0}
+                          placeholder="Unlimited"
+                          value={formData.planLimits.maxBidsPerNeed ?? ''}
+                          onChange={(e) =>
+                            setFormData({
+                              ...formData,
+                              planLimits: {
+                                ...formData.planLimits,
+                                maxBidsPerNeed:
+                                  e.target.value === '' ? null : parseInt(e.target.value, 10),
+                              },
+                            })
+                          }
+                        />
+                      </div>
+                      <div className="admin-form-group">
+                        <label className="admin-form-label admin-form-label--inline-hint">
+                          <span>{d.bidsVisibleToCustomer}</span>
+                          <AdminPlanFieldHint hints={hints} hintKey="hintBidsVisible" />
+                        </label>
+                        <select
+                          className="admin-form-select"
+                          value={formData.planLimits.bidsVisibleToCustomer ?? ''}
+                          onChange={(e) =>
+                            setFormData({
+                              ...formData,
+                              planLimits: {
+                                ...formData.planLimits,
+                                bidsVisibleToCustomer: (e.target.value
+                                  ? e.target.value
+                                  : null) as PlanLimits['bidsVisibleToCustomer'],
+                              } as PlanLimits,
+                            })
+                          }
+                        >
+                          <option value="">—</option>
+                          <option value="all">{d.bidsVisibleOptionAll}</option>
+                          <option value="priority_first">{d.bidsVisibleOptionPriorityFirst}</option>
+                          <option value="premium_first">{d.bidsVisibleOptionPremiumFirst}</option>
+                          <option value="top_n">{d.bidsVisibleOptionTopN}</option>
+                        </select>
+                      </div>
+                      {formData.planLimits.bidsVisibleToCustomer === 'top_n' && (
+                        <div className="admin-form-group">
+                          <label className="admin-form-label admin-form-label--inline-hint">
+                            <span>{d.bidsVisibleTopN}</span>
+                            <AdminPlanFieldHint hints={hints} hintKey="hintBidsVisibleTopN" />
+                          </label>
+                          <input
+                            className="admin-form-input"
+                            type="number"
+                            min={1}
+                            value={formData.planLimits.bidsVisibleTopN ?? 3}
+                            onChange={(e) =>
+                              setFormData({
+                                ...formData,
+                                planLimits: {
+                                  ...formData.planLimits,
+                                  bidsVisibleTopN: parseInt(e.target.value, 10) || 3,
+                                },
+                              })
+                            }
+                          />
+                        </div>
+                      )}
+                    </fieldset>
+                  )}
 
-            {showProviderLimits && (
-              <fieldset className="admin-plan-modal__fieldset">
-                <legend className="admin-plan-modal__fieldset-legend">{d.limitsSectionProviders}</legend>
-                <div className="admin-form-group">
-                  <label className="admin-form-label admin-form-label--inline-hint">
-                    <span>{d.maxServices}</span>
-                    <AdminPlanFieldHint hints={hints} hintKey="hintMaxServices" />
-                  </label>
-                  <input
-                    className="admin-form-input"
-                    type="number"
-                    min={0}
-                    placeholder="Unlimited"
-                    value={formData.planLimits.maxServices ?? ''}
-                    onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        planLimits: {
-                          ...formData.planLimits,
-                          maxServices: e.target.value === '' ? null : parseInt(e.target.value, 10),
-                        },
-                      })
-                    }
-                  />
-                </div>
-                <div className="admin-form-group">
-                  <label className="admin-form-label admin-form-label--inline-hint">
-                    <span>{d.maxActiveBids}</span>
-                    <AdminPlanFieldHint hints={hints} hintKey="hintMaxActiveBids" />
-                  </label>
-                  <input
-                    className="admin-form-input"
-                    type="number"
-                    min={0}
-                    placeholder="Unlimited"
-                    value={formData.planLimits.maxActiveBids ?? ''}
-                    onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        planLimits: {
-                          ...formData.planLimits,
-                          maxActiveBids: e.target.value === '' ? null : parseInt(e.target.value, 10),
-                        },
-                      })
-                    }
-                  />
-                </div>
-                <div className="admin-form-group admin-plan-modal__check-row">
-                  <input
-                    type="checkbox"
-                    id="plan-can-priority-listing"
-                    checked={formData.planLimits.canPriorityListing ?? false}
-                    onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        planLimits: { ...formData.planLimits, canPriorityListing: e.target.checked },
-                      })
-                    }
-                  />
-                  <label className="admin-form-label" htmlFor="plan-can-priority-listing" style={{ marginBottom: 0 }}>
-                    {d.canPriorityListing}
-                  </label>
-                  <AdminPlanFieldHint hints={hints} hintKey="hintCanPriorityListing" />
-                </div>
-                <div className="admin-form-group admin-plan-modal__check-row">
-                  <input
-                    type="checkbox"
-                    id="plan-can-priority-bid"
-                    checked={formData.planLimits.canPriorityBid ?? false}
-                    onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        planLimits: { ...formData.planLimits, canPriorityBid: e.target.checked },
-                      })
-                    }
-                  />
-                  <label className="admin-form-label" htmlFor="plan-can-priority-bid" style={{ marginBottom: 0 }}>
-                    {d.canPriorityBid}
-                  </label>
-                  <AdminPlanFieldHint hints={hints} hintKey="hintCanPriorityBid" />
-                </div>
-                <div className="admin-form-group admin-plan-modal__check-row">
-                  <input
-                    type="checkbox"
-                    id="plan-can-pro-badge"
-                    checked={formData.planLimits.canProBadge ?? false}
-                    onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        planLimits: { ...formData.planLimits, canProBadge: e.target.checked },
-                      })
-                    }
-                  />
-                  <label className="admin-form-label" htmlFor="plan-can-pro-badge" style={{ marginBottom: 0 }}>
-                    {d.canProBadge}
-                  </label>
-                  <AdminPlanFieldHint hints={hints} hintKey="hintCanProBadge" />
-                </div>
-              </fieldset>
-            )}
+                  {showProviderLimits && (
+                    <fieldset className="admin-plan-modal__fieldset">
+                      <legend className="admin-plan-modal__fieldset-legend">
+                        {d.limitsSectionProviders}
+                      </legend>
+                      <div className="admin-form-group">
+                        <label className="admin-form-label admin-form-label--inline-hint">
+                          <span>{d.maxServices}</span>
+                          <AdminPlanFieldHint hints={hints} hintKey="hintMaxServices" />
+                        </label>
+                        <input
+                          className="admin-form-input"
+                          type="number"
+                          min={0}
+                          placeholder="Unlimited"
+                          value={formData.planLimits.maxServices ?? ''}
+                          onChange={(e) =>
+                            setFormData({
+                              ...formData,
+                              planLimits: {
+                                ...formData.planLimits,
+                                maxServices:
+                                  e.target.value === '' ? null : parseInt(e.target.value, 10),
+                              },
+                            })
+                          }
+                        />
+                      </div>
+                      <div className="admin-form-group">
+                        <label className="admin-form-label admin-form-label--inline-hint">
+                          <span>{d.maxActiveBids}</span>
+                          <AdminPlanFieldHint hints={hints} hintKey="hintMaxActiveBids" />
+                        </label>
+                        <input
+                          className="admin-form-input"
+                          type="number"
+                          min={0}
+                          placeholder="Unlimited"
+                          value={formData.planLimits.maxActiveBids ?? ''}
+                          onChange={(e) =>
+                            setFormData({
+                              ...formData,
+                              planLimits: {
+                                ...formData.planLimits,
+                                maxActiveBids:
+                                  e.target.value === '' ? null : parseInt(e.target.value, 10),
+                              },
+                            })
+                          }
+                        />
+                      </div>
+                      <div className="admin-form-group admin-plan-modal__check-row">
+                        <input
+                          type="checkbox"
+                          id="plan-can-priority-listing"
+                          checked={formData.planLimits.canPriorityListing ?? false}
+                          onChange={(e) =>
+                            setFormData({
+                              ...formData,
+                              planLimits: {
+                                ...formData.planLimits,
+                                canPriorityListing: e.target.checked,
+                              },
+                            })
+                          }
+                        />
+                        <label
+                          className="admin-form-label"
+                          htmlFor="plan-can-priority-listing"
+                          style={{ marginBottom: 0 }}
+                        >
+                          {d.canPriorityListing}
+                        </label>
+                        <AdminPlanFieldHint hints={hints} hintKey="hintCanPriorityListing" />
+                      </div>
+                      <div className="admin-form-group admin-plan-modal__check-row">
+                        <input
+                          type="checkbox"
+                          id="plan-can-priority-bid"
+                          checked={formData.planLimits.canPriorityBid ?? false}
+                          onChange={(e) =>
+                            setFormData({
+                              ...formData,
+                              planLimits: {
+                                ...formData.planLimits,
+                                canPriorityBid: e.target.checked,
+                              },
+                            })
+                          }
+                        />
+                        <label
+                          className="admin-form-label"
+                          htmlFor="plan-can-priority-bid"
+                          style={{ marginBottom: 0 }}
+                        >
+                          {d.canPriorityBid}
+                        </label>
+                        <AdminPlanFieldHint hints={hints} hintKey="hintCanPriorityBid" />
+                      </div>
+                      <div className="admin-form-group admin-plan-modal__check-row">
+                        <input
+                          type="checkbox"
+                          id="plan-can-pro-badge"
+                          checked={formData.planLimits.canProBadge ?? false}
+                          onChange={(e) =>
+                            setFormData({
+                              ...formData,
+                              planLimits: { ...formData.planLimits, canProBadge: e.target.checked },
+                            })
+                          }
+                        />
+                        <label
+                          className="admin-form-label"
+                          htmlFor="plan-can-pro-badge"
+                          style={{ marginBottom: 0 }}
+                        >
+                          {d.canProBadge}
+                        </label>
+                        <AdminPlanFieldHint hints={hints} hintKey="hintCanProBadge" />
+                      </div>
+                    </fieldset>
+                  )}
 
-            {showBusinessLimits && (
-              <fieldset className="admin-plan-modal__fieldset">
-                <legend className="admin-plan-modal__fieldset-legend">{d.limitsSectionBusiness}</legend>
-                <div className="admin-form-group">
-                  <label className="admin-form-label admin-form-label--inline-hint">
-                    <span>{d.maxJobs}</span>
-                    <AdminPlanFieldHint hints={hints} hintKey="hintMaxJobs" />
-                  </label>
-                  <input
-                    className="admin-form-input"
-                    type="number"
-                    min={0}
-                    placeholder="Unlimited"
-                    value={formData.planLimits.maxJobs ?? ''}
-                    onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        planLimits: {
-                          ...formData.planLimits,
-                          maxJobs: e.target.value === '' ? null : parseInt(e.target.value, 10),
-                        },
-                      })
-                    }
-                  />
-                </div>
-                <div className="admin-form-group">
-                  <label className="admin-form-label admin-form-label--inline-hint">
-                    <span>{d.maxBusinessServices}</span>
-                    <AdminPlanFieldHint hints={hints} hintKey="hintMaxBusinessServices" />
-                  </label>
-                  <input
-                    className="admin-form-input"
-                    type="number"
-                    min={0}
-                    placeholder="Unlimited"
-                    value={formData.planLimits.maxBusinessServices ?? ''}
-                    onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        planLimits: {
-                          ...formData.planLimits,
-                          maxBusinessServices: e.target.value === '' ? null : parseInt(e.target.value, 10),
-                        },
-                      })
-                    }
-                  />
-                </div>
-                <div className="admin-form-group">
-                  <label className="admin-form-label admin-form-label--inline-hint">
-                    <span>{d.maxTeamSlots}</span>
-                    <AdminPlanFieldHint hints={hints} hintKey="hintMaxTeamSlots" />
-                  </label>
-                  <input
-                    className="admin-form-input"
-                    type="number"
-                    min={0}
-                    placeholder="Unlimited"
-                    value={formData.planLimits.maxTeamSlots ?? ''}
-                    onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        planLimits: {
-                          ...formData.planLimits,
-                          maxTeamSlots: e.target.value === '' ? null : parseInt(e.target.value, 10),
-                        },
-                      })
-                    }
-                  />
-                </div>
-                <div className="admin-form-group admin-plan-modal__check-row">
-                  <input
-                    type="checkbox"
-                    id="plan-can-business-featured"
-                    checked={formData.planLimits.canBusinessFeatured ?? false}
-                    onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        planLimits: { ...formData.planLimits, canBusinessFeatured: e.target.checked },
-                      })
-                    }
-                  />
-                  <label className="admin-form-label" htmlFor="plan-can-business-featured" style={{ marginBottom: 0 }}>
-                    {d.canBusinessFeatured}
-                  </label>
-                  <AdminPlanFieldHint hints={hints} hintKey="hintCanBusinessFeatured" />
-                </div>
-                <div className="admin-form-group admin-plan-modal__check-row">
-                  <input
-                    type="checkbox"
-                    id="plan-can-trusted-badge"
-                    checked={formData.planLimits.canTrustedBusinessBadge ?? false}
-                    onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        planLimits: { ...formData.planLimits, canTrustedBusinessBadge: e.target.checked },
-                      })
-                    }
-                  />
-                  <label className="admin-form-label" htmlFor="plan-can-trusted-badge" style={{ marginBottom: 0 }}>
-                    {d.canTrustedBusinessBadge}
-                  </label>
-                  <AdminPlanFieldHint hints={hints} hintKey="hintCanTrustedBusinessBadge" />
-                </div>
-              </fieldset>
-            )}
+                  {showBusinessLimits && (
+                    <fieldset className="admin-plan-modal__fieldset">
+                      <legend className="admin-plan-modal__fieldset-legend">
+                        {d.limitsSectionBusiness}
+                      </legend>
+                      <div className="admin-form-group">
+                        <label className="admin-form-label admin-form-label--inline-hint">
+                          <span>{d.maxJobs}</span>
+                          <AdminPlanFieldHint hints={hints} hintKey="hintMaxJobs" />
+                        </label>
+                        <input
+                          className="admin-form-input"
+                          type="number"
+                          min={0}
+                          placeholder="Unlimited"
+                          value={formData.planLimits.maxJobs ?? ''}
+                          onChange={(e) =>
+                            setFormData({
+                              ...formData,
+                              planLimits: {
+                                ...formData.planLimits,
+                                maxJobs:
+                                  e.target.value === '' ? null : parseInt(e.target.value, 10),
+                              },
+                            })
+                          }
+                        />
+                      </div>
+                      <div className="admin-form-group">
+                        <label className="admin-form-label admin-form-label--inline-hint">
+                          <span>{d.maxBusinessServices}</span>
+                          <AdminPlanFieldHint hints={hints} hintKey="hintMaxBusinessServices" />
+                        </label>
+                        <input
+                          className="admin-form-input"
+                          type="number"
+                          min={0}
+                          placeholder="Unlimited"
+                          value={formData.planLimits.maxBusinessServices ?? ''}
+                          onChange={(e) =>
+                            setFormData({
+                              ...formData,
+                              planLimits: {
+                                ...formData.planLimits,
+                                maxBusinessServices:
+                                  e.target.value === '' ? null : parseInt(e.target.value, 10),
+                              },
+                            })
+                          }
+                        />
+                      </div>
+                      <div className="admin-form-group">
+                        <label className="admin-form-label admin-form-label--inline-hint">
+                          <span>{d.maxTeamSlots}</span>
+                          <AdminPlanFieldHint hints={hints} hintKey="hintMaxTeamSlots" />
+                        </label>
+                        <input
+                          className="admin-form-input"
+                          type="number"
+                          min={0}
+                          placeholder="Unlimited"
+                          value={formData.planLimits.maxTeamSlots ?? ''}
+                          onChange={(e) =>
+                            setFormData({
+                              ...formData,
+                              planLimits: {
+                                ...formData.planLimits,
+                                maxTeamSlots:
+                                  e.target.value === '' ? null : parseInt(e.target.value, 10),
+                              },
+                            })
+                          }
+                        />
+                      </div>
+                      <div className="admin-form-group admin-plan-modal__check-row">
+                        <input
+                          type="checkbox"
+                          id="plan-can-business-featured"
+                          checked={formData.planLimits.canBusinessFeatured ?? false}
+                          onChange={(e) =>
+                            setFormData({
+                              ...formData,
+                              planLimits: {
+                                ...formData.planLimits,
+                                canBusinessFeatured: e.target.checked,
+                              },
+                            })
+                          }
+                        />
+                        <label
+                          className="admin-form-label"
+                          htmlFor="plan-can-business-featured"
+                          style={{ marginBottom: 0 }}
+                        >
+                          {d.canBusinessFeatured}
+                        </label>
+                        <AdminPlanFieldHint hints={hints} hintKey="hintCanBusinessFeatured" />
+                      </div>
+                      <div className="admin-form-group admin-plan-modal__check-row">
+                        <input
+                          type="checkbox"
+                          id="plan-can-trusted-badge"
+                          checked={formData.planLimits.canTrustedBusinessBadge ?? false}
+                          onChange={(e) =>
+                            setFormData({
+                              ...formData,
+                              planLimits: {
+                                ...formData.planLimits,
+                                canTrustedBusinessBadge: e.target.checked,
+                              },
+                            })
+                          }
+                        />
+                        <label
+                          className="admin-form-label"
+                          htmlFor="plan-can-trusted-badge"
+                          style={{ marginBottom: 0 }}
+                        >
+                          {d.canTrustedBusinessBadge}
+                        </label>
+                        <AdminPlanFieldHint hints={hints} hintKey="hintCanTrustedBusinessBadge" />
+                      </div>
+                    </fieldset>
+                  )}
                 </section>
               )}
-
             </div>
 
             <footer className="admin-plan-modal__footer">

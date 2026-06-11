@@ -292,7 +292,11 @@ export class ProfilesService {
 
   async updateCustomerProfile(
     userId: string,
-    input: { city?: string | null | undefined; country?: string | null | undefined; contactPreference?: string | null | undefined },
+    input: {
+      city?: string | null | undefined;
+      country?: string | null | undefined;
+      contactPreference?: string | null | undefined;
+    },
   ): Promise<CustomerProfile> {
     const updated = await this.repo.updateCustomerProfile(userId, input);
     if (!updated) {
@@ -472,9 +476,7 @@ export class ProfilesService {
           'Your identity has already been verified. A new submission is only allowed after a rejection.',
       });
     }
-    if (
-      existingDocs.some((d) => d.status === 'pending' || d.status === 'under_review')
-    ) {
+    if (existingDocs.some((d) => d.status === 'pending' || d.status === 'under_review')) {
       throw new HttpError({
         statusCode: 409,
         code: 'IDENTITY_SUBMISSION_ALREADY_PENDING',

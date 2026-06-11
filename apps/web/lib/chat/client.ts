@@ -1,3 +1,4 @@
+import { fetchWithAuthRetry } from '@/lib/auth/fetch-with-auth-retry';
 import { getApiBaseUrl } from '@/lib/env';
 
 export type Conversation = {
@@ -44,14 +45,18 @@ export type SendMessagePayload = {
 };
 
 async function apiReq<T>(path: string, accessToken: string, opts?: RequestInit): Promise<T> {
-  const res = await fetch(`${getApiBaseUrl()}${path}`, {
-    ...opts,
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${accessToken}`,
-      ...(opts?.headers ?? {}),
+  const res = await fetchWithAuthRetry(
+    `${getApiBaseUrl()}${path}`,
+    {
+      ...opts,
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${accessToken}`,
+        ...(opts?.headers ?? {}),
+      },
     },
-  });
+    accessToken,
+  );
   if (!res.ok) throw new Error('Request failed');
   const json = (await res.json()) as { data: T };
   return json.data;

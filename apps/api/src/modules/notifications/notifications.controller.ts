@@ -15,7 +15,11 @@ const notificationsService = new NotificationsService();
 
 function requireUserId(req: Request): string {
   if (!req.user?.id) {
-    throw new HttpError({ statusCode: 401, code: 'UNAUTHORIZED', message: 'Authentication required.' });
+    throw new HttpError({
+      statusCode: 401,
+      code: 'UNAUTHORIZED',
+      message: 'Authentication required.',
+    });
   }
   return req.user.id;
 }
@@ -34,7 +38,10 @@ export const getNotifications = asyncHandler(async (req, res) => {
 export const getUnreadCount = asyncHandler(async (req, res) => {
   const userId = requireUserId(req);
   const count = await notificationsService.getUnreadCount(userId);
-  const response: ApiSuccessBody<{ unreadCount: number }> = { ok: true, data: { unreadCount: count } };
+  const response: ApiSuccessBody<{ unreadCount: number }> = {
+    ok: true,
+    data: { unreadCount: count },
+  };
   res.json(response);
 });
 
@@ -42,7 +49,11 @@ export const markAsRead = asyncHandler(async (req, res) => {
   const userId = requireUserId(req);
   const id = req.params.id;
   if (!id) {
-    throw new HttpError({ statusCode: 400, code: 'BAD_REQUEST', message: 'Notification id required.' });
+    throw new HttpError({
+      statusCode: 400,
+      code: 'BAD_REQUEST',
+      message: 'Notification id required.',
+    });
   }
   const updated = await notificationsService.markAsRead(id, userId);
   const response: ApiSuccessBody<{ updated: boolean }> = { ok: true, data: { updated } };

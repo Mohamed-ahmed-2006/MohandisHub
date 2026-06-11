@@ -46,13 +46,7 @@ import {
   type WithdrawalRequestRow,
 } from './wallet.repository.js';
 
-const FAILED_DEPOSIT_STATUSES = new Set([
-  'failed',
-  'expired',
-  'cancelled',
-  'canceled',
-  'refunded',
-]);
+const FAILED_DEPOSIT_STATUSES = new Set(['failed', 'expired', 'cancelled', 'canceled', 'refunded']);
 const MIN_CRYPTO_DEPOSIT_PROVIDER_USD = 10;
 
 type CreateDepositCheckoutInput = {
@@ -193,7 +187,9 @@ export class WalletService {
     }
 
     const requestedCurrencyFrom = (input.currencyFrom || 'EGP').toUpperCase();
-    const currencyTo = (input.currencyTo || env.NOWPAYMENTS_WITHDRAWAL_DEFAULT_CURRENCY).toUpperCase();
+    const currencyTo = (
+      input.currencyTo || env.NOWPAYMENTS_WITHDRAWAL_DEFAULT_CURRENCY
+    ).toUpperCase();
     let amountForProvider = amount;
     let currencyFromForProvider = requestedCurrencyFrom;
     if (requestedCurrencyFrom === 'EGP') {
@@ -242,7 +238,10 @@ export class WalletService {
       });
     }
 
-    if (input.method === 'crypto' && !isPaymentMethodEnabled(status.paymentMethodsEnabled, 'deposit_crypto')) {
+    if (
+      input.method === 'crypto' &&
+      !isPaymentMethodEnabled(status.paymentMethodsEnabled, 'deposit_crypto')
+    ) {
       throw new HttpError({
         statusCode: 503,
         code: 'CRYPTO_DEPOSITS_DISABLED',
@@ -252,7 +251,8 @@ export class WalletService {
 
     if (
       input.method === 'card' &&
-      (!isPaymentMethodEnabled(status.paymentMethodsEnabled, 'deposit_card') || !env.NOWPAYMENTS_FIAT_ENABLED)
+      (!isPaymentMethodEnabled(status.paymentMethodsEnabled, 'deposit_card') ||
+        !env.NOWPAYMENTS_FIAT_ENABLED)
     ) {
       throw new HttpError({
         statusCode: 503,
@@ -482,42 +482,132 @@ export class WalletService {
     try {
       parsed = JSON.parse(rawBody);
     } catch {
-      throw new HttpError({ statusCode: 400, code: 'INVALID_WEBHOOK', message: 'Invalid Paymob payload.' });
+      throw new HttpError({
+        statusCode: 400,
+        code: 'INVALID_WEBHOOK',
+        message: 'Invalid Paymob payload.',
+      });
     }
     const payload = (parsed ?? {}) as Record<string, unknown>;
     const transaction = (payload.obj ?? {}) as Record<string, unknown>;
 
     if (!verifyPaymobHmac(transaction, hmac)) {
-      throw new HttpError({ statusCode: 401, code: 'INVALID_SIGNATURE', message: 'Invalid Paymob signature.' });
+      throw new HttpError({
+        statusCode: 401,
+        code: 'INVALID_SIGNATURE',
+        message: 'Invalid Paymob signature.',
+      });
     }
 
-    const order = (transaction.order ?? {}) as Record<string, unknown>;
+    const paymobOrderId = this.toStringOrNull(this.readPath(transaction, 'order.id'));
     const orderId =
-      (typeof order.merchant_order_id === 'string' && order.merchant_order_id) || null;
+      this.toStringOrNull(this.readPath(transaction, 'order.merchant_order_id')) ||
+      this.toStringOrNull(transaction.merchant_order_id) ||
+      this.toStringOrNull(transaction.special_reference) ||
+      this.toStringOrNull(payload.merchant_order_id) ||
+      this.toStringOrNull(payload.special_reference);
     if (!orderId) return;
 
-    const success = transaction.success === true;
     const transactionId =
       typeof transaction.id === 'string' || typeof transaction.id === 'number'
         ? String(transaction.id)
         : null;
+    const deposit = await this.repo.findDepositRequestByOrderId(orderId);
+    if (!deposit || deposit.provider !== 'paymob') return;
+
+    const amountCents = this.toNumberOrNull(transaction.amount_cents);
+    const paidAmountEgp = amountCents != null ? Math.round(amountCents) / 100 : null;
+    const expectedAmountEgp = parseFloat(deposit.amount);
+    const currency = this.toStringOrNull(transaction.currency)?.toUpperCase() ?? null;
+    const success =
+      transaction.success === true &&
+      transaction.pending !== true &&
+      transaction.error_occured !== true;
+    const reconciliation = {
+      paymob_order_id: paymobOrderId,
+      paymob_transaction_id: transactionId,
+      expected_amount_egp: expectedAmountEgp,
+      paid_amount_egp: paidAmountEgp,
+      currency,
+      success,
+      settled_at: new Date().toISOString(),
+    };
 
     if (!success) {
-      const dep = await this.repo.findDepositRequestByOrderId(orderId);
-      if (dep && dep.status === 'pending') {
+      await this.repo.updateDepositProviderStateByOrderId({
+        orderId,
+        providerStatus: 'failed',
+        providerPaymentId: transactionId,
+        paymobOrderId,
+        paymobTransactionId: transactionId,
+        providerPayload: { paymob: transaction, reconciliation },
+      });
+      if (deposit.status === 'pending') {
         await this.repo.updateDepositRequestStatus(orderId, 'failed');
       }
       return;
     }
 
+    if (currency !== 'EGP' || paidAmountEgp == null || !Number.isFinite(paidAmountEgp)) {
+      await this.repo.updateDepositProviderStateByOrderId({
+        orderId,
+        providerStatus: 'invalid_amount',
+        providerPaymentId: transactionId,
+        paymobOrderId,
+        paymobTransactionId: transactionId,
+        providerPayload: {
+          paymob: transaction,
+          reconciliation,
+          error: 'invalid_currency_or_amount',
+        },
+      });
+      if (deposit.status === 'pending') {
+        await this.repo.updateDepositRequestStatus(orderId, 'failed');
+      }
+      return;
+    }
+
+    if (paidAmountEgp + 0.01 < expectedAmountEgp) {
+      await this.repo.updateDepositProviderStateByOrderId({
+        orderId,
+        providerStatus: 'underpaid',
+        providerPaymentId: transactionId,
+        paymobOrderId,
+        paymobTransactionId: transactionId,
+        providerPayload: { paymob: transaction, reconciliation, error: 'underpaid' },
+      });
+      if (deposit.status === 'pending') {
+        await this.repo.updateDepositRequestStatus(orderId, 'failed');
+      }
+      return;
+    }
+
+    const creditAmountEgp = Math.min(paidAmountEgp, expectedAmountEgp);
+    const overpaymentEgp = Math.max(0, paidAmountEgp - expectedAmountEgp);
+    const rateSnapshot = {
+      mode: 'paymob_deposit_settlement',
+      ...reconciliation,
+      credited_amount_egp: creditAmountEgp,
+      overpayment_egp: overpaymentEgp,
+    };
+
     await this.repo.creditDepositIfPendingByOrderId({
       orderId,
       providerStatus: 'finished',
       referenceType: 'paymob',
-      referenceId: null,
+      referenceId: transactionId,
       description: 'Wallet deposit via Paymob',
       providerPaymentId: transactionId,
-      providerPayload: { paymob_transaction_id: transactionId, paymob: transaction },
+      paymobOrderId,
+      paymobTransactionId: transactionId,
+      providerPayload: {
+        paymob_transaction_id: transactionId,
+        paymob_order_id: paymobOrderId,
+        paymob: transaction,
+        reconciliation,
+      },
+      creditAmountEgp,
+      rateSnapshot,
     });
   }
 
@@ -539,15 +629,17 @@ export class WalletService {
     }
 
     const payload = JSON.parse(rawBody) as Record<string, unknown>;
-    const providerStatus =
-      (this.toStringOrNull(payload.payment_status) ||
-        this.toStringOrNull(payload.status) ||
-        this.toStringOrNull(payload.pay_status) ||
-        'unknown')
-        .toLowerCase()
-        .trim();
+    const providerStatus = (
+      this.toStringOrNull(payload.payment_status) ||
+      this.toStringOrNull(payload.status) ||
+      this.toStringOrNull(payload.pay_status) ||
+      'unknown'
+    )
+      .toLowerCase()
+      .trim();
 
-    const providerPaymentId = this.toStringOrNull(payload.payment_id) || this.toStringOrNull(payload.id);
+    const providerPaymentId =
+      this.toStringOrNull(payload.payment_id) || this.toStringOrNull(payload.id);
     const providerInvoiceId = this.toStringOrNull(payload.invoice_id);
     const providerPurchaseId = this.toStringOrNull(payload.purchase_id);
     const providerParentPaymentId = this.toStringOrNull(payload.parent_payment_id);
@@ -566,6 +658,7 @@ export class WalletService {
 
     if (providerStatus === 'finished' && !providerParentPaymentId) {
       const dep = await this.repo.findDepositRequestByOrderId(orderId);
+      if (!dep) return;
       const invoiceAmount = dep ? parseFloat(dep.amount) : 0;
       const invoiceCurrency = dep?.currency ?? 'EGP';
       const { egp, snapshot } = await this.fx.computeDepositCreditEgp({
@@ -573,6 +666,46 @@ export class WalletService {
         invoicePriceAmount: invoiceAmount,
         invoicePriceCurrency: invoiceCurrency,
       });
+      const requestedAmount = this.toNumberOrNull(dep.provider_payload?.requested_price_amount);
+      const requestedCurrency =
+        typeof dep.provider_payload?.requested_price_currency === 'string'
+          ? dep.provider_payload.requested_price_currency.toUpperCase()
+          : null;
+      const requestedCreditEgp =
+        requestedCurrency === 'EGP' && requestedAmount != null && requestedAmount > 0
+          ? requestedAmount
+          : egp;
+      if (egp + 0.01 < requestedCreditEgp) {
+        await this.repo.updateDepositProviderStateByOrderId({
+          orderId,
+          providerStatus: 'underpaid',
+          providerPaymentId,
+          providerInvoiceId,
+          providerPurchaseId,
+          providerParentPaymentId,
+          providerPayload: {
+            nowpayments: providerPayload,
+            settlement: {
+              ...snapshot,
+              requested_credit_egp: requestedCreditEgp,
+              computed_credit_egp: egp,
+              underpayment_egp: requestedCreditEgp - egp,
+            },
+          },
+        });
+        if (dep.status === 'pending') {
+          await this.repo.updateDepositRequestStatus(orderId, 'failed');
+        }
+        return;
+      }
+      const cappedEgp = Math.min(egp, requestedCreditEgp);
+      const settlementSnapshot = {
+        ...snapshot,
+        requested_credit_egp: requestedCreditEgp,
+        computed_credit_egp: egp,
+        credited_egp: cappedEgp,
+        overpayment_egp: Math.max(0, egp - cappedEgp),
+      };
       const { credited, row: depRow } = await this.repo.creditDepositIfPendingByOrderId({
         orderId,
         providerStatus,
@@ -583,9 +716,9 @@ export class WalletService {
         providerInvoiceId,
         providerPurchaseId,
         providerParentPaymentId,
-        providerPayload,
-        creditAmountEgp: egp,
-        rateSnapshot: snapshot,
+        providerPayload: { nowpayments: providerPayload, settlement: settlementSnapshot },
+        creditAmountEgp: cappedEgp,
+        rateSnapshot: settlementSnapshot,
       });
       if (credited && depRow) {
         const amt =
@@ -685,21 +818,30 @@ export class WalletService {
       });
     }
 
-    if (input.method === 'instapay' && !isPaymentMethodEnabled(status.paymentMethodsEnabled, 'withdrawal_instapay')) {
+    if (
+      input.method === 'instapay' &&
+      !isPaymentMethodEnabled(status.paymentMethodsEnabled, 'withdrawal_instapay')
+    ) {
       throw new HttpError({
         statusCode: 503,
         code: 'INSTAPAY_WITHDRAWALS_DISABLED',
         message: 'InstaPay withdrawals are not available.',
       });
     }
-    if (input.method === 'crypto' && !isPaymentMethodEnabled(status.paymentMethodsEnabled, 'withdrawal_crypto')) {
+    if (
+      input.method === 'crypto' &&
+      !isPaymentMethodEnabled(status.paymentMethodsEnabled, 'withdrawal_crypto')
+    ) {
       throw new HttpError({
         statusCode: 503,
         code: 'CRYPTO_WITHDRAWALS_DISABLED',
         message: 'Crypto withdrawals are not available.',
       });
     }
-    if (input.method === 'paymob' && !isPaymentMethodEnabled(status.paymentMethodsEnabled, 'withdrawal_paymob')) {
+    if (
+      input.method === 'paymob' &&
+      !isPaymentMethodEnabled(status.paymentMethodsEnabled, 'withdrawal_paymob')
+    ) {
       throw new HttpError({
         statusCode: 503,
         code: 'PAYMOB_WITHDRAWALS_DISABLED',
@@ -1082,7 +1224,11 @@ export class WalletService {
   ): Promise<ManualDepositRequest> {
     const dep = await this.repo.findDepositRequestById(depositId);
     if (!dep) {
-      throw new HttpError({ statusCode: 404, code: 'NOT_FOUND', message: 'Deposit request not found.' });
+      throw new HttpError({
+        statusCode: 404,
+        code: 'NOT_FOUND',
+        message: 'Deposit request not found.',
+      });
     }
     const credit =
       creditedAmountEgp != null && Number.isFinite(creditedAmountEgp)
@@ -1171,6 +1317,36 @@ export class WalletService {
     return mappedW;
   }
 
+  async completePaymobWithdrawalAdmin(
+    withdrawalId: string,
+    adminId: string,
+    input: { providerReference?: string | null; note?: string | null },
+  ): Promise<WithdrawalRequest> {
+    const row = await this.repo.completePaymobWithdrawalByAdmin({
+      withdrawalId,
+      adminId,
+      providerReference: input.providerReference ?? null,
+      note: input.note ?? null,
+    });
+    if (!row) {
+      throw new HttpError({
+        statusCode: 400,
+        code: 'WITHDRAWAL_NOT_COMPLETABLE',
+        message: 'Paymob withdrawal cannot be completed.',
+      });
+    }
+    const mapped = this.toWithdrawalRequest(row);
+    void this.notificationsService
+      .createForUser(row.user_id, {
+        type: 'wallet_withdrawal_completed',
+        title: 'Withdrawal completed',
+        message: `Your Paymob withdrawal of ${mapped.sourceAmountEgp.toFixed(2)} EGP was marked completed.`,
+        payload: { withdrawalId: row.id },
+      })
+      .catch(() => {});
+    return mapped;
+  }
+
   async rejectInstapayWithdrawalAdmin(
     withdrawalId: string,
     adminId: string,
@@ -1247,8 +1423,10 @@ export class WalletService {
       });
     }
 
-    if ((!env.NOWPAYMENTS_MANUAL_PAYOUT_VERIFY || !row.verification_required) &&
-      (row.status === 'processing' || row.status === 'finished')) {
+    if (
+      (!env.NOWPAYMENTS_MANUAL_PAYOUT_VERIFY || !row.verification_required) &&
+      (row.status === 'processing' || row.status === 'finished')
+    ) {
       return this.toWithdrawalRequest(row);
     }
 
@@ -1490,8 +1668,7 @@ export class WalletService {
         this.toStringOrNull(firstWithdrawal?.batch_withdrawal_id) ||
         this.toStringOrNull(payoutResult.id);
       const providerWithdrawalId =
-        this.toStringOrNull(payoutResult.withdrawal_id) ||
-        this.toStringOrNull(firstWithdrawal?.id);
+        this.toStringOrNull(payoutResult.withdrawal_id) || this.toStringOrNull(firstWithdrawal?.id);
       const providerStatus =
         this.toStringOrNull(firstWithdrawal?.status) || this.toStringOrNull(payoutResult.status);
 
@@ -1544,7 +1721,10 @@ export class WalletService {
       });
     }
 
-    const auth = await authenticateNowPayments(env.NOWPAYMENTS_AUTH_EMAIL, env.NOWPAYMENTS_AUTH_PASSWORD);
+    const auth = await authenticateNowPayments(
+      env.NOWPAYMENTS_AUTH_EMAIL,
+      env.NOWPAYMENTS_AUTH_PASSWORD,
+    );
     this.payoutAuthCache = {
       token: auth.token,
       expiresAt: now + 10 * 60 * 1000,
@@ -1577,9 +1757,7 @@ export class WalletService {
         .map((origin) => origin.trim())
         .filter(Boolean)
         .map((origin) => new URL(origin).origin);
-      return allowedOrigins.includes(candidate.origin)
-        ? returnUrl.replace(/\/$/, '')
-        : fallback;
+      return allowedOrigins.includes(candidate.origin) ? returnUrl.replace(/\/$/, '') : fallback;
     } catch {
       return fallback;
     }
@@ -1610,6 +1788,22 @@ export class WalletService {
       return String(value);
     }
     return null;
+  }
+
+  private toNumberOrNull(value: unknown): number | null {
+    if (typeof value === 'number' && Number.isFinite(value)) return value;
+    if (typeof value === 'string' && value.trim().length > 0) {
+      const parsed = Number(value);
+      return Number.isFinite(parsed) ? parsed : null;
+    }
+    return null;
+  }
+
+  private readPath(obj: Record<string, unknown>, path: string): unknown {
+    return path.split('.').reduce<unknown>((acc, key) => {
+      if (acc && typeof acc === 'object') return (acc as Record<string, unknown>)[key];
+      return undefined;
+    }, obj);
   }
 
   private toWallet(row: WalletRow): Wallet {

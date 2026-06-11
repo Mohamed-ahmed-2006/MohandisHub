@@ -30,7 +30,13 @@ import { SettingsService } from '../settings/settings.service.js';
 import { WalletRepository } from '../wallet/wallet.repository.js';
 
 import { JobsRepository } from './jobs.repository.js';
-import type { JobRow, JobApplicationRow, JobMilestoneRow, JobSubmissionRow, JobApplicationMessageRow } from './jobs.repository.js';
+import type {
+  JobRow,
+  JobApplicationRow,
+  JobMilestoneRow,
+  JobSubmissionRow,
+  JobApplicationMessageRow,
+} from './jobs.repository.js';
 
 const toNumber = (value: string | number | null | undefined): number => {
   if (value == null) return 0;
@@ -96,7 +102,11 @@ export class JobsService {
       const q = planLimits.usageQuotas.new_jobs_per_period;
       if (q) {
         const { start } = await this.usageQuotaService.resolvePeriodBounds(businessId, q.period);
-        const used = await this.usageQuotaService.getCountForWindow(businessId, 'new_jobs_per_period', start);
+        const used = await this.usageQuotaService.getCountForWindow(
+          businessId,
+          'new_jobs_per_period',
+          start,
+        );
         if (used >= q.maxPerPeriod) {
           throw new HttpError({
             statusCode: 403,
@@ -131,7 +141,7 @@ export class JobsService {
   async listOpenJobs(page: number = 1, limit: number = 20) {
     const { rows, total } = await this.repo.listOpenJobs(page, limit);
     return {
-      items: rows.map(r => this.toJob(r)),
+      items: rows.map((r) => this.toJob(r)),
       total,
       page,
       limit,
@@ -142,7 +152,7 @@ export class JobsService {
   async listBusinessJobs(businessId: string, page: number = 1, limit: number = 20) {
     const { rows, total } = await this.repo.listBusinessJobs(businessId, page, limit);
     return {
-      items: rows.map(r => this.toJob(r)),
+      items: rows.map((r) => this.toJob(r)),
       total,
       page,
       limit,
@@ -153,7 +163,11 @@ export class JobsService {
   async applyForJob(jobId: string, expertId: string, input: ApplyJobDto): Promise<JobApplication> {
     const job = await this.repo.getJobById(jobId);
     if (!job || job.status !== 'open') {
-      throw new HttpError({ statusCode: 400, code: 'JOB_NOT_OPEN', message: 'Job is not open or does not exist.' });
+      throw new HttpError({
+        statusCode: 400,
+        code: 'JOB_NOT_OPEN',
+        message: 'Job is not open or does not exist.',
+      });
     }
     if (input.submissionType === 'cv_upload' && !input.cvFileUrl?.trim()) {
       throw new HttpError({
@@ -206,10 +220,7 @@ export class JobsService {
         ...(profileSnapshot != null ? { profileSnapshot } : {}),
         ...(input.cvFileUrl?.trim() ? { cvFileUrl: input.cvFileUrl.trim() } : {}),
       };
-      const app = await this.repo.applyForJob(
-        applicationInput,
-        client,
-      );
+      const app = await this.repo.applyForJob(applicationInput, client);
 
       if (applicationFeeAmount > 0) {
         const businessWallet = await this.walletRepo.findByUserId(job.business_id);
@@ -297,15 +308,19 @@ export class JobsService {
   async getJobApplications(jobId: string, businessId: string): Promise<JobApplication[]> {
     const job = await this.repo.getJobById(jobId);
     if (!job || job.business_id !== businessId) {
-      throw new HttpError({ statusCode: 403, code: 'FORBIDDEN', message: 'You do not own this job.' });
+      throw new HttpError({
+        statusCode: 403,
+        code: 'FORBIDDEN',
+        message: 'You do not own this job.',
+      });
     }
     const apps = await this.repo.listJobApplications(jobId);
-    return apps.map(a => this.toApplication(a));
+    return apps.map((a) => this.toApplication(a));
   }
 
   async listExpertApplications(expertId: string): Promise<JobApplication[]> {
     const apps = await this.repo.listExpertApplications(expertId);
-    return apps.map(a => this.toApplication(a));
+    return apps.map((a) => this.toApplication(a));
   }
 
   async updateApplicationStatus(
@@ -339,16 +354,26 @@ export class JobsService {
 
       const app = await this.findApplicationForUpdate(client, applicationId);
       if (!app) {
-        throw new HttpError({ statusCode: 404, code: 'NOT_FOUND', message: 'Application not found' });
+        throw new HttpError({
+          statusCode: 404,
+          code: 'NOT_FOUND',
+          message: 'Application not found',
+        });
       }
       job = await this.findJobForUpdate(client, app.job_id);
       if (!job || job.business_id !== businessId) {
-        throw new HttpError({ statusCode: 403, code: 'FORBIDDEN', message: 'You do not own this job' });
+        throw new HttpError({
+          statusCode: 403,
+          code: 'FORBIDDEN',
+          message: 'You do not own this job',
+        });
       }
 
       if (status === 'accepted') {
         const jobApplications = await this.listApplicationsByJobForUpdate(client, app.job_id);
-        const currentAccepted = jobApplications.find((row) => row.status === 'accepted' && row.id !== app.id);
+        const currentAccepted = jobApplications.find(
+          (row) => row.status === 'accepted' && row.id !== app.id,
+        );
 
         if (currentAccepted) {
           const started = await this.hasApplicationWorkStarted(client, currentAccepted.id);
@@ -426,7 +451,11 @@ export class JobsService {
     }
 
     if (!updated || !job) {
-      throw new HttpError({ statusCode: 500, code: 'INTERNAL_ERROR', message: 'Application update failed.' });
+      throw new HttpError({
+        statusCode: 500,
+        code: 'INTERNAL_ERROR',
+        message: 'Application update failed.',
+      });
     }
 
     await this.notificationsService.createForUser(updated.expert_id, {
@@ -446,7 +475,11 @@ export class JobsService {
   ): Promise<ReservationSlot> {
     const job = await this.repo.getJobById(jobId);
     if (!job || job.business_id !== businessId) {
-      throw new HttpError({ statusCode: 403, code: 'FORBIDDEN', message: 'You do not own this job.' });
+      throw new HttpError({
+        statusCode: 403,
+        code: 'FORBIDDEN',
+        message: 'You do not own this job.',
+      });
     }
     if (!job.interview_enabled) {
       throw new HttpError({
@@ -468,7 +501,10 @@ export class JobsService {
       return mapInterviewSlot(slot);
     } catch (error) {
       const pgError = error as { code?: string; constraint?: string };
-      if (pgError?.code === '23P01' || pgError?.constraint === 'reservation_slots_no_overlap_active') {
+      if (
+        pgError?.code === '23P01' ||
+        pgError?.constraint === 'reservation_slots_no_overlap_active'
+      ) {
         throw new HttpError({
           statusCode: 409,
           code: 'SLOT_OVERLAP',
@@ -486,7 +522,11 @@ export class JobsService {
   ): Promise<{ items: ReservationSlot[] }> {
     const job = await this.repo.getJobById(jobId);
     if (!job || job.business_id !== businessId) {
-      throw new HttpError({ statusCode: 403, code: 'FORBIDDEN', message: 'You do not own this job.' });
+      throw new HttpError({
+        statusCode: 403,
+        code: 'FORBIDDEN',
+        message: 'You do not own this job.',
+      });
     }
     const rows = await this.reservationsRepo.listSlots(businessId, range.from, range.to, false, {
       purpose: 'job_interview',
@@ -527,7 +567,10 @@ export class JobsService {
       return mapInterviewSlot(updated);
     } catch (error) {
       const pgError = error as { code?: string; constraint?: string };
-      if (pgError?.code === '23P01' || pgError?.constraint === 'reservation_slots_no_overlap_active') {
+      if (
+        pgError?.code === '23P01' ||
+        pgError?.constraint === 'reservation_slots_no_overlap_active'
+      ) {
         throw new HttpError({
           statusCode: 409,
           code: 'SLOT_OVERLAP',
@@ -565,9 +608,18 @@ export class JobsService {
     const isBusiness = job.business_id === userId;
     const isExpert = app.expert_id === userId;
     if (!isBusiness && !isExpert) {
-      throw new HttpError({ statusCode: 403, code: 'FORBIDDEN', message: 'You are not authorized.' });
+      throw new HttpError({
+        statusCode: 403,
+        code: 'FORBIDDEN',
+        message: 'You are not authorized.',
+      });
     }
-    if (isExpert && !['interview_invited', 'interview_booked', 'interview_completed', 'accepted'].includes(app.status)) {
+    if (
+      isExpert &&
+      !['interview_invited', 'interview_booked', 'interview_completed', 'accepted'].includes(
+        app.status,
+      )
+    ) {
       throw new HttpError({
         statusCode: 400,
         code: 'INTERVIEW_NOT_AVAILABLE',
@@ -592,11 +644,11 @@ export class JobsService {
   ): Promise<Reservation> {
     const app = await this.repo.getApplicationById(applicationId);
     if (!app || app.expert_id !== expertId) {
-        throw new HttpError({
-          statusCode: 403,
-          code: 'FORBIDDEN',
-          message: 'You are not the applicant for this application',
-        });
+      throw new HttpError({
+        statusCode: 403,
+        code: 'FORBIDDEN',
+        message: 'You are not the applicant for this application',
+      });
     }
     if (app.status !== 'interview_invited') {
       throw new HttpError({
@@ -637,16 +689,24 @@ export class JobsService {
     return reservation;
   }
 
-  async createMilestone(applicationId: string, businessId: string, input: CreateMilestoneDto): Promise<JobMilestone> {
+  async createMilestone(
+    applicationId: string,
+    businessId: string,
+    input: CreateMilestoneDto,
+  ): Promise<JobMilestone> {
     const app = await this.repo.getApplicationById(applicationId);
     if (!app) {
       throw new HttpError({ statusCode: 404, code: 'NOT_FOUND', message: 'Application not found' });
     }
     const job = await this.repo.getJobById(app.job_id);
     if (!job || job.business_id !== businessId) {
-      throw new HttpError({ statusCode: 403, code: 'FORBIDDEN', message: 'You do not own this job' });
+      throw new HttpError({
+        statusCode: 403,
+        code: 'FORBIDDEN',
+        message: 'You do not own this job',
+      });
     }
-    
+
     if (job.status === 'closed') {
       throw new HttpError({ statusCode: 400, code: 'JOB_CLOSED', message: 'Job is closed' });
     }
@@ -657,7 +717,7 @@ export class JobsService {
         message: 'Milestones can only be created for accepted applications.',
       });
     }
-    
+
     const milestone = await this.repo.createMilestone(applicationId, input.title, input.amount);
     return this.toMilestone(milestone);
   }
@@ -671,27 +731,47 @@ export class JobsService {
     if (!job) {
       throw new HttpError({ statusCode: 404, code: 'NOT_FOUND', message: 'Job not found' });
     }
-    
+
     // Check if the user is either the business or the expert
     if (job.business_id !== userId && app.expert_id !== userId) {
-      throw new HttpError({ statusCode: 403, code: 'FORBIDDEN', message: 'You are not authorized to view these milestones' });
+      throw new HttpError({
+        statusCode: 403,
+        code: 'FORBIDDEN',
+        message: 'You are not authorized to view these milestones',
+      });
     }
 
     const milestones = await this.repo.listMilestones(applicationId);
-    return milestones.map(m => this.toMilestone(m));
+    return milestones.map((m) => this.toMilestone(m));
   }
 
-  async submitMilestone(milestoneId: string, expertId: string, input: SubmitMilestoneDto): Promise<JobSubmission> {
+  async submitMilestone(
+    milestoneId: string,
+    expertId: string,
+    input: SubmitMilestoneDto,
+  ): Promise<JobSubmission> {
     const milestone = await this.repo.getMilestoneById(milestoneId);
     if (!milestone) {
       throw new HttpError({ statusCode: 404, code: 'NOT_FOUND', message: 'Milestone not found' });
     }
     const app = await this.repo.getApplicationById(milestone.job_application_id);
     if (!app || app.expert_id !== expertId) {
-      throw new HttpError({ statusCode: 403, code: 'FORBIDDEN', message: 'You are not the applicant for this application' });
+      throw new HttpError({
+        statusCode: 403,
+        code: 'FORBIDDEN',
+        message: 'You are not the applicant for this application',
+      });
     }
-    if (milestone.status !== 'pending' && milestone.status !== 'active' && milestone.status !== 'rejected') {
-      throw new HttpError({ statusCode: 400, code: 'BAD_REQUEST', message: 'Milestone is not in a submittable state' });
+    if (
+      milestone.status !== 'pending' &&
+      milestone.status !== 'active' &&
+      milestone.status !== 'rejected'
+    ) {
+      throw new HttpError({
+        statusCode: 400,
+        code: 'BAD_REQUEST',
+        message: 'Milestone is not in a submittable state',
+      });
     }
 
     const job = await this.repo.getJobById(app.job_id);
@@ -701,8 +781,12 @@ export class JobsService {
     if (job.status === 'closed') {
       throw new HttpError({ statusCode: 400, code: 'JOB_CLOSED', message: 'Job is closed' });
     }
-    
-    const submission = await this.repo.createSubmission(milestoneId, input.submissionNotes, input.attachments);
+
+    const submission = await this.repo.createSubmission(
+      milestoneId,
+      input.submissionNotes,
+      input.attachments,
+    );
     await this.repo.updateMilestoneStatus(milestoneId, 'submitted');
 
     await this.notificationsService.createForUser(job.business_id, {
@@ -715,7 +799,11 @@ export class JobsService {
     return this.toSubmission(submission);
   }
 
-  async reviewMilestone(milestoneId: string, businessId: string, status: 'approved' | 'rejected'): Promise<JobMilestone> {
+  async reviewMilestone(
+    milestoneId: string,
+    businessId: string,
+    status: 'approved' | 'rejected',
+  ): Promise<JobMilestone> {
     const milestone = await this.repo.getMilestoneById(milestoneId);
     if (!milestone) {
       throw new HttpError({ statusCode: 404, code: 'NOT_FOUND', message: 'Milestone not found' });
@@ -726,16 +814,24 @@ export class JobsService {
     }
     const job = await this.repo.getJobById(app.job_id);
     if (!job || job.business_id !== businessId) {
-      throw new HttpError({ statusCode: 403, code: 'FORBIDDEN', message: 'You do not own this job' });
+      throw new HttpError({
+        statusCode: 403,
+        code: 'FORBIDDEN',
+        message: 'You do not own this job',
+      });
     }
     if (milestone.status !== 'submitted') {
-      throw new HttpError({ statusCode: 400, code: 'BAD_REQUEST', message: 'Milestone is not pending review' });
+      throw new HttpError({
+        statusCode: 400,
+        code: 'BAD_REQUEST',
+        message: 'Milestone is not pending review',
+      });
     }
 
     if (job.status === 'closed') {
       throw new HttpError({ statusCode: 400, code: 'JOB_CLOSED', message: 'Job is closed' });
     }
-    
+
     const updated = await this.repo.updateMilestoneStatus(milestoneId, status);
 
     await this.notificationsService.createForUser(app.expert_id, {
@@ -748,7 +844,10 @@ export class JobsService {
     return this.toMilestone(updated);
   }
 
-  async getApplicationMessages(applicationId: string, userId: string): Promise<JobApplicationMessage[]> {
+  async getApplicationMessages(
+    applicationId: string,
+    userId: string,
+  ): Promise<JobApplicationMessage[]> {
     const app = await this.repo.getApplicationById(applicationId);
     if (!app) {
       throw new HttpError({ statusCode: 404, code: 'NOT_FOUND', message: 'Application not found' });
@@ -758,9 +857,22 @@ export class JobsService {
       throw new HttpError({ statusCode: 404, code: 'NOT_FOUND', message: 'Job not found' });
     }
     if (job.business_id !== userId && app.expert_id !== userId) {
-      throw new HttpError({ statusCode: 403, code: 'FORBIDDEN', message: 'You are not authorized' });
+      throw new HttpError({
+        statusCode: 403,
+        code: 'FORBIDDEN',
+        message: 'You are not authorized',
+      });
     }
-    if (!['pending', 'reviewed', 'interview_invited', 'interview_booked', 'interview_completed', 'accepted'].includes(app.status)) {
+    if (
+      ![
+        'pending',
+        'reviewed',
+        'interview_invited',
+        'interview_booked',
+        'interview_completed',
+        'accepted',
+      ].includes(app.status)
+    ) {
       throw new HttpError({
         statusCode: 400,
         code: 'APPLICATION_CHAT_NOT_ALLOWED',
@@ -769,10 +881,14 @@ export class JobsService {
     }
 
     const messages = await this.repo.listApplicationMessages(applicationId);
-    return messages.map(m => this.toApplicationMessage(m));
+    return messages.map((m) => this.toApplicationMessage(m));
   }
 
-  async sendApplicationMessage(applicationId: string, userId: string, content: string): Promise<JobApplicationMessage> {
+  async sendApplicationMessage(
+    applicationId: string,
+    userId: string,
+    content: string,
+  ): Promise<JobApplicationMessage> {
     const app = await this.repo.getApplicationById(applicationId);
     if (!app) {
       throw new HttpError({ statusCode: 404, code: 'NOT_FOUND', message: 'Application not found' });
@@ -782,9 +898,22 @@ export class JobsService {
       throw new HttpError({ statusCode: 404, code: 'NOT_FOUND', message: 'Job not found' });
     }
     if (job.business_id !== userId && app.expert_id !== userId) {
-      throw new HttpError({ statusCode: 403, code: 'FORBIDDEN', message: 'You are not authorized' });
+      throw new HttpError({
+        statusCode: 403,
+        code: 'FORBIDDEN',
+        message: 'You are not authorized',
+      });
     }
-    if (!['pending', 'reviewed', 'interview_invited', 'interview_booked', 'interview_completed', 'accepted'].includes(app.status)) {
+    if (
+      ![
+        'pending',
+        'reviewed',
+        'interview_invited',
+        'interview_booked',
+        'interview_completed',
+        'accepted',
+      ].includes(app.status)
+    ) {
       throw new HttpError({
         statusCode: 400,
         code: 'APPLICATION_CHAT_NOT_ALLOWED',
@@ -814,7 +943,11 @@ export class JobsService {
   async closeJob(jobId: string, businessId: string): Promise<Job> {
     const updated = await this.repo.updateJobStatus(jobId, businessId, 'closed');
     if (!updated) {
-      throw new HttpError({ statusCode: 404, code: 'NOT_FOUND', message: 'Job not found or unauthorized' });
+      throw new HttpError({
+        statusCode: 404,
+        code: 'NOT_FOUND',
+        message: 'Job not found or unauthorized',
+      });
     }
     return this.toJob(updated);
   }
@@ -831,10 +964,9 @@ export class JobsService {
   }
 
   private async findJobForUpdate(client: PoolClient, jobId: string): Promise<JobRow | null> {
-    const { rows } = await client.query<JobRow>(
-      `SELECT * FROM jobs WHERE id = $1 FOR UPDATE`,
-      [jobId],
-    );
+    const { rows } = await client.query<JobRow>(`SELECT * FROM jobs WHERE id = $1 FOR UPDATE`, [
+      jobId,
+    ]);
     return rows[0] ?? null;
   }
 
@@ -849,7 +981,10 @@ export class JobsService {
     return rows;
   }
 
-  private async hasApplicationWorkStarted(client: PoolClient, applicationId: string): Promise<boolean> {
+  private async hasApplicationWorkStarted(
+    client: PoolClient,
+    applicationId: string,
+  ): Promise<boolean> {
     const { rows } = await client.query<{ started: boolean }>(
       `SELECT EXISTS (
           SELECT 1
@@ -959,7 +1094,9 @@ export class JobsService {
   }
 
   private async getIndividualProviderProfileSnapshot(expertId: string): Promise<unknown> {
-    const craftsmanProfile = await this.profilesService.getCraftsmanProfile(expertId).catch(() => null);
+    const craftsmanProfile = await this.profilesService
+      .getCraftsmanProfile(expertId)
+      .catch(() => null);
     if (craftsmanProfile) return craftsmanProfile;
     return this.profilesService.getExpertProfile(expertId);
   }

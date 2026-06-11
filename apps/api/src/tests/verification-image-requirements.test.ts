@@ -27,10 +27,12 @@ describe('verification image requirements', () => {
       getBusinessLogoUrl: vi.fn().mockResolvedValue(null),
     };
 
-    await expect(assertRequiredVerificationImage(repo, 'user-2', 'business')).rejects.toMatchObject({
-      statusCode: 400,
-      code: 'VERIFICATION_REQUIRED_IMAGE_MISSING',
-    });
+    await expect(assertRequiredVerificationImage(repo, 'user-2', 'business')).rejects.toMatchObject(
+      {
+        statusCode: 400,
+        code: 'VERIFICATION_REQUIRED_IMAGE_MISSING',
+      },
+    );
   });
 
   it('rejects craftsman verification when avatar is missing', async () => {
@@ -39,7 +41,9 @@ describe('verification image requirements', () => {
       getBusinessLogoUrl: vi.fn(),
     };
 
-    await expect(assertRequiredVerificationImage(repo, 'user-3', 'craftsman')).rejects.toMatchObject({
+    await expect(
+      assertRequiredVerificationImage(repo, 'user-3', 'craftsman'),
+    ).rejects.toMatchObject({
       statusCode: 400,
       code: 'VERIFICATION_REQUIRED_IMAGE_MISSING',
     });

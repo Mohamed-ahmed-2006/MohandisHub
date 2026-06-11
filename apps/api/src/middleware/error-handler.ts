@@ -15,10 +15,7 @@ export const errorHandler: ErrorRequestHandler = (error, req, res, next) => {
   if (error instanceof ZodError) {
     const flattened = error.flatten();
     const fieldErrors = flattened.fieldErrors as Record<string, string[] | undefined>;
-    const message =
-      Object.values(fieldErrors)
-        .flat()
-        .filter(Boolean)[0] ?? 'Validation failed';
+    const message = Object.values(fieldErrors).flat().filter(Boolean)[0] ?? 'Validation failed';
     const body: ApiErrorBody = {
       ok: false,
       error: {
@@ -74,10 +71,6 @@ export const errorHandler: ErrorRequestHandler = (error, req, res, next) => {
     error: error instanceof Error ? error.message : 'Unknown error',
     ...(error instanceof Error && error.stack ? { stack: error.stack } : {}),
   });
-  captureException(error, {
-    ...(requestId && { requestId }),
-    ...(req.user?.id && { userId: req.user.id }),
-  });
 
   const pgLikeError = error as { code?: string; message?: string };
   const pgMessage = typeof pgLikeError.message === 'string' ? pgLikeError.message : '';
@@ -87,6 +80,10 @@ export const errorHandler: ErrorRequestHandler = (error, req, res, next) => {
       pgMessage.includes('reservation_slots') ||
       pgMessage.includes('reservation_'));
   if (isReservationSchemaError) {
+    captureException(error, {
+      ...(requestId && { requestId }),
+      ...(req.user?.id && { userId: req.user.id }),
+    });
     const body: ApiErrorBody = {
       ok: false,
       error: {
@@ -103,6 +100,10 @@ export const errorHandler: ErrorRequestHandler = (error, req, res, next) => {
   const isNotificationsSchemaError =
     pgLikeError.code === '42P01' && pgMessage.includes('notifications');
   if (isNotificationsSchemaError) {
+    captureException(error, {
+      ...(requestId && { requestId }),
+      ...(req.user?.id && { userId: req.user.id }),
+    });
     const body: ApiErrorBody = {
       ok: false,
       error: {

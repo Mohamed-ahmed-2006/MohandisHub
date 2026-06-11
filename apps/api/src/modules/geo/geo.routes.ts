@@ -11,4 +11,3 @@ const geoRouter = Router();
 geoRouter.get('/country', geoController.getCountryFromIp);
 
 export { geoRouter };
-

@@ -9,9 +9,7 @@ import { requireVerified } from '../../middleware/require-verified.js';
 import { jobsController } from './jobs.controller.js';
 
 const jobsRouter = Router();
-const asHandler = (
-  handler: (req: Request, res: Response, next: NextFunction) => Promise<void>,
-) => {
+const asHandler = (handler: (req: Request, res: Response, next: NextFunction) => Promise<void>) => {
   return (req: Request, res: Response, next: NextFunction): void => {
     void handler(req, res, next);
   };
@@ -20,13 +18,26 @@ const asHandler = (
 jobsRouter.get('/', asHandler(jobsController.listOpenJobs));
 
 const businessMw = [authenticate, requireEmailVerified, requireRole('business'), requireVerified];
-const applicantMw = [authenticate, requireEmailVerified, requireRole('expert', 'craftsman'), requireVerified];
+const applicantMw = [
+  authenticate,
+  requireEmailVerified,
+  requireRole('expert', 'craftsman'),
+  requireVerified,
+];
 
 // Business endpoints
 jobsRouter.post('/', ...businessMw, asHandler(jobsController.createJob));
 jobsRouter.get('/my', ...businessMw, asHandler(jobsController.listBusinessJobs));
-jobsRouter.get('/:id/interview-slots', ...businessMw, asHandler(jobsController.listBusinessInterviewSlots));
-jobsRouter.post('/:id/interview-slots', ...businessMw, asHandler(jobsController.createInterviewSlot));
+jobsRouter.get(
+  '/:id/interview-slots',
+  ...businessMw,
+  asHandler(jobsController.listBusinessInterviewSlots),
+);
+jobsRouter.post(
+  '/:id/interview-slots',
+  ...businessMw,
+  asHandler(jobsController.createInterviewSlot),
+);
 jobsRouter.get('/:id/applications', ...businessMw, asHandler(jobsController.getJobApplications));
 jobsRouter.post('/:id/close', ...businessMw, asHandler(jobsController.closeJob));
 jobsRouter.patch(
@@ -34,10 +45,22 @@ jobsRouter.patch(
   ...businessMw,
   asHandler(jobsController.updateApplicationStatus),
 );
-jobsRouter.patch('/interview-slots/:slotId', ...businessMw, asHandler(jobsController.updateInterviewSlot));
-jobsRouter.delete('/interview-slots/:slotId', ...businessMw, asHandler(jobsController.deleteInterviewSlot));
+jobsRouter.patch(
+  '/interview-slots/:slotId',
+  ...businessMw,
+  asHandler(jobsController.updateInterviewSlot),
+);
+jobsRouter.delete(
+  '/interview-slots/:slotId',
+  ...businessMw,
+  asHandler(jobsController.deleteInterviewSlot),
+);
 
-jobsRouter.post('/applications/:appId/milestones', ...businessMw, asHandler(jobsController.createMilestone));
+jobsRouter.post(
+  '/applications/:appId/milestones',
+  ...businessMw,
+  asHandler(jobsController.createMilestone),
+);
 jobsRouter.get(
   '/applications/:appId/milestones',
   authenticate,
@@ -45,7 +68,11 @@ jobsRouter.get(
   requireVerified,
   asHandler(jobsController.getMilestones),
 );
-jobsRouter.post('/milestones/:milestoneId/review', ...businessMw, asHandler(jobsController.reviewMilestone));
+jobsRouter.post(
+  '/milestones/:milestoneId/review',
+  ...businessMw,
+  asHandler(jobsController.reviewMilestone),
+);
 
 // Shared application messages endpoints
 const sharedMw = [authenticate, requireEmailVerified, requireVerified];
@@ -59,7 +86,11 @@ jobsRouter.post(
   ...sharedMw,
   asHandler(jobsController.bookInterview),
 );
-jobsRouter.get('/applications/:appId/messages', ...sharedMw, asHandler(jobsController.getApplicationMessages));
+jobsRouter.get(
+  '/applications/:appId/messages',
+  ...sharedMw,
+  asHandler(jobsController.getApplicationMessages),
+);
 jobsRouter.post(
   '/applications/:appId/messages',
   ...sharedMw,
@@ -67,8 +98,16 @@ jobsRouter.post(
 );
 
 // Expert endpoints
-jobsRouter.get('/my-applications', ...applicantMw, asHandler(jobsController.listExpertApplications));
+jobsRouter.get(
+  '/my-applications',
+  ...applicantMw,
+  asHandler(jobsController.listExpertApplications),
+);
 jobsRouter.post('/:id/apply', ...applicantMw, asHandler(jobsController.applyForJob));
-jobsRouter.post('/milestones/:milestoneId/submit', ...applicantMw, asHandler(jobsController.submitMilestone));
+jobsRouter.post(
+  '/milestones/:milestoneId/submit',
+  ...applicantMw,
+  asHandler(jobsController.submitMilestone),
+);
 
 export { jobsRouter };

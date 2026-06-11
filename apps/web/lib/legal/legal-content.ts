@@ -44,7 +44,9 @@ const PRIVACY_EN: LegalDocumentContent = {
     },
     {
       title: '2. Information We Collect',
-      paragraphs: ['Depending on how you use MohandisHub, we may collect the following categories of information:'],
+      paragraphs: [
+        'Depending on how you use MohandisHub, we may collect the following categories of information:',
+      ],
       bullets: [
         'Account data such as display name, email address, password hash, phone number, phone code, nationality, date of birth, role, and records of acceptance of our legal terms.',
         'Profile data such as biography, professional or business details, specialties, pricing, city, country, company information, workshop information, portfolio or social links, and avatar or logo images.',
@@ -58,7 +60,9 @@ const PRIVACY_EN: LegalDocumentContent = {
     },
     {
       title: '3. How We Use Information',
-      paragraphs: ['We use personal data to operate, secure, and improve MohandisHub, including to:'],
+      paragraphs: [
+        'We use personal data to operate, secure, and improve MohandisHub, including to:',
+      ],
       bullets: [
         'Create accounts, authenticate users, manage sessions, and secure the platform.',
         'Provide marketplace functionality including profiles, search, services, needs, bids, jobs, reservations, messaging, reviews, support, notifications, and subscription access where enabled.',
@@ -212,7 +216,9 @@ const PRIVACY_AR: LegalDocumentContent = {
     },
     {
       title: '3. كيف نستخدم المعلومات',
-      paragraphs: ['نستخدم البيانات الشخصية لتشغيل MohandisHub وتأمينه وتحسينه، بما في ذلك من أجل:'],
+      paragraphs: [
+        'نستخدم البيانات الشخصية لتشغيل MohandisHub وتأمينه وتحسينه، بما في ذلك من أجل:',
+      ],
       bullets: [
         'إنشاء الحسابات ومصادقة المستخدمين وإدارة الجلسات وتأمين المنصة.',
         'تقديم وظائف السوق بما في ذلك الملفات الشخصية والبحث والخدمات والطلبات والعروض والوظائف والحجوزات والرسائل والمراجعات والدعم والإشعارات والوصول إلى الاشتراكات عند تفعيلها.',
@@ -485,7 +491,7 @@ const TERMS_EN: LegalDocumentContent = {
       title: '15. Limitation of Liability',
       paragraphs: [
         'To the maximum extent permitted by law, MohandisHub and its operators, administrators, employees, contractors, and affiliates will not be liable for indirect, incidental, consequential, special, punitive, or exemplary damages, or for loss of profits, revenue, business, goodwill, data, or opportunity arising out of or related to your use of the platform.',
-        'To the maximum extent permitted by law, MohandisHub\'s aggregate liability for claims arising out of or related to the platform will not exceed the greater of the amount of platform fees actually paid by you to MohandisHub in the 12 months before the event giving rise to the claim or EGP 5,000.',
+        "To the maximum extent permitted by law, MohandisHub's aggregate liability for claims arising out of or related to the platform will not exceed the greater of the amount of platform fees actually paid by you to MohandisHub in the 12 months before the event giving rise to the claim or EGP 5,000.",
       ],
     },
     {
@@ -510,9 +516,7 @@ const TERMS_EN: LegalDocumentContent = {
     },
   ],
   contactTitle: 'Contact',
-  contactLines: [
-    'For legal, contractual, or policy-related questions, contact us at:',
-  ],
+  contactLines: ['For legal, contractual, or policy-related questions, contact us at:'],
   contactEmail: LEGAL_CONTACT_EMAIL,
 };
 
@@ -693,9 +697,7 @@ const TERMS_AR: LegalDocumentContent = {
     },
   ],
   contactTitle: 'التواصل',
-  contactLines: [
-    'للاستفسارات القانونية أو التعاقدية أو المتعلقة بالسياسات، تواصل معنا عبر:',
-  ],
+  contactLines: ['للاستفسارات القانونية أو التعاقدية أو المتعلقة بالسياسات، تواصل معنا عبر:'],
   contactEmail: LEGAL_CONTACT_EMAIL,
 };
 

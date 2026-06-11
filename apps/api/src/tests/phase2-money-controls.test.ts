@@ -10,20 +10,22 @@ import type {
 } from '../modules/reservations/reservations.repository.js';
 import { ReservationsService } from '../modules/reservations/reservations.service.js';
 
-const readSource = (relative: string): string => readFileSync(new URL(relative, import.meta.url), 'utf8');
+const readSource = (relative: string): string =>
+  readFileSync(new URL(relative, import.meta.url), 'utf8');
 
-const makeReq = (adminPermissions: string[]): Request => ({
-  user: {
-    id: 'admin-1',
-    email: 'admin@example.com',
-    role: 'customer',
-    isAdmin: true,
-    adminPermissions,
-    plan: 'free',
-    emailVerified: true,
-    verified: true,
-  },
-}) as unknown as Request;
+const makeReq = (adminPermissions: string[]): Request =>
+  ({
+    user: {
+      id: 'admin-1',
+      email: 'admin@example.com',
+      role: 'customer',
+      isAdmin: true,
+      adminPermissions,
+      plan: 'free',
+      emailVerified: true,
+      verified: true,
+    },
+  }) as unknown as Request;
 
 const makeReservationRow = (overrides: Partial<ReservationRow> = {}): ReservationRow => ({
   id: 'reservation-1',
@@ -84,16 +86,21 @@ describe('phase 2 admin money controls', () => {
     const allowedNext = vi.fn() as unknown as NextFunction;
     const deniedNext = vi.fn() as unknown as NextFunction;
     const superNext = vi.fn() as unknown as NextFunction;
+    const emptyNext = vi.fn() as unknown as NextFunction;
 
     middleware(makeReq(['manage_support']), res, allowedNext);
     expect(() => middleware(makeReq(['manage_users']), res, deniedNext)).toThrow(
       'You do not have permission to perform this action.',
     );
-    middleware(makeReq([]), res, superNext);
+    expect(() => middleware(makeReq([]), res, emptyNext)).toThrow(
+      'You do not have permission to perform this action.',
+    );
+    middleware(makeReq(['super_admin']), res, superNext);
 
     expect(allowedNext).toHaveBeenCalledTimes(1);
     expect(superNext).toHaveBeenCalledTimes(1);
     expect(deniedNext).not.toHaveBeenCalled();
+    expect(emptyNext).not.toHaveBeenCalled();
   });
 
   it('assigns dedicated permissions to admin-like support, media, ads, and reservation money routes', () => {
@@ -103,6 +110,7 @@ describe('phase 2 admin money controls', () => {
     const reservationRoutes = readSource('../modules/reservations/reservations.routes.ts');
 
     expect(adminRoutes).toContain("requireAdminPermission('manage_support')");
+    expect(adminRoutes).toContain("requireAdminPermission('super_admin')");
     expect(mediaRoutes).toContain("requireAdminPermission('manage_media')");
     expect(adsRoutes).toContain("requireAdminPermission('manage_ads')");
     expect(adsRoutes).toContain("requireAdminPermission('manage_ad_pricing')");
@@ -114,12 +122,24 @@ describe('phase 2 admin money controls', () => {
     const reservationsController = readSource('../modules/reservations/reservations.controller.ts');
 
     expect(reservationsController).toContain('function reservationAdminRole');
-    expect(reservationsController).toContain("return user.isAdmin ? 'admin' : (user.role ?? 'customer')");
-    expect(reservationsController).toContain('svc.listDisputes(user.id, reservationAdminRole(user)');
-    expect(reservationsController).toContain('svc.resolveDispute(user.id, reservationAdminRole(user)');
-    expect(reservationsController).toContain('svc.listActionFailures(user.id, reservationAdminRole(user)');
-    expect(reservationsController).toContain('svc.replayActionFailure(user.id, reservationAdminRole(user)');
-    expect(reservationsController).toContain('svc.reconcileReservationMoney(user.id, reservationAdminRole(user)');
+    expect(reservationsController).toContain(
+      "return user.isAdmin ? 'admin' : (user.role ?? 'customer')",
+    );
+    expect(reservationsController).toMatch(
+      /svc\.listDisputes\(\s*user\.id,\s*reservationAdminRole\(user\)/,
+    );
+    expect(reservationsController).toMatch(
+      /svc\.resolveDispute\(\s*user\.id,\s*reservationAdminRole\(user\)/,
+    );
+    expect(reservationsController).toMatch(
+      /svc\.listActionFailures\(\s*user\.id,\s*reservationAdminRole\(user\)/,
+    );
+    expect(reservationsController).toMatch(
+      /svc\.replayActionFailure\(\s*user\.id,\s*reservationAdminRole\(user\)/,
+    );
+    expect(reservationsController).toMatch(
+      /svc\.reconcileReservationMoney\(\s*user\.id,\s*reservationAdminRole\(user\)/,
+    );
   });
 
   it('keeps audit hooks on critical admin and money-control actions', () => {
@@ -176,9 +196,37 @@ describe('phase 2 admin money controls', () => {
 
     expect(uploadRoutes).toContain('loadAdminFromDb');
     expect(uploadRoutes).toContain('function canAdminReadPrivateUpload');
-    expect(uploadRoutes).toContain("adminPermissions.includes('manage_verifications')");
-    expect(uploadRoutes).toContain("adminPermissions.includes('manage_transactions')");
+    expect(uploadRoutes).toContain("hasAdminPermission(user, 'manage_verifications')");
+    expect(uploadRoutes).toContain("hasAdminPermission(user, 'manage_transactions')");
     expect(uploadRoutes).toContain('!canAdminReadPrivateUpload(user)');
+  });
+
+  it('hardens auth lockdown, refresh/logout origin checks, and admin power changes', () => {
+    const authService = readSource('../modules/auth/auth.service.ts');
+    const authenticate = readSource('../middleware/authenticate.ts');
+    const authRoutes = readSource('../modules/auth/auth.routes.ts');
+    const adminController = readSource('../modules/admin/admin.controller.ts');
+    const adminService = readSource('../modules/admin/admin.service.ts');
+    const chatSocket = readSource('../modules/chat/chat.socket.ts');
+    const usersService = readSource('../modules/users/users.service.ts');
+
+    expect(authService).toContain('status.signupsLocked');
+    expect(authService).toContain('status.lockLogins');
+    expect(authService).toContain("user.admin_permissions.includes('super_admin')");
+    expect(authService).toContain(
+      'If your email is registered, a password reset link has been sent.',
+    );
+    expect(authenticate).toContain('SELECT primary_role');
+    expect(authenticate).toContain('admin_permissions');
+    expect(authenticate).toContain('email_verified_at');
+    expect(usersService).toContain('EMAIL_CHANGE_MAX_CONFIRM_ATTEMPTS');
+    expect(usersService).toContain('EMAIL_CHANGE_ATTEMPTS_EXCEEDED');
+    expect(authRoutes).toContain('requireTrustedAuthOrigin');
+    expect(adminController).toContain('SUPER_ADMIN_REQUIRED');
+    expect(adminController).toContain('SELF_ADMIN_CHANGE_FORBIDDEN');
+    expect(adminService).toContain('revokeExistingSessions');
+    expect(adminService).toContain('revokeAllUserTokens(userId)');
+    expect(chatSocket).toContain('isUserActive');
   });
 
   it('restricts payment checkout return URLs to configured web origins', () => {
@@ -195,7 +243,9 @@ describe('phase 2 admin money controls', () => {
     const migration = readSource(
       '../../../../supabase/migrations/20260604170000_disable_card_deposits_launch_default.sql',
     );
-    const adminSettingsTab = readSource('../../../../apps/web/components/admin/admin-settings-tab.tsx');
+    const adminSettingsTab = readSource(
+      '../../../../apps/web/components/admin/admin-settings-tab.tsx',
+    );
 
     expect(appSettings).toContain("key: 'deposit_card'");
     expect(appSettings).toContain('defaultEnabled: false');
@@ -210,15 +260,17 @@ describe('phase 2 admin money controls', () => {
   it('returns the stored reservation for duplicate create requests with the same idempotency key', async () => {
     const reservation = makeReservationRow();
     const repo = {
-      findActionIdempotency: vi.fn<() => Promise<ReservationActionIdempotencyRow | null>>().mockResolvedValue({
-        id: 'idem-1',
-        actor_id: 'customer-1',
-        action: 'create_reservation',
-        idempotency_key: 'create-provider-1-slot-1',
-        reservation_id: reservation.id,
-        response_json: {},
-        created_at: new Date().toISOString(),
-      }),
+      findActionIdempotency: vi
+        .fn<() => Promise<ReservationActionIdempotencyRow | null>>()
+        .mockResolvedValue({
+          id: 'idem-1',
+          actor_id: 'customer-1',
+          action: 'create_reservation',
+          idempotency_key: 'create-provider-1-slot-1',
+          reservation_id: reservation.id,
+          response_json: {},
+          created_at: new Date().toISOString(),
+        }),
       findReservationById: vi.fn().mockResolvedValue(reservation),
     };
     const service = new ReservationsService(

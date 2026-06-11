@@ -54,7 +54,9 @@ export const GlobalAnnouncementBanner = () => {
       }}
     >
       {asset ? (
-        <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.7rem', flexWrap: 'wrap' }}>
+        <div
+          style={{ display: 'inline-flex', alignItems: 'center', gap: '0.7rem', flexWrap: 'wrap' }}
+        >
           <Image
             src={asset.image_url}
             alt={asset.alt_text ?? asset.title}

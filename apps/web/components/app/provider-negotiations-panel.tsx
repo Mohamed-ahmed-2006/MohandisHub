@@ -63,7 +63,11 @@ export function ProviderNegotiationsPanel({ accessToken, dictionary, embedInPage
         style={embedInPage ? { justifyContent: 'flex-end' } : undefined}
       >
         {embedInPage ? (
-          <h2 id="negotiations-heading" className="services-negotiations-title" style={visuallyHidden}>
+          <h2
+            id="negotiations-heading"
+            className="services-negotiations-title"
+            style={visuallyHidden}
+          >
             {np.providerSectionTitle ?? 'Price negotiations'}
           </h2>
         ) : (
@@ -71,7 +75,11 @@ export function ProviderNegotiationsPanel({ accessToken, dictionary, embedInPage
             {np.providerSectionTitle ?? 'Price negotiations'}
           </h2>
         )}
-        <button type="button" className="dashboard-link-btn" onClick={() => void loadNegotiations()}>
+        <button
+          type="button"
+          className="dashboard-link-btn"
+          onClick={() => void loadNegotiations()}
+        >
           {np.refresh ?? 'Refresh'}
         </button>
       </div>

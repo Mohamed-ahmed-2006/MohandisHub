@@ -8,10 +8,7 @@ import { asyncHandler } from '../../utils/async-handler.js';
 import { HttpError } from '../../utils/http-error.js';
 
 import { ServicesService } from './services.service.js';
-import {
-  createServiceSchema,
-  updateServiceSchema,
-} from './services.validation.js';
+import { createServiceSchema, updateServiceSchema } from './services.validation.js';
 
 const servicesService = new ServicesService();
 

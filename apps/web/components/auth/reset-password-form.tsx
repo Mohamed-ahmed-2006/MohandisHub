@@ -58,6 +58,7 @@ const PasswordVisibilityIcon = ({ visible }: { visible: boolean }) => {
 
 export const ResetPasswordForm = ({ locale, dictionary, token }: ResetPasswordFormProps) => {
   const router = useRouter();
+  const [fragmentToken, setFragmentToken] = useState<string | null>(null);
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [passwordError, setPasswordError] = useState<string | null>(null);
@@ -69,9 +70,26 @@ export const ResetPasswordForm = ({ locale, dictionary, token }: ResetPasswordFo
   const [isConfirmPasswordVisible, setIsConfirmPasswordVisible] = useState(false);
   const [redirecting, setRedirecting] = useState(false);
 
-  const hasToken = useMemo(() => Boolean(token && token.trim().length > 0), [token]);
+  const effectiveToken = token?.trim() ? token : fragmentToken;
+  const hasToken = useMemo(
+    () => Boolean(effectiveToken && effectiveToken.trim().length > 0),
+    [effectiveToken],
+  );
 
   const loginPath = useMemo(() => buildLocalePath(locale, '/auth?mode=login'), [locale]);
+
+  useEffect(() => {
+    if (token?.trim() || typeof window === 'undefined') return;
+    const rawHash = window.location.hash.startsWith('#')
+      ? window.location.hash.slice(1)
+      : window.location.hash;
+    const hashParams = new URLSearchParams(rawHash);
+    const hashToken = hashParams.get('token');
+    if (!hashToken?.trim()) return;
+
+    setFragmentToken(hashToken);
+    window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}`);
+  }, [token]);
 
   useEffect(() => {
     if (!redirecting || statusVariant !== 'success') return;
@@ -84,7 +102,7 @@ export const ResetPasswordForm = ({ locale, dictionary, token }: ResetPasswordFo
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
-    if (!hasToken || !token) {
+    if (!hasToken || !effectiveToken) {
       setStatusVariant('error');
       setStatusMessage(dictionary.resetPassword.invalidToken);
       return;
@@ -116,7 +134,7 @@ export const ResetPasswordForm = ({ locale, dictionary, token }: ResetPasswordFo
     setIsSubmitting(true);
 
     try {
-      const response = await authApiClient.resetPassword({ token, password });
+      const response = await authApiClient.resetPassword({ token: effectiveToken, password });
       setStatusVariant('success');
       setStatusMessage(response.message || dictionary.resetPassword.successMessage);
       setPassword('');

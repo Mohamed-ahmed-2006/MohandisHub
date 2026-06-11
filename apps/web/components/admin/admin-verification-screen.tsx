@@ -112,7 +112,10 @@ export const AdminVerificationScreen = ({ locale, dictionary }: AdminVerificatio
     try {
       const result = await adminApiClient.syncVerifiedAt(accessToken);
       if (result.experts > 0 || result.businesses > 0) {
-        addToast('Success', `Synced: ${result.experts} expert(s), ${result.businesses} business(es).`);
+        addToast(
+          'Success',
+          `Synced: ${result.experts} expert(s), ${result.businesses} business(es).`,
+        );
       } else {
         addToast('Info', 'No profiles needed syncing.');
       }
@@ -231,7 +234,15 @@ export const AdminVerificationScreen = ({ locale, dictionary }: AdminVerificatio
   return (
     <main className="admin-verification-main">
       <Container className="admin-verification-container">
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
+        <div
+          style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            flexWrap: 'wrap',
+            gap: '1rem',
+          }}
+        >
           <h1 className="admin-verification-title">{dictionary.admin.title}</h1>
           <button
             type="button"
@@ -247,7 +258,9 @@ export const AdminVerificationScreen = ({ locale, dictionary }: AdminVerificatio
           <button
             type="button"
             className={
-              activeRoleTab === 'customer' ? 'admin-verification-tab admin-verification-tab-active' : 'admin-verification-tab'
+              activeRoleTab === 'customer'
+                ? 'admin-verification-tab admin-verification-tab-active'
+                : 'admin-verification-tab'
             }
             onClick={() => setActiveRoleTab('customer')}
           >
@@ -256,7 +269,9 @@ export const AdminVerificationScreen = ({ locale, dictionary }: AdminVerificatio
           <button
             type="button"
             className={
-              activeRoleTab === 'expert' ? 'admin-verification-tab admin-verification-tab-active' : 'admin-verification-tab'
+              activeRoleTab === 'expert'
+                ? 'admin-verification-tab admin-verification-tab-active'
+                : 'admin-verification-tab'
             }
             onClick={() => setActiveRoleTab('expert')}
           >
@@ -265,7 +280,9 @@ export const AdminVerificationScreen = ({ locale, dictionary }: AdminVerificatio
           <button
             type="button"
             className={
-              activeRoleTab === 'business' ? 'admin-verification-tab admin-verification-tab-active' : 'admin-verification-tab'
+              activeRoleTab === 'business'
+                ? 'admin-verification-tab admin-verification-tab-active'
+                : 'admin-verification-tab'
             }
             onClick={() => setActiveRoleTab('business')}
           >

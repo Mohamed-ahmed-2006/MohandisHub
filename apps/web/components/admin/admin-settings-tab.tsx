@@ -128,7 +128,10 @@ export const AdminSettingsTab = ({ dictionary, accessToken, refreshSession }: Pr
         setSuccess(true);
         setToastMessage(d.saveSuccess);
         window.dispatchEvent(new CustomEvent('app-status-updated'));
-        setTimeout(() => { setSuccess(false); setSuccessMessage(null); }, 2000);
+        setTimeout(() => {
+          setSuccess(false);
+          setSuccessMessage(null);
+        }, 2000);
         setTimeout(() => setToastMessage(null), 2200);
       } catch (err: unknown) {
         setError(getErrorMessage(err, dictionary));
@@ -216,12 +219,19 @@ export const AdminSettingsTab = ({ dictionary, accessToken, refreshSession }: Pr
         }
         const parsed: unknown = JSON.parse(trimmed);
         if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
-          setError(tr('Platform InstaPay must be a JSON object.', 'يجب أن تكون بيانات إنستاباي كائن JSON.'));
+          setError(
+            tr(
+              'Platform InstaPay must be a JSON object.',
+              'يجب أن تكون بيانات إنستاباي كائن JSON.',
+            ),
+          );
           return;
         }
         void update({ platformInstapayDisplay: parsed as Record<string, unknown> });
       } catch {
-        setError(tr('Invalid JSON for platform InstaPay.', 'صيغة JSON غير صحيحة لبيانات إنستاباي.'));
+        setError(
+          tr('Invalid JSON for platform InstaPay.', 'صيغة JSON غير صحيحة لبيانات إنستاباي.'),
+        );
       }
     },
     [update],
@@ -236,9 +246,7 @@ export const AdminSettingsTab = ({ dictionary, accessToken, refreshSession }: Pr
       <h2 className="admin-settings-title">{d.title}</h2>
 
       {error && <p className="admin-settings-error">{error}</p>}
-      {success && successMessage && (
-        <p className="admin-settings-success">{successMessage}</p>
-      )}
+      {success && successMessage && <p className="admin-settings-success">{successMessage}</p>}
       {toastMessage && (
         <div className="admin-settings-toast" role="status" aria-live="polite">
           {toastMessage}
@@ -317,20 +325,23 @@ export const AdminSettingsTab = ({ dictionary, accessToken, refreshSession }: Pr
                   : tr('Withdrawal methods', 'Ø·Ø±Ù‚ Ø§Ù„Ø³Ø­Ø¨')}
               </p>
               {methods.map((method) => {
-          const key = method.key;
-          const label =
-            (d.paymentMethodLabels as Record<string, string> | undefined)?.[key] ?? key;
-          const enabled = settings.paymentMethodsEnabled[key] !== false;
-          return (
-            <Toggle
-              key={key}
-              label={label}
-              desc={tr('Visible to users in the wallet; API rejects hidden methods.', 'يظهر للمستخدمين في المحفظة؛ الـ API يرفض الطرق المخفية.')}
-              checked={enabled}
-              onChange={(v) => handlePaymentMethodToggle(key, v)}
-              disabled={saving}
-            />
-          );
+                const key = method.key;
+                const label =
+                  (d.paymentMethodLabels as Record<string, string> | undefined)?.[key] ?? key;
+                const enabled = settings.paymentMethodsEnabled[key] !== false;
+                return (
+                  <Toggle
+                    key={key}
+                    label={label}
+                    desc={tr(
+                      'Visible to users in the wallet; API rejects hidden methods.',
+                      'يظهر للمستخدمين في المحفظة؛ الـ API يرفض الطرق المخفية.',
+                    )}
+                    checked={enabled}
+                    onChange={(v) => handlePaymentMethodToggle(key, v)}
+                    disabled={saving}
+                  />
+                );
               })}
             </div>
           );
@@ -482,7 +493,7 @@ export const AdminSettingsTab = ({ dictionary, accessToken, refreshSession }: Pr
             onBlur={(e) =>
               handleNumberChange(
                 'commissionPercent',
-                e.target.value === '' ? 0 : parseFloat(e.target.value) ?? 0,
+                e.target.value === '' ? 0 : (parseFloat(e.target.value) ?? 0),
               )
             }
           />
@@ -501,7 +512,7 @@ export const AdminSettingsTab = ({ dictionary, accessToken, refreshSession }: Pr
             onBlur={(e) =>
               handleNumberChange(
                 'commissionMinEgp',
-                e.target.value === '' ? 0 : parseFloat(e.target.value) ?? 0,
+                e.target.value === '' ? 0 : (parseFloat(e.target.value) ?? 0),
               )
             }
           />
@@ -520,7 +531,7 @@ export const AdminSettingsTab = ({ dictionary, accessToken, refreshSession }: Pr
             onBlur={(e) =>
               handleNumberChange(
                 'minTransactionEgp',
-                e.target.value === '' ? 0 : parseFloat(e.target.value) ?? 0,
+                e.target.value === '' ? 0 : (parseFloat(e.target.value) ?? 0),
               )
             }
           />
@@ -539,9 +550,7 @@ export const AdminSettingsTab = ({ dictionary, accessToken, refreshSession }: Pr
             type="text"
             className="admin-settings-input"
             defaultValue={settings.commissionReceiverId ?? ''}
-            onBlur={(e) =>
-              handleTextChange('commissionReceiverId', e.target.value.trim() || null)
-            }
+            onBlur={(e) => handleTextChange('commissionReceiverId', e.target.value.trim() || null)}
             disabled={saving}
           />
         </div>
@@ -551,7 +560,9 @@ export const AdminSettingsTab = ({ dictionary, accessToken, refreshSession }: Pr
         <h3 className="admin-settings-section-title">{tr('Reservations', 'الحجوزات')}</h3>
         <div className="admin-settings-row">
           <div className="admin-settings-label-wrap">
-                <label className="admin-settings-label">{tr('Acceptance fee (EGP)', 'رسوم القبول (ج.م)')}</label>
+            <label className="admin-settings-label">
+              {tr('Acceptance fee (EGP)', 'رسوم القبول (ج.م)')}
+            </label>
             <span className="admin-settings-desc">
               {tr(
                 'Charged to customer when provider accepts a reservation.',
@@ -568,14 +579,16 @@ export const AdminSettingsTab = ({ dictionary, accessToken, refreshSession }: Pr
             onBlur={(e) =>
               handleNumberChange(
                 'reservationAcceptanceFee',
-                e.target.value === '' ? 0 : parseFloat(e.target.value) ?? 0,
+                e.target.value === '' ? 0 : (parseFloat(e.target.value) ?? 0),
               )
             }
           />
         </div>
         <div className="admin-settings-row">
           <div className="admin-settings-label-wrap">
-                <label className="admin-settings-label">{tr('Voice minute fee (EGP)', 'رسوم الدقيقة الصوتية (ج.م)')}</label>
+            <label className="admin-settings-label">
+              {tr('Voice minute fee (EGP)', 'رسوم الدقيقة الصوتية (ج.م)')}
+            </label>
             <span className="admin-settings-desc">
               {tr(
                 'Global online voice minute fee (split equally customer/provider).',
@@ -592,14 +605,16 @@ export const AdminSettingsTab = ({ dictionary, accessToken, refreshSession }: Pr
             onBlur={(e) =>
               handleNumberChange(
                 'reservationVoiceMinuteRate',
-                e.target.value === '' ? 0 : parseFloat(e.target.value) ?? 0,
+                e.target.value === '' ? 0 : (parseFloat(e.target.value) ?? 0),
               )
             }
           />
         </div>
         <div className="admin-settings-row">
           <div className="admin-settings-label-wrap">
-                <label className="admin-settings-label">{tr('Video minute fee (EGP)', 'رسوم الدقيقة المرئية (ج.م)')}</label>
+            <label className="admin-settings-label">
+              {tr('Video minute fee (EGP)', 'رسوم الدقيقة المرئية (ج.م)')}
+            </label>
             <span className="admin-settings-desc">
               {tr(
                 'Global online video minute fee (split equally customer/provider).',
@@ -616,14 +631,16 @@ export const AdminSettingsTab = ({ dictionary, accessToken, refreshSession }: Pr
             onBlur={(e) =>
               handleNumberChange(
                 'reservationVideoMinuteRate',
-                e.target.value === '' ? 0 : parseFloat(e.target.value) ?? 0,
+                e.target.value === '' ? 0 : (parseFloat(e.target.value) ?? 0),
               )
             }
           />
         </div>
         <div className="admin-settings-row">
           <div className="admin-settings-label-wrap">
-            <label className="admin-settings-label">{tr('Minimum prejoin minutes', 'الحد الأدنى لدقائق ما قبل الانضمام')}</label>
+            <label className="admin-settings-label">
+              {tr('Minimum prejoin minutes', 'الحد الأدنى لدقائق ما قبل الانضمام')}
+            </label>
             <span className="admin-settings-desc">
               {tr(
                 'Required wallet coverage before users can join online sessions.',
@@ -647,7 +664,9 @@ export const AdminSettingsTab = ({ dictionary, accessToken, refreshSession }: Pr
         </div>
         <div className="admin-settings-row">
           <div className="admin-settings-label-wrap">
-            <label className="admin-settings-label">{tr('Job interview fee (EGP)', 'رسوم مقابلة الوظيفة (ج.م)')}</label>
+            <label className="admin-settings-label">
+              {tr('Job interview fee (EGP)', 'رسوم مقابلة الوظيفة (ج.م)')}
+            </label>
             <span className="admin-settings-desc">
               {tr(
                 'Global fee charged to experts when they reserve an interview slot with a business.',
@@ -664,7 +683,7 @@ export const AdminSettingsTab = ({ dictionary, accessToken, refreshSession }: Pr
             onBlur={(e) =>
               handleNumberChange(
                 'jobInterviewFeeAmount',
-                e.target.value === '' ? 0 : parseFloat(e.target.value) ?? 0,
+                e.target.value === '' ? 0 : (parseFloat(e.target.value) ?? 0),
               )
             }
           />
@@ -716,7 +735,10 @@ export const AdminSettingsTab = ({ dictionary, accessToken, refreshSession }: Pr
           onChange={(v) => handleToggle('pauseUploads', v)}
           disabled={saving}
         />
-        <h4 className="admin-settings-section-title" style={{ marginTop: '1rem', fontSize: '1rem' }}>
+        <h4
+          className="admin-settings-section-title"
+          style={{ marginTop: '1rem', fontSize: '1rem' }}
+        >
           {d.uploadPolicySection ?? 'Upload policy'}
         </h4>
         <div className="admin-settings-row" key={`up-max-${settings.updatedAt}`}>
@@ -860,9 +882,7 @@ export const AdminSettingsTab = ({ dictionary, accessToken, refreshSession }: Pr
       </section>
 
       <section className="admin-settings-section admin-settings-section--danger">
-        <h3 className="admin-settings-section-title">
-          {d.dangerZone ?? 'Danger zone'}
-        </h3>
+        <h3 className="admin-settings-section-title">{d.dangerZone ?? 'Danger zone'}</h3>
         <p className="admin-settings-desc admin-settings-desc--block">
           {d.factoryResetWarning ??
             'Factory reset permanently removes all user accounts and their data except the platform and your admin account. This cannot be undone.'}
@@ -887,14 +907,13 @@ export const AdminSettingsTab = ({ dictionary, accessToken, refreshSession }: Pr
         <div
           className="admin-modal-overlay"
           onClick={(e) => {
-            if (e.target === e.currentTarget && !factoryResetLoading) setFactoryResetModalOpen(false);
+            if (e.target === e.currentTarget && !factoryResetLoading)
+              setFactoryResetModalOpen(false);
           }}
           role="presentation"
         >
           <div className="admin-modal" onClick={(e) => e.stopPropagation()}>
-            <h3 className="admin-modal-title">
-              {d.factoryReset ?? 'Factory reset'}
-            </h3>
+            <h3 className="admin-modal-title">{d.factoryReset ?? 'Factory reset'}</h3>
             <p className="admin-settings-desc admin-settings-desc--block">
               {d.factoryResetWarning ??
                 'This will permanently remove all user accounts and data except the platform and your admin account. Type the confirmation phrase below to proceed.'}
@@ -949,13 +968,10 @@ export const AdminSettingsTab = ({ dictionary, accessToken, refreshSession }: Pr
                       setFactoryResetModalOpen(false);
                       setSuccessMessage(d.factoryResetSuccess);
                       setSuccess(true);
-                      setTimeout(
-                        () => {
-                          setSuccess(false);
-                          setSuccessMessage(null);
-                        },
-                        5000,
-                      );
+                      setTimeout(() => {
+                        setSuccess(false);
+                        setSuccessMessage(null);
+                      }, 5000);
                       if (refreshSession) await refreshSession();
                       setFactoryResetLoading(false);
                     } catch (err: unknown) {

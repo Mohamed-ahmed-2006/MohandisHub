@@ -3,6 +3,7 @@ import type { Socket } from 'socket.io-client';
 import { getApiBaseUrl } from '@/lib/env';
 
 let socket: Socket | null = null;
+let socketToken: string | null = null;
 
 export async function getChatSocket(accessToken?: string): Promise<Socket | null> {
   const baseUrl = getApiBaseUrl();
@@ -18,8 +19,13 @@ export async function getChatSocket(accessToken?: string): Promise<Socket | null
   }
 
   if (accessToken) {
+    const tokenChanged = socketToken !== accessToken;
     socket.auth = { token: accessToken };
-    if (!socket.connected) {
+    socketToken = accessToken;
+    if (socket.connected && tokenChanged) {
+      socket.disconnect();
+      socket.connect();
+    } else if (!socket.connected) {
       socket.connect();
     }
   }
@@ -31,5 +37,6 @@ export function disconnectChatSocket(): void {
   if (socket) {
     socket.disconnect();
     socket = null;
+    socketToken = null;
   }
 }

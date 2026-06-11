@@ -26,7 +26,11 @@ export function Drawer({
   if (!open) return null;
 
   const content = (
-    <Overlay onClick={onClose} className={`mh-drawer-overlay ${overlayClassName}`.trim()} zIndex={zIndex}>
+    <Overlay
+      onClick={onClose}
+      className={`mh-drawer-overlay ${overlayClassName}`.trim()}
+      zIndex={zIndex}
+    >
       <section
         className={`mh-drawer mh-animate-slide-side ${className}`.trim()}
         role="dialog"

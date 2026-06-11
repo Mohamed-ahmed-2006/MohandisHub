@@ -17,7 +17,9 @@ export type TopServiceRow = {
 
 export class AnalyticsRepository {
   /** Total earnings for provider: payment + release transactions, completed */
-  async getProviderEarnings(providerId: string): Promise<{ totalEarnings: number; currency: string }> {
+  async getProviderEarnings(
+    providerId: string,
+  ): Promise<{ totalEarnings: number; currency: string }> {
     const pool = getPool();
     const { rows } = await pool.query<ProviderEarningsRow>(
       `SELECT COALESCE(SUM(t.amount), 0)::text AS total_earnings,

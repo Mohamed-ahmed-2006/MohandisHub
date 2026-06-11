@@ -10,10 +10,10 @@ Deployment targets: **Vercel** (web), **Render** (API + worker), **Supabase** (P
 
 ### Web (Vercel)
 
-| Variable | Description |
-|----------|-------------|
-| `NEXT_PUBLIC_API_URL` | Public API base URL (e.g. `https://api.mohandishub.app`) |
-| `API_INTERNAL_URL` | Same as above for server-side rewrites (or leave unset to use `NEXT_PUBLIC_API_URL`) |
+| Variable              | Description                                                                          |
+| --------------------- | ------------------------------------------------------------------------------------ |
+| `NEXT_PUBLIC_API_URL` | Public API base URL (e.g. `https://api.mohandishub.app`)                             |
+| `API_INTERNAL_URL`    | Same as above for server-side rewrites (or leave unset to use `NEXT_PUBLIC_API_URL`) |
 
 Set **Root Directory** to `apps/web`. Build and install are in `apps/web/vercel.json`.
 

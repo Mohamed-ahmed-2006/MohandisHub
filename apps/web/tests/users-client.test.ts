@@ -14,26 +14,27 @@ describe('usersApiClient.updateAccount', () => {
   it('sends avatarUrl in the account update payload', async () => {
     const fetchMock = vi.fn<typeof fetch>().mockResolvedValue({
       ok: true,
-      json: () => Promise.resolve({
-        ok: true,
-        data: {
-          id: 'user-1',
-          email: 'expert@example.com',
-          displayName: 'Expert',
-          phone: null,
-          phoneCode: null,
-          nationality: null,
-          avatarUrl: 'http://localhost:4000/uploads/avatar.png',
-          dateOfBirth: null,
-          role: 'expert',
-          isAdmin: false,
-          adminPermissions: [],
-          plan: 'free',
-          emailVerified: true,
-          verificationStatus: 'under_review',
-          createdAt: '2026-03-14T00:00:00.000Z',
-        },
-      }),
+      json: () =>
+        Promise.resolve({
+          ok: true,
+          data: {
+            id: 'user-1',
+            email: 'expert@example.com',
+            displayName: 'Expert',
+            phone: null,
+            phoneCode: null,
+            nationality: null,
+            avatarUrl: 'http://localhost:4000/uploads/avatar.png',
+            dateOfBirth: null,
+            role: 'expert',
+            isAdmin: false,
+            adminPermissions: [],
+            plan: 'free',
+            emailVerified: true,
+            verificationStatus: 'under_review',
+            createdAt: '2026-03-14T00:00:00.000Z',
+          },
+        }),
     } as Response);
     vi.stubGlobal('fetch', fetchMock);
 

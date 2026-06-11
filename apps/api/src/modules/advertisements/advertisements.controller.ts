@@ -16,11 +16,15 @@ import {
 const svc = new AdvertisementsService();
 
 function requireUser(req: { user?: { id: string } }) {
-  if (!req.user) throw new HttpError({ statusCode: 401, code: 'UNAUTHORIZED', message: 'Auth required.' });
+  if (!req.user)
+    throw new HttpError({ statusCode: 401, code: 'UNAUTHORIZED', message: 'Auth required.' });
   return req.user;
 }
 
-function requestIp(req: { ip?: string | undefined; socket?: { remoteAddress?: string | undefined } }): string | null {
+function requestIp(req: {
+  ip?: string | undefined;
+  socket?: { remoteAddress?: string | undefined };
+}): string | null {
   return req.ip ?? req.socket?.remoteAddress ?? null;
 }
 
@@ -97,9 +101,16 @@ const trackClick = asyncHandler(async (req, res) => {
 
 const adminSetStatus = asyncHandler(async (req, res) => {
   const user = requireUser(req);
-  const input = req.body as { status?: 'active' | 'paused_by_admin' | 'cancelled'; reason?: string };
+  const input = req.body as {
+    status?: 'active' | 'paused_by_admin' | 'cancelled';
+    reason?: string;
+  };
   if (!input.status) {
-    throw new HttpError({ statusCode: 400, code: 'VALIDATION_ERROR', message: 'status is required.' });
+    throw new HttpError({
+      statusCode: 400,
+      code: 'VALIDATION_ERROR',
+      message: 'status is required.',
+    });
   }
   const data = await svc.applyAdminStatus(req.params.id!, input.status, input.reason);
   await logAudit({

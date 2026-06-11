@@ -54,60 +54,65 @@ export const OnlineCallModal = ({ open, reservation, accessToken, onClose, onEnd
   /** True after local publish succeeds; used to ignore late WebRTC failures during teardown. */
   const callEstablishedRef = useRef(false);
 
-  const cleanup = useCallback(async (notifyDisconnect: boolean) => {
-    if (cleanupPromiseRef.current) {
-      await cleanupPromiseRef.current;
-      return;
-    }
+  const cleanup = useCallback(
+    async (notifyDisconnect: boolean) => {
+      if (cleanupPromiseRef.current) {
+        await cleanupPromiseRef.current;
+        return;
+      }
 
-    cleanupPromiseRef.current = (async () => {
-    const reservationId = reservationIdRef.current;
-    if (heartbeatRef.current) {
-      clearInterval(heartbeatRef.current);
-      heartbeatRef.current = null;
-    }
-    if (callTimerRef.current) {
-      clearInterval(callTimerRef.current);
-      callTimerRef.current = null;
-    }
+      cleanupPromiseRef.current = (async () => {
+        const reservationId = reservationIdRef.current;
+        if (heartbeatRef.current) {
+          clearInterval(heartbeatRef.current);
+          heartbeatRef.current = null;
+        }
+        if (callTimerRef.current) {
+          clearInterval(callTimerRef.current);
+          callTimerRef.current = null;
+        }
 
-    if (notifyDisconnect && reservationId) {
-      await reservationsApiClient.callHeartbeat(accessToken, reservationId, { connected: false }).catch(() => {});
-    }
+        if (notifyDisconnect && reservationId) {
+          await reservationsApiClient
+            .callHeartbeat(accessToken, reservationId, { connected: false })
+            .catch(() => {});
+        }
 
-    micTrackRef.current?.stop();
-    micTrackRef.current?.close();
-    micTrackRef.current = null;
+        micTrackRef.current?.stop();
+        micTrackRef.current?.close();
+        micTrackRef.current = null;
 
-    camTrackRef.current?.stop();
-    camTrackRef.current?.close();
-    camTrackRef.current = null;
+        camTrackRef.current?.stop();
+        camTrackRef.current?.close();
+        camTrackRef.current = null;
 
-    if (clientRef.current) {
-      await clientRef.current.leave().catch(() => {});
-      clientRef.current.removeAllListeners();
-      clientRef.current = null;
-    }
+        if (clientRef.current) {
+          await clientRef.current.leave().catch(() => {});
+          clientRef.current.removeAllListeners();
+          clientRef.current = null;
+        }
 
-    reservationIdRef.current = null;
-    renewPromiseRef.current = null;
-    renewFailureCountRef.current = 0;
-    callEstablishedRef.current = false;
-    setConnected(false);
-    setMicMuted(false);
-    setCamMuted(false);
-    setCallSeconds(0);
+        reservationIdRef.current = null;
+        renewPromiseRef.current = null;
+        renewFailureCountRef.current = 0;
+        callEstablishedRef.current = false;
+        setConnected(false);
+        setMicMuted(false);
+        setCamMuted(false);
+        setCallSeconds(0);
 
-    if (localVideoRef.current) localVideoRef.current.innerHTML = '';
-    if (remoteVideoRef.current) remoteVideoRef.current.innerHTML = '';
-    })();
+        if (localVideoRef.current) localVideoRef.current.innerHTML = '';
+        if (remoteVideoRef.current) remoteVideoRef.current.innerHTML = '';
+      })();
 
-    try {
-      await cleanupPromiseRef.current;
-    } finally {
-      cleanupPromiseRef.current = null;
-    }
-  }, [accessToken]);
+      try {
+        await cleanupPromiseRef.current;
+      } finally {
+        cleanupPromiseRef.current = null;
+      }
+    },
+    [accessToken],
+  );
 
   useEffect(() => {
     if (!connected) return;
@@ -338,15 +343,35 @@ export const OnlineCallModal = ({ open, reservation, accessToken, onClose, onEnd
         <h3 className="plan-modal-title">
           {reservation.onlineType === 'video' ? 'Video Call' : 'Voice Call'}
         </h3>
-        <p style={{ marginTop: '-0.5rem', marginBottom: '0.75rem', color: '#6b7280', fontSize: '0.9rem' }}>
+        <p
+          style={{
+            marginTop: '-0.5rem',
+            marginBottom: '0.75rem',
+            color: '#6b7280',
+            fontSize: '0.9rem',
+          }}
+        >
           {connected ? `Connected • ${formatCallDuration(callSeconds)}` : 'Connecting...'}
         </p>
         {error && <p className="dashboard-error">{error}</p>}
         {loading && <p className="dashboard-loading">Joining call...</p>}
 
-        <div style={{ display: 'grid', gridTemplateColumns: reservation.onlineType === 'video' ? '1fr 1fr' : '1fr', gap: '0.75rem' }}>
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: reservation.onlineType === 'video' ? '1fr 1fr' : '1fr',
+            gap: '0.75rem',
+          }}
+        >
           {reservation.onlineType === 'video' && (
-            <div style={{ minHeight: 220, borderRadius: 8, border: '1px solid rgba(0,0,0,0.1)', overflow: 'hidden' }}>
+            <div
+              style={{
+                minHeight: 220,
+                borderRadius: 8,
+                border: '1px solid rgba(0,0,0,0.1)',
+                overflow: 'hidden',
+              }}
+            >
               <div ref={localVideoRef} style={{ width: '100%', height: '100%' }} />
             </div>
           )}
@@ -381,14 +406,29 @@ export const OnlineCallModal = ({ open, reservation, accessToken, onClose, onEnd
               </p>
             </div>
           ) : (
-            <div style={{ minHeight: 220, borderRadius: 8, border: '1px solid rgba(0,0,0,0.1)', overflow: 'hidden' }}>
+            <div
+              style={{
+                minHeight: 220,
+                borderRadius: 8,
+                border: '1px solid rgba(0,0,0,0.1)',
+                overflow: 'hidden',
+              }}
+            >
               <div ref={remoteVideoRef} style={{ width: '100%', height: '100%' }} />
             </div>
           )}
         </div>
 
-        <div className="dashboard-form-row" style={{ marginTop: '1rem', gap: '0.5rem', flexWrap: 'wrap' }}>
-          <button type="button" className="dashboard-btn dashboard-btn--secondary" onClick={() => void toggleMic()} disabled={!connected}>
+        <div
+          className="dashboard-form-row"
+          style={{ marginTop: '1rem', gap: '0.5rem', flexWrap: 'wrap' }}
+        >
+          <button
+            type="button"
+            className="dashboard-btn dashboard-btn--secondary"
+            onClick={() => void toggleMic()}
+            disabled={!connected}
+          >
             {micMuted ? 'Unmute Mic' : 'Mute Mic'}
           </button>
           {reservation.onlineType === 'video' && (

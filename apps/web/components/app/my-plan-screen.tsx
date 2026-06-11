@@ -57,9 +57,7 @@ export const MyPlanScreen = ({ locale, dictionary }: Props) => {
     setLoading(true);
     try {
       const [planList, w, subscription, usage] = await Promise.all([
-        accessToken
-          ? plansApiClient.listActivePlans(accessToken)
-          : Promise.resolve([] as Plan[]),
+        accessToken ? plansApiClient.listActivePlans(accessToken) : Promise.resolve([] as Plan[]),
         accessToken ? walletApiClient.getMyWallet(accessToken) : Promise.resolve(null),
         accessToken ? plansApiClient.getCurrentSubscription(accessToken) : Promise.resolve(null),
         accessToken ? plansApiClient.getMyUsage(accessToken) : Promise.resolve(null),
@@ -137,9 +135,9 @@ export const MyPlanScreen = ({ locale, dictionary }: Props) => {
     plansFeatureEnabled &&
     !loading &&
     u?.plansFeatureEnabled &&
-    (((role === 'customer' && u.customer) ||
+    ((role === 'customer' && u.customer) ||
       ((role === 'expert' || role === 'craftsman') && u.individualProvider) ||
-      (role === 'business' && u.business)) ||
+      (role === 'business' && u.business) ||
       (u.usageQuotas?.length ?? 0) > 0);
 
   const getPlanIcon = (slug: string) => {
@@ -263,7 +261,9 @@ export const MyPlanScreen = ({ locale, dictionary }: Props) => {
                 <>
                   <li>
                     {u.individualProvider.maxServices == null
-                      ? fmt(d.usageServicesUnlimited ?? '', { used: u.individualProvider.servicesCount })
+                      ? fmt(d.usageServicesUnlimited ?? '', {
+                          used: u.individualProvider.servicesCount,
+                        })
                       : fmt(d.usageServices ?? '', {
                           used: u.individualProvider.servicesCount,
                           max: u.individualProvider.maxServices,
@@ -296,7 +296,9 @@ export const MyPlanScreen = ({ locale, dictionary }: Props) => {
                   </li>
                   <li>
                     {u.business.maxBusinessServices == null
-                      ? fmt(d.usageBusinessServicesUnlimited ?? '', { used: u.business.servicesCount })
+                      ? fmt(d.usageBusinessServicesUnlimited ?? '', {
+                          used: u.business.servicesCount,
+                        })
                       : fmt(d.usageBusinessServices ?? '', {
                           used: u.business.servicesCount,
                           max: u.business.maxBusinessServices,

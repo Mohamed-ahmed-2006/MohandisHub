@@ -53,18 +53,19 @@ async function parseJsonSafe(res: Response): Promise<unknown> {
 export function isPaymobDepositConfigured(): boolean {
   return Boolean(
     env.PAYMOB_DEPOSITS_ENABLED &&
-      env.PAYMOB_SECRET_KEY &&
-      env.PAYMOB_PUBLIC_KEY &&
-      env.PAYMOB_HMAC_SECRET &&
-      env.PAYMOB_INTEGRATION_IDS,
+    env.PAYMOB_SECRET_KEY &&
+    env.PAYMOB_PUBLIC_KEY &&
+    env.PAYMOB_HMAC_SECRET &&
+    env.PAYMOB_INTEGRATION_IDS,
   );
 }
 
 export function isPaymobPayoutConfigured(): boolean {
   return Boolean(
     env.PAYMOB_WITHDRAWALS_ENABLED &&
-      env.PAYMOB_PAYOUT_CLIENT_ID &&
-      env.PAYMOB_PAYOUT_CLIENT_SECRET,
+    env.PAYMOB_PAYOUT_CLIENT_ID &&
+    env.PAYMOB_PAYOUT_CLIENT_SECRET &&
+    env.PAYMOB_PAYOUT_BASE_URL,
   );
 }
 
@@ -106,7 +107,8 @@ export async function createPaymobIntention(
 ): Promise<CreatePaymobIntentionResult> {
   if (!isPaymobDepositConfigured()) throw new PaymobNotConfiguredError();
   const integrationIds = parseIntegrationIds();
-  if (integrationIds.length === 0) throw new PaymobNotConfiguredError('No Paymob integration ids configured.');
+  if (integrationIds.length === 0)
+    throw new PaymobNotConfiguredError('No Paymob integration ids configured.');
 
   const amountCents = Math.round(params.amountEgp * 100);
   const res = await fetch(`${env.PAYMOB_API_BASE_URL}/v1/intention/`, {
@@ -125,9 +127,10 @@ export async function createPaymobIntention(
       billing_data: params.billingData,
     }),
   });
-  const body = (await parseJsonSafe(res)) as
-    | { client_secret?: string; id?: string | number }
-    | null;
+  const body = (await parseJsonSafe(res)) as {
+    client_secret?: string;
+    id?: string | number;
+  } | null;
   if (!res.ok || !body?.client_secret) {
     throw new PaymobApiError(res.status, body);
   }
@@ -208,7 +211,8 @@ export function verifyPaymobHmac(
 // ---------------------------------------------------------------------------
 
 export async function authenticatePaymobPayout(): Promise<string> {
-  if (!isPaymobPayoutConfigured()) throw new PaymobNotConfiguredError('Paymob payouts are not configured yet.');
+  if (!isPaymobPayoutConfigured())
+    throw new PaymobNotConfiguredError('Paymob payouts are not configured yet.');
   const res = await fetch(`${env.PAYMOB_PAYOUT_BASE_URL}/api/secure/o/token/`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -240,7 +244,8 @@ export async function createPaymobDisbursement(
   accessToken: string,
   params: PaymobDisbursementParams,
 ): Promise<PaymobDisbursementResult> {
-  if (!isPaymobPayoutConfigured()) throw new PaymobNotConfiguredError('Paymob payouts are not configured yet.');
+  if (!isPaymobPayoutConfigured())
+    throw new PaymobNotConfiguredError('Paymob payouts are not configured yet.');
   const res = await fetch(`${env.PAYMOB_PAYOUT_BASE_URL}/api/secure/disburse/`, {
     method: 'POST',
     headers: {
@@ -253,9 +258,12 @@ export async function createPaymobDisbursement(
       reference: params.reference,
     }),
   });
-  const body = (await parseJsonSafe(res)) as
-    | { transaction_id?: string | number; reference?: string; disbursement_status?: string; status?: string }
-    | null;
+  const body = (await parseJsonSafe(res)) as {
+    transaction_id?: string | number;
+    reference?: string;
+    disbursement_status?: string;
+    status?: string;
+  } | null;
   if (!res.ok || !body) {
     throw new PaymobApiError(res.status, body);
   }

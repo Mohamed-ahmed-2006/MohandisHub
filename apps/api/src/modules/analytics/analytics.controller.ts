@@ -12,10 +12,17 @@ import { AnalyticsService } from './analytics.service.js';
 
 const analyticsService = new AnalyticsService();
 
-function requireProvider(req: { user?: { id: string; role?: string } }): { id: string; role: string } {
+function requireProvider(req: { user?: { id: string; role?: string } }): {
+  id: string;
+  role: string;
+} {
   const user = req.user;
   if (!user) {
-    throw new HttpError({ statusCode: 401, code: 'UNAUTHORIZED', message: 'Authentication required.' });
+    throw new HttpError({
+      statusCode: 401,
+      code: 'UNAUTHORIZED',
+      message: 'Authentication required.',
+    });
   }
   const role = user.role ?? 'customer';
   if (!canAccessProviderAnalytics(role)) {

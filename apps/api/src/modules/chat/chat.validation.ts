@@ -21,15 +21,18 @@ export const sendMessageSchema = z
         case 'location':
           return data.lat != null && data.lng != null;
         case 'text':
-          return ((data.body ?? '').trim().length > 0) || !!data.attachmentUrl;
+          return (data.body ?? '').trim().length > 0 || !!data.attachmentUrl;
         case 'image':
         case 'voice':
-          return ((data.body ?? '').trim().length > 0) || !!data.attachmentUrl;
+          return (data.body ?? '').trim().length > 0 || !!data.attachmentUrl;
         default:
           return true;
       }
     },
-    { message: 'Link requires linkUrl; location requires lat/lng; text/image/voice requires body or attachmentUrl.' },
+    {
+      message:
+        'Link requires linkUrl; location requires lat/lng; text/image/voice requires body or attachmentUrl.',
+    },
   );
 
 export type SendMessageInput = z.infer<typeof sendMessageSchema>;

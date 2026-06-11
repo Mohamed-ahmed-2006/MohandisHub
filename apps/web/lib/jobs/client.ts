@@ -17,11 +17,17 @@ import type {
 
 import { getApiBaseUrl } from '../env';
 
+import { bearerTokenFromHeaders, fetchWithAuthRetry } from '@/lib/auth/fetch-with-auth-retry';
+
 const createIdempotencyKey = () =>
   typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : `${Date.now()}`;
 
 async function apiReq<T>(path: string, options?: RequestInit): Promise<T> {
-  const res = await fetch(`${getApiBaseUrl()}${path}`, options);
+  const res = await fetchWithAuthRetry(
+    `${getApiBaseUrl()}${path}`,
+    options ?? {},
+    bearerTokenFromHeaders(options?.headers),
+  );
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
     const err = data as { error?: { message?: string } };
@@ -31,11 +37,18 @@ async function apiReq<T>(path: string, options?: RequestInit): Promise<T> {
 }
 
 export const jobsApiClient = {
-  async listOpenJobs(page = 1, limit = 20): Promise<{ items: Job[]; total: number; page: number; limit: number; totalPages: number }> {
+  async listOpenJobs(
+    page = 1,
+    limit = 20,
+  ): Promise<{ items: Job[]; total: number; page: number; limit: number; totalPages: number }> {
     return apiReq(`/api/jobs?page=${page}&limit=${limit}`);
   },
 
-  async listBusinessJobs(accessToken: string, page = 1, limit = 20): Promise<{ items: Job[]; total: number; page: number; limit: number; totalPages: number }> {
+  async listBusinessJobs(
+    accessToken: string,
+    page = 1,
+    limit = 20,
+  ): Promise<{ items: Job[]; total: number; page: number; limit: number; totalPages: number }> {
     return apiReq(`/api/jobs/my?page=${page}&limit=${limit}`, {
       headers: { Authorization: `Bearer ${accessToken}` },
     });
@@ -75,7 +88,11 @@ export const jobsApiClient = {
     });
   },
 
-  async updateApplicationStatus(accessToken: string, appId: string, status: string): Promise<JobApplication> {
+  async updateApplicationStatus(
+    accessToken: string,
+    appId: string,
+    status: string,
+  ): Promise<JobApplication> {
     return apiReq(`/api/jobs/applications/${appId}/status`, {
       method: 'PATCH',
       headers: {
@@ -93,7 +110,11 @@ export const jobsApiClient = {
     });
   },
 
-  async createMilestone(accessToken: string, appId: string, dto: CreateMilestoneDto): Promise<JobMilestone> {
+  async createMilestone(
+    accessToken: string,
+    appId: string,
+    dto: CreateMilestoneDto,
+  ): Promise<JobMilestone> {
     return apiReq(`/api/jobs/applications/${appId}/milestones`, {
       method: 'POST',
       headers: {
@@ -110,7 +131,11 @@ export const jobsApiClient = {
     });
   },
 
-  async submitMilestone(accessToken: string, milestoneId: string, dto: SubmitMilestoneDto): Promise<JobSubmission> {
+  async submitMilestone(
+    accessToken: string,
+    milestoneId: string,
+    dto: SubmitMilestoneDto,
+  ): Promise<JobSubmission> {
     return apiReq(`/api/jobs/milestones/${milestoneId}/submit`, {
       method: 'POST',
       headers: {
@@ -121,7 +146,11 @@ export const jobsApiClient = {
     });
   },
 
-  async reviewMilestone(accessToken: string, milestoneId: string, status: 'approved' | 'rejected'): Promise<JobMilestone> {
+  async reviewMilestone(
+    accessToken: string,
+    milestoneId: string,
+    status: 'approved' | 'rejected',
+  ): Promise<JobMilestone> {
     return apiReq(`/api/jobs/milestones/${milestoneId}/review`, {
       method: 'POST',
       headers: {
@@ -132,13 +161,20 @@ export const jobsApiClient = {
     });
   },
 
-  async getApplicationMessages(accessToken: string, appId: string): Promise<JobApplicationMessage[]> {
+  async getApplicationMessages(
+    accessToken: string,
+    appId: string,
+  ): Promise<JobApplicationMessage[]> {
     return apiReq(`/api/jobs/applications/${appId}/messages`, {
       headers: { Authorization: `Bearer ${accessToken}` },
     });
   },
 
-  async sendApplicationMessage(accessToken: string, appId: string, content: string): Promise<JobApplicationMessage> {
+  async sendApplicationMessage(
+    accessToken: string,
+    appId: string,
+    content: string,
+  ): Promise<JobApplicationMessage> {
     return apiReq(`/api/jobs/applications/${appId}/messages`, {
       method: 'POST',
       headers: {
@@ -172,9 +208,12 @@ export const jobsApiClient = {
     const query = new URLSearchParams();
     if (params?.from) query.set('from', params.from);
     if (params?.to) query.set('to', params.to);
-    return apiReq(`/api/jobs/${jobId}/interview-slots${query.toString() ? `?${query.toString()}` : ''}`, {
-      headers: { Authorization: `Bearer ${accessToken}` },
-    });
+    return apiReq(
+      `/api/jobs/${jobId}/interview-slots${query.toString() ? `?${query.toString()}` : ''}`,
+      {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      },
+    );
   },
 
   async updateInterviewSlot(

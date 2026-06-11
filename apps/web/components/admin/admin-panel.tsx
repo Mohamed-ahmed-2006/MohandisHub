@@ -49,6 +49,14 @@ type TabId =
   | 'media'
   | 'ads';
 
+const hasAdminPermission = (
+  permissions: readonly string[] | undefined,
+  permission: string,
+): boolean => {
+  const list = permissions ?? [];
+  return list.includes('super_admin') || list.includes(permission);
+};
+
 export const AdminPanel = ({ locale, dictionary }: AdminPanelProps) => {
   const router = useRouter();
   const { authUser, accessToken, refreshSession, isAuthenticated, isReady, authGuard } = useAuth();
@@ -71,29 +79,49 @@ export const AdminPanel = ({ locale, dictionary }: AdminPanelProps) => {
 
   // Must be called unconditionally (Rules of Hooks) - before any early return
   const tabs: { id: TabId; label: string; permission?: string }[] = [
-    { id: 'dashboard', label: dictionary.admin.tabs.dashboard },
+    { id: 'dashboard', label: dictionary.admin.tabs.dashboard, permission: 'super_admin' },
     { id: 'users', label: dictionary.admin.tabs.users, permission: 'manage_users' },
     { id: 'plans', label: dictionary.admin.tabs.plans, permission: 'manage_plans' },
-    { id: 'transactions', label: dictionary.admin.tabs.transactions, permission: 'manage_transactions' },
-    { id: 'walletRails', label: dictionary.admin.tabs.walletRails, permission: 'manage_transactions' },
+    {
+      id: 'transactions',
+      label: dictionary.admin.tabs.transactions,
+      permission: 'manage_transactions',
+    },
+    {
+      id: 'walletRails',
+      label: dictionary.admin.tabs.walletRails,
+      permission: 'manage_transactions',
+    },
     { id: 'services', label: dictionary.admin.tabs.services, permission: 'manage_services' },
     { id: 'categories', label: dictionary.admin.tabs.categories, permission: 'manage_services' },
-    { id: 'verifications', label: dictionary.admin.tabs.verifications, permission: 'manage_verifications' },
-    { id: 'reviewReports', label: dictionary.admin.tabs.reviewReports ?? '', permission: 'manage_verifications' },
+    {
+      id: 'verifications',
+      label: dictionary.admin.tabs.verifications,
+      permission: 'manage_verifications',
+    },
+    {
+      id: 'reviewReports',
+      label: dictionary.admin.tabs.reviewReports ?? '',
+      permission: 'manage_verifications',
+    },
     { id: 'support', label: dictionary.admin.tabs.support ?? '', permission: 'manage_support' },
-    { id: 'notifications', label: dictionary.admin.tabs.notifications ?? '', permission: 'manage_notifications' },
+    {
+      id: 'notifications',
+      label: dictionary.admin.tabs.notifications ?? '',
+      permission: 'manage_notifications',
+    },
     { id: 'ads', label: dictionary.admin.tabs.ads ?? 'Advertisements', permission: 'manage_ads' },
     { id: 'media', label: 'Media library', permission: 'manage_media' },
     { id: 'settings', label: dictionary.admin.tabs.settings, permission: 'manage_settings' },
-    { id: 'retention', label: dictionary.admin.tabs.retention ?? 'Retention', permission: 'manage_retention' },
+    {
+      id: 'retention',
+      label: dictionary.admin.tabs.retention ?? 'Retention',
+      permission: 'manage_retention',
+    },
   ];
 
   const filteredTabs = tabs.filter(
-    (tab) =>
-      !tab.permission ||
-      !authUser?.adminPermissions ||
-      authUser.adminPermissions?.length === 0 ||
-      authUser.adminPermissions?.includes(tab.permission),
+    (tab) => !tab.permission || hasAdminPermission(authUser?.adminPermissions, tab.permission),
   );
 
   useEffect(() => {
@@ -105,13 +133,7 @@ export const AdminPanel = ({ locale, dictionary }: AdminPanelProps) => {
   // Never render the admin surface for non-admins, unverified users, or while
   // auth state is settling. The redirect happens in the effect above; until it
   // completes we show only the skeleton so no admin UI ever paints.
-  if (
-    !isReady ||
-    !authUser ||
-    !accessToken ||
-    !authGuard.emailVerified ||
-    !authUser.isAdmin
-  ) {
+  if (!isReady || !authUser || !accessToken || !authGuard.emailVerified || !authUser.isAdmin) {
     return (
       <main className="admin-panel-main">
         <Container className="admin-panel-container">

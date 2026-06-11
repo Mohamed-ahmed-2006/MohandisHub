@@ -160,7 +160,11 @@
   padding: clamp(1rem, 2vw, 1.25rem);
   border-radius: var(--radius-lg);
   border: 1px solid hsl(var(--glass-border));
-  background: linear-gradient(180deg, hsl(var(--glass-bg-strong)), color-mix(in srgb, hsl(var(--card)) 84%, transparent));
+  background: linear-gradient(
+    180deg,
+    hsl(var(--glass-bg-strong)),
+    color-mix(in srgb, hsl(var(--card)) 84%, transparent)
+  );
   margin-bottom: 1.15rem;
   box-shadow: var(--elevation-2), var(--glass-shadow);
   backdrop-filter: blur(var(--glass-blur));
@@ -417,12 +421,16 @@
 
 .home-top-card--clickable {
   cursor: pointer;
-  transition: opacity 0.15s, box-shadow 0.15s;
+  transition:
+    opacity 0.15s,
+    box-shadow 0.15s;
 }
 
 .home-top-card--clickable:hover {
   opacity: 0.9;
-  box-shadow: var(--shadow-soft), 0 0 0 2px hsl(var(--primary) / 0.2);
+  box-shadow:
+    var(--shadow-soft),
+    0 0 0 2px hsl(var(--primary) / 0.2);
 }
 
 .home-top-card--clickable:focus-visible {

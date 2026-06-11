@@ -1,4 +1,9 @@
-import type { ApiSuccessBody, Plan, PlanUsageSummary, SubscribeToPlanResponse } from '@mohandishub/shared';
+import type {
+  ApiSuccessBody,
+  Plan,
+  PlanUsageSummary,
+  SubscribeToPlanResponse,
+} from '@mohandishub/shared';
 
 import { asyncHandler } from '../../utils/async-handler.js';
 import { HttpError } from '../../utils/http-error.js';

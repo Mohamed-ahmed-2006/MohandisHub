@@ -12,7 +12,10 @@ const loadLocalEnv = () => {
     const separator = trimmed.indexOf('=');
     if (separator <= 0) continue;
     const key = trimmed.slice(0, separator).trim();
-    const value = trimmed.slice(separator + 1).trim().replace(/^['"]|['"]$/g, '');
+    const value = trimmed
+      .slice(separator + 1)
+      .trim()
+      .replace(/^['"]|['"]$/g, '');
     process.env[key] ??= value;
   }
 };
@@ -20,6 +23,11 @@ const loadLocalEnv = () => {
 loadLocalEnv();
 
 const baseURL = process.env.PLAYWRIGHT_BASE_URL ?? process.env.BASE_URL ?? 'http://localhost:3000';
+const apiBaseURL =
+  process.env.E2E_API_BASE_URL ?? process.env.API_BASE_URL ?? 'http://localhost:4000';
+process.env.E2E_API_BASE_URL ??= apiBaseURL;
+
+const isLocalWeb = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?/i.test(baseURL);
 
 export default defineConfig({
   testDir: './specs',
@@ -33,16 +41,25 @@ export default defineConfig({
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
   },
-  projects: [
-    { name: 'chromium', use: { ...devices['Desktop Chrome'] } },
-  ],
-  webServer: {
-    command: 'npm run dev:web',
-    cwd: '../..',
-    reuseExistingServer: !process.env.CI,
-    timeout: 120_000,
-    url: 'http://127.0.0.1:3000/en',
-  },
+  projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
+  webServer: isLocalWeb
+    ? [
+        {
+          command: 'node scripts/e2e-dev-api.mjs',
+          cwd: '../..',
+          reuseExistingServer: !process.env.CI,
+          timeout: 120_000,
+          url: `${apiBaseURL.replace(/\/$/, '')}/health`,
+        },
+        {
+          command: 'npm run dev:web',
+          cwd: '../..',
+          reuseExistingServer: !process.env.CI,
+          timeout: 120_000,
+          url: `${baseURL.replace(/\/$/, '')}/en`,
+        },
+      ]
+    : undefined,
   timeout: 60_000,
   expect: { timeout: 10_000 },
 });

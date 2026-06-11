@@ -46,6 +46,7 @@ import type {
 
 import { ApiClientRequestError, isApiClientError } from '../auth/client';
 
+import { fetchWithAuthRetry } from '@/lib/auth/fetch-with-auth-retry';
 import { getApiBaseUrl } from '@/lib/env';
 
 type ApiRequestOptions = {
@@ -73,15 +74,19 @@ const apiRequest = async <T>({
   refreshSession,
 }: ApiRequestOptions): Promise<T> => {
   const doRequest = async (token: string): Promise<T> => {
-    const response = await fetch(`${getApiBaseUrl()}${path}`, {
-      method,
-      credentials: 'include',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
+    const response = await fetchWithAuthRetry(
+      `${getApiBaseUrl()}${path}`,
+      {
+        method,
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        ...(body ? { body: JSON.stringify(body) } : {}),
       },
-      ...(body ? { body: JSON.stringify(body) } : {}),
-    });
+      token,
+    );
 
     if (!response.ok) {
       const rawErrorBody: unknown = await response.json().catch(() => null);
@@ -314,7 +319,13 @@ export const adminApiClient = {
 
   sendNotification: (
     accessToken: string,
-    body: { target: 'all' | 'users' | 'role'; userIds?: string[]; role?: string; title: string; message: string },
+    body: {
+      target: 'all' | 'users' | 'role';
+      userIds?: string[];
+      role?: string;
+      title: string;
+      message: string;
+    },
     options?: AdminClientOptions,
   ) =>
     apiRequest<{ created: number }>({
@@ -907,14 +918,18 @@ export const adminApiClient = {
     options?: AdminClientOptions,
   ): Promise<string> => {
     const doFetch = async (token: string): Promise<string> => {
-      const res = await fetch(`${getApiBaseUrl()}${pathWithQuery}`, {
-        method: 'GET',
-        credentials: 'include',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
+      const res = await fetchWithAuthRetry(
+        `${getApiBaseUrl()}${pathWithQuery}`,
+        {
+          method: 'GET',
+          credentials: 'include',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
         },
-      });
+        token,
+      );
       if (res.status === 401 && options?.refreshSession) {
         const next = await options.refreshSession();
         if (next) return doFetch(next);
@@ -929,7 +944,11 @@ export const adminApiClient = {
     return doFetch(accessToken);
   },
 
-  listMediaAssets: (accessToken: string, usageType?: AdminMediaUsageType, options?: AdminClientOptions) => {
+  listMediaAssets: (
+    accessToken: string,
+    usageType?: AdminMediaUsageType,
+    options?: AdminClientOptions,
+  ) => {
     const qs = usageType ? `?usageType=${encodeURIComponent(usageType)}` : '';
     return apiRequest<AdminMediaAsset[]>({
       method: 'GET',

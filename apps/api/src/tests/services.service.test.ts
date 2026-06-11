@@ -78,7 +78,11 @@ describe('ServicesService launch hardening', () => {
     const plansService = {
       getEffectivePlanLimits: vi.fn(),
     };
-    const service = new ServicesService(repo as never, plansService as never, settingsService as never);
+    const service = new ServicesService(
+      repo as never,
+      plansService as never,
+      settingsService as never,
+    );
 
     const result = await service.createService('provider-1', 'expert', {
       title: 'Structural Review',
@@ -113,9 +117,7 @@ describe('ServicesService launch hardening', () => {
   it('submits draft services for review instead of activating them', async () => {
     const repo = {
       getServiceByIdAndProvider: vi.fn().mockResolvedValue(makeServiceRow({ status: 'draft' })),
-      updateServiceStatus: vi
-        .fn()
-        .mockResolvedValue(makeServiceRow({ status: 'pending_review' })),
+      updateServiceStatus: vi.fn().mockResolvedValue(makeServiceRow({ status: 'pending_review' })),
     };
     const service = new ServicesService(repo as never, {} as never, {} as never);
 
@@ -131,17 +133,21 @@ describe('ServicesService launch hardening', () => {
 
   it('moves active services back to review when provider edits public listing content', async () => {
     const repo = {
-      getServiceByIdAndProvider: vi.fn().mockResolvedValue(makeServiceRow({
-        status: 'active',
-        reviewed_by: 'admin-1',
-        reviewed_at: new Date().toISOString(),
-      })),
-      updateService: vi.fn().mockResolvedValue(makeServiceRow({
-        status: 'pending_review',
-        title: 'Updated Structural Review',
-        reviewed_by: null,
-        reviewed_at: null,
-      })),
+      getServiceByIdAndProvider: vi.fn().mockResolvedValue(
+        makeServiceRow({
+          status: 'active',
+          reviewed_by: 'admin-1',
+          reviewed_at: new Date().toISOString(),
+        }),
+      ),
+      updateService: vi.fn().mockResolvedValue(
+        makeServiceRow({
+          status: 'pending_review',
+          title: 'Updated Structural Review',
+          reviewed_by: null,
+          reviewed_at: null,
+        }),
+      ),
     };
     const settingsService = {
       getAppStatus: vi.fn().mockResolvedValue({ featureHourlyPricingEnabled: true }),
@@ -169,9 +175,7 @@ describe('ServicesService launch hardening', () => {
   it('allows rejected services to be resubmitted after provider edits', async () => {
     const repo = {
       getServiceByIdAndProvider: vi.fn().mockResolvedValue(makeServiceRow({ status: 'rejected' })),
-      updateServiceStatus: vi
-        .fn()
-        .mockResolvedValue(makeServiceRow({ status: 'pending_review' })),
+      updateServiceStatus: vi.fn().mockResolvedValue(makeServiceRow({ status: 'pending_review' })),
     };
     const service = new ServicesService(repo as never, {} as never, {} as never);
 

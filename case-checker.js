@@ -3,7 +3,7 @@ const path = require('path');
 
 function checkDir(dir) {
   const files = fs.readdirSync(dir);
-  files.forEach(f => {
+  files.forEach((f) => {
     const fullPath = path.join(dir, f);
     if (fs.statSync(fullPath).isDirectory()) {
       if (f !== 'node_modules' && f !== '.next' && f !== '.git' && f !== 'dist') {
@@ -20,27 +20,34 @@ function checkDir(dir) {
           const parentDir = path.dirname(resolvedDir);
           const baseName = path.basename(resolvedDir);
           if (fs.existsSync(parentDir)) {
-             const actualFiles = fs.readdirSync(parentDir);
-             
-             // Exact match?
-             let hasExact = false;
-             let hasCaseInsensitive = false;
-             let matchedName = '';
-             
-             for (const af of actualFiles) {
-               const withoutExt = af.replace(/\.(ts|tsx|js|jsx)$/, '');
-               if (withoutExt === baseName) {
-                 hasExact = true;
-               }
-               if (withoutExt.toLowerCase() === baseName.toLowerCase()) {
-                 hasCaseInsensitive = true;
-                 matchedName = af;
-               }
-             }
-             
-             if (!hasExact && hasCaseInsensitive) {
-               console.log('Case mismatch in', fullPath, 'Import:', importPath, 'Actual file:', matchedName);
-             }
+            const actualFiles = fs.readdirSync(parentDir);
+
+            // Exact match?
+            let hasExact = false;
+            let hasCaseInsensitive = false;
+            let matchedName = '';
+
+            for (const af of actualFiles) {
+              const withoutExt = af.replace(/\.(ts|tsx|js|jsx)$/, '');
+              if (withoutExt === baseName) {
+                hasExact = true;
+              }
+              if (withoutExt.toLowerCase() === baseName.toLowerCase()) {
+                hasCaseInsensitive = true;
+                matchedName = af;
+              }
+            }
+
+            if (!hasExact && hasCaseInsensitive) {
+              console.log(
+                'Case mismatch in',
+                fullPath,
+                'Import:',
+                importPath,
+                'Actual file:',
+                matchedName,
+              );
+            }
           }
         }
       }

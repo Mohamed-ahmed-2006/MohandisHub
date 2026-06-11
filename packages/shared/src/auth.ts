@@ -3,6 +3,7 @@
 // ---------------------------------------------------------------------------
 
 import type { UserRole } from './roles.js';
+import type { AdminPermission } from './admin.js';
 import type { VerificationStatus } from './verification.js';
 
 /** Payload sent when registering a new user. */
@@ -83,7 +84,7 @@ export type AuthUser = {
   dateOfBirth: string | null;
   role: UserRole;
   isAdmin: boolean;
-  adminPermissions: string[];
+  adminPermissions: AdminPermission[];
   plan: string;
   /** Plan grants a Pro-style badge (experts & craftsmen). */
   planProBadge?: boolean;

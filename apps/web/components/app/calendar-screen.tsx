@@ -47,7 +47,9 @@ const parseMoneyInput = (value: string): number => {
 };
 
 const withDayKeyAndTime = (value: string, dayKey: string, fallbackTime: string): string => {
-  const timePart = value.includes('T') ? value.slice(value.indexOf('T') + 1, value.indexOf('T') + 6) : '';
+  const timePart = value.includes('T')
+    ? value.slice(value.indexOf('T') + 1, value.indexOf('T') + 6)
+    : '';
   return `${dayKey}T${timePart || fallbackTime}`;
 };
 
@@ -321,9 +323,14 @@ export const CalendarScreen = (_props: Props) => {
         {pendingCount > 0 && (
           <div className="dashboard-banner dashboard-banner--warning" role="status">
             <p>
-              You have {pendingCount} pending request{pendingCount !== 1 ? 's' : ''}. Accept or reject them so customers get a response.
+              You have {pendingCount} pending request{pendingCount !== 1 ? 's' : ''}. Accept or
+              reject them so customers get a response.
             </p>
-            <a href={bookingsPath} className="dashboard-primary-btn" style={{ textDecoration: 'none', flexShrink: 0 }}>
+            <a
+              href={bookingsPath}
+              className="dashboard-primary-btn"
+              style={{ textDecoration: 'none', flexShrink: 0 }}
+            >
               View requests
             </a>
           </div>
@@ -408,7 +415,9 @@ export const CalendarScreen = (_props: Props) => {
             </section>
 
             <section className="dashboard-card calendar-day-details">
-              <h2 className="dashboard-section-title calendar-day-details-title">{dayDetailsTitle}</h2>
+              <h2 className="dashboard-section-title calendar-day-details-title">
+                {dayDetailsTitle}
+              </h2>
               <p className="dashboard-card-meta calendar-day-details-meta">
                 {selectedDayLabel}: {formatDateLabel(selectedDayDate)}
               </p>
@@ -436,7 +445,8 @@ export const CalendarScreen = (_props: Props) => {
                           >
                             <div className="calendar-slot-info">
                               <span className="calendar-slot-time">
-                                {formatDateLabel(start)} {formatTimeLabel(start)} - {formatTimeLabel(end)}
+                                {formatDateLabel(start)} {formatTimeLabel(start)} -{' '}
+                                {formatTimeLabel(end)}
                               </span>
                               <span className="calendar-slot-status">
                                 {slot.status} | {slot.supportsOnline ? onlineText : ''}
@@ -479,7 +489,10 @@ export const CalendarScreen = (_props: Props) => {
                     </ul>
                   )}
 
-                  <h3 className="dashboard-section-title" style={{ fontSize: '0.95rem', marginTop: '1rem' }}>
+                  <h3
+                    className="dashboard-section-title"
+                    style={{ fontSize: '0.95rem', marginTop: '1rem' }}
+                  >
                     {reservationsTitle}
                   </h3>
                   {selectedDayReservations.length === 0 ? (
@@ -498,7 +511,9 @@ export const CalendarScreen = (_props: Props) => {
                             </span>
                             {' - '}
                             <span>{formatDateLabel(new Date(r.requestedStartAt))}</span>
-                            <span className={`calendar-booking-status calendar-booking-status--${r.status}`}>
+                            <span
+                              className={`calendar-booking-status calendar-booking-status--${r.status}`}
+                            >
                               {r.status}
                             </span>
                           </div>
@@ -526,11 +541,11 @@ export const CalendarScreen = (_props: Props) => {
                     type="checkbox"
                     checked={autoAccept}
                     onChange={(e) => setAutoAccept(e.target.checked)}
-                  />
-                  {' '}Auto-accept requests when slot is still free
+                  />{' '}
+                  Auto-accept requests when slot is still free
                 </label>
                 <label className="dashboard-card-meta">
-                Voice session fixed price (EGP)
+                  Voice session fixed price (EGP)
                   <input
                     type="number"
                     min={0}
@@ -541,7 +556,7 @@ export const CalendarScreen = (_props: Props) => {
                   />
                 </label>
                 <label className="dashboard-card-meta">
-                Video session fixed price (EGP)
+                  Video session fixed price (EGP)
                   <input
                     type="number"
                     min={0}
@@ -552,7 +567,7 @@ export const CalendarScreen = (_props: Props) => {
                   />
                 </label>
                 <label className="dashboard-card-meta">
-                Offline session fixed price (EGP)
+                  Offline session fixed price (EGP)
                   <input
                     type="number"
                     min={0}
@@ -602,19 +617,19 @@ export const CalendarScreen = (_props: Props) => {
                     type="checkbox"
                     checked={supportsOnline}
                     onChange={(e) => setSupportsOnline(e.target.checked)}
-                  />
-                  {' '}{onlineText}
+                  />{' '}
+                  {onlineText}
                 </label>
                 <label className="dashboard-card-meta reservation-settings-checkbox">
                   <input
                     type="checkbox"
                     checked={supportsOffline}
                     onChange={(e) => setSupportsOffline(e.target.checked)}
-                  />
-                  {' '}{offlineText}
+                  />{' '}
+                  {offlineText}
                 </label>
                 <button type="submit" className="dashboard-primary-btn" disabled={saving}>
-                  {saving ? '...' : dictionary.calendarPage?.addSlot ?? 'Add Slot'}
+                  {saving ? '...' : (dictionary.calendarPage?.addSlot ?? 'Add Slot')}
                 </button>
               </form>
             </section>

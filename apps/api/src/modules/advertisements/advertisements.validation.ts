@@ -96,4 +96,3 @@ export type AdminAdControlsInput = z.infer<typeof adminAdControlsSchema>;
 export type CreatePricingRuleInput = z.infer<typeof createPricingRuleSchema>;
 export type UpdatePricingRuleInput = z.infer<typeof updatePricingRuleSchema>;
 export type AdCenterResolveInput = z.infer<typeof adCenterResolveSchema>;
-

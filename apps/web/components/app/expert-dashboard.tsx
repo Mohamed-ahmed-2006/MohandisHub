@@ -16,7 +16,6 @@ import type { Bid, BidMessage, Need } from '@/lib/needs/client';
 import { needsApiClient } from '@/lib/needs/client';
 import { uploadFile } from '@/lib/upload/client';
 
-
 type Props = {
   locale: Locale;
   dictionary: Dictionary;
@@ -44,7 +43,7 @@ export const ExpertDashboard = ({
   const [bidding, setBidding] = useState(false);
   const [tab, setTab] = useState<'needs' | 'bids' | 'jobs'>('needs');
   const [bidAmountInput, setBidAmountInput] = useState<string>('');
-  
+
   const [chatBid, setChatBid] = useState<Bid | null>(null);
   const [messages, setMessages] = useState<BidMessage[]>([]);
   const [msgContent, setMsgContent] = useState('');
@@ -136,11 +135,16 @@ export const ExpertDashboard = ({
         setBidding(false);
         return;
       }
-      const bidData: { amount: number; message: string; deliveryDays?: number; estimatedHours?: number } = {
+      const bidData: {
+        amount: number;
+        message: string;
+        deliveryDays?: number;
+        estimatedHours?: number;
+      } = {
         amount,
         message,
       };
-      
+
       const ddRaw = form.elements.namedItem('deliveryDays') as HTMLInputElement | null;
       if (ddRaw) {
         const dd = parseInt(ddRaw.value, 10);
@@ -151,7 +155,7 @@ export const ExpertDashboard = ({
           return;
         }
       }
-      
+
       const ehRaw = form.elements.namedItem('estimatedHours') as HTMLInputElement | null;
       if (ehRaw) {
         const eh = parseInt(ehRaw.value, 10);
@@ -182,7 +186,10 @@ export const ExpertDashboard = ({
     <section className="dashboard-section">
       {suggestItems.length > 0 && (
         <div className="dashboard-suggestions">
-          <h3 className="dashboard-section-title" style={{ fontSize: '1rem', marginBottom: '0.5rem' }}>
+          <h3
+            className="dashboard-section-title"
+            style={{ fontSize: '1rem', marginBottom: '0.5rem' }}
+          >
             {suggestTitle}
           </h3>
           <ul className="dashboard-suggestions-list">
@@ -245,8 +252,7 @@ export const ExpertDashboard = ({
                         ? (d.fixed ?? 'Fixed')
                         : (d.hourly ?? 'Hourly')
                       : tr('Budget', 'الميزانية')}
-                    :{' '}
-                    {parseFloat(need.budget_amount).toFixed(2)} {need.currency}
+                    : {parseFloat(need.budget_amount).toFixed(2)} {need.currency}
                     {need.timeline_days && ` — ${need.timeline_days} days`}
                   </p>
                   {need.category_name_en && (
@@ -313,8 +319,21 @@ export const ExpertDashboard = ({
                   {parseFloat(bid.amount).toFixed(2)} {bid.currency}
                   {bid.delivery_days && ` — ${bid.delivery_days} days`}
                 </p>
-                <span className={`dashboard-badge dashboard-badge--${bid.status}`}>{bid.status}</span>
-                {bid.has_unread && <span className="dashboard-badge" style={{ background: 'hsl(var(--destructive))', color: '#fff', marginLeft: '0.5rem' }}>New Message</span>}
+                <span className={`dashboard-badge dashboard-badge--${bid.status}`}>
+                  {bid.status}
+                </span>
+                {bid.has_unread && (
+                  <span
+                    className="dashboard-badge"
+                    style={{
+                      background: 'hsl(var(--destructive))',
+                      color: '#fff',
+                      marginInlineStart: '0.5rem',
+                    }}
+                  >
+                    New Message
+                  </span>
+                )}
                 {bid.status === 'pending' && (
                   <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem' }}>
                     <button
@@ -323,7 +342,13 @@ export const ExpertDashboard = ({
                       onClick={() => {
                         const relatedNeed = openNeeds.find((n) => n.id === bid.need_id);
                         setEditingBid(bid);
-                        setBidNeed(relatedNeed || { id: bid.need_id, title: bid.need_title || 'Need', budget_type: bid.estimated_hours ? 'hourly' : 'fixed' });
+                        setBidNeed(
+                          relatedNeed || {
+                            id: bid.need_id,
+                            title: bid.need_title || 'Need',
+                            budget_type: bid.estimated_hours ? 'hourly' : 'fixed',
+                          },
+                        );
                         setBidAmountInput(bid.amount);
                         setBidError(null);
                       }}
@@ -377,11 +402,21 @@ export const ExpertDashboard = ({
                 onChange={(e) => setBidAmountInput(e.target.value)}
                 required
               />
-              <p className="dashboard-form-hint" style={{ marginTop: '-0.5rem', marginBottom: '0.5rem' }}>
+              <p
+                className="dashboard-form-hint"
+                style={{ marginTop: '-0.5rem', marginBottom: '0.5rem' }}
+              >
                 {bidAmountInput && !isNaN(Number(bidAmountInput)) ? (
-                  <>You will receive approximately <strong>{(Number(bidAmountInput) * 0.9).toFixed(2)} EGP</strong> after the 10% platform commission.</>
+                  <>
+                    You will receive approximately{' '}
+                    <strong>{(Number(bidAmountInput) * 0.9).toFixed(2)} EGP</strong> after the 10%
+                    platform commission.
+                  </>
                 ) : (
-                  <>Note: A platform commission (typically ~10%) will be deducted from this total upon payout.</>
+                  <>
+                    Note: A platform commission (typically ~10%) will be deducted from this total
+                    upon payout.
+                  </>
                 )}
               </p>
               {bidNeed.budget_type === 'hourly' && (
@@ -443,7 +478,16 @@ export const ExpertDashboard = ({
             style={{ maxWidth: 480 }}
           >
             <h3 className="plan-modal-title">Pre-Award Chat: {chatBid.need_title}</h3>
-            <div style={{ maxHeight: '300px', overflowY: 'auto', marginBottom: '1rem', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+            <div
+              style={{
+                maxHeight: '300px',
+                overflowY: 'auto',
+                marginBottom: '1rem',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '0.5rem',
+              }}
+            >
               {messages.map((m) => (
                 <div
                   key={m.id}
@@ -476,14 +520,27 @@ export const ExpertDashboard = ({
             {bidMsgAttachmentUrl ? (
               <div className="dashboard-need-chat-pending" style={{ marginBottom: '0.5rem' }}>
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={bidMsgAttachmentUrl} alt="" className="dashboard-need-chat-attach-thumb" />
-                <button type="button" className="dashboard-link-btn" onClick={() => setBidMsgAttachmentUrl(null)}>
+                <img
+                  src={bidMsgAttachmentUrl}
+                  alt=""
+                  className="dashboard-need-chat-attach-thumb"
+                />
+                <button
+                  type="button"
+                  className="dashboard-link-btn"
+                  onClick={() => setBidMsgAttachmentUrl(null)}
+                >
                   {tr('Remove image', 'إزالة الصورة')}
                 </button>
               </div>
             ) : null}
-            <label className="dashboard-need-chat-file" style={{ display: 'block', marginBottom: '0.5rem' }}>
-              <span className="dashboard-need-chat-file-label">{tr('Attach image', 'إرفاق صورة')}</span>
+            <label
+              className="dashboard-need-chat-file"
+              style={{ display: 'block', marginBottom: '0.5rem' }}
+            >
+              <span className="dashboard-need-chat-file-label">
+                {tr('Attach image', 'إرفاق صورة')}
+              </span>
               <input
                 type="file"
                 accept="image/*"
@@ -506,7 +563,12 @@ export const ExpertDashboard = ({
                 }}
               />
             </label>
-            <form onSubmit={(e) => { void sendMsg(e); }} className="dashboard-need-chat-form">
+            <form
+              onSubmit={(e) => {
+                void sendMsg(e);
+              }}
+              className="dashboard-need-chat-form"
+            >
               <input
                 className="dashboard-input"
                 value={msgContent}

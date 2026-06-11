@@ -68,15 +68,17 @@ describe('ReservationsService hardening', () => {
   it('returns stored reservation for idempotent cancellation retries', async () => {
     const reservation = makeReservationRow({ status: 'cancelled' });
     const repo = {
-      findActionIdempotency: vi.fn<() => Promise<ReservationActionIdempotencyRow | null>>().mockResolvedValue({
-        id: 'idem-1',
-        actor_id: 'customer-1',
-        action: 'cancel_reservation',
-        idempotency_key: 'retry-key',
-        reservation_id: reservation.id,
-        response_json: {},
-        created_at: new Date().toISOString(),
-      }),
+      findActionIdempotency: vi
+        .fn<() => Promise<ReservationActionIdempotencyRow | null>>()
+        .mockResolvedValue({
+          id: 'idem-1',
+          actor_id: 'customer-1',
+          action: 'cancel_reservation',
+          idempotency_key: 'retry-key',
+          reservation_id: reservation.id,
+          response_json: {},
+          created_at: new Date().toISOString(),
+        }),
       findReservationById: vi.fn().mockResolvedValue(reservation),
     };
 

@@ -15,11 +15,7 @@ export type SlotRow = {
 };
 
 export class AvailabilityRepository {
-  async listByProvider(
-    providerId: string,
-    from: Date,
-    to: Date,
-  ): Promise<SlotRow[]> {
+  async listByProvider(providerId: string, from: Date, to: Date): Promise<SlotRow[]> {
     const { rows } = await getPool().query<SlotRow>(
       `SELECT * FROM availability_slots
        WHERE provider_id = $1 AND start_at < $3 AND end_at > $2
@@ -29,11 +25,7 @@ export class AvailabilityRepository {
     return rows;
   }
 
-  async listAvailableByProvider(
-    providerId: string,
-    from: Date,
-    to: Date,
-  ): Promise<SlotRow[]> {
+  async listAvailableByProvider(providerId: string, from: Date, to: Date): Promise<SlotRow[]> {
     const { rows } = await getPool().query<SlotRow>(
       `SELECT * FROM availability_slots
        WHERE provider_id = $1 AND status = 'available'

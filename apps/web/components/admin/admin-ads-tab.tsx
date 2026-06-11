@@ -1,5 +1,6 @@
 'use client';
 
+import type { AdminPermission } from '@mohandishub/shared';
 import { useCallback, useEffect, useState } from 'react';
 
 import {
@@ -12,12 +13,11 @@ import type { Dictionary } from '@/lib/i18n/types';
 type AdminAdsTabProps = {
   dictionary: Dictionary;
   accessToken: string;
-  adminPermissions: string[];
+  adminPermissions: AdminPermission[];
 };
 
-const hasPermission = (permissions: string[], permission: string): boolean => (
-  permissions.length === 0 || permissions.includes(permission)
-);
+const hasPermission = (permissions: string[], permission: string): boolean =>
+  permissions.includes('super_admin') || permissions.includes(permission);
 
 export const AdminAdsTab = ({ dictionary, accessToken, adminPermissions }: AdminAdsTabProps) => {
   const [rows, setRows] = useState<Advertisement[]>([]);
@@ -45,7 +45,13 @@ export const AdminAdsTab = ({ dictionary, accessToken, adminPermissions }: Admin
     setLoading(true);
     setError(null);
     try {
-      const status = statusFilter as 'pending_payment' | 'active' | 'expired' | 'cancelled' | 'paused_by_admin' | '';
+      const status = statusFilter as
+        | 'pending_payment'
+        | 'active'
+        | 'expired'
+        | 'cancelled'
+        | 'paused_by_admin'
+        | '';
       const [data, adControls] = await Promise.all([
         advertisementsApiClient.adminListAds(accessToken, status ? { status } : undefined),
         canManageAdPricing
@@ -150,48 +156,60 @@ export const AdminAdsTab = ({ dictionary, accessToken, adminPermissions }: Admin
           </article>
         </div>
         {canManageAdPricing && (
-        <div className="admin-settings-section" style={{ marginBottom: '1rem' }}>
-          <p className="admin-settings-section-title">Global advertisement settings</p>
-          <div className="admin-settings-row">
-            <label className="admin-settings-label-wrap">
-              <span className="admin-settings-label">Price per day (EGP)</span>
-              <input
-                type="number"
-                min={0}
-                step="0.01"
-                className="admin-settings-input admin-settings-input--number"
-                value={String(controls.pricePerDay)}
-                onChange={(e) =>
-                  setControls((prev) => ({ ...prev, pricePerDay: Number.parseFloat(e.target.value || '0') }))
-                }
-              />
-            </label>
-            <label className="admin-settings-row" style={{ justifyContent: 'flex-start', gap: '0.6rem', marginTop: '0.5rem' }}>
+          <div className="admin-settings-section" style={{ marginBottom: '1rem' }}>
+            <p className="admin-settings-section-title">Global advertisement settings</p>
+            <div className="admin-settings-row">
+              <label className="admin-settings-label-wrap">
+                <span className="admin-settings-label">Price per day (EGP)</span>
+                <input
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  className="admin-settings-input admin-settings-input--number"
+                  value={String(controls.pricePerDay)}
+                  onChange={(e) =>
+                    setControls((prev) => ({
+                      ...prev,
+                      pricePerDay: Number.parseFloat(e.target.value || '0'),
+                    }))
+                  }
+                />
+              </label>
+              <label
+                className="admin-settings-row"
+                style={{ justifyContent: 'flex-start', gap: '0.6rem', marginTop: '0.5rem' }}
+              >
+                <button
+                  type="button"
+                  className={`admin-settings-toggle ${controls.acceptAds ? 'admin-settings-toggle--on' : ''}`}
+                  onClick={() => setControls((prev) => ({ ...prev, acceptAds: !prev.acceptAds }))}
+                  aria-label="Toggle accepting ads"
+                  aria-pressed={controls.acceptAds}
+                >
+                  <span className="admin-settings-toggle-thumb" />
+                </button>
+                <span className="admin-settings-label">Accept new ads</span>
+              </label>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '0.75rem' }}>
               <button
                 type="button"
-                className={`admin-settings-toggle ${controls.acceptAds ? 'admin-settings-toggle--on' : ''}`}
-                onClick={() => setControls((prev) => ({ ...prev, acceptAds: !prev.acceptAds }))}
-                aria-label="Toggle accepting ads"
-                aria-pressed={controls.acceptAds}
+                className="admin-btn admin-btn--primary"
+                onClick={() => void saveControls()}
+                disabled={savingControls}
               >
-                <span className="admin-settings-toggle-thumb" />
+                {savingControls ? 'Saving...' : 'Save controls'}
               </button>
-              <span className="admin-settings-label">Accept new ads</span>
-            </label>
+            </div>
           </div>
-          <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '0.75rem' }}>
-            <button type="button" className="admin-btn admin-btn--primary" onClick={() => void saveControls()} disabled={savingControls}>
-              {savingControls ? 'Saving...' : 'Save controls'}
-            </button>
-          </div>
-        </div>
         )}
       </div>
 
       <div className="admin-section">
         <h3 className="admin-section-title">Campaign Controls</h3>
         <p className="admin-section-desc">
-          Per-campaign controls (Activate, Pause, Cancel, Schedule, Price Override) appear on each campaign row below.
+          Per-campaign controls (Activate, Pause, Cancel, Schedule, Price Override) appear on each
+          campaign row below.
         </p>
       </div>
 
@@ -212,8 +230,8 @@ export const AdminAdsTab = ({ dictionary, accessToken, adminPermissions }: Admin
       {error ? <p className="admin-empty">{error}</p> : null}
       {!loading && rows.length === 0 ? (
         <p className="admin-empty" style={{ marginBottom: '0.75rem' }}>
-          No ad campaigns yet. Once first campaign is created, you will immediately get row controls:
-          Activate / Pause / Cancel / Schedule / Pricing Override.
+          No ad campaigns yet. Once first campaign is created, you will immediately get row
+          controls: Activate / Pause / Cancel / Schedule / Pricing Override.
         </p>
       ) : null}
       {loading ? (
@@ -249,28 +267,53 @@ export const AdminAdsTab = ({ dictionary, accessToken, adminPermissions }: Admin
                   <td>{ad.clicks}</td>
                   <td>
                     <div className="admin-actions-row">
-                      {canManageAds && ad.status !== 'active' && ad.status !== 'cancelled' && ad.status !== 'expired' && (
-                        <button type="button" className="admin-btn admin-btn--small" onClick={() => void setStatus(ad.id, 'active')}>
-                          Activate
-                        </button>
-                      )}
+                      {canManageAds &&
+                        ad.status !== 'active' &&
+                        ad.status !== 'cancelled' &&
+                        ad.status !== 'expired' && (
+                          <button
+                            type="button"
+                            className="admin-btn admin-btn--small"
+                            onClick={() => void setStatus(ad.id, 'active')}
+                          >
+                            Activate
+                          </button>
+                        )}
                       {canManageAds && ad.status === 'active' && (
-                        <button type="button" className="admin-btn admin-btn--small admin-btn--danger" onClick={() => void setStatus(ad.id, 'paused_by_admin')}>
+                        <button
+                          type="button"
+                          className="admin-btn admin-btn--small admin-btn--danger"
+                          onClick={() => void setStatus(ad.id, 'paused_by_admin')}
+                        >
                           Pause
                         </button>
                       )}
                       {canManageAds && ad.status !== 'cancelled' && ad.status !== 'expired' && (
-                        <button type="button" className="admin-btn admin-btn--small admin-btn--danger" onClick={() => void setStatus(ad.id, 'cancelled')}>
+                        <button
+                          type="button"
+                          className="admin-btn admin-btn--small admin-btn--danger"
+                          onClick={() => void setStatus(ad.id, 'cancelled')}
+                        >
                           Cancel
                         </button>
                       )}
-                      {canManageAdScheduling && ad.status !== 'cancelled' && ad.status !== 'expired' && (
-                        <button type="button" className="admin-btn admin-btn--small" onClick={() => setScheduleAdId(ad.id)}>
-                          Schedule
-                        </button>
-                      )}
+                      {canManageAdScheduling &&
+                        ad.status !== 'cancelled' &&
+                        ad.status !== 'expired' && (
+                          <button
+                            type="button"
+                            className="admin-btn admin-btn--small"
+                            onClick={() => setScheduleAdId(ad.id)}
+                          >
+                            Schedule
+                          </button>
+                        )}
                       {canManageAdPricing && (
-                        <button type="button" className="admin-btn admin-btn--small" onClick={() => setPricingAdId(ad.id)}>
+                        <button
+                          type="button"
+                          className="admin-btn admin-btn--small"
+                          onClick={() => setPricingAdId(ad.id)}
+                        >
                           Pricing
                         </button>
                       )}
@@ -286,7 +329,9 @@ export const AdminAdsTab = ({ dictionary, accessToken, adminPermissions }: Admin
       {scheduleAdId && (
         <div className="admin-modal-overlay" onClick={() => setScheduleAdId(null)}>
           <div className="admin-modal" onClick={(e) => e.stopPropagation()}>
-            <h2 className="admin-modal-title">{dictionary.advertisements?.schedule ?? 'Schedule ad'}</h2>
+            <h2 className="admin-modal-title">
+              {dictionary.advertisements?.schedule ?? 'Schedule ad'}
+            </h2>
             <input
               type="datetime-local"
               className="admin-form-input"
@@ -309,7 +354,11 @@ export const AdminAdsTab = ({ dictionary, accessToken, adminPermissions }: Admin
               <button type="button" className="admin-btn" onClick={() => setScheduleAdId(null)}>
                 {dictionary.common.cancel}
               </button>
-              <button type="button" className="admin-btn admin-btn--primary" onClick={() => void saveSchedule()}>
+              <button
+                type="button"
+                className="admin-btn admin-btn--primary"
+                onClick={() => void saveSchedule()}
+              >
                 {dictionary.common.save}
               </button>
             </div>
@@ -320,7 +369,9 @@ export const AdminAdsTab = ({ dictionary, accessToken, adminPermissions }: Admin
       {pricingAdId && (
         <div className="admin-modal-overlay" onClick={() => setPricingAdId(null)}>
           <div className="admin-modal" onClick={(e) => e.stopPropagation()}>
-            <h2 className="admin-modal-title">{dictionary.advertisements?.pricing?.override ?? 'Override price'}</h2>
+            <h2 className="admin-modal-title">
+              {dictionary.advertisements?.pricing?.override ?? 'Override price'}
+            </h2>
             <input
               type="number"
               min={0}
@@ -333,7 +384,11 @@ export const AdminAdsTab = ({ dictionary, accessToken, adminPermissions }: Admin
               <button type="button" className="admin-btn" onClick={() => setPricingAdId(null)}>
                 {dictionary.common.cancel}
               </button>
-              <button type="button" className="admin-btn admin-btn--primary" onClick={() => void savePriceOverride()}>
+              <button
+                type="button"
+                className="admin-btn admin-btn--primary"
+                onClick={() => void savePriceOverride()}
+              >
                 {dictionary.common.save}
               </button>
             </div>

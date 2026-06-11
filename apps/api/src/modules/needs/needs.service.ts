@@ -1,7 +1,4 @@
-import {
-  computeCommissionSplit,
-  type EffectivePlanLimits,
-} from '@mohandishub/shared';
+import { computeCommissionSplit, type EffectivePlanLimits } from '@mohandishub/shared';
 import type { PoolClient } from 'pg';
 
 import { getPool } from '../../db/pool.js';
@@ -14,7 +11,12 @@ import { WalletRepository } from '../wallet/wallet.repository.js';
 
 import { NeedsRepository } from './needs.repository.js';
 import type { BidRow, NeedRow } from './needs.repository.js';
-import type { CreateBidInput, CreateNeedInput, UpdateNeedInput, UpdateBidInput } from './needs.validation.js';
+import type {
+  CreateBidInput,
+  CreateNeedInput,
+  UpdateNeedInput,
+  UpdateBidInput,
+} from './needs.validation.js';
 
 const PLATFORM_USER_ID = '00000000-0000-0000-0000-000000000001';
 
@@ -84,7 +86,11 @@ export class NeedsService {
       const q = planLimits.usageQuotas.new_needs_per_period;
       if (q) {
         const { start } = await this.usageQuotaService.resolvePeriodBounds(customerId, q.period);
-        const used = await this.usageQuotaService.getCountForWindow(customerId, 'new_needs_per_period', start);
+        const used = await this.usageQuotaService.getCountForWindow(
+          customerId,
+          'new_needs_per_period',
+          start,
+        );
         if (used >= q.maxPerPeriod) {
           throw new HttpError({
             statusCode: 403,
@@ -146,7 +152,11 @@ export class NeedsService {
       throw new HttpError({ statusCode: 403, code: 'FORBIDDEN', message: 'Not your bid.' });
     }
     if (bid.status !== 'pending') {
-      throw new HttpError({ statusCode: 400, code: 'BID_NOT_PENDING', message: 'Can only edit pending bids.' });
+      throw new HttpError({
+        statusCode: 400,
+        code: 'BID_NOT_PENDING',
+        message: 'Can only edit pending bids.',
+      });
     }
 
     const fields: Record<string, unknown> = {};
@@ -167,7 +177,11 @@ export class NeedsService {
       throw new HttpError({ statusCode: 403, code: 'FORBIDDEN', message: 'Not your bid.' });
     }
     if (bid.status !== 'pending') {
-      throw new HttpError({ statusCode: 400, code: 'BID_NOT_PENDING', message: 'Can only delete pending bids.' });
+      throw new HttpError({
+        statusCode: 400,
+        code: 'BID_NOT_PENDING',
+        message: 'Can only delete pending bids.',
+      });
     }
     return this.repo.deleteBid(bidId);
   }
@@ -266,7 +280,11 @@ export class NeedsService {
       const bidQ = bidderLimits.usageQuotas.new_bids_per_period;
       if (bidQ) {
         const { start } = await this.usageQuotaService.resolvePeriodBounds(expertId, bidQ.period);
-        const used = await this.usageQuotaService.getCountForWindow(expertId, 'new_bids_per_period', start);
+        const used = await this.usageQuotaService.getCountForWindow(
+          expertId,
+          'new_bids_per_period',
+          start,
+        );
         if (used >= bidQ.maxPerPeriod) {
           throw new HttpError({
             statusCode: 403,
@@ -340,14 +358,17 @@ export class NeedsService {
         const n = limits.bidsVisibleTopN ?? 3;
         result = sorted.slice(0, n);
       }
-      return result.map(({ expert_plan_slug: _plan, bidder_can_priority_bid: _pri, ...bid }) => bid as BidRow);
+      return result.map(
+        ({ expert_plan_slug: _plan, bidder_can_priority_bid: _pri, ...bid }) => bid as BidRow,
+      );
     } catch (err: unknown) {
       const pgErr = err as { code?: string; message?: string };
       if (pgErr.code === '42703' || (pgErr.message?.includes('does not exist') ?? false)) {
         throw new HttpError({
           statusCode: 503,
           code: 'SCHEMA_OUTDATED',
-          message: 'Database schema is out of date. Please run migrations in the API folder: npm run migrate',
+          message:
+            'Database schema is out of date. Please run migrations in the API folder: npm run migrate',
         });
       }
       throw err;
@@ -364,7 +385,8 @@ export class NeedsService {
         throw new HttpError({
           statusCode: 503,
           code: 'SCHEMA_OUTDATED',
-          message: 'Database schema is out of date. Please run migrations in the API folder: npm run migrate',
+          message:
+            'Database schema is out of date. Please run migrations in the API folder: npm run migrate',
         });
       }
       throw err;
@@ -389,7 +411,11 @@ export class NeedsService {
 
       const need = await this.findNeedForUpdate(client, needId);
       if (!need) {
-        throw new HttpError({ statusCode: 404, code: 'NEED_NOT_FOUND', message: 'Need not found.' });
+        throw new HttpError({
+          statusCode: 404,
+          code: 'NEED_NOT_FOUND',
+          message: 'Need not found.',
+        });
       }
       if (need.customer_id !== userId) {
         throw new HttpError({ statusCode: 403, code: 'FORBIDDEN', message: 'Not your need.' });
@@ -431,8 +457,7 @@ export class NeedsService {
       }
 
       const losers = bids.filter(
-        (row) =>
-          row.id !== targetBid.id && (row.status === 'pending' || row.status === 'accepted'),
+        (row) => row.id !== targetBid.id && (row.status === 'pending' || row.status === 'accepted'),
       );
 
       await client.query(
@@ -477,10 +502,7 @@ export class NeedsService {
     } catch (err: unknown) {
       await client.query('ROLLBACK');
       const pgErr = err as { code?: string; constraint?: string };
-      if (
-        pgErr.code === '23505' &&
-        pgErr.constraint === 'uniq_bids_one_accepted_per_need'
-      ) {
+      if (pgErr.code === '23505' && pgErr.constraint === 'uniq_bids_one_accepted_per_need') {
         throw new HttpError({
           statusCode: 409,
           code: 'AWARD_CONFLICT',
@@ -511,7 +533,11 @@ export class NeedsService {
 
       const need = await this.findNeedForUpdate(client, needId);
       if (!need) {
-        throw new HttpError({ statusCode: 404, code: 'NEED_NOT_FOUND', message: 'Need not found.' });
+        throw new HttpError({
+          statusCode: 404,
+          code: 'NEED_NOT_FOUND',
+          message: 'Need not found.',
+        });
       }
       if (need.customer_id !== userId) {
         throw new HttpError({ statusCode: 403, code: 'FORBIDDEN', message: 'Not your need.' });
@@ -656,7 +682,11 @@ export class NeedsService {
     }
     const isCustomer = need.customer_id === userId;
     if (!isCustomer && bid.expert_id !== userId) {
-      throw new HttpError({ statusCode: 403, code: 'FORBIDDEN', message: 'Not allowed to view messages' });
+      throw new HttpError({
+        statusCode: 403,
+        code: 'FORBIDDEN',
+        message: 'Not allowed to view messages',
+      });
     }
     return this.repo.listBidMessages(bidId, userId, isCustomer);
   }
@@ -674,7 +704,11 @@ export class NeedsService {
       throw new HttpError({ statusCode: 404, code: 'BID_NOT_FOUND', message: 'Bid not found' });
     }
     if (need.customer_id !== userId && bid.expert_id !== userId) {
-      throw new HttpError({ statusCode: 403, code: 'FORBIDDEN', message: 'Not allowed to post messages' });
+      throw new HttpError({
+        statusCode: 403,
+        code: 'FORBIDDEN',
+        message: 'Not allowed to post messages',
+      });
     }
     const trimmed = input.content.trim();
     const url = input.attachmentUrl?.trim();
@@ -683,18 +717,16 @@ export class NeedsService {
   }
 
   private async findNeedForUpdate(client: PoolClient, needId: string): Promise<NeedRow | null> {
-    const { rows } = await client.query<NeedRow>(
-      `SELECT * FROM needs WHERE id = $1 FOR UPDATE`,
-      [needId],
-    );
+    const { rows } = await client.query<NeedRow>(`SELECT * FROM needs WHERE id = $1 FOR UPDATE`, [
+      needId,
+    ]);
     return rows[0] ?? null;
   }
 
   private async findBidForUpdate(client: PoolClient, bidId: string): Promise<BidRow | null> {
-    const { rows } = await client.query<BidRow>(
-      `SELECT * FROM bids WHERE id = $1 FOR UPDATE`,
-      [bidId],
-    );
+    const { rows } = await client.query<BidRow>(`SELECT * FROM bids WHERE id = $1 FOR UPDATE`, [
+      bidId,
+    ]);
     return rows[0] ?? null;
   }
 

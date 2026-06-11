@@ -14,8 +14,8 @@ export const getPool = (): Pool => {
   if (!pool) {
     pool = new Pool({
       connectionString: env.DATABASE_URL,
-      max: 10,
-      idleTimeoutMillis: 30_000,
+      max: env.DB_POOL_MAX,
+      idleTimeoutMillis: env.DB_IDLE_TIMEOUT_MS,
     });
   }
 

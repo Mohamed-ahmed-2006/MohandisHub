@@ -119,7 +119,7 @@ export class SendGridEmailSender implements IOtpSender {
 
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   send(params: { destination: string; code: string; displayName: string }): Promise<boolean> {
-    // TODO: Implement with @sendgrid/mail
+    // SendGrid is blocked in production until this provider is implemented.
     throw new Error('SendGrid email sender not configured. Set SENDGRID_API_KEY in .env');
   }
 }
@@ -131,7 +131,7 @@ export class TwilioSmsSender implements IOtpSender {
 
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   send(params: { destination: string; code: string; displayName: string }): Promise<boolean> {
-    // TODO: Implement with twilio
+    // Twilio is blocked in production until this provider is implemented.
     //
     // import twilio from 'twilio';
     // const client = twilio(env.TWILIO_ACCOUNT_SID, env.TWILIO_AUTH_TOKEN);

@@ -32,7 +32,11 @@ export function Modal({
   if (!open) return null;
 
   const content = (
-    <Overlay onClick={closeOnOverlay ? onClose : undefined} className={overlayClassName} zIndex={zIndex}>
+    <Overlay
+      onClick={closeOnOverlay ? onClose : undefined}
+      className={overlayClassName}
+      zIndex={zIndex}
+    >
       <section
         className={`mh-modal mh-modal--${size} mh-animate-scale-in ${className}`.trim()}
         role="dialog"

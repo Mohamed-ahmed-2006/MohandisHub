@@ -19,8 +19,12 @@ describe('mergeRetentionHours', () => {
   });
 
   it('returns null when admin disables or value is 0', () => {
-    expect(mergeRetentionHours({ enabled: false, value: 10, unit: 'hours' }, 100, 'hours')).toBeNull();
-    expect(mergeRetentionHours({ enabled: true, value: 0, unit: 'hours' }, 100, 'hours')).toBeNull();
+    expect(
+      mergeRetentionHours({ enabled: false, value: 10, unit: 'hours' }, 100, 'hours'),
+    ).toBeNull();
+    expect(
+      mergeRetentionHours({ enabled: true, value: 0, unit: 'hours' }, 100, 'hours'),
+    ).toBeNull();
   });
 
   it('effective is min(env hours, admin hours)', () => {
@@ -31,8 +35,7 @@ describe('mergeRetentionHours', () => {
 
 describe('parsePublicUploadsPathFromUrl', () => {
   it('extracts object path for uploads bucket', () => {
-    const url =
-      'https://abc.supabase.co/storage/v1/object/public/uploads/1690000000-abc-photo.jpg';
+    const url = 'https://abc.supabase.co/storage/v1/object/public/uploads/1690000000-abc-photo.jpg';
     expect(parsePublicUploadsPathFromUrl(url)).toBe('1690000000-abc-photo.jpg');
   });
 
@@ -54,7 +57,9 @@ describe('parseLocalUploadsBasenameFromUrl', () => {
   });
 
   it('rejects traversal', () => {
-    expect(parseLocalUploadsBasenameFromUrl('http://localhost:4000/uploads/../etc/passwd')).toBeNull();
+    expect(
+      parseLocalUploadsBasenameFromUrl('http://localhost:4000/uploads/../etc/passwd'),
+    ).toBeNull();
   });
 });
 

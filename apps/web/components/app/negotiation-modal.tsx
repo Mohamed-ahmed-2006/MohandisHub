@@ -57,9 +57,7 @@ export function NegotiationModal({
         serviceId: service.id,
         limit: 10,
       });
-      const active = list.items.find(
-        (x) => x.status === 'pending' || x.status === 'accepted',
-      );
+      const active = list.items.find((x) => x.status === 'pending' || x.status === 'accepted');
       if (active) {
         const d = await negotiationsApiClient.get(accessToken, active.id);
         setDetail(d);
@@ -68,7 +66,9 @@ export function NegotiationModal({
       }
     } catch (e) {
       setError(
-        e instanceof Error ? e.message : sp.loadError ?? (locale === 'ar' ? 'فشل التحميل.' : 'Failed to load.'),
+        e instanceof Error
+          ? e.message
+          : (sp.loadError ?? (locale === 'ar' ? 'فشل التحميل.' : 'Failed to load.')),
       );
       setDetail(null);
     } finally {
@@ -116,7 +116,8 @@ export function NegotiationModal({
     try {
       const msg = decision === 'counter' ? counterMessage.trim() : '';
       const body: RespondNegotiationBody = { decision };
-      if (decision === 'counter' && extra?.counterPrice != null) body.counterPrice = extra.counterPrice;
+      if (decision === 'counter' && extra?.counterPrice != null)
+        body.counterPrice = extra.counterPrice;
       if (extra?.validForHours != null) body.validForHours = extra.validForHours;
       if (decision === 'counter' && msg) body.message = msg;
       const d = await negotiationsApiClient.respond(accessToken, detail.negotiation.id, body);
@@ -148,10 +149,8 @@ export function NegotiationModal({
 
   const neg = detail?.negotiation;
   const rounds = detail?.rounds ?? [];
-  const isCustomerTurn =
-    neg?.status === 'pending' && neg.latestOfferedBy !== neg.customerId;
-  const waitingOnProvider =
-    neg?.status === 'pending' && neg.latestOfferedBy === neg.customerId;
+  const isCustomerTurn = neg?.status === 'pending' && neg.latestOfferedBy !== neg.customerId;
+  const waitingOnProvider = neg?.status === 'pending' && neg.latestOfferedBy === neg.customerId;
 
   const statusLabel = (s: string) => {
     const map: Record<string, string> = {
@@ -169,8 +168,15 @@ export function NegotiationModal({
     <Drawer open={open} onClose={onClose} className="negotiation-modal" zIndex={1150}>
       <div className="negotiation-modal-inner">
         <div className="negotiation-modal-header">
-          <h2 className="negotiation-modal-title">{sp.title ?? tr('Price negotiation', 'تفاوض السعر')}</h2>
-          <button type="button" className="negotiation-modal-close" onClick={onClose} aria-label="Close">
+          <h2 className="negotiation-modal-title">
+            {sp.title ?? tr('Price negotiation', 'تفاوض السعر')}
+          </h2>
+          <button
+            type="button"
+            className="negotiation-modal-close"
+            onClick={onClose}
+            aria-label="Close"
+          >
             ×
           </button>
         </div>
@@ -229,7 +235,10 @@ export function NegotiationModal({
                 {neg!.agreedValidUntil && (
                   <>
                     {' '}
-                    · {sp.agreedUntil}: {new Date(neg!.agreedValidUntil).toLocaleString(locale === 'ar' ? 'ar-EG' : undefined)}
+                    · {sp.agreedUntil}:{' '}
+                    {new Date(neg!.agreedValidUntil).toLocaleString(
+                      locale === 'ar' ? 'ar-EG' : undefined,
+                    )}
                   </>
                 )}
               </p>
@@ -243,9 +252,7 @@ export function NegotiationModal({
                     {r.amount} {neg!.currency}
                   </span>
                   <span className="negotiation-round-meta">
-                    {r.offeredBy === neg!.customerId
-                      ? tr('You', 'أنت')
-                      : service.providerName}
+                    {r.offeredBy === neg!.customerId ? tr('You', 'أنت') : service.providerName}
                     {r.message ? ` — ${r.message}` : ''}
                   </span>
                   <span className="negotiation-round-time">
@@ -354,7 +361,11 @@ export function NegotiationModal({
               </button>
             )}
 
-            <button type="button" className="dashboard-btn dashboard-btn--secondary" onClick={() => void load()}>
+            <button
+              type="button"
+              className="dashboard-btn dashboard-btn--secondary"
+              onClick={() => void load()}
+            >
               {sp.refresh ?? tr('Refresh', 'تحديث')}
             </button>
           </div>

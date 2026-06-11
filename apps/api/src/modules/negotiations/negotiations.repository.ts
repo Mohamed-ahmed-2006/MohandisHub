@@ -154,10 +154,10 @@ export class NegotiationsRepository {
     const expiresAt = new Date();
     expiresAt.setHours(expiresAt.getHours() + INACTIVITY_HOURS);
     const q = client ?? this.db;
-    await q.query(`UPDATE price_negotiations SET expires_at = $2, updated_at = now() WHERE id = $1`, [
-      negotiationId,
-      expiresAt.toISOString(),
-    ]);
+    await q.query(
+      `UPDATE price_negotiations SET expires_at = $2, updated_at = now() WHERE id = $1`,
+      [negotiationId, expiresAt.toISOString()],
+    );
   }
 
   async updatePendingToAccepted(
@@ -203,7 +203,10 @@ export class NegotiationsRepository {
     return rows[0] ?? null;
   }
 
-  async cancelPending(negotiationId: string, customerId: string): Promise<PriceNegotiationRow | null> {
+  async cancelPending(
+    negotiationId: string,
+    customerId: string,
+  ): Promise<PriceNegotiationRow | null> {
     const { rows } = await this.db.query<PriceNegotiationRow>(
       `UPDATE price_negotiations SET status = 'cancelled', updated_at = now()
        WHERE id = $1 AND customer_id = $2 AND status = 'pending'
@@ -240,7 +243,10 @@ export class NegotiationsRepository {
     return (rowCount ?? 0) > 0;
   }
 
-  async markConsumed(negotiationId: string, customerId: string): Promise<PriceNegotiationRow | null> {
+  async markConsumed(
+    negotiationId: string,
+    customerId: string,
+  ): Promise<PriceNegotiationRow | null> {
     const { rows } = await this.db.query<PriceNegotiationRow>(
       `UPDATE price_negotiations SET status = 'consumed', updated_at = now()
        WHERE id = $1 AND customer_id = $2 AND status = 'accepted'

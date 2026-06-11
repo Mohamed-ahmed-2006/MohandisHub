@@ -76,10 +76,7 @@ export const findCountryByCode = (code: string): CountryEntry | undefined =>
   COUNTRIES.find((c) => c.code === code.toUpperCase());
 
 export const findCountryByName = (name: string): CountryEntry | undefined =>
-  COUNTRIES.find(
-    (c) =>
-      c.nameEn === name || c.nameAr === name || c.code === name.toUpperCase(),
-  );
+  COUNTRIES.find((c) => c.nameEn === name || c.nameAr === name || c.code === name.toUpperCase());
 
 export const getDialCodeForCountry = (code: string): string =>
   findCountryByCode(code)?.dialCode ?? '+20';

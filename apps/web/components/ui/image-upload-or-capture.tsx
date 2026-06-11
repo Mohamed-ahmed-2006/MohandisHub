@@ -81,7 +81,10 @@ export function ImageUploadOrCapture({
           Upload a photo or take a live picture of your document.
         </p>
         <div className="image-upload-or-capture-buttons">
-          <label className="live-capture-start" style={{ cursor: disabled ? 'not-allowed' : 'pointer' }}>
+          <label
+            className="live-capture-start"
+            style={{ cursor: disabled ? 'not-allowed' : 'pointer' }}
+          >
             <input
               type="file"
               accept="image/jpeg,image/png,image/webp"
@@ -100,7 +103,9 @@ export function ImageUploadOrCapture({
             Take live photo
           </button>
         </div>
-        <p className="mh-upload-hint">Accepted: JPG, PNG, WebP. Use clear high-resolution images.</p>
+        <p className="mh-upload-hint">
+          Accepted: JPG, PNG, WebP. Use clear high-resolution images.
+        </p>
       </div>
     );
   }
@@ -130,4 +135,3 @@ export function ImageUploadOrCapture({
 
   return null;
 }
-

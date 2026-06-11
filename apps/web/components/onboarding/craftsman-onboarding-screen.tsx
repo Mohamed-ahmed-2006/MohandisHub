@@ -148,7 +148,13 @@ export const CraftsmanOnboardingScreen = ({ locale, dictionary }: Props) => {
     } finally {
       setSaving(false);
     }
-  }, [accessToken, withdrawableManualDocId, loadKycStatus, updateAuthUser, dictionary.profile.saveError]);
+  }, [
+    accessToken,
+    withdrawableManualDocId,
+    loadKycStatus,
+    updateAuthUser,
+    dictionary.profile.saveError,
+  ]);
 
   useEffect(() => {
     if ((step !== 'complete' && kycStatus !== 'pending') || !accessToken) return;
@@ -182,9 +188,9 @@ export const CraftsmanOnboardingScreen = ({ locale, dictionary }: Props) => {
         );
         const workshopComplete = Boolean(
           profile?.city?.trim() &&
-            profile?.country?.trim() &&
-            profile?.workshopName?.trim() &&
-            profile?.workshopAddress?.trim(),
+          profile?.country?.trim() &&
+          profile?.workshopName?.trim() &&
+          profile?.workshopAddress?.trim(),
         );
         const hasPendingIdentitySubmission =
           Array.isArray(identityDocs) &&
@@ -364,7 +370,11 @@ export const CraftsmanOnboardingScreen = ({ locale, dictionary }: Props) => {
     try {
       const base = (getApiBaseUrl() || '').replace(/\/$/, '');
       const toFullUrl = (url: string) =>
-        url.startsWith('http') ? url : base ? `${base}${url.startsWith('/') ? '' : '/'}${url}` : url;
+        url.startsWith('http')
+          ? url
+          : base
+            ? `${base}${url.startsWith('/') ? '' : '/'}${url}`
+            : url;
 
       const [frontRes, backRes, selfieRes] = await Promise.all([
         uploadPrivateFile(accessToken, manualFrontFile),
@@ -452,9 +462,7 @@ export const CraftsmanOnboardingScreen = ({ locale, dictionary }: Props) => {
                     name="title"
                     className="onboarding-input"
                     placeholder={dict.profileForm.titlePlaceholder}
-                    defaultValue={
-                      craftsmanProfile?.title?.trim() || authUser?.displayName || ''
-                    }
+                    defaultValue={craftsmanProfile?.title?.trim() || authUser?.displayName || ''}
                     required
                   />
                 </div>
@@ -491,14 +499,23 @@ export const CraftsmanOnboardingScreen = ({ locale, dictionary }: Props) => {
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
                       src={avatarPreviewUrl}
-                      alt={dict.profileForm.profilePhotoLabel ?? tr('Profile picture', 'الصورة الشخصية')}
-                      style={{ display: 'block', width: '100%', maxHeight: '12rem', objectFit: 'cover' }}
+                      alt={
+                        dict.profileForm.profilePhotoLabel ??
+                        tr('Profile picture', 'الصورة الشخصية')
+                      }
+                      style={{
+                        display: 'block',
+                        width: '100%',
+                        maxHeight: '12rem',
+                        objectFit: 'cover',
+                      }}
                     />
                   </div>
                 )}
                 <ImageUploadOrCapture
                   label={
-                    dict.profileForm.uploadProfilePhoto ?? tr('Upload profile picture', 'رفع الصورة الشخصية')
+                    dict.profileForm.uploadProfilePhoto ??
+                    tr('Upload profile picture', 'رفع الصورة الشخصية')
                   }
                   onImage={(file) => {
                     void (async () => {
@@ -654,8 +671,8 @@ export const CraftsmanOnboardingScreen = ({ locale, dictionary }: Props) => {
                       onClick={() => void handleWithdrawManualSubmission()}
                       disabled={saving}
                     >
-                    {dict.withdrawIdentitySubmission ??
-                      tr('Remove submission and start over', 'حذف الطلب والبدء من جديد')}
+                      {dict.withdrawIdentitySubmission ??
+                        tr('Remove submission and start over', 'حذف الطلب والبدء من جديد')}
                     </button>
                   </div>
                 )}

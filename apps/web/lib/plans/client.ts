@@ -1,5 +1,11 @@
-import type { ApiSuccessBody, Plan, PlanUsageSummary, SubscribeToPlanResponse } from '@mohandishub/shared';
+import type {
+  ApiSuccessBody,
+  Plan,
+  PlanUsageSummary,
+  SubscribeToPlanResponse,
+} from '@mohandishub/shared';
 
+import { fetchWithAuthRetry } from '@/lib/auth/fetch-with-auth-retry';
 import { getApiBaseUrl } from '@/lib/env';
 
 async function apiRequest<T>(opts: {
@@ -11,11 +17,15 @@ async function apiRequest<T>(opts: {
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
   if (opts.accessToken) headers.Authorization = `Bearer ${opts.accessToken}`;
 
-  const res = await fetch(`${getApiBaseUrl()}${opts.path}`, {
-    method: opts.method,
-    headers,
-    body: opts.body ? JSON.stringify(opts.body) : null,
-  });
+  const res = await fetchWithAuthRetry(
+    `${getApiBaseUrl()}${opts.path}`,
+    {
+      method: opts.method,
+      headers,
+      body: opts.body ? JSON.stringify(opts.body) : null,
+    },
+    opts.accessToken,
+  );
 
   const json = (await res.json()) as unknown as
     | ApiSuccessBody<T>

@@ -16,8 +16,10 @@ test.describe('Admin verification flow', () => {
     await page.goto('/en/app');
     await expect(page).toHaveURL(/\/(auth|app)/);
     await page.goto('/en/app/admin');
-    await expect(page).toHaveURL(/\/admin/).catch(() => {
-      // May redirect to auth if not logged in
-    });
+    await expect(page)
+      .toHaveURL(/\/admin/)
+      .catch(() => {
+        // May redirect to auth if not logged in
+      });
   });
 });

@@ -19,7 +19,8 @@ const ProfileModalContext = createContext<ProfileModalContextValue | null>(null)
 
 export function ProfileModalProvider({ children }: { children: React.ReactNode }) {
   const [profileModalUserId, setProfileModalUserId] = useState<string | null>(null);
-  const [profileModalInitialData, setProfileModalInitialData] = useState<ProfileModalInitialData | null>(null);
+  const [profileModalInitialData, setProfileModalInitialData] =
+    useState<ProfileModalInitialData | null>(null);
 
   const openProfileModal = useCallback((userId: string, initialData?: ProfileModalInitialData) => {
     setProfileModalUserId(userId);
@@ -38,11 +39,7 @@ export function ProfileModalProvider({ children }: { children: React.ReactNode }
     closeProfileModal,
   };
 
-  return (
-    <ProfileModalContext.Provider value={value}>
-      {children}
-    </ProfileModalContext.Provider>
-  );
+  return <ProfileModalContext.Provider value={value}>{children}</ProfileModalContext.Provider>;
 }
 
 export function useProfileModal() {

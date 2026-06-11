@@ -249,6 +249,7 @@ export type ReservationDisputeStatus =
   | 'resolved_provider'
   | 'resolved_partial'
   | 'dismissed';
+export type ReservationDisputeSettlementOutcome = 'refund' | 'release' | 'split' | 'none';
 
 export type ReservationDisputeReason = 'customer_report' | 'timeout_no_done' | 'manual' | 'system';
 
@@ -327,6 +328,14 @@ export type FinishReservationBody = {
 export type CancelReservationBody = {
   reasonCode: ReservationCancellationReasonCode;
   reasonText?: string;
+};
+
+export type ResolveReservationDisputeBody = {
+  status: Exclude<ReservationDisputeStatus, 'open'>;
+  resolutionNotes: string;
+  settlementOutcome?: ReservationDisputeSettlementOutcome;
+  customerRefundAmount?: number;
+  providerReleaseAmount?: number;
 };
 
 export type CallJoinBody = {

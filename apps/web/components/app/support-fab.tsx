@@ -15,7 +15,12 @@ import { uploadFile } from '@/lib/upload/client';
 
 function roleLabelFor(
   role: UserRole,
-  profileModal: { roleCustomer: string; roleExpert: string; roleCraftsman: string; roleBusiness: string },
+  profileModal: {
+    roleCustomer: string;
+    roleExpert: string;
+    roleCraftsman: string;
+    roleBusiness: string;
+  },
   adminLabel: string,
 ): string {
   switch (role) {
@@ -85,7 +90,8 @@ export const SupportFab = () => {
       setFiles([]);
       setCategory('other');
     } catch (err) {
-      const detail = err instanceof Error && err.message ? err.message : (common.ticketSendError ?? 'Failed.');
+      const detail =
+        err instanceof Error && err.message ? err.message : (common.ticketSendError ?? 'Failed.');
       addToast(common.errorTitle ?? 'Error', detail);
     } finally {
       setSending(false);
@@ -104,7 +110,13 @@ export const SupportFab = () => {
       </button>
 
       {open ? (
-        <Modal open={open} onClose={handleClose} size="md" className="support-fab-dialog" usePortal={false}>
+        <Modal
+          open={open}
+          onClose={handleClose}
+          size="md"
+          className="support-fab-dialog"
+          usePortal={false}
+        >
           <DialogHeader
             title={sf.title ?? 'Support'}
             {...(sf.subtitle ? { subtitle: sf.subtitle } : {})}
@@ -113,77 +125,91 @@ export const SupportFab = () => {
           />
 
           <form className="support-fab-form" onSubmit={(e) => void handleSubmit(e)}>
-              <label className="support-fab-label" htmlFor="support-fab-email">
-                {sf.email}
-              </label>
-              <input
-                id="support-fab-email"
-                className="support-fab-input"
-                value={authUser.email}
-                disabled
-                readOnly
-                autoComplete="email"
-              />
+            <label className="support-fab-label" htmlFor="support-fab-email">
+              {sf.email}
+            </label>
+            <input
+              id="support-fab-email"
+              className="support-fab-input"
+              value={authUser.email}
+              disabled
+              readOnly
+              autoComplete="email"
+            />
 
-              <label className="support-fab-label" htmlFor="support-fab-role">
-                {sf.role}
-              </label>
-              <input id="support-fab-role" className="support-fab-input" value={roleText} disabled readOnly />
+            <label className="support-fab-label" htmlFor="support-fab-role">
+              {sf.role}
+            </label>
+            <input
+              id="support-fab-role"
+              className="support-fab-input"
+              value={roleText}
+              disabled
+              readOnly
+            />
 
-              <label className="support-fab-label" htmlFor="support-fab-category">
-                {sf.categoryLabel}
-              </label>
-              <select
-                id="support-fab-category"
-                className="support-fab-input"
-                value={category}
-                onChange={(e) => setCategory(e.target.value as SupportTicketCategory)}
+            <label className="support-fab-label" htmlFor="support-fab-category">
+              {sf.categoryLabel}
+            </label>
+            <select
+              id="support-fab-category"
+              className="support-fab-input"
+              value={category}
+              onChange={(e) => setCategory(e.target.value as SupportTicketCategory)}
+            >
+              <option value="bug">{sf.categoryBug}</option>
+              <option value="suggestion">{sf.categorySuggestion}</option>
+              <option value="error">{sf.categoryError}</option>
+              <option value="other">{sf.categoryOther}</option>
+            </select>
+
+            <label className="support-fab-label" htmlFor="support-fab-body">
+              {common.description ?? 'Description'}
+            </label>
+            <textarea
+              id="support-fab-body"
+              className="support-fab-textarea"
+              value={body}
+              onChange={(e) => setBody(e.target.value)}
+              placeholder={sf.descriptionPlaceholder}
+              required
+              rows={5}
+              maxLength={10000}
+            />
+
+            <label className="support-fab-label" htmlFor="support-fab-files">
+              {sf.imagesHint}
+            </label>
+            <input
+              id="support-fab-files"
+              type="file"
+              accept="image/*"
+              multiple
+              className="support-fab-file"
+              onChange={(e) => setFiles(Array.from(e.target.files ?? []).slice(0, 2))}
+            />
+            {files.length > 0 ? (
+              <p className="support-fab-hint">
+                {files.length} / 2 — {common.maxTwoImages}
+              </p>
+            ) : null}
+
+            <div className="support-fab-actions">
+              <button
+                type="button"
+                className="support-fab-btn support-fab-btn--secondary"
+                onClick={handleClose}
               >
-                <option value="bug">{sf.categoryBug}</option>
-                <option value="suggestion">{sf.categorySuggestion}</option>
-                <option value="error">{sf.categoryError}</option>
-                <option value="other">{sf.categoryOther}</option>
-              </select>
-
-              <label className="support-fab-label" htmlFor="support-fab-body">
-                {common.description ?? 'Description'}
-              </label>
-              <textarea
-                id="support-fab-body"
-                className="support-fab-textarea"
-                value={body}
-                onChange={(e) => setBody(e.target.value)}
-                placeholder={sf.descriptionPlaceholder}
-                required
-                rows={5}
-                maxLength={10000}
-              />
-
-              <label className="support-fab-label" htmlFor="support-fab-files">
-                {sf.imagesHint}
-              </label>
-              <input
-                id="support-fab-files"
-                type="file"
-                accept="image/*"
-                multiple
-                className="support-fab-file"
-                onChange={(e) => setFiles(Array.from(e.target.files ?? []).slice(0, 2))}
-              />
-              {files.length > 0 ? (
-                <p className="support-fab-hint">
-                  {files.length} / 2 — {common.maxTwoImages}
-                </p>
-              ) : null}
-
-              <div className="support-fab-actions">
-                <button type="button" className="support-fab-btn support-fab-btn--secondary" onClick={handleClose}>
-                  {common.cancel}
-                </button>
-                <button type="submit" className="support-fab-btn support-fab-btn--primary" disabled={sending || !body.trim()}>
-                  {sending ? sf.sending : sf.send}
-                </button>
-              </div>
+                {common.cancel}
+              </button>
+              <button
+                type="submit"
+                className="support-fab-btn support-fab-btn--primary"
+                disabled={sending || !body.trim()}
+              >
+                {sending ? sf.sending : sf.send}
+              </button>
+            </div>
           </form>
         </Modal>
       ) : null}

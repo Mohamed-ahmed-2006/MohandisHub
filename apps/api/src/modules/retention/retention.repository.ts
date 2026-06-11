@@ -28,9 +28,7 @@ export class RetentionRepository {
     const { rows } = await this.pool.query<{
       retention_policy: RetentionPolicyJson;
       retention_alerts: RetentionAlertsJson;
-    }>(
-      `SELECT retention_policy, retention_alerts FROM app_settings LIMIT 1`,
-    );
+    }>(`SELECT retention_policy, retention_alerts FROM app_settings LIMIT 1`);
     return rows[0] ?? null;
   }
 
@@ -84,11 +82,7 @@ export class RetentionRepository {
     }>;
   }
 
-  async listSweepLogsRange(params: {
-    from?: Date;
-    to?: Date;
-    limit: number;
-  }): Promise<
+  async listSweepLogsRange(params: { from?: Date; to?: Date; limit: number }): Promise<
     Array<{
       id: string;
       started_at: Date;
@@ -266,7 +260,11 @@ export class RetentionRepository {
     return rows;
   }
 
-  async clearBidMessageAttachment(client: PoolClient, messageId: string, dryRun: boolean): Promise<void> {
+  async clearBidMessageAttachment(
+    client: PoolClient,
+    messageId: string,
+    dryRun: boolean,
+  ): Promise<void> {
     if (dryRun) return;
     await client.query(`UPDATE bid_messages SET attachment_url = NULL WHERE id = $1`, [messageId]);
   }

@@ -86,12 +86,14 @@ export function UserProfileModal({
   }, [accessToken, isAuthenticated, profile, onClose, router, locale]);
 
   const roleKey = profile?.role ?? initialData?.role ?? '';
-  const profileModalDict = dictionary.profileModal as {
-    roleExpert?: string;
-    roleCraftsman?: string;
-    roleBusiness?: string;
-    roleCustomer?: string;
-  } | undefined;
+  const profileModalDict = dictionary.profileModal as
+    | {
+        roleExpert?: string;
+        roleCraftsman?: string;
+        roleBusiness?: string;
+        roleCustomer?: string;
+      }
+    | undefined;
   const roleLabel =
     (roleKey === 'expert'
       ? profileModalDict?.roleExpert
@@ -130,7 +132,11 @@ export function UserProfileModal({
         ) : error ? (
           <div className="user-profile-modal-error">
             <p>{error}</p>
-            <button type="button" className="user-profile-modal-btn user-profile-modal-btn--primary" onClick={onClose}>
+            <button
+              type="button"
+              className="user-profile-modal-btn user-profile-modal-btn--primary"
+              onClick={onClose}
+            >
               {closeLabel}
             </button>
           </div>
@@ -189,7 +195,8 @@ export function UserProfileModal({
                         .join(' · ')}
                     </p>
                   )}
-                  {(profile.expertProfile.averageRating != null || profile.expertProfile.reviewCount > 0) && (
+                  {(profile.expertProfile.averageRating != null ||
+                    profile.expertProfile.reviewCount > 0) && (
                     <p className="user-profile-modal-meta">
                       {profile.expertProfile.averageRating != null &&
                         `${profile.expertProfile.averageRating.toFixed(1)} ★`}
@@ -202,16 +209,21 @@ export function UserProfileModal({
 
               {profile.businessProfile && (
                 <div className="user-profile-modal-section">
-                  <p className="user-profile-modal-company">{profile.businessProfile.companyName}</p>
+                  <p className="user-profile-modal-company">
+                    {profile.businessProfile.companyName}
+                  </p>
                   {(profile.businessProfile.industry || profile.businessProfile.city) && (
                     <p className="user-profile-modal-meta">
-                      {[profile.businessProfile.industry, profile.businessProfile.city].filter(Boolean).join(' · ')}
+                      {[profile.businessProfile.industry, profile.businessProfile.city]
+                        .filter(Boolean)
+                        .join(' · ')}
                     </p>
                   )}
                   {profile.businessProfile.description && (
                     <p className="user-profile-modal-bio">{profile.businessProfile.description}</p>
                   )}
-                  {(profile.businessProfile.averageRating != null || profile.businessProfile.reviewCount > 0) && (
+                  {(profile.businessProfile.averageRating != null ||
+                    profile.businessProfile.reviewCount > 0) && (
                     <p className="user-profile-modal-meta">
                       {profile.businessProfile.averageRating != null &&
                         `${profile.businessProfile.averageRating.toFixed(1)} ★`}
@@ -228,7 +240,9 @@ export function UserProfileModal({
                     <p className="user-profile-modal-headline">{profile.craftsmanProfile.title}</p>
                   )}
                   {profile.craftsmanProfile.headline && !profile.craftsmanProfile.title && (
-                    <p className="user-profile-modal-headline">{profile.craftsmanProfile.headline}</p>
+                    <p className="user-profile-modal-headline">
+                      {profile.craftsmanProfile.headline}
+                    </p>
                   )}
                   {profile.craftsmanProfile.bio && (
                     <p className="user-profile-modal-bio">{profile.craftsmanProfile.bio}</p>
@@ -269,14 +283,16 @@ export function UserProfileModal({
                 !profile.expertProfile &&
                 !profile.craftsmanProfile &&
                 !profile.businessProfile && (
-                <div className="user-profile-modal-section">
-                  {(profile.customerProfile.city || profile.customerProfile.country) && (
-                    <p className="user-profile-modal-meta">
-                      {[profile.customerProfile.city, profile.customerProfile.country].filter(Boolean).join(', ')}
-                    </p>
-                  )}
-                </div>
-              )}
+                  <div className="user-profile-modal-section">
+                    {(profile.customerProfile.city || profile.customerProfile.country) && (
+                      <p className="user-profile-modal-meta">
+                        {[profile.customerProfile.city, profile.customerProfile.country]
+                          .filter(Boolean)
+                          .join(', ')}
+                      </p>
+                    )}
+                  </div>
+                )}
 
               {isAuthenticated && profile.userId && authUser?.id !== profile.userId && (
                 <div className="user-profile-modal-actions">

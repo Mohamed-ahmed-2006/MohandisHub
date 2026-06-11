@@ -8,8 +8,7 @@ import { logger } from '../config/logger.js';
  */
 export const requestLoggingMiddleware: RequestHandler = (req, res, next) => {
   const start = Date.now();
-  const requestId =
-    typeof res.locals.requestId === 'string' ? res.locals.requestId : undefined;
+  const requestId = typeof res.locals.requestId === 'string' ? res.locals.requestId : undefined;
 
   res.on('finish', () => {
     const durationMs = Date.now() - start;

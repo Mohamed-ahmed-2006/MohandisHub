@@ -2,7 +2,7 @@
 
 Copy everything below the line into email or a spreadsheet. Check each line when done.
 
-**Tester:** __________________ **Date:** __________________ **Build / environment:** __________________
+**Tester:** **\*\*\*\***\_\_**\*\*\*\*** **Date:** **\*\*\*\***\_\_**\*\*\*\*** **Build / environment:** **\*\*\*\***\_\_**\*\*\*\***
 
 **Accounts to use:** customer · expert · business · craftsman · admin (`is_admin` flag)
 
@@ -101,7 +101,7 @@ Copy everything below the line into email or a spreadsheet. Check each line when
 - [ ] **Service moderation** (`service_approved`, `service_rejected`, `service_paused_by_admin`): tap opens **My Services** with `?service=<id>` when payload has id.
 - [ ] **Reviews** (`review_received`, `review_report_resolved`, `review_dispute_resolved`): tap opens **Profile** (`/app/profile`).
 - [ ] **Needs/bids** (`need_bid_*`, `need_closed`): tap goes to **app home** with `?need=<id>` in the URL when payload includes need (confirm URL; deep scroll/highlight may vary).
-- [ ] **Jobs** (`job_*`, `application_status`, `milestone_*`, `new_message` mapped to projects): tap goes to **`/app/projects`** with `?job=` / `?application=` when payload includes ids (if Projects is still “Coming soon”, confirm URL/query is still correct for when the page ships).
+- [ ] **Jobs** (`job_*`, `application_status`, `milestone_*`, `new_message` mapped to projects): tap goes to **`/app/projects`** with `?job=` / `?application=` when payload includes ids and opens the matching business/expert workflow.
 - [ ] **Admin broadcast** (`admin`, `demo`): tap goes to app home or sensible default without error.
 - [ ] Realtime: new notification appears via socket without full refresh when possible.
 

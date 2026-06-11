@@ -173,29 +173,45 @@ export class AuthRepository {
     expiresAt: Date,
   ): Promise<void> {
     await this.db.query(
-      `UPDATE users SET pending_email = $1, pending_email_token = $2, pending_email_expires = $3 WHERE id = $4`,
+      `UPDATE users
+       SET pending_email = $1,
+           pending_email_token = $2,
+           pending_email_expires = $3,
+           pending_email_attempts = 0
+       WHERE id = $4`,
       [email.toLowerCase(), tokenHash, expiresAt, userId],
     );
   }
 
   /** Get pending email info for a user. */
-  async getPendingEmail(
-    userId: string,
-  ): Promise<{
+  async getPendingEmail(userId: string): Promise<{
     pending_email: string;
     pending_email_token: string;
     pending_email_expires: Date;
+    pending_email_attempts: number;
   } | null> {
     const { rows } = await this.db.query<{
       pending_email: string;
       pending_email_token: string;
       pending_email_expires: Date;
+      pending_email_attempts: number;
     }>(
-      `SELECT pending_email, pending_email_token, pending_email_expires FROM users
+      `SELECT pending_email, pending_email_token, pending_email_expires, COALESCE(pending_email_attempts, 0) AS pending_email_attempts FROM users
        WHERE id = $1 AND pending_email IS NOT NULL AND pending_email_expires > now()`,
       [userId],
     );
     return rows[0] ?? null;
+  }
+
+  async incrementPendingEmailAttempts(userId: string): Promise<number> {
+    const { rows } = await this.db.query<{ pending_email_attempts: number }>(
+      `UPDATE users
+       SET pending_email_attempts = COALESCE(pending_email_attempts, 0) + 1
+       WHERE id = $1 AND pending_email IS NOT NULL
+       RETURNING pending_email_attempts`,
+      [userId],
+    );
+    return rows[0]?.pending_email_attempts ?? 0;
   }
 
   /** Confirm email change: set email = pending_email, clear pending fields, update email_verified_at. */
@@ -207,6 +223,7 @@ export class AuthRepository {
            pending_email = NULL,
            pending_email_token = NULL,
            pending_email_expires = NULL,
+           pending_email_attempts = 0,
            updated_at = now()
        WHERE id = $1 AND pending_email IS NOT NULL`,
       [userId],
@@ -217,7 +234,12 @@ export class AuthRepository {
   /** Clear pending email change. */
   async clearPendingEmail(userId: string): Promise<void> {
     await this.db.query(
-      `UPDATE users SET pending_email = NULL, pending_email_token = NULL, pending_email_expires = NULL WHERE id = $1`,
+      `UPDATE users
+       SET pending_email = NULL,
+           pending_email_token = NULL,
+           pending_email_expires = NULL,
+           pending_email_attempts = 0
+       WHERE id = $1`,
       [userId],
     );
   }

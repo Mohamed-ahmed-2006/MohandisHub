@@ -15,7 +15,9 @@ import type { NotificationRow } from './notifications.repository.js';
 /** True if the error is Postgres "relation does not exist" for notifications table. */
 function isNotificationsTableMissing(err: unknown): boolean {
   const pg = err as { code?: string; message?: string };
-  return pg?.code === '42P01' && typeof pg?.message === 'string' && pg.message.includes('notifications');
+  return (
+    pg?.code === '42P01' && typeof pg?.message === 'string' && pg.message.includes('notifications')
+  );
 }
 
 function canUseMissingTableFallback(): boolean {
@@ -78,7 +80,8 @@ export class NotificationsService {
           title: input.title,
           introLines: [input.message],
         };
-        if (input.recipientDisplayName != null) emailParams.displayName = input.recipientDisplayName;
+        if (input.recipientDisplayName != null)
+          emailParams.displayName = input.recipientDisplayName;
         sendTransactionalEmail(emailParams).catch((err: unknown) =>
           logger.warn('Notification email send failed', { err, userId, type: input.type }),
         );

@@ -11,49 +11,39 @@ export default function LocaleIcon() {
 
   if (logoSrc) {
     return new ImageResponse(
-      (
-        <div
-          style={{
-            width: '100%',
-            height: '100%',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            background: 'transparent',
-          }}
-        >
-          <img
-            src={logoSrc}
-            alt=""
-            width={32}
-            height={32}
-            style={{ objectFit: 'contain' }}
-          />
-        </div>
-      ),
-      { ...size },
-    );
-  }
-
-  return new ImageResponse(
-    (
       <div
         style={{
-          fontSize: 20,
-          fontWeight: 700,
-          background: `linear-gradient(135deg, ${BRAND_ACCENT_HEX} 0%, #c2410c 100%)`,
           width: '100%',
           height: '100%',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          color: 'white',
-          borderRadius: 6,
+          background: 'transparent',
         }}
       >
-        M
-      </div>
-    ),
+        <img src={logoSrc} alt="" width={32} height={32} style={{ objectFit: 'contain' }} />
+      </div>,
+      { ...size },
+    );
+  }
+
+  return new ImageResponse(
+    <div
+      style={{
+        fontSize: 20,
+        fontWeight: 700,
+        background: `linear-gradient(135deg, ${BRAND_ACCENT_HEX} 0%, #c2410c 100%)`,
+        width: '100%',
+        height: '100%',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        color: 'white',
+        borderRadius: 6,
+      }}
+    >
+      M
+    </div>,
     { ...size },
   );
 }

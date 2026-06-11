@@ -48,11 +48,7 @@ export const AppSidebar = ({
     let activeSocket: Awaited<ReturnType<typeof getChatSocket>> | null = null;
     const onNotification = (data: { type?: string }) => {
       const type = data.type ?? '';
-      if (
-        type === 'new_message' ||
-        type === 'new_application_message' ||
-        type === 'chat_message'
-      ) {
+      if (type === 'new_message' || type === 'new_application_message' || type === 'chat_message') {
         setHasUnreadChat(true);
         return;
       }
@@ -104,14 +100,26 @@ export const AppSidebar = ({
   const navItems: NavItem[] = [
     { href: '/app', label: dictionary.nav.home },
     { href: '/app/bookings', label: dictionary.nav.bookings },
-    { href: '/app/services', label: dictionary.nav.myServices ?? dictionary.nav.browse, roles: ['expert', 'craftsman', 'business'] },
+    {
+      href: '/app/services',
+      label: dictionary.nav.myServices ?? dictionary.nav.browse,
+      roles: ['expert', 'craftsman', 'business'],
+    },
     {
       href: '/app/negotiations',
       label: dictionary.nav.negotiations ?? 'Price negotiations',
       roles: ['expert', 'craftsman', 'business'],
     },
-    { href: '/app/advertisements', label: dictionary.nav.advertisements ?? 'My Ads', roles: ['expert', 'craftsman', 'business'] },
-    { href: '/app/calendar', label: dictionary.nav.calendar ?? dictionary.calendarPage?.title ?? dictionary.nav.home, roles: ['expert', 'craftsman', 'business'] },
+    {
+      href: '/app/advertisements',
+      label: dictionary.nav.advertisements ?? 'My Ads',
+      roles: ['expert', 'craftsman', 'business'],
+    },
+    {
+      href: '/app/calendar',
+      label: dictionary.nav.calendar ?? dictionary.calendarPage?.title ?? dictionary.nav.home,
+      roles: ['expert', 'craftsman', 'business'],
+    },
     { href: '/app/settings', label: dictionary.nav.settings },
     { href: '/app/chat', label: dictionary.nav.chat },
     { href: '/app/history', label: dictionary.nav.history },
@@ -167,19 +175,54 @@ export const AppSidebar = ({
             >
               {item.label}
               {item.href === '/app/chat' && hasUnreadChat && (
-                <span style={{ width: '8px', height: '8px', background: '#ef4444', borderRadius: '50%' }} />
+                <span
+                  style={{
+                    width: '8px',
+                    height: '8px',
+                    background: '#ef4444',
+                    borderRadius: '50%',
+                  }}
+                />
               )}
               {item.href === '/app' && hasUnreadJobs && (
-                <span style={{ width: '8px', height: '8px', background: '#3b82f6', borderRadius: '50%' }} />
+                <span
+                  style={{
+                    width: '8px',
+                    height: '8px',
+                    background: '#3b82f6',
+                    borderRadius: '50%',
+                  }}
+                />
               )}
               {item.href === '/app/bookings' && hasUnreadBookings && (
-                <span style={{ width: '8px', height: '8px', background: '#f97316', borderRadius: '50%' }} />
+                <span
+                  style={{
+                    width: '8px',
+                    height: '8px',
+                    background: '#f97316',
+                    borderRadius: '50%',
+                  }}
+                />
               )}
               {item.href === '/app/settings' && hasUnreadWallet && (
-                <span style={{ width: '8px', height: '8px', background: '#22c55e', borderRadius: '50%' }} />
+                <span
+                  style={{
+                    width: '8px',
+                    height: '8px',
+                    background: '#22c55e',
+                    borderRadius: '50%',
+                  }}
+                />
               )}
               {item.href === '/app/negotiations' && hasUnreadNegotiations && (
-                <span style={{ width: '8px', height: '8px', background: '#a855f7', borderRadius: '50%' }} />
+                <span
+                  style={{
+                    width: '8px',
+                    height: '8px',
+                    background: '#a855f7',
+                    borderRadius: '50%',
+                  }}
+                />
               )}
             </Link>
           ))}

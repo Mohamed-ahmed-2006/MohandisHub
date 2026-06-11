@@ -124,8 +124,8 @@ class JobsController {
 
   listOpenJobs = async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const page = Math.max(1, parseInt(req.query.page as string || '1', 10));
-      const limit = Math.max(1, Math.min(50, parseInt(req.query.limit as string || '20', 10)));
+      const page = Math.max(1, parseInt((req.query.page as string) || '1', 10));
+      const limit = Math.max(1, Math.min(50, parseInt((req.query.limit as string) || '20', 10)));
       const result = await this.service.listOpenJobs(page, limit);
       res.json({ ok: true, data: result });
     } catch (err) {
@@ -157,8 +157,8 @@ class JobsController {
   listBusinessJobs = async (req: Request, res: Response, next: NextFunction) => {
     try {
       const user = req.user!;
-      const page = Math.max(1, parseInt(req.query.page as string || '1', 10));
-      const limit = Math.max(1, Math.min(50, parseInt(req.query.limit as string || '20', 10)));
+      const page = Math.max(1, parseInt((req.query.page as string) || '1', 10));
+      const limit = Math.max(1, Math.min(50, parseInt((req.query.limit as string) || '20', 10)));
       const result = await this.service.listBusinessJobs(user.id, page, limit);
       res.json({ ok: true, data: result });
     } catch (err) {
@@ -232,8 +232,7 @@ class JobsController {
     try {
       const user = req.user!;
       const jobId = req.params.id!;
-      const fromRaw =
-        (req.query.from as string | undefined) ?? new Date().toISOString();
+      const fromRaw = (req.query.from as string | undefined) ?? new Date().toISOString();
       const toRaw =
         (req.query.to as string | undefined) ??
         new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString();

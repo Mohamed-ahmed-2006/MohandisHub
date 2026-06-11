@@ -16,14 +16,23 @@ export const patchRetentionGovernanceSchema = z.object({
     .optional(),
   alerts: z
     .object({
-      webhookUrl: z.union([z.string().url(), z.literal('')]).optional().nullable(),
-      alertEmail: z.union([z.string().email(), z.literal('')]).optional().nullable(),
+      webhookUrl: z
+        .union([z.string().url(), z.literal('')])
+        .optional()
+        .nullable(),
+      alertEmail: z
+        .union([z.string().email(), z.literal('')])
+        .optional()
+        .nullable(),
       deleteCountThresholds: z.record(z.string(), z.number().int().positive()).optional(),
     })
     .optional(),
   maxPublicUploadBytes: z.number().int().positive().optional().nullable(),
   publicUploadAllowedMimes: z.array(z.string().min(3).max(120)).max(24).optional().nullable(),
-  supabaseStorageDashboardUrl: z.union([z.string().url(), z.literal('')]).optional().nullable(),
+  supabaseStorageDashboardUrl: z
+    .union([z.string().url(), z.literal('')])
+    .optional()
+    .nullable(),
 });
 
 export const runRetentionSchema = z.object({

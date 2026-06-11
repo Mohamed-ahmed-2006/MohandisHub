@@ -81,7 +81,10 @@ const deleteMessage = asyncHandler(async (req, res) => {
   const result = await chatService.deleteMessage(user.id, conversationId, messageId, scope);
   const io = getSocketServer();
   if (io) {
-    io.to(`conversation:${conversationId}`).emit('message_deleted', { messageId, scope: result.scope });
+    io.to(`conversation:${conversationId}`).emit('message_deleted', {
+      messageId,
+      scope: result.scope,
+    });
   }
   res.json({ ok: true, data: result });
 });

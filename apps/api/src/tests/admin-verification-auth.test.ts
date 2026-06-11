@@ -10,7 +10,9 @@ describe('admin verification authorization', () => {
   });
 
   it('allows users with isAdmin=true even when primary role is not admin', async () => {
-    const pendingSpy = vi.spyOn(ProfilesService.prototype, 'getPendingVerifications').mockResolvedValue([]);
+    const pendingSpy = vi
+      .spyOn(ProfilesService.prototype, 'getPendingVerifications')
+      .mockResolvedValue([]);
 
     const req = {
       user: {
@@ -34,7 +36,9 @@ describe('admin verification authorization', () => {
   });
 
   it('rejects users with isAdmin=false', async () => {
-    const pendingSpy = vi.spyOn(ProfilesService.prototype, 'getPendingVerifications').mockResolvedValue([]);
+    const pendingSpy = vi
+      .spyOn(ProfilesService.prototype, 'getPendingVerifications')
+      .mockResolvedValue([]);
 
     const req = {
       user: {

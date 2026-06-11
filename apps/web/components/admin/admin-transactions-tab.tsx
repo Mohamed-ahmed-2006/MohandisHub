@@ -171,7 +171,9 @@ export const AdminTransactionsTab = ({ dictionary, accessToken }: Props) => {
                     <td>{txn.amount.toFixed(2)}</td>
                     <td>{txn.balanceAfter.toFixed(2)}</td>
                     <td>
-                      <span className={`admin-badge admin-badge--${txn.status}`}>{statusLabel(txn.status)}</span>
+                      <span className={`admin-badge admin-badge--${txn.status}`}>
+                        {statusLabel(txn.status)}
+                      </span>
                     </td>
                     <td>{txn.description ?? '—'}</td>
                     <td>{new Date(txn.createdAt).toLocaleDateString()}</td>

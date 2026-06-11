@@ -132,9 +132,7 @@ export const updateBusinessProfileSchema = z.object({
   companyEmail: z.string().email().max(255).optional(),
   companyPhone: z.string().max(20).optional(),
   address: z.string().max(500).optional(),
-  logoUrl: z
-    .union([z.string().max(500).url(), z.null()])
-    .optional(),
+  logoUrl: z.union([z.string().max(500).url(), z.null()]).optional(),
   city: z.string().max(100).optional(),
   country: z.string().max(100).optional(),
   description: z.string().max(2000).optional(),

@@ -128,13 +128,20 @@ export const arDictionary: Dictionary = {
     metricsCustomers: 'عملاء مستخدمون',
     faqTitle: 'أسئلة شائعة',
     faqItems: [
-      { question: 'كيف أتأهل للتحقق كخبير؟', answer: 'أكمل التهيئة وارفع الهوية والشهادات. يراجع فريقنا ويوافق حتى يثق العملاء بملفك.' },
-      { question: 'متى أدفع عن حجز؟', answer: 'تُحجز الأموال عند الحجز. تُحرر للمقدم عند الإكمال أو تُعاد إليك إذا أُلغي ضمن السياسة.' },
+      {
+        question: 'كيف أتأهل للتحقق كخبير؟',
+        answer: 'أكمل التهيئة وارفع الهوية والشهادات. يراجع فريقنا ويوافق حتى يثق العملاء بملفك.',
+      },
+      {
+        question: 'متى أدفع عن حجز؟',
+        answer:
+          'تُحجز الأموال عند الحجز. تُحرر للمقدم عند الإكمال أو تُعاد إليك إذا أُلغي ضمن السياسة.',
+      },
     ],
   },
   login: {
     title: 'تسجيل الدخول',
-    description: 'مسار المصادقة قادم قريبًا.',
+    description: 'سجل الدخول للوصول إلى مساحة العمل والمحفظة والحجوزات والرسائل وأدوات الإدارة.',
   },
   onboarding: {
     role: {
@@ -151,7 +158,8 @@ export const arDictionary: Dictionary = {
         },
         craftsman: {
           title: '\u062d\u0631\u0641\u064a',
-          description: '\u0642\u062f\u0651\u0645 \u062e\u062f\u0645\u0627\u062a \u0645\u064a\u062f\u0627\u0646\u064a\u0629 \u0648\u0639\u0645\u0644\u064a\u0629 \u0645\u062b\u0644 \u0627\u0644\u0645\u064a\u0643\u0627\u0646\u064a\u0643\u0627 \u0648\u0627\u0644\u0633\u0628\u0627\u0643\u0629 \u0648\u0627\u0644\u0644\u062d\u0627\u0645 \u0648\u0627\u0644\u062a\u0634\u0643\u064a\u0644.',
+          description:
+            '\u0642\u062f\u0651\u0645 \u062e\u062f\u0645\u0627\u062a \u0645\u064a\u062f\u0627\u0646\u064a\u0629 \u0648\u0639\u0645\u0644\u064a\u0629 \u0645\u062b\u0644 \u0627\u0644\u0645\u064a\u0643\u0627\u0646\u064a\u0643\u0627 \u0648\u0627\u0644\u0633\u0628\u0627\u0643\u0629 \u0648\u0627\u0644\u0644\u062d\u0627\u0645 \u0648\u0627\u0644\u062a\u0634\u0643\u064a\u0644.',
         },
         business: {
           title: 'شركة',
@@ -176,7 +184,8 @@ export const arDictionary: Dictionary = {
       profileContactPref: 'طريقة التواصل المفضلة',
       profileContactPrefOptional: 'أي',
       profileCompleteTitle: 'أنت جاهز',
-      profileCompleteDescription: 'ملفك جاهز. انتقل إلى لوحة التحكم لنشر احتياجاتك أو تصفح الخدمات.',
+      profileCompleteDescription:
+        'ملفك جاهز. انتقل إلى لوحة التحكم لنشر احتياجاتك أو تصفح الخدمات.',
       steps: {
         emailVerification: 'التحقق من البريد',
       },
@@ -239,75 +248,104 @@ export const arDictionary: Dictionary = {
       kycPending: 'جاري معالجة التحقق من هويتك. يرجى الانتظار.',
       kycVerified: 'تم التحقق من هويتك بنجاح!',
       kycRejected: 'تم رفض التحقق من هويتك. يرجى المحاولة مرة أخرى أو التواصل مع الدعم.',
-      pendingReviewMessage:
-        'مستنداتك قيد المراجعة. سنخبرك بالبريد عند التحقق من حسابك.',
-      identityRejectedResubmit:
-        'تم رفض مستند الهوية. يرجى إعادة إرسال مستند الهوية أدناه.',
-      documentRejectedResubmit:
-        'تم رفض الشهادة أو المستند. يرجى رفع مستند جديد أدناه.',
+      pendingReviewMessage: 'مستنداتك قيد المراجعة. سنخبرك بالبريد عند التحقق من حسابك.',
+      identityRejectedResubmit: 'تم رفض مستند الهوية. يرجى إعادة إرسال مستند الهوية أدناه.',
+      documentRejectedResubmit: 'تم رفض الشهادة أو المستند. يرجى رفع مستند جديد أدناه.',
       withdrawIdentitySubmission: 'إزالة الإرسال والبدء من جديد',
     },
     craftsman: {
       title: '\u062a\u0647\u064a\u0626\u0629 \u0627\u0644\u062d\u0631\u0641\u064a',
-      description: '\u0623\u0643\u0645\u0644 \u0647\u0630\u0647 \u0627\u0644\u062e\u0637\u0648\u0627\u062a \u0644\u0628\u062f\u0621 \u062a\u0642\u062f\u064a\u0645 \u062e\u062f\u0645\u0627\u062a \u0627\u0644\u0648\u0631\u0634\u0629 \u0648\u0627\u0644\u0639\u0645\u0644 \u0627\u0644\u0645\u064a\u062f\u0627\u0646\u064a.',
+      description:
+        '\u0623\u0643\u0645\u0644 \u0647\u0630\u0647 \u0627\u0644\u062e\u0637\u0648\u0627\u062a \u0644\u0628\u062f\u0621 \u062a\u0642\u062f\u064a\u0645 \u062e\u062f\u0645\u0627\u062a \u0627\u0644\u0648\u0631\u0634\u0629 \u0648\u0627\u0644\u0639\u0645\u0644 \u0627\u0644\u0645\u064a\u062f\u0627\u0646\u064a.',
       steps: {
-        emailVerification: '\u0627\u0644\u062a\u062d\u0642\u0642 \u0645\u0646 \u0627\u0644\u0628\u0631\u064a\u062f',
+        emailVerification:
+          '\u0627\u0644\u062a\u062d\u0642\u0642 \u0645\u0646 \u0627\u0644\u0628\u0631\u064a\u062f',
         profileDetails: '\u062a\u0641\u0627\u0635\u064a\u0644 \u0627\u0644\u0645\u0644\u0641',
-        workshopDetails: '\u062a\u0641\u0627\u0635\u064a\u0644 \u0627\u0644\u0648\u0631\u0634\u0629',
-        identityVerification: '\u0627\u0644\u062a\u062d\u0642\u0642 \u0645\u0646 \u0627\u0644\u0647\u0648\u064a\u0629',
+        workshopDetails:
+          '\u062a\u0641\u0627\u0635\u064a\u0644 \u0627\u0644\u0648\u0631\u0634\u0629',
+        identityVerification:
+          '\u0627\u0644\u062a\u062d\u0642\u0642 \u0645\u0646 \u0627\u0644\u0647\u0648\u064a\u0629',
       },
       profileForm: {
-        tradeLabel: '\u0627\u0644\u062d\u0631\u0641\u0629 \u0627\u0644\u0623\u0633\u0627\u0633\u064a\u0629',
-        tradePlaceholder: '\u0645\u062b\u0644: \u0645\u064a\u0643\u0627\u0646\u064a\u0643\u064a\u060c \u0633\u0628\u0627\u0643\u060c \u0644\u062d\u0627\u0645',
+        tradeLabel:
+          '\u0627\u0644\u062d\u0631\u0641\u0629 \u0627\u0644\u0623\u0633\u0627\u0633\u064a\u0629',
+        tradePlaceholder:
+          '\u0645\u062b\u0644: \u0645\u064a\u0643\u0627\u0646\u064a\u0643\u064a\u060c \u0633\u0628\u0627\u0643\u060c \u0644\u062d\u0627\u0645',
         titleLabel: '\u0639\u0646\u0648\u0627\u0646 \u0627\u0644\u062e\u062f\u0645\u0629',
-        titlePlaceholder: '\u0645\u062b\u0644: \u0645\u064a\u0643\u0627\u0646\u064a\u0643\u064a \u0633\u064a\u0627\u0631\u0627\u062a \u0645\u062a\u0646\u0642\u0644',
-        headlineLabel: '\u0627\u0644\u0639\u0646\u0648\u0627\u0646 \u0627\u0644\u0631\u0626\u064a\u0633\u064a',
+        titlePlaceholder:
+          '\u0645\u062b\u0644: \u0645\u064a\u0643\u0627\u0646\u064a\u0643\u064a \u0633\u064a\u0627\u0631\u0627\u062a \u0645\u062a\u0646\u0642\u0644',
+        headlineLabel:
+          '\u0627\u0644\u0639\u0646\u0648\u0627\u0646 \u0627\u0644\u0631\u0626\u064a\u0633\u064a',
         bioLabel: '\u0646\u0628\u0630\u0629 \u062a\u0639\u0631\u064a\u0641\u064a\u0629',
         specializationsLabel: '\u0627\u0644\u062a\u062e\u0635\u0635\u0627\u062a',
-        specializationsHint: '\u0645\u0641\u0635\u0648\u0644\u0629 \u0628\u0641\u0648\u0627\u0635\u0644\u060c \u0645\u062b\u0644: \u0645\u062d\u0631\u0643\u0627\u062a\u060c \u0645\u0648\u0627\u0633\u064a\u0631\u060c \u062a\u0634\u0643\u064a\u0644',
-        yearsOfExperienceLabel: '\u0633\u0646\u0648\u0627\u062a \u0627\u0644\u062e\u0628\u0631\u0629',
-        hourlyRateLabel: '\u0627\u0644\u0633\u0639\u0631 \u0628\u0627\u0644\u0633\u0627\u0639\u0629 (\u062c.\u0645)',
+        specializationsHint:
+          '\u0645\u0641\u0635\u0648\u0644\u0629 \u0628\u0641\u0648\u0627\u0635\u0644\u060c \u0645\u062b\u0644: \u0645\u062d\u0631\u0643\u0627\u062a\u060c \u0645\u0648\u0627\u0633\u064a\u0631\u060c \u062a\u0634\u0643\u064a\u0644',
+        yearsOfExperienceLabel:
+          '\u0633\u0646\u0648\u0627\u062a \u0627\u0644\u062e\u0628\u0631\u0629',
+        hourlyRateLabel:
+          '\u0627\u0644\u0633\u0639\u0631 \u0628\u0627\u0644\u0633\u0627\u0639\u0629 (\u062c.\u0645)',
         cityLabel: '\u0627\u0644\u0645\u062f\u064a\u0646\u0629',
         countryLabel: '\u0627\u0644\u062f\u0648\u0644\u0629',
         availabilityLabel: '\u0627\u0644\u062a\u0648\u0641\u0631',
         workshopNameLabel: '\u0627\u0633\u0645 \u0627\u0644\u0648\u0631\u0634\u0629',
         workshopAddressLabel: '\u0639\u0646\u0648\u0627\u0646 \u0627\u0644\u0648\u0631\u0634\u0629',
-        workshopAddressHint: '\u062a\u0641\u0635\u064a\u0644 \u062e\u0627\u0635 \u064a\u064f\u0633\u062a\u062e\u062f\u0645 \u0644\u0644\u062c\u062f\u0648\u0644\u0629 \u0648\u0627\u0644\u062a\u062d\u0642\u0642.',
-        profilePhotoLabel: '\u0635\u0648\u0631\u0629 \u0627\u0644\u0645\u0644\u0641 \u0627\u0644\u0634\u062e\u0635\u064a',
-        profilePhotoHint: '\u0645\u0637\u0644\u0648\u0628\u0629 \u0644\u0644\u062a\u062d\u0642\u0642 \u0648\u0638\u0647\u0648\u0631 \u0634\u0627\u0631\u0629 \u0627\u0644\u062a\u0648\u062b\u064a\u0642.',
-        uploadProfilePhoto: '\u0631\u0641\u0639 \u0635\u0648\u0631\u0629 \u0627\u0644\u0645\u0644\u0641',
+        workshopAddressHint:
+          '\u062a\u0641\u0635\u064a\u0644 \u062e\u0627\u0635 \u064a\u064f\u0633\u062a\u062e\u062f\u0645 \u0644\u0644\u062c\u062f\u0648\u0644\u0629 \u0648\u0627\u0644\u062a\u062d\u0642\u0642.',
+        profilePhotoLabel:
+          '\u0635\u0648\u0631\u0629 \u0627\u0644\u0645\u0644\u0641 \u0627\u0644\u0634\u062e\u0635\u064a',
+        profilePhotoHint:
+          '\u0645\u0637\u0644\u0648\u0628\u0629 \u0644\u0644\u062a\u062d\u0642\u0642 \u0648\u0638\u0647\u0648\u0631 \u0634\u0627\u0631\u0629 \u0627\u0644\u062a\u0648\u062b\u064a\u0642.',
+        uploadProfilePhoto:
+          '\u0631\u0641\u0639 \u0635\u0648\u0631\u0629 \u0627\u0644\u0645\u0644\u0641',
       },
       documentsForm: {
         identityTitle: '\u0645\u0633\u062a\u0646\u062f \u0627\u0644\u0647\u0648\u064a\u0629',
-        identityDescription: '\u0627\u0631\u0641\u0639 \u0647\u0648\u064a\u0629 \u062d\u0643\u0648\u0645\u064a\u0629 \u0644\u0644\u062a\u062d\u0642\u0642 \u0645\u0646 \u0627\u0644\u0647\u0648\u064a\u0629.',
+        identityDescription:
+          '\u0627\u0631\u0641\u0639 \u0647\u0648\u064a\u0629 \u062d\u0643\u0648\u0645\u064a\u0629 \u0644\u0644\u062a\u062d\u0642\u0642 \u0645\u0646 \u0627\u0644\u0647\u0648\u064a\u0629.',
         documentTypeLabel: '\u0646\u0648\u0639 \u0627\u0644\u0645\u0633\u062a\u0646\u062f',
-        fullNameOnDocLabel: '\u0627\u0644\u0627\u0633\u0645 \u0627\u0644\u0643\u0627\u0645\u0644 \u0639\u0644\u0649 \u0627\u0644\u0645\u0633\u062a\u0646\u062f',
+        fullNameOnDocLabel:
+          '\u0627\u0644\u0627\u0633\u0645 \u0627\u0644\u0643\u0627\u0645\u0644 \u0639\u0644\u0649 \u0627\u0644\u0645\u0633\u062a\u0646\u062f',
         documentNumberLabel: '\u0631\u0642\u0645 \u0627\u0644\u0645\u0633\u062a\u0646\u062f',
         nationalityLabel: '\u0627\u0644\u062c\u0646\u0633\u064a\u0629',
         frontImageLabel: '\u0635\u0648\u0631\u0629 \u0627\u0644\u0648\u062c\u0647',
         backImageLabel: '\u0635\u0648\u0631\u0629 \u0627\u0644\u0638\u0647\u0631',
-        selfieImageLabel: '\u0635\u0648\u0631\u0629 \u0633\u064a\u0644\u0641\u064a \u0645\u0628\u0627\u0634\u0631\u0629',
-        backImageHint: '\u0645\u0637\u0644\u0648\u0628\u0629 \u0644\u0628\u0637\u0627\u0642\u0629 \u0627\u0644\u0631\u0642\u0645 \u0627\u0644\u0642\u0648\u0645\u064a \u0648\u0631\u062e\u0635\u0629 \u0627\u0644\u0642\u064a\u0627\u062f\u0629. \u062a\u062c\u0627\u0648\u0632\u0647\u0627 \u0644\u062c\u0648\u0627\u0632 \u0627\u0644\u0633\u0641\u0631.',
-        liveSelfieHint: '\u064a\u062c\u0628 \u0627\u0644\u062a\u0642\u0627\u0637 \u0633\u064a\u0644\u0641\u064a \u0645\u0628\u0627\u0634\u0631 \u0627\u0644\u0622\u0646. \u0644\u0627 \u064a\u064f\u0633\u0645\u062d \u0628\u0631\u0641\u0639 \u0635\u0648\u0631\u0629 \u0633\u064a\u0644\u0641\u064a \u062c\u0627\u0647\u0632\u0629.',
-        identityDescriptionSuffix: '\u064a\u062c\u0628 \u062a\u0648\u0641\u064a\u0631 \u0633\u064a\u0644\u0641\u064a \u0645\u0628\u0627\u0634\u0631 \u0648\u0635\u0648\u0631 \u0648\u0627\u0636\u062d\u0629 \u0644\u0644\u0647\u0648\u064a\u0629.',
+        selfieImageLabel:
+          '\u0635\u0648\u0631\u0629 \u0633\u064a\u0644\u0641\u064a \u0645\u0628\u0627\u0634\u0631\u0629',
+        backImageHint:
+          '\u0645\u0637\u0644\u0648\u0628\u0629 \u0644\u0628\u0637\u0627\u0642\u0629 \u0627\u0644\u0631\u0642\u0645 \u0627\u0644\u0642\u0648\u0645\u064a \u0648\u0631\u062e\u0635\u0629 \u0627\u0644\u0642\u064a\u0627\u062f\u0629. \u062a\u062c\u0627\u0648\u0632\u0647\u0627 \u0644\u062c\u0648\u0627\u0632 \u0627\u0644\u0633\u0641\u0631.',
+        liveSelfieHint:
+          '\u064a\u062c\u0628 \u0627\u0644\u062a\u0642\u0627\u0637 \u0633\u064a\u0644\u0641\u064a \u0645\u0628\u0627\u0634\u0631 \u0627\u0644\u0622\u0646. \u0644\u0627 \u064a\u064f\u0633\u0645\u062d \u0628\u0631\u0641\u0639 \u0635\u0648\u0631\u0629 \u0633\u064a\u0644\u0641\u064a \u062c\u0627\u0647\u0632\u0629.',
+        identityDescriptionSuffix:
+          '\u064a\u062c\u0628 \u062a\u0648\u0641\u064a\u0631 \u0633\u064a\u0644\u0641\u064a \u0645\u0628\u0627\u0634\u0631 \u0648\u0635\u0648\u0631 \u0648\u0627\u0636\u062d\u0629 \u0644\u0644\u0647\u0648\u064a\u0629.',
       },
       availabilityOptions: {
         available: '\u0645\u062a\u0627\u062d',
         busy: '\u0645\u0634\u063a\u0648\u0644',
         offline: '\u063a\u064a\u0631 \u0645\u062a\u0627\u062d',
       },
-      kycTitle: '\u0627\u0644\u062a\u062d\u0642\u0642 \u0645\u0646 \u0627\u0644\u0647\u0648\u064a\u0629',
-      kycDescription: '\u0627\u062e\u062a\u0631 \u0637\u0631\u064a\u0642\u0629 \u0627\u0644\u062a\u062d\u0642\u0642: \u062a\u0644\u0642\u0627\u0626\u064a (KYC) \u0623\u0648 \u0645\u0631\u0627\u062c\u0639\u0629 \u064a\u062f\u0648\u064a\u0629 \u0645\u0646 \u0641\u0631\u064a\u0642\u0646\u0627.',
-      kycButton: '\u0628\u062f\u0621 \u0627\u0644\u062a\u062d\u0642\u0642 \u0645\u0646 \u0627\u0644\u0647\u0648\u064a\u0629',
-      kycManualButton: '\u0625\u0631\u0633\u0627\u0644 \u0644\u0644\u0645\u0631\u0627\u062c\u0639\u0629 \u0627\u0644\u064a\u062f\u0648\u064a\u0629',
-      kycPending: '\u062c\u0627\u0631\u064a \u0645\u0639\u0627\u0644\u062c\u0629 \u0627\u0644\u062a\u062d\u0642\u0642 \u0645\u0646 \u0647\u0648\u064a\u062a\u0643. \u064a\u0631\u062c\u0649 \u0627\u0644\u0627\u0646\u062a\u0638\u0627\u0631.',
-      kycVerified: '\u062a\u0645 \u0627\u0644\u062a\u062d\u0642\u0642 \u0645\u0646 \u0647\u0648\u064a\u062a\u0643 \u0628\u0646\u062c\u0627\u062d.',
-      kycRejected: '\u062a\u0645 \u0631\u0641\u0636 \u0627\u0644\u062a\u062d\u0642\u0642 \u0645\u0646 \u0647\u0648\u064a\u062a\u0643. \u064a\u0631\u062c\u0649 \u0625\u0639\u0627\u062f\u0629 \u0627\u0644\u0625\u0631\u0633\u0627\u0644.',
-      pendingReviewMessage: '\u0645\u0633\u062a\u0646\u062f\u0627\u062a \u0627\u0644\u0647\u0648\u064a\u0629 \u0642\u064a\u062f \u0627\u0644\u0645\u0631\u0627\u062c\u0639\u0629. \u0633\u0646\u062e\u0628\u0631\u0643 \u0639\u0646\u062f \u0627\u0644\u0627\u0646\u062a\u0647\u0627\u0621 \u0645\u0646 \u0627\u0644\u062a\u062d\u0642\u0642.',
-      identityRejectedResubmit: '\u062a\u0645 \u0631\u0641\u0636 \u0645\u0633\u062a\u0646\u062f \u0627\u0644\u0647\u0648\u064a\u0629. \u064a\u0631\u062c\u0649 \u0625\u0639\u0627\u062f\u0629 \u0625\u0631\u0633\u0627\u0644 \u0628\u064a\u0627\u0646\u0627\u062a \u0627\u0644\u062a\u062d\u0642\u0642 \u0623\u062f\u0646\u0627\u0647.',
+      kycTitle:
+        '\u0627\u0644\u062a\u062d\u0642\u0642 \u0645\u0646 \u0627\u0644\u0647\u0648\u064a\u0629',
+      kycDescription:
+        '\u0627\u062e\u062a\u0631 \u0637\u0631\u064a\u0642\u0629 \u0627\u0644\u062a\u062d\u0642\u0642: \u062a\u0644\u0642\u0627\u0626\u064a (KYC) \u0623\u0648 \u0645\u0631\u0627\u062c\u0639\u0629 \u064a\u062f\u0648\u064a\u0629 \u0645\u0646 \u0641\u0631\u064a\u0642\u0646\u0627.',
+      kycButton:
+        '\u0628\u062f\u0621 \u0627\u0644\u062a\u062d\u0642\u0642 \u0645\u0646 \u0627\u0644\u0647\u0648\u064a\u0629',
+      kycManualButton:
+        '\u0625\u0631\u0633\u0627\u0644 \u0644\u0644\u0645\u0631\u0627\u062c\u0639\u0629 \u0627\u0644\u064a\u062f\u0648\u064a\u0629',
+      kycPending:
+        '\u062c\u0627\u0631\u064a \u0645\u0639\u0627\u0644\u062c\u0629 \u0627\u0644\u062a\u062d\u0642\u0642 \u0645\u0646 \u0647\u0648\u064a\u062a\u0643. \u064a\u0631\u062c\u0649 \u0627\u0644\u0627\u0646\u062a\u0638\u0627\u0631.',
+      kycVerified:
+        '\u062a\u0645 \u0627\u0644\u062a\u062d\u0642\u0642 \u0645\u0646 \u0647\u0648\u064a\u062a\u0643 \u0628\u0646\u062c\u0627\u062d.',
+      kycRejected:
+        '\u062a\u0645 \u0631\u0641\u0636 \u0627\u0644\u062a\u062d\u0642\u0642 \u0645\u0646 \u0647\u0648\u064a\u062a\u0643. \u064a\u0631\u062c\u0649 \u0625\u0639\u0627\u062f\u0629 \u0627\u0644\u0625\u0631\u0633\u0627\u0644.',
+      pendingReviewMessage:
+        '\u0645\u0633\u062a\u0646\u062f\u0627\u062a \u0627\u0644\u0647\u0648\u064a\u0629 \u0642\u064a\u062f \u0627\u0644\u0645\u0631\u0627\u062c\u0639\u0629. \u0633\u0646\u062e\u0628\u0631\u0643 \u0639\u0646\u062f \u0627\u0644\u0627\u0646\u062a\u0647\u0627\u0621 \u0645\u0646 \u0627\u0644\u062a\u062d\u0642\u0642.',
+      identityRejectedResubmit:
+        '\u062a\u0645 \u0631\u0641\u0636 \u0645\u0633\u062a\u0646\u062f \u0627\u0644\u0647\u0648\u064a\u0629. \u064a\u0631\u062c\u0649 \u0625\u0639\u0627\u062f\u0629 \u0625\u0631\u0633\u0627\u0644 \u0628\u064a\u0627\u0646\u0627\u062a \u0627\u0644\u062a\u062d\u0642\u0642 \u0623\u062f\u0646\u0627\u0647.',
       withdrawIdentitySubmission: 'إزالة الإرسال والبدء من جديد',
-      goToDashboard: '\u0627\u0644\u0630\u0647\u0627\u0628 \u0625\u0644\u0649 \u0644\u0648\u062d\u0629 \u0627\u0644\u062a\u062d\u0643\u0645',
-      profilePhotoRequiredError: '\u064a\u0631\u062c\u0649 \u0631\u0641\u0639 \u0635\u0648\u0631\u0629 \u0644\u0644\u0645\u0644\u0641 \u0642\u0628\u0644 \u0627\u0644\u0645\u062a\u0627\u0628\u0639\u0629.',
+      goToDashboard:
+        '\u0627\u0644\u0630\u0647\u0627\u0628 \u0625\u0644\u0649 \u0644\u0648\u062d\u0629 \u0627\u0644\u062a\u062d\u0643\u0645',
+      profilePhotoRequiredError:
+        '\u064a\u0631\u062c\u0649 \u0631\u0641\u0639 \u0635\u0648\u0631\u0629 \u0644\u0644\u0645\u0644\u0641 \u0642\u0628\u0644 \u0627\u0644\u0645\u062a\u0627\u0628\u0639\u0629.',
       manualKycMissingFilesError:
         '\u064a\u0631\u062c\u0649 \u0631\u0641\u0639 \u0648\u062c\u0647 \u0627\u0644\u0647\u0648\u064a\u0629\u060c \u0648\u0631\u0641\u0639 \u0627\u0644\u0638\u0647\u0631 \u0639\u0646\u062f\u0645\u0627 \u064a\u0643\u0648\u0646 \u0645\u0637\u0644\u0648\u0628\u064b\u0627\u060c \u0648\u0627\u0644\u062a\u0642\u0627\u0637 \u0633\u064a\u0644\u0641\u064a \u0645\u0628\u0627\u0634\u0631 \u0644\u0644\u0645\u062a\u0627\u0628\u0639\u0629.',
       kycRequirementsHint:
@@ -349,7 +387,8 @@ export const arDictionary: Dictionary = {
         identityDescription: 'ارفع بطاقة هوية حكومية لممثل الشركة.',
         businessDocsTitle: 'مستندات الشركة',
         businessDocsDescription: 'تم إرسال تفاصيل تسجيل الشركة مع ملفك.',
-        companyUploadComingSoon: 'سيصبح رفع مستندات الشركة (مثل صورة الرخصة التجارية) متاحًا في الملف الشخصي ← المستندات بعد إكمال التهيئة.',
+        companyUploadComingSoon:
+          'سيصبح رفع مستندات الشركة (مثل صورة الرخصة التجارية) متاحًا في الملف الشخصي ← المستندات بعد إكمال التهيئة.',
         businessDocsCompanyInfo:
           'تم إرسال تفاصيل شركتك (رخصة تجارية، الرقم الضريبي، السجل التجاري) مع ملفك. سيقوم فريقنا بمراجعة التحقق من الشركة. لا يلزم رفع مستندات إضافية في الوقت الحالي.',
         documentTypeLabel: 'نوع المستند',
@@ -418,7 +457,8 @@ export const arDictionary: Dictionary = {
       '201-500': '201–500 موظف',
       '500+': '500+ موظف',
     },
-    verificationTimeNote: 'التحقق عادة يستغرق 1–5 أيام عمل. نستخدم Didit والمراجعة اليدوية الاختيارية.',
+    verificationTimeNote:
+      'التحقق عادة يستغرق 1–5 أيام عمل. نستخدم Didit والمراجعة اليدوية الاختيارية.',
   },
   profileModal: {
     message: 'رسالة',
@@ -480,10 +520,16 @@ export const arDictionary: Dictionary = {
     reservation_cancelled: { title: 'إلغاء الحجز', message: 'تم إلغاء حجز.' },
     reservation_completed: { title: 'اكتمال الحجز', message: 'تم إكمال الحجز.' },
     reservation_started: { title: 'بدء الجلسة', message: 'بدأت جلسة الحجز.' },
-    reservation_disputed: { title: 'نزاع على الحجز', message: 'تم الإبلاغ عن حجز وهو قيد المراجعة.' },
+    reservation_disputed: {
+      title: 'نزاع على الحجز',
+      message: 'تم الإبلاغ عن حجز وهو قيد المراجعة.',
+    },
     reservation_dispute_resolved: { title: 'حُل النزاع', message: 'تم حل نزاع الحجز من الإدارة.' },
     reservation_expired: { title: 'انتهت صلاحية الحجز', message: 'انتهت مهلة حجز معلّق دون رد.' },
-    reservation_location_proposed: { title: 'اقتراح موقع', message: 'اقترح الطرف الآخر موقع لقاء.' },
+    reservation_location_proposed: {
+      title: 'اقتراح موقع',
+      message: 'اقترح الطرف الآخر موقع لقاء.',
+    },
     price_negotiation: { title: 'تفاوض السعر', message: 'تحديث في تفاوض السعر.' },
     need_bid_received: { title: 'عرض جديد', message: 'وصلك عرض جديد على طلبك.' },
     need_bid_awarded: { title: 'فوز بالعرض', message: 'تم اختيار عرضك.' },
@@ -547,8 +593,9 @@ export const arDictionary: Dictionary = {
     logout: 'تسجيل الخروج',
     helpSupport: 'المساعدة والدعم',
     balanceTitle: 'الرصيد',
-    balanceTopUp: 'شحن الرصيد (قريباً)',
-    balanceStubNote: 'تكامل المحفظة سيكون متاحاً لاحقاً.',
+    balanceTopUp: 'شحن الرصيد',
+    balanceStubNote:
+      'استخدم المحفظة لمراجعة الإيداعات والسحوبات والمبالغ المحجوزة وحالة المدفوعات.',
     welcome: 'مرحباً',
     genericRoleDescription: 'أدر تدفق الخدمات الهندسية من مكان واحد.',
     catalogFallbackNotice: 'يتم عرض قائمة افتراضية حتى اكتمال تحديث الخدمات.',
@@ -753,8 +800,13 @@ export const arDictionary: Dictionary = {
             permissions: 'الصلاحيات',
           },
           adminPermissionsIntro:
-            'الصلاحيات المحددة تمنح فقط تلك المجالات. اترك الكل بدون تحديد لصلاحية كاملة (مدير أعلى). المدراء المحدودون يحتاجون صلاحية لكل تبويب.',
+            'الصلاحيات المحددة تمنح فقط تلك المجالات. صلاحية المدير الأعلى صريحة، وترك كل الخانات بدون تحديد لا يمنح أي صلاحيات محددة.',
           permissionDefs: [
+            {
+              id: 'super_admin',
+              label: 'مدير أعلى',
+              hint: 'صلاحية كاملة للمنصة، بما في ذلك منح وإلغاء حالة المدير والصلاحيات.',
+            },
             {
               id: 'manage_users',
               label: 'المستخدمون والدعم',
@@ -1039,37 +1091,25 @@ export const arDictionary: Dictionary = {
         'أقصى احتياجات بحالة مفتوح أو مُسنَد أو قيد التنفيذ معاً. المكتمل أو المغلق لا يُحسب. لا إعادة تعيين تقويمية.',
       hintMaxBidsPerNeed:
         'عند وصول عدد العروض (قيد الانتظار أو مقبولة) لهذا الحد على احتياج واحد، لا يُقبل المزيد.',
-      hintBidsVisible:
-        'كم عرضاً يرى العميل وبأي ترتيب (الأولوية والخطط المدفوعة أولاً ثم الزمن).',
-      hintBidsVisibleTopN:
-        'بعد الترتيب يرى العميل هذا العدد فقط. يُستخدم عند اختيار «أول N».',
-      hintMaxServices:
-        'إجمالي قوائم الخدمات للخبير أو الحرفي. العدّ حالياً لكل الصفوف.',
-      hintMaxActiveBids:
-        'أقصى عروض قيد الانتظار على جميع الاحتياجات. الرد أو السحب يُفرّغ خانة.',
-      hintCanPriorityListing:
-        'علم للخطة لتمييز الخدمات في البحث عند تفعيله في المنتج.',
-      hintCanPriorityBid:
-        'عروض أصحاب هذه الخطة تظهر أولاً عندما يفتح العميل قائمة العروض.',
-      hintCanProBadge:
-        'تظهر شارة Pro في رأس التطبيق للخبراء والحرفيين على هذه الخطة.',
-      hintMaxJobs:
-        'إجمالي إعلانات الوظائف للشركة (يُحسب كل الصفوف حتى تضيف تصفية حالة).',
+      hintBidsVisible: 'كم عرضاً يرى العميل وبأي ترتيب (الأولوية والخطط المدفوعة أولاً ثم الزمن).',
+      hintBidsVisibleTopN: 'بعد الترتيب يرى العميل هذا العدد فقط. يُستخدم عند اختيار «أول N».',
+      hintMaxServices: 'إجمالي قوائم الخدمات للخبير أو الحرفي. العدّ حالياً لكل الصفوف.',
+      hintMaxActiveBids: 'أقصى عروض قيد الانتظار على جميع الاحتياجات. الرد أو السحب يُفرّغ خانة.',
+      hintCanPriorityListing: 'علم للخطة لتمييز الخدمات في البحث عند تفعيله في المنتج.',
+      hintCanPriorityBid: 'عروض أصحاب هذه الخطة تظهر أولاً عندما يفتح العميل قائمة العروض.',
+      hintCanProBadge: 'تظهر شارة Pro في رأس التطبيق للخبراء والحرفيين على هذه الخطة.',
+      hintMaxJobs: 'إجمالي إعلانات الوظائف للشركة (يُحسب كل الصفوف حتى تضيف تصفية حالة).',
       hintMaxBusinessServices:
         'حد قوائم خدمات الشركة. إن وُجد الفراغ يُطبَّق حد الخدمات العام للشركات.',
-      hintMaxTeamSlots:
-        'محجوز لحد أعضاء الفريق؛ اربطه بالـ API عند إضافة الفرق.',
-      hintCanBusinessFeatured:
-        'محجوز لإبراز الشركة في القوائم عند التنفيذ.',
-      hintCanTrustedBusinessBadge:
-        'تظهر شارة «موثوق» بجانب اسم الشركة في التطبيق.',
+      hintMaxTeamSlots: 'محجوز لحد أعضاء الفريق؛ اربطه بالـ API عند إضافة الفرق.',
+      hintCanBusinessFeatured: 'محجوز لإبراز الشركة في القوائم عند التنفيذ.',
+      hintCanTrustedBusinessBadge: 'تظهر شارة «موثوق» بجانب اسم الشركة في التطبيق.',
       hintName: 'الاسم الظاهر في بطاقات الخطط وعند الدفع.',
       hintSlug: 'معرّف ثابت في الروابط والـ API (أحرف صغيرة، بلا مسافات).',
       hintPrice: 'المبلغ المخصوم من محفظة المشترك عند دفع هذه الخطة.',
       hintDescription: 'نص اختياري أطول؛ يمكن عرضه تحت اسم الخطة في بعض الشاشات.',
       hintBillingCycle: 'دورة التجديد (أو دفعة لمرة واحدة). تُخصم المحفظة عند كل تجديد.',
-      hintFeatures:
-        'عناصر مفصولة بفواصل تظهر في بطاقة الخطة.',
+      hintFeatures: 'عناصر مفصولة بفواصل تظهر في بطاقة الخطة.',
       usageQuotasSection: 'استخدام مُقاس (لكل فترة)',
       usageQuotasIntro:
         'حدود اختيارية لعدد مرات تنفيذ إجراءات في نافذة زمنية. دورة الفوترة تستخدم تواريخ الاشتراك النشط؛ إن كان المستخدم على خطة مجانية فقط تُحسب النافذة كالشهر التقويمي (UTC). لا يُرحّل الرصيد غير المستخدم.',
@@ -1086,10 +1126,8 @@ export const arDictionary: Dictionary = {
         'يُحسب كل احتياج ينشئه العميل بنجاح في الفترة (بالإضافة لحد الاحتياجات النشطة المتزامنة).',
       hintQuota_new_services_per_period:
         'يُحسب كل صف خدمة جديد يُنشئه المزوّد في الفترة (مسودة أو مرسل للمراجعة).',
-      hintQuota_new_bids_per_period:
-        'يُحسب كل عرض جديد يقدّمه الخبير أو الحرفي في الفترة.',
-      hintQuota_new_jobs_per_period:
-        'يُحسب كل وظيفة جديدة تنشئها الشركة في الفترة.',
+      hintQuota_new_bids_per_period: 'يُحسب كل عرض جديد يقدّمه الخبير أو الحرفي في الفترة.',
+      hintQuota_new_jobs_per_period: 'يُحسب كل وظيفة جديدة تنشئها الشركة في الفترة.',
     },
     txns: {
       title: 'إدارة المعاملات',
@@ -1191,8 +1229,7 @@ export const arDictionary: Dictionary = {
     paymobOptionLabel: 'باي موب',
     paymobOptionHint: 'ادفع بالبطاقة أو المحفظة بالجنيه المصري',
     paymobPay: 'الدفع عبر باي موب',
-    instapayInstructions:
-      'حوّل المبلغ أدناه إلى حساب إنستاباي للمنصة، ثم ارفع إيصال الدفع.',
+    instapayInstructions: 'حوّل المبلغ أدناه إلى حساب إنستاباي للمنصة، ثم ارفع إيصال الدفع.',
     instapayAmountLabel: 'المبلغ (ج.م)',
     instapayProofLabel: 'إثبات الدفع (صورة)',
     instapaySubmit: 'إرسال للمراجعة',
@@ -1206,8 +1243,7 @@ export const arDictionary: Dictionary = {
     depositMinAmount: 'الحد الأدنى للإيداع بالبطاقة 50 جنيه.',
     depositSuccess: 'تم الإيداع بنجاح. تم تحديث رصيدك.',
     depositCancelled: 'تم إلغاء الإيداع.',
-    depositCardUnavailable:
-      'مدفوعات البطاقة غير متاحة الآن. حاول لاحقًا أو استخدم طريقة أخرى.',
+    depositCardUnavailable: 'مدفوعات البطاقة غير متاحة الآن. حاول لاحقًا أو استخدم طريقة أخرى.',
   },
   servicesPage: {
     title: 'خدماتي',
@@ -1255,8 +1291,7 @@ export const arDictionary: Dictionary = {
     badgePro: 'Pro',
     badgeTrustedBusiness: 'موثوق',
     usageTitle: 'استخدام خطتك',
-    usageConcurrentNote:
-      'هذه خانات حية وليست حدوداً شهرية. إنهاء العمل أو إغلاقه يُفرّغ السعة.',
+    usageConcurrentNote: 'هذه خانات حية وليست حدوداً شهرية. إنهاء العمل أو إغلاقه يُفرّغ السعة.',
     usageNeeds: 'احتياجات نشطة: {used} من {max} ({remaining} متبقية).',
     usageNeedsUnlimited: 'احتياجات نشطة: {used} (لا حد أقصى في خطتك).',
     usageServices: 'قوائم الخدمات: {used} من {max} ({remaining} متبقية).',
@@ -1270,8 +1305,7 @@ export const arDictionary: Dictionary = {
     usageMeteredTitle: 'إجراءات مُقاسة (هذه الفترة)',
     usageMeteredIntro:
       'تُصفَّر هذه الأعداد عند انتهاء الفترة (تجديد الاشتراك أو الشهر التقويمي حسب إعداد خطتك).',
-    usageQuotaLine:
-      '{label}: {used} من {max} ({remaining} متبقية). تنتهي الفترة في {ends}.',
+    usageQuotaLine: '{label}: {used} من {max} ({remaining} متبقية). تنتهي الفترة في {ends}.',
     quotaFeature_new_needs_per_period: 'احتياجات جديدة منشورة',
     quotaFeature_new_services_per_period: 'خدمات جديدة مُنشأة',
     quotaFeature_new_bids_per_period: 'عروض جديدة مقدَّمة',
@@ -1438,9 +1472,12 @@ export const arDictionary: Dictionary = {
       academicSubmitSuccess: 'تم إرسال السجل الأكاديمي بنجاح.',
       noDocuments:
         '\u0644\u0645 \u064a\u062a\u0645 \u0631\u0641\u0639 \u0623\u064a \u0645\u0633\u062a\u0646\u062f\u0627\u062a \u0628\u0639\u062f.',
-      addIdentityDocument: '\u0625\u0636\u0627\u0641\u0629 \u0645\u0633\u062a\u0646\u062f \u0627\u0644\u0647\u0648\u064a\u0629',
-      addAcademicRecord: '\u0625\u0636\u0627\u0641\u0629 \u0633\u062c\u0644 \u0623\u0643\u0627\u062f\u064a\u0645\u064a',
-      addAnotherAcademicRecord: '\u0625\u0636\u0627\u0641\u0629 \u0633\u062c\u0644 \u0623\u0643\u0627\u062f\u064a\u0645\u064a \u0622\u062e\u0631',
+      addIdentityDocument:
+        '\u0625\u0636\u0627\u0641\u0629 \u0645\u0633\u062a\u0646\u062f \u0627\u0644\u0647\u0648\u064a\u0629',
+      addAcademicRecord:
+        '\u0625\u0636\u0627\u0641\u0629 \u0633\u062c\u0644 \u0623\u0643\u0627\u062f\u064a\u0645\u064a',
+      addAnotherAcademicRecord:
+        '\u0625\u0636\u0627\u0641\u0629 \u0633\u062c\u0644 \u0623\u0643\u0627\u062f\u064a\u0645\u064a \u0622\u062e\u0631',
       editAcademicRecord: '\u062a\u062d\u062f\u064a\u062b',
       status: '\u0627\u0644\u062d\u0627\u0644\u0629',
       rejectionReason: '\u0633\u0628\u0628 \u0627\u0644\u0631\u0641\u0636',
@@ -1449,11 +1486,15 @@ export const arDictionary: Dictionary = {
       goToVerification: '\u0625\u0643\u0645\u0627\u0644 \u0627\u0644\u062a\u062d\u0642\u0642',
       withdrawPendingIdentity: 'إزالة الإرسال',
       withdrawSuccess: 'تمت إزالة الإرسال. يمكنك إرسال تحقق جديد عندما تكون جاهزًا.',
-      companyDetailsTitle: '\u062a\u0641\u0627\u0635\u064a\u0644 \u0627\u0644\u0634\u0631\u0643\u0629',
-      companyDetailsHint: '\u062a\u0645 \u0625\u0631\u0633\u0627\u0644 \u0627\u0644\u062a\u0641\u0627\u0635\u064a\u0644 \u0645\u0639 \u0645\u0644\u0641 \u0634\u0631\u0643\u062a\u0643. \u064a\u0645\u0643\u0646 \u0644\u0644\u0625\u062f\u0645\u064a\u0646 \u0627\u0633\u062a\u062e\u062f\u0627\u0645\u0647\u0627 \u0644\u0644\u062a\u062d\u0642\u0642.',
-      tradeLicense: '\u0627\u0644\u0631\u062e\u0635\u0629 \u0627\u0644\u062a\u062c\u0627\u0631\u064a\u0629',
+      companyDetailsTitle:
+        '\u062a\u0641\u0627\u0635\u064a\u0644 \u0627\u0644\u0634\u0631\u0643\u0629',
+      companyDetailsHint:
+        '\u062a\u0645 \u0625\u0631\u0633\u0627\u0644 \u0627\u0644\u062a\u0641\u0627\u0635\u064a\u0644 \u0645\u0639 \u0645\u0644\u0641 \u0634\u0631\u0643\u062a\u0643. \u064a\u0645\u0643\u0646 \u0644\u0644\u0625\u062f\u0645\u064a\u0646 \u0627\u0633\u062a\u062e\u062f\u0627\u0645\u0647\u0627 \u0644\u0644\u062a\u062d\u0642\u0642.',
+      tradeLicense:
+        '\u0627\u0644\u0631\u062e\u0635\u0629 \u0627\u0644\u062a\u062c\u0627\u0631\u064a\u0629',
       taxId: '\u0627\u0644\u0631\u0642\u0645 \u0627\u0644\u0636\u0631\u064a\u0628\u064a',
-      commercialRegister: '\u0627\u0644\u0633\u062c\u0644 \u0627\u0644\u062a\u062c\u0627\u0631\u064a',
+      commercialRegister:
+        '\u0627\u0644\u0633\u062c\u0644 \u0627\u0644\u062a\u062c\u0627\u0631\u064a',
       notSubmitted: '\u0644\u0645 \u064a\u062a\u0645 \u0627\u0644\u0625\u0631\u0633\u0627\u0644',
       companyUploadNote: 'سيصبح رفع مستندات الشركة (مثل صورة الرخصة) متاحًا هنا في تحديث قادم.',
       companyUploadComingSoon:
@@ -1461,13 +1502,16 @@ export const arDictionary: Dictionary = {
     },
     reviews: {
       sectionTitle: '\u0627\u0644\u062a\u062e\u0635\u064a\u0635\u0627\u062a',
-      averageRating: '\u0627\u0644\u062a\u0642\u064a\u064a\u0645 \u0627\u0644\u0645\u062a\u0648\u0633\u0637',
+      averageRating:
+        '\u0627\u0644\u062a\u0642\u064a\u064a\u0645 \u0627\u0644\u0645\u062a\u0648\u0633\u0637',
       reviewCount: '\u062a\u062e\u0635\u064a\u0635\u0627\u062a',
-      noReviews: '\u0644\u0627 \u062a\u0648\u062c\u062f \u062a\u062e\u0635\u064a\u0635\u0627\u062a \u0628\u0639\u062f.',
+      noReviews:
+        '\u0644\u0627 \u062a\u0648\u062c\u062f \u062a\u062e\u0635\u064a\u0635\u0627\u062a \u0628\u0639\u062f.',
       rateProvider: '\u062a\u0642\u064a\u064a\u0645 \u0627\u0644\u0645\u0648\u0631\u0651\u062f',
       rateCustomer: '\u062a\u0642\u064a\u064a\u0645 \u0627\u0644\u0639\u0645\u064a\u0644',
       leaveReview: '\u0627\u062a\u0631\u0643 \u062a\u062e\u0635\u064a\u0635\u0627\u064b',
-      commentPlaceholder: '\u0627\u0644\u062a\u0639\u0644\u064a\u0642 \u0627\u062e\u062a\u064a\u0627\u0631\u064a',
+      commentPlaceholder:
+        '\u0627\u0644\u062a\u0639\u0644\u064a\u0642 \u0627\u062e\u062a\u064a\u0627\u0631\u064a',
     },
   },
   auth: {
@@ -1745,7 +1789,8 @@ export const arDictionary: Dictionary = {
     nextMonth: 'الشهر التالي',
     upcomingBookings: 'الحجوزات القادمة',
     reservationSettingsTitle: 'إعدادات الحجز',
-    reservationSettingsDescription: 'حدد الأسعار الثابتة وخيار القبول التلقائي لطلبات الحجز الواردة.',
+    reservationSettingsDescription:
+      'حدد الأسعار الثابتة وخيار القبول التلقائي لطلبات الحجز الواردة.',
     saveReservationSettings: 'حفظ إعدادات الحجز',
     dayDetailsTitle: 'تفاصيل اليوم',
     selectedDay: 'اليوم المحدد',

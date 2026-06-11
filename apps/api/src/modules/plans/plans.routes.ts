@@ -9,11 +9,7 @@ const plansRouter = Router();
 
 plansRouter.get('/', authenticate, plansController.listActivePlans);
 plansRouter.get('/usage', authenticate, plansController.getMyUsage);
-plansRouter.get(
-  '/my-subscription',
-  authenticate,
-  plansController.getCurrentSubscription,
-);
+plansRouter.get('/my-subscription', authenticate, plansController.getCurrentSubscription);
 plansRouter.post(
   '/:planId/subscribe',
   authenticate,

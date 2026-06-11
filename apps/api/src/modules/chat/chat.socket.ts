@@ -3,8 +3,9 @@ import type { Server as SocketServer } from 'socket.io';
 
 import { verifyAccessToken } from '../../config/jwt.js';
 import { logger } from '../../config/logger.js';
-import { getPool } from '../../db/pool.js';
+import { getPool, hasDatabaseConfig } from '../../db/pool.js';
 import { setSocketServer } from '../../lib/socket-instance.js';
+import { isUserActive } from '../../middleware/user-status-cache.js';
 
 type SocketAuthUser = {
   id: string;
@@ -44,7 +45,10 @@ const canJoinApplicationRoom = async (applicationId: string, userId: string): Pr
   return participants.expert_id === userId || participants.business_id === userId;
 };
 
-const canJoinConversationRoom = async (conversationId: string, userId: string): Promise<boolean> => {
+const canJoinConversationRoom = async (
+  conversationId: string,
+  userId: string,
+): Promise<boolean> => {
   const { rows } = await getPool().query<{ participant_a: string; participant_b: string }>(
     `SELECT participant_a, participant_b FROM conversations WHERE id = $1 LIMIT 1`,
     [conversationId],
@@ -62,14 +66,23 @@ export const registerChatSocket = (io: SocketServer): void => {
       next(new Error('UNAUTHORIZED'));
       return;
     }
-    try {
-      const payload = verifyAccessToken(token);
-      const socketData = socket.data as { authUser?: SocketAuthUser };
-      socketData.authUser = { id: payload.sub };
-      next();
-    } catch {
-      next(new Error('UNAUTHORIZED'));
-    }
+    void (async () => {
+      try {
+        const payload = verifyAccessToken(token);
+        if (hasDatabaseConfig()) {
+          const active = await isUserActive(payload.sub);
+          if (!active) {
+            next(new Error('ACCOUNT_DISABLED'));
+            return;
+          }
+        }
+        const socketData = socket.data as { authUser?: SocketAuthUser };
+        socketData.authUser = { id: payload.sub };
+        next();
+      } catch {
+        next(new Error('UNAUTHORIZED'));
+      }
+    })();
   });
 
   io.on('connection', (socket) => {
@@ -109,7 +122,11 @@ export const registerChatSocket = (io: SocketServer): void => {
       try {
         const allowed = await canJoinApplicationRoom(appId, authUser.id);
         if (!allowed) {
-          emitSocketError(socket, 'FORBIDDEN_ROOM_JOIN', 'Not authorized for this application room.');
+          emitSocketError(
+            socket,
+            'FORBIDDEN_ROOM_JOIN',
+            'Not authorized for this application room.',
+          );
           return;
         }
         void socket.join(`application:${appId}`);

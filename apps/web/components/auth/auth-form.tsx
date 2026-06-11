@@ -3,7 +3,7 @@
 import type { UserRole } from '@mohandishub/shared';
 import { Eye, EyeOff } from 'lucide-react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { AuthModeSwitch, type AuthMode } from '@/components/auth/auth-mode-switch';
@@ -109,6 +109,13 @@ const extractFieldErrors = (details: unknown): Partial<Record<FieldName, string>
 const getPostAuthPath = (locale: Locale, emailVerified: boolean): string =>
   buildLocalePath(locale, emailVerified ? '/app' : '/verify-email');
 
+const getSafeNextPath = (locale: Locale, rawNext: string | null): string | null => {
+  if (!rawNext) return null;
+  if (!rawNext.startsWith(`/${locale}/app`)) return null;
+  if (rawNext.startsWith('//') || rawNext.includes('://')) return null;
+  return rawNext;
+};
+
 export const AuthForm = ({
   locale,
   mode,
@@ -123,6 +130,7 @@ export const AuthForm = ({
   onBackToRoleSelect,
 }: AuthFormProps) => {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { login, register, isReady } = useAuth();
   const geoDetectedRef = useRef(false);
 
@@ -183,6 +191,8 @@ export const AuthForm = ({
 
     if (!loginValues.password) {
       errors.password = dictionary.validation.required;
+    } else if (loginValues.password.length > 128) {
+      errors.password = dictionary.validation.invalidPassword;
     }
 
     return errors;
@@ -313,7 +323,10 @@ export const AuthForm = ({
       setStatusVariant('success');
       setStatusMessage(null);
 
-      const postAuthPath = getPostAuthPath(locale, authenticatedUser.emailVerified);
+      const safeNext = authenticatedUser.emailVerified
+        ? getSafeNextPath(locale, searchParams.get('next'))
+        : null;
+      const postAuthPath = safeNext ?? getPostAuthPath(locale, authenticatedUser.emailVerified);
       router.push(postAuthPath);
       return;
     } catch (error: unknown) {
@@ -400,6 +413,7 @@ export const AuthForm = ({
         loginLabel={dictionary.common.login}
         registerLabel={dictionary.common.register}
         onModeChange={onModeChange}
+        controlsPrefix="auth"
       />
 
       {mode === 'register' && registerSteps ? (
@@ -433,7 +447,13 @@ export const AuthForm = ({
 
       {statusMessage ? <AuthStatusBanner variant={statusVariant} message={statusMessage} /> : null}
 
-      <form className="auth-form" onSubmit={handleFormSubmit} noValidate>
+      <form
+        id={`auth-${mode}-panel`}
+        className="auth-form"
+        role="tabpanel"
+        onSubmit={handleFormSubmit}
+        noValidate
+      >
         {mode === 'register' && role === 'business' ? (
           <label className="auth-form-field-group">
             <span className="auth-form-field-label">{dictionary.register.companyNameLabel}</span>
@@ -527,10 +547,16 @@ export const AuthForm = ({
               aria-label={
                 isPasswordVisible ? dictionary.common.hidePassword : dictionary.common.showPassword
               }
-              title={isPasswordVisible ? dictionary.common.hidePassword : dictionary.common.showPassword}
+              title={
+                isPasswordVisible ? dictionary.common.hidePassword : dictionary.common.showPassword
+              }
               suppressHydrationWarning
             >
-              {isPasswordVisible ? <EyeOff size={18} aria-hidden="true" /> : <Eye size={18} aria-hidden="true" />}
+              {isPasswordVisible ? (
+                <EyeOff size={18} aria-hidden="true" />
+              ) : (
+                <Eye size={18} aria-hidden="true" />
+              )}
             </button>
           </div>
           {fieldErrors.password ? (
@@ -540,7 +566,10 @@ export const AuthForm = ({
 
         {mode === 'login' ? (
           <div className="auth-form-forgot-row">
-            <Link href={buildLocalePath(locale, '/auth/forgot-password')} className="auth-form-forgot-link">
+            <Link
+              href={buildLocalePath(locale, '/auth/forgot-password')}
+              className="auth-form-forgot-link"
+            >
               {dictionary.login.forgotPasswordLink}
             </Link>
           </div>

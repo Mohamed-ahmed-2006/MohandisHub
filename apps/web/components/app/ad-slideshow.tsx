@@ -88,8 +88,16 @@ export const AdSlideshow = ({ locale, dictionary, accessToken, role }: AdSlidesh
   };
 
   return (
-    <section className="ad-slideshow" aria-label={dictionary.advertisements?.title ?? 'Advertisements'}>
-      <div className="ad-slideshow-banner" style={{ backgroundImage: `url(${imageUrl})` }}>
+    <section
+      className="ad-slideshow"
+      aria-label={dictionary.advertisements?.title ?? 'Advertisements'}
+    >
+      <div
+        id="ad-slideshow-panel"
+        className="ad-slideshow-banner"
+        style={{ backgroundImage: `url(${imageUrl})` }}
+        role="tabpanel"
+      >
         <div className="ad-slideshow-overlay">
           <p className="ad-slideshow-badge">{dictionary.advertisements?.adLabel ?? 'Sponsored'}</p>
           <h2 className="ad-slideshow-title">{title}</h2>
@@ -108,6 +116,7 @@ export const AdSlideshow = ({ locale, dictionary, accessToken, role }: AdSlidesh
               type="button"
               role="tab"
               aria-selected={slide === idx}
+              aria-controls="ad-slideshow-panel"
               aria-label={`Ad ${idx + 1}`}
               className="ad-slideshow-dot"
               onClick={() => setSlide(idx)}

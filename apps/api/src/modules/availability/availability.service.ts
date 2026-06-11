@@ -8,7 +8,11 @@ import { HttpError } from '../../utils/http-error.js';
 
 import { AvailabilityRepository } from './availability.repository.js';
 import type { SlotRow } from './availability.repository.js';
-import type { CreateSlotInput, CreateSlotsInput, UpdateSlotInput } from './availability.validation.js';
+import type {
+  CreateSlotInput,
+  CreateSlotsInput,
+  UpdateSlotInput,
+} from './availability.validation.js';
 
 function toSlot(row: SlotRow) {
   return {

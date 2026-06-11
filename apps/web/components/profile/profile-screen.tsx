@@ -464,7 +464,10 @@ const AccountForm = ({
               </div>
             )}
             <ImageUploadOrCapture
-              label={(labels as { avatarUploadLabel?: string }).avatarUploadLabel ?? 'Upload profile picture'}
+              label={
+                (labels as { avatarUploadLabel?: string }).avatarUploadLabel ??
+                'Upload profile picture'
+              }
               onImage={(file) => void handleAvatarSelected(file)}
               onClear={() => {
                 setAvatarFile(null);
@@ -531,7 +534,9 @@ export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
   const [reviewsPage, _setReviewsPage] = useState(1);
   const [_reviewsTotal, setReviewsTotal] = useState(0);
   const [reportModalReviewId, setReportModalReviewId] = useState<string | null>(null);
-  const [reportReason, setReportReason] = useState<'inappropriate' | 'fake' | 'spam' | 'other'>('inappropriate');
+  const [reportReason, setReportReason] = useState<'inappropriate' | 'fake' | 'spam' | 'other'>(
+    'inappropriate',
+  );
   const [reportComment, setReportComment] = useState('');
   const [disputeModalReviewId, setDisputeModalReviewId] = useState<string | null>(null);
   const [disputeReason, setDisputeReason] = useState('');
@@ -690,10 +695,7 @@ export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
       const acadsPromise = isExpert
         ? profilesApiClient.getAcademicRecords(accessToken)
         : Promise.resolve<AcademicRecord[]>([]);
-      const [ids, acads] = await Promise.all([
-        idsPromise,
-        acadsPromise,
-      ]);
+      const [ids, acads] = await Promise.all([idsPromise, acadsPromise]);
       const resolvedIds = Array.isArray(ids) ? ids : [];
       const resolvedAcads = Array.isArray(acads) ? acads : [];
       setIdentityDocuments(resolvedIds);
@@ -790,8 +792,15 @@ export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
   const handleAddIdentityDocument = useCallback(async () => {
     if (!accessToken) return;
     const needsBack = identityDocType === 'national_id' || identityDocType === 'driving_license';
-    if (!identityFullNameOnDoc.trim() || !identityFrontFile || !identitySelfieFile || (needsBack && !identityBackFile)) {
-      setIdentitySubmitError('Please provide full name, document front, live selfie, and back image when required.');
+    if (
+      !identityFullNameOnDoc.trim() ||
+      !identityFrontFile ||
+      !identitySelfieFile ||
+      (needsBack && !identityBackFile)
+    ) {
+      setIdentitySubmitError(
+        'Please provide full name, document front, live selfie, and back image when required.',
+      );
       return;
     }
 
@@ -825,7 +834,9 @@ export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
       await loadDocuments();
       setSaveMessage({
         type: 'success',
-        text: dictionary.profile.documents.identitySubmitSuccess ?? 'Identity document submitted successfully.',
+        text:
+          dictionary.profile.documents.identitySubmitSuccess ??
+          'Identity document submitted successfully.',
       });
     } catch (err) {
       setIdentitySubmitError(formatApiError(err, dictionary.profile.saveError));
@@ -858,7 +869,9 @@ export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
     try {
       const [certRes, transcriptRes] = await Promise.all([
         uploadPrivateFile(accessToken, academicCertificateFile),
-        academicTranscriptFile ? uploadPrivateFile(accessToken, academicTranscriptFile) : Promise.resolve(null),
+        academicTranscriptFile
+          ? uploadPrivateFile(accessToken, academicTranscriptFile)
+          : Promise.resolve(null),
       ]);
 
       await profilesApiClient.submitAcademicRecord(accessToken, {
@@ -866,7 +879,9 @@ export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
         title: academicTitle.trim(),
         institution: academicInstitution.trim(),
         certificateImageUrl: toFullUploadUrl(certRes.url),
-        ...(academicTranscriptFile ? { transcriptImageUrl: toFullUploadUrl(transcriptRes!.url) } : {}),
+        ...(academicTranscriptFile
+          ? { transcriptImageUrl: toFullUploadUrl(transcriptRes!.url) }
+          : {}),
         ...(academicFieldOfStudy.trim() ? { fieldOfStudy: academicFieldOfStudy.trim() } : {}),
         ...(academicGraduationYear.trim()
           ? { graduationYear: Number.parseInt(academicGraduationYear, 10) }
@@ -886,7 +901,9 @@ export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
       await loadDocuments();
       setSaveMessage({
         type: 'success',
-        text: dictionary.profile.documents.academicSubmitSuccess ?? 'Academic record submitted successfully.',
+        text:
+          dictionary.profile.documents.academicSubmitSuccess ??
+          'Academic record submitted successfully.',
       });
     } catch (err) {
       setAcademicSubmitError(formatApiError(err, dictionary.profile.saveError));
@@ -1052,7 +1069,9 @@ export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
     };
     const sizeVal = nonEmpty((form.elements.namedItem('companySize') as HTMLSelectElement)?.value);
     const industryVal = nonEmpty((form.elements.namedItem('industry') as HTMLSelectElement)?.value);
-    const subIndustryVal = nonEmpty((form.elements.namedItem('subIndustry') as HTMLSelectElement)?.value);
+    const subIndustryVal = nonEmpty(
+      (form.elements.namedItem('subIndustry') as HTMLSelectElement)?.value,
+    );
     const industryDisplay =
       industryVal && subIndustryVal ? `${industryVal} — ${subIndustryVal}` : industryVal;
     let logoUrl: string | null | undefined;
@@ -1139,11 +1158,7 @@ export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
 
         <nav className="profile-screen-jump-nav" aria-label={dictionary.nav.settings}>
           {visibleSections.map((section) => (
-            <a
-              key={section.id}
-              href={`#${section.anchorId}`}
-              className="profile-screen-jump-link"
-            >
+            <a key={section.id} href={`#${section.anchorId}`} className="profile-screen-jump-link">
               {getSectionLabel(section.id, dictionary, roleProfileKind)}
             </a>
           ))}
@@ -1160,7 +1175,10 @@ export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
 
         {/* Role-specific profile tab */}
         {hasRoleProfile && loading && (
-          <section id="profile-settings" className="profile-screen-card profile-screen-section-card">
+          <section
+            id="profile-settings"
+            className="profile-screen-card profile-screen-section-card"
+          >
             <h2 className="profile-screen-sectionTitle">
               {getSectionLabel('profile', dictionary, roleProfileKind)}
             </h2>
@@ -1171,7 +1189,10 @@ export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
         )}
 
         {hasRoleProfile && !loading && isExpert && !expertProfile && (
-          <section id="profile-settings" className="profile-screen-card profile-screen-section-card">
+          <section
+            id="profile-settings"
+            className="profile-screen-card profile-screen-section-card"
+          >
             <h2 className="profile-screen-sectionTitle">
               {getSectionLabel('profile', dictionary, roleProfileKind)}
             </h2>
@@ -1182,7 +1203,10 @@ export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
         )}
 
         {!loading && isExpert && expertProfile && (
-          <section id="profile-settings" className="profile-screen-card profile-screen-section-card">
+          <section
+            id="profile-settings"
+            className="profile-screen-card profile-screen-section-card"
+          >
             <h2 className="profile-screen-sectionTitle">
               {getSectionLabel('profile', dictionary, roleProfileKind)}
             </h2>
@@ -1193,28 +1217,43 @@ export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
                 expertProfile.verificationStatus}
             </span>
             {dictionary.verification?.verificationTimeNote && (
-              <p className="profile-screen-verification-note">{dictionary.verification.verificationTimeNote}</p>
+              <p className="profile-screen-verification-note">
+                {dictionary.verification.verificationTimeNote}
+              </p>
             )}
             {expertImageMissing && (
               <p className="profile-screen-save-error">
-                {(dictionary.profile.account as { avatarRequiredHint?: string }).avatarRequiredHint ??
+                {(dictionary.profile.account as { avatarRequiredHint?: string })
+                  .avatarRequiredHint ??
                   'Add a profile picture in settings before you can complete verification or earn the badge.'}
               </p>
             )}
             {expertProfile.verificationBadgeEarned && (
-                <span className="profile-screen-badge profile-screen-badge_verified" title="Complete profile and 1000 EGP total deposits.">
+              <span
+                className="profile-screen-badge profile-screen-badge_verified"
+                title="Complete profile and 1000 EGP total deposits."
+              >
                 Platform verified
               </span>
             )}
             {(expertProfile.averageRating != null || (expertProfile.reviewCount ?? 0) > 0) && (
               <p className="profile-screen-rating-row">
-                <span className="profile-screen-stars" aria-label={(dictionary.profile as { reviews?: { averageRating?: string } }).reviews?.averageRating ?? 'Average rating'}>
+                <span
+                  className="profile-screen-stars"
+                  aria-label={
+                    (dictionary.profile as { reviews?: { averageRating?: string } }).reviews
+                      ?.averageRating ?? 'Average rating'
+                  }
+                >
                   {'★'.repeat(Math.round(expertProfile.averageRating ?? 0))}
                   {'☆'.repeat(5 - Math.round(expertProfile.averageRating ?? 0))}
                 </span>
                 <span className="profile-screen-review-count">
-                  {expertProfile.averageRating != null && `${Number(expertProfile.averageRating).toFixed(1)} · `}
-                  {(expertProfile.reviewCount ?? 0)} {(dictionary.profile as { reviews?: { reviewCount?: string } }).reviews?.reviewCount ?? 'reviews'}
+                  {expertProfile.averageRating != null &&
+                    `${Number(expertProfile.averageRating).toFixed(1)} · `}
+                  {expertProfile.reviewCount ?? 0}{' '}
+                  {(dictionary.profile as { reviews?: { reviewCount?: string } }).reviews
+                    ?.reviewCount ?? 'reviews'}
                 </span>
               </p>
             )}
@@ -1248,7 +1287,9 @@ export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
               </div>
               <div className="profile-screen-row">
                 <div className="profile-screen-field">
-                  <label className="profile-screen-label">{expertForm.yearsOfExperienceLabel}</label>
+                  <label className="profile-screen-label">
+                    {expertForm.yearsOfExperienceLabel}
+                  </label>
                   <input
                     name="yearsOfExperience"
                     type="number"
@@ -1273,8 +1314,8 @@ export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
               </div>
               <div className="profile-screen-field">
                 <label className="profile-screen-label">
-                  {(dictionary.admin?.settingsMgmt?.sections as Record<string, string>)?.availability ??
-                    'Availability'}
+                  {(dictionary.admin?.settingsMgmt?.sections as Record<string, string>)
+                    ?.availability ?? 'Availability'}
                 </label>
                 <select
                   name="availabilityStatus"
@@ -1371,22 +1412,30 @@ export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
             {hasRoleProfile && (
               <div className="profile-screen-reviews-section">
                 <h3 className="profile-screen-reviews-title">
-                  {(dictionary.profile as { reviews?: { sectionTitle?: string } }).reviews?.sectionTitle ?? 'Reviews'}
+                  {(dictionary.profile as { reviews?: { sectionTitle?: string } }).reviews
+                    ?.sectionTitle ?? 'Reviews'}
                 </h3>
                 {reviewsLoading ? (
-                  <p className="profile-screen-muted">{(dictionary.profile as { loading?: string }).loading ?? 'Loading...'}</p>
+                  <p className="profile-screen-muted">
+                    {(dictionary.profile as { loading?: string }).loading ?? 'Loading...'}
+                  </p>
                 ) : reviews.length === 0 ? (
-                  <p className="profile-screen-muted">{(dictionary.profile as { reviews?: { noReviews?: string } }).reviews?.noReviews ?? 'No reviews yet.'}</p>
+                  <p className="profile-screen-muted">
+                    {(dictionary.profile as { reviews?: { noReviews?: string } }).reviews
+                      ?.noReviews ?? 'No reviews yet.'}
+                  </p>
                 ) : (
                   <ul className="profile-screen-reviews-list">
                     {reviews.map((r) => (
                       <li key={r.id} className="profile-screen-review-item">
                         <span className="profile-screen-stars small">
-                          {'★'.repeat(r.rating)}{'☆'.repeat(5 - r.rating)}
+                          {'★'.repeat(r.rating)}
+                          {'☆'.repeat(5 - r.rating)}
                         </span>
                         {r.comment && <p className="profile-screen-review-comment">{r.comment}</p>}
                         <p className="profile-screen-review-meta">
-                          {r.reviewerName ?? 'Anonymous'} · {new Date(r.createdAt).toLocaleDateString(locale)}
+                          {r.reviewerName ?? 'Anonymous'} ·{' '}
+                          {new Date(r.createdAt).toLocaleDateString(locale)}
                         </p>
                         <div className="profile-screen-review-actions">
                           {r.reviewerId !== authUser?.id && (
@@ -1403,7 +1452,15 @@ export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
                                 <div className="profile-screen-report-form">
                                   <select
                                     value={reportReason}
-                                    onChange={(e) => setReportReason(e.target.value as 'inappropriate' | 'fake' | 'spam' | 'other')}
+                                    onChange={(e) =>
+                                      setReportReason(
+                                        e.target.value as
+                                          | 'inappropriate'
+                                          | 'fake'
+                                          | 'spam'
+                                          | 'other',
+                                      )
+                                    }
                                     className="profile-screen-select"
                                   >
                                     <option value="inappropriate">Inappropriate</option>
@@ -1414,15 +1471,33 @@ export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
                                   <input
                                     type="text"
                                     className="profile-screen-input"
-                                    placeholder={(dictionary.profile as { reviews?: { commentPlaceholder?: string } }).reviews?.commentPlaceholder ?? 'Optional comment'}
+                                    placeholder={
+                                      (
+                                        dictionary.profile as {
+                                          reviews?: { commentPlaceholder?: string };
+                                        }
+                                      ).reviews?.commentPlaceholder ?? 'Optional comment'
+                                    }
                                     value={reportComment}
                                     onChange={(e) => setReportComment(e.target.value)}
                                   />
                                   <div className="profile-screen-review-form-actions">
-                                    <button type="button" className="profile-screen-cancel-btn" onClick={() => { setReportModalReviewId(null); setReportComment(''); }}>
+                                    <button
+                                      type="button"
+                                      className="profile-screen-cancel-btn"
+                                      onClick={() => {
+                                        setReportModalReviewId(null);
+                                        setReportComment('');
+                                      }}
+                                    >
                                       Cancel
                                     </button>
-                                    <button type="button" className="profile-screen-submit-button" disabled={reportSubmitting} onClick={() => void submitReport()}>
+                                    <button
+                                      type="button"
+                                      className="profile-screen-submit-button"
+                                      disabled={reportSubmitting}
+                                      onClick={() => void submitReport()}
+                                    >
                                       {reportSubmitting ? '...' : 'Submit'}
                                     </button>
                                   </div>
@@ -1450,10 +1525,22 @@ export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
                                     onChange={(e) => setDisputeReason(e.target.value)}
                                   />
                                   <div className="profile-screen-review-form-actions">
-                                    <button type="button" className="profile-screen-cancel-btn" onClick={() => { setDisputeModalReviewId(null); setDisputeReason(''); }}>
+                                    <button
+                                      type="button"
+                                      className="profile-screen-cancel-btn"
+                                      onClick={() => {
+                                        setDisputeModalReviewId(null);
+                                        setDisputeReason('');
+                                      }}
+                                    >
                                       Cancel
                                     </button>
-                                    <button type="button" className="profile-screen-submit-button" disabled={disputeSubmitting || !disputeReason.trim()} onClick={() => void submitDispute()}>
+                                    <button
+                                      type="button"
+                                      className="profile-screen-submit-button"
+                                      disabled={disputeSubmitting || !disputeReason.trim()}
+                                      onClick={() => void submitDispute()}
+                                    >
                                       {disputeSubmitting ? '...' : 'Submit'}
                                     </button>
                                   </div>
@@ -1472,7 +1559,10 @@ export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
         )}
 
         {hasRoleProfile && !loading && isCraftsman && !craftsmanProfile && (
-          <section id="profile-settings" className="profile-screen-card profile-screen-section-card">
+          <section
+            id="profile-settings"
+            className="profile-screen-card profile-screen-section-card"
+          >
             <h2 className="profile-screen-sectionTitle">
               {getSectionLabel('profile', dictionary, roleProfileKind)}
             </h2>
@@ -1483,7 +1573,10 @@ export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
         )}
 
         {!loading && isCraftsman && craftsmanProfile && (
-          <section id="profile-settings" className="profile-screen-card profile-screen-section-card">
+          <section
+            id="profile-settings"
+            className="profile-screen-card profile-screen-section-card"
+          >
             <h2 className="profile-screen-sectionTitle">
               {getSectionLabel('profile', dictionary, roleProfileKind)}
             </h2>
@@ -1500,7 +1593,8 @@ export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
             )}
             {expertImageMissing && (
               <p className="profile-screen-save-error">
-                {(dictionary.profile.account as { avatarRequiredHint?: string }).avatarRequiredHint ??
+                {(dictionary.profile.account as { avatarRequiredHint?: string })
+                  .avatarRequiredHint ??
                   'Add a profile picture in settings before you can complete verification or earn the badge.'}
               </p>
             )}
@@ -1512,7 +1606,8 @@ export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
                 Platform verified
               </span>
             )}
-            {(craftsmanProfile.averageRating != null || (craftsmanProfile.reviewCount ?? 0) > 0) && (
+            {(craftsmanProfile.averageRating != null ||
+              (craftsmanProfile.reviewCount ?? 0) > 0) && (
               <p className="profile-screen-rating-row">
                 <span
                   className="profile-screen-stars"
@@ -1527,7 +1622,7 @@ export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
                 <span className="profile-screen-review-count">
                   {craftsmanProfile.averageRating != null &&
                     `${Number(craftsmanProfile.averageRating).toFixed(1)} Â· `}
-                  {(craftsmanProfile.reviewCount ?? 0)}{' '}
+                  {craftsmanProfile.reviewCount ?? 0}{' '}
                   {(dictionary.profile as { reviews?: { reviewCount?: string } }).reviews
                     ?.reviewCount ?? 'reviews'}
                 </span>
@@ -1564,9 +1659,7 @@ export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
                 />
               </div>
               <div className="profile-screen-field">
-                <label className="profile-screen-label">
-                  {craftsmanForm.specializationsLabel}
-                </label>
+                <label className="profile-screen-label">{craftsmanForm.specializationsLabel}</label>
                 <input
                   name="specializations"
                   className="profile-screen-input"
@@ -1602,9 +1695,7 @@ export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
                 ) : null}
               </div>
               <div className="profile-screen-field">
-                <label className="profile-screen-label">
-                  {craftsmanForm.availabilityLabel}
-                </label>
+                <label className="profile-screen-label">{craftsmanForm.availabilityLabel}</label>
                 <select
                   name="availabilityStatus"
                   className="profile-screen-select"
@@ -1707,7 +1798,11 @@ export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
                                     value={reportReason}
                                     onChange={(e) =>
                                       setReportReason(
-                                        e.target.value as 'inappropriate' | 'fake' | 'spam' | 'other',
+                                        e.target.value as
+                                          | 'inappropriate'
+                                          | 'fake'
+                                          | 'spam'
+                                          | 'other',
                                       )
                                     }
                                     className="profile-screen-select"
@@ -1721,9 +1816,11 @@ export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
                                     type="text"
                                     className="profile-screen-input"
                                     placeholder={
-                                      (dictionary.profile as {
-                                        reviews?: { commentPlaceholder?: string };
-                                      }).reviews?.commentPlaceholder ?? 'Optional comment'
+                                      (
+                                        dictionary.profile as {
+                                          reviews?: { commentPlaceholder?: string };
+                                        }
+                                      ).reviews?.commentPlaceholder ?? 'Optional comment'
                                     }
                                     value={reportComment}
                                     onChange={(e) => setReportComment(e.target.value)}
@@ -1806,7 +1903,10 @@ export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
         )}
 
         {hasRoleProfile && !loading && isBusiness && !businessProfile && (
-          <section id="profile-settings" className="profile-screen-card profile-screen-section-card">
+          <section
+            id="profile-settings"
+            className="profile-screen-card profile-screen-section-card"
+          >
             <h2 className="profile-screen-sectionTitle">
               {getSectionLabel('profile', dictionary, roleProfileKind)}
             </h2>
@@ -1817,7 +1917,10 @@ export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
         )}
 
         {!loading && isBusiness && businessProfile && (
-          <section id="profile-settings" className="profile-screen-card profile-screen-section-card">
+          <section
+            id="profile-settings"
+            className="profile-screen-card profile-screen-section-card"
+          >
             <h2 className="profile-screen-sectionTitle">
               {getSectionLabel('profile', dictionary, roleProfileKind)}
             </h2>
@@ -1828,28 +1931,43 @@ export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
                 businessProfile.verificationStatus}
             </span>
             {dictionary.verification?.verificationTimeNote && (
-              <p className="profile-screen-verification-note">{dictionary.verification.verificationTimeNote}</p>
+              <p className="profile-screen-verification-note">
+                {dictionary.verification.verificationTimeNote}
+              </p>
             )}
             {businessImageMissing && (
               <p className="profile-screen-save-error">
-                {(dictionary.profile as { businessLogoRequiredHint?: string }).businessLogoRequiredHint ??
+                {(dictionary.profile as { businessLogoRequiredHint?: string })
+                  .businessLogoRequiredHint ??
                   'Add a company logo before you can complete verification or earn the badge.'}
               </p>
             )}
             {businessProfile.verificationBadgeEarned && (
-                <span className="profile-screen-badge profile-screen-badge_verified" title="Complete profile and 1000 EGP total deposits.">
+              <span
+                className="profile-screen-badge profile-screen-badge_verified"
+                title="Complete profile and 1000 EGP total deposits."
+              >
                 Platform verified
               </span>
             )}
             {(businessProfile.averageRating != null || (businessProfile.reviewCount ?? 0) > 0) && (
               <p className="profile-screen-rating-row">
-                <span className="profile-screen-stars" aria-label={(dictionary.profile as { reviews?: { averageRating?: string } }).reviews?.averageRating ?? 'Average rating'}>
+                <span
+                  className="profile-screen-stars"
+                  aria-label={
+                    (dictionary.profile as { reviews?: { averageRating?: string } }).reviews
+                      ?.averageRating ?? 'Average rating'
+                  }
+                >
                   {'★'.repeat(Math.round(businessProfile.averageRating ?? 0))}
                   {'☆'.repeat(5 - Math.round(businessProfile.averageRating ?? 0))}
                 </span>
                 <span className="profile-screen-review-count">
-                  {businessProfile.averageRating != null && `${Number(businessProfile.averageRating).toFixed(1)} · `}
-                  {(businessProfile.reviewCount ?? 0)} {(dictionary.profile as { reviews?: { reviewCount?: string } }).reviews?.reviewCount ?? 'reviews'}
+                  {businessProfile.averageRating != null &&
+                    `${Number(businessProfile.averageRating).toFixed(1)} · `}
+                  {businessProfile.reviewCount ?? 0}{' '}
+                  {(dictionary.profile as { reviews?: { reviewCount?: string } }).reviews
+                    ?.reviewCount ?? 'reviews'}
                 </span>
               </p>
             )}
@@ -1882,7 +2000,9 @@ export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
                 </div>
               </div>
               <div className="profile-screen-field">
-                <label className="profile-screen-label">{businessForm.commercialRegisterLabel}</label>
+                <label className="profile-screen-label">
+                  {businessForm.commercialRegisterLabel}
+                </label>
                 <input
                   name="commercialRegister"
                   className="profile-screen-input"
@@ -1965,7 +2085,10 @@ export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
                   </div>
                 )}
                 <ImageUploadOrCapture
-                  label={(businessForm as { logoUploadLabel?: string }).logoUploadLabel ?? 'Upload company logo'}
+                  label={
+                    (businessForm as { logoUploadLabel?: string }).logoUploadLabel ??
+                    'Upload company logo'
+                  }
                   onImage={(file) => {
                     void (async () => {
                       setBusinessLogoFile(file);
@@ -1990,7 +2113,8 @@ export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
                       setBusinessLogoRemoved(true);
                     }}
                   >
-                    {(businessForm as { logoRemoveButton?: string }).logoRemoveButton ?? 'Remove logo'}
+                    {(businessForm as { logoRemoveButton?: string }).logoRemoveButton ??
+                      'Remove logo'}
                   </button>
                 )}
               </div>
@@ -2091,40 +2215,88 @@ export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
             {hasRoleProfile && (
               <div className="profile-screen-reviews-section">
                 <h3 className="profile-screen-reviews-title">
-                  {(dictionary.profile as { reviews?: { sectionTitle?: string } }).reviews?.sectionTitle ?? 'Reviews'}
+                  {(dictionary.profile as { reviews?: { sectionTitle?: string } }).reviews
+                    ?.sectionTitle ?? 'Reviews'}
                 </h3>
                 {reviewsLoading ? (
-                  <p className="profile-screen-muted">{(dictionary.profile as { loading?: string }).loading ?? 'Loading...'}</p>
+                  <p className="profile-screen-muted">
+                    {(dictionary.profile as { loading?: string }).loading ?? 'Loading...'}
+                  </p>
                 ) : reviews.length === 0 ? (
-                  <p className="profile-screen-muted">{(dictionary.profile as { reviews?: { noReviews?: string } }).reviews?.noReviews ?? 'No reviews yet.'}</p>
+                  <p className="profile-screen-muted">
+                    {(dictionary.profile as { reviews?: { noReviews?: string } }).reviews
+                      ?.noReviews ?? 'No reviews yet.'}
+                  </p>
                 ) : (
                   <ul className="profile-screen-reviews-list">
                     {reviews.map((r) => (
                       <li key={r.id} className="profile-screen-review-item">
                         <span className="profile-screen-stars small">
-                          {'★'.repeat(r.rating)}{'☆'.repeat(5 - r.rating)}
+                          {'★'.repeat(r.rating)}
+                          {'☆'.repeat(5 - r.rating)}
                         </span>
                         {r.comment && <p className="profile-screen-review-comment">{r.comment}</p>}
                         <p className="profile-screen-review-meta">
-                          {r.reviewerName ?? 'Anonymous'} · {new Date(r.createdAt).toLocaleDateString(locale)}
+                          {r.reviewerName ?? 'Anonymous'} ·{' '}
+                          {new Date(r.createdAt).toLocaleDateString(locale)}
                         </p>
                         <div className="profile-screen-review-actions">
                           {r.reviewerId !== authUser?.id && (
                             <>
                               {reportModalReviewId !== r.id ? (
-                                <button type="button" className="profile-screen-review-action-btn" onClick={() => setReportModalReviewId(r.id)}>Report</button>
+                                <button
+                                  type="button"
+                                  className="profile-screen-review-action-btn"
+                                  onClick={() => setReportModalReviewId(r.id)}
+                                >
+                                  Report
+                                </button>
                               ) : (
                                 <div className="profile-screen-report-form">
-                                  <select value={reportReason} onChange={(e) => setReportReason(e.target.value as 'inappropriate' | 'fake' | 'spam' | 'other')} className="profile-screen-select">
+                                  <select
+                                    value={reportReason}
+                                    onChange={(e) =>
+                                      setReportReason(
+                                        e.target.value as
+                                          | 'inappropriate'
+                                          | 'fake'
+                                          | 'spam'
+                                          | 'other',
+                                      )
+                                    }
+                                    className="profile-screen-select"
+                                  >
                                     <option value="inappropriate">Inappropriate</option>
                                     <option value="fake">Fake</option>
                                     <option value="spam">Spam</option>
                                     <option value="other">Other</option>
                                   </select>
-                                  <input type="text" className="profile-screen-input" placeholder="Optional comment" value={reportComment} onChange={(e) => setReportComment(e.target.value)} />
+                                  <input
+                                    type="text"
+                                    className="profile-screen-input"
+                                    placeholder="Optional comment"
+                                    value={reportComment}
+                                    onChange={(e) => setReportComment(e.target.value)}
+                                  />
                                   <div className="profile-screen-review-form-actions">
-                                    <button type="button" className="profile-screen-cancel-btn" onClick={() => { setReportModalReviewId(null); setReportComment(''); }}>Cancel</button>
-                                    <button type="button" className="profile-screen-submit-button" disabled={reportSubmitting} onClick={() => void submitReport()}>{reportSubmitting ? '...' : 'Submit'}</button>
+                                    <button
+                                      type="button"
+                                      className="profile-screen-cancel-btn"
+                                      onClick={() => {
+                                        setReportModalReviewId(null);
+                                        setReportComment('');
+                                      }}
+                                    >
+                                      Cancel
+                                    </button>
+                                    <button
+                                      type="button"
+                                      className="profile-screen-submit-button"
+                                      disabled={reportSubmitting}
+                                      onClick={() => void submitReport()}
+                                    >
+                                      {reportSubmitting ? '...' : 'Submit'}
+                                    </button>
                                   </div>
                                 </div>
                               )}
@@ -2133,13 +2305,41 @@ export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
                           {r.targetUserId === authUser?.id && (
                             <>
                               {disputeModalReviewId !== r.id ? (
-                                <button type="button" className="profile-screen-review-action-btn" onClick={() => setDisputeModalReviewId(r.id)}>Dispute</button>
+                                <button
+                                  type="button"
+                                  className="profile-screen-review-action-btn"
+                                  onClick={() => setDisputeModalReviewId(r.id)}
+                                >
+                                  Dispute
+                                </button>
                               ) : (
                                 <div className="profile-screen-report-form">
-                                  <textarea className="profile-screen-textarea" rows={2} placeholder="Reason for disputing" value={disputeReason} onChange={(e) => setDisputeReason(e.target.value)} />
+                                  <textarea
+                                    className="profile-screen-textarea"
+                                    rows={2}
+                                    placeholder="Reason for disputing"
+                                    value={disputeReason}
+                                    onChange={(e) => setDisputeReason(e.target.value)}
+                                  />
                                   <div className="profile-screen-review-form-actions">
-                                    <button type="button" className="profile-screen-cancel-btn" onClick={() => { setDisputeModalReviewId(null); setDisputeReason(''); }}>Cancel</button>
-                                    <button type="button" className="profile-screen-submit-button" disabled={disputeSubmitting || !disputeReason.trim()} onClick={() => void submitDispute()}>{disputeSubmitting ? '...' : 'Submit'}</button>
+                                    <button
+                                      type="button"
+                                      className="profile-screen-cancel-btn"
+                                      onClick={() => {
+                                        setDisputeModalReviewId(null);
+                                        setDisputeReason('');
+                                      }}
+                                    >
+                                      Cancel
+                                    </button>
+                                    <button
+                                      type="button"
+                                      className="profile-screen-submit-button"
+                                      disabled={disputeSubmitting || !disputeReason.trim()}
+                                      onClick={() => void submitDispute()}
+                                    >
+                                      {disputeSubmitting ? '...' : 'Submit'}
+                                    </button>
                                   </div>
                                 </div>
                               )}
@@ -2177,13 +2377,15 @@ export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
                 </p>
                 {(isExpert || isCraftsman) && expertImageMissing && (
                   <p className="profile-screen-save-error">
-                    {(dictionary.profile.account as { avatarRequiredHint?: string }).avatarRequiredHint ??
+                    {(dictionary.profile.account as { avatarRequiredHint?: string })
+                      .avatarRequiredHint ??
                       'Add a profile picture in settings before you can complete verification or earn the badge.'}
                   </p>
                 )}
                 {isBusiness && businessImageMissing && (
                   <p className="profile-screen-save-error">
-                    {(dictionary.profile as { businessLogoRequiredHint?: string }).businessLogoRequiredHint ??
+                    {(dictionary.profile as { businessLogoRequiredHint?: string })
+                      .businessLogoRequiredHint ??
                       'Add a company logo before you can complete verification or earn the badge.'}
                   </p>
                 )}
@@ -2193,10 +2395,12 @@ export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
                       {dictionary.profile.documents.companyDetailsTitle ?? 'Company details'}
                     </h3>
                     <p className="profile-screen-hint">
-                      {dictionary.profile.documents.companyDetailsHint ?? 'Registration details submitted with your business profile. Admin may use these for verification.'}
+                      {dictionary.profile.documents.companyDetailsHint ??
+                        'Registration details submitted with your business profile. Admin may use these for verification.'}
                     </p>
                     <p className="profile-screen-hint profile-screen-hint--muted">
-                      {dictionary.profile.documents.companyUploadNote ?? 'Upload of company document files (e.g. trade license scan) will be available here in a future update.'}
+                      {dictionary.profile.documents.companyUploadNote ??
+                        'Upload of company document files (e.g. trade license scan) will be available here in a future update.'}
                     </p>
                     <ul className="profile-screen-doc-list" aria-label="Company details">
                       <li className="profile-screen-doc-item">
@@ -2204,7 +2408,8 @@ export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
                           {dictionary.profile.documents.tradeLicense ?? 'Trade license'}
                         </span>
                         <span className="profile-screen-doc-meta">
-                          {businessProfile.tradeLicenseNumber || (dictionary.profile.documents.notSubmitted ?? 'Not submitted')}
+                          {businessProfile.tradeLicenseNumber ||
+                            (dictionary.profile.documents.notSubmitted ?? 'Not submitted')}
                         </span>
                       </li>
                       <li className="profile-screen-doc-item">
@@ -2212,7 +2417,8 @@ export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
                           {dictionary.profile.documents.taxId ?? 'Tax ID'}
                         </span>
                         <span className="profile-screen-doc-meta">
-                          {businessProfile.taxId || (dictionary.profile.documents.notSubmitted ?? 'Not submitted')}
+                          {businessProfile.taxId ||
+                            (dictionary.profile.documents.notSubmitted ?? 'Not submitted')}
                         </span>
                       </li>
                       <li className="profile-screen-doc-item">
@@ -2220,12 +2426,17 @@ export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
                           {dictionary.profile.documents.commercialRegister ?? 'Commercial register'}
                         </span>
                         <span className="profile-screen-doc-meta">
-                          {businessProfile.commercialRegister || (dictionary.profile.documents.notSubmitted ?? 'Not submitted')}
+                          {businessProfile.commercialRegister ||
+                            (dictionary.profile.documents.notSubmitted ?? 'Not submitted')}
                         </span>
                       </li>
                       <li className="profile-screen-doc-item">
-                        <span className="profile-screen-doc-type">{dictionary.profile.documents.status}</span>
-                        <span className={`profile-screen-doc-status profile-screen-doc-status--${businessProfile.verificationStatus ?? 'unverified'}`}>
+                        <span className="profile-screen-doc-type">
+                          {dictionary.profile.documents.status}
+                        </span>
+                        <span
+                          className={`profile-screen-doc-status profile-screen-doc-status--${businessProfile.verificationStatus ?? 'unverified'}`}
+                        >
                           {businessProfile.verificationStatus === 'verified'
                             ? 'Verified'
                             : businessProfile.verificationStatus === 'pending'
@@ -2258,7 +2469,8 @@ export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
                         onClick={() => setAddIdentityOpen(true)}
                         className="profile-screen-cta-link"
                       >
-                        {dictionary.profile.documents.addIdentityDocument ?? 'Add identity document'}
+                        {dictionary.profile.documents.addIdentityDocument ??
+                          'Add identity document'}
                       </button>
                     ) : null}
                   </>
@@ -2310,8 +2522,8 @@ export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
                             >
                               {withdrawingDocId === doc.id
                                 ? dictionary.auth.common.loading
-                                : dictionary.profile.documents.withdrawPendingIdentity ??
-                                  'Remove submission'}
+                                : (dictionary.profile.documents.withdrawPendingIdentity ??
+                                  'Remove submission')}
                             </button>
                           </div>
                         )}
@@ -2385,7 +2597,8 @@ export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
                               )}
                               {rec.rejectionReason && (
                                 <p className="profile-screen-doc-rejection">
-                                  {dictionary.profile.documents.rejectionReason}: {rec.rejectionReason}
+                                  {dictionary.profile.documents.rejectionReason}:{' '}
+                                  {rec.rejectionReason}
                                 </p>
                               )}
                               <div className="profile-screen-doc-actions">
@@ -2425,13 +2638,13 @@ export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
                 {identityDocuments.length === 0 &&
                   (!isExpert || academicRecords.length === 0) &&
                   !verificationCompletedOrInReview && (
-                  <button
-                    type="button"
-                    onClick={() => setAddIdentityOpen(true)}
-                    className="profile-screen-cta-link"
-                  >
-                    {dictionary.profile.documents.goToVerification}
-                  </button>
+                    <button
+                      type="button"
+                      onClick={() => setAddIdentityOpen(true)}
+                      className="profile-screen-cta-link"
+                    >
+                      {dictionary.profile.documents.goToVerification}
+                    </button>
                   )}
               </>
             )}
@@ -2449,7 +2662,9 @@ export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
               <h2 className="profile-screen-sectionTitle">
                 {dictionary.profile.documents.addIdentityDocument ?? 'Add identity document'}
               </h2>
-              {identitySubmitError && <p className="profile-screen-save-error">{identitySubmitError}</p>}
+              {identitySubmitError && (
+                <p className="profile-screen-save-error">{identitySubmitError}</p>
+              )}
               <div className="profile-screen-form">
                 <div className="profile-screen-field">
                   <label className="profile-screen-label">Document type</label>
@@ -2529,7 +2744,9 @@ export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
               <h2 className="profile-screen-sectionTitle">
                 {dictionary.profile.documents.addAcademicRecord ?? 'Add academic record'}
               </h2>
-              {academicSubmitError && <p className="profile-screen-save-error">{academicSubmitError}</p>}
+              {academicSubmitError && (
+                <p className="profile-screen-save-error">{academicSubmitError}</p>
+              )}
               <div className="profile-screen-form">
                 <div className="profile-screen-field">
                   <label className="profile-screen-label">Record type</label>
@@ -2639,14 +2856,18 @@ export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
           >
             <div className="profile-screen-modal" onClick={(e) => e.stopPropagation()}>
               <h2 id="edit-academic-record-title" className="profile-screen-sectionTitle">
-                {dictionary.profile.documents.editAcademicRecord ?? 'Edit'} — {editAcademicRecord.title}
+                {dictionary.profile.documents.editAcademicRecord ?? 'Edit'} —{' '}
+                {editAcademicRecord.title}
               </h2>
               {academicEditError && (
                 <p className="profile-screen-save-error" role="alert">
                   {academicEditError}
                 </p>
               )}
-              <form onSubmit={(e) => void handleSaveAcademicEdit(e)} className="profile-screen-form">
+              <form
+                onSubmit={(e) => void handleSaveAcademicEdit(e)}
+                className="profile-screen-form"
+              >
                 <div className="profile-screen-field">
                   <label htmlFor="edit-recordType" className="profile-screen-label">
                     Record type
@@ -2659,16 +2880,20 @@ export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
                     required
                   >
                     <option value="degree">
-                      {(dictionary.verification as { academicRecordTypes?: Record<string, string> })?.academicRecordTypes?.degree ?? 'Degree'}
+                      {(dictionary.verification as { academicRecordTypes?: Record<string, string> })
+                        ?.academicRecordTypes?.degree ?? 'Degree'}
                     </option>
                     <option value="diploma">
-                      {(dictionary.verification as { academicRecordTypes?: Record<string, string> })?.academicRecordTypes?.diploma ?? 'Diploma'}
+                      {(dictionary.verification as { academicRecordTypes?: Record<string, string> })
+                        ?.academicRecordTypes?.diploma ?? 'Diploma'}
                     </option>
                     <option value="certificate">
-                      {(dictionary.verification as { academicRecordTypes?: Record<string, string> })?.academicRecordTypes?.certificate ?? 'Certificate'}
+                      {(dictionary.verification as { academicRecordTypes?: Record<string, string> })
+                        ?.academicRecordTypes?.certificate ?? 'Certificate'}
                     </option>
                     <option value="license">
-                      {(dictionary.verification as { academicRecordTypes?: Record<string, string> })?.academicRecordTypes?.license ?? 'License'}
+                      {(dictionary.verification as { academicRecordTypes?: Record<string, string> })
+                        ?.academicRecordTypes?.license ?? 'License'}
                     </option>
                   </select>
                 </div>
@@ -2746,7 +2971,10 @@ export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
                   <button
                     type="button"
                     className="profile-screen-button profile-screen-button--secondary"
-                    onClick={() => { setEditAcademicRecord(null); setAcademicEditError(null); }}
+                    onClick={() => {
+                      setEditAcademicRecord(null);
+                      setAcademicEditError(null);
+                    }}
                   >
                     Cancel
                   </button>
@@ -2755,7 +2983,9 @@ export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
                     className="profile-screen-button profile-screen-button--primary"
                     disabled={academicEditSaving}
                   >
-                    {academicEditSaving ? (dictionary.common?.saving ?? 'Saving...') : (dictionary.common?.save ?? 'Save')}
+                    {academicEditSaving
+                      ? (dictionary.common?.saving ?? 'Saving...')
+                      : (dictionary.common?.save ?? 'Save')}
                   </button>
                 </div>
               </form>

@@ -8,7 +8,13 @@ import { SettingsRepository } from '../modules/settings/settings.repository.js';
 
 const settingsRepo = new SettingsRepository();
 
-const ALLOWED_PATHS = ['/app/status', '/auth/login', '/auth/refresh', '/auth/forgot-password', '/admin', '/notifications'];
+function isMaintenanceAllowedPath(path: string, method: string): boolean {
+  if (path === '/app/status') return true;
+  if (path === '/auth/login' || path === '/auth/refresh' || path === '/auth/forgot-password') {
+    return true;
+  }
+  return path === '/admin/settings' && (method === 'GET' || method === 'PATCH');
+}
 
 export async function maintenanceMode(
   req: Request,
@@ -16,8 +22,7 @@ export async function maintenanceMode(
   next: NextFunction,
 ): Promise<void> {
   const path = req.path || req.url?.split('?')[0] || '';
-  const allowed = ALLOWED_PATHS.some((p) => path === p || path.startsWith(p + '/') || path.startsWith(p));
-  if (allowed) {
+  if (isMaintenanceAllowedPath(path, req.method)) {
     return next();
   }
 

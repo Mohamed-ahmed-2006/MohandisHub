@@ -1,6 +1,10 @@
 'use client';
 
-import type { SupportTicket, SupportTicketCategory, SupportTicketMessage } from '@mohandishub/shared';
+import type {
+  SupportTicket,
+  SupportTicketCategory,
+  SupportTicketMessage,
+} from '@mohandishub/shared';
 import { ChevronLeft, Inbox } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -45,10 +49,7 @@ function categoryLabel(
   }
 }
 
-function statusLabel(
-  s: SupportTicket['status'],
-  st: Record<string, string>,
-): string {
+function statusLabel(s: SupportTicket['status'], st: Record<string, string>): string {
   switch (s) {
     case 'open':
       return st.statusOpen ?? s;
@@ -231,8 +232,7 @@ export const SupportScreen = () => {
     );
   }
 
-  const layoutClass =
-    `support-layout${selectedTicket ? ' support-layout--thread' : ''}`;
+  const layoutClass = `support-layout${selectedTicket ? ' support-layout--thread' : ''}`;
 
   return (
     <main className="support-screen">
@@ -264,8 +264,16 @@ export const SupportScreen = () => {
               ) : (
                 <div className="support-create-panel">
                   <h3>{d.createTicket ?? 'New ticket'}</h3>
-                  <form onSubmit={(e) => { void handleCreate(e); }} className="dashboard-form">
-                    <label className="dashboard-form-label-inline" htmlFor="support-create-category">
+                  <form
+                    onSubmit={(e) => {
+                      void handleCreate(e);
+                    }}
+                    className="dashboard-form"
+                  >
+                    <label
+                      className="dashboard-form-label-inline"
+                      htmlFor="support-create-category"
+                    >
                       {sf.categoryLabel}
                     </label>
                     <select
@@ -297,7 +305,9 @@ export const SupportScreen = () => {
                         accept="image/*"
                         multiple
                         className="dashboard-input"
-                        onChange={(e) => setCreateFiles(Array.from(e.target.files ?? []).slice(0, 2))}
+                        onChange={(e) =>
+                          setCreateFiles(Array.from(e.target.files ?? []).slice(0, 2))
+                        }
                       />
                       {createFiles.length > 0 && (
                         <p className="dashboard-form-hint">{createFiles.length} / 2</p>
@@ -441,7 +451,11 @@ export const SupportScreen = () => {
                   </div>
                 ) : (
                   <div className="support-composer">
-                    <form onSubmit={(e) => { void handleReply(e); }}>
+                    <form
+                      onSubmit={(e) => {
+                        void handleReply(e);
+                      }}
+                    >
                       <textarea
                         value={replyBody}
                         onChange={(e) => setReplyBody(e.target.value)}
@@ -451,7 +465,10 @@ export const SupportScreen = () => {
                       />
                       <div className="support-composer__row">
                         <div className="support-composer__files">
-                          <label className="dashboard-form-label-inline" htmlFor="support-reply-files">
+                          <label
+                            className="dashboard-form-label-inline"
+                            htmlFor="support-reply-files"
+                          >
                             {d.upload ?? 'Upload'} — {d.maxTwoImages ?? 'Max 2'}
                           </label>
                           <input
@@ -460,7 +477,9 @@ export const SupportScreen = () => {
                             accept="image/*"
                             multiple
                             className="dashboard-input"
-                            onChange={(e) => setReplyFiles(Array.from(e.target.files ?? []).slice(0, 2))}
+                            onChange={(e) =>
+                              setReplyFiles(Array.from(e.target.files ?? []).slice(0, 2))
+                            }
                           />
                         </div>
                         <button

@@ -7,7 +7,7 @@ services:
     name: mohandishub-api
     runtime: node
     region: oregon
-    plan: free
+    plan: starter
 
     buildCommand: npm ci && npm run build -w @mohandishub/shared && npm run build -w @mohandishub/api
     startCommand: node apps/api/dist/server.js
@@ -19,6 +19,8 @@ services:
         value: production
       - key: PORT
         value: 10000
+      - key: TRUST_PROXY
+        value: 1
       - key: DATABASE_URL
         sync: false
       - key: CORS_ORIGIN
@@ -30,9 +32,9 @@ services:
       - key: WEB_PUBLIC_URL
         sync: false
       - key: JWT_SECRET
-        generateValue: true
+        sync: false
       - key: JWT_REFRESH_SECRET
-        generateValue: true
+        sync: false
       - key: VERIFICATION_PROVIDER
         value: didit
       - key: DIDIT_API_KEY
@@ -81,12 +83,30 @@ services:
         sync: false
       - key: STRIPE_WEBHOOK_SECRET
         sync: false
+      - key: PAYMOB_SECRET_KEY
+        sync: false
+      - key: PAYMOB_PUBLIC_KEY
+        sync: false
+      - key: PAYMOB_HMAC_SECRET
+        sync: false
+      - key: PAYMOB_INTEGRATION_IDS
+        sync: false
+      - key: PAYMOB_DEPOSITS_ENABLED
+        value: false
+      - key: PAYMOB_WITHDRAWALS_ENABLED
+        value: false
+      - key: PAYMOB_PAYOUT_CLIENT_ID
+        sync: false
+      - key: PAYMOB_PAYOUT_CLIENT_SECRET
+        sync: false
+      - key: PAYMOB_PAYOUT_BASE_URL
+        sync: false
 
   - type: worker
     name: mohandishub-worker
     runtime: node
     region: oregon
-    plan: free
+    plan: starter
 
     buildCommand: npm ci && npm run build -w @mohandishub/shared && npm run build -w @mohandishub/api
     startCommand: node apps/api/dist/worker.js
@@ -94,6 +114,8 @@ services:
     envVars:
       - key: NODE_ENV
         value: production
+      - key: TRUST_PROXY
+        value: 1
       - key: DATABASE_URL
         sync: false
       - key: CORS_ORIGIN
@@ -117,6 +139,8 @@ services:
       - key: SUPABASE_URL
         sync: false
       - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: SENTRY_DSN
         sync: false
       - key: OTP_EMAIL_PROVIDER
         value: brevo

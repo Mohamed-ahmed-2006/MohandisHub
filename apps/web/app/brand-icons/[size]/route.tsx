@@ -20,28 +20,6 @@ export async function GET(_req: NextRequest, context: { params: Promise<{ size: 
 
   if (logoSrc) {
     return new ImageResponse(
-      (
-        <div
-          style={{
-            width: px,
-            height: px,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            background: '#ffffff',
-            borderRadius: sizeStr === '512' ? px * 0.2 : px * 0.18,
-          }}
-        >
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={logoSrc} alt="" width={inner} height={inner} style={{ objectFit: 'contain' }} />
-        </div>
-      ),
-      { width: px, height: px },
-    );
-  }
-
-  return new ImageResponse(
-    (
       <div
         style={{
           width: px,
@@ -49,16 +27,34 @@ export async function GET(_req: NextRequest, context: { params: Promise<{ size: 
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          background: `linear-gradient(145deg, ${BRAND_ACCENT_HEX} 0%, #c2410c 100%)`,
+          background: '#ffffff',
           borderRadius: sizeStr === '512' ? px * 0.2 : px * 0.18,
-          color: 'white',
-          fontSize: Math.round(px * 0.38),
-          fontWeight: 700,
         }}
       >
-        M
-      </div>
-    ),
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={logoSrc} alt="" width={inner} height={inner} style={{ objectFit: 'contain' }} />
+      </div>,
+      { width: px, height: px },
+    );
+  }
+
+  return new ImageResponse(
+    <div
+      style={{
+        width: px,
+        height: px,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        background: `linear-gradient(145deg, ${BRAND_ACCENT_HEX} 0%, #c2410c 100%)`,
+        borderRadius: sizeStr === '512' ? px * 0.2 : px * 0.18,
+        color: 'white',
+        fontSize: Math.round(px * 0.38),
+        fontWeight: 700,
+      }}
+    >
+      M
+    </div>,
     { width: px, height: px },
   );
 }

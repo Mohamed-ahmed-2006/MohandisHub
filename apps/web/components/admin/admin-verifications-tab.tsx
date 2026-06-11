@@ -79,9 +79,7 @@ export const AdminVerificationsTab = ({ dictionary, accessToken, refreshSession 
   const handleReviewAcademic = async (recordId: string, decision: 'approved' | 'rejected') => {
     let notes: string | undefined;
     if (decision === 'rejected') {
-      const reason = window.prompt(
-        'Rejection reason (sent to user by email):',
-      );
+      const reason = window.prompt('Rejection reason (sent to user by email):');
       if (reason === null) return;
       notes = reason.trim() || undefined;
     }
@@ -106,7 +104,12 @@ export const AdminVerificationsTab = ({ dictionary, accessToken, refreshSession 
     setReviewing(userId);
     setError(null);
     try {
-      await adminApiClient.reviewBusinessDocs(accessToken, userId, { decision }, { refreshSession });
+      await adminApiClient.reviewBusinessDocs(
+        accessToken,
+        userId,
+        { decision },
+        { refreshSession },
+      );
       await load();
     } catch (err: unknown) {
       setError(getErrorMessage(err, dictionary));
@@ -201,7 +204,9 @@ export const AdminVerificationsTab = ({ dictionary, accessToken, refreshSession 
 
   useEffect(() => {
     // If we move to Business, ensure the selected category is also business.
-    setActiveCategoryTab((prev) => (activeRoleTab === 'business' ? 'business' : prev === 'business' ? 'identity' : prev));
+    setActiveCategoryTab((prev) =>
+      activeRoleTab === 'business' ? 'business' : prev === 'business' ? 'identity' : prev,
+    );
   }, [activeRoleTab]);
 
   if (loading) {
@@ -246,7 +251,9 @@ export const AdminVerificationsTab = ({ dictionary, accessToken, refreshSession 
                       <button
                         type="button"
                         className="admin-btn admin-btn--small"
-                        onClick={() => setPreviewImage({ url: doc.frontImageUrl!, title: 'Document front' })}
+                        onClick={() =>
+                          setPreviewImage({ url: doc.frontImageUrl!, title: 'Document front' })
+                        }
                       >
                         View front
                       </button>
@@ -255,7 +262,9 @@ export const AdminVerificationsTab = ({ dictionary, accessToken, refreshSession 
                       <button
                         type="button"
                         className="admin-btn admin-btn--small"
-                        onClick={() => setPreviewImage({ url: doc.backImageUrl!, title: 'Document back' })}
+                        onClick={() =>
+                          setPreviewImage({ url: doc.backImageUrl!, title: 'Document back' })
+                        }
                       >
                         View back
                       </button>
@@ -264,7 +273,9 @@ export const AdminVerificationsTab = ({ dictionary, accessToken, refreshSession 
                       <button
                         type="button"
                         className="admin-btn admin-btn--small"
-                        onClick={() => setPreviewImage({ url: doc.selfieImageUrl!, title: 'Selfie' })}
+                        onClick={() =>
+                          setPreviewImage({ url: doc.selfieImageUrl!, title: 'Selfie' })
+                        }
                       >
                         View selfie
                       </button>
@@ -330,7 +341,9 @@ export const AdminVerificationsTab = ({ dictionary, accessToken, refreshSession 
                       <button
                         type="button"
                         className="admin-btn admin-btn--small"
-                        onClick={() => setPreviewImage({ url: rec.certificateImageUrl!, title: 'Certificate' })}
+                        onClick={() =>
+                          setPreviewImage({ url: rec.certificateImageUrl!, title: 'Certificate' })
+                        }
                       >
                         View certificate
                       </button>
@@ -339,7 +352,9 @@ export const AdminVerificationsTab = ({ dictionary, accessToken, refreshSession 
                       <button
                         type="button"
                         className="admin-btn admin-btn--small"
-                        onClick={() => setPreviewImage({ url: rec.transcriptImageUrl!, title: 'Transcript' })}
+                        onClick={() =>
+                          setPreviewImage({ url: rec.transcriptImageUrl!, title: 'Transcript' })
+                        }
                       >
                         View transcript
                       </button>
@@ -406,7 +421,12 @@ export const AdminVerificationsTab = ({ dictionary, accessToken, refreshSession 
                       <button
                         type="button"
                         className="admin-btn admin-btn--small"
-                        onClick={() => setPreviewImage({ url: item.businessProfile!.logoUrl!, title: 'Company logo' })}
+                        onClick={() =>
+                          setPreviewImage({
+                            url: item.businessProfile!.logoUrl!,
+                            title: 'Company logo',
+                          })
+                        }
                       >
                         View logo
                       </button>
@@ -463,7 +483,15 @@ export const AdminVerificationsTab = ({ dictionary, accessToken, refreshSession 
         />
       )}
       {error && <p className="admin-error-banner">{error}</p>}
-      <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.75rem', flexWrap: 'wrap', alignItems: 'center' }}>
+      <div
+        style={{
+          display: 'flex',
+          gap: '0.5rem',
+          marginBottom: '0.75rem',
+          flexWrap: 'wrap',
+          alignItems: 'center',
+        }}
+      >
         <button
           type="button"
           className="admin-btn"
@@ -503,7 +531,15 @@ export const AdminVerificationsTab = ({ dictionary, accessToken, refreshSession 
         </button>
       </div>
 
-      <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem', flexWrap: 'wrap', alignItems: 'center' }}>
+      <div
+        style={{
+          display: 'flex',
+          gap: '0.5rem',
+          marginBottom: '1rem',
+          flexWrap: 'wrap',
+          alignItems: 'center',
+        }}
+      >
         <button
           type="button"
           className={`admin-btn ${activeCategoryTab === 'identity' ? 'admin-btn--primary' : ''}`}

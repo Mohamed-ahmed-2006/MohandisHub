@@ -48,5 +48,7 @@ export async function GET(request: NextRequest) {
   }
 
   const message = await upstream.text().catch(() => '');
-  return new Response(message || 'Failed to load private upload', { status: upstream.status || 502 });
+  return new Response(message || 'Failed to load private upload', {
+    status: upstream.status || 502,
+  });
 }

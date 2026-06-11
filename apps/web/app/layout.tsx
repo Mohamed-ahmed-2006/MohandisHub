@@ -73,7 +73,9 @@ const RootLayout = ({ children }: RootLayoutProps) => {
           {themeInitScript}
         </Script>
       </head>
-      <body className={`${manrope.variable} ${sora.variable} ${cairo.variable} ${tajawal.variable}`}>
+      <body
+        className={`${manrope.variable} ${sora.variable} ${cairo.variable} ${tajawal.variable}`}
+      >
         <ThemeProvider>
           <AuthProvider>
             <AppStatusProvider>

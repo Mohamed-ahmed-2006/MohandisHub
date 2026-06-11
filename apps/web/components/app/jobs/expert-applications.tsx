@@ -1,6 +1,12 @@
 'use client';
 
-import type { JobApplication, JobMilestone, Reservation, ReservationSlot } from '@mohandishub/shared';
+import type {
+  JobApplication,
+  JobMilestone,
+  Reservation,
+  ReservationSlot,
+} from '@mohandishub/shared';
+import { useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 
 import { OnlineCallModal } from '../online-call-modal';
@@ -22,6 +28,7 @@ function formatDateTime(value: string): string {
 
 export const ExpertApplications = ({ accessToken }: { accessToken: string }) => {
   const { addToast } = useToast();
+  const searchParams = useSearchParams();
   const [applications, setApplications] = useState<JobApplication[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedAppId, setSelectedAppId] = useState<string | null>(null);
@@ -44,35 +51,46 @@ export const ExpertApplications = ({ accessToken }: { accessToken: string }) => 
     void loadApplications();
   }, [loadApplications]);
 
-  const openApplication = async (app: JobApplication) => {
-    if (selectedAppId === app.id) {
-      setSelectedAppId(null);
-      setMilestones([]);
-      setInterviewSlots([]);
-      return;
-    }
+  const openApplication = useCallback(
+    async (app: JobApplication) => {
+      if (selectedAppId === app.id) {
+        setSelectedAppId(null);
+        setMilestones([]);
+        setInterviewSlots([]);
+        return;
+      }
 
-    setSelectedAppId(app.id);
-    if (app.status === 'accepted') {
-      const milestoneRows = await jobsApiClient.getMilestones(accessToken, app.id);
-      setMilestones(milestoneRows);
-      if (app.interviewReservationId) {
+      setSelectedAppId(app.id);
+      if (app.status === 'accepted') {
+        const milestoneRows = await jobsApiClient.getMilestones(accessToken, app.id);
+        setMilestones(milestoneRows);
+        if (app.interviewReservationId) {
+          const slotRows = await jobsApiClient.listApplicationInterviewSlots(accessToken, app.id);
+          setInterviewSlots(slotRows.items);
+        } else {
+          setInterviewSlots([]);
+        }
+        return;
+      }
+
+      if (['interview_invited', 'interview_booked', 'interview_completed'].includes(app.status)) {
         const slotRows = await jobsApiClient.listApplicationInterviewSlots(accessToken, app.id);
         setInterviewSlots(slotRows.items);
       } else {
         setInterviewSlots([]);
       }
-      return;
-    }
+      setMilestones([]);
+    },
+    [accessToken, selectedAppId],
+  );
 
-    if (['interview_invited', 'interview_booked', 'interview_completed'].includes(app.status)) {
-      const slotRows = await jobsApiClient.listApplicationInterviewSlots(accessToken, app.id);
-      setInterviewSlots(slotRows.items);
-    } else {
-      setInterviewSlots([]);
-    }
-    setMilestones([]);
-  };
+  useEffect(() => {
+    const applicationId = searchParams.get('application');
+    if (!applicationId || loading || selectedAppId === applicationId) return;
+    const app = applications.find((item) => item.id === applicationId);
+    if (!app) return;
+    void openApplication(app);
+  }, [applications, loading, openApplication, searchParams, selectedAppId]);
 
   const handleSubmitMilestone = async (milestoneId: string, notes: string) => {
     try {
@@ -92,7 +110,10 @@ export const ExpertApplications = ({ accessToken }: { accessToken: string }) => 
     try {
       await jobsApiClient.bookInterview(accessToken, selectedApp.id, { slotId, mode });
       await loadApplications();
-      const refreshed = await jobsApiClient.listApplicationInterviewSlots(accessToken, selectedApp.id);
+      const refreshed = await jobsApiClient.listApplicationInterviewSlots(
+        accessToken,
+        selectedApp.id,
+      );
       setInterviewSlots(refreshed.items);
     } catch (err) {
       addToast('Error', err instanceof Error ? err.message : 'Failed to book interview');
@@ -101,7 +122,10 @@ export const ExpertApplications = ({ accessToken }: { accessToken: string }) => 
 
   const openInterviewReservation = async (reservationId: string) => {
     try {
-      const reservation = await reservationsApiClient.getReservationById(accessToken, reservationId);
+      const reservation = await reservationsApiClient.getReservationById(
+        accessToken,
+        reservationId,
+      );
       if (reservation.mode !== 'online') {
         addToast('Notice', 'This interview reservation is offline.');
         return;
@@ -138,8 +162,8 @@ export const ExpertApplications = ({ accessToken }: { accessToken: string }) => 
                     {app.businessName || 'Business'} | {app.status.replaceAll('_', ' ')}
                   </p>
                   <p className="dashboard-card-meta">
-                    Submitted via {app.submissionType === 'cv_upload' ? 'CV upload' : 'app profile'} | Paid{' '}
-                    {formatMoney(app.applicationFeeAmount)}
+                    Submitted via {app.submissionType === 'cv_upload' ? 'CV upload' : 'app profile'}{' '}
+                    | Paid {formatMoney(app.applicationFeeAmount)}
                   </p>
                   {app.coverLetter && <p style={{ marginTop: '0.75rem' }}>{app.coverLetter}</p>}
                   {app.cvFileUrl ? (
@@ -164,30 +188,41 @@ export const ExpertApplications = ({ accessToken }: { accessToken: string }) => 
                 </div>
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                  <button
-                    className="dashboard-link-btn"
-                    onClick={() => void openApplication(app)}
-                  >
+                  <button className="dashboard-link-btn" onClick={() => void openApplication(app)}>
                     {selectedAppId === app.id ? 'Hide Details' : 'Open Details'}
                   </button>
                   {app.interviewReservationId &&
-                    ['interview_booked', 'interview_completed', 'accepted'].includes(app.status) && (
-                    <button
-                      className="dashboard-btn dashboard-btn--small dashboard-btn--secondary"
-                      onClick={() => void openInterviewReservation(app.interviewReservationId!)}
-                    >
-                      {app.status === 'interview_booked' ? 'Join Interview' : 'Open Interview'}
-                    </button>
-                  )}
+                    ['interview_booked', 'interview_completed', 'accepted'].includes(
+                      app.status,
+                    ) && (
+                      <button
+                        className="dashboard-btn dashboard-btn--small dashboard-btn--secondary"
+                        onClick={() => void openInterviewReservation(app.interviewReservationId!)}
+                      >
+                        {app.status === 'interview_booked' ? 'Join Interview' : 'Open Interview'}
+                      </button>
+                    )}
                 </div>
               </div>
 
               {selectedAppId === app.id && (
                 <div style={{ marginTop: '1rem', display: 'grid', gap: '1rem' }}>
-                  <div style={{ padding: '1rem', background: '#fff', border: '1px solid #ddd', borderRadius: '10px' }}>
+                  <div
+                    style={{
+                      padding: '1rem',
+                      background: '#fff',
+                      border: '1px solid #ddd',
+                      borderRadius: '10px',
+                    }}
+                  >
                     <h4 style={{ marginBottom: '0.75rem' }}>Submission Receipt</h4>
-                    <p className="dashboard-card-meta">Application fee: {formatMoney(app.applicationFeeAmount)}</p>
-                    <p className="dashboard-card-meta">Submission type: {app.submissionType === 'cv_upload' ? 'CV upload' : 'Profile snapshot'}</p>
+                    <p className="dashboard-card-meta">
+                      Application fee: {formatMoney(app.applicationFeeAmount)}
+                    </p>
+                    <p className="dashboard-card-meta">
+                      Submission type:{' '}
+                      {app.submissionType === 'cv_upload' ? 'CV upload' : 'Profile snapshot'}
+                    </p>
                     {app.interviewInvitationSentAt && (
                       <p className="dashboard-card-meta">
                         Interview invited at {formatDateTime(app.interviewInvitationSentAt)}
@@ -206,7 +241,14 @@ export const ExpertApplications = ({ accessToken }: { accessToken: string }) => 
                   </div>
 
                   {app.status === 'accepted' && (
-                    <div style={{ padding: '1rem', background: '#fff', border: '1px solid #ddd', borderRadius: '10px' }}>
+                    <div
+                      style={{
+                        padding: '1rem',
+                        background: '#fff',
+                        border: '1px solid #ddd',
+                        borderRadius: '10px',
+                      }}
+                    >
                       <h4 style={{ marginBottom: '1rem' }}>Project Milestones</h4>
                       {milestones.length === 0 ? (
                         <p>No milestones created yet.</p>
@@ -215,9 +257,19 @@ export const ExpertApplications = ({ accessToken }: { accessToken: string }) => 
                           {milestones.map((milestone) => (
                             <li
                               key={milestone.id}
-                              style={{ marginBottom: '1rem', paddingBottom: '1rem', borderBottom: '1px solid #eee' }}
+                              style={{
+                                marginBottom: '1rem',
+                                paddingBottom: '1rem',
+                                borderBottom: '1px solid #eee',
+                              }}
                             >
-                              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
+                              <div
+                                style={{
+                                  display: 'flex',
+                                  justifyContent: 'space-between',
+                                  marginBottom: '0.5rem',
+                                }}
+                              >
                                 <strong>{milestone.title}</strong>
                                 <span>
                                   {milestone.amount} EGP | {milestone.status}
@@ -229,7 +281,9 @@ export const ExpertApplications = ({ accessToken }: { accessToken: string }) => 
                                   onSubmit={(e) => {
                                     e.preventDefault();
                                     const form = e.currentTarget;
-                                    const notes = (form.elements.namedItem('notes') as HTMLInputElement).value;
+                                    const notes = (
+                                      form.elements.namedItem('notes') as HTMLInputElement
+                                    ).value;
                                     void handleSubmitMilestone(milestone.id, notes);
                                   }}
                                 >
@@ -240,7 +294,10 @@ export const ExpertApplications = ({ accessToken }: { accessToken: string }) => 
                                     required
                                     style={{ flex: 1 }}
                                   />
-                                  <button type="submit" className="dashboard-primary-btn dashboard-primary-btn--small">
+                                  <button
+                                    type="submit"
+                                    className="dashboard-primary-btn dashboard-primary-btn--small"
+                                  >
                                     Submit
                                   </button>
                                 </form>
@@ -252,8 +309,17 @@ export const ExpertApplications = ({ accessToken }: { accessToken: string }) => 
                     </div>
                   )}
 
-                  {['interview_invited', 'interview_booked', 'interview_completed'].includes(app.status) && (
-                    <div style={{ padding: '1rem', background: '#fff', border: '1px solid #ddd', borderRadius: '10px' }}>
+                  {['interview_invited', 'interview_booked', 'interview_completed'].includes(
+                    app.status,
+                  ) && (
+                    <div
+                      style={{
+                        padding: '1rem',
+                        background: '#fff',
+                        border: '1px solid #ddd',
+                        borderRadius: '10px',
+                      }}
+                    >
                       <h4 style={{ marginBottom: '0.5rem' }}>Interview</h4>
                       {app.interviewInvitationSentAt && (
                         <p className="dashboard-card-meta">
@@ -262,12 +328,14 @@ export const ExpertApplications = ({ accessToken }: { accessToken: string }) => 
                       )}
                       {app.status === 'interview_booked' && (
                         <p className="dashboard-card-meta" style={{ marginTop: '0.5rem' }}>
-                          Your interview has been booked. Use the reservation link to join or review details.
+                          Your interview has been booked. Use the reservation link to join or review
+                          details.
                         </p>
                       )}
                       {app.status === 'interview_completed' && (
                         <p className="dashboard-card-meta" style={{ marginTop: '0.5rem' }}>
-                          The interview is marked completed. You can still open the reservation record below.
+                          The interview is marked completed. You can still open the reservation
+                          record below.
                         </p>
                       )}
                       {app.status === 'interview_invited' && (
@@ -275,7 +343,15 @@ export const ExpertApplications = ({ accessToken }: { accessToken: string }) => 
                           {interviewSlots.length === 0 ? (
                             <p>No interview slots are available yet.</p>
                           ) : (
-                            <ul style={{ listStyle: 'none', padding: 0, margin: '1rem 0 0', display: 'grid', gap: '0.75rem' }}>
+                            <ul
+                              style={{
+                                listStyle: 'none',
+                                padding: 0,
+                                margin: '1rem 0 0',
+                                display: 'grid',
+                                gap: '0.75rem',
+                              }}
+                            >
                               {interviewSlots.map((slot) => (
                                 <li
                                   key={slot.id}
@@ -289,7 +365,9 @@ export const ExpertApplications = ({ accessToken }: { accessToken: string }) => 
                                   <p className="dashboard-card-meta">
                                     Ends {formatDateTime(slot.endAt)}
                                   </p>
-                                  <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.75rem' }}>
+                                  <div
+                                    style={{ display: 'flex', gap: '0.5rem', marginTop: '0.75rem' }}
+                                  >
                                     {slot.supportsOnline && (
                                       <button
                                         className="dashboard-primary-btn dashboard-primary-btn--small"
@@ -314,13 +392,22 @@ export const ExpertApplications = ({ accessToken }: { accessToken: string }) => 
                         </>
                       )}
                       {app.interviewReservationId && app.status !== 'interview_invited' && (
-                        <div style={{ marginTop: '0.75rem', display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                        <div
+                          style={{
+                            marginTop: '0.75rem',
+                            display: 'flex',
+                            gap: '0.5rem',
+                            flexWrap: 'wrap',
+                          }}
+                        >
                           <p className="dashboard-card-meta" style={{ margin: 0 }}>
                             Reservation ID: {app.interviewReservationId}
                           </p>
                           <button
                             className="dashboard-btn dashboard-btn--small dashboard-btn--secondary"
-                            onClick={() => void openInterviewReservation(app.interviewReservationId!)}
+                            onClick={() =>
+                              void openInterviewReservation(app.interviewReservationId!)
+                            }
                           >
                             Open reservation
                           </button>

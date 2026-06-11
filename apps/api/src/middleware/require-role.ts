@@ -7,6 +7,15 @@ import type { RequestHandler } from 'express';
 
 import { HttpError } from '../utils/http-error.js';
 
+export const hasAdminPermission = (
+  user: { isAdmin?: boolean; adminPermissions?: string[] },
+  permission: string,
+): boolean => {
+  if (user.isAdmin !== true) return false;
+  const permissions = Array.isArray(user.adminPermissions) ? user.adminPermissions : [];
+  return permissions.includes('super_admin') || permissions.includes(permission);
+};
+
 /**
  * Returns middleware that ensures `req.user.role` is one of the allowed roles.
  *
@@ -82,21 +91,15 @@ export const requireAdminPermission =
       });
     }
 
-    // If adminPermissions is undefined or empty, it means full access
-    if (!user.adminPermissions || user.adminPermissions.length === 0) {
+    if (hasAdminPermission(user, permission)) {
       return next();
     }
 
-    // Check if they have the specific permission
-    if (!user.adminPermissions.includes(permission)) {
-      throw new HttpError({
-        statusCode: 403,
-        code: 'FORBIDDEN',
-        message: 'You do not have permission to perform this action.',
-      });
-    }
-
-    next();
+    throw new HttpError({
+      statusCode: 403,
+      code: 'FORBIDDEN',
+      message: 'You do not have permission to perform this action.',
+    });
   };
 
 export const requireAdminAnyPermission =
@@ -124,11 +127,11 @@ export const requireAdminAnyPermission =
       });
     }
 
-    if (!user.adminPermissions || user.adminPermissions.length === 0) {
+    if (hasAdminPermission(user, 'super_admin')) {
       return next();
     }
 
-    if (!permissions.some((p) => user.adminPermissions!.includes(p))) {
+    if (!permissions.some((p) => hasAdminPermission(user, p))) {
       throw new HttpError({
         statusCode: 403,
         code: 'FORBIDDEN',

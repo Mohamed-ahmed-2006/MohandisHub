@@ -97,7 +97,10 @@ export class NegotiationsService {
     return row;
   }
 
-  async createNegotiation(customerId: string, input: CreateNegotiationInput): Promise<NegotiationDetailResponse> {
+  async createNegotiation(
+    customerId: string,
+    input: CreateNegotiationInput,
+  ): Promise<NegotiationDetailResponse> {
     const service = await this.servicesRepo.getActiveServiceById(input.serviceId);
     if (!service) {
       throw new HttpError({
@@ -154,7 +157,11 @@ export class NegotiationsService {
 
     const full = await this.repo.findById(row.id);
     if (!full) {
-      throw new HttpError({ statusCode: 500, code: 'INTERNAL', message: 'Failed to load negotiation.' });
+      throw new HttpError({
+        statusCode: 500,
+        code: 'INTERNAL',
+        message: 'Failed to load negotiation.',
+      });
     }
 
     void this.notifications.createForUser(service.provider_id, {
@@ -171,7 +178,11 @@ export class NegotiationsService {
   async getDetail(userId: string, negotiationId: string): Promise<NegotiationDetailResponse> {
     let row = await this.repo.findById(negotiationId);
     if (!row) {
-      throw new HttpError({ statusCode: 404, code: 'NOT_FOUND', message: 'Negotiation not found.' });
+      throw new HttpError({
+        statusCode: 404,
+        code: 'NOT_FOUND',
+        message: 'Negotiation not found.',
+      });
     }
     if (row.customer_id !== userId && row.provider_id !== userId) {
       throw new HttpError({ statusCode: 403, code: 'FORBIDDEN', message: 'Access denied.' });
@@ -189,7 +200,14 @@ export class NegotiationsService {
     page: number,
     limit: number,
   ): Promise<NegotiationListResponse> {
-    const { rows, total } = await this.repo.listForUser(userId, role, status, serviceId, page, limit);
+    const { rows, total } = await this.repo.listForUser(
+      userId,
+      role,
+      status,
+      serviceId,
+      page,
+      limit,
+    );
     const refreshed: PriceNegotiationRow[] = [];
     for (const r of rows) {
       const u = await this.refreshRowState(r);
@@ -211,7 +229,11 @@ export class NegotiationsService {
   ): Promise<NegotiationDetailResponse> {
     let row = await this.repo.findById(negotiationId);
     if (!row) {
-      throw new HttpError({ statusCode: 404, code: 'NOT_FOUND', message: 'Negotiation not found.' });
+      throw new HttpError({
+        statusCode: 404,
+        code: 'NOT_FOUND',
+        message: 'Negotiation not found.',
+      });
     }
     if (row.customer_id !== userId && row.provider_id !== userId) {
       throw new HttpError({ statusCode: 403, code: 'FORBIDDEN', message: 'Access denied.' });
@@ -252,7 +274,11 @@ export class NegotiationsService {
     if (input.decision === 'accept') {
       const agreed = toNumber(row.latest_amount);
       if (agreed == null) {
-        throw new HttpError({ statusCode: 400, code: 'INVALID_STATE', message: 'No amount to accept.' });
+        throw new HttpError({
+          statusCode: 400,
+          code: 'INVALID_STATE',
+          message: 'No amount to accept.',
+        });
       }
       let validHours = 48;
       if (isProvider) {
@@ -269,7 +295,11 @@ export class NegotiationsService {
       until.setHours(until.getHours() + validHours);
       const updated = await this.repo.updatePendingToAccepted(negotiationId, agreed, until);
       if (!updated) {
-        throw new HttpError({ statusCode: 409, code: 'CONFLICT', message: 'Negotiation was already updated.' });
+        throw new HttpError({
+          statusCode: 409,
+          code: 'CONFLICT',
+          message: 'Negotiation was already updated.',
+        });
       }
       const otherId = isCustomer ? row.provider_id : row.customer_id;
       void this.notifications.createForUser(otherId, {
@@ -286,7 +316,11 @@ export class NegotiationsService {
     if (input.decision === 'reject') {
       const updated = await this.repo.updatePendingToRejected(negotiationId);
       if (!updated) {
-        throw new HttpError({ statusCode: 409, code: 'CONFLICT', message: 'Negotiation was already updated.' });
+        throw new HttpError({
+          statusCode: 409,
+          code: 'CONFLICT',
+          message: 'Negotiation was already updated.',
+        });
       }
       const otherId = isCustomer ? row.provider_id : row.customer_id;
       void this.notifications.createForUser(otherId, {
@@ -311,7 +345,11 @@ export class NegotiationsService {
     }
     const updated = await this.repo.updatePendingToCounter(negotiationId, userId, counter);
     if (!updated) {
-      throw new HttpError({ statusCode: 409, code: 'CONFLICT', message: 'Negotiation was already updated.' });
+      throw new HttpError({
+        statusCode: 409,
+        code: 'CONFLICT',
+        message: 'Negotiation was already updated.',
+      });
     }
     await this.repo.insertRound(negotiationId, userId, counter, input.message?.trim() ?? null);
     const otherId = isCustomer ? row.provider_id : row.customer_id;
@@ -326,13 +364,24 @@ export class NegotiationsService {
     return { negotiation: mapNegotiation(full!), rounds: rounds.map(mapRound) };
   }
 
-  async cancelNegotiation(customerId: string, negotiationId: string): Promise<NegotiationDetailResponse> {
+  async cancelNegotiation(
+    customerId: string,
+    negotiationId: string,
+  ): Promise<NegotiationDetailResponse> {
     const row = await this.repo.findById(negotiationId);
     if (!row) {
-      throw new HttpError({ statusCode: 404, code: 'NOT_FOUND', message: 'Negotiation not found.' });
+      throw new HttpError({
+        statusCode: 404,
+        code: 'NOT_FOUND',
+        message: 'Negotiation not found.',
+      });
     }
     if (row.customer_id !== customerId) {
-      throw new HttpError({ statusCode: 403, code: 'FORBIDDEN', message: 'Only the customer can cancel.' });
+      throw new HttpError({
+        statusCode: 403,
+        code: 'FORBIDDEN',
+        message: 'Only the customer can cancel.',
+      });
     }
     const updated = await this.repo.cancelPending(negotiationId, customerId);
     if (!updated) {
@@ -362,10 +411,18 @@ export class NegotiationsService {
   ): Promise<{ agreedPrice: number; currency: string }> {
     let row = await this.repo.findById(negotiationId);
     if (!row) {
-      throw new HttpError({ statusCode: 404, code: 'NEGOTIATION_NOT_FOUND', message: 'Negotiation not found.' });
+      throw new HttpError({
+        statusCode: 404,
+        code: 'NEGOTIATION_NOT_FOUND',
+        message: 'Negotiation not found.',
+      });
     }
     if (row.customer_id !== customerId) {
-      throw new HttpError({ statusCode: 403, code: 'FORBIDDEN', message: 'This negotiation is not yours.' });
+      throw new HttpError({
+        statusCode: 403,
+        code: 'FORBIDDEN',
+        message: 'This negotiation is not yours.',
+      });
     }
     if (row.service_id !== serviceId || row.provider_id !== providerId) {
       throw new HttpError({
@@ -392,13 +449,21 @@ export class NegotiationsService {
     }
     const agreed = toNumber(row.agreed_price);
     if (agreed == null) {
-      throw new HttpError({ statusCode: 400, code: 'INVALID_NEGOTIATION', message: 'No agreed price.' });
+      throw new HttpError({
+        statusCode: 400,
+        code: 'INVALID_NEGOTIATION',
+        message: 'No agreed price.',
+      });
     }
     return { agreedPrice: agreed, currency: row.currency };
   }
 
   /** Mark negotiation consumed after reservation is created (same DB transaction as booking). */
-  async markNegotiationConsumed(negotiationId: string, customerId: string, client: PoolClient): Promise<void> {
+  async markNegotiationConsumed(
+    negotiationId: string,
+    customerId: string,
+    client: PoolClient,
+  ): Promise<void> {
     const res = await client.query(
       `UPDATE price_negotiations SET status = 'consumed', updated_at = now()
        WHERE id = $1 AND customer_id = $2 AND status = 'accepted'`,

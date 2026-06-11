@@ -10,7 +10,6 @@ Stripe provides:
 - **Setup Intents** — for saving cards for future use
 - **Customer Portal** — for managing saved payment methods
 
-
 ## 1. Install Stripe
 
 ```bash

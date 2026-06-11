@@ -130,8 +130,7 @@ export const AdminWalletRailsTab = ({ dictionary, accessToken, refreshSession }:
     setActionError(null);
     try {
       const raw = modalCredit.trim();
-      const credited =
-        raw === '' ? undefined : (parseFloat(raw.replace(/,/g, '.')) || undefined);
+      const credited = raw === '' ? undefined : parseFloat(raw.replace(/,/g, '.')) || undefined;
       await adminApiClient.approveManualInstapayDeposit(
         accessToken,
         modal.row.id,
@@ -269,7 +268,9 @@ export const AdminWalletRailsTab = ({ dictionary, accessToken, refreshSession }:
                       <td style={{ fontSize: '0.8rem', wordBreak: 'break-all' }}>{row.userId}</td>
                       <td>{row.amountEgp.toFixed(2)}</td>
                       <td>{row.senderAccount ?? '—'}</td>
-                      <td><span className="admin-badge">{statusLabel(row.status)}</span></td>
+                      <td>
+                        <span className="admin-badge">{statusLabel(row.status)}</span>
+                      </td>
                       <td>{new Date(row.createdAt).toLocaleString()}</td>
                       <td>
                         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem' }}>
@@ -385,7 +386,9 @@ export const AdminWalletRailsTab = ({ dictionary, accessToken, refreshSession }:
                       <td style={{ fontSize: '0.8rem', wordBreak: 'break-all' }}>{row.userId}</td>
                       <td>{row.sourceAmountEgp.toFixed(2)}</td>
                       <td>{row.instapayRecipient ?? '—'}</td>
-                      <td><span className="admin-badge">{statusLabel(row.status)}</span></td>
+                      <td>
+                        <span className="admin-badge">{statusLabel(row.status)}</span>
+                      </td>
                       <td>{new Date(row.createdAt).toLocaleString()}</td>
                       <td>
                         {row.status === 'awaiting_transfer' && (
@@ -475,7 +478,12 @@ export const AdminWalletRailsTab = ({ dictionary, accessToken, refreshSession }:
                 </div>
                 {actionError && <p className="admin-settings-error">{actionError}</p>}
                 <div className="admin-modal-actions">
-                  <button type="button" className="admin-btn" onClick={closeModal} disabled={modalBusy}>
+                  <button
+                    type="button"
+                    className="admin-btn"
+                    onClick={closeModal}
+                    disabled={modalBusy}
+                  >
                     {dictionary.common.back}
                   </button>
                   <button
@@ -503,7 +511,12 @@ export const AdminWalletRailsTab = ({ dictionary, accessToken, refreshSession }:
                 </div>
                 {actionError && <p className="admin-settings-error">{actionError}</p>}
                 <div className="admin-modal-actions">
-                  <button type="button" className="admin-btn" onClick={closeModal} disabled={modalBusy}>
+                  <button
+                    type="button"
+                    className="admin-btn"
+                    onClick={closeModal}
+                    disabled={modalBusy}
+                  >
                     {dictionary.common.back}
                   </button>
                   <button
@@ -541,7 +554,12 @@ export const AdminWalletRailsTab = ({ dictionary, accessToken, refreshSession }:
                 </div>
                 {actionError && <p className="admin-settings-error">{actionError}</p>}
                 <div className="admin-modal-actions">
-                  <button type="button" className="admin-btn" onClick={closeModal} disabled={modalBusy}>
+                  <button
+                    type="button"
+                    className="admin-btn"
+                    onClick={closeModal}
+                    disabled={modalBusy}
+                  >
                     {dictionary.common.back}
                   </button>
                   <button

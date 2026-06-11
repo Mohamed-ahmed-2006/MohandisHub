@@ -223,9 +223,18 @@ export const AdminCategoriesTab = ({ dictionary, accessToken }: Props) => {
                 ))}
               </select>
               {formData.icon && (
-                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem', marginTop: '0.35rem' }}>
+                <span
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '0.5rem',
+                    marginTop: '0.35rem',
+                  }}
+                >
                   <CategoryIcon name={formData.icon} size={20} />
-                  <span className="admin-form-label" style={{ marginBottom: 0 }}>{formData.icon}</span>
+                  <span className="admin-form-label" style={{ marginBottom: 0 }}>
+                    {formData.icon}
+                  </span>
                 </span>
               )}
             </div>

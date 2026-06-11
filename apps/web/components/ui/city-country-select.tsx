@@ -87,7 +87,8 @@ export function CityCountrySelect({
     const match = CITIES.find((c) => {
       const cityMatches = c[nameKey] === defaultValue;
       const ctry = findCountryByCode(c.countryCode);
-      const countryMatches = ctry && (ctry[nameKey] === defaultCountry || ctry.code === resolveInitialCountryCode());
+      const countryMatches =
+        ctry && (ctry[nameKey] === defaultCountry || ctry.code === resolveInitialCountryCode());
       return cityMatches && countryMatches;
     });
     if (match) {
@@ -102,7 +103,10 @@ export function CityCountrySelect({
 
   return (
     <div className={className}>
-      <div className="profile-screen-row" style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
+      <div
+        className="profile-screen-row"
+        style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}
+      >
         <div className="profile-screen-field" style={{ flex: 1, minWidth: '140px' }}>
           <label className="profile-screen-label">{countryLabel}</label>
           <input type="hidden" name={countryName} value={countryDisplayName} />

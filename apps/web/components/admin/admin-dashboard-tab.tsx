@@ -43,14 +43,23 @@ export const AdminDashboardTab = ({ dictionary, accessToken, refreshSession }: P
   const cards = [
     { label: d.totalUsers, value: stats.totalUsers },
     { label: d.activeUsers, value: stats.activeUsers },
-      { label: d.totalRevenue, value: `${stats.totalRevenue.toFixed(2)} EGP` },
+    { label: d.totalRevenue, value: `${stats.totalRevenue.toFixed(2)} EGP` },
     { label: d.totalTransactions, value: stats.totalTransactions },
-      { label: tr('Total Transaction Volume', 'إجمالي حجم المعاملات'), value: `${stats.transactionVolume.toFixed(2)} EGP` },
-      { label: tr('Total Commission Volume', 'إجمالي حجم العمولة'), value: `${stats.platformCommissionVolume.toFixed(2)} EGP` },
+    {
+      label: tr('Total Transaction Volume', 'إجمالي حجم المعاملات'),
+      value: `${stats.transactionVolume.toFixed(2)} EGP`,
+    },
+    {
+      label: tr('Total Commission Volume', 'إجمالي حجم العمولة'),
+      value: `${stats.platformCommissionVolume.toFixed(2)} EGP`,
+    },
     { label: d.pendingVerifications, value: stats.pendingVerifications },
     { label: d.activeServices, value: stats.activeServices },
     { label: d.totalPlans, value: stats.totalPlans },
-      { label: d.platformWallet ?? tr('Platform commission balance', 'رصيد عمولة المنصة'), value: `${stats.platformWalletBalance.toFixed(2)} EGP` },
+    {
+      label: d.platformWallet ?? tr('Platform commission balance', 'رصيد عمولة المنصة'),
+      value: `${stats.platformWalletBalance.toFixed(2)} EGP`,
+    },
   ];
 
   return (

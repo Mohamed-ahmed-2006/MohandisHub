@@ -56,9 +56,7 @@ export class VerificationService {
     await assertRequiredVerificationImage(this.profilesRepo, params.userId, params.role);
 
     const identityDocs = await this.profilesRepo.findIdentityDocuments(params.userId);
-    if (
-      identityDocs.some((d) => d.status === 'pending' || d.status === 'under_review')
-    ) {
+    if (identityDocs.some((d) => d.status === 'pending' || d.status === 'under_review')) {
       throw new HttpError({
         statusCode: 409,
         code: 'IDENTITY_SUBMISSION_BLOCKS_KYC',
@@ -147,14 +145,14 @@ export class VerificationService {
                 },
                 Boolean((await this.profilesRepo.getUserAvatarUrl(userId))?.trim()),
               )
-          : getEffectiveBusinessVerificationStatus(
-              (await this.profilesRepo.findBusinessProfile(userId)) ?? {
-                verification_status: 'unverified',
-                identity_verified: false,
-                business_verified: false,
-              },
-              Boolean((await this.profilesRepo.getBusinessLogoUrl(userId))?.trim()),
-            );
+            : getEffectiveBusinessVerificationStatus(
+                (await this.profilesRepo.findBusinessProfile(userId)) ?? {
+                  verification_status: 'unverified',
+                  identity_verified: false,
+                  business_verified: false,
+                },
+                Boolean((await this.profilesRepo.getBusinessLogoUrl(userId))?.trim()),
+              );
       if (profileStatus === 'verified') {
         const latestRequest = await this.verificationRepo.findLatestByUserId(userId);
         return { status: 'verified', latestRequest };
@@ -218,10 +216,17 @@ export class VerificationService {
       });
 
       const role = await this.resolveRequestRole(request.user_id, request.request_type);
-      const hasRequiredImage =
-        await hasRequiredVerificationImage(this.profilesRepo, request.user_id, role);
+      const hasRequiredImage = await hasRequiredVerificationImage(
+        this.profilesRepo,
+        request.user_id,
+        role,
+      );
       const profileStatus =
-        result.approved && !hasRequiredImage ? 'under_review' : result.approved ? 'verified' : 'rejected';
+        result.approved && !hasRequiredImage
+          ? 'under_review'
+          : result.approved
+            ? 'verified'
+            : 'rejected';
       const identityMethod =
         result.approved && role !== 'business'
           ? request.provider === 'manual'
@@ -292,7 +297,11 @@ export class VerificationService {
       ? await hasRequiredVerificationImage(this.profilesRepo, request.user_id, role)
       : false;
     const profileStatus =
-      params.approved && !hasRequiredImage ? 'under_review' : params.approved ? 'verified' : 'rejected';
+      params.approved && !hasRequiredImage
+        ? 'under_review'
+        : params.approved
+          ? 'verified'
+          : 'rejected';
     const identityMethod = params.approved && role !== 'business' ? 'manual' : undefined;
 
     if (params.approved) {

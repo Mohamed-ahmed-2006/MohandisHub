@@ -24,14 +24,14 @@ const paidReservationOnlineType = process.env.E2E_PAID_RESERVATION_ONLINE_TYPE ?
 
 const sandboxReady = Boolean(
   apiBaseUrl &&
-    customerEmail &&
-    customerPassword &&
-    providerEmail &&
-    providerPassword &&
-    adminEmail &&
-    adminPassword &&
-    scopedAdminEmail &&
-    scopedAdminPassword,
+  customerEmail &&
+  customerPassword &&
+  providerEmail &&
+  providerPassword &&
+  adminEmail &&
+  adminPassword &&
+  scopedAdminEmail &&
+  scopedAdminPassword,
 );
 const paidReservationReady = Boolean(paidProviderId && paidServiceId && paidSlotId);
 
@@ -40,7 +40,7 @@ async function login(request: APIRequestContext, email: string, password: string
     data: { email, password },
   });
   expect(response.ok(), await response.text()).toBeTruthy();
-  const body = await response.json() as { data: { tokens: { accessToken: string } } };
+  const body = (await response.json()) as { data: { tokens: { accessToken: string } } };
   return body.data.tokens.accessToken;
 }
 
@@ -52,9 +52,15 @@ async function openAuthed(page: Page, token: string, path: string): Promise<void
 }
 
 test.describe('Phase 2 sandbox money journeys', () => {
-  test.skip(!sandboxReady, 'Set E2E_API_BASE_URL and sandbox test account credentials to run real money-flow E2E.');
+  test.skip(
+    !sandboxReady,
+    'Set E2E_API_BASE_URL and sandbox test account credentials to run real money-flow E2E.',
+  );
 
-  test('wallet deposit starts a sandbox checkout and keeps the wallet page usable', async ({ page, request }) => {
+  test('wallet deposit starts a sandbox checkout and keeps the wallet page usable', async ({
+    page,
+    request,
+  }) => {
     const token = await login(request, customerEmail!, customerPassword!);
 
     await openAuthed(page, token, '/en/app/settings/wallet');
@@ -71,15 +77,21 @@ test.describe('Phase 2 sandbox money journeys', () => {
       },
     });
     expect(checkout.ok(), await checkout.text()).toBeTruthy();
-    const body = await checkout.json() as {
+    const body = (await checkout.json()) as {
       data: { checkoutUrl?: string; paymentUrl?: string; orderId?: string };
     };
     expect(body.data.checkoutUrl ?? body.data.paymentUrl).toBeTruthy();
     expect(body.data.orderId).toBeTruthy();
   });
 
-  test('paid booking surfaces request-time wallet hold state for customer and provider', async ({ page, request }) => {
-    test.skip(!paidReservationReady, 'Set E2E_PAID_PROVIDER_ID, E2E_PAID_SERVICE_ID, and E2E_PAID_SLOT_ID for paid reservation E2E.');
+  test('paid booking surfaces request-time wallet hold state for customer and provider', async ({
+    page,
+    request,
+  }) => {
+    test.skip(
+      !paidReservationReady,
+      'Set E2E_PAID_PROVIDER_ID, E2E_PAID_SERVICE_ID, and E2E_PAID_SLOT_ID for paid reservation E2E.',
+    );
     const customerToken = await login(request, customerEmail!, customerPassword!);
     const providerToken = await login(request, providerEmail!, providerPassword!);
 
@@ -105,7 +117,7 @@ test.describe('Phase 2 sandbox money journeys', () => {
       },
     });
     expect(reservation.ok(), await reservation.text()).toBeTruthy();
-    const reservationBody = await reservation.json() as {
+    const reservationBody = (await reservation.json()) as {
       data: {
         id: string;
         fixedPriceHoldId: string | null;
@@ -119,23 +131,29 @@ test.describe('Phase 2 sandbox money journeys', () => {
     expect(reservationBody.data.fixedPriceHoldId).toBeTruthy();
     expect(reservationBody.data.settlementStatus).toBe('held');
 
-    const cancel = await request.post(`${apiBaseUrl}/api/reservations/${reservationBody.data.id}/cancel`, {
-      headers: {
-        Authorization: `Bearer ${customerToken}`,
-        'Idempotency-Key': `e2e-cancel-paid-reservation-${Date.now()}`,
+    const cancel = await request.post(
+      `${apiBaseUrl}/api/reservations/${reservationBody.data.id}/cancel`,
+      {
+        headers: {
+          Authorization: `Bearer ${customerToken}`,
+          'Idempotency-Key': `e2e-cancel-paid-reservation-${Date.now()}`,
+        },
+        data: {
+          reasonCode: 'platform_failure',
+          reasonText: 'E2E cleanup after paid reservation hold assertion.',
+        },
       },
-      data: {
-        reasonCode: 'platform_failure',
-        reasonText: 'E2E cleanup after paid reservation hold assertion.',
-      },
-    });
+    );
     expect(cancel.ok(), await cancel.text()).toBeTruthy();
 
     await openAuthed(page, providerToken, '/en/app/bookings');
     await expect(page.locator('body')).toBeVisible();
   });
 
-  test('withdrawal request and admin manual approval surfaces are reachable with sandbox accounts', async ({ page, request }) => {
+  test('withdrawal request and admin manual approval surfaces are reachable with sandbox accounts', async ({
+    page,
+    request,
+  }) => {
     const customerToken = await login(request, customerEmail!, customerPassword!);
     const adminToken = await login(request, adminEmail!, adminPassword!);
 
@@ -153,7 +171,10 @@ test.describe('Phase 2 sandbox money journeys', () => {
     await expect(page.locator('body')).toBeVisible();
   });
 
-  test('scoped admin cannot see or execute unrelated money-control areas', async ({ page, request }) => {
+  test('scoped admin cannot see or execute unrelated money-control areas', async ({
+    page,
+    request,
+  }) => {
     const scopedToken = await login(request, scopedAdminEmail!, scopedAdminPassword!);
 
     await openAuthed(page, scopedToken, '/en/app/admin');
@@ -165,9 +186,12 @@ test.describe('Phase 2 sandbox money journeys', () => {
     const media = await request.get(`${apiBaseUrl}/api/media`, {
       headers: { Authorization: `Bearer ${scopedToken}` },
     });
-    const reservationMoney = await request.get(`${apiBaseUrl}/api/reservations/admin/action-failures`, {
-      headers: { Authorization: `Bearer ${scopedToken}` },
-    });
+    const reservationMoney = await request.get(
+      `${apiBaseUrl}/api/reservations/admin/action-failures`,
+      {
+        headers: { Authorization: `Bearer ${scopedToken}` },
+      },
+    );
 
     expect(support.status(), await support.text()).toBe(403);
     expect(media.status(), await media.text()).toBe(403);

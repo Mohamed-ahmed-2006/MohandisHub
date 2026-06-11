@@ -10,7 +10,7 @@ import type {
   AuthUser,
   VerificationStatus,
 } from '@mohandishub/shared';
-import { isVerifiableRole } from '@mohandishub/shared';
+import { isVerifiableRole, normalizeAdminPermissions } from '@mohandishub/shared';
 import bcrypt from 'bcryptjs';
 
 import { env } from '../../config/env.js';
@@ -22,6 +22,7 @@ import {
 } from '../../config/jwt.js';
 import { HttpError } from '../../utils/http-error.js';
 import { buildTransactionalEmailHtml } from '../../utils/transactional-email-template.js';
+import { SettingsService } from '../settings/settings.service.js';
 
 import { AuthRepository } from './auth.repository.js';
 import type { UserRow } from './auth.types.js';
@@ -41,7 +42,10 @@ function planLimitBool(limits: unknown, key: string): boolean {
 }
 
 export class AuthService {
-  public constructor(private readonly authRepository: AuthRepository = new AuthRepository()) {}
+  public constructor(
+    private readonly authRepository: AuthRepository = new AuthRepository(),
+    private readonly settingsService: SettingsService = new SettingsService(),
+  ) {}
 
   // ── Register ──────────────────────────────────────────────────────────
 
@@ -49,6 +53,15 @@ export class AuthService {
     input: RegisterInput,
     meta?: { deviceInfo?: string | undefined; ipAddress?: string | undefined },
   ): Promise<{ user: AuthUser; tokens: AuthTokens; refreshToken: string }> {
+    const status = await this.settingsService.getAppStatus();
+    if (status.signupsLocked) {
+      throw new HttpError({
+        statusCode: 403,
+        code: 'SIGNUPS_LOCKED',
+        message: 'New registrations are temporarily disabled.',
+      });
+    }
+
     const existing = await this.authRepository.findUserByEmail(input.email);
     if (existing) {
       const abandoned = await this.authRepository.isAbandonedUnverifiedBusinessSignup(existing.id);
@@ -147,6 +160,15 @@ export class AuthService {
         statusCode: 401,
         code: 'INVALID_CREDENTIALS',
         message: 'Invalid email or password.',
+      });
+    }
+
+    const status = await this.settingsService.getAppStatus();
+    if (status.lockLogins && !this.isSuperAdmin(userRow)) {
+      throw new HttpError({
+        statusCode: 403,
+        code: 'LOGINS_LOCKED',
+        message: 'Logins are temporarily disabled.',
       });
     }
 
@@ -286,12 +308,15 @@ export class AuthService {
   async forgotPassword(
     input: ForgotPasswordInput,
   ): Promise<{ message: string; devResetLink?: string }> {
+    const generic = {
+      message: 'If your email is registered, a password reset link has been sent.',
+    };
     const userRow = await this.authRepository.findUserByEmail(input.email);
     if (!userRow) {
-      return { message: 'No account found with that email address.' };
+      return generic;
     }
     if (!userRow.is_active) {
-      return { message: 'This account has been disabled. Please contact support.' };
+      return generic;
     }
 
     const rawToken = randomBytes(32).toString('hex');
@@ -300,9 +325,13 @@ export class AuthService {
     await this.authRepository.setPasswordResetToken(userRow.id, tokenHash, expiresAt);
 
     const webBase = (env.WEB_PUBLIC_URL ?? 'http://localhost:3000').replace(/\/$/, '');
-    const resetUrl = `${webBase}/en/auth/reset-password?token=${encodeURIComponent(rawToken)}`;
+    const resetUrl = `${webBase}/en/auth/reset-password#token=${encodeURIComponent(rawToken)}`;
 
-    const emailSent = await this.sendPasswordResetEmail(userRow.email, userRow.display_name, resetUrl);
+    const emailSent = await this.sendPasswordResetEmail(
+      userRow.email,
+      userRow.display_name,
+      resetUrl,
+    );
     if (!emailSent) {
       return {
         message:
@@ -427,6 +456,14 @@ export class AuthService {
     };
   }
 
+  private isSuperAdmin(user: UserRow): boolean {
+    return (
+      user.is_admin === true &&
+      Array.isArray(user.admin_permissions) &&
+      user.admin_permissions.includes('super_admin')
+    );
+  }
+
   private async issueTokens(
     user: UserRow,
     verificationStatus: VerificationStatus | null,
@@ -455,9 +492,7 @@ export class AuthService {
   }
 
   private toAuthUser(user: UserRow, verificationStatus: VerificationStatus | null): AuthUser {
-    const adminPermissions = Array.isArray(user.admin_permissions)
-      ? user.admin_permissions.filter((p): p is string => typeof p === 'string')
-      : [];
+    const adminPermissions = normalizeAdminPermissions(user.admin_permissions);
     const role = user.primary_role;
     const pl = user.plan_limits;
     return {
@@ -473,8 +508,7 @@ export class AuthService {
       isAdmin: user.is_admin === true,
       adminPermissions,
       plan: user.plan_slug,
-      planProBadge:
-        (role === 'expert' || role === 'craftsman') && planLimitBool(pl, 'canProBadge'),
+      planProBadge: (role === 'expert' || role === 'craftsman') && planLimitBool(pl, 'canProBadge'),
       planTrustedBusinessBadge: role === 'business' && planLimitBool(pl, 'canTrustedBusinessBadge'),
       emailVerified: user.email_verified_at !== null,
       verificationStatus,

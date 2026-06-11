@@ -15,7 +15,9 @@ export type SendTransactionalEmailParams = {
   title: string;
   greeting?: string;
   introLines: string[];
-  action?: { kind: 'button'; label: string; url: string } | { kind: 'code'; label: string; value: string };
+  action?:
+    | { kind: 'button'; label: string; url: string }
+    | { kind: 'code'; label: string; value: string };
   expiryText?: string;
   safetyText?: string;
   footerText?: string;

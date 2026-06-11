@@ -7141,11 +7141,7 @@
     "University of Hargeisa",
     "University of Somalia"
   ],
-  "MR": [
-    "Université de Nouakchott"
-  ],
-  "DJ": [
-    "Université de Djibouti"
-  ],
+  "MR": ["Université de Nouakchott"],
+  "DJ": ["Université de Djibouti"],
   "KM": []
 }

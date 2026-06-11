@@ -9,13 +9,18 @@ import { addFavoriteSchema } from './favorites.validation.js';
 const svc = new FavoritesService();
 
 function requireUser(req: { user?: { id: string } }) {
-  if (!req.user) throw new HttpError({ statusCode: 401, code: 'UNAUTHORIZED', message: 'Auth required.' });
+  if (!req.user)
+    throw new HttpError({ statusCode: 401, code: 'UNAUTHORIZED', message: 'Auth required.' });
   return req.user.id;
 }
 
-function parseBody<T>(schema: { safeParse: (d: unknown) => { success: boolean; data?: T } }, body: unknown): T {
+function parseBody<T>(
+  schema: { safeParse: (d: unknown) => { success: boolean; data?: T } },
+  body: unknown,
+): T {
   const r = schema.safeParse(body);
-  if (!r.success) throw new HttpError({ statusCode: 400, code: 'VALIDATION_ERROR', message: 'Invalid input.' });
+  if (!r.success)
+    throw new HttpError({ statusCode: 400, code: 'VALIDATION_ERROR', message: 'Invalid input.' });
   return r.data as T;
 }
 
@@ -31,7 +36,11 @@ const remove = asyncHandler(async (req, res) => {
   const targetType = req.params.targetType as 'provider' | 'service';
   const targetId = req.params.targetId!;
   if (targetType !== 'provider' && targetType !== 'service') {
-    throw new HttpError({ statusCode: 400, code: 'VALIDATION_ERROR', message: 'Invalid targetType.' });
+    throw new HttpError({
+      statusCode: 400,
+      code: 'VALIDATION_ERROR',
+      message: 'Invalid targetType.',
+    });
   }
   await svc.remove(userId, targetType, targetId);
   res.json({ ok: true, data: { removed: true } });
@@ -49,7 +58,11 @@ const check = asyncHandler(async (req, res) => {
   const targetType = req.params.targetType as 'provider' | 'service';
   const targetId = req.params.targetId!;
   if (targetType !== 'provider' && targetType !== 'service') {
-    throw new HttpError({ statusCode: 400, code: 'VALIDATION_ERROR', message: 'Invalid targetType.' });
+    throw new HttpError({
+      statusCode: 400,
+      code: 'VALIDATION_ERROR',
+      message: 'Invalid targetType.',
+    });
   }
   const isFav = await svc.isFavorite(userId, targetType, targetId);
   res.json({ ok: true, data: { isFavorite: isFav } });

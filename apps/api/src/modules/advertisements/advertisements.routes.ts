@@ -10,8 +10,18 @@ import { advertisementsController } from './advertisements.controller.js';
 
 const advertisementsRouter = Router();
 
-advertisementsRouter.get('/active', authenticate, requireEmailVerified, advertisementsController.listActiveResolved);
-advertisementsRouter.get('/controls', authenticate, requireEmailVerified, advertisementsController.getAdControls);
+advertisementsRouter.get(
+  '/active',
+  authenticate,
+  requireEmailVerified,
+  advertisementsController.listActiveResolved,
+);
+advertisementsRouter.get(
+  '/controls',
+  authenticate,
+  requireEmailVerified,
+  advertisementsController.getAdControls,
+);
 advertisementsRouter.post(
   '/',
   authenticate,
@@ -20,8 +30,18 @@ advertisementsRouter.post(
   requireVerified,
   advertisementsController.createAd,
 );
-advertisementsRouter.get('/my', authenticate, requireEmailVerified, advertisementsController.listMyAds);
-advertisementsRouter.post('/:id/click', authenticate, requireEmailVerified, advertisementsController.trackClick);
+advertisementsRouter.get(
+  '/my',
+  authenticate,
+  requireEmailVerified,
+  advertisementsController.listMyAds,
+);
+advertisementsRouter.post(
+  '/:id/click',
+  authenticate,
+  requireEmailVerified,
+  advertisementsController.trackClick,
+);
 
 advertisementsRouter.get(
   '/admin/all',
@@ -78,7 +98,12 @@ advertisementsRouter.put(
   advertisementsController.updateAdminAdControls,
 );
 
-advertisementsRouter.get('/:id', authenticate, requireEmailVerified, advertisementsController.getAd);
+advertisementsRouter.get(
+  '/:id',
+  authenticate,
+  requireEmailVerified,
+  advertisementsController.getAd,
+);
 advertisementsRouter.put(
   '/:id',
   authenticate,

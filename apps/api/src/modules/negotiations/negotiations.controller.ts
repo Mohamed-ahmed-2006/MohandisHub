@@ -1,24 +1,30 @@
-import type { ApiSuccessBody, NegotiationDetailResponse, NegotiationListResponse } from '@mohandishub/shared';
+import type {
+  ApiSuccessBody,
+  NegotiationDetailResponse,
+  NegotiationListResponse,
+} from '@mohandishub/shared';
 
 import { asyncHandler } from '../../utils/async-handler.js';
 import { HttpError } from '../../utils/http-error.js';
 
 import { NegotiationsService } from './negotiations.service.js';
-import {
-  createNegotiationSchema,
-  respondNegotiationSchema,
-} from './negotiations.validation.js';
+import { createNegotiationSchema, respondNegotiationSchema } from './negotiations.validation.js';
 
 const svc = new NegotiationsService();
 
 function requireUser(req: { user?: { id: string } }) {
-  if (!req.user) throw new HttpError({ statusCode: 401, code: 'UNAUTHORIZED', message: 'Auth required.' });
+  if (!req.user)
+    throw new HttpError({ statusCode: 401, code: 'UNAUTHORIZED', message: 'Auth required.' });
   return req.user.id;
 }
 
-function parseBody<T>(schema: { safeParse: (d: unknown) => { success: boolean; data?: T } }, body: unknown): T {
+function parseBody<T>(
+  schema: { safeParse: (d: unknown) => { success: boolean; data?: T } },
+  body: unknown,
+): T {
   const r = schema.safeParse(body);
-  if (!r.success) throw new HttpError({ statusCode: 400, code: 'VALIDATION_ERROR', message: 'Invalid input.' });
+  if (!r.success)
+    throw new HttpError({ statusCode: 400, code: 'VALIDATION_ERROR', message: 'Invalid input.' });
   return r.data as T;
 }
 
@@ -33,7 +39,11 @@ const list = asyncHandler(async (req, res) => {
   const userId = requireUser(req);
   const role = req.query.role as 'customer' | 'provider';
   if (role !== 'customer' && role !== 'provider') {
-    throw new HttpError({ statusCode: 400, code: 'VALIDATION_ERROR', message: 'role must be customer or provider.' });
+    throw new HttpError({
+      statusCode: 400,
+      code: 'VALIDATION_ERROR',
+      message: 'role must be customer or provider.',
+    });
   }
   const status = typeof req.query.status === 'string' ? req.query.status : undefined;
   const serviceId = typeof req.query.serviceId === 'string' ? req.query.serviceId : undefined;

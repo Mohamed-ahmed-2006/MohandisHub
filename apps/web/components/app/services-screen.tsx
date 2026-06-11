@@ -146,7 +146,9 @@ export const ServicesScreen = ({ locale, dictionary }: Props) => {
         ? ((form.elements.namedItem('priceType') as HTMLSelectElement)?.value as 'fixed' | 'hourly')
         : 'fixed';
       const isNegotiable = (form.elements.namedItem('isNegotiable') as HTMLInputElement)?.checked;
-      const description = (form.elements.namedItem('description') as HTMLTextAreaElement)?.value?.trim();
+      const description = (
+        form.elements.namedItem('description') as HTMLTextAreaElement
+      )?.value?.trim();
       const city = (form.elements.namedItem('city') as HTMLSelectElement)?.value?.trim();
       const country = (form.elements.namedItem('country') as HTMLInputElement)?.value?.trim();
       const body: Parameters<typeof servicesApiClient.createService>[1] = {
@@ -209,7 +211,9 @@ export const ServicesScreen = ({ locale, dictionary }: Props) => {
       return;
     }
     try {
-      const description = (form.elements.namedItem('description') as HTMLTextAreaElement)?.value?.trim();
+      const description = (
+        form.elements.namedItem('description') as HTMLTextAreaElement
+      )?.value?.trim();
       const priceRaw = (form.elements.namedItem('price') as HTMLInputElement)?.value;
       const price = priceRaw?.trim() ? parseFloat(priceRaw.trim()) : undefined;
       const priceType = hourlyPricingEnabled
@@ -293,7 +297,10 @@ export const ServicesScreen = ({ locale, dictionary }: Props) => {
             {np.servicesPageTeaser ??
               'Customer price offers are managed in a dedicated inbox so your service list stays easy to scan.'}
           </p>
-          <Link href={buildLocalePath(locale, '/app/negotiations')} className="dashboard-primary-btn">
+          <Link
+            href={buildLocalePath(locale, '/app/negotiations')}
+            className="dashboard-primary-btn"
+          >
             {np.openInbox ?? dictionary.nav?.negotiations ?? 'Open price negotiations'}
           </Link>
         </section>
@@ -367,7 +374,9 @@ export const ServicesScreen = ({ locale, dictionary }: Props) => {
                       className="dashboard-link-btn"
                       onClick={() => void handleAction(s, 'submit')}
                     >
-                      {s.status === 'rejected' ? (sp.resubmit ?? 'Resubmit') : (sp.submit ?? 'Submit')}
+                      {s.status === 'rejected'
+                        ? (sp.resubmit ?? 'Resubmit')
+                        : (sp.submit ?? 'Submit')}
                     </button>
                   )}
                   {s.status === 'active' && (
@@ -405,7 +414,10 @@ export const ServicesScreen = ({ locale, dictionary }: Props) => {
             <div className="plan-modal service-create-modal" onClick={(e) => e.stopPropagation()}>
               <h3 className="plan-modal-title">{sp.createService ?? 'Create Service'}</h3>
               {error && <p className="dashboard-error">{error}</p>}
-              <form className="dashboard-form service-create-form" onSubmit={(e) => void handleCreate(e)}>
+              <form
+                className="dashboard-form service-create-form"
+                onSubmit={(e) => void handleCreate(e)}
+              >
                 <div className="service-create-grid">
                   <div className="service-create-field service-create-field--full">
                     <label className="service-create-label">{sp.titleLabel ?? 'Title'}</label>
@@ -424,7 +436,9 @@ export const ServicesScreen = ({ locale, dictionary }: Props) => {
                   </div>
 
                   <div className="service-create-field service-create-field--full">
-                    <label className="service-create-label">{sp.descriptionLabel ?? 'Description'}</label>
+                    <label className="service-create-label">
+                      {sp.descriptionLabel ?? 'Description'}
+                    </label>
                     <p className="service-create-hint">
                       {sp.descriptionPlaceholder ??
                         'Describe deliverables, workflow, and expected response time.'}
@@ -471,7 +485,10 @@ export const ServicesScreen = ({ locale, dictionary }: Props) => {
                     </div>
                   ) : null}
 
-                  <label className="service-create-checkbox service-create-field service-create-field--full" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <label
+                    className="service-create-checkbox service-create-field service-create-field--full"
+                    style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}
+                  >
                     <input name="isNegotiable" type="checkbox" />
                     <span>Price is negotiable</span>
                   </label>
@@ -479,9 +496,7 @@ export const ServicesScreen = ({ locale, dictionary }: Props) => {
                   <div className="service-create-field">
                     <label className="service-create-label">{sp.cityLabel ?? 'City'}</label>
                     <select name="city" className="home-search-select service-create-city-select">
-                      <option value="">
-                        {dictionary.homeSearch?.chooseCity ?? 'Choose city'}
-                      </option>
+                      <option value="">{dictionary.homeSearch?.chooseCity ?? 'Choose city'}</option>
                       {EGYPTIAN_CITIES.map((cityOption) => (
                         <option key={cityOption} value={cityOption}>
                           {cityOption}
@@ -505,7 +520,9 @@ export const ServicesScreen = ({ locale, dictionary }: Props) => {
                     <label className="service-create-label">
                       Gallery ({createImages.length}/{MAX_SERVICE_IMAGES})
                     </label>
-                    <p className="service-create-hint">JPEG/PNG/WebP — up to {MAX_SERVICE_IMAGES} images.</p>
+                    <p className="service-create-hint">
+                      JPEG/PNG/WebP — up to {MAX_SERVICE_IMAGES} images.
+                    </p>
                     <div className="service-images-row">
                       {createImages.map((u, idx) => (
                         <div key={`${u}-${idx}`} className="service-image-tile">
@@ -515,7 +532,9 @@ export const ServicesScreen = ({ locale, dictionary }: Props) => {
                             type="button"
                             className="service-image-remove"
                             aria-label="Remove"
-                            onClick={() => setCreateImages((prev) => prev.filter((_, i) => i !== idx))}
+                            onClick={() =>
+                              setCreateImages((prev) => prev.filter((_, i) => i !== idx))
+                            }
                           >
                             ×
                           </button>
@@ -534,7 +553,6 @@ export const ServicesScreen = ({ locale, dictionary }: Props) => {
                       }}
                     />
                   </div>
-
                 </div>
 
                 <div className="service-create-actions">
@@ -548,7 +566,11 @@ export const ServicesScreen = ({ locale, dictionary }: Props) => {
                   >
                     {dictionary.common?.back ?? 'Back'}
                   </button>
-                  <button type="submit" className="dashboard-primary-btn" disabled={creating || imageUploadBusy}>
+                  <button
+                    type="submit"
+                    className="dashboard-primary-btn"
+                    disabled={creating || imageUploadBusy}
+                  >
                     {imageUploadBusy ? 'Uploading…' : creating ? '...' : 'Publish'}
                   </button>
                 </div>
@@ -582,7 +604,9 @@ export const ServicesScreen = ({ locale, dictionary }: Props) => {
                   </div>
 
                   <div className="service-create-field service-create-field--full">
-                    <label className="service-create-label">{sp.descriptionLabel ?? 'Description'}</label>
+                    <label className="service-create-label">
+                      {sp.descriptionLabel ?? 'Description'}
+                    </label>
                     <textarea
                       name="description"
                       className="dashboard-textarea service-create-input"
@@ -616,7 +640,9 @@ export const ServicesScreen = ({ locale, dictionary }: Props) => {
                       step="0.01"
                       className="dashboard-input service-create-input"
                       placeholder={sp.pricePlaceholder}
-                      defaultValue={editingService.price != null ? String(editingService.price) : ''}
+                      defaultValue={
+                        editingService.price != null ? String(editingService.price) : ''
+                      }
                     />
                   </div>
 
@@ -653,9 +679,7 @@ export const ServicesScreen = ({ locale, dictionary }: Props) => {
                       className="home-search-select service-create-city-select"
                       defaultValue={editingService.city ?? ''}
                     >
-                      <option value="">
-                        {dictionary.homeSearch?.chooseCity ?? 'Choose city'}
-                      </option>
+                      <option value="">{dictionary.homeSearch?.chooseCity ?? 'Choose city'}</option>
                       {EGYPTIAN_CITIES.map((cityOption) => (
                         <option key={cityOption} value={cityOption}>
                           {cityOption}
@@ -679,7 +703,9 @@ export const ServicesScreen = ({ locale, dictionary }: Props) => {
                     <label className="service-create-label">
                       Gallery ({editImages.length}/{MAX_SERVICE_IMAGES})
                     </label>
-                    <p className="service-create-hint">JPEG/PNG/WebP — up to {MAX_SERVICE_IMAGES} images.</p>
+                    <p className="service-create-hint">
+                      JPEG/PNG/WebP — up to {MAX_SERVICE_IMAGES} images.
+                    </p>
                     <div className="service-images-row">
                       {editImages.map((u, idx) => (
                         <div key={`${u}-${idx}`} className="service-image-tile">
@@ -689,7 +715,9 @@ export const ServicesScreen = ({ locale, dictionary }: Props) => {
                             type="button"
                             className="service-image-remove"
                             aria-label="Remove"
-                            onClick={() => setEditImages((prev) => prev.filter((_, i) => i !== idx))}
+                            onClick={() =>
+                              setEditImages((prev) => prev.filter((_, i) => i !== idx))
+                            }
                           >
                             ×
                           </button>
@@ -711,10 +739,18 @@ export const ServicesScreen = ({ locale, dictionary }: Props) => {
                 </div>
 
                 <div className="service-create-actions">
-                  <button type="button" className="plan-modal-cancel" onClick={() => setEditingService(null)}>
+                  <button
+                    type="button"
+                    className="plan-modal-cancel"
+                    onClick={() => setEditingService(null)}
+                  >
                     {dictionary.common?.back ?? 'Back'}
                   </button>
-                  <button type="submit" className="dashboard-primary-btn" disabled={savingEdit || imageUploadBusy}>
+                  <button
+                    type="submit"
+                    className="dashboard-primary-btn"
+                    disabled={savingEdit || imageUploadBusy}
+                  >
                     {imageUploadBusy ? 'Uploading…' : savingEdit ? '...' : 'Save'}
                   </button>
                 </div>

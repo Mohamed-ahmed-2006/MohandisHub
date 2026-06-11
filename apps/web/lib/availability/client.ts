@@ -1,16 +1,21 @@
 import type { ApiSuccessBody, AvailabilitySlot } from '@mohandishub/shared';
 
+import { fetchWithAuthRetry } from '@/lib/auth/fetch-with-auth-retry';
 import { getApiBaseUrl } from '@/lib/env';
 
 async function apiReq<T>(path: string, token: string, opts?: RequestInit): Promise<T> {
-  const res = await fetch(`${getApiBaseUrl()}${path}`, {
-    ...opts,
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`,
-      ...(opts?.headers ?? {}),
+  const res = await fetchWithAuthRetry(
+    `${getApiBaseUrl()}${path}`,
+    {
+      ...opts,
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+        ...(opts?.headers ?? {}),
+      },
     },
-  });
+    token,
+  );
   if (!res.ok) {
     const body = (await res.json().catch(() => ({}))) as { error?: { message?: string } };
     throw new Error(body?.error?.message ?? 'Request failed');

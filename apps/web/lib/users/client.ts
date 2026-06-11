@@ -1,7 +1,13 @@
-import type { ApiErrorBody, ApiSuccessBody, AuthUser, UpdateAccountBody } from '@mohandishub/shared';
+import type {
+  ApiErrorBody,
+  ApiSuccessBody,
+  AuthUser,
+  UpdateAccountBody,
+} from '@mohandishub/shared';
 
 import { ApiClientRequestError } from '../auth/client';
 
+import { fetchWithAuthRetry } from '@/lib/auth/fetch-with-auth-retry';
 import { getApiBaseUrl } from '@/lib/env';
 
 type ApiRequestOptions = {
@@ -26,15 +32,19 @@ const apiRequest = async <T>({
   body,
   accessToken,
 }: ApiRequestOptions): Promise<T> => {
-  const response = await fetch(`${getApiBaseUrl()}${path}`, {
-    method,
-    credentials: 'include',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${accessToken}`,
+  const response = await fetchWithAuthRetry(
+    `${getApiBaseUrl()}${path}`,
+    {
+      method,
+      credentials: 'include',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${accessToken}`,
+      },
+      ...(body ? { body: JSON.stringify(body) } : {}),
     },
-    ...(body ? { body: JSON.stringify(body) } : {}),
-  });
+    accessToken,
+  );
 
   if (!response.ok) {
     const rawErrorBody: unknown = await response.json().catch(() => null);

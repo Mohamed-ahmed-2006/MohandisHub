@@ -97,7 +97,11 @@ export class ModerationService {
     }
     const images = row.images ?? [];
     if (urlIndex < 0 || urlIndex >= images.length) {
-      throw new HttpError({ statusCode: 400, code: 'BAD_REQUEST', message: 'Invalid image index.' });
+      throw new HttpError({
+        statusCode: 400,
+        code: 'BAD_REQUEST',
+        message: 'Invalid image index.',
+      });
     }
     const removed = images[urlIndex]!;
     const next = images.filter((_, i) => i !== urlIndex);

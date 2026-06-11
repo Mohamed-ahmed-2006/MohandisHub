@@ -86,37 +86,37 @@ export function ImagePreviewModal({
         closeLabel="Close"
         className="image-preview-header"
       />
-        <div className="image-preview-content">
-          {loading && <p className="admin-empty">Loading…</p>}
-          {error && <p className="admin-error-banner">{error}</p>}
-          {resolvedUrl && !loading && (
-            resolvedUrl.startsWith('blob:') || resolvedUrl.startsWith('data:') ? (
-              // `next/image` does not reliably render `blob:` sources. Use a plain <img>.
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={resolvedUrl}
-                alt={title ?? 'Preview'}
-                className="image-preview-img"
-                onError={() => {
-                  console.warn('[ImagePreviewModal] <img> failed to load', {
-                    title,
-                    imageUrl,
-                    resolvedUrlPrefix: resolvedUrl.slice(0, 30),
-                  });
-                }}
-              />
-            ) : (
-              <Image
-                src={resolvedUrl}
-                alt={title ?? 'Preview'}
-                className="image-preview-img"
-                width={1200}
-                height={800}
-                unoptimized
-              />
-            )
-          )}
-        </div>
+      <div className="image-preview-content">
+        {loading && <p className="admin-empty">Loading…</p>}
+        {error && <p className="admin-error-banner">{error}</p>}
+        {resolvedUrl &&
+          !loading &&
+          (resolvedUrl.startsWith('blob:') || resolvedUrl.startsWith('data:') ? (
+            // `next/image` does not reliably render `blob:` sources. Use a plain <img>.
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={resolvedUrl}
+              alt={title ?? 'Preview'}
+              className="image-preview-img"
+              onError={() => {
+                console.warn('[ImagePreviewModal] <img> failed to load', {
+                  title,
+                  imageUrl,
+                  resolvedUrlPrefix: resolvedUrl.slice(0, 30),
+                });
+              }}
+            />
+          ) : (
+            <Image
+              src={resolvedUrl}
+              alt={title ?? 'Preview'}
+              className="image-preview-img"
+              width={1200}
+              height={800}
+              unoptimized
+            />
+          ))}
+      </div>
     </Modal>
   );
 }

@@ -73,7 +73,7 @@ export class NeedsRepository {
         input.categoryId ?? null,
         input.budgetType,
         input.budgetAmount,
-      input.currency ?? 'EGP',
+        input.currency ?? 'EGP',
         input.timelineDays ?? null,
         input.city ?? null,
         input.country ?? null,
@@ -180,7 +180,14 @@ export class NeedsRepository {
     const { rows } = await getPool().query(
       `INSERT INTO bids (need_id, expert_id, amount, message, delivery_days, estimated_hours)
        VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
-      [needId, expertId, input.amount, input.message, input.deliveryDays ?? null, input.estimatedHours ?? null],
+      [
+        needId,
+        expertId,
+        input.amount,
+        input.message,
+        input.deliveryDays ?? null,
+        input.estimatedHours ?? null,
+      ],
     );
     return rows[0] as BidRow;
   }
@@ -230,7 +237,10 @@ export class NeedsRepository {
        WHERE b.need_id = $1 ORDER BY b.created_at ASC`,
       [needId],
     );
-    return rows as (BidRow & { expert_plan_slug: string | null; bidder_can_priority_bid: boolean })[];
+    return rows as (BidRow & {
+      expert_plan_slug: string | null;
+      bidder_can_priority_bid: boolean;
+    })[];
   }
 
   async listBidsByExpert(
@@ -331,10 +341,16 @@ export class NeedsRepository {
     return rows[0] as BidMessageRow;
   }
 
-  async listBidMessages(bidId: string, userId?: string, isCustomer?: boolean): Promise<BidMessageRow[]> {
+  async listBidMessages(
+    bidId: string,
+    userId?: string,
+    isCustomer?: boolean,
+  ): Promise<BidMessageRow[]> {
     if (userId) {
       if (isCustomer) {
-        await getPool().query(`UPDATE bids SET customer_last_read_at = now() WHERE id = $1`, [bidId]);
+        await getPool().query(`UPDATE bids SET customer_last_read_at = now() WHERE id = $1`, [
+          bidId,
+        ]);
       } else {
         await getPool().query(`UPDATE bids SET expert_last_read_at = now() WHERE id = $1`, [bidId]);
       }
@@ -345,7 +361,7 @@ export class NeedsRepository {
        JOIN users u ON u.id = m.sender_id 
        WHERE m.bid_id = $1 
        ORDER BY m.created_at ASC`,
-      [bidId]
+      [bidId],
     );
     return rows as BidMessageRow[];
   }

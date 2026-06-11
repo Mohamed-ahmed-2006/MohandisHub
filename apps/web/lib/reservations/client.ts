@@ -25,20 +25,25 @@ import type {
 } from '@mohandishub/shared';
 
 import { ApiClientRequestError } from '@/lib/auth/client';
+import { fetchWithAuthRetry } from '@/lib/auth/fetch-with-auth-retry';
 import { getApiBaseUrl } from '@/lib/env';
 
 const createIdempotencyKey = () =>
   typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : `${Date.now()}`;
 
 async function apiReq<T>(path: string, token: string, opts?: RequestInit): Promise<T> {
-  const res = await fetch(`${getApiBaseUrl()}${path}`, {
-    ...opts,
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`,
-      ...(opts?.headers ?? {}),
+  const res = await fetchWithAuthRetry(
+    `${getApiBaseUrl()}${path}`,
+    {
+      ...opts,
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+        ...(opts?.headers ?? {}),
+      },
     },
-  });
+    token,
+  );
   if (!res.ok) {
     const rawErrorBody: unknown = await res.json().catch(() => null);
     const maybeError = rawErrorBody as ApiErrorBody | null;
@@ -69,7 +74,10 @@ export const reservationsApiClient = {
   getProviderProfile: (token: string, providerId: string): Promise<ReservationProfile> =>
     apiReq(`/api/reservations/profile/${providerId}`, token),
 
-  updateMyProfile: (token: string, body: UpdateReservationProfileBody): Promise<ReservationProfile> =>
+  updateMyProfile: (
+    token: string,
+    body: UpdateReservationProfileBody,
+  ): Promise<ReservationProfile> =>
     apiReq('/api/reservations/profile/me', token, {
       method: 'PATCH',
       body: JSON.stringify(body),
@@ -93,7 +101,11 @@ export const reservationsApiClient = {
       body: JSON.stringify(body),
     }),
 
-  updateSlot: (token: string, slotId: string, body: UpdateReservationSlotBody): Promise<ReservationSlot> =>
+  updateSlot: (
+    token: string,
+    slotId: string,
+    body: UpdateReservationSlotBody,
+  ): Promise<ReservationSlot> =>
     apiReq(`/api/reservations/slots/${slotId}`, token, {
       method: 'PATCH',
       body: JSON.stringify(body),
@@ -169,7 +181,10 @@ export const reservationsApiClient = {
   ): Promise<ReservationTimelineEvent[]> =>
     apiReq(`/api/reservations/${reservationId}/timeline`, token),
 
-  listLocationProposals: (token: string, reservationId: string): Promise<ReservationLocationProposal[]> =>
+  listLocationProposals: (
+    token: string,
+    reservationId: string,
+  ): Promise<ReservationLocationProposal[]> =>
     apiReq(`/api/reservations/${reservationId}/location`, token),
 
   proposeLocation: (

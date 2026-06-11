@@ -12,6 +12,7 @@ import type {
 
 import { ApiClientRequestError } from '../auth/client';
 
+import { fetchWithAuthRetry } from '@/lib/auth/fetch-with-auth-retry';
 import { getApiBaseUrl } from '@/lib/env';
 
 type RequestOptions = {
@@ -21,16 +22,25 @@ type RequestOptions = {
   body?: unknown;
 };
 
-async function requestJson<T>({ accessToken, path, method = 'GET', body }: RequestOptions): Promise<T> {
-  const response = await fetch(`${getApiBaseUrl()}${path}`, {
-    method,
-    credentials: 'include',
-    headers: {
-      ...(body ? { 'Content-Type': 'application/json' } : {}),
-      Authorization: `Bearer ${accessToken}`,
+async function requestJson<T>({
+  accessToken,
+  path,
+  method = 'GET',
+  body,
+}: RequestOptions): Promise<T> {
+  const response = await fetchWithAuthRetry(
+    `${getApiBaseUrl()}${path}`,
+    {
+      method,
+      credentials: 'include',
+      headers: {
+        ...(body ? { 'Content-Type': 'application/json' } : {}),
+        Authorization: `Bearer ${accessToken}`,
+      },
+      ...(body ? { body: JSON.stringify(body) } : {}),
     },
-    ...(body ? { body: JSON.stringify(body) } : {}),
-  });
+    accessToken,
+  );
 
   if (!response.ok) {
     const rawErrorBody: unknown = await response.json().catch(() => null);

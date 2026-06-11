@@ -35,4 +35,3 @@ export function getIconVersion(): string {
 
   return hash.digest('hex').slice(0, 10);
 }
-

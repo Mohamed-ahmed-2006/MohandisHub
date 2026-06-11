@@ -14,7 +14,16 @@ type LiveCaptureProps = {
 };
 
 const FlipCameraIcon = () => (
-  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+  <svg
+    width="22"
+    height="22"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
     <path d="M7 16V4m0 0L3 8m4-4l4 4" />
     <path d="M17 8v12m0 0l4-4m-4 4l-4-4" />
   </svg>
@@ -42,33 +51,38 @@ export function LiveCapture({
     }
   }, []);
 
-  const startCamera = useCallback(async (facing: 'user' | 'environment' = currentFacing) => {
-    setErrorMessage(null);
-    onClear?.();
-    stopStream();
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: {
-          facingMode: facing,
-          width: { ideal: 1280 },
-          height: { ideal: 720 },
-        },
-        audio: false,
-      });
-      streamRef.current = stream;
-      setCurrentFacing(facing);
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
+  const startCamera = useCallback(
+    async (facing: 'user' | 'environment' = currentFacing) => {
+      setErrorMessage(null);
+      onClear?.();
+      stopStream();
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            facingMode: facing,
+            width: { ideal: 1280 },
+            height: { ideal: 720 },
+          },
+          audio: false,
+        });
+        streamRef.current = stream;
+        setCurrentFacing(facing);
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+        }
+        setStatus('streaming');
+      } catch (err) {
+        const msg =
+          err instanceof Error
+            ? err.message
+            : 'Could not access camera. Please allow camera access.';
+        setErrorMessage(msg);
+        setStatus('error');
+        onError?.(msg);
       }
-      setStatus('streaming');
-    } catch (err) {
-      const msg =
-        err instanceof Error ? err.message : 'Could not access camera. Please allow camera access.';
-      setErrorMessage(msg);
-      setStatus('error');
-      onError?.(msg);
-    }
-  }, [onClear, onError, stopStream, currentFacing]);
+    },
+    [onClear, onError, stopStream, currentFacing],
+  );
 
   const closeModal = useCallback(() => {
     stopStream();
@@ -162,7 +176,11 @@ export function LiveCapture({
               <button type="button" className="live-capture-capture" onClick={capture}>
                 Capture now
               </button>
-              <button type="button" className="live-capture-retry" onClick={() => void startCamera(currentFacing)}>
+              <button
+                type="button"
+                className="live-capture-retry"
+                onClick={() => void startCamera(currentFacing)}
+              >
                 Restart camera
               </button>
             </div>
@@ -172,7 +190,11 @@ export function LiveCapture({
       {status === 'captured' && (
         <div className="live-capture-done">
           <span className="live-capture-check">Photo captured</span>
-          <button type="button" className="live-capture-retake" onClick={() => void startCamera(currentFacing)}>
+          <button
+            type="button"
+            className="live-capture-retake"
+            onClick={() => void startCamera(currentFacing)}
+          >
             Retake
           </button>
         </div>
@@ -180,7 +202,11 @@ export function LiveCapture({
       {status === 'error' && (
         <div className="live-capture-error">
           <p>{errorMessage}</p>
-          <button type="button" className="live-capture-retry" onClick={() => void startCamera(currentFacing)}>
+          <button
+            type="button"
+            className="live-capture-retry"
+            onClick={() => void startCamera(currentFacing)}
+          >
             Try again
           </button>
         </div>

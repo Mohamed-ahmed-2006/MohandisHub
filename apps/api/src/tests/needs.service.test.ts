@@ -102,7 +102,9 @@ describe('NeedsService hardening', () => {
       .mockResolvedValueOnce({}); // COMMIT
 
     const settingsService = {
-      getAppStatus: vi.fn().mockResolvedValue({ ...enabledNeedsStatus, moneyMovementsPaused: false }),
+      getAppStatus: vi
+        .fn()
+        .mockResolvedValue({ ...enabledNeedsStatus, moneyMovementsPaused: false }),
     };
     const walletRepo = {
       findByUserId: vi.fn(),

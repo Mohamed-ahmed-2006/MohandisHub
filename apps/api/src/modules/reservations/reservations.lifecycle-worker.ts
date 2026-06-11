@@ -1,5 +1,6 @@
 import { env } from '../../config/env.js';
 import { logger } from '../../config/logger.js';
+import { captureException } from '../../config/sentry.js';
 import { hasDatabaseConfig } from '../../db/pool.js';
 
 import { ReservationsService } from './reservations.service.js';
@@ -10,9 +11,10 @@ type ReservationLifecycleWorkerHandle = {
   stop: () => Promise<void>;
 };
 
-const sleep = (ms: number) => new Promise<void>((resolve) => {
-  setTimeout(resolve, ms);
-});
+const sleep = (ms: number) =>
+  new Promise<void>((resolve) => {
+    setTimeout(resolve, ms);
+  });
 
 export const startReservationLifecycleWorker = (): ReservationLifecycleWorkerHandle => {
   if (env.NODE_ENV === 'test' || !hasDatabaseConfig()) {
@@ -37,6 +39,7 @@ export const startReservationLifecycleWorker = (): ReservationLifecycleWorkerHan
         logger.info('Reservation lifecycle sweep processed due items', result);
       }
     } catch (error) {
+      captureException(error);
       logger.error('Reservation lifecycle sweep failed', {
         error: error instanceof Error ? error.message : 'Unknown error',
       });

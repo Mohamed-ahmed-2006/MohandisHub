@@ -54,10 +54,7 @@ export class SupportRepository {
       [ticketId, authorId, body, isStaff, urls],
     );
     if (!rows[0]) throw new Error('Insert message failed');
-    await pool.query(
-      `UPDATE support_tickets SET updated_at = now() WHERE id = $1`,
-      [ticketId],
-    );
+    await pool.query(`UPDATE support_tickets SET updated_at = now() WHERE id = $1`, [ticketId]);
     return rows[0];
   }
 
@@ -71,7 +68,11 @@ export class SupportRepository {
     return rows[0] ?? null;
   }
 
-  async listTicketsByUser(userId: string, limit: number, offset: number): Promise<{ rows: TicketRow[]; total: number }> {
+  async listTicketsByUser(
+    userId: string,
+    limit: number,
+    offset: number,
+  ): Promise<{ rows: TicketRow[]; total: number }> {
     const pool = getPool();
     const countResult = await pool.query<{ count: string }>(
       `SELECT COUNT(*)::text AS count FROM support_tickets WHERE user_id = $1`,
@@ -122,7 +123,10 @@ export class SupportRepository {
     filters: { status?: string; category?: string },
     limit: number,
     offset: number,
-  ): Promise<{ rows: (TicketRow & { user_email?: string; message_count?: string })[]; total: number }> {
+  ): Promise<{
+    rows: (TicketRow & { user_email?: string; message_count?: string })[];
+    total: number;
+  }> {
     const pool = getPool();
     const conditions: string[] = ['1=1'];
     const params: unknown[] = [];
