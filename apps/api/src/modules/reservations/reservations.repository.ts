@@ -151,6 +151,45 @@ export type ReservationDisputeRow = {
   updated_at: string;
 };
 
+export type ReservationDisputeNoteRow = {
+  id: string;
+  dispute_id: string;
+  author_id: string;
+  author_name: string | null;
+  body: string;
+  visibility: string;
+  created_at: string;
+};
+
+export type ReservationDisputeEvidenceRow = {
+  id: string;
+  dispute_id: string;
+  uploaded_by: string;
+  upload_id: string;
+  label: string | null;
+  original_name: string | null;
+  created_at: string;
+};
+
+export type ReservationDisputeMoneyEventRow = {
+  id: string;
+  kind: string;
+  status: string;
+  amount: string;
+  currency: string;
+  label: string;
+  reference_type: string | null;
+  reference_id: string | null;
+  metadata: Record<string, unknown>;
+  created_at: string;
+};
+
+export type ReservationDisputeListRow = ReservationDisputeRow & {
+  evidence_count: string;
+  note_count: string;
+  last_activity_at: string;
+};
+
 export type ReservationEventRow = {
   id: string;
   reservation_id: string;
@@ -940,7 +979,7 @@ export class ReservationsRepository {
     page: number,
     limit: number,
     status?: string,
-  ): Promise<{ rows: ReservationDisputeRow[]; total: number }> {
+  ): Promise<{ rows: ReservationDisputeListRow[]; total: number }> {
     const offset = (page - 1) * limit;
     const params: unknown[] = [];
     let where = '';
@@ -951,18 +990,185 @@ export class ReservationsRepository {
     params.push(limit, offset);
     const limitIdx = status ? 2 : 1;
     const offsetIdx = status ? 3 : 2;
-    const { rows } = await getPool().query<ReservationDisputeRow>(
-      `SELECT * FROM reservation_disputes
+    const { rows } = await getPool().query<ReservationDisputeListRow>(
+      `SELECT d.*,
+              COALESCE(ev.cnt, 0)::text AS evidence_count,
+              COALESCE(nt.cnt, 0)::text AS note_count,
+              GREATEST(
+                d.updated_at,
+                COALESCE(ev.last_created_at, d.updated_at),
+                COALESCE(nt.last_created_at, d.updated_at)
+              )::text AS last_activity_at
+       FROM reservation_disputes d
+       LEFT JOIN (
+         SELECT dispute_id, COUNT(*) AS cnt, MAX(created_at) AS last_created_at
+         FROM reservation_dispute_evidence
+         GROUP BY dispute_id
+       ) ev ON ev.dispute_id = d.id
+       LEFT JOIN (
+         SELECT dispute_id, COUNT(*) AS cnt, MAX(created_at) AS last_created_at
+         FROM reservation_dispute_notes
+         GROUP BY dispute_id
+       ) nt ON nt.dispute_id = d.id
        ${where}
-       ORDER BY created_at DESC
+       ORDER BY d.created_at DESC
        LIMIT $${limitIdx}::int OFFSET $${offsetIdx}::int`,
       params,
     );
     const { rows: countRows } = await getPool().query<{ count: string }>(
-      `SELECT COUNT(*)::text AS count FROM reservation_disputes ${where}`,
+      `SELECT COUNT(*)::text AS count FROM reservation_disputes d ${where}`,
       status ? [status] : [],
     );
     return { rows, total: parseInt(countRows[0]!.count, 10) };
+  }
+
+  async listDisputesForUser(userId: string): Promise<ReservationDisputeListRow[]> {
+    const { rows } = await getPool().query<ReservationDisputeListRow>(
+      `SELECT d.*,
+              COALESCE(ev.cnt, 0)::text AS evidence_count,
+              COALESCE(nt.cnt, 0)::text AS note_count,
+              GREATEST(
+                d.updated_at,
+                COALESCE(ev.last_created_at, d.updated_at),
+                COALESCE(nt.last_created_at, d.updated_at)
+              )::text AS last_activity_at
+       FROM reservation_disputes d
+       JOIN reservations r ON r.id = d.reservation_id
+       LEFT JOIN (
+         SELECT dispute_id, COUNT(*) AS cnt, MAX(created_at) AS last_created_at
+         FROM reservation_dispute_evidence
+         GROUP BY dispute_id
+       ) ev ON ev.dispute_id = d.id
+       LEFT JOIN (
+         SELECT dispute_id, COUNT(*) AS cnt, MAX(created_at) AS last_created_at
+         FROM reservation_dispute_notes
+         GROUP BY dispute_id
+       ) nt ON nt.dispute_id = d.id
+       WHERE r.customer_id = $1 OR r.provider_id = $1
+       ORDER BY d.created_at DESC`,
+      [userId],
+    );
+    return rows;
+  }
+
+  async listDisputeNotes(
+    disputeId: string,
+    includeAdmin: boolean,
+  ): Promise<ReservationDisputeNoteRow[]> {
+    const { rows } = await getPool().query<ReservationDisputeNoteRow>(
+      `SELECT n.*, COALESCE(u.display_name, u.email) AS author_name
+       FROM reservation_dispute_notes n
+       JOIN users u ON u.id = n.author_id
+       WHERE n.dispute_id = $1 AND ($2::boolean OR n.visibility = 'public')
+       ORDER BY n.created_at ASC`,
+      [disputeId, includeAdmin],
+    );
+    return rows;
+  }
+
+  async createDisputeNote(input: {
+    disputeId: string;
+    authorId: string;
+    body: string;
+    visibility: 'public' | 'admin';
+  }): Promise<ReservationDisputeNoteRow> {
+    const { rows } = await getPool().query<ReservationDisputeNoteRow>(
+      `INSERT INTO reservation_dispute_notes (dispute_id, author_id, body, visibility)
+       VALUES ($1, $2, $3, $4)
+       RETURNING *,
+         (SELECT COALESCE(display_name, email) FROM users WHERE id = $2) AS author_name`,
+      [input.disputeId, input.authorId, input.body, input.visibility],
+    );
+    return rows[0]!;
+  }
+
+  async listDisputeEvidence(disputeId: string): Promise<ReservationDisputeEvidenceRow[]> {
+    const { rows } = await getPool().query<ReservationDisputeEvidenceRow>(
+      `SELECT e.*, pu.original_name
+       FROM reservation_dispute_evidence e
+       JOIN private_uploads pu ON pu.id = e.upload_id
+       WHERE e.dispute_id = $1
+       ORDER BY e.created_at DESC`,
+      [disputeId],
+    );
+    return rows;
+  }
+
+  async createDisputeEvidence(input: {
+    disputeId: string;
+    uploadedBy: string;
+    uploadId: string;
+    label?: string | null;
+  }): Promise<ReservationDisputeEvidenceRow> {
+    const { rows } = await getPool().query<ReservationDisputeEvidenceRow>(
+      `INSERT INTO reservation_dispute_evidence (dispute_id, uploaded_by, upload_id, label)
+       VALUES ($1, $2, $3, $4)
+       ON CONFLICT (dispute_id, upload_id) DO UPDATE
+         SET label = COALESCE(EXCLUDED.label, reservation_dispute_evidence.label)
+       RETURNING *,
+         (SELECT original_name FROM private_uploads WHERE id = $3) AS original_name`,
+      [input.disputeId, input.uploadedBy, input.uploadId, input.label ?? null],
+    );
+    return rows[0]!;
+  }
+
+  async privateUploadBelongsToUser(uploadId: string, userId: string): Promise<boolean> {
+    const { rows } = await getPool().query<{ id: string }>(
+      `SELECT id FROM private_uploads WHERE id = $1 AND user_id = $2 LIMIT 1`,
+      [uploadId, userId],
+    );
+    return rows.length > 0;
+  }
+
+  async listDisputeMoneyEvents(reservationId: string): Promise<ReservationDisputeMoneyEventRow[]> {
+    const { rows } = await getPool().query<ReservationDisputeMoneyEventRow>(
+      `SELECT *
+       FROM (
+         SELECT t.id,
+                'transaction' AS kind,
+                t.status,
+                t.amount::text,
+                COALESCE(w.currency, 'EGP') AS currency,
+                COALESCE(t.description, t.type) AS label,
+                t.reference_type,
+                t.reference_id,
+                COALESCE(t.metadata, '{}'::jsonb) AS metadata,
+                t.created_at::text
+         FROM transactions t
+         LEFT JOIN wallets w ON w.id = t.wallet_id
+         WHERE t.reference_id = $1 OR COALESCE(t.metadata, '{}'::jsonb)::text ILIKE '%' || $1 || '%'
+         UNION ALL
+         SELECT h.id,
+                'hold' AS kind,
+                h.status,
+                h.amount::text,
+                h.currency,
+                'Wallet hold' AS label,
+                h.reference_type,
+                h.reference_id,
+                COALESCE(h.metadata, '{}'::jsonb) AS metadata,
+                h.created_at::text
+         FROM wallet_holds h
+         WHERE h.reference_id = $1 OR COALESCE(h.metadata, '{}'::jsonb)::text ILIKE '%' || $1 || '%'
+         UNION ALL
+         SELECT f.id,
+                'failure' AS kind,
+                CASE WHEN f.resolved_at IS NULL THEN 'open' ELSE 'resolved' END AS status,
+                '0' AS amount,
+                'EGP' AS currency,
+                f.error_message AS label,
+                'reservation_action_failure' AS reference_type,
+                f.reservation_id AS reference_id,
+                COALESCE(f.metadata, '{}'::jsonb) AS metadata,
+                f.created_at::text
+         FROM reservation_action_failures f
+         WHERE f.reservation_id = $1
+       ) money
+       ORDER BY created_at DESC
+       LIMIT 100`,
+      [reservationId],
+    );
+    return rows;
   }
 
   async resolveDispute(

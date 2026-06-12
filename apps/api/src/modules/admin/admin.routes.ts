@@ -186,6 +186,16 @@ adminRouter.get(
   adminController.listTransactions,
 );
 adminRouter.get(
+  '/money-audit',
+  requireAdminPermission('manage_transactions'),
+  adminController.listMoneyAuditEvents,
+);
+adminRouter.get(
+  '/paymob-readiness',
+  requireAdminPermission('manage_transactions'),
+  adminController.getPaymobReadiness,
+);
+adminRouter.get(
   '/transactions/:id',
   requireAdminPermission('manage_transactions'),
   adminController.getTransactionDetail,

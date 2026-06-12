@@ -7,15 +7,15 @@ import {
 } from './app-settings.js';
 
 describe('payment method settings', () => {
-  it('defaults launch rails to NOWPayments crypto and InstaPay while card, Paymob, and crypto withdrawal stay off', () => {
+  it('defaults launch rails to NOWPayments crypto, InstaPay, and admin-visible Paymob while card and crypto withdrawal stay off', () => {
     expect(getDefaultPaymentMethodsEnabled()).toEqual({
       deposit_crypto: true,
       deposit_card: false,
       deposit_instapay: true,
-      deposit_paymob: false,
+      deposit_paymob: true,
       withdrawal_crypto: false,
       withdrawal_instapay: true,
-      withdrawal_paymob: false,
+      withdrawal_paymob: true,
     });
     expect(
       PAYMENT_METHOD_DEFINITIONS.find((method) => method.key === 'deposit_card'),
@@ -26,14 +26,14 @@ describe('payment method settings', () => {
     expect(
       PAYMENT_METHOD_DEFINITIONS.find((method) => method.key === 'deposit_paymob'),
     ).toMatchObject({
-      defaultEnabled: false,
-      launchRecommended: false,
+      defaultEnabled: true,
+      launchRecommended: true,
     });
     expect(
       PAYMENT_METHOD_DEFINITIONS.find((method) => method.key === 'withdrawal_paymob'),
     ).toMatchObject({
-      defaultEnabled: false,
-      launchRecommended: false,
+      defaultEnabled: true,
+      launchRecommended: true,
     });
     expect(
       PAYMENT_METHOD_DEFINITIONS.find((method) => method.key === 'withdrawal_crypto'),

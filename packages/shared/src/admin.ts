@@ -168,6 +168,54 @@ export type AdminTransactionListItem = {
   createdAt: string;
 };
 
+export type AdminMoneyAuditEvent = {
+  id: string;
+  kind: 'transaction' | 'hold' | 'deposit' | 'withdrawal' | 'reservation_failure';
+  userId: string | null;
+  userEmail: string | null;
+  userDisplayName: string | null;
+  reservationId: string | null;
+  disputeId: string | null;
+  amount: number;
+  currency: string;
+  status: string;
+  rail: string | null;
+  label: string;
+  referenceType: string | null;
+  referenceId: string | null;
+  providerReference: string | null;
+  reviewNeeded: boolean;
+  metadata: Record<string, unknown>;
+  createdAt: string;
+};
+
+export type AdminMoneyAuditFilters = PaginationParams & {
+  userId?: string;
+  reservationId?: string;
+  provider?: string;
+  rail?: string;
+  status?: string;
+  type?: string;
+  dateFrom?: string;
+  dateTo?: string;
+  reviewNeeded?: boolean;
+};
+
+export type PaymobReadiness = {
+  depositsEnabled: boolean;
+  withdrawalsEnabled: boolean;
+  depositConfigured: boolean;
+  payoutConfigured: boolean;
+  missingDepositKeys: string[];
+  missingPayoutKeys: string[];
+  webhookUrl: string | null;
+  returnUrl: string | null;
+  payoutBaseUrlConfigured: boolean;
+  lastDepositCallbackAt: string | null;
+  lastDepositCallbackStatus: string | null;
+  lastPaymobError: string | null;
+};
+
 export type AdminServiceListItem = {
   id: string;
   title: string;

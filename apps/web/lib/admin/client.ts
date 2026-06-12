@@ -5,6 +5,7 @@ import type {
   AdminChangeUserEmailBody,
   AdminDashboardStats,
   AdminForceLogoutResponse,
+  AdminMoneyAuditEvent,
   AdminJobActivityItem,
   AdminJobApplicationActivityItem,
   AdminNeedActivityItem,
@@ -34,6 +35,7 @@ import type {
   IdentityDocument,
   PaginatedResponse,
   PendingVerificationItem,
+  PaymobReadiness,
   Plan,
   ServiceCategory,
   SupportTicket,
@@ -42,6 +44,13 @@ import type {
   UpdateCategoryBody,
   UpdatePlanBody,
   WithdrawalRequest,
+  ReservationDisputeCase,
+  ReservationDisputeEvidence,
+  ReservationDisputeListItem,
+  ReservationDisputeNote,
+  ResolveReservationDisputeBody,
+  AddReservationDisputeNoteBody,
+  AddReservationDisputeEvidenceBody,
 } from '@mohandishub/shared';
 
 import { ApiClientRequestError, isApiClientError } from '../auth/client';
@@ -492,6 +501,52 @@ export const adminApiClient = {
       accessToken,
     }),
 
+  getMoneyAudit: (
+    accessToken: string,
+    params?: {
+      page?: number;
+      limit?: number;
+      userId?: string;
+      reservationId?: string;
+      provider?: string;
+      rail?: string;
+      type?: string;
+      status?: string;
+      reviewNeeded?: boolean;
+      dateFrom?: string;
+      dateTo?: string;
+    },
+    options?: AdminClientOptions,
+  ) => {
+    const query = new URLSearchParams();
+    if (params?.page) query.set('page', String(params.page));
+    if (params?.limit) query.set('limit', String(params.limit));
+    if (params?.userId) query.set('userId', params.userId);
+    if (params?.reservationId) query.set('reservationId', params.reservationId);
+    if (params?.provider) query.set('provider', params.provider);
+    if (params?.rail) query.set('rail', params.rail);
+    if (params?.type) query.set('type', params.type);
+    if (params?.status) query.set('status', params.status);
+    if (params?.reviewNeeded !== undefined) query.set('reviewNeeded', String(params.reviewNeeded));
+    if (params?.dateFrom) query.set('dateFrom', params.dateFrom);
+    if (params?.dateTo) query.set('dateTo', params.dateTo);
+    const qs = query.toString();
+    return apiRequest<PaginatedResponse<AdminMoneyAuditEvent>>({
+      method: 'GET',
+      path: `/api/admin/money-audit${qs ? `?${qs}` : ''}`,
+      accessToken,
+      ...(options?.refreshSession ? { refreshSession: options.refreshSession } : {}),
+    });
+  },
+
+  getPaymobReadiness: (accessToken: string, options?: AdminClientOptions) =>
+    apiRequest<PaymobReadiness>({
+      method: 'GET',
+      path: '/api/admin/paymob-readiness',
+      accessToken,
+      ...(options?.refreshSession ? { refreshSession: options.refreshSession } : {}),
+    }),
+
   adjustBalance: (accessToken: string, body: AdjustBalanceBody, options?: AdminClientOptions) =>
     apiRequest<Transaction>({
       method: 'POST',
@@ -506,6 +561,78 @@ export const adminApiClient = {
       method: 'POST',
       path: `/api/admin/transactions/${txnId}/reverse`,
       accessToken,
+    }),
+
+  listReservationDisputeCases: (
+    accessToken: string,
+    params?: { page?: number; limit?: number; status?: string },
+    options?: AdminClientOptions,
+  ) => {
+    const query = new URLSearchParams();
+    if (params?.page) query.set('page', String(params.page));
+    if (params?.limit) query.set('limit', String(params.limit));
+    if (params?.status) query.set('status', params.status);
+    const qs = query.toString();
+    return apiRequest<PaginatedResponse<ReservationDisputeListItem>>({
+      method: 'GET',
+      path: `/api/reservations/admin/dispute-cases${qs ? `?${qs}` : ''}`,
+      accessToken,
+      ...(options?.refreshSession ? { refreshSession: options.refreshSession } : {}),
+    });
+  },
+
+  getReservationDisputeCase: (
+    accessToken: string,
+    disputeId: string,
+    options?: AdminClientOptions,
+  ) =>
+    apiRequest<ReservationDisputeCase>({
+      method: 'GET',
+      path: `/api/reservations/disputes/${disputeId}`,
+      accessToken,
+      ...(options?.refreshSession ? { refreshSession: options.refreshSession } : {}),
+    }),
+
+  addReservationDisputeNote: (
+    accessToken: string,
+    disputeId: string,
+    body: AddReservationDisputeNoteBody,
+    options?: AdminClientOptions,
+  ) =>
+    apiRequest<ReservationDisputeNote>({
+      method: 'POST',
+      path: `/api/reservations/disputes/${disputeId}/notes`,
+      body,
+      accessToken,
+      ...(options?.refreshSession ? { refreshSession: options.refreshSession } : {}),
+    }),
+
+  addReservationDisputeEvidence: (
+    accessToken: string,
+    disputeId: string,
+    body: AddReservationDisputeEvidenceBody,
+    options?: AdminClientOptions,
+  ) =>
+    apiRequest<ReservationDisputeEvidence>({
+      method: 'POST',
+      path: `/api/reservations/disputes/${disputeId}/evidence`,
+      body,
+      accessToken,
+      ...(options?.refreshSession ? { refreshSession: options.refreshSession } : {}),
+    }),
+
+  resolveReservationDispute: (
+    accessToken: string,
+    disputeId: string,
+    body: ResolveReservationDisputeBody,
+    options?: AdminClientOptions,
+  ) =>
+    apiRequest<ReservationDisputeCase['dispute']>({
+      method: 'POST',
+      path: `/api/reservations/disputes/${disputeId}/resolve`,
+      body,
+      accessToken,
+      ...(options?.refreshSession ? { refreshSession: options.refreshSession } : {}),
     }),
 
   listManualInstapayDeposits: (

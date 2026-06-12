@@ -8,6 +8,11 @@ import type {
   ReservationCallParticipant,
   ReservationCallSession,
   ReservationDispute,
+  ReservationDisputeCase,
+  ReservationDisputeEvidence,
+  ReservationDisputeListItem,
+  ReservationDisputeMoneyEvent,
+  ReservationDisputeNote,
   ReservationLocationProposal,
   ReservationPricingBreakdown,
   ReservationProfile,
@@ -35,6 +40,10 @@ import type {
   ReservationActionFailureRow,
   ReservationCallParticipantRow,
   ReservationCallSessionRow,
+  ReservationDisputeEvidenceRow,
+  ReservationDisputeListRow,
+  ReservationDisputeMoneyEventRow,
+  ReservationDisputeNoteRow,
   ReservationDisputeRow,
   ReservationEventRow,
   ReservationLocationProposalRow,
@@ -243,6 +252,41 @@ const mapDispute = (row: ReservationDisputeRow): ReservationDispute => ({
   resolvedAt: row.resolved_at,
   createdAt: row.created_at,
   updatedAt: row.updated_at,
+});
+
+const mapDisputeNote = (row: ReservationDisputeNoteRow): ReservationDisputeNote => ({
+  id: row.id,
+  disputeId: row.dispute_id,
+  authorId: row.author_id,
+  authorName: row.author_name,
+  body: row.body,
+  visibility: row.visibility as ReservationDisputeNote['visibility'],
+  createdAt: row.created_at,
+});
+
+const mapDisputeEvidence = (row: ReservationDisputeEvidenceRow): ReservationDisputeEvidence => ({
+  id: row.id,
+  disputeId: row.dispute_id,
+  uploadedBy: row.uploaded_by,
+  uploadId: row.upload_id,
+  fileUrl: `/api/upload/private/${row.upload_id}`,
+  label: row.label ?? row.original_name,
+  createdAt: row.created_at,
+});
+
+const mapDisputeMoneyEvent = (
+  row: ReservationDisputeMoneyEventRow,
+): ReservationDisputeMoneyEvent => ({
+  id: row.id,
+  kind: row.kind as ReservationDisputeMoneyEvent['kind'],
+  status: row.status,
+  amount: toNumber(row.amount),
+  currency: row.currency,
+  label: row.label,
+  referenceType: row.reference_type,
+  referenceId: row.reference_id,
+  metadata: row.metadata ?? {},
+  createdAt: row.created_at,
 });
 
 const mapTimelineEvent = (row: ReservationEventRow): ReservationTimelineEvent => ({
@@ -2210,6 +2254,110 @@ export class ReservationsService {
     };
   }
 
+  async listMyDisputeCases(userId: string): Promise<ReservationDisputeListItem[]> {
+    const rows = await this.repo.listDisputesForUser(userId);
+    return this.mapDisputeListRows(rows);
+  }
+
+  async listDisputeCases(
+    userId: string,
+    role: string,
+    page: number,
+    limit: number,
+    status?: string,
+  ): Promise<{
+    items: ReservationDisputeListItem[];
+    total: number;
+    page: number;
+    limit: number;
+    totalPages: number;
+  }> {
+    this.ensureAdminRole(userId, role);
+    const { rows, total } = await this.repo.listDisputes(page, limit, status);
+    return {
+      items: await this.mapDisputeListRows(rows),
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit),
+    };
+  }
+
+  async getDisputeCase(
+    userId: string,
+    role: string,
+    disputeId: string,
+  ): Promise<ReservationDisputeCase> {
+    const isAdmin = role === 'admin';
+    const dispute = await this.repo.findDisputeById(disputeId);
+    if (!dispute) {
+      throw new HttpError({
+        statusCode: 404,
+        code: 'DISPUTE_NOT_FOUND',
+        message: 'Dispute not found.',
+      });
+    }
+    const reservation = await this.repo.findReservationById(dispute.reservation_id);
+    if (!reservation) {
+      throw new HttpError({
+        statusCode: 404,
+        code: 'RESERVATION_NOT_FOUND',
+        message: 'Reservation not found.',
+      });
+    }
+    if (!isAdmin) this.ensureReservationParticipant(reservation, userId);
+    return this.buildDisputeCase(dispute, reservation, isAdmin);
+  }
+
+  async addDisputeNote(
+    userId: string,
+    role: string,
+    disputeId: string,
+    input: { body: string; visibility?: 'public' | 'admin' | undefined },
+  ): Promise<ReservationDisputeNote> {
+    const visibility = input.visibility ?? 'public';
+    const isAdmin = role === 'admin';
+    if (visibility === 'admin' && !isAdmin) {
+      throw new HttpError({
+        statusCode: 403,
+        code: 'FORBIDDEN',
+        message: 'Only admins can add internal dispute notes.',
+      });
+    }
+    await this.getDisputeCase(userId, role, disputeId);
+    const row = await this.repo.createDisputeNote({
+      disputeId,
+      authorId: userId,
+      body: input.body.trim(),
+      visibility,
+    });
+    return mapDisputeNote(row);
+  }
+
+  async addDisputeEvidence(
+    userId: string,
+    role: string,
+    disputeId: string,
+    input: { uploadId: string; label?: string | null | undefined },
+  ): Promise<ReservationDisputeEvidence> {
+    await this.getDisputeCase(userId, role, disputeId);
+    const ownsUpload = await this.repo.privateUploadBelongsToUser(input.uploadId, userId);
+    if (!ownsUpload) {
+      throw new HttpError({
+        statusCode: 403,
+        code: 'UPLOAD_NOT_OWNED',
+        message: 'Evidence upload must belong to the current user.',
+      });
+    }
+    const row = await this.repo.createDisputeEvidence({
+      disputeId,
+      uploadedBy: userId,
+      uploadId: input.uploadId,
+      label: input.label?.trim() || null,
+    });
+    return mapDisputeEvidence(row);
+  }
+
   async resolveDispute(
     userId: string,
     role: string,
@@ -2966,6 +3114,57 @@ export class ReservationsService {
         message: 'Admin access required.',
       });
     }
+  }
+
+  private async mapDisputeListRows(
+    rows: ReservationDisputeListRow[],
+  ): Promise<ReservationDisputeListItem[]> {
+    const items = await Promise.all(
+      rows.map(async (row) => {
+        const reservation = await this.repo.findReservationById(row.reservation_id);
+        if (!reservation) return null;
+        return {
+          dispute: mapDispute(row),
+          reservation: mapReservation(reservation),
+          evidenceCount: toNumber(row.evidence_count),
+          noteCount: toNumber(row.note_count),
+          lastActivityAt: row.last_activity_at,
+        };
+      }),
+    );
+    return items.filter((item): item is ReservationDisputeListItem => item != null);
+  }
+
+  private async buildDisputeCase(
+    dispute: ReservationDisputeRow,
+    reservation: ReservationRow,
+    includeAdmin: boolean,
+  ): Promise<ReservationDisputeCase> {
+    const [events, evidence, notes, moneyEvents, messages] = await Promise.all([
+      this.repo.listEvents(reservation.id),
+      this.repo.listDisputeEvidence(dispute.id),
+      this.repo.listDisputeNotes(dispute.id, includeAdmin),
+      this.repo.listDisputeMoneyEvents(reservation.id),
+      reservation.conversation_id
+        ? this.chatRepo.getMessages(reservation.conversation_id, 50, 0)
+        : Promise.resolve([]),
+    ]);
+    return {
+      dispute: mapDispute(dispute),
+      reservation: mapReservation(reservation),
+      timeline: events.map(mapTimelineEvent),
+      evidence: evidence.map(mapDisputeEvidence),
+      notes: notes.map(mapDisputeNote),
+      messages: messages.map((message) => ({
+        id: message.id,
+        senderId: message.sender_id,
+        senderName: message.sender_name,
+        body: message.body,
+        attachmentUrl: message.attachment_url,
+        createdAt: message.created_at,
+      })),
+      moneyEvents: moneyEvents.map(mapDisputeMoneyEvent),
+    };
   }
 
   private resolveProviderIdForSlots(userId: string, role: string, providerId?: string): string {

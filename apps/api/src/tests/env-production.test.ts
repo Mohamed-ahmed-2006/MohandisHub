@@ -207,7 +207,7 @@ describe('production environment validation', () => {
     await expect(importFreshEnv()).rejects.toThrow('Production provider configuration failed');
   });
 
-  it('requires deposit callback verification details when Paymob deposits are enabled', async () => {
+  it('allows Paymob deposits to be runtime-gated when production keys are not active yet', async () => {
     stubProductionEnv({
       PAYMOB_DEPOSITS_ENABLED: 'true',
       PAYMOB_SECRET_KEY: 'secret',
@@ -216,7 +216,11 @@ describe('production environment validation', () => {
       PAYMOB_INTEGRATION_IDS: undefined,
     });
 
-    await expect(importFreshEnv()).rejects.toThrow('Production provider configuration failed');
+    const mod = await importFreshEnv();
+
+    expect(mod.env.PAYMOB_DEPOSITS_ENABLED).toBe(true);
+    expect(mod.env.PAYMOB_PUBLIC_KEY).toBeUndefined();
+    expect(mod.env.PAYMOB_HMAC_SECRET).toBeUndefined();
   });
 
   it('rejects unsafe global upload retention in production', async () => {

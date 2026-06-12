@@ -38,8 +38,7 @@ export const WalletDepositModal = ({
     Object.keys(status.platformInstapayDisplay as object).length > 0;
   const instapayDepositAllowed =
     isPaymentMethodEnabled(pm, 'deposit_instapay') && instapayConfigured;
-  const paymobEnabledEnv = process.env.NEXT_PUBLIC_PAYMOB_ENABLED === 'true';
-  const paymobDepositAllowed = isPaymentMethodEnabled(pm, 'deposit_paymob') && paymobEnabledEnv;
+  const paymobDepositAllowed = isPaymentMethodEnabled(pm, 'deposit_paymob');
   const canDeposit =
     !depositsPaused &&
     (!cryptoDisabled || !cardDisabled || instapayDepositAllowed || paymobDepositAllowed);

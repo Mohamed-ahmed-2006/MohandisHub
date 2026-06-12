@@ -78,10 +78,9 @@ export const WalletSettingsScreen = (_props: WalletSettingsScreenProps) => {
   const canWithdraw = authUser?.role ? canRequestWithdrawal(authUser.role) : false;
   const { status: appStatus } = useAppStatus();
   const pm = appStatus?.paymentMethodsEnabled ?? {};
-  const paymobEnabledEnv = process.env.NEXT_PUBLIC_PAYMOB_ENABLED === 'true';
   const showWithdrawCrypto = isPaymentMethodEnabled(pm, 'withdrawal_crypto');
   const showWithdrawInstapay = isPaymentMethodEnabled(pm, 'withdrawal_instapay');
-  const showWithdrawPaymob = isPaymentMethodEnabled(pm, 'withdrawal_paymob') && paymobEnabledEnv;
+  const showWithdrawPaymob = isPaymentMethodEnabled(pm, 'withdrawal_paymob');
   const anyWithdrawMethod = showWithdrawCrypto || showWithdrawInstapay || showWithdrawPaymob;
 
   const depositResult = useMemo(() => {

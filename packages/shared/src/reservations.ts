@@ -267,6 +267,76 @@ export type ReservationDispute = {
   updatedAt: string;
 };
 
+export type ReservationDisputeEvidence = {
+  id: string;
+  disputeId: string;
+  uploadedBy: string;
+  uploadId: string;
+  fileUrl: string;
+  label: string | null;
+  createdAt: string;
+};
+
+export type ReservationDisputeNoteVisibility = 'public' | 'admin';
+
+export type ReservationDisputeNote = {
+  id: string;
+  disputeId: string;
+  authorId: string;
+  authorName: string | null;
+  body: string;
+  visibility: ReservationDisputeNoteVisibility;
+  createdAt: string;
+};
+
+export type ReservationDisputeMoneyEvent = {
+  id: string;
+  kind: 'transaction' | 'hold' | 'deposit' | 'withdrawal' | 'failure';
+  status: string;
+  amount: number;
+  currency: string;
+  label: string;
+  referenceType: string | null;
+  referenceId: string | null;
+  metadata: Record<string, unknown>;
+  createdAt: string;
+};
+
+export type ReservationDisputeCase = {
+  dispute: ReservationDispute;
+  reservation: Reservation;
+  timeline: ReservationTimelineEvent[];
+  evidence: ReservationDisputeEvidence[];
+  notes: ReservationDisputeNote[];
+  messages: Array<{
+    id: string;
+    senderId: string;
+    senderName: string | null;
+    body: string | null;
+    attachmentUrl: string | null;
+    createdAt: string;
+  }>;
+  moneyEvents: ReservationDisputeMoneyEvent[];
+};
+
+export type AddReservationDisputeNoteBody = {
+  body: string;
+  visibility?: ReservationDisputeNoteVisibility;
+};
+
+export type AddReservationDisputeEvidenceBody = {
+  uploadId: string;
+  label?: string;
+};
+
+export type ReservationDisputeListItem = {
+  dispute: ReservationDispute;
+  reservation: Reservation;
+  evidenceCount: number;
+  noteCount: number;
+  lastActivityAt: string;
+};
+
 export type CreateReservationBody = {
   serviceId?: string;
   providerId: string;

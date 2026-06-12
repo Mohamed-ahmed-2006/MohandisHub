@@ -14,6 +14,7 @@ import type {
   DashboardStatsRow,
   JobActivityRow,
   JobApplicationActivityRow,
+  MoneyAuditEventRow,
   NeedActivityRow,
   PlanRow,
   ServiceListRow,
@@ -713,6 +714,200 @@ export class AdminRepository {
     } finally {
       client.release();
     }
+  }
+
+  async listMoneyAuditEvents(
+    filters: {
+      userId?: string;
+      reservationId?: string;
+      provider?: string;
+      rail?: string;
+      status?: string;
+      type?: string;
+      dateFrom?: string;
+      dateTo?: string;
+      reviewNeeded?: boolean;
+    },
+    page: number,
+    limit: number,
+  ): Promise<{ rows: MoneyAuditEventRow[]; total: number }> {
+    const conditions: string[] = [];
+    const params: unknown[] = [];
+    let idx = 1;
+    if (filters.userId) {
+      conditions.push(`user_id = $${idx++}`);
+      params.push(filters.userId);
+    }
+    if (filters.reservationId) {
+      conditions.push(`reservation_id = $${idx++}`);
+      params.push(filters.reservationId);
+    }
+    if (filters.provider) {
+      conditions.push(`rail = $${idx++}`);
+      params.push(filters.provider);
+    }
+    if (filters.rail) {
+      conditions.push(`rail = $${idx++}`);
+      params.push(filters.rail);
+    }
+    if (filters.status) {
+      conditions.push(`status = $${idx++}`);
+      params.push(filters.status);
+    }
+    if (filters.type) {
+      conditions.push(`kind = $${idx++}`);
+      params.push(filters.type);
+    }
+    if (filters.dateFrom) {
+      conditions.push(`created_at >= $${idx++}`);
+      params.push(filters.dateFrom);
+    }
+    if (filters.dateTo) {
+      conditions.push(`created_at <= $${idx++}`);
+      params.push(filters.dateTo);
+    }
+    if (filters.reviewNeeded !== undefined) {
+      conditions.push(`review_needed = $${idx++}`);
+      params.push(filters.reviewNeeded);
+    }
+    const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+    const base = `
+      WITH audit AS (
+        SELECT t.id,
+               'transaction' AS kind,
+               t.user_id,
+               u.email AS user_email,
+               COALESCE(u.display_name, u.email) AS user_display_name,
+               CASE WHEN t.reference_type = 'reservation' THEN t.reference_id ELSE NULL END AS reservation_id,
+               rd.id AS dispute_id,
+               t.amount::text,
+               COALESCE(w.currency, 'EGP') AS currency,
+               t.status,
+               COALESCE(t.reference_type, 'manual') AS rail,
+               COALESCE(t.description, t.type) AS label,
+               t.reference_type,
+               t.reference_id,
+               COALESCE(
+                 t.metadata->>'paymob_transaction_id',
+                 t.metadata->>'paymob_order_id',
+                 t.metadata->>'provider_payment_id',
+                 t.metadata->>'providerWithdrawalId'
+               ) AS provider_reference,
+               (t.status IN ('pending', 'failed') OR t.reference_type = 'reversal') AS review_needed,
+               COALESCE(t.metadata, '{}'::jsonb) AS metadata,
+               t.created_at
+        FROM transactions t
+        LEFT JOIN users u ON u.id = t.user_id
+        LEFT JOIN wallets w ON w.id = t.wallet_id
+        LEFT JOIN reservation_disputes rd ON rd.reservation_id = t.reference_id::uuid
+          AND t.reference_type = 'reservation'
+        UNION ALL
+        SELECT h.id,
+               'hold' AS kind,
+               h.user_id,
+               u.email AS user_email,
+               COALESCE(u.display_name, u.email) AS user_display_name,
+               CASE WHEN h.reference_type = 'reservation' THEN h.reference_id ELSE NULL END AS reservation_id,
+               rd.id AS dispute_id,
+               h.amount::text,
+               h.currency,
+               h.status,
+               h.reference_type AS rail,
+               'Wallet hold' AS label,
+               h.reference_type,
+               h.reference_id,
+               NULL AS provider_reference,
+               h.status = 'held' AS review_needed,
+               COALESCE(h.metadata, '{}'::jsonb) AS metadata,
+               h.created_at
+        FROM wallet_holds h
+        LEFT JOIN users u ON u.id = h.user_id
+        LEFT JOIN reservation_disputes rd ON rd.reservation_id = h.reference_id::uuid
+          AND h.reference_type = 'reservation'
+        UNION ALL
+        SELECT d.id,
+               'deposit' AS kind,
+               d.user_id,
+               u.email AS user_email,
+               COALESCE(u.display_name, u.email) AS user_display_name,
+               NULL AS reservation_id,
+               NULL AS dispute_id,
+               d.amount::text,
+               d.currency,
+               d.status,
+               d.provider AS rail,
+               'Wallet deposit request' AS label,
+               'deposit_request' AS reference_type,
+               d.id AS reference_id,
+               COALESCE(d.paymob_transaction_id, d.paymob_order_id, d.provider_payment_id) AS provider_reference,
+               d.status IN ('pending', 'pending_review', 'underpaid', 'failed') AS review_needed,
+               COALESCE(d.provider_payload, '{}'::jsonb) AS metadata,
+               d.created_at
+        FROM deposit_requests d
+        LEFT JOIN users u ON u.id = d.user_id
+        UNION ALL
+        SELECT wr.id,
+               'withdrawal' AS kind,
+               wr.user_id,
+               u.email AS user_email,
+               COALESCE(u.display_name, u.email) AS user_display_name,
+               NULL AS reservation_id,
+               NULL AS dispute_id,
+               COALESCE(wr.source_amount_egp, wr.amount)::text AS amount,
+               COALESCE(wr.currency, 'EGP') AS currency,
+               wr.status,
+               wr.provider AS rail,
+               'Wallet withdrawal request' AS label,
+               'withdrawal_request' AS reference_type,
+               wr.id AS reference_id,
+               COALESCE(wr.paymob_payout_reference, wr.provider_withdrawal_id) AS provider_reference,
+               wr.status IN ('pending_verification', 'processing', 'awaiting_transfer', 'failed', 'blocked') AS review_needed,
+               COALESCE(wr.provider_payload, '{}'::jsonb) AS metadata,
+               wr.created_at
+        FROM withdrawal_requests wr
+        LEFT JOIN users u ON u.id = wr.user_id
+        UNION ALL
+        SELECT f.id,
+               'reservation_failure' AS kind,
+               f.actor_id AS user_id,
+               u.email AS user_email,
+               COALESCE(u.display_name, u.email) AS user_display_name,
+               f.reservation_id,
+               rd.id AS dispute_id,
+               '0' AS amount,
+               'EGP' AS currency,
+               CASE WHEN f.resolved_at IS NULL THEN 'open' ELSE 'resolved' END AS status,
+               'worker' AS rail,
+               f.error_message AS label,
+               'reservation_action_failure' AS reference_type,
+               f.id AS reference_id,
+               NULL AS provider_reference,
+               f.resolved_at IS NULL AS review_needed,
+               COALESCE(f.metadata, '{}'::jsonb) AS metadata,
+               f.created_at
+        FROM reservation_action_failures f
+        LEFT JOIN users u ON u.id = f.actor_id
+        LEFT JOIN reservation_disputes rd ON rd.reservation_id = f.reservation_id
+      )
+    `;
+    const count = await this.db.query<{ count: string }>(
+      `${base} SELECT COUNT(*)::text AS count FROM audit ${where}`,
+      params,
+    );
+    const total = parseInt(count.rows[0]?.count ?? '0', 10);
+    params.push(limit, (page - 1) * limit);
+    const rows = await this.db.query<MoneyAuditEventRow>(
+      `${base}
+       SELECT id, kind, user_id, user_email, user_display_name, reservation_id, dispute_id,
+              amount, currency, status, rail, label, reference_type, reference_id,
+              provider_reference, review_needed, metadata, created_at::text
+       FROM audit
+       ${where}
+       ORDER BY created_at DESC
+       LIMIT $${idx++} OFFSET $${idx}`,
+      params,
+    );
+    return { rows: rows.rows, total };
   }
 
   // ── Services ────────────────────────────────────────────────────────────

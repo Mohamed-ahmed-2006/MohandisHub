@@ -469,6 +469,40 @@ const listTransactions = asyncHandler(async (req, res) => {
   res.json(response);
 });
 
+const listMoneyAuditEvents = asyncHandler(async (req, res) => {
+  const page = parseInt(req.query.page as string, 10) || 1;
+  const limit = Math.min(parseInt(req.query.limit as string, 10) || 20, 100);
+  const filters: {
+    userId?: string;
+    reservationId?: string;
+    provider?: string;
+    rail?: string;
+    status?: string;
+    type?: string;
+    dateFrom?: string;
+    dateTo?: string;
+    reviewNeeded?: boolean;
+  } = {};
+  if (req.query.userId) filters.userId = req.query.userId as string;
+  if (req.query.reservationId) filters.reservationId = req.query.reservationId as string;
+  if (req.query.provider) filters.provider = req.query.provider as string;
+  if (req.query.rail) filters.rail = req.query.rail as string;
+  if (req.query.status) filters.status = req.query.status as string;
+  if (req.query.type) filters.type = req.query.type as string;
+  if (req.query.dateFrom) filters.dateFrom = req.query.dateFrom as string;
+  if (req.query.dateTo) filters.dateTo = req.query.dateTo as string;
+  if (typeof req.query.reviewNeeded === 'string') {
+    filters.reviewNeeded = req.query.reviewNeeded.toLowerCase() === 'true';
+  }
+  const result = await adminService.listMoneyAuditEvents(filters, page, limit);
+  res.json({ ok: true, data: result });
+});
+
+const getPaymobReadiness = asyncHandler((_req, res) => {
+  const result = adminService.getPaymobReadiness();
+  res.json({ ok: true, data: result });
+});
+
 const getTransactionDetail = asyncHandler(async (req, res) => {
   const txn = await adminService.getTransactionDetail(req.params.id!);
   const response: ApiSuccessBody<Transaction> = { ok: true, data: txn };
@@ -908,6 +942,8 @@ export const adminController = {
   updatePlan,
   deletePlan,
   listTransactions,
+  listMoneyAuditEvents,
+  getPaymobReadiness,
   getTransactionDetail,
   adjustBalance,
   listManualInstapayDeposits,

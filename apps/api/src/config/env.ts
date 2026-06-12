@@ -301,49 +301,10 @@ if (parsed.data.NODE_ENV === 'production') {
       ];
     }
   }
-  if (parsed.data.PAYMOB_DEPOSITS_ENABLED) {
-    if (!parsed.data.PAYMOB_SECRET_KEY || !parsed.data.PAYMOB_PUBLIC_KEY) {
-      productionErrors.PAYMOB_SECRET_KEY = [
-        'Paymob secret + public keys are required when PAYMOB_DEPOSITS_ENABLED=true.',
-      ];
-    }
-    if (!parsed.data.PAYMOB_HMAC_SECRET) {
-      productionErrors.PAYMOB_HMAC_SECRET = [
-        'Paymob HMAC secret is required so deposit callbacks cannot be spoofed.',
-      ];
-    }
-    if (!parsed.data.PAYMOB_INTEGRATION_IDS) {
-      productionErrors.PAYMOB_INTEGRATION_IDS = [
-        'At least one Paymob integration id is required for the unified checkout.',
-      ];
-    }
-    if (!parsed.data.API_PUBLIC_URL) {
-      productionErrors.API_PUBLIC_URL = [
-        'API_PUBLIC_URL is required for Paymob deposit webhook callbacks.',
-      ];
-    }
-    if (!parsed.data.WEB_PUBLIC_URL) {
-      productionErrors.WEB_PUBLIC_URL = [
-        'WEB_PUBLIC_URL is required for Paymob checkout return URLs.',
-      ];
-    }
-  }
-  if (parsed.data.PAYMOB_WITHDRAWALS_ENABLED) {
-    if (!parsed.data.PAYMOB_PAYOUT_CLIENT_ID || !parsed.data.PAYMOB_PAYOUT_CLIENT_SECRET) {
-      productionErrors.PAYMOB_PAYOUT_CLIENT_ID = [
-        'Paymob payout client id/secret are required when PAYMOB_WITHDRAWALS_ENABLED=true.',
-      ];
-    }
-    if (!parsed.data.PAYMOB_PAYOUT_BASE_URL) {
-      productionErrors.PAYMOB_PAYOUT_BASE_URL = [
-        'PAYMOB_PAYOUT_BASE_URL is required when PAYMOB_WITHDRAWALS_ENABLED=true.',
-      ];
-    }
-    if (parsed.data.PAYMOB_PAYOUT_BASE_URL?.includes('staging')) {
-      productionErrors.PAYMOB_PAYOUT_BASE_URL = [
-        'Paymob production withdrawals must not use a staging payout endpoint.',
-      ];
-    }
+  if (parsed.data.PAYMOB_PAYOUT_BASE_URL?.includes('staging')) {
+    productionErrors.PAYMOB_PAYOUT_BASE_URL = [
+      'Paymob production withdrawals must not use a staging payout endpoint.',
+    ];
   }
   if (Object.keys(productionErrors).length > 0) {
     console.error('Invalid production provider configuration', productionErrors);

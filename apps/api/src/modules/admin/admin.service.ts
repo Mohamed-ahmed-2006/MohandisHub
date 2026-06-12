@@ -9,6 +9,7 @@ import type {
   AdminForceLogoutResponse,
   AdminJobActivityItem,
   AdminJobApplicationActivityItem,
+  AdminMoneyAuditEvent,
   AdminNeedActivityItem,
   AdminServiceListItem,
   AdminTransactionListItem,
@@ -23,6 +24,7 @@ import type {
   ExpertProfile,
   ManualDepositRequest,
   PaginatedResponse,
+  PaymobReadiness,
   Plan,
   ServiceCategory,
   Transaction,
@@ -30,6 +32,8 @@ import type {
 } from '@mohandishub/shared';
 import { normalizeAdminPermissions, normalizePlanAllowedRoles } from '@mohandishub/shared';
 
+import { env } from '../../config/env.js';
+import { isPaymobDepositConfigured, isPaymobPayoutConfigured } from '../../lib/paymob.client.js';
 import { invalidateUserStatusCache } from '../../middleware/user-status-cache.js';
 import { HttpError } from '../../utils/http-error.js';
 import { AuthRepository } from '../auth/auth.repository.js';
@@ -46,6 +50,7 @@ import type {
   CategoryRow,
   JobActivityRow,
   JobApplicationActivityRow,
+  MoneyAuditEventRow,
   NeedActivityRow,
   PlanRow,
   ServiceListRow,
@@ -740,6 +745,67 @@ export class AdminService {
 
   // ── Services ────────────────────────────────────────────────────────────
 
+  async listMoneyAuditEvents(
+    filters: {
+      userId?: string;
+      reservationId?: string;
+      provider?: string;
+      rail?: string;
+      status?: string;
+      type?: string;
+      dateFrom?: string;
+      dateTo?: string;
+      reviewNeeded?: boolean;
+    },
+    page: number = 1,
+    limit: number = 20,
+  ): Promise<PaginatedResponse<AdminMoneyAuditEvent>> {
+    const { rows, total } = await this.repo.listMoneyAuditEvents(filters, page, limit);
+    return {
+      items: rows.map((row) => this.toMoneyAuditEvent(row)),
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit),
+    };
+  }
+
+  getPaymobReadiness(): PaymobReadiness {
+    const missingDepositKeys = (
+      [
+        ['PAYMOB_SECRET_KEY', env.PAYMOB_SECRET_KEY],
+        ['PAYMOB_PUBLIC_KEY', env.PAYMOB_PUBLIC_KEY],
+        ['PAYMOB_HMAC_SECRET', env.PAYMOB_HMAC_SECRET],
+        ['PAYMOB_INTEGRATION_IDS', env.PAYMOB_INTEGRATION_IDS],
+      ] as Array<[string, string | undefined]>
+    )
+      .filter(([, value]) => !value)
+      .map(([key]) => key);
+    const missingPayoutKeys = (
+      [
+        ['PAYMOB_PAYOUT_CLIENT_ID', env.PAYMOB_PAYOUT_CLIENT_ID],
+        ['PAYMOB_PAYOUT_CLIENT_SECRET', env.PAYMOB_PAYOUT_CLIENT_SECRET],
+        ['PAYMOB_PAYOUT_BASE_URL', env.PAYMOB_PAYOUT_BASE_URL],
+      ] as Array<[string, string | undefined]>
+    )
+      .filter(([, value]) => !value)
+      .map(([key]) => key);
+    return {
+      depositsEnabled: env.PAYMOB_DEPOSITS_ENABLED,
+      withdrawalsEnabled: env.PAYMOB_WITHDRAWALS_ENABLED,
+      depositConfigured: isPaymobDepositConfigured(),
+      payoutConfigured: isPaymobPayoutConfigured(),
+      missingDepositKeys,
+      missingPayoutKeys,
+      webhookUrl: env.API_PUBLIC_URL ? `${env.API_PUBLIC_URL}/api/wallet/paymob/webhook` : null,
+      returnUrl: env.WEB_PUBLIC_URL ? `${env.WEB_PUBLIC_URL}/app/settings/wallet` : null,
+      payoutBaseUrlConfigured: Boolean(env.PAYMOB_PAYOUT_BASE_URL),
+      lastDepositCallbackAt: null,
+      lastDepositCallbackStatus: null,
+      lastPaymobError: null,
+    };
+  }
+
   async listServices(
     filters: { status?: string; categoryId?: string; providerId?: string },
     page: number = 1,
@@ -1046,6 +1112,29 @@ export class AdminService {
       referenceId: row.reference_id,
       metadata: row.metadata ?? {},
       createdBy: row.created_by,
+      createdAt: row.created_at,
+    };
+  }
+
+  private toMoneyAuditEvent(row: MoneyAuditEventRow): AdminMoneyAuditEvent {
+    return {
+      id: row.id,
+      kind: row.kind as AdminMoneyAuditEvent['kind'],
+      userId: row.user_id,
+      userEmail: row.user_email,
+      userDisplayName: row.user_display_name,
+      reservationId: row.reservation_id,
+      disputeId: row.dispute_id,
+      amount: parseFloat(row.amount),
+      currency: row.currency,
+      status: row.status,
+      rail: row.rail,
+      label: row.label,
+      referenceType: row.reference_type,
+      referenceId: row.reference_id,
+      providerReference: row.provider_reference,
+      reviewNeeded: row.review_needed,
+      metadata: row.metadata ?? {},
       createdAt: row.created_at,
     };
   }

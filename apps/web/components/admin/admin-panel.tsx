@@ -6,7 +6,9 @@ import { useEffect, useState } from 'react';
 import { AdminAdsTab } from './admin-ads-tab';
 import { AdminCategoriesTab } from './admin-categories-tab';
 import { AdminDashboardTab } from './admin-dashboard-tab';
+import { AdminDisputesTab } from './admin-disputes-tab';
 import { AdminMediaLibraryTab } from './admin-media-library-tab';
+import { AdminMoneyAuditTab } from './admin-money-audit-tab';
 import { AdminNotificationsTab } from './admin-notifications-tab';
 import { AdminPlansTab } from './admin-plans-tab';
 import { AdminRetentionTab } from './admin-retention-tab';
@@ -37,7 +39,9 @@ type TabId =
   | 'users'
   | 'plans'
   | 'transactions'
+  | 'moneyAudit'
   | 'walletRails'
+  | 'disputes'
   | 'services'
   | 'categories'
   | 'verifications'
@@ -88,8 +92,18 @@ export const AdminPanel = ({ locale, dictionary }: AdminPanelProps) => {
       permission: 'manage_transactions',
     },
     {
+      id: 'moneyAudit',
+      label: dictionary.admin.tabs.moneyAudit ?? 'Money audit',
+      permission: 'manage_transactions',
+    },
+    {
       id: 'walletRails',
       label: dictionary.admin.tabs.walletRails,
+      permission: 'manage_transactions',
+    },
+    {
+      id: 'disputes',
+      label: dictionary.admin.tabs.disputes ?? 'Disputes',
       permission: 'manage_transactions',
     },
     { id: 'services', label: dictionary.admin.tabs.services, permission: 'manage_services' },
@@ -192,8 +206,22 @@ export const AdminPanel = ({ locale, dictionary }: AdminPanelProps) => {
         {activeTab === 'transactions' && (
           <AdminTransactionsTab dictionary={dictionary} accessToken={accessToken} />
         )}
+        {activeTab === 'moneyAudit' && (
+          <AdminMoneyAuditTab
+            dictionary={dictionary}
+            accessToken={accessToken}
+            refreshSession={refreshSession}
+          />
+        )}
         {activeTab === 'walletRails' && (
           <AdminWalletRailsTab
+            dictionary={dictionary}
+            accessToken={accessToken}
+            refreshSession={refreshSession}
+          />
+        )}
+        {activeTab === 'disputes' && (
+          <AdminDisputesTab
             dictionary={dictionary}
             accessToken={accessToken}
             refreshSession={refreshSession}

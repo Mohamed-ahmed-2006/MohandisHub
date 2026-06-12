@@ -100,6 +100,7 @@ export const AppSidebar = ({
   const navItems: NavItem[] = [
     { href: '/app', label: dictionary.nav.home },
     { href: '/app/bookings', label: dictionary.nav.bookings },
+    { href: '/app/disputes', label: dictionary.nav.disputes ?? 'Disputes' },
     {
       href: '/app/services',
       label: dictionary.nav.myServices ?? dictionary.nav.browse,

@@ -148,6 +148,16 @@ export const resolveDisputeSchema = z.object({
   providerReleaseAmount: z.number().min(0).optional(),
 });
 
+export const addDisputeNoteSchema = z.object({
+  body: z.string().trim().min(1).max(4000),
+  visibility: z.enum(['public', 'admin']).optional(),
+});
+
+export const addDisputeEvidenceSchema = z.object({
+  uploadId: z.string().uuid(),
+  label: z.string().trim().min(1).max(200).optional(),
+});
+
 export type UpsertReservationProfileInput = z.infer<typeof upsertReservationProfileSchema>;
 export type CreateReservationSlotInput = z.infer<typeof createReservationSlotSchema>;
 export type UpdateReservationSlotInput = z.infer<typeof updateReservationSlotSchema>;
@@ -164,3 +174,5 @@ export type CallExtensionInput = z.infer<typeof callExtensionSchema>;
 export type EndCallInput = z.infer<typeof endCallSchema>;
 export type RenewCallTokenInput = z.infer<typeof renewCallTokenSchema>;
 export type ResolveDisputeInput = z.infer<typeof resolveDisputeSchema>;
+export type AddDisputeNoteInput = z.infer<typeof addDisputeNoteSchema>;
+export type AddDisputeEvidenceInput = z.infer<typeof addDisputeEvidenceSchema>;

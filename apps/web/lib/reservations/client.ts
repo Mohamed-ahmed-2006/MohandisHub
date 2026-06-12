@@ -1,6 +1,8 @@
 import type {
   ApiErrorBody,
   ApiSuccessBody,
+  AddReservationDisputeEvidenceBody,
+  AddReservationDisputeNoteBody,
   CallExtensionBody,
   CallHeartbeatBody,
   CallJoinBody,
@@ -15,6 +17,10 @@ import type {
   Reservation,
   ReservationCallSnapshot,
   ReservationDispute,
+  ReservationDisputeCase,
+  ReservationDisputeEvidence,
+  ReservationDisputeListItem,
+  ReservationDisputeNote,
   ReservationLocationProposal,
   ReservationProfile,
   ReservationSlot,
@@ -145,6 +151,32 @@ export const reservationsApiClient = {
     if (params.limit) q.set('limit', String(params.limit));
     return apiReq(`/api/reservations/my${q.toString() ? `?${q.toString()}` : ''}`, token);
   },
+
+  listMyDisputeCases: (token: string): Promise<ReservationDisputeListItem[]> =>
+    apiReq('/api/reservations/dispute-cases/my', token),
+
+  getDisputeCase: (token: string, disputeId: string): Promise<ReservationDisputeCase> =>
+    apiReq(`/api/reservations/disputes/${disputeId}`, token),
+
+  addDisputeNote: (
+    token: string,
+    disputeId: string,
+    body: AddReservationDisputeNoteBody,
+  ): Promise<ReservationDisputeNote> =>
+    apiReq(`/api/reservations/disputes/${disputeId}/notes`, token, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+
+  addDisputeEvidence: (
+    token: string,
+    disputeId: string,
+    body: AddReservationDisputeEvidenceBody,
+  ): Promise<ReservationDisputeEvidence> =>
+    apiReq(`/api/reservations/disputes/${disputeId}/evidence`, token, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
 
   getReservationById: (token: string, reservationId: string): Promise<Reservation> =>
     apiReq(`/api/reservations/${reservationId}`, token),

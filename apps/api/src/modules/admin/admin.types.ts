@@ -159,6 +159,27 @@ export type TransactionRow = {
   created_at: string;
 };
 
+export type MoneyAuditEventRow = {
+  id: string;
+  kind: string;
+  user_id: string | null;
+  user_email: string | null;
+  user_display_name: string | null;
+  reservation_id: string | null;
+  dispute_id: string | null;
+  amount: string;
+  currency: string;
+  status: string;
+  rail: string | null;
+  label: string;
+  reference_type: string | null;
+  reference_id: string | null;
+  provider_reference: string | null;
+  review_needed: boolean;
+  metadata: Record<string, unknown>;
+  created_at: string;
+};
+
 export type ServiceListRow = {
   id: string;
   title: string;

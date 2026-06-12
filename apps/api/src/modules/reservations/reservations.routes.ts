@@ -51,12 +51,23 @@ reservationsRouter.post(
   reservationsController.createReservation,
 );
 reservationsRouter.get('/my', reservationsController.listMyReservations);
+reservationsRouter.get('/dispute-cases/my', reservationsController.listMyDisputeCases);
+reservationsRouter.get('/disputes/:disputeId', reservationsController.getDisputeCase);
+reservationsRouter.post('/disputes/:disputeId/notes', reservationsController.addDisputeNote);
+reservationsRouter.post('/disputes/:disputeId/evidence', reservationsController.addDisputeEvidence);
 reservationsRouter.get(
   '/disputes',
   loadAdminFromDb,
   requireRole('admin'),
   requireAdminPermission('manage_transactions'),
   reservationsController.listDisputes,
+);
+reservationsRouter.get(
+  '/admin/dispute-cases',
+  loadAdminFromDb,
+  requireRole('admin'),
+  requireAdminPermission('manage_transactions'),
+  reservationsController.listDisputeCases,
 );
 reservationsRouter.get(
   '/admin/action-failures',

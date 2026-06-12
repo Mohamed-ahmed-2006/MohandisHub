@@ -6,6 +6,7 @@
 export const MANAGED_SIDEBAR_HREFS = [
   '/app',
   '/app/bookings',
+  '/app/disputes',
   '/app/services',
   '/app/calendar',
   '/app/settings',
@@ -70,8 +71,8 @@ export const PAYMENT_METHOD_DEFINITIONS: readonly PaymentMethodDefinition[] = [
     key: 'deposit_paymob',
     flow: 'deposit',
     provider: 'paymob',
-    defaultEnabled: false,
-    launchRecommended: false,
+    defaultEnabled: true,
+    launchRecommended: true,
   },
   {
     key: 'withdrawal_crypto',
@@ -91,8 +92,8 @@ export const PAYMENT_METHOD_DEFINITIONS: readonly PaymentMethodDefinition[] = [
     key: 'withdrawal_paymob',
     flow: 'withdrawal',
     provider: 'paymob',
-    defaultEnabled: false,
-    launchRecommended: false,
+    defaultEnabled: true,
+    launchRecommended: true,
   },
 ] as const;
 

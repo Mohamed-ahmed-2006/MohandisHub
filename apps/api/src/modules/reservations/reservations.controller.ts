@@ -4,6 +4,8 @@ import { logAudit } from '../audit/audit.service.js';
 
 import { ReservationsService } from './reservations.service.js';
 import {
+  addDisputeEvidenceSchema,
+  addDisputeNoteSchema,
   cancelReservationSchema,
   callExtensionSchema,
   callHeartbeatSchema,
@@ -448,6 +450,85 @@ const listDisputes = asyncHandler(async (req, res) => {
   res.json({ ok: true, data });
 });
 
+const listMyDisputeCases = asyncHandler(async (req, res) => {
+  const user = requireUser(req);
+  const data = await svc.listMyDisputeCases(user.id);
+  res.json({ ok: true, data });
+});
+
+const listDisputeCases = asyncHandler(async (req, res) => {
+  const user = requireUser(req);
+  const page = Math.max(parseInt((req.query.page as string | undefined) ?? '1', 10), 1);
+  const limit = Math.min(
+    Math.max(parseInt((req.query.limit as string | undefined) ?? '20', 10), 1),
+    100,
+  );
+  const status = (req.query.status as string | undefined) ?? undefined;
+  const data = await svc.listDisputeCases(user.id, reservationAdminRole(user), page, limit, status);
+  res.json({ ok: true, data });
+});
+
+const getDisputeCase = asyncHandler(async (req, res) => {
+  const user = requireUser(req);
+  const disputeId = req.params.disputeId;
+  if (!disputeId) {
+    throw new HttpError({
+      statusCode: 400,
+      code: 'VALIDATION_ERROR',
+      message: 'disputeId is required.',
+    });
+  }
+  const data = await svc.getDisputeCase(user.id, reservationAdminRole(user), disputeId);
+  res.json({ ok: true, data });
+});
+
+const addDisputeNote = asyncHandler(async (req, res) => {
+  const user = requireUser(req);
+  const disputeId = req.params.disputeId;
+  if (!disputeId) {
+    throw new HttpError({
+      statusCode: 400,
+      code: 'VALIDATION_ERROR',
+      message: 'disputeId is required.',
+    });
+  }
+  const input = parseBody(addDisputeNoteSchema, req.body);
+  const data = await svc.addDisputeNote(user.id, reservationAdminRole(user), disputeId, input);
+  await logAudit({
+    actorId: user.id,
+    action:
+      input.visibility === 'admin' ? 'admin.reservation_dispute.note' : 'reservation_dispute.note',
+    resourceType: 'reservation_dispute',
+    resourceId: disputeId,
+    details: { visibility: input.visibility ?? 'public' },
+    ip: requestIp(req),
+  });
+  res.status(201).json({ ok: true, data });
+});
+
+const addDisputeEvidence = asyncHandler(async (req, res) => {
+  const user = requireUser(req);
+  const disputeId = req.params.disputeId;
+  if (!disputeId) {
+    throw new HttpError({
+      statusCode: 400,
+      code: 'VALIDATION_ERROR',
+      message: 'disputeId is required.',
+    });
+  }
+  const input = parseBody(addDisputeEvidenceSchema, req.body);
+  const data = await svc.addDisputeEvidence(user.id, reservationAdminRole(user), disputeId, input);
+  await logAudit({
+    actorId: user.id,
+    action: 'reservation_dispute.evidence.add',
+    resourceType: 'reservation_dispute',
+    resourceId: disputeId,
+    details: { uploadId: input.uploadId },
+    ip: requestIp(req),
+  });
+  res.status(201).json({ ok: true, data });
+});
+
 const resolveDispute = asyncHandler(async (req, res) => {
   const user = requireUser(req);
   const disputeId = req.params.disputeId;
@@ -557,6 +638,11 @@ export const reservationsController = {
   renewCallToken,
   getCallSnapshot,
   listDisputes,
+  listMyDisputeCases,
+  listDisputeCases,
+  getDisputeCase,
+  addDisputeNote,
+  addDisputeEvidence,
   resolveDispute,
   listActionFailures,
   replayActionFailure,
