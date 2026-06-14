@@ -67,9 +67,10 @@ export const AdminTransactionsTab = ({ dictionary, accessToken }: Props) => {
   }, [load]);
 
   const handleReverse = async (txnId: string) => {
-    if (!confirm(d.confirmReverse)) return;
+    const reason = prompt(`${d.confirmReverse}\n\nReason:`);
+    if (!reason || reason.trim().length < 5) return;
     try {
-      await adminApiClient.reverseTransaction(accessToken, txnId);
+      await adminApiClient.reverseTransaction(accessToken, txnId, reason.trim());
       void load();
     } catch {
       /* empty */
@@ -77,6 +78,7 @@ export const AdminTransactionsTab = ({ dictionary, accessToken }: Props) => {
   };
 
   const handleAdjust = async () => {
+    if (adjustForm.description.trim().length < 5) return;
     try {
       const body: {
         userId: string;
@@ -88,7 +90,7 @@ export const AdminTransactionsTab = ({ dictionary, accessToken }: Props) => {
         type: adjustForm.type as 'deposit' | 'withdrawal' | 'adjustment' | 'bonus',
         amount: adjustForm.amount,
       };
-      if (adjustForm.description) body.description = adjustForm.description;
+      body.description = adjustForm.description.trim();
       await adminApiClient.adjustBalance(accessToken, body);
       setShowAdjust(false);
       setAdjustForm({ userId: '', type: 'deposit', amount: 0, description: '' });

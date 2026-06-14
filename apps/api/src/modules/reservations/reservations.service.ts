@@ -28,6 +28,7 @@ import { getPool } from '../../db/pool.js';
 import { buildAgoraRtcToken } from '../../lib/agora-token.js';
 import { HttpError } from '../../utils/http-error.js';
 import { ChatRepository } from '../chat/chat.repository.js';
+import { CouponsService } from '../coupons/coupons.service.js';
 import { JobsRepository } from '../jobs/jobs.repository.js';
 import { NegotiationsService } from '../negotiations/negotiations.service.js';
 import { NotificationsService } from '../notifications/notifications.service.js';
@@ -330,6 +331,7 @@ export class ReservationsService {
     private readonly servicesRepo: ServicesRepository = new ServicesRepository(),
     private readonly negotiationsSvc: NegotiationsService = new NegotiationsService(),
     private readonly notificationsService: NotificationsService = new NotificationsService(),
+    private readonly couponsService: CouponsService = new CouponsService(),
   ) {}
 
   /** Fire-and-forget in-app notification; never blocks reservation flows. */
@@ -627,7 +629,38 @@ export class ReservationsService {
         reservationCurrency = service.currency || reservationCurrency;
       }
     }
-    const expertPrice = Math.max(0, toMoney(servicePrice + reservationModePrice));
+    const originalExpertPrice = Math.max(0, toMoney(servicePrice + reservationModePrice));
+    const commissionPreview =
+      originalExpertPrice > 0
+        ? computeCommissionSplit(
+            originalExpertPrice,
+            status.commissionPercent,
+            status.commissionMinEgp,
+          ).commission
+        : 0;
+    const couponPreview =
+      input.couponCode && originalExpertPrice > 0
+        ? await this.couponsService.preview(
+            {
+              code: input.couponCode,
+              surface: 'service',
+              subtotal: originalExpertPrice,
+              commissionAmount: commissionPreview,
+              currency: reservationCurrency,
+              providerId: input.providerId,
+              ...(input.serviceId ? { itemId: input.serviceId } : {}),
+            },
+            { id: customerId, role: 'customer' },
+          )
+        : null;
+    if (input.couponCode && (!couponPreview || !couponPreview.valid)) {
+      throw new HttpError({
+        statusCode: 400,
+        code: 'COUPON_NOT_APPLICABLE',
+        message: couponPreview?.reason ?? 'Coupon is not valid for this reservation.',
+      });
+    }
+    const expertPrice = toMoney(couponPreview?.finalAmount ?? originalExpertPrice);
     const minTransactionEgp = status.minTransactionEgp ?? 0;
     if (minTransactionEgp > 0 && expertPrice > 0 && expertPrice <= minTransactionEgp) {
       throw new HttpError({
@@ -648,12 +681,25 @@ export class ReservationsService {
       pricingBreakdown: {
         servicePriceAmount: toMoney(servicePrice),
         reservationPriceAmount: toMoney(reservationModePrice),
-        totalAmount: toMoney(servicePrice + reservationModePrice),
+        originalServicePriceAmount: toMoney(servicePrice),
+        originalReservationPriceAmount: toMoney(reservationModePrice),
+        ...(couponPreview
+          ? {
+              couponCode: couponPreview.code,
+              couponDiscountAmount: couponPreview.discountAmount,
+              couponServiceDiscountAmount: couponPreview.serviceDiscountAmount,
+              couponCommissionDiscountAmount: couponPreview.commissionDiscountAmount,
+              couponProviderFundedAmount: couponPreview.providerFundedAmount,
+              couponPlatformFundedAmount: couponPreview.platformFundedAmount,
+            }
+          : {}),
+        totalAmount: expertPrice,
         currency: reservationCurrency,
         deductionTiming: 'on_reserve_hold',
         releaseTiming: 'on_completion_or_policy',
-        explanation:
-          'Total amount (service + reservation mode price) is held when you click Reserve. It is released based on completion/cancellation policy.',
+        explanation: couponPreview
+          ? 'Discounted total amount is held when you click Reserve. It is released based on completion/cancellation policy.'
+          : 'Total amount (service + reservation mode price) is held when you click Reserve. It is released based on completion/cancellation policy.',
       },
     });
 
@@ -693,6 +739,32 @@ export class ReservationsService {
           },
           client,
         );
+        if (couponPreview) {
+          const appliedCoupon = await this.couponsService.applyInTransaction(
+            client,
+            {
+              code: input.couponCode,
+              surface: 'service',
+              subtotal: originalExpertPrice,
+              commissionAmount: commissionPreview,
+              currency: reservationCurrency,
+              providerId: input.providerId,
+              itemId: reservation.id,
+              sourceReference: `reservation:${reservation.id}`,
+            },
+            { id: customerId, role: 'customer' },
+          );
+          policySnapshot.pricingBreakdown = {
+            ...policySnapshot.pricingBreakdown!,
+            couponRedemptionId: appliedCoupon.redemptionId,
+          };
+          const updated = await this.repo.updateReservation(
+            reservation.id,
+            { policySnapshot },
+            client,
+          );
+          reservation = updated ?? reservation;
+        }
         await this.ensureFixedPriceHold(client, reservation);
         if (input.negotiationId) {
           await this.negotiationsSvc.markNegotiationConsumed(
@@ -725,7 +797,82 @@ export class ReservationsService {
           },
           client,
         );
+        if (couponPreview) {
+          const appliedCoupon = await this.couponsService.applyInTransaction(
+            client,
+            {
+              code: input.couponCode,
+              surface: 'service',
+              subtotal: originalExpertPrice,
+              commissionAmount: commissionPreview,
+              currency: reservationCurrency,
+              providerId: input.providerId,
+              itemId: reservation.id,
+              sourceReference: `reservation:${reservation.id}`,
+            },
+            { id: customerId, role: 'customer' },
+          );
+          policySnapshot.pricingBreakdown = {
+            ...policySnapshot.pricingBreakdown!,
+            couponRedemptionId: appliedCoupon.redemptionId,
+          };
+          const updated = await this.repo.updateReservation(
+            reservation.id,
+            { policySnapshot },
+            client,
+          );
+          reservation = updated ?? reservation;
+        }
         await this.negotiationsSvc.markNegotiationConsumed(input.negotiationId, customerId, client);
+        await client.query('COMMIT');
+      } catch (err) {
+        await client.query('ROLLBACK');
+        throw err;
+      } finally {
+        client.release();
+      }
+    } else if (couponPreview) {
+      const pool = getPool();
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+        reservation = await this.repo.createReservation(createInput, client);
+        await this.repo.createEvent(
+          {
+            reservationId: reservation.id,
+            eventType: 'created',
+            actorId: customerId,
+            metadata: {
+              purpose: 'service',
+              mode: input.mode,
+            },
+          },
+          client,
+        );
+        const appliedCoupon = await this.couponsService.applyInTransaction(
+          client,
+          {
+            code: input.couponCode,
+            surface: 'service',
+            subtotal: originalExpertPrice,
+            commissionAmount: commissionPreview,
+            currency: reservationCurrency,
+            providerId: input.providerId,
+            itemId: reservation.id,
+            sourceReference: `reservation:${reservation.id}`,
+          },
+          { id: customerId, role: 'customer' },
+        );
+        policySnapshot.pricingBreakdown = {
+          ...policySnapshot.pricingBreakdown!,
+          couponRedemptionId: appliedCoupon.redemptionId,
+        };
+        const updated = await this.repo.updateReservation(
+          reservation.id,
+          { policySnapshot },
+          client,
+        );
+        reservation = updated ?? reservation;
         await client.query('COMMIT');
       } catch (err) {
         await client.query('ROLLBACK');
@@ -3887,10 +4034,8 @@ export class ReservationsService {
       providerWallet = await this.walletRepo.createForUser(reservation.provider_id);
     }
     const settings = await this.settingsService.getAppStatus();
-    // Single source of truth: caps commission at the held amount so the provider
-    // payout can never go negative and the platform can never be credited more
-    // than the customer paid.
-    const { commission, providerAmount } = computeCommissionSplit(
+    const { commission, providerAmount } = this.computeReservationPayoutSplit(
+      reservation,
       amount,
       settings.commissionPercent,
       settings.commissionMinEgp,
@@ -3923,6 +4068,34 @@ export class ReservationsService {
         reservation.id,
       );
     }
+  }
+
+  private computeReservationPayoutSplit(
+    reservation: ReservationRow,
+    heldAmount: number,
+    commissionPercent: number,
+    commissionMinEgp: number,
+  ): { commission: number; providerAmount: number } {
+    const policy = this.getPolicySnapshot(reservation);
+    const pricing = policy.pricingBreakdown;
+    const platformFundedAmount = toMoney(pricing?.couponPlatformFundedAmount ?? 0);
+    const originalAmount = toMoney(
+      (pricing?.originalServicePriceAmount ?? 0) + (pricing?.originalReservationPriceAmount ?? 0),
+    );
+    if (!pricing?.couponRedemptionId || originalAmount <= 0) {
+      return computeCommissionSplit(heldAmount, commissionPercent, commissionMinEgp);
+    }
+
+    const originalSplit = computeCommissionSplit(
+      originalAmount,
+      commissionPercent,
+      commissionMinEgp,
+    );
+    const commission = toMoney(Math.max(0, originalSplit.commission - platformFundedAmount));
+    return {
+      commission: Math.min(heldAmount, commission),
+      providerAmount: toMoney(Math.max(0, heldAmount - Math.min(heldAmount, commission))),
+    };
   }
 
   private async ensurePrejoinBalances(

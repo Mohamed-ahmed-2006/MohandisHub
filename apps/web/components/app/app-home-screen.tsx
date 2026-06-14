@@ -26,6 +26,8 @@ import type { Bid, Need } from '@/lib/needs/client';
 import { needsApiClient } from '@/lib/needs/client';
 import type { TopBusiness, TopCraftsman, TopExpert } from '@/lib/profiles/client';
 import { profilesApiClient } from '@/lib/profiles/client';
+import { recommendationsApiClient } from '@/lib/recommendations/client';
+import { savedSearchesApiClient } from '@/lib/saved-searches/client';
 import { servicesApiClient } from '@/lib/services/client';
 
 import '@/app/dashboard.css';
@@ -227,6 +229,11 @@ export const AppHomeScreen = ({ locale, dictionary }: AppHomeScreenProps) => {
   const [verifiedOnly, setVerifiedOnly] = useState(false);
   const [sort, setSort] = useState<string>('newest');
   const [results, setResults] = useState<ServiceSearchResult[]>([]);
+  const [savedSearches, setSavedSearches] = useState<
+    Awaited<ReturnType<typeof savedSearchesApiClient.list>>
+  >([]);
+  const [recommendations, setRecommendations] = useState<ServiceSearchResult[]>([]);
+  const [searchNotice, setSearchNotice] = useState<string | null>(null);
   const [searching, setSearching] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('');
@@ -389,6 +396,57 @@ export const AppHomeScreen = ({ locale, dictionary }: AppHomeScreenProps) => {
     return () => clearInterval(t);
   }, [totalTopSlides]);
 
+  useEffect(() => {
+    if (!accessToken || !isAuthenticated) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const [saved, recs] = await Promise.all([
+          savedSearchesApiClient.list(accessToken, 'service'),
+          recommendationsApiClient.list(accessToken, 6),
+        ]);
+        if (cancelled) return;
+        setSavedSearches(saved);
+        setRecommendations(recs.items);
+      } catch {
+        if (!cancelled) {
+          setSavedSearches([]);
+          setRecommendations([]);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [accessToken, isAuthenticated]);
+
+  const getCurrentSearchFilters = useCallback(
+    () => ({
+      query: searchQuery,
+      categoryId,
+      city,
+      area,
+      providerType,
+      minRating,
+      minPrice,
+      maxPrice,
+      verifiedOnly,
+      sort,
+    }),
+    [
+      area,
+      categoryId,
+      city,
+      maxPrice,
+      minPrice,
+      minRating,
+      providerType,
+      searchQuery,
+      sort,
+      verifiedOnly,
+    ],
+  );
+
   const handleSearch = useCallback(
     async (qOverride?: string) => {
       setSearching(true);
@@ -426,6 +484,14 @@ export const AppHomeScreen = ({ locale, dictionary }: AppHomeScreenProps) => {
           images: Array.isArray(item.images) ? item.images : [],
         }));
         setResults(dedupeById(withImages));
+        if (accessToken) {
+          void recommendationsApiClient.recordEvent(accessToken, {
+            eventType: 'search',
+            metadata: { query: q, result_count: withImages.length },
+            ...(categoryId ? { categoryId } : {}),
+            ...(city ? { city } : {}),
+          });
+        }
       } catch {
         setResults([]);
       } finally {
@@ -434,6 +500,7 @@ export const AppHomeScreen = ({ locale, dictionary }: AppHomeScreenProps) => {
     },
     [
       authUser,
+      accessToken,
       categoryId,
       city,
       area,
@@ -464,6 +531,90 @@ export const AppHomeScreen = ({ locale, dictionary }: AppHomeScreenProps) => {
       setBusinessNeedsLoading(false);
     }
   }, [accessToken, authUser?.role]);
+
+  const saveCurrentSearch = useCallback(async () => {
+    if (!accessToken) return;
+    const name = window.prompt(dictionary.homeSearch?.placeholder ?? 'Saved search name');
+    if (!name?.trim()) return;
+    setSearchNotice(null);
+    try {
+      const saved = await savedSearchesApiClient.create(accessToken, {
+        kind: 'service',
+        name: name.trim(),
+        filters: getCurrentSearchFilters(),
+        locale,
+      });
+      setSavedSearches((prev) => [saved, ...prev.filter((item) => item.id !== saved.id)]);
+      setSearchNotice('Search saved.');
+    } catch (err) {
+      setSearchNotice(err instanceof Error ? err.message : 'Could not save search.');
+    }
+  }, [accessToken, dictionary.homeSearch?.placeholder, getCurrentSearchFilters, locale]);
+
+  const runSavedSearch = useCallback(
+    async (saved: (typeof savedSearches)[number]) => {
+      const filters = saved.filters;
+      setSearchQuery(typeof filters.query === 'string' ? filters.query : '');
+      setCategoryId(typeof filters.categoryId === 'string' ? filters.categoryId : '');
+      setCity(typeof filters.city === 'string' ? filters.city : '');
+      setArea(typeof filters.area === 'string' ? filters.area : '');
+      setProviderType(typeof filters.providerType === 'string' ? filters.providerType : '');
+      setMinRating(typeof filters.minRating === 'number' ? filters.minRating : '');
+      setMinPrice(typeof filters.minPrice === 'number' ? filters.minPrice : '');
+      setMaxPrice(typeof filters.maxPrice === 'number' ? filters.maxPrice : '');
+      setVerifiedOnly(Boolean(filters.verifiedOnly));
+      setSort(typeof filters.sort === 'string' ? filters.sort : 'newest');
+      if (accessToken) {
+        void savedSearchesApiClient.markViewed(accessToken, saved.id);
+        void recommendationsApiClient.recordEvent(accessToken, {
+          eventType: 'saved_search',
+          metadata: { saved_search_id: saved.id },
+          ...(typeof filters.categoryId === 'string' && filters.categoryId
+            ? { categoryId: filters.categoryId }
+            : {}),
+          ...(typeof filters.city === 'string' && filters.city ? { city: filters.city } : {}),
+        });
+      }
+      setSearching(true);
+      setHasSearched(true);
+      try {
+        const params: Parameters<typeof servicesApiClient.searchServices>[0] = {};
+        if (typeof filters.categoryId === 'string' && filters.categoryId)
+          params.categoryId = filters.categoryId;
+        if (typeof filters.city === 'string' && filters.city) params.city = filters.city;
+        if (typeof filters.area === 'string' && filters.area) params.area = filters.area;
+        if (typeof filters.providerType === 'string' && filters.providerType)
+          params.providerType = filters.providerType;
+        if (typeof filters.query === 'string' && filters.query.trim())
+          params.q = filters.query.trim();
+        if (typeof filters.minRating === 'number') params.minRating = filters.minRating;
+        if (typeof filters.minPrice === 'number') params.minPrice = filters.minPrice;
+        if (typeof filters.maxPrice === 'number') params.maxPrice = filters.maxPrice;
+        if (filters.verifiedOnly === true) params.verifiedOnly = true;
+        if (typeof filters.sort === 'string' && filters.sort) params.sort = filters.sort;
+        const data = await servicesApiClient.searchServices(params);
+        setResults(dedupeById(data.items.map((item) => ({ ...item, images: item.images ?? [] }))));
+      } catch {
+        setResults([]);
+      } finally {
+        setSearching(false);
+      }
+    },
+    [accessToken],
+  );
+
+  const deleteSavedSearch = useCallback(
+    async (id: string) => {
+      if (!accessToken) return;
+      try {
+        await savedSearchesApiClient.delete(accessToken, id);
+        setSavedSearches((prev) => prev.filter((item) => item.id !== id));
+      } catch (err) {
+        setSearchNotice(err instanceof Error ? err.message : 'Could not delete saved search.');
+      }
+    },
+    [accessToken],
+  );
 
   const handleBusinessSearchModeChange = useCallback((checked: boolean) => {
     const nextMode: 'services' | 'needs' = checked ? 'needs' : 'services';
@@ -1109,7 +1260,80 @@ export const AppHomeScreen = ({ locale, dictionary }: AppHomeScreenProps) => {
                   >
                     {searching ? dictionary.admin.loading : d.search}
                   </button>
+                  <button
+                    type="button"
+                    className="dashboard-secondary-btn"
+                    onClick={() => void saveCurrentSearch()}
+                    disabled={!accessToken}
+                    style={{ marginTop: '0.75rem' }}
+                  >
+                    {dictionary.common?.save ?? 'Save search'}
+                  </button>
+                  {searchNotice && <p className="home-empty">{searchNotice}</p>}
                 </section>
+
+                {savedSearches.length > 0 && (
+                  <section className="home-results-section">
+                    <h2 className="home-section-title">Saved searches</h2>
+                    <div className="dashboard-actions-row">
+                      {savedSearches.slice(0, 6).map((saved) => (
+                        <span key={saved.id} className="dashboard-chip">
+                          <button
+                            type="button"
+                            className="dashboard-link-button"
+                            onClick={() => void runSavedSearch(saved)}
+                          >
+                            {saved.name}
+                          </button>
+                          <button
+                            type="button"
+                            className="dashboard-link-button"
+                            aria-label={`Delete ${saved.name}`}
+                            onClick={() => void deleteSavedSearch(saved.id)}
+                          >
+                            ×
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                  </section>
+                )}
+
+                {!hasSearched && recommendations.length > 0 && (
+                  <section className="home-results-section">
+                    <h2 className="home-section-title">Recommended for you</h2>
+                    <div className="home-results-grid">
+                      {recommendations.map((r) => (
+                        <button
+                          key={r.id}
+                          type="button"
+                          className="home-result-card"
+                          onClick={() => {
+                            setSelectedResult(r);
+                            if (accessToken) {
+                              void recommendationsApiClient.recordEvent(accessToken, {
+                                eventType: 'service_view',
+                                serviceId: r.id,
+                                ...(r.city ? { city: r.city } : {}),
+                              });
+                            }
+                          }}
+                        >
+                          {r.images?.[0] ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img
+                              src={toAbsoluteAssetUrl(r.images[0])}
+                              alt=""
+                              className="home-result-service-thumb"
+                            />
+                          ) : null}
+                          <strong>{r.title}</strong>
+                          <span>{r.providerName}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </section>
+                )}
 
                 {/* Search Results */}
                 {hasSearched && (

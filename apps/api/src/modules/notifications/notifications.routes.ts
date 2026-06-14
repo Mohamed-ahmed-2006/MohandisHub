@@ -15,6 +15,11 @@ notificationsRouter.use(authenticate, requireEmailVerified);
 
 notificationsRouter.get('/', notificationsController.getNotifications);
 notificationsRouter.get('/unread-count', notificationsController.getUnreadCount);
+notificationsRouter.get('/preferences', notificationsController.getPreferences);
+notificationsRouter.patch('/preferences', notificationsController.updatePreferences);
+notificationsRouter.get('/push/readiness', notificationsController.getPushReadiness);
+notificationsRouter.post('/push/subscriptions', notificationsController.upsertPushSubscription);
+notificationsRouter.delete('/push/subscriptions', notificationsController.disablePushSubscription);
 notificationsRouter.post('/demo', notificationsController.sendDemo);
 notificationsRouter.patch('/read-all', notificationsController.markAllAsRead);
 notificationsRouter.patch('/:id/read', notificationsController.markAsRead);

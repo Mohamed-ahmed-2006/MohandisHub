@@ -126,6 +126,11 @@ export const AdminWalletRailsTab = ({ dictionary, accessToken, refreshSession }:
 
   const submitApproveDeposit = async () => {
     if (!modal || modal.kind !== 'approve-dep') return;
+    const reason = modalReason.trim();
+    if (reason.length < 5) {
+      setActionError(d.reason);
+      return;
+    }
     setModalBusy(true);
     setActionError(null);
     try {
@@ -135,8 +140,8 @@ export const AdminWalletRailsTab = ({ dictionary, accessToken, refreshSession }:
         accessToken,
         modal.row.id,
         credited != null && Number.isFinite(credited) && credited > 0
-          ? { creditedAmountEgp: credited }
-          : {},
+          ? { creditedAmountEgp: credited, reason }
+          : { reason },
         refreshSession ? { refreshSession } : {},
       );
       closeModal();
@@ -173,10 +178,14 @@ export const AdminWalletRailsTab = ({ dictionary, accessToken, refreshSession }:
     }
   };
 
-  const submitCompleteWithdrawal = async (file: File | undefined) => {
+  const submitCompleteWithdrawal = async (file: File | undefined, reason: string) => {
     if (!modal || modal.kind !== 'complete-wdr') return;
     if (!file) {
       setActionError(d.proofFile);
+      return;
+    }
+    if (reason.trim().length < 5) {
+      setActionError(d.reason);
       return;
     }
     setModalBusy(true);
@@ -186,7 +195,7 @@ export const AdminWalletRailsTab = ({ dictionary, accessToken, refreshSession }:
       await adminApiClient.completeManualInstapayWithdrawal(
         accessToken,
         modal.row.id,
-        { proofUploadId: uploaded.filename },
+        { proofUploadId: uploaded.filename, reason: reason.trim() },
         refreshSession ? { refreshSession } : {},
       );
       closeModal();
@@ -476,6 +485,15 @@ export const AdminWalletRailsTab = ({ dictionary, accessToken, refreshSession }:
                     disabled={modalBusy}
                   />
                 </div>
+                <div className="admin-form-group">
+                  <label className="admin-form-label">{d.reason}</label>
+                  <textarea
+                    className="admin-form-textarea"
+                    value={modalReason}
+                    onChange={(e) => setModalReason(e.target.value)}
+                    disabled={modalBusy}
+                  />
+                </div>
                 {actionError && <p className="admin-settings-error">{actionError}</p>}
                 <div className="admin-modal-actions">
                   <button
@@ -537,7 +555,7 @@ export const AdminWalletRailsTab = ({ dictionary, accessToken, refreshSession }:
                 busy={modalBusy}
                 error={actionError}
                 onCancel={closeModal}
-                onSubmit={(file) => void submitCompleteWithdrawal(file)}
+                onSubmit={(file, reason) => void submitCompleteWithdrawal(file, reason)}
               />
             )}
             {modal.kind === 'reject-wdr' && (
@@ -593,20 +611,30 @@ function CompleteWithdrawalForm({
   busy: boolean;
   error: string | null;
   onCancel: () => void;
-  onSubmit: (file: File | undefined) => void;
+  onSubmit: (file: File | undefined, reason: string) => void;
 }) {
+  const [reason, setReason] = useState('');
   return (
     <form
       onSubmit={(e) => {
         e.preventDefault();
         const input = e.currentTarget.querySelector<HTMLInputElement>('input[type=file]');
-        onSubmit(input?.files?.[0]);
+        onSubmit(input?.files?.[0], reason);
       }}
     >
       <h2 className="admin-modal-title">{labels.completeTitle}</h2>
       <div className="admin-form-group">
         <label className="admin-form-label">{labels.proofFile}</label>
         <input type="file" accept="image/*" disabled={busy} />
+      </div>
+      <div className="admin-form-group">
+        <label className="admin-form-label">{labels.reason}</label>
+        <textarea
+          className="admin-form-textarea"
+          value={reason}
+          onChange={(event) => setReason(event.target.value)}
+          disabled={busy}
+        />
       </div>
       {error && <p className="admin-settings-error">{error}</p>}
       <div className="admin-modal-actions">

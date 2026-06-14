@@ -51,6 +51,9 @@ import type {
   ResolveReservationDisputeBody,
   AddReservationDisputeNoteBody,
   AddReservationDisputeEvidenceBody,
+  BackupRestoreStatus,
+  Coupon,
+  ProviderCouponCampaignRequest,
 } from '@mohandishub/shared';
 
 import { ApiClientRequestError, isApiClientError } from '../auth/client';
@@ -547,6 +550,140 @@ export const adminApiClient = {
       ...(options?.refreshSession ? { refreshSession: options.refreshSession } : {}),
     }),
 
+  listCoupons: (accessToken: string, options?: AdminClientOptions) =>
+    apiRequest<Coupon[]>({
+      method: 'GET',
+      path: '/api/admin/coupons',
+      accessToken,
+      ...(options?.refreshSession ? { refreshSession: options.refreshSession } : {}),
+    }),
+
+  createCoupon: (
+    accessToken: string,
+    body: Partial<Coupon> & { code: string; type: 'fixed' | 'percent'; value: number },
+    options?: AdminClientOptions,
+  ) =>
+    apiRequest<Coupon>({
+      method: 'POST',
+      path: '/api/admin/coupons',
+      body,
+      accessToken,
+      ...(options?.refreshSession ? { refreshSession: options.refreshSession } : {}),
+    }),
+
+  updateCoupon: (
+    accessToken: string,
+    couponId: string,
+    body: Partial<Coupon>,
+    options?: AdminClientOptions,
+  ) =>
+    apiRequest<Coupon>({
+      method: 'PATCH',
+      path: `/api/admin/coupons/${encodeURIComponent(couponId)}`,
+      body,
+      accessToken,
+      ...(options?.refreshSession ? { refreshSession: options.refreshSession } : {}),
+    }),
+
+  listCouponCampaigns: (
+    accessToken: string,
+    params?: { status?: string },
+    options?: AdminClientOptions,
+  ) => {
+    const query = new URLSearchParams();
+    if (params?.status) query.set('status', params.status);
+    const qs = query.toString();
+    return apiRequest<ProviderCouponCampaignRequest[]>({
+      method: 'GET',
+      path: `/api/admin/coupon-campaigns${qs ? `?${qs}` : ''}`,
+      accessToken,
+      ...(options?.refreshSession ? { refreshSession: options.refreshSession } : {}),
+    });
+  },
+
+  approveCouponCampaign: (
+    accessToken: string,
+    campaignId: string,
+    body: { reason: string },
+    options?: AdminClientOptions,
+  ) =>
+    apiRequest<ProviderCouponCampaignRequest>({
+      method: 'POST',
+      path: `/api/admin/coupon-campaigns/${encodeURIComponent(campaignId)}/approve`,
+      body,
+      accessToken,
+      ...(options?.refreshSession ? { refreshSession: options.refreshSession } : {}),
+    }),
+
+  rejectCouponCampaign: (
+    accessToken: string,
+    campaignId: string,
+    body: { reason: string },
+    options?: AdminClientOptions,
+  ) =>
+    apiRequest<ProviderCouponCampaignRequest>({
+      method: 'POST',
+      path: `/api/admin/coupon-campaigns/${encodeURIComponent(campaignId)}/reject`,
+      body,
+      accessToken,
+      ...(options?.refreshSession ? { refreshSession: options.refreshSession } : {}),
+    }),
+
+  getBackupStatus: (accessToken: string, options?: AdminClientOptions) =>
+    apiRequest<BackupRestoreStatus>({
+      method: 'GET',
+      path: '/api/admin/backups/status',
+      accessToken,
+      ...(options?.refreshSession ? { refreshSession: options.refreshSession } : {}),
+    }),
+
+  runBackupCheck: (accessToken: string, options?: AdminClientOptions) =>
+    apiRequest<{ id: string; created_at: string }>({
+      method: 'POST',
+      path: '/api/admin/backups/check',
+      accessToken,
+      ...(options?.refreshSession ? { refreshSession: options.refreshSession } : {}),
+    }),
+
+  requestRestore: (
+    accessToken: string,
+    body: { backupReference: string; typedConfirmation: 'RESTORE' },
+    options?: AdminClientOptions,
+  ) =>
+    apiRequest<{ id: string; status: string; created_at: string; approved_at: string | null }>({
+      method: 'POST',
+      path: '/api/admin/restores/request',
+      body,
+      accessToken,
+      ...(options?.refreshSession ? { refreshSession: options.refreshSession } : {}),
+    }),
+
+  dryRunRestore: (
+    accessToken: string,
+    body: { backupReference: string; typedConfirmation: 'RESTORE' },
+    options?: AdminClientOptions,
+  ) =>
+    apiRequest<{
+      id: string;
+      status: string;
+      result: Record<string, unknown>;
+      created_at: string;
+    }>({
+      method: 'POST',
+      path: '/api/admin/restores/dry-run',
+      body,
+      accessToken,
+      ...(options?.refreshSession ? { refreshSession: options.refreshSession } : {}),
+    }),
+
+  approveRestore: (accessToken: string, restoreId: string, options?: AdminClientOptions) =>
+    apiRequest<{ id: string; status: string; approved_at: string }>({
+      method: 'POST',
+      path: `/api/admin/restores/${encodeURIComponent(restoreId)}/approve`,
+      accessToken,
+      ...(options?.refreshSession ? { refreshSession: options.refreshSession } : {}),
+    }),
+
   adjustBalance: (accessToken: string, body: AdjustBalanceBody, options?: AdminClientOptions) =>
     apiRequest<Transaction>({
       method: 'POST',
@@ -556,10 +693,11 @@ export const adminApiClient = {
       ...(options?.refreshSession ? { refreshSession: options.refreshSession } : {}),
     }),
 
-  reverseTransaction: (accessToken: string, txnId: string) =>
+  reverseTransaction: (accessToken: string, txnId: string, reason: string) =>
     apiRequest<Transaction>({
       method: 'POST',
       path: `/api/admin/transactions/${txnId}/reverse`,
+      body: { reason },
       accessToken,
     }),
 
@@ -656,13 +794,13 @@ export const adminApiClient = {
   approveManualInstapayDeposit: (
     accessToken: string,
     depositId: string,
-    body?: { creditedAmountEgp?: number },
+    body: { creditedAmountEgp?: number; reason: string },
     options?: AdminClientOptions,
   ) =>
     apiRequest<ManualDepositRequest>({
       method: 'POST',
       path: `/api/admin/wallet/manual-deposits/${encodeURIComponent(depositId)}/approve`,
-      body: body ?? {},
+      body,
       accessToken,
       ...(options?.refreshSession ? { refreshSession: options.refreshSession } : {}),
     }),
@@ -702,7 +840,7 @@ export const adminApiClient = {
   completeManualInstapayWithdrawal: (
     accessToken: string,
     withdrawalId: string,
-    body: { proofUploadId: string },
+    body: { proofUploadId: string; reason: string },
     options?: AdminClientOptions,
   ) =>
     apiRequest<WithdrawalRequest>({

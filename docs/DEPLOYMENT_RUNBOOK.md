@@ -6,6 +6,19 @@ Deployment targets: **Vercel** (web), **Render** (API + worker), **Supabase** (P
 
 ---
 
+## Canonical Launch Domains
+
+Use custom domains as the public contract. Hosting provider URLs are implementation details and should only be added to CORS as explicit preview/debug origins.
+
+- Web: `https://mohandishub.app`
+- API: `https://api.mohandishub.app`
+- Render API/worker required values: `CORS_ORIGIN=https://mohandishub.app`, `WEB_PUBLIC_URL=https://mohandishub.app`, `API_PUBLIC_URL=https://api.mohandishub.app`, and `SENTRY_DSN=<real DSN>`.
+- Paymob stays hidden/off until the Paymob account is active and all Paymob env keys are configured.
+- Launch OTP channel is Brevo email only; SMS/WhatsApp OTP remain disabled until configured later.
+- Backup/restore launch provider is Supabase: set `BACKUP_PROVIDER=supabase`, `BACKUP_SUPABASE_PROJECT_REF`, and `BACKUP_SUPABASE_ACCESS_TOKEN` on the API service.
+
+---
+
 ## 1. Environment checklist
 
 ### Web (Vercel)

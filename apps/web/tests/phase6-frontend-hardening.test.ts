@@ -16,6 +16,15 @@ describe('Phase 6 frontend route, session, and notification hardening', () => {
     expect(middleware).toContain("url.searchParams.set('next'");
   });
 
+  it('passes locale into the root document so Arabic is server-rendered as RTL', () => {
+    const middleware = read('middleware.ts');
+    const rootLayout = read('app/layout.tsx');
+
+    expect(middleware).toContain("requestHeaders.set('x-mohandishub-locale', locale)");
+    expect(rootLayout).toContain("requestHeaders.get('x-mohandishub-locale')");
+    expect(rootLayout).toContain('dir={getDirection(locale)}');
+  });
+
   it('sets and clears the web session hint and disconnects sockets on logout', () => {
     const provider = read('components/auth/auth-provider.tsx');
 

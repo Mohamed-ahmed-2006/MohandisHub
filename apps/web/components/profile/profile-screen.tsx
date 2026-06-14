@@ -13,6 +13,7 @@ import type {
   UpdateBusinessProfileBody,
   UpdateCraftsmanProfileBody,
   UpdateExpertProfileBody,
+  NotificationPreferenceGroup,
 } from '@mohandishub/shared';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
@@ -34,7 +35,9 @@ import { COUNTRIES } from '@/lib/data/countries';
 import { getApiBaseUrl } from '@/lib/env';
 import { buildLocalePath } from '@/lib/i18n/path';
 import type { Dictionary, Locale } from '@/lib/i18n/types';
+import { notificationsApiClient } from '@/lib/notifications/client';
 import { profilesApiClient } from '@/lib/profiles/client';
+import { recommendationsApiClient } from '@/lib/recommendations/client';
 import { reviewsApiClient } from '@/lib/reviews/client';
 import { uploadFile, uploadPrivateFile } from '@/lib/upload/client';
 import { usersApiClient } from '@/lib/users/client';
@@ -79,9 +82,155 @@ type RoleProfileKind = 'expert' | 'craftsman' | 'business';
 type AccountPreferencesProps = {
   locale: Locale;
   dictionary: Dictionary;
+  accessToken: string;
 };
 
-const AccountPreferences = ({ locale, dictionary }: AccountPreferencesProps) => {
+const AccountPreferences = ({ locale, dictionary, accessToken }: AccountPreferencesProps) => {
+  const [groups, setGroups] = useState<NotificationPreferenceGroup[]>([]);
+  const [preferencesLoading, setPreferencesLoading] = useState(true);
+  const [preferencesSaving, setPreferencesSaving] = useState(false);
+  const [preferencesMessage, setPreferencesMessage] = useState<string | null>(null);
+  const [pushReady, setPushReady] = useState<{ enabled: boolean; publicKey: string | null } | null>(
+    null,
+  );
+  const [personalized, setPersonalized] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      setPreferencesLoading(true);
+      try {
+        const [prefs, push, consent] = await Promise.all([
+          notificationsApiClient.getPreferences(accessToken),
+          notificationsApiClient.getPushReadiness(accessToken),
+          recommendationsApiClient.getConsent(accessToken),
+        ]);
+        if (cancelled) return;
+        setGroups(prefs.groups);
+        setPushReady(push);
+        setPersonalized(consent.personalizedRecommendationsEnabled);
+      } catch {
+        if (!cancelled) setPreferencesMessage('Could not load notification preferences.');
+      } finally {
+        if (!cancelled) setPreferencesLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [accessToken]);
+
+  const savePreference = async (groupIndex: number, preferenceIndex: number, enabled: boolean) => {
+    const pref = groups[groupIndex]?.preferences[preferenceIndex];
+    if (!pref || pref.required) return;
+    const nextGroups = groups.map((group, gi) =>
+      gi !== groupIndex
+        ? group
+        : {
+            ...group,
+            preferences: group.preferences.map((p, pi) =>
+              pi === preferenceIndex ? { ...p, enabled } : p,
+            ),
+          },
+    );
+    setGroups(nextGroups);
+    setPreferencesSaving(true);
+    setPreferencesMessage(null);
+    try {
+      const flattened = nextGroups.flatMap((group) =>
+        group.preferences.map((p) => ({
+          notificationType: p.notificationType,
+          channel: p.channel,
+          enabled: p.enabled,
+        })),
+      );
+      const saved = await notificationsApiClient.updatePreferences(accessToken, {
+        preferences: flattened,
+      });
+      setGroups(saved.groups);
+      setPreferencesMessage('Preferences saved.');
+    } catch {
+      setPreferencesMessage('Could not save notification preferences.');
+    } finally {
+      setPreferencesSaving(false);
+    }
+  };
+
+  const togglePersonalized = async (enabled: boolean) => {
+    setPersonalized(enabled);
+    try {
+      const saved = await recommendationsApiClient.setConsent(accessToken, enabled);
+      setPersonalized(saved.personalizedRecommendationsEnabled);
+    } catch {
+      setPreferencesMessage('Could not update recommendation consent.');
+    }
+  };
+
+  const enablePush = async () => {
+    setPreferencesMessage(null);
+    try {
+      const readiness = pushReady ?? (await notificationsApiClient.getPushReadiness(accessToken));
+      setPushReady(readiness);
+      if (!readiness.enabled || !readiness.publicKey) {
+        setPreferencesMessage('Push is not configured on the server yet.');
+        return;
+      }
+      if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+        setPreferencesMessage('This browser does not support push notifications.');
+        return;
+      }
+      const permission = await Notification.requestPermission();
+      if (permission !== 'granted') {
+        setPreferencesMessage('Push permission was not granted.');
+        return;
+      }
+      const registration = await navigator.serviceWorker.register('/sw.js');
+      const key = Uint8Array.from(
+        atob(readiness.publicKey.replace(/-/g, '+').replace(/_/g, '/')),
+        (char) => char.charCodeAt(0),
+      );
+      const subscription = await registration.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: key,
+      });
+      const json = subscription.toJSON();
+      if (!json.endpoint || !json.keys?.p256dh || !json.keys.auth) {
+        setPreferencesMessage('Browser did not return a complete push subscription.');
+        return;
+      }
+      await notificationsApiClient.savePushSubscription(accessToken, {
+        endpoint: json.endpoint,
+        keys: { p256dh: json.keys.p256dh, auth: json.keys.auth },
+        userAgent: navigator.userAgent,
+      });
+      setPreferencesMessage('Push notifications enabled on this device.');
+    } catch {
+      setPreferencesMessage('Could not enable push notifications.');
+    }
+  };
+
+  const categoryLabel = (category: string) =>
+    ({
+      security: locale === 'ar' ? 'الأمان والحساب' : 'Security and account',
+      reservations: locale === 'ar' ? 'الحجوزات' : 'Reservations',
+      disputes: locale === 'ar' ? 'النزاعات' : 'Disputes',
+      wallet: locale === 'ar' ? 'المحفظة والمدفوعات' : 'Wallet and payments',
+      withdrawals: locale === 'ar' ? 'السحب' : 'Withdrawals',
+      messages: locale === 'ar' ? 'الرسائل' : 'Messages',
+      jobs: locale === 'ar' ? 'الوظائف' : 'Jobs',
+      services: locale === 'ar' ? 'الخدمات' : 'Services',
+      reviews: locale === 'ar' ? 'التقييمات' : 'Reviews',
+      admin: locale === 'ar' ? 'النظام والإدارة' : 'System and admin',
+      marketing: locale === 'ar' ? 'العروض والنمو' : 'Marketing',
+    })[category] ?? category;
+
+  const channelLabel = (channel: string) =>
+    ({
+      in_app: locale === 'ar' ? 'داخل التطبيق' : 'In-app',
+      email: locale === 'ar' ? 'البريد' : 'Email',
+      push: locale === 'ar' ? 'تنبيهات الجهاز' : 'Push',
+    })[channel] ?? channel;
+
   return (
     <div className="profile-screen-subsection">
       <div className="profile-screen-subsection-header">
@@ -109,6 +258,82 @@ const AccountPreferences = ({ locale, dictionary }: AccountPreferencesProps) => 
             lightLabel={dictionary.theme.lightLabel}
           />
         </div>
+      </div>
+      <div className="profile-screen-pref-panel">
+        <div className="profile-screen-subsection-header">
+          <h4 className="profile-screen-subsection-title">
+            {locale === 'ar' ? 'تفضيلات التنبيهات' : 'Notification preferences'}
+          </h4>
+          {preferencesSaving && (
+            <span className="profile-screen-label">
+              {locale === 'ar' ? 'جار الحفظ...' : 'Saving...'}
+            </span>
+          )}
+        </div>
+        <p className="profile-screen-muted">
+          {locale === 'ar'
+            ? 'تنبيهات الأمان والأموال والحجوزات المهمة لا يمكن إيقافها بالكامل.'
+            : 'Security, money, dispute, and critical reservation notices cannot be fully disabled.'}
+        </p>
+        {pushReady && !pushReady.enabled && (
+          <p className="profile-screen-muted">
+            {locale === 'ar'
+              ? 'تنبيهات الجهاز جاهزة في الواجهة، لكنها تحتاج مفاتيح VAPID في env.'
+              : 'Push controls are ready, but VAPID env keys are required before delivery works.'}
+          </p>
+        )}
+        <button
+          type="button"
+          className="profile-screen-button profile-screen-button--secondary"
+          onClick={() => void enablePush()}
+        >
+          {locale === 'ar' ? 'تفعيل تنبيهات الجهاز' : 'Enable push on this device'}
+        </button>
+        {preferencesMessage && <p className="profile-screen-muted">{preferencesMessage}</p>}
+        {preferencesLoading ? (
+          <p className="profile-screen-muted">{dictionary.admin?.loading ?? 'Loading...'}</p>
+        ) : (
+          <div className="profile-screen-notification-grid">
+            {groups.map((group, groupIndex) => (
+              <section key={group.category} className="profile-screen-pref-card">
+                <h5 className="profile-screen-label">{categoryLabel(group.category)}</h5>
+                {group.preferences.map((pref, preferenceIndex) => (
+                  <label
+                    key={`${pref.notificationType}-${pref.channel}`}
+                    className="profile-screen-toggle-row"
+                  >
+                    <span>
+                      {pref.notificationType.replaceAll('_', ' ')} / {channelLabel(pref.channel)}
+                      {pref.required ? (locale === 'ar' ? ' - مطلوب' : ' - required') : ''}
+                    </span>
+                    <input
+                      type="checkbox"
+                      checked={pref.enabled}
+                      disabled={pref.required || preferencesSaving}
+                      onChange={(event) =>
+                        void savePreference(groupIndex, preferenceIndex, event.target.checked)
+                      }
+                    />
+                  </label>
+                ))}
+              </section>
+            ))}
+          </div>
+        )}
+      </div>
+      <div className="profile-screen-pref-panel">
+        <label className="profile-screen-toggle-row">
+          <span>
+            {locale === 'ar'
+              ? 'استخدام نشاطي لتحسين الاقتراحات'
+              : 'Use my activity for personalized recommendations'}
+          </span>
+          <input
+            type="checkbox"
+            checked={personalized}
+            onChange={(event) => void togglePersonalized(event.target.checked)}
+          />
+        </label>
       </div>
     </div>
   );
@@ -508,7 +733,7 @@ const AccountForm = ({
           {saving ? dictionary.common.continue : dictionary.common.save}
         </button>
       </form>
-      <AccountPreferences locale={locale} dictionary={dictionary} />
+      <AccountPreferences locale={locale} dictionary={dictionary} accessToken={accessToken} />
     </section>
   );
 };

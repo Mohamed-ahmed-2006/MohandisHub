@@ -9,6 +9,7 @@ import { useAppStatus } from '@/components/app-status-provider';
 import { useAuth } from '@/components/auth/auth-provider';
 import { Container } from '@/components/ui/container';
 import { toAbsoluteAssetUrl } from '@/lib/asset-url';
+import { couponsApiClient } from '@/lib/coupons/client';
 import { EGYPTIAN_CITIES } from '@/lib/data/egyptian-cities';
 import { buildLocalePath } from '@/lib/i18n/path';
 import type { Dictionary, Locale } from '@/lib/i18n/types';
@@ -38,6 +39,11 @@ const getStatusLabel = (status: string, sp: Record<string, string>): string => {
   return (key && sp[key]) ?? status;
 };
 
+const displayCampaignCode = (config: Record<string, unknown>) => {
+  const code = config.code;
+  return typeof code === 'string' || typeof code === 'number' ? String(code) : '-';
+};
+
 export const ServicesScreen = ({ locale, dictionary }: Props) => {
   const router = useRouter();
   const { authUser, accessToken, isAuthenticated, isReady, authGuard } = useAuth();
@@ -53,6 +59,11 @@ export const ServicesScreen = ({ locale, dictionary }: Props) => {
   const [editImages, setEditImages] = useState<string[]>([]);
   const [imageUploadBusy, setImageUploadBusy] = useState(false);
   const [savingEdit, setSavingEdit] = useState(false);
+  const [couponCampaigns, setCouponCampaigns] = useState<
+    Awaited<ReturnType<typeof couponsApiClient.listMyCampaigns>>
+  >([]);
+  const [campaignBusy, setCampaignBusy] = useState(false);
+  const [campaignMessage, setCampaignMessage] = useState<string | null>(null);
   const sp = dictionary.servicesPage ?? ({} as Record<string, string>);
   const np = (dictionary as { negotiation?: Record<string, string> }).negotiation ?? {};
   const { status } = useAppStatus();
@@ -86,15 +97,23 @@ export const ServicesScreen = ({ locale, dictionary }: Props) => {
       if (accessToken) {
         const data = await servicesApiClient.listMyServices(accessToken, 1, 50);
         setServices(data.items);
+        if (
+          authUser?.role === 'expert' ||
+          authUser?.role === 'craftsman' ||
+          authUser?.role === 'business'
+        ) {
+          setCouponCampaigns(await couponsApiClient.listMyCampaigns(accessToken));
+        }
       } else {
         setServices([]);
+        setCouponCampaigns([]);
       }
     } catch {
       setServices([]);
     } finally {
       setLoading(false);
     }
-  }, [accessToken]);
+  }, [accessToken, authUser?.role]);
 
   useEffect(() => {
     void load();
@@ -256,6 +275,54 @@ export const ServicesScreen = ({ locale, dictionary }: Props) => {
     }
   };
 
+  const handleCampaignRequest = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!accessToken) return;
+    const form = event.currentTarget;
+    const serviceId = (form.elements.namedItem('serviceId') as HTMLSelectElement).value;
+    const code = (form.elements.namedItem('code') as HTMLInputElement).value.trim();
+    const value = Number((form.elements.namedItem('value') as HTMLInputElement).value);
+    const requestedQuantity = Number(
+      (form.elements.namedItem('requestedQuantity') as HTMLInputElement).value,
+    );
+    const discountTarget = (form.elements.namedItem('discountTarget') as HTMLSelectElement)
+      .value as 'service_price' | 'platform_commission' | 'both';
+    if (!serviceId || !code || !Number.isFinite(value) || !Number.isFinite(requestedQuantity)) {
+      setCampaignMessage('Complete the coupon campaign fields.');
+      return;
+    }
+    setCampaignBusy(true);
+    setCampaignMessage(null);
+    try {
+      const preview = await couponsApiClient.previewCampaign(accessToken, { requestedQuantity });
+      if (!preview.canSubmit) {
+        setCampaignMessage(
+          `Wallet balance is not enough. Fee: ${preview.totalFeeEgp.toFixed(2)} EGP.`,
+        );
+        return;
+      }
+      await couponsApiClient.createCampaign(accessToken, {
+        code,
+        type: 'percent',
+        value,
+        surface: 'service',
+        subtotal: 0,
+        itemId: serviceId,
+        discountTarget,
+        requestedQuantity,
+        currency: 'EGP',
+        ...(authUser?.id ? { providerId: authUser.id } : {}),
+      });
+      form.reset();
+      setCampaignMessage(`Campaign requested. Fee debited: ${preview.totalFeeEgp.toFixed(2)} EGP.`);
+      setCouponCampaigns(await couponsApiClient.listMyCampaigns(accessToken));
+    } catch (err) {
+      setCampaignMessage(err instanceof Error ? err.message : 'Campaign request failed.');
+    } finally {
+      setCampaignBusy(false);
+    }
+  };
+
   const categoryName = (cat: ServiceCategory) => (locale === 'ar' ? cat.nameAr : cat.nameEn);
 
   if (!isReady || !authUser) {
@@ -304,6 +371,104 @@ export const ServicesScreen = ({ locale, dictionary }: Props) => {
             {np.openInbox ?? dictionary.nav?.negotiations ?? 'Open price negotiations'}
           </Link>
         </section>
+
+        {services.length > 0 && (
+          <section className="dashboard-card" style={{ marginBottom: '1.25rem' }}>
+            <h2 className="dashboard-card-title">Coupon campaigns</h2>
+            <p className="dashboard-card-meta">
+              Request provider-funded service coupons. The generation fee is debited from your
+              wallet, then admin approval activates the coupon.
+            </p>
+            {campaignMessage && <p className="dashboard-error">{campaignMessage}</p>}
+            <form className="dashboard-form" onSubmit={(e) => void handleCampaignRequest(e)}>
+              <div className="service-create-grid">
+                <div className="service-create-field">
+                  <label className="service-create-label">Service</label>
+                  <select
+                    name="serviceId"
+                    className="dashboard-select service-create-input"
+                    required
+                  >
+                    <option value="">Select service</option>
+                    {services.map((service) => (
+                      <option key={service.id} value={service.id}>
+                        {service.title}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="service-create-field">
+                  <label className="service-create-label">Coupon code</label>
+                  <input name="code" className="dashboard-input service-create-input" required />
+                </div>
+                <div className="service-create-field">
+                  <label className="service-create-label">Discount %</label>
+                  <input
+                    name="value"
+                    type="number"
+                    min={1}
+                    max={100}
+                    step={0.01}
+                    className="dashboard-input service-create-input"
+                    required
+                  />
+                </div>
+                <div className="service-create-field">
+                  <label className="service-create-label">Coupon count</label>
+                  <input
+                    name="requestedQuantity"
+                    type="number"
+                    min={1}
+                    step={1}
+                    className="dashboard-input service-create-input"
+                    required
+                  />
+                </div>
+                <div className="service-create-field">
+                  <label className="service-create-label">Discount target</label>
+                  <select
+                    name="discountTarget"
+                    className="dashboard-select service-create-input"
+                    defaultValue="service_price"
+                  >
+                    <option value="service_price">Service price</option>
+                    <option value="platform_commission">Platform commission</option>
+                    <option value="both">Service + commission</option>
+                  </select>
+                </div>
+              </div>
+              <div className="service-create-actions">
+                <button className="dashboard-primary-btn" type="submit" disabled={campaignBusy}>
+                  {campaignBusy ? 'Requesting...' : 'Request campaign'}
+                </button>
+              </div>
+            </form>
+            {couponCampaigns.length > 0 && (
+              <div className="service-campaign-table-wrapper">
+                <table className="service-campaign-table">
+                  <thead>
+                    <tr>
+                      <th>Code</th>
+                      <th>Count</th>
+                      <th>Fee</th>
+                      <th>Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {couponCampaigns.slice(0, 5).map((campaign) => (
+                      <tr key={campaign.id}>
+                        <td>{displayCampaignCode(campaign.couponConfig)}</td>
+                        <td>{campaign.requestedQuantity}</td>
+                        <td>{campaign.totalFeeEgp.toFixed(2)} EGP</td>
+                        <td>{campaign.status}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </section>
+        )}
 
         {loading ? (
           <p>{dictionary.admin?.loading ?? 'Loading...'}</p>

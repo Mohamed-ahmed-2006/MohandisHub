@@ -1,4 +1,11 @@
-import type { ApiErrorBody, ApiSuccessBody, NotificationListResponse } from '@mohandishub/shared';
+import type {
+  ApiErrorBody,
+  ApiSuccessBody,
+  NotificationListResponse,
+  NotificationPreferencesResponse,
+  PushSubscriptionBody,
+  UpdateNotificationPreferencesBody,
+} from '@mohandishub/shared';
 
 import { ApiClientRequestError } from '../auth/client';
 
@@ -78,6 +85,48 @@ export const notificationsApiClient = {
     options?: { refreshSession?: () => Promise<string | null> },
   ) =>
     requestJson<{ unreadCount: number }>(accessToken, '/api/notifications/unread-count', options),
+
+  getPreferences: (
+    accessToken: string,
+    options?: { refreshSession?: () => Promise<string | null> },
+  ) =>
+    requestJson<NotificationPreferencesResponse>(
+      accessToken,
+      '/api/notifications/preferences',
+      options,
+    ),
+
+  updatePreferences: (
+    accessToken: string,
+    body: UpdateNotificationPreferencesBody,
+    options?: { refreshSession?: () => Promise<string | null> },
+  ) =>
+    requestJson<NotificationPreferencesResponse>(accessToken, '/api/notifications/preferences', {
+      method: 'PATCH',
+      body: JSON.stringify(body),
+      ...options,
+    }),
+
+  getPushReadiness: (
+    accessToken: string,
+    options?: { refreshSession?: () => Promise<string | null> },
+  ) =>
+    requestJson<{ enabled: boolean; publicKey: string | null }>(
+      accessToken,
+      '/api/notifications/push/readiness',
+      options,
+    ),
+
+  savePushSubscription: (
+    accessToken: string,
+    body: PushSubscriptionBody,
+    options?: { refreshSession?: () => Promise<string | null> },
+  ) =>
+    requestJson<{ configured: boolean }>(accessToken, '/api/notifications/push/subscriptions', {
+      method: 'POST',
+      body: JSON.stringify(body),
+      ...options,
+    }),
 
   markAsRead: (
     accessToken: string,

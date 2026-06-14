@@ -23,5 +23,15 @@ async function apiReq<T>(path: string, token: string): Promise<T> {
 }
 
 export const analyticsApiClient = {
-  getMyAnalytics: (token: string): Promise<ProviderAnalytics> => apiReq('/api/analytics/me', token),
+  getMyAnalytics: (
+    token: string,
+    params?: { days?: number; from?: string; to?: string },
+  ): Promise<ProviderAnalytics> => {
+    const query = new URLSearchParams();
+    if (params?.days) query.set('days', String(params.days));
+    if (params?.from) query.set('from', params.from);
+    if (params?.to) query.set('to', params.to);
+    const qs = query.toString();
+    return apiReq(`/api/analytics/me${qs ? `?${qs}` : ''}`, token);
+  },
 };

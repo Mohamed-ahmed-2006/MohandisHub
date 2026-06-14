@@ -35,6 +35,73 @@
   cursor: default;
 }
 
+.dashboard-secondary-btn {
+  min-height: 2.65rem;
+  padding: 0.7rem 1rem;
+  border-radius: 999px;
+  border: 1px solid hsl(var(--border));
+  background: hsl(var(--background));
+  color: hsl(var(--foreground));
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.dashboard-secondary-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.dashboard-actions-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.dashboard-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  min-height: 2.25rem;
+  padding: 0.25rem 0.55rem;
+  border-radius: 999px;
+  border: 1px solid hsl(var(--border));
+  background: hsl(var(--surface-elevated));
+}
+
+.dashboard-link-button {
+  border: 0;
+  background: transparent;
+  color: hsl(var(--foreground));
+  font: inherit;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.service-campaign-table-wrapper {
+  margin-top: 1rem;
+  overflow-x: auto;
+  border: 1px solid hsl(var(--border));
+  border-radius: var(--radius-lg);
+}
+
+.service-campaign-table {
+  width: 100%;
+  min-width: 520px;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+
+.service-campaign-table th,
+.service-campaign-table td {
+  padding: 0.7rem 0.85rem;
+  text-align: start;
+  border-bottom: 1px solid hsl(var(--border) / 0.65);
+}
+
+.service-campaign-table tr:last-child td {
+  border-bottom: 0;
+}
+
 .dashboard-primary-btn--small {
   padding: 0.35rem 0.9rem;
   font-size: 0.8rem;

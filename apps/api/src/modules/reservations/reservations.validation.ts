@@ -47,6 +47,7 @@ export const createReservationSchema = z
     slotId: z.string().uuid(),
     mode: z.enum(['online', 'offline']),
     onlineType: z.enum(['voice', 'video']).optional(),
+    couponCode: z.string().trim().min(2).max(50).optional(),
   })
   .superRefine((v, ctx) => {
     if (v.mode === 'online' && !v.onlineType) {

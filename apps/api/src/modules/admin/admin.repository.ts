@@ -638,7 +638,11 @@ export class AdminRepository {
     }
   }
 
-  async reverseTransaction(txnId: string, adminId: string): Promise<TransactionRow> {
+  async reverseTransaction(
+    txnId: string,
+    adminId: string,
+    reason: string,
+  ): Promise<TransactionRow> {
     const client = await this.db.connect();
     try {
       await client.query('BEGIN');
@@ -700,7 +704,7 @@ export class AdminRepository {
           orig.user_id,
           Math.abs(reverseAmount),
           newBalance,
-          `Reversal of transaction ${txnId}`,
+          `Reversal of transaction ${txnId}: ${reason}`,
           txnId,
           adminId,
         ],

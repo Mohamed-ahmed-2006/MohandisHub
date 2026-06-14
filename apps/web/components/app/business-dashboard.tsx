@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
 
 import { BusinessJobsTab } from './business-jobs-tab';
+import { BusinessTeamPanel } from './business-team-panel';
 
 import { analyticsApiClient } from '@/lib/analytics/client';
 import { buildLocalePath } from '@/lib/i18n/path';
@@ -34,7 +35,7 @@ type Props = {
   verificationStatus?: string;
 };
 
-type BusinessTab = 'overview' | 'services' | 'orders' | 'analytics' | 'jobs';
+type BusinessTab = 'overview' | 'services' | 'orders' | 'analytics' | 'jobs' | 'team';
 
 export const BusinessDashboard = ({
   locale,
@@ -50,6 +51,7 @@ export const BusinessDashboard = ({
   const [servicesLoading, setServicesLoading] = useState(false);
   const [analytics, setAnalytics] = useState<ProviderAnalytics | null>(null);
   const [analyticsLoading, setAnalyticsLoading] = useState(false);
+  const [analyticsDays, setAnalyticsDays] = useState(30);
   const [overviewLoading, setOverviewLoading] = useState(false);
   const [overviewNegNeedAction, setOverviewNegNeedAction] = useState(0);
   const [overviewNegPending, setOverviewNegPending] = useState(0);
@@ -74,14 +76,14 @@ export const BusinessDashboard = ({
   const loadAnalytics = useCallback(async () => {
     setAnalyticsLoading(true);
     try {
-      const data = await analyticsApiClient.getMyAnalytics(accessToken);
+      const data = await analyticsApiClient.getMyAnalytics(accessToken, { days: analyticsDays });
       setAnalytics(data);
     } catch {
       setAnalytics(null);
     } finally {
       setAnalyticsLoading(false);
     }
-  }, [accessToken]);
+  }, [accessToken, analyticsDays]);
 
   const loadMyServices = useCallback(async () => {
     setServicesLoading(true);
@@ -247,6 +249,17 @@ export const BusinessDashboard = ({
           onClick={() => setTab('jobs')}
         >
           Jobs
+        </button>
+        <button
+          id="business-team-tab"
+          type="button"
+          role="tab"
+          aria-selected={tab === 'team'}
+          aria-controls="business-team-panel"
+          className={`dashboard-tab ${tab === 'team' ? 'dashboard-tab--active' : ''}`}
+          onClick={() => setTab('team')}
+        >
+          Team
         </button>
       </div>
 
@@ -449,6 +462,18 @@ export const BusinessDashboard = ({
           role="tabpanel"
           aria-labelledby="business-analytics-tab"
         >
+          <div className="dashboard-actions-row" style={{ marginBottom: '1rem' }}>
+            {[7, 30, 90, 365].map((days) => (
+              <button
+                key={days}
+                type="button"
+                className={`dashboard-secondary-btn ${analyticsDays === days ? 'dashboard-primary-btn' : ''}`}
+                onClick={() => setAnalyticsDays(days)}
+              >
+                {days === 365 ? 'Year' : `${days} days`}
+              </button>
+            ))}
+          </div>
           {analyticsLoading ? (
             <p className="dashboard-empty">{common.loading ?? 'Loading...'}</p>
           ) : analytics ? (
@@ -471,6 +496,59 @@ export const BusinessDashboard = ({
                   {analytics.ordersCount}
                 </p>
               </div>
+              <div className="dashboard-card">
+                <h4 className="dashboard-card-title">Conversion</h4>
+                <p className="dashboard-card-meta" style={{ fontSize: '1.25rem', fontWeight: 600 }}>
+                  {analytics.conversion ? `${analytics.conversion.rate.toFixed(1)}%` : '0%'}
+                </p>
+                <p className="dashboard-card-meta">
+                  {analytics.conversion?.orders ?? 0} orders / {analytics.conversion?.views ?? 0}{' '}
+                  views
+                </p>
+              </div>
+              {analytics.payoutForecast && (
+                <div className="dashboard-card" style={{ gridColumn: '1 / -1' }}>
+                  <h4 className="dashboard-card-title">Payout forecast</h4>
+                  <p className="dashboard-card-meta">
+                    Available: {analytics.payoutForecast.available.toFixed(2)}{' '}
+                    {analytics.payoutForecast.currency} · Pending:{' '}
+                    {analytics.payoutForecast.pending.toFixed(2)} · Held:{' '}
+                    {analytics.payoutForecast.held.toFixed(2)}
+                  </p>
+                </div>
+              )}
+              {analytics.earningsTrend?.length ? (
+                <div className="dashboard-card" style={{ gridColumn: '1 / -1' }}>
+                  <h4 className="dashboard-card-title">Earnings trend</h4>
+                  <div className="service-campaign-table-wrapper">
+                    <table className="service-campaign-table">
+                      <thead>
+                        <tr>
+                          <th>Date</th>
+                          <th>Amount</th>
+                          <th>Orders</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {analytics.earningsTrend.slice(-10).map((row) => {
+                          const orders = analytics.orderTrend?.find(
+                            (item) => item.date === row.date,
+                          );
+                          return (
+                            <tr key={row.date}>
+                              <td>{row.date}</td>
+                              <td>
+                                {row.amount.toFixed(2)} {analytics.currency}
+                              </td>
+                              <td>{orders?.count ?? 0}</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              ) : null}
               {analytics.topServices.length > 0 && (
                 <div className="dashboard-card" style={{ gridColumn: '1 / -1' }}>
                   <h4 className="dashboard-card-title">{common.topServices ?? 'Top services'}</h4>
@@ -495,6 +573,35 @@ export const BusinessDashboard = ({
                   </ul>
                 </div>
               )}
+              {analytics.servicePerformance?.length ? (
+                <div className="dashboard-card" style={{ gridColumn: '1 / -1' }}>
+                  <h4 className="dashboard-card-title">Service performance</h4>
+                  <div className="service-campaign-table-wrapper">
+                    <table className="service-campaign-table">
+                      <thead>
+                        <tr>
+                          <th>Service</th>
+                          <th>City</th>
+                          <th>Completed</th>
+                          <th>Cancelled</th>
+                          <th>Disputes</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {analytics.servicePerformance.map((row) => (
+                          <tr key={row.id}>
+                            <td>{row.title}</td>
+                            <td>{row.city ?? '-'}</td>
+                            <td>{row.completionCount}</td>
+                            <td>{row.cancellationCount}</td>
+                            <td>{row.disputeCount}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              ) : null}
             </div>
           ) : (
             <p className="dashboard-empty">{common.errorLoading ?? 'Failed to load analytics.'}</p>
@@ -505,6 +612,11 @@ export const BusinessDashboard = ({
       {tab === 'jobs' && (
         <div id="business-jobs-panel" role="tabpanel" aria-labelledby="business-jobs-tab">
           <BusinessJobsTab accessToken={accessToken} />
+        </div>
+      )}
+      {tab === 'team' && (
+        <div id="business-team-panel" role="tabpanel" aria-labelledby="business-team-tab">
+          <BusinessTeamPanel dictionary={dictionary} accessToken={accessToken} />
         </div>
       )}
     </section>

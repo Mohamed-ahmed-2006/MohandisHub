@@ -74,7 +74,9 @@ const envSchema = z.object({
 
   // OTP delivery providers
   OTP_EMAIL_PROVIDER: z.enum(['console', 'brevo', 'sendgrid']).default('console'),
-  OTP_SMS_PROVIDER: z.enum(['console', 'twilio']).default('console'),
+  OTP_SMS_PROVIDER: z
+    .enum(['console', 'twilio', 'http_adapter', 'meta_whatsapp'])
+    .default('console'),
   BREVO_API_KEY: z.string().optional(),
   SENDGRID_API_KEY: z.string().optional(),
   EMAIL_FROM: z.string().default('noreply@mohandishub.app'),
@@ -82,6 +84,31 @@ const envSchema = z.object({
   TWILIO_ACCOUNT_SID: z.string().optional(),
   TWILIO_AUTH_TOKEN: z.string().optional(),
   TWILIO_PHONE_NUMBER: z.string().optional(),
+  SMS_HTTP_ENDPOINT: z.string().url().optional(),
+  SMS_HTTP_API_KEY: z.string().optional(),
+  SMS_HTTP_FROM: z.string().optional(),
+  META_WHATSAPP_TOKEN: z.string().optional(),
+  META_WHATSAPP_PHONE_NUMBER_ID: z.string().optional(),
+  META_WHATSAPP_OTP_TEMPLATE: z.string().default('mohandishub_otp'),
+  META_WHATSAPP_LANGUAGE: z.string().default('en_US'),
+
+  // Web Push (PWA/browser push). Keys stay in env; subscriptions are stored per device.
+  WEB_PUSH_ENABLED: booleanEnv(false),
+  WEB_PUSH_VAPID_PUBLIC_KEY: z.string().optional(),
+  WEB_PUSH_VAPID_PRIVATE_KEY: z.string().optional(),
+  WEB_PUSH_SUBJECT: z.string().optional(),
+
+  // Backup/restore provider API. Restore is admin-gated and provider-driven.
+  BACKUP_PROVIDER: z.enum(['disabled', 'supabase', 'custom_http']).default('disabled'),
+  BACKUP_SUPABASE_PROJECT_REF: z.string().optional(),
+  BACKUP_SUPABASE_ACCESS_TOKEN: z.string().optional(),
+  BACKUP_SUPABASE_BASE_URL: z.string().url().default('https://api.supabase.com'),
+  BACKUP_CUSTOM_BASE_URL: z.string().url().optional(),
+  BACKUP_CUSTOM_API_KEY: z.string().optional(),
+  BACKUP_CUSTOM_STATUS_PATH: z.string().default('/status'),
+  BACKUP_CUSTOM_LIST_PATH: z.string().default('/backups'),
+  BACKUP_CUSTOM_DRY_RUN_PATH: z.string().default('/restores/dry-run'),
+  BACKUP_CUSTOM_RESTORE_PATH: z.string().default('/restores'),
 
   // Cryptomus — crypto payments (wallet deposit)
   CRYPTOMUS_MERCHANT_ID: z.string().uuid().optional(),
@@ -218,9 +245,55 @@ if (parsed.data.NODE_ENV === 'production') {
     ];
   }
   if (parsed.data.OTP_SMS_PROVIDER === 'twilio') {
+    if (
+      !parsed.data.TWILIO_ACCOUNT_SID ||
+      !parsed.data.TWILIO_AUTH_TOKEN ||
+      !parsed.data.TWILIO_PHONE_NUMBER
+    ) {
+      productionErrors.OTP_SMS_PROVIDER = [
+        'Twilio SMS requires TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, and TWILIO_PHONE_NUMBER.',
+      ];
+    }
+  }
+  if (
+    parsed.data.OTP_SMS_PROVIDER === 'http_adapter' &&
+    (!parsed.data.SMS_HTTP_ENDPOINT || !parsed.data.SMS_HTTP_API_KEY)
+  ) {
     productionErrors.OTP_SMS_PROVIDER = [
-      'Twilio SMS is not implemented for production. Use console only for non-production or implement Twilio first.',
+      'HTTP SMS adapter requires SMS_HTTP_ENDPOINT and SMS_HTTP_API_KEY.',
     ];
+  }
+  if (
+    parsed.data.OTP_SMS_PROVIDER === 'meta_whatsapp' &&
+    (!parsed.data.META_WHATSAPP_TOKEN || !parsed.data.META_WHATSAPP_PHONE_NUMBER_ID)
+  ) {
+    productionErrors.OTP_SMS_PROVIDER = [
+      'Meta WhatsApp requires META_WHATSAPP_TOKEN and META_WHATSAPP_PHONE_NUMBER_ID.',
+    ];
+  }
+  if (
+    parsed.data.WEB_PUSH_ENABLED &&
+    (!parsed.data.WEB_PUSH_VAPID_PUBLIC_KEY ||
+      !parsed.data.WEB_PUSH_VAPID_PRIVATE_KEY ||
+      !parsed.data.WEB_PUSH_SUBJECT)
+  ) {
+    productionErrors.WEB_PUSH_ENABLED = [
+      'WEB_PUSH_ENABLED=true requires WEB_PUSH_VAPID_PUBLIC_KEY, WEB_PUSH_VAPID_PRIVATE_KEY, and WEB_PUSH_SUBJECT.',
+    ];
+  }
+  if (parsed.data.BACKUP_PROVIDER === 'supabase') {
+    if (!parsed.data.BACKUP_SUPABASE_PROJECT_REF || !parsed.data.BACKUP_SUPABASE_ACCESS_TOKEN) {
+      productionErrors.BACKUP_PROVIDER = [
+        'BACKUP_PROVIDER=supabase requires BACKUP_SUPABASE_PROJECT_REF and BACKUP_SUPABASE_ACCESS_TOKEN.',
+      ];
+    }
+  }
+  if (parsed.data.BACKUP_PROVIDER === 'custom_http') {
+    if (!parsed.data.BACKUP_CUSTOM_BASE_URL || !parsed.data.BACKUP_CUSTOM_API_KEY) {
+      productionErrors.BACKUP_PROVIDER = [
+        'BACKUP_PROVIDER=custom_http requires BACKUP_CUSTOM_BASE_URL and BACKUP_CUSTOM_API_KEY.',
+      ];
+    }
   }
   if (parsed.data.VERIFICATION_PROVIDER === 'idenfy') {
     productionErrors.VERIFICATION_PROVIDER = [

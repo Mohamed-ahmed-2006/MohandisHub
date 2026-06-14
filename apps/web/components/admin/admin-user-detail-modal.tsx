@@ -458,7 +458,14 @@ export const AdminUserDetailModal = ({
   };
 
   const handleAdjustBalance = async () => {
-    if (!user || !canManageTransactions || adjustForm.amount <= 0) return;
+    if (
+      !user ||
+      !canManageTransactions ||
+      adjustForm.amount <= 0 ||
+      adjustForm.description.trim().length < 5
+    ) {
+      return;
+    }
 
     setActionLoading('adjust');
     try {
@@ -466,13 +473,13 @@ export const AdminUserDetailModal = ({
         userId: string;
         type: 'deposit' | 'withdrawal' | 'adjustment' | 'bonus';
         amount: number;
-        description?: string;
+        description: string;
       } = {
         userId: user.id,
         type: adjustForm.type,
         amount: adjustForm.amount,
+        description: adjustForm.description.trim(),
       };
-      if (adjustForm.description.trim()) body.description = adjustForm.description.trim();
       await adminApiClient.adjustBalance(accessToken, body, opts(refreshSession));
       setAdjustForm({ type: 'deposit', amount: 0, description: '' });
       setShowAdjust(false);

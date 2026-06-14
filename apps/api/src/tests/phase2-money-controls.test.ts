@@ -174,7 +174,8 @@ describe('phase 2 admin money controls', () => {
     expect(envConfig).toContain("parsed.data.NODE_ENV === 'production'");
     expect(envConfig).toContain("parsed.data.OTP_EMAIL_PROVIDER === 'console'");
     expect(envConfig).toContain("parsed.data.OTP_EMAIL_PROVIDER === 'sendgrid'");
-    expect(envConfig).toContain("parsed.data.OTP_SMS_PROVIDER === 'twilio'");
+    expect(envConfig).toContain("parsed.data.OTP_SMS_PROVIDER === 'http_adapter'");
+    expect(envConfig).toContain("parsed.data.OTP_SMS_PROVIDER === 'meta_whatsapp'");
     expect(envConfig).toContain("parsed.data.VERIFICATION_PROVIDER === 'idenfy'");
     expect(envConfig).toContain('Production provider configuration failed');
   });

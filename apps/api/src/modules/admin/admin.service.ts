@@ -721,7 +721,7 @@ export class AdminService {
     return this.toTransaction(row);
   }
 
-  async reverseTransaction(txnId: string, adminId: string): Promise<Transaction> {
+  async reverseTransaction(txnId: string, adminId: string, reason: string): Promise<Transaction> {
     const status = await this.settingsService.getAppStatus();
     if (status.moneyMovementsPaused) {
       throw new HttpError({
@@ -732,7 +732,7 @@ export class AdminService {
     }
 
     try {
-      const row = await this.repo.reverseTransaction(txnId, adminId);
+      const row = await this.repo.reverseTransaction(txnId, adminId, reason);
       return this.toTransaction(row);
     } catch {
       throw new HttpError({

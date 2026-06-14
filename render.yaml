@@ -24,13 +24,13 @@ services:
       - key: DATABASE_URL
         sync: false
       - key: CORS_ORIGIN
-        sync: false
+        value: https://mohandishub.app
       - key: CORS_EXTRA_ORIGINS
         sync: false
       - key: API_PUBLIC_URL
-        sync: false
+        value: https://api.mohandishub.app
       - key: WEB_PUBLIC_URL
-        sync: false
+        value: https://mohandishub.app
       - key: JWT_SECRET
         sync: false
       - key: JWT_REFRESH_SECRET
@@ -48,6 +48,12 @@ services:
       - key: SUPABASE_SERVICE_ROLE_KEY
         sync: false
       - key: SENTRY_DSN
+        sync: false
+      - key: BACKUP_PROVIDER
+        value: supabase
+      - key: BACKUP_SUPABASE_PROJECT_REF
+        sync: false
+      - key: BACKUP_SUPABASE_ACCESS_TOKEN
         sync: false
       - key: OTP_EMAIL_PROVIDER
         value: brevo
@@ -119,11 +125,13 @@ services:
       - key: DATABASE_URL
         sync: false
       - key: CORS_ORIGIN
+        value: https://mohandishub.app
+      - key: CORS_EXTRA_ORIGINS
         sync: false
       - key: API_PUBLIC_URL
-        sync: false
+        value: https://api.mohandishub.app
       - key: WEB_PUBLIC_URL
-        sync: false
+        value: https://mohandishub.app
       - key: JWT_SECRET
         sync: false
       - key: JWT_REFRESH_SECRET

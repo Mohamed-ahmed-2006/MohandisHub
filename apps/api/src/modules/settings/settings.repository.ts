@@ -42,6 +42,7 @@ export type AppSettingsRow = {
   reservation_video_minute_rate?: string;
   reservation_min_prejoin_minutes?: number;
   job_interview_fee_amount?: string;
+  coupon_generation_fee_egp?: string;
   wallet_egp_per_usdt_deposit?: string | null;
   wallet_egp_per_usdt_withdrawal?: string | null;
   platform_instapay_display?: Record<string, unknown> | null;
@@ -90,6 +91,7 @@ export type AppSettingsUpdate = Partial<{
   reservation_video_minute_rate: number;
   reservation_min_prejoin_minutes: number;
   job_interview_fee_amount: number;
+  coupon_generation_fee_egp: number;
   walletEgpPerUsdtDeposit: number | null;
   walletEgpPerUsdtWithdrawal: number | null;
   platformInstapayDisplay: Record<string, unknown> | null;
@@ -150,6 +152,7 @@ export class SettingsRepository {
     reservationVideoMinuteRate: 'reservation_video_minute_rate',
     reservationMinPrejoinMinutes: 'reservation_min_prejoin_minutes',
     jobInterviewFeeAmount: 'job_interview_fee_amount',
+    couponGenerationFeeEgp: 'coupon_generation_fee_egp',
     walletEgpPerUsdtDeposit: 'wallet_egp_per_usdt_deposit',
     walletEgpPerUsdtWithdrawal: 'wallet_egp_per_usdt_withdrawal',
     platformInstapayDisplay: 'platform_instapay_display',

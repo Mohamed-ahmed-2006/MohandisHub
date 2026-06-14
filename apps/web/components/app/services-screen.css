@@ -147,6 +147,31 @@
   font-size: 0.82rem;
 }
 
+.service-campaign-table-wrapper {
+  margin-top: 1rem;
+  overflow-x: auto;
+  border: 1px solid hsl(var(--border));
+  border-radius: var(--radius-lg);
+}
+
+.service-campaign-table {
+  width: 100%;
+  min-width: 520px;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+
+.service-campaign-table th,
+.service-campaign-table td {
+  padding: 0.7rem 0.85rem;
+  text-align: start;
+  border-bottom: 1px solid hsl(var(--border) / 0.65);
+}
+
+.service-campaign-table tr:last-child td {
+  border-bottom: 0;
+}
+
 @media (max-width: 720px) {
   .service-create-grid {
     grid-template-columns: 1fr;

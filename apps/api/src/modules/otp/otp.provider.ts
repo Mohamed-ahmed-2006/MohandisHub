@@ -129,21 +129,117 @@ export class SendGridEmailSender implements IOtpSender {
 export class TwilioSmsSender implements IOtpSender {
   readonly channel: OtpChannel = 'phone';
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  send(params: { destination: string; code: string; displayName: string }): Promise<boolean> {
-    // Twilio is blocked in production until this provider is implemented.
-    //
-    // import twilio from 'twilio';
-    // const client = twilio(env.TWILIO_ACCOUNT_SID, env.TWILIO_AUTH_TOKEN);
-    //
-    // await client.messages.create({
-    //   to: params.destination,
-    //   from: env.TWILIO_PHONE_NUMBER,
-    //   body: `MohandisHub: Your verification code is ${params.code}. Expires in 10 minutes.`,
-    // });
-    // return true;
+  async send(params: { destination: string; code: string; displayName: string }): Promise<boolean> {
+    const { env } = await import('../../config/env.js');
+    if (!env.TWILIO_ACCOUNT_SID || !env.TWILIO_AUTH_TOKEN || !env.TWILIO_PHONE_NUMBER) {
+      throw new Error('Twilio SMS sender not configured. Set Twilio credentials in .env');
+    }
+    const auth = Buffer.from(`${env.TWILIO_ACCOUNT_SID}:${env.TWILIO_AUTH_TOKEN}`).toString(
+      'base64',
+    );
+    const body = new URLSearchParams({
+      To: params.destination,
+      From: env.TWILIO_PHONE_NUMBER,
+      Body: `MohandisHub: your verification code is ${params.code}. It expires in 10 minutes.`,
+    });
+    const response = await fetch(
+      `https://api.twilio.com/2010-04-01/Accounts/${env.TWILIO_ACCOUNT_SID}/Messages.json`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Basic ${auth}`,
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body,
+      },
+    );
+    if (!response.ok) {
+      logger.error('Twilio SMS send failed', {
+        status: response.status,
+        body: await response.text(),
+      });
+      return false;
+    }
+    return true;
+  }
+}
 
-    throw new Error('Twilio SMS sender not configured. Set TWILIO_ACCOUNT_SID in .env');
+export class HttpAdapterSmsSender implements IOtpSender {
+  readonly channel: OtpChannel = 'phone';
+
+  async send(params: { destination: string; code: string; displayName: string }): Promise<boolean> {
+    const { env } = await import('../../config/env.js');
+    if (!env.SMS_HTTP_ENDPOINT || !env.SMS_HTTP_API_KEY) {
+      throw new Error(
+        'HTTP SMS adapter not configured. Set SMS_HTTP_ENDPOINT and SMS_HTTP_API_KEY.',
+      );
+    }
+    const response = await fetch(env.SMS_HTTP_ENDPOINT, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${env.SMS_HTTP_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        to: params.destination,
+        from: env.SMS_HTTP_FROM ?? 'MohandisHub',
+        body: `MohandisHub: your verification code is ${params.code}. It expires in 10 minutes.`,
+        template: 'otp',
+        variables: { code: params.code, displayName: params.displayName },
+      }),
+    });
+    if (!response.ok) {
+      logger.error('HTTP SMS adapter send failed', {
+        status: response.status,
+        body: await response.text(),
+      });
+      return false;
+    }
+    return true;
+  }
+}
+
+export class MetaWhatsAppOtpSender implements IOtpSender {
+  readonly channel: OtpChannel = 'phone';
+
+  async send(params: { destination: string; code: string; displayName: string }): Promise<boolean> {
+    const { env } = await import('../../config/env.js');
+    if (!env.META_WHATSAPP_TOKEN || !env.META_WHATSAPP_PHONE_NUMBER_ID) {
+      throw new Error('Meta WhatsApp sender not configured. Set WhatsApp env keys.');
+    }
+    const response = await fetch(
+      `https://graph.facebook.com/v20.0/${env.META_WHATSAPP_PHONE_NUMBER_ID}/messages`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${env.META_WHATSAPP_TOKEN}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          messaging_product: 'whatsapp',
+          to: params.destination,
+          type: 'template',
+          template: {
+            name: env.META_WHATSAPP_OTP_TEMPLATE,
+            language: { code: env.META_WHATSAPP_LANGUAGE },
+            components: [
+              {
+                type: 'body',
+                parameters: [{ type: 'text', text: params.code }],
+              },
+            ],
+          },
+        }),
+      },
+    );
+    if (!response.ok) {
+      logger.error('Meta WhatsApp OTP send failed', {
+        status: response.status,
+        body: await response.text(),
+      });
+      return false;
+    }
+    return true;
   }
 }
 
@@ -172,6 +268,10 @@ export const createOtpSender = (
       return new ConsoleSmsSender();
     case 'twilio':
       return new TwilioSmsSender();
+    case 'http_adapter':
+      return new HttpAdapterSmsSender();
+    case 'meta_whatsapp':
+      return new MetaWhatsAppOtpSender();
     default:
       throw new Error(`Unknown SMS OTP provider: ${smsProvider}`);
   }

@@ -6,14 +6,14 @@ const readSource = (relative: string): string =>
   readFileSync(new URL(relative, import.meta.url), 'utf8');
 
 describe('launch surface hardening', () => {
-  it('does not expose the business team stub as a production API feature', () => {
+  it('exposes business teams only after replacing the old production stub', () => {
     const apiRoutes = readSource('../routes/index.ts');
     const roadmap = readSource('../../../../docs/FEATURE_ROADMAP_STATUS_AND_TESTING.md');
 
-    expect(apiRoutes).not.toContain('businessTeamsRouter');
-    expect(apiRoutes).not.toContain("apiRouter.use('/business/team'");
-    expect(roadmap).toMatch(/Team accounts for businesses\*\*\s+\|\s+Deferred/);
-    expect(roadmap).toContain('Do not advertise team seats as an active launch feature');
+    expect(apiRoutes).toContain('businessTeamsRouter');
+    expect(apiRoutes).toContain("apiRouter.use('/business-teams'");
+    expect(roadmap).toMatch(/Team accounts for businesses\*\*\s+\|\s+Active/);
+    expect(roadmap).toContain('Owner-managed business teams are active with roles and invites');
   });
 
   it('does not expose the removed legacy immediate-payment bookings API', () => {
@@ -35,6 +35,17 @@ describe('launch surface hardening', () => {
     expect(apiSection).toContain('plan: starter');
     expect(apiSection).toContain('key: TRUST_PROXY');
     expect(apiSection).toContain('value: 1');
+    expect(apiSection).toContain('key: CORS_ORIGIN');
+    expect(apiSection).toContain('value: https://mohandishub.app');
+    expect(apiSection).toContain('key: API_PUBLIC_URL');
+    expect(apiSection).toContain('value: https://api.mohandishub.app');
+    expect(apiSection).toContain('key: WEB_PUBLIC_URL');
+    expect(apiSection).toContain('value: https://mohandishub.app');
+    expect(apiSection).toContain('key: SENTRY_DSN');
+    expect(apiSection).toContain('key: BACKUP_PROVIDER');
+    expect(apiSection).toContain('value: supabase');
+    expect(apiSection).toContain('key: BACKUP_SUPABASE_PROJECT_REF');
+    expect(apiSection).toContain('key: BACKUP_SUPABASE_ACCESS_TOKEN');
     expect(apiSection).not.toContain('key: JWT_SECRET\n        generateValue: true');
     expect(apiSection).not.toContain('key: JWT_REFRESH_SECRET\n        generateValue: true');
     expect(apiSection).toContain('key: JWT_SECRET');
@@ -52,6 +63,8 @@ describe('launch surface hardening', () => {
     expect(workerSection).toContain('key: CORS_ORIGIN');
     expect(workerSection).toContain('key: API_PUBLIC_URL');
     expect(workerSection).toContain('key: WEB_PUBLIC_URL');
+    expect(workerSection).toContain('value: https://mohandishub.app');
+    expect(workerSection).toContain('value: https://api.mohandishub.app');
     expect(workerSection).toContain('key: SUPABASE_URL');
     expect(workerSection).toContain('key: SUPABASE_SERVICE_ROLE_KEY');
     expect(workerSection).toContain('key: NOWPAYMENTS_API_KEY');
@@ -88,9 +101,12 @@ describe('launch surface hardening', () => {
     const renderBlueprint = readSource('../../../../render.yaml');
     const apiSection =
       renderBlueprint.split('name: mohandishub-api')[1]?.split('name: mohandishub-worker')[0] ?? '';
+    const appSettings = readSource('../../../../packages/shared/src/app-settings.ts');
 
     expect(envExample).toContain('PAYMOB_DEPOSITS_ENABLED=false');
     expect(envExample).toContain('PAYMOB_WITHDRAWALS_ENABLED=false');
+    expect(appSettings).toMatch(/key: 'deposit_paymob',[\s\S]*?defaultEnabled: false/);
+    expect(appSettings).toMatch(/key: 'withdrawal_paymob',[\s\S]*?defaultEnabled: false/);
     expect(envExample).toContain('Do not use staging URLs in production.');
     expect(envExample).not.toContain(
       'PAYMOB_PAYOUT_BASE_URL=https://stagingpayouts.paymobsolutions.com',

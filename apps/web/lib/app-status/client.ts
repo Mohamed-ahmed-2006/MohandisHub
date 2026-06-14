@@ -52,6 +52,7 @@ function getDefaultAppStatus(): AppStatus {
     reservationVideoMinuteRate: 2,
     reservationMinPrejoinMinutes: 5,
     jobInterviewFeeAmount: 0,
+    couponGenerationFeeEgp: 0.25,
     walletEgpPerUsdtDeposit: null,
     walletEgpPerUsdtWithdrawal: null,
     platformInstapayDisplay: null,

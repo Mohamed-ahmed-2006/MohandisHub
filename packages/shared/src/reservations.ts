@@ -126,6 +126,15 @@ export type Reservation = {
 export type ReservationPricingBreakdown = {
   servicePriceAmount: number;
   reservationPriceAmount: number;
+  originalServicePriceAmount?: number;
+  originalReservationPriceAmount?: number;
+  couponCode?: string | null;
+  couponRedemptionId?: string | null;
+  couponDiscountAmount?: number;
+  couponServiceDiscountAmount?: number;
+  couponCommissionDiscountAmount?: number;
+  couponProviderFundedAmount?: number;
+  couponPlatformFundedAmount?: number;
   totalAmount: number;
   currency: string;
   deductionTiming: 'on_reserve_hold';
@@ -345,6 +354,7 @@ export type CreateReservationBody = {
   onlineType?: ReservationOnlineType;
   /** When set, service price comes from accepted negotiation (single use). */
   negotiationId?: string;
+  couponCode?: string;
 };
 
 export type DecideReservationBody = {

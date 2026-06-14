@@ -1,6 +1,12 @@
 'use client';
 
-import type { ReservationProfile, ReservationSlot, ServiceSearchResult } from '@mohandishub/shared';
+import {
+  computeCommissionSplit,
+  type CouponPreview,
+  type ReservationProfile,
+  type ReservationSlot,
+  type ServiceSearchResult,
+} from '@mohandishub/shared';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { useProfileModal } from './profile-modal-context';
@@ -8,6 +14,7 @@ import { useProfileModal } from './profile-modal-context';
 import { useAppStatus } from '@/components/app-status-provider';
 import { Drawer } from '@/components/ui/drawer';
 import { toAbsoluteAssetUrl } from '@/lib/asset-url';
+import { couponsApiClient } from '@/lib/coupons/client';
 import type { Dictionary, Locale } from '@/lib/i18n/types';
 import { reservationsApiClient } from '@/lib/reservations/client';
 
@@ -82,6 +89,10 @@ export const ServiceBookingModal = ({
   const [slotFilter, setSlotFilter] = useState<'today' | 'next7Days' | 'thisMonth' | 'allUpcoming'>(
     'allUpcoming',
   );
+  const [couponCode, setCouponCode] = useState('');
+  const [couponPreview, setCouponPreview] = useState<CouponPreview | null>(null);
+  const [couponLoading, setCouponLoading] = useState(false);
+  const [couponMessage, setCouponMessage] = useState<string | null>(null);
   const [modeReady, setModeReady] = useState(false);
   const { openProfileModal } = useProfileModal();
   const { status } = useAppStatus();
@@ -145,6 +156,9 @@ export const ServiceBookingModal = ({
         setMode('online');
         setOnlineType('voice');
         setSlotFilter('allUpcoming');
+        setCouponCode('');
+        setCouponPreview(null);
+        setCouponMessage(null);
         setModeReady(false);
       }
       void loadSlots();
@@ -203,6 +217,7 @@ export const ServiceBookingModal = ({
           mode,
           ...(mode === 'online' ? { onlineType } : {}),
           ...(negotiationId ? { negotiationId } : {}),
+          ...(couponCode.trim() ? { couponCode: couponCode.trim().toUpperCase() } : {}),
         },
         idempotencyKey,
       );
@@ -247,7 +262,55 @@ export const ServiceBookingModal = ({
     agreedServicePrice != null && Number.isFinite(agreedServicePrice)
       ? agreedServicePrice
       : (service.price ?? 0);
-  const totalPrice = modePrice != null ? servicePrice + modePrice + platformFee : null;
+  const subtotalPrice = modePrice != null ? servicePrice + modePrice : null;
+  const commissionPreview =
+    subtotalPrice != null && subtotalPrice > 0
+      ? computeCommissionSplit(
+          subtotalPrice,
+          status?.commissionPercent ?? 10,
+          status?.commissionMinEgp ?? 0,
+        ).commission
+      : 0;
+  const totalPrice = subtotalPrice != null ? subtotalPrice + platformFee : null;
+  const finalHeldPrice =
+    couponPreview?.valid && subtotalPrice != null ? couponPreview.finalAmount : subtotalPrice;
+  const finalDisplayedTotal = finalHeldPrice != null ? finalHeldPrice + platformFee : null;
+
+  const handlePreviewCoupon = async () => {
+    const code = couponCode.trim().toUpperCase();
+    if (!code || subtotalPrice == null || subtotalPrice <= 0) {
+      setCouponPreview(null);
+      setCouponMessage(tr('Enter a coupon code first.', 'أدخل كود الكوبون أولا.'));
+      return;
+    }
+    setCouponLoading(true);
+    setCouponMessage(null);
+    try {
+      const preview = await couponsApiClient.validate(accessToken, {
+        code,
+        surface: 'service',
+        subtotal: subtotalPrice,
+        commissionAmount: commissionPreview,
+        currency: service.currency ?? 'EGP',
+        providerId: service.providerId,
+        itemId: service.id,
+      });
+      setCouponPreview(preview);
+      setCouponMessage(
+        preview.valid
+          ? tr('Coupon applied to preview.', 'تم تطبيق الكوبون في المعاينة.')
+          : (preview.reason ??
+              tr('Coupon is not valid for this booking.', 'الكوبون غير صالح لهذا الحجز.')),
+      );
+    } catch (e) {
+      setCouponPreview(null);
+      setCouponMessage(
+        e instanceof Error ? e.message : tr('Could not check coupon.', 'تعذر فحص الكوبون.'),
+      );
+    } finally {
+      setCouponLoading(false);
+    }
+  };
 
   if (!open) return null;
 
@@ -366,6 +429,57 @@ export const ServiceBookingModal = ({
                 {tr('Total', 'الإجمالي')}: {totalPrice.toFixed(2)} EGP
               </strong>
             </p>
+          </div>
+        )}
+        {subtotalPrice != null && subtotalPrice > 0 && (
+          <div className="reservation-note-box" style={{ marginBottom: '0.75rem' }}>
+            {couponPreview?.valid && finalDisplayedTotal != null && (
+              <>
+                <p>
+                  {tr('Coupon discount', 'خصم الكوبون')}: {couponPreview.discountAmount.toFixed(2)}{' '}
+                  EGP
+                </p>
+                <p>
+                  <strong>
+                    {tr('Total after coupon', 'الإجمالي بعد الكوبون')}:{' '}
+                    {finalDisplayedTotal.toFixed(2)} EGP
+                  </strong>
+                </p>
+              </>
+            )}
+            <label
+              htmlFor="service-booking-coupon"
+              style={{ display: 'block', fontSize: '0.9rem', fontWeight: 600 }}
+            >
+              {tr('Coupon code', 'كود الكوبون')}
+            </label>
+            <div className="dashboard-actions-row" style={{ marginTop: '0.4rem' }}>
+              <input
+                id="service-booking-coupon"
+                className="dashboard-input"
+                value={couponCode}
+                onChange={(event) => {
+                  setCouponCode(event.target.value);
+                  setCouponPreview(null);
+                  setCouponMessage(null);
+                }}
+                placeholder={tr('Optional coupon', 'كوبون اختياري')}
+                disabled={couponLoading || booking}
+              />
+              <button
+                type="button"
+                className="dashboard-btn dashboard-btn--secondary"
+                onClick={() => void handlePreviewCoupon()}
+                disabled={couponLoading || booking || !couponCode.trim()}
+              >
+                {couponLoading ? tr('Checking...', 'جار الفحص...') : tr('Apply', 'تطبيق')}
+              </button>
+            </div>
+            {couponMessage && (
+              <p style={{ margin: '0.45rem 0 0', color: 'hsl(var(--muted-foreground))' }}>
+                {couponMessage}
+              </p>
+            )}
           </div>
         )}
         <div className="reservation-note-box" style={{ marginBottom: '0.75rem' }}>

@@ -91,6 +91,7 @@ export class SettingsService {
       reservationVideoMinuteRate: parseFloat(row.reservation_video_minute_rate ?? '2'),
       reservationMinPrejoinMinutes: row.reservation_min_prejoin_minutes ?? 5,
       jobInterviewFeeAmount: parseFloat(row.job_interview_fee_amount ?? '0'),
+      couponGenerationFeeEgp: parseFloat(row.coupon_generation_fee_egp ?? '0.25'),
       walletEgpPerUsdtDeposit:
         row.wallet_egp_per_usdt_deposit != null
           ? parseFloat(row.wallet_egp_per_usdt_deposit)
@@ -177,6 +178,8 @@ export class SettingsService {
       dbPartial.reservation_min_prejoin_minutes = partial.reservationMinPrejoinMinutes;
     if (partial.jobInterviewFeeAmount !== undefined)
       dbPartial.job_interview_fee_amount = partial.jobInterviewFeeAmount;
+    if (partial.couponGenerationFeeEgp !== undefined)
+      dbPartial.coupon_generation_fee_egp = partial.couponGenerationFeeEgp;
     if (partial.walletEgpPerUsdtDeposit !== undefined)
       dbPartial.walletEgpPerUsdtDeposit = partial.walletEgpPerUsdtDeposit;
     if (partial.walletEgpPerUsdtWithdrawal !== undefined)
@@ -271,6 +274,7 @@ export class SettingsService {
       reservationVideoMinuteRate: parseFloat(row.reservation_video_minute_rate ?? '2'),
       reservationMinPrejoinMinutes: row.reservation_min_prejoin_minutes ?? 5,
       jobInterviewFeeAmount: parseFloat(row.job_interview_fee_amount ?? '0'),
+      couponGenerationFeeEgp: parseFloat(row.coupon_generation_fee_egp ?? '0.25'),
       walletEgpPerUsdtDeposit:
         row.wallet_egp_per_usdt_deposit != null
           ? parseFloat(row.wallet_egp_per_usdt_deposit)
@@ -328,6 +332,7 @@ export class SettingsService {
       reservationVideoMinuteRate: 2,
       reservationMinPrejoinMinutes: 5,
       jobInterviewFeeAmount: 0,
+      couponGenerationFeeEgp: 0.25,
       walletEgpPerUsdtDeposit: null,
       walletEgpPerUsdtWithdrawal: null,
       platformInstapayDisplay: null,

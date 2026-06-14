@@ -71,8 +71,8 @@ export const PAYMENT_METHOD_DEFINITIONS: readonly PaymentMethodDefinition[] = [
     key: 'deposit_paymob',
     flow: 'deposit',
     provider: 'paymob',
-    defaultEnabled: true,
-    launchRecommended: true,
+    defaultEnabled: false,
+    launchRecommended: false,
   },
   {
     key: 'withdrawal_crypto',
@@ -92,8 +92,8 @@ export const PAYMENT_METHOD_DEFINITIONS: readonly PaymentMethodDefinition[] = [
     key: 'withdrawal_paymob',
     flow: 'withdrawal',
     provider: 'paymob',
-    defaultEnabled: true,
-    launchRecommended: true,
+    defaultEnabled: false,
+    launchRecommended: false,
   },
 ] as const;
 
@@ -165,6 +165,7 @@ export type AppSettings = {
   reservationVideoMinuteRate: number;
   reservationMinPrejoinMinutes: number;
   jobInterviewFeeAmount: number;
+  couponGenerationFeeEgp: number;
   walletEgpPerUsdtDeposit: number | null;
   walletEgpPerUsdtWithdrawal: number | null;
   platformInstapayDisplay: Record<string, unknown> | null;
@@ -220,6 +221,7 @@ export type AppStatus = {
   reservationVideoMinuteRate: number;
   reservationMinPrejoinMinutes: number;
   jobInterviewFeeAmount: number;
+  couponGenerationFeeEgp: number;
   walletEgpPerUsdtDeposit: number | null;
   walletEgpPerUsdtWithdrawal: number | null;
   platformInstapayDisplay: Record<string, unknown> | null;
@@ -262,6 +264,7 @@ export type UpdateAppSettingsBody = Partial<{
   reservationVideoMinuteRate: number;
   reservationMinPrejoinMinutes: number;
   jobInterviewFeeAmount: number;
+  couponGenerationFeeEgp: number;
   walletEgpPerUsdtDeposit: number | null;
   walletEgpPerUsdtWithdrawal: number | null;
   platformInstapayDisplay: Record<string, unknown> | null;

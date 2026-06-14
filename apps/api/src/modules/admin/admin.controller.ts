@@ -43,6 +43,7 @@ import type {
   CreatePlanInput,
   RejectManualInstapayDepositInput,
   RejectManualInstapayWithdrawalInput,
+  ReverseTransactionInput,
   RejectServiceInput,
   UpdateBusinessProfileByAdminInput,
   UpdateCategoryInput,
@@ -63,6 +64,7 @@ import {
   createPlanSchema,
   rejectManualInstapayDepositSchema,
   rejectManualInstapayWithdrawalSchema,
+  reverseTransactionSchema,
   rejectServiceSchema,
   userActivityTypeSchema,
   updateBusinessProfileSchema,
@@ -551,6 +553,7 @@ const approveManualInstapayDeposit = asyncHandler(async (req, res) => {
     req.params.id!,
     {
       creditedAmountEgp: input.creditedAmountEgp,
+      reason: input.reason,
       userId: row.userId,
       status: row.status,
     },
@@ -605,6 +608,7 @@ const completeManualInstapayWithdrawal = asyncHandler(async (req, res) => {
     req.params.id!,
     {
       proofUploadId: input.proofUploadId,
+      reason: input.reason,
       userId: row.userId,
       status: row.status,
     },
@@ -626,6 +630,7 @@ const completePaymobWithdrawal = asyncHandler(async (req, res) => {
     req.params.id!,
     {
       providerReference: input.providerReference ?? null,
+      note: input.note,
       userId: row.userId,
       status: row.status,
     },
@@ -656,12 +661,14 @@ const rejectManualInstapayWithdrawal = asyncHandler(async (req, res) => {
 
 const reverseTransaction = asyncHandler(async (req, res) => {
   const adminId = getAdminId(req);
-  const txn = await adminService.reverseTransaction(req.params.id!, adminId);
+  const input = parseValidation<ReverseTransactionInput>(reverseTransactionSchema, req.body);
+  const txn = await adminService.reverseTransaction(req.params.id!, adminId, input.reason);
   await logAdminAction(req, 'admin.wallet.transaction.reverse', 'transaction', req.params.id!, {
     userId: txn.userId,
     type: txn.type,
     amount: txn.amount,
     status: txn.status,
+    reason: input.reason,
   });
   const response: ApiSuccessBody<Transaction> = { ok: true, data: txn };
   res.json(response);

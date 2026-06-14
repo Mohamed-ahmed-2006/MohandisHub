@@ -32,6 +32,16 @@ const LOCALE_SKIP_FIRST_SEGMENTS = new Set([
   'twitter-image',
 ]);
 
+const nextWithLocaleHeader = (request: NextRequest, locale: 'en' | 'ar') => {
+  const requestHeaders = new Headers(request.headers);
+  requestHeaders.set('x-mohandishub-locale', locale);
+  return NextResponse.next({
+    request: {
+      headers: requestHeaders,
+    },
+  });
+};
+
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
@@ -51,7 +61,7 @@ export function middleware(request: NextRequest) {
       url.searchParams.set('next', pathname + request.nextUrl.search);
       return NextResponse.redirect(url);
     }
-    return NextResponse.next();
+    return nextWithLocaleHeader(request, maybeLocale);
   }
 
   const localeFromCookie = request.cookies.get(LANGUAGE_COOKIE_KEY)?.value;

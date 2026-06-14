@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from 'next';
 import { Cairo, Manrope, Sora, Tajawal } from 'next/font/google';
+import { headers } from 'next/headers';
 import Script from 'next/script';
 
 import { AppStatusProvider } from '@/components/app-status-provider';
@@ -8,6 +9,7 @@ import { GlobalAnnouncementBanner } from '@/components/global-announcement-banne
 import { MaintenanceGate } from '@/components/maintenance-gate';
 import SpeedInsightsClient from '@/components/speed-insights-client';
 import { ThemeProvider, themeInitScript } from '@/components/theme-provider';
+import { DEFAULT_LOCALE, getDirection, isSupportedLocale } from '@/lib/i18n/config';
 import { getIconVersion } from '@/lib/icon-version';
 
 import './globals.css';
@@ -65,9 +67,18 @@ type RootLayoutProps = Readonly<{
   children: React.ReactNode;
 }>;
 
-const RootLayout = ({ children }: RootLayoutProps) => {
+const RootLayout = async ({ children }: RootLayoutProps) => {
+  const requestHeaders = await headers();
+  const requestedLocale = requestHeaders.get('x-mohandishub-locale') ?? DEFAULT_LOCALE;
+  const locale = isSupportedLocale(requestedLocale) ? requestedLocale : DEFAULT_LOCALE;
+
   return (
-    <html lang="en" suppressHydrationWarning data-scroll-behavior="smooth">
+    <html
+      lang={locale}
+      dir={getDirection(locale)}
+      suppressHydrationWarning
+      data-scroll-behavior="smooth"
+    >
       <head>
         <Script id="mohandishub-theme-init" strategy="beforeInteractive">
           {themeInitScript}

@@ -5,11 +5,13 @@ import { useEffect, useState } from 'react';
 
 import { AdminAdsTab } from './admin-ads-tab';
 import { AdminCategoriesTab } from './admin-categories-tab';
+import { AdminCouponsTab } from './admin-coupons-tab';
 import { AdminDashboardTab } from './admin-dashboard-tab';
 import { AdminDisputesTab } from './admin-disputes-tab';
 import { AdminMediaLibraryTab } from './admin-media-library-tab';
 import { AdminMoneyAuditTab } from './admin-money-audit-tab';
 import { AdminNotificationsTab } from './admin-notifications-tab';
+import { AdminOperationsTab } from './admin-operations-tab';
 import { AdminPlansTab } from './admin-plans-tab';
 import { AdminRetentionTab } from './admin-retention-tab';
 import { AdminReviewReportsTab } from './admin-review-reports-tab';
@@ -38,6 +40,7 @@ type TabId =
   | 'dashboard'
   | 'users'
   | 'plans'
+  | 'coupons'
   | 'transactions'
   | 'moneyAudit'
   | 'walletRails'
@@ -49,6 +52,7 @@ type TabId =
   | 'support'
   | 'notifications'
   | 'settings'
+  | 'operations'
   | 'retention'
   | 'media'
   | 'ads';
@@ -86,6 +90,7 @@ export const AdminPanel = ({ locale, dictionary }: AdminPanelProps) => {
     { id: 'dashboard', label: dictionary.admin.tabs.dashboard, permission: 'super_admin' },
     { id: 'users', label: dictionary.admin.tabs.users, permission: 'manage_users' },
     { id: 'plans', label: dictionary.admin.tabs.plans, permission: 'manage_plans' },
+    { id: 'coupons', label: 'Coupons', permission: 'manage_plans' },
     {
       id: 'transactions',
       label: dictionary.admin.tabs.transactions,
@@ -127,6 +132,7 @@ export const AdminPanel = ({ locale, dictionary }: AdminPanelProps) => {
     { id: 'ads', label: dictionary.admin.tabs.ads ?? 'Advertisements', permission: 'manage_ads' },
     { id: 'media', label: 'Media library', permission: 'manage_media' },
     { id: 'settings', label: dictionary.admin.tabs.settings, permission: 'manage_settings' },
+    { id: 'operations', label: 'Operations', permission: 'super_admin' },
     {
       id: 'retention',
       label: dictionary.admin.tabs.retention ?? 'Retention',
@@ -203,6 +209,13 @@ export const AdminPanel = ({ locale, dictionary }: AdminPanelProps) => {
             refreshSession={refreshSession}
           />
         )}
+        {activeTab === 'coupons' && (
+          <AdminCouponsTab
+            dictionary={dictionary}
+            accessToken={accessToken}
+            refreshSession={refreshSession}
+          />
+        )}
         {activeTab === 'transactions' && (
           <AdminTransactionsTab dictionary={dictionary} accessToken={accessToken} />
         )}
@@ -266,6 +279,13 @@ export const AdminPanel = ({ locale, dictionary }: AdminPanelProps) => {
         )}
         {activeTab === 'settings' && (
           <AdminSettingsTab
+            dictionary={dictionary}
+            accessToken={accessToken}
+            refreshSession={refreshSession}
+          />
+        )}
+        {activeTab === 'operations' && (
+          <AdminOperationsTab
             dictionary={dictionary}
             accessToken={accessToken}
             refreshSession={refreshSession}

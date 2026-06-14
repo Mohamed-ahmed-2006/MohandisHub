@@ -110,7 +110,11 @@ export const adjustBalanceSchema = z.object({
   userId: z.string().uuid(),
   type: z.enum(['deposit', 'withdrawal', 'adjustment', 'bonus', 'commission']),
   amount: z.number().positive(),
-  description: z.string().max(500).optional(),
+  description: z.string().min(5).max(500),
+});
+
+export const reverseTransactionSchema = z.object({
+  reason: z.string().min(5).max(1000),
 });
 
 export const rejectServiceSchema = z.object({
@@ -205,6 +209,7 @@ export const updateSettingsSchema = z.object({
 
 export const approveManualInstapayDepositSchema = z.object({
   creditedAmountEgp: z.number().positive().optional(),
+  reason: z.string().min(5).max(1000),
 });
 
 export const rejectManualInstapayDepositSchema = z.object({
@@ -213,11 +218,12 @@ export const rejectManualInstapayDepositSchema = z.object({
 
 export const completeManualInstapayWithdrawalSchema = z.object({
   proofUploadId: z.string().uuid(),
+  reason: z.string().min(5).max(1000),
 });
 
 export const completePaymobWithdrawalSchema = z.object({
   providerReference: z.string().max(255).optional(),
-  note: z.string().max(1000).optional(),
+  note: z.string().min(5).max(1000),
 });
 
 export const rejectManualInstapayWithdrawalSchema = z.object({
@@ -233,6 +239,7 @@ export type UpdateCraftsmanProfileByAdminInput = z.infer<typeof updateCraftsmanP
 export type CreatePlanInput = z.infer<typeof createPlanSchema>;
 export type UpdatePlanInput = z.infer<typeof updatePlanSchema>;
 export type AdjustBalanceInput = z.infer<typeof adjustBalanceSchema>;
+export type ReverseTransactionInput = z.infer<typeof reverseTransactionSchema>;
 export type CreateCategoryInput = z.infer<typeof createCategorySchema>;
 export type UpdateCategoryInput = z.infer<typeof updateCategorySchema>;
 export type UpdateServiceInput = z.infer<typeof updateServiceSchema>;

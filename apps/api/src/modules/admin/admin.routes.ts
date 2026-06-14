@@ -12,6 +12,8 @@ import {
   requireAdminPermission,
   requireRole,
 } from '../../middleware/require-role.js';
+import { couponsController } from '../coupons/coupons.controller.js';
+import { backupRestoreRouter } from '../operations/backup-restore.routes.js';
 import { profilesController } from '../profiles/profiles.controller.js';
 import * as retentionAdminController from '../retention/retention.admin.controller.js';
 
@@ -20,6 +22,7 @@ import { adminController } from './admin.controller.js';
 const adminRouter = Router();
 
 adminRouter.use(authenticate, requireEmailVerified, loadAdminFromDb, requireRole('admin'));
+adminRouter.use('/', backupRestoreRouter);
 
 // Notifications (admin send to users)
 adminRouter.post(
@@ -177,6 +180,36 @@ adminRouter.delete(
   '/plans/:id',
   requireAdminPermission('manage_plans'),
   adminController.deletePlan,
+);
+adminRouter.get(
+  '/coupons',
+  requireAdminPermission('manage_plans'),
+  couponsController.listAdminCoupons,
+);
+adminRouter.post(
+  '/coupons',
+  requireAdminPermission('manage_plans'),
+  couponsController.createAdminCoupon,
+);
+adminRouter.patch(
+  '/coupons/:id',
+  requireAdminPermission('manage_plans'),
+  couponsController.updateAdminCoupon,
+);
+adminRouter.get(
+  '/coupon-campaigns',
+  requireAdminPermission('manage_plans'),
+  couponsController.listAdminCampaigns,
+);
+adminRouter.post(
+  '/coupon-campaigns/:id/approve',
+  requireAdminPermission('manage_plans'),
+  couponsController.approveCampaign,
+);
+adminRouter.post(
+  '/coupon-campaigns/:id/reject',
+  requireAdminPermission('manage_plans'),
+  couponsController.rejectCampaign,
 );
 
 // Transactions

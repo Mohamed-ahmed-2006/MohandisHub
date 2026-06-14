@@ -461,6 +461,58 @@
   background: color-mix(in srgb, hsl(var(--surface-strong)) 88%, transparent);
 }
 
+.profile-screen-pref-panel {
+  margin-top: 1rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 1rem;
+  background: var(--surface);
+}
+
+.profile-screen-muted {
+  margin: 0.35rem 0 0.75rem;
+  color: var(--muted-foreground);
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+
+.profile-screen-notification-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 0.75rem;
+}
+
+.profile-screen-toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  min-width: 0;
+  padding: 0.45rem 0;
+  color: var(--foreground);
+  font-size: 0.9rem;
+  line-height: 1.35;
+}
+
+.profile-screen-toggle-row span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.profile-screen-toggle-row input {
+  flex: 0 0 auto;
+}
+
+@media (max-width: 480px) {
+  .profile-screen-notification-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .profile-screen-toggle-row {
+    align-items: flex-start;
+  }
+}
+
 .profile-screen-rating-row {
   display: flex;
   align-items: center;

@@ -11,6 +11,7 @@ export * from './jobs.js';
 export * from './negotiations.js';
 export * from './otp.js';
 export * from './plans.js';
+export * from './product-growth.js';
 export * from './profiles.js';
 export * from './reservations.js';
 export * from './reviews.js';

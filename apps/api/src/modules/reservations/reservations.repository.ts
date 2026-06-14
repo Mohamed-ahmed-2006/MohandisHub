@@ -611,6 +611,7 @@ export class ReservationsRepository {
       finalLocationLat: number | null;
       finalLocationLng: number | null;
       requestedEndAt: Date;
+      policySnapshot: Record<string, unknown>;
     }>,
     client?: PoolClient,
   ): Promise<ReservationRow | null> {
@@ -643,6 +644,7 @@ export class ReservationsRepository {
       finalLocationLat: 'final_location_lat',
       finalLocationLng: 'final_location_lng',
       requestedEndAt: 'requested_end_at',
+      policySnapshot: 'policy_snapshot',
     };
 
     const entries = Object.entries(updates).filter(([, v]) => v !== undefined);
@@ -655,7 +657,9 @@ export class ReservationsRepository {
       const col = map[key];
       if (!col) continue;
       setClauses.push(`${col} = $${idx++}`);
-      values.push(key === 'suggestedSlots' ? JSON.stringify(value) : value);
+      values.push(
+        key === 'suggestedSlots' || key === 'policySnapshot' ? JSON.stringify(value) : value,
+      );
     }
     values.push(id);
     const { rows } = await db.query<ReservationRow>(

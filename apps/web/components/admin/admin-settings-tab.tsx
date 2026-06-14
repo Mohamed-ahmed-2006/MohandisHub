@@ -688,6 +688,32 @@ export const AdminSettingsTab = ({ dictionary, accessToken, refreshSession }: Pr
             }
           />
         </div>
+        <div className="admin-settings-row">
+          <div className="admin-settings-label-wrap">
+            <label className="admin-settings-label">
+              {tr('Coupon generation fee (EGP)', 'رسوم إنشاء الكوبون (ج.م)')}
+            </label>
+            <span className="admin-settings-desc">
+              {tr(
+                'Amount charged from provider wallet for each generated provider-campaign coupon.',
+                'المبلغ الذي يخصم من محفظة مقدم الخدمة لكل كوبون يتم إنشاؤه في حملة كوبونات.',
+              )}
+            </span>
+          </div>
+          <input
+            type="number"
+            min={0}
+            step={0.01}
+            className="admin-settings-input admin-settings-input--number"
+            defaultValue={settings.couponGenerationFeeEgp}
+            onBlur={(e) =>
+              handleNumberChange(
+                'couponGenerationFeeEgp',
+                e.target.value === '' ? 0 : (parseFloat(e.target.value) ?? 0),
+              )
+            }
+          />
+        </div>
       </section>
 
       <section className="admin-settings-section">
