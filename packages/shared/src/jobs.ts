@@ -83,13 +83,23 @@ export interface BookJobInterviewDto {
   mode: 'online' | 'offline';
 }
 
-export type MilestoneStatus = 'pending' | 'active' | 'submitted' | 'approved' | 'rejected';
+export type MilestoneStatus =
+  | 'pending'
+  | 'active'
+  | 'submitted'
+  | 'approved'
+  | 'rejected'
+  | 'refunded';
 
 export interface JobMilestone {
   id: string;
   jobApplicationId: string;
   title: string;
   amount: string;
+  walletHoldId: string | null;
+  commissionAmount: string;
+  providerPayoutAmount: string;
+  settledAt: string | null;
   status: MilestoneStatus;
   createdAt: string;
   updatedAt: string;

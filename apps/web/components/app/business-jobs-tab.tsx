@@ -9,14 +9,23 @@ import { BusinessMilestoneManager } from './jobs/business-milestone-manager';
 import { JobCard } from './jobs/job-card';
 import { OnlineCallModal } from './online-call-modal';
 
+import { formatApplicationStatus, getJobsCopy } from '@/components/app/jobs/jobs-copy';
 import { useToast } from '@/components/app/toast';
+import type { Dictionary } from '@/lib/i18n/types';
 import { jobsApiClient } from '@/lib/jobs/client';
 import { reservationsApiClient } from '@/lib/reservations/client';
 import { getPrivateFileOpenableUrl } from '@/lib/upload/client';
 
-export const BusinessJobsTab = ({ accessToken }: { accessToken: string }) => {
+export const BusinessJobsTab = ({
+  accessToken,
+  dictionary,
+}: {
+  accessToken: string;
+  dictionary?: Dictionary;
+}) => {
   const { addToast } = useToast();
   const searchParams = useSearchParams();
+  const copy = getJobsCopy(dictionary);
   const [jobs, setJobs] = useState<Job[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
@@ -27,6 +36,7 @@ export const BusinessJobsTab = ({ accessToken }: { accessToken: string }) => {
   const [callReservation, setCallReservation] = useState<Reservation | null>(null);
 
   const selectedJob = jobs.find((job) => job.id === selectedJobId) ?? null;
+  const highlightedApplicationId = searchParams.get('application');
 
   const loadJobs = useCallback(async () => {
     try {
@@ -105,9 +115,9 @@ export const BusinessJobsTab = ({ accessToken }: { accessToken: string }) => {
       });
       setShowCreate(false);
       await loadJobs();
-      addToast('Success', 'Hiring post created.');
+      addToast('Success', copy.hiringPostCreated);
     } catch (err) {
-      addToast('Error', err instanceof Error ? err.message : 'Failed to create hiring post');
+      addToast('Error', err instanceof Error ? err.message : copy.failedToCreateHiringPost);
     } finally {
       setCreating(false);
     }
@@ -120,7 +130,7 @@ export const BusinessJobsTab = ({ accessToken }: { accessToken: string }) => {
         await loadApplications(selectedJobId);
       }
     } catch (err) {
-      addToast('Error', err instanceof Error ? err.message : 'Failed to update application');
+      addToast('Error', err instanceof Error ? err.message : copy.failedToUpdateApplication);
     }
   };
 
@@ -138,7 +148,7 @@ export const BusinessJobsTab = ({ accessToken }: { accessToken: string }) => {
       form.reset();
       await loadInterviewSlots(selectedJob.id);
     } catch (err) {
-      addToast('Error', err instanceof Error ? err.message : 'Failed to create interview slot');
+      addToast('Error', err instanceof Error ? err.message : copy.failedToCreateInterviewSlot);
     }
   };
 
@@ -148,7 +158,7 @@ export const BusinessJobsTab = ({ accessToken }: { accessToken: string }) => {
       await jobsApiClient.deleteInterviewSlot(accessToken, slotId);
       await loadInterviewSlots(selectedJob.id);
     } catch (err) {
-      addToast('Error', err instanceof Error ? err.message : 'Failed to delete interview slot');
+      addToast('Error', err instanceof Error ? err.message : copy.failedToDeleteInterviewSlot);
     }
   };
 
@@ -158,7 +168,7 @@ export const BusinessJobsTab = ({ accessToken }: { accessToken: string }) => {
       await jobsApiClient.updateInterviewSlot(accessToken, slotId, { status });
       await loadInterviewSlots(selectedJob.id);
     } catch (err) {
-      addToast('Error', err instanceof Error ? err.message : 'Failed to update interview slot');
+      addToast('Error', err instanceof Error ? err.message : copy.failedToUpdateInterviewSlot);
     }
   };
 
@@ -169,31 +179,31 @@ export const BusinessJobsTab = ({ accessToken }: { accessToken: string }) => {
         reservationId,
       );
       if (reservation.mode !== 'online') {
-        addToast('Notice', 'This interview was booked as an offline reservation.');
+        addToast('Notice', copy.offlineReservationNotice);
         return;
       }
       setCallReservation(reservation);
     } catch (err) {
-      addToast('Error', err instanceof Error ? err.message : 'Failed to open reservation');
+      addToast('Error', err instanceof Error ? err.message : copy.failedToOpenReservation);
     }
   };
 
-  if (loading) return <p>Loading jobs...</p>;
+  if (loading) return <p>{copy.loadingJobs}</p>;
 
   return (
     <div className="dashboard-section">
       <div className="dashboard-section-header">
-        <h3 className="dashboard-section-title">My Hiring Posts</h3>
+        <h3 className="dashboard-section-title">{copy.businessTitle}</h3>
         <button className="dashboard-primary-btn" onClick={() => setShowCreate(true)}>
-          Post a Hiring Need
+          {copy.postHiringNeed}
         </button>
       </div>
 
       <div className="dashboard-cards">
         {jobs.map((job) => (
-          <JobCard key={job.id} job={job}>
+          <JobCard key={job.id} job={job} copy={copy}>
             <button className="dashboard-link-btn" onClick={() => void openJob(job.id)}>
-              {selectedJobId === job.id ? 'Hide Details' : 'Manage Applications'}
+              {selectedJobId === job.id ? copy.hideDetails : copy.manageApplications}
             </button>
           </JobCard>
         ))}
@@ -202,9 +212,9 @@ export const BusinessJobsTab = ({ accessToken }: { accessToken: string }) => {
       {selectedJob && (
         <div style={{ marginTop: '1.5rem', display: 'grid', gap: '1rem' }}>
           <div className="dashboard-card">
-            <h4 className="dashboard-card-title">Applications</h4>
+            <h4 className="dashboard-card-title">{copy.applications}</h4>
             {applications.length === 0 ? (
-              <p className="dashboard-empty">No applications yet.</p>
+              <p className="dashboard-empty">{copy.noApplications}</p>
             ) : (
               <ul
                 style={{ listStyle: 'none', padding: 0, margin: 0, display: 'grid', gap: '1rem' }}
@@ -215,7 +225,10 @@ export const BusinessJobsTab = ({ accessToken }: { accessToken: string }) => {
                     style={{
                       padding: '1rem',
                       background: '#fff',
-                      border: '1px solid #e5e7eb',
+                      border:
+                        highlightedApplicationId === app.id
+                          ? '2px solid #2563eb'
+                          : '1px solid #e5e7eb',
                       borderRadius: '12px',
                     }}
                   >
@@ -223,13 +236,15 @@ export const BusinessJobsTab = ({ accessToken }: { accessToken: string }) => {
                       <div>
                         <strong>{app.expertName || app.expertId}</strong>
                         <p className="dashboard-card-meta" style={{ marginTop: '0.35rem' }}>
-                          {app.status} |{' '}
-                          {app.submissionType === 'cv_upload' ? 'CV uploaded' : 'Profile snapshot'}
+                          {formatApplicationStatus(app.status, copy)} |{' '}
+                          {app.submissionType === 'cv_upload'
+                            ? copy.cvUploaded
+                            : copy.profileSnapshot}
                         </p>
                         <p className="dashboard-card-meta">
-                          Paid {app.applicationFeeAmount.toFixed(2)} EGP | Business gets{' '}
-                          {app.businessPayoutAmount.toFixed(2)} EGP | Platform gets{' '}
-                          {app.applicationCommissionAmount.toFixed(2)} EGP
+                          {copy.paid} {app.applicationFeeAmount.toFixed(2)} EGP |{' '}
+                          {copy.businessGets} {app.businessPayoutAmount.toFixed(2)} EGP |{' '}
+                          {copy.platformGets} {app.applicationCommissionAmount.toFixed(2)} EGP
                         </p>
                         {app.coverLetter && (
                           <p style={{ marginTop: '0.75rem' }}>{app.coverLetter}</p>
@@ -245,17 +260,17 @@ export const BusinessJobsTab = ({ accessToken }: { accessToken: string }) => {
                                   .catch(() => {});
                               }}
                             >
-                              Open CV
+                              {copy.openCv}
                             </button>
                           </p>
                         ) : (
                           <p className="dashboard-card-meta" style={{ marginTop: '0.5rem' }}>
-                            App profile snapshot attached.
+                            {copy.appProfileSnapshotAttached}
                           </p>
                         )}
                         {app.interviewInvitationSentAt && (
                           <p className="dashboard-card-meta" style={{ marginTop: '0.5rem' }}>
-                            Interview invited at{' '}
+                            {copy.interviewInvitedAt}{' '}
                             {new Date(app.interviewInvitationSentAt).toLocaleString()}
                           </p>
                         )}
@@ -269,20 +284,20 @@ export const BusinessJobsTab = ({ accessToken }: { accessToken: string }) => {
                                 className="dashboard-btn dashboard-btn--small dashboard-btn--secondary"
                                 onClick={() => void handleUpdateApp(app.id, 'interview_invited')}
                               >
-                                Invite Interview
+                                {copy.inviteInterview}
                               </button>
                             )}
                             <button
                               className="dashboard-primary-btn dashboard-primary-btn--small"
                               onClick={() => void handleUpdateApp(app.id, 'accepted')}
                             >
-                              Accept
+                              {copy.accept}
                             </button>
                             <button
                               className="dashboard-btn dashboard-btn--secondary dashboard-btn--small"
                               onClick={() => void handleUpdateApp(app.id, 'rejected')}
                             >
-                              Reject
+                              {copy.reject}
                             </button>
                           </>
                         )}
@@ -293,7 +308,7 @@ export const BusinessJobsTab = ({ accessToken }: { accessToken: string }) => {
                               void openInterviewReservation(app.interviewReservationId!)
                             }
                           >
-                            Open Interview
+                            {copy.openInterview}
                           </button>
                         )}
                       </div>
@@ -304,9 +319,10 @@ export const BusinessJobsTab = ({ accessToken }: { accessToken: string }) => {
                         <BusinessMilestoneManager
                           accessToken={accessToken}
                           applicationId={app.id}
+                          copy={copy}
                         />
                         <div>
-                          <h4>Project Chat</h4>
+                          <h4>{copy.projectChat}</h4>
                           <ApplicationChat applicationId={app.id} />
                         </div>
                       </div>
@@ -314,7 +330,7 @@ export const BusinessJobsTab = ({ accessToken }: { accessToken: string }) => {
 
                     {app.status !== 'accepted' && (
                       <div style={{ marginTop: '1rem' }}>
-                        <h4 style={{ marginBottom: '0.5rem' }}>Application Chat</h4>
+                        <h4 style={{ marginBottom: '0.5rem' }}>{copy.applicationChat}</h4>
                         <ApplicationChat applicationId={app.id} />
                       </div>
                     )}
@@ -326,13 +342,11 @@ export const BusinessJobsTab = ({ accessToken }: { accessToken: string }) => {
 
           {selectedJob.interviewEnabled && (
             <div className="dashboard-card">
-              <h4 className="dashboard-card-title">Interview Slots</h4>
-              <p className="dashboard-card-meta">
-                These slots are published for invited experts on this hiring post.
-              </p>
+              <h4 className="dashboard-card-title">{copy.interviewSlots}</h4>
+              <p className="dashboard-card-meta">{copy.interviewSlotsHelp}</p>
 
               {interviewSlots.length === 0 ? (
-                <p className="dashboard-empty">No interview slots yet.</p>
+                <p className="dashboard-empty">{copy.noInterviewSlots}</p>
               ) : (
                 <ul
                   style={{
@@ -358,10 +372,11 @@ export const BusinessJobsTab = ({ accessToken }: { accessToken: string }) => {
                       <div>
                         <strong>{new Date(slot.startAt).toLocaleString()}</strong>
                         <p className="dashboard-card-meta">
-                          Ends {new Date(slot.endAt).toLocaleString()} | {slot.status} |{' '}
-                          {slot.supportsOnline ? 'Online' : ''}
+                          {copy.ends} {new Date(slot.endAt).toLocaleString()} |{' '}
+                          {copy.statusLabels[slot.status] ?? slot.status} |{' '}
+                          {slot.supportsOnline ? copy.online : ''}
                           {slot.supportsOnline && slot.supportsOffline ? ' / ' : ''}
-                          {slot.supportsOffline ? 'Offline' : ''}
+                          {slot.supportsOffline ? copy.offline : ''}
                         </p>
                       </div>
                       <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
@@ -370,21 +385,21 @@ export const BusinessJobsTab = ({ accessToken }: { accessToken: string }) => {
                             className="dashboard-btn dashboard-btn--small dashboard-btn--secondary"
                             onClick={() => void handleToggleInterviewSlot(slot.id, 'blocked')}
                           >
-                            Block
+                            {copy.block}
                           </button>
                         ) : slot.status === 'blocked' ? (
                           <button
                             className="dashboard-btn dashboard-btn--small dashboard-btn--secondary"
                             onClick={() => void handleToggleInterviewSlot(slot.id, 'available')}
                           >
-                            Reopen
+                            {copy.reopen}
                           </button>
                         ) : null}
                         <button
                           className="dashboard-btn dashboard-btn--secondary dashboard-btn--small"
                           onClick={() => void handleDeleteInterviewSlot(slot.id)}
                         >
-                          Delete
+                          {copy.delete}
                         </button>
                       </div>
                     </li>
@@ -395,7 +410,7 @@ export const BusinessJobsTab = ({ accessToken }: { accessToken: string }) => {
               <form className="dashboard-form" onSubmit={(e) => void handleCreateInterviewSlot(e)}>
                 <div className="dashboard-form-row">
                   <label style={{ flex: 1 }}>
-                    Start
+                    {copy.start}
                     <input
                       name="startAt"
                       type="datetime-local"
@@ -404,7 +419,7 @@ export const BusinessJobsTab = ({ accessToken }: { accessToken: string }) => {
                     />
                   </label>
                   <label style={{ flex: 1 }}>
-                    End
+                    {copy.end}
                     <input
                       name="endAt"
                       type="datetime-local"
@@ -415,17 +430,17 @@ export const BusinessJobsTab = ({ accessToken }: { accessToken: string }) => {
                 </div>
                 <div className="dashboard-form-row">
                   <label>
-                    <input name="supportsOnline" type="checkbox" defaultChecked /> Online
+                    <input name="supportsOnline" type="checkbox" defaultChecked /> {copy.online}
                   </label>
                   <label>
-                    <input name="supportsOffline" type="checkbox" /> Offline
+                    <input name="supportsOffline" type="checkbox" /> {copy.offline}
                   </label>
                 </div>
                 <button
                   type="submit"
                   className="dashboard-primary-btn dashboard-primary-btn--small"
                 >
-                  Add Interview Slot
+                  {copy.addInterviewSlot}
                 </button>
               </form>
             </div>
@@ -436,37 +451,46 @@ export const BusinessJobsTab = ({ accessToken }: { accessToken: string }) => {
       {showCreate && (
         <div className="plan-modal-overlay" onClick={() => setShowCreate(false)}>
           <div className="plan-modal" onClick={(e) => e.stopPropagation()}>
-            <h3 className="plan-modal-title">Post a Hiring Need</h3>
+            <h3 className="plan-modal-title">{copy.postHiringNeed}</h3>
             <form className="dashboard-form" onSubmit={(e) => void handleCreate(e)}>
-              <input name="title" className="dashboard-input" placeholder="Job title" required />
+              <input
+                name="title"
+                className="dashboard-input"
+                placeholder={copy.jobTitlePlaceholder}
+                required
+              />
               <textarea
                 name="description"
                 className="dashboard-textarea"
-                placeholder="Description"
+                placeholder={copy.descriptionPlaceholder}
                 required
               />
               <textarea
                 name="requirements"
                 className="dashboard-textarea"
-                placeholder="Requirements"
+                placeholder={copy.requirementsPlaceholder}
               />
-              <input name="salaryRange" className="dashboard-input" placeholder="Salary range" />
+              <input
+                name="salaryRange"
+                className="dashboard-input"
+                placeholder={copy.salaryRangePlaceholder}
+              />
               <input
                 name="applicationFeeAmount"
                 type="number"
                 min="0"
                 step="0.01"
                 className="dashboard-input"
-                placeholder="Application fee (EGP)"
+                placeholder={copy.applicationFeePlaceholder}
                 required
               />
               <label style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-                <input name="interviewEnabled" type="checkbox" /> Enable interviews
+                <input name="interviewEnabled" type="checkbox" /> {copy.enableInterviews}
               </label>
               <textarea
                 name="interviewInstructions"
                 className="dashboard-textarea"
-                placeholder="Interview instructions (optional)"
+                placeholder={copy.interviewInstructionsPlaceholder}
               />
               <div className="dashboard-form-row">
                 <button
@@ -474,10 +498,10 @@ export const BusinessJobsTab = ({ accessToken }: { accessToken: string }) => {
                   className="plan-modal-cancel"
                   onClick={() => setShowCreate(false)}
                 >
-                  Cancel
+                  {copy.cancel}
                 </button>
                 <button type="submit" className="dashboard-primary-btn" disabled={creating}>
-                  {creating ? '...' : 'Post'}
+                  {creating ? copy.creating : copy.post}
                 </button>
               </div>
             </form>

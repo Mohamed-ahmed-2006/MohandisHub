@@ -29,7 +29,21 @@ export const createApp = () => {
   app.use(
     helmet({
       crossOriginResourcePolicy: { policy: 'cross-origin' },
-      contentSecurityPolicy: false,
+      contentSecurityPolicy: {
+        reportOnly: true,
+        directives: {
+          defaultSrc: ["'self'"],
+          baseUri: ["'self'"],
+          objectSrc: ["'none'"],
+          scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'"],
+          styleSrc: ["'self'", "'unsafe-inline'"],
+          imgSrc: ["'self'", 'data:', 'blob:', 'http:', 'https:'],
+          fontSrc: ["'self'", 'data:'],
+          connectSrc: ["'self'", 'http:', 'https:', 'ws:', 'wss:'],
+          frameSrc: ["'self'", 'https:'],
+          formAction: ["'self'"],
+        },
+      },
     }),
   );
   app.use(requestIdMiddleware);

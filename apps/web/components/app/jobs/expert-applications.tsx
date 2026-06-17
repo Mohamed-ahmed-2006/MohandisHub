@@ -12,6 +12,8 @@ import { useCallback, useEffect, useState } from 'react';
 import { OnlineCallModal } from '../online-call-modal';
 
 import { ApplicationChat } from './application-chat';
+import type { JobsCopy } from './jobs-copy';
+import { formatApplicationStatus, formatMilestoneStatus } from './jobs-copy';
 
 import { useToast } from '@/components/app/toast';
 import { jobsApiClient } from '@/lib/jobs/client';
@@ -26,7 +28,13 @@ function formatDateTime(value: string): string {
   return new Date(value).toLocaleString();
 }
 
-export const ExpertApplications = ({ accessToken }: { accessToken: string }) => {
+export const ExpertApplications = ({
+  accessToken,
+  copy,
+}: {
+  accessToken: string;
+  copy: JobsCopy;
+}) => {
   const { addToast } = useToast();
   const searchParams = useSearchParams();
   const [applications, setApplications] = useState<JobApplication[]>([]);
@@ -95,13 +103,13 @@ export const ExpertApplications = ({ accessToken }: { accessToken: string }) => 
   const handleSubmitMilestone = async (milestoneId: string, notes: string) => {
     try {
       await jobsApiClient.submitMilestone(accessToken, milestoneId, { submissionNotes: notes });
-      addToast('Success', 'Milestone submitted');
+      addToast('Success', copy.milestoneSubmitted);
       if (selectedAppId) {
         const milestoneRows = await jobsApiClient.getMilestones(accessToken, selectedAppId);
         setMilestones(milestoneRows);
       }
     } catch (err: unknown) {
-      addToast('Error', err instanceof Error ? err.message : 'Failed to submit milestone');
+      addToast('Error', err instanceof Error ? err.message : copy.failedToSubmitMilestone);
     }
   };
 
@@ -116,7 +124,7 @@ export const ExpertApplications = ({ accessToken }: { accessToken: string }) => 
       );
       setInterviewSlots(refreshed.items);
     } catch (err) {
-      addToast('Error', err instanceof Error ? err.message : 'Failed to book interview');
+      addToast('Error', err instanceof Error ? err.message : copy.failedToBookInterview);
     }
   };
 
@@ -127,22 +135,22 @@ export const ExpertApplications = ({ accessToken }: { accessToken: string }) => 
         reservationId,
       );
       if (reservation.mode !== 'online') {
-        addToast('Notice', 'This interview reservation is offline.');
+        addToast('Notice', copy.offlineInterviewNotice);
         return;
       }
       setCallReservation(reservation);
     } catch (err) {
-      addToast('Error', err instanceof Error ? err.message : 'Failed to open interview');
+      addToast('Error', err instanceof Error ? err.message : copy.failedToOpenInterview);
     }
   };
 
-  if (loading) return <p>Loading my applications...</p>;
+  if (loading) return <p>{copy.loadingApplications}</p>;
 
   return (
     <div className="dashboard-section" style={{ marginTop: '2rem' }}>
-      <h3 className="dashboard-section-title">My Applications</h3>
+      <h3 className="dashboard-section-title">{copy.myApplications}</h3>
       {applications.length === 0 ? (
-        <p className="dashboard-empty">No applications yet.</p>
+        <p className="dashboard-empty">{copy.noApplications}</p>
       ) : (
         <ul style={{ listStyle: 'none', padding: 0, display: 'grid', gap: '1rem' }}>
           {applications.map((app) => (
@@ -159,11 +167,13 @@ export const ExpertApplications = ({ accessToken }: { accessToken: string }) => 
                 <div>
                   <strong>{app.jobTitle || app.jobId}</strong>
                   <p className="dashboard-card-meta" style={{ marginTop: '0.35rem' }}>
-                    {app.businessName || 'Business'} | {app.status.replaceAll('_', ' ')}
+                    {app.businessName || copy.businessFallback} |{' '}
+                    {formatApplicationStatus(app.status, copy)}
                   </p>
                   <p className="dashboard-card-meta">
-                    Submitted via {app.submissionType === 'cv_upload' ? 'CV upload' : 'app profile'}{' '}
-                    | Paid {formatMoney(app.applicationFeeAmount)}
+                    {copy.submittedVia}{' '}
+                    {app.submissionType === 'cv_upload' ? copy.cvUpload : copy.appProfile} |{' '}
+                    {copy.paid} {formatMoney(app.applicationFeeAmount)}
                   </p>
                   {app.coverLetter && <p style={{ marginTop: '0.75rem' }}>{app.coverLetter}</p>}
                   {app.cvFileUrl ? (
@@ -177,19 +187,19 @@ export const ExpertApplications = ({ accessToken }: { accessToken: string }) => 
                             .catch(() => {});
                         }}
                       >
-                        Open submitted CV
+                        {copy.openSubmittedCv}
                       </button>
                     </p>
                   ) : (
                     <p className="dashboard-card-meta" style={{ marginTop: '0.5rem' }}>
-                      Profile snapshot was attached to this application.
+                      {copy.profileSnapshotStored}
                     </p>
                   )}
                 </div>
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                   <button className="dashboard-link-btn" onClick={() => void openApplication(app)}>
-                    {selectedAppId === app.id ? 'Hide Details' : 'Open Details'}
+                    {selectedAppId === app.id ? copy.hideDetails : copy.openDetails}
                   </button>
                   {app.interviewReservationId &&
                     ['interview_booked', 'interview_completed', 'accepted'].includes(
@@ -199,7 +209,9 @@ export const ExpertApplications = ({ accessToken }: { accessToken: string }) => 
                         className="dashboard-btn dashboard-btn--small dashboard-btn--secondary"
                         onClick={() => void openInterviewReservation(app.interviewReservationId!)}
                       >
-                        {app.status === 'interview_booked' ? 'Join Interview' : 'Open Interview'}
+                        {app.status === 'interview_booked'
+                          ? copy.joinInterview
+                          : copy.openInterview}
                       </button>
                     )}
                 </div>
@@ -215,27 +227,27 @@ export const ExpertApplications = ({ accessToken }: { accessToken: string }) => 
                       borderRadius: '10px',
                     }}
                   >
-                    <h4 style={{ marginBottom: '0.75rem' }}>Submission Receipt</h4>
+                    <h4 style={{ marginBottom: '0.75rem' }}>{copy.submissionReceipt}</h4>
                     <p className="dashboard-card-meta">
-                      Application fee: {formatMoney(app.applicationFeeAmount)}
+                      {copy.applicationFee}: {formatMoney(app.applicationFeeAmount)}
                     </p>
                     <p className="dashboard-card-meta">
-                      Submission type:{' '}
-                      {app.submissionType === 'cv_upload' ? 'CV upload' : 'Profile snapshot'}
+                      {copy.submissionType}:{' '}
+                      {app.submissionType === 'cv_upload' ? copy.cvUpload : copy.profileSnapshot}
                     </p>
                     {app.interviewInvitationSentAt && (
                       <p className="dashboard-card-meta">
-                        Interview invited at {formatDateTime(app.interviewInvitationSentAt)}
+                        {copy.interviewInvitedAt} {formatDateTime(app.interviewInvitationSentAt)}
                       </p>
                     )}
                     {Boolean(app.profileSnapshot) && (
                       <p className="dashboard-card-meta" style={{ marginTop: '0.5rem' }}>
-                        Your expert profile snapshot was stored with this application.
+                        {copy.expertProfileSnapshotStored}
                       </p>
                     )}
                     {app.interviewReservationId && (
                       <p className="dashboard-card-meta" style={{ marginTop: '0.5rem' }}>
-                        Interview reservation ID: {app.interviewReservationId}
+                        {copy.interviewReservationId}: {app.interviewReservationId}
                       </p>
                     )}
                   </div>
@@ -249,9 +261,9 @@ export const ExpertApplications = ({ accessToken }: { accessToken: string }) => 
                         borderRadius: '10px',
                       }}
                     >
-                      <h4 style={{ marginBottom: '1rem' }}>Project Milestones</h4>
+                      <h4 style={{ marginBottom: '1rem' }}>{copy.projectMilestones}</h4>
                       {milestones.length === 0 ? (
-                        <p>No milestones created yet.</p>
+                        <p>{copy.noMilestones}</p>
                       ) : (
                         <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
                           {milestones.map((milestone) => (
@@ -272,9 +284,14 @@ export const ExpertApplications = ({ accessToken }: { accessToken: string }) => 
                               >
                                 <strong>{milestone.title}</strong>
                                 <span>
-                                  {milestone.amount} EGP | {milestone.status}
+                                  {milestone.amount} EGP |{' '}
+                                  {formatMilestoneStatus(milestone.status, copy)}
                                 </span>
                               </div>
+                              <p className="dashboard-card-meta" style={{ marginBottom: '0.5rem' }}>
+                                {copy.businessGets}: {milestone.providerPayoutAmount} EGP |{' '}
+                                {copy.platformGets}: {milestone.commissionAmount} EGP
+                              </p>
                               {['pending', 'active', 'rejected'].includes(milestone.status) && (
                                 <form
                                   style={{ display: 'flex', gap: '0.5rem' }}
@@ -290,7 +307,7 @@ export const ExpertApplications = ({ accessToken }: { accessToken: string }) => 
                                   <input
                                     name="notes"
                                     className="dashboard-input"
-                                    placeholder="Submission notes or link"
+                                    placeholder={copy.submissionNotesPlaceholder}
                                     required
                                     style={{ flex: 1 }}
                                   />
@@ -298,7 +315,7 @@ export const ExpertApplications = ({ accessToken }: { accessToken: string }) => 
                                     type="submit"
                                     className="dashboard-primary-btn dashboard-primary-btn--small"
                                   >
-                                    Submit
+                                    {copy.submit}
                                   </button>
                                 </form>
                               )}
@@ -320,28 +337,26 @@ export const ExpertApplications = ({ accessToken }: { accessToken: string }) => 
                         borderRadius: '10px',
                       }}
                     >
-                      <h4 style={{ marginBottom: '0.5rem' }}>Interview</h4>
+                      <h4 style={{ marginBottom: '0.5rem' }}>{copy.interview}</h4>
                       {app.interviewInvitationSentAt && (
                         <p className="dashboard-card-meta">
-                          Invited at {formatDateTime(app.interviewInvitationSentAt)}
+                          {copy.invitedAt} {formatDateTime(app.interviewInvitationSentAt)}
                         </p>
                       )}
                       {app.status === 'interview_booked' && (
                         <p className="dashboard-card-meta" style={{ marginTop: '0.5rem' }}>
-                          Your interview has been booked. Use the reservation link to join or review
-                          details.
+                          {copy.interviewBookedHelp}
                         </p>
                       )}
                       {app.status === 'interview_completed' && (
                         <p className="dashboard-card-meta" style={{ marginTop: '0.5rem' }}>
-                          The interview is marked completed. You can still open the reservation
-                          record below.
+                          {copy.interviewCompletedHelp}
                         </p>
                       )}
                       {app.status === 'interview_invited' && (
                         <>
                           {interviewSlots.length === 0 ? (
-                            <p>No interview slots are available yet.</p>
+                            <p>{copy.noAvailableInterviewSlots}</p>
                           ) : (
                             <ul
                               style={{
@@ -363,7 +378,7 @@ export const ExpertApplications = ({ accessToken }: { accessToken: string }) => 
                                 >
                                   <strong>{formatDateTime(slot.startAt)}</strong>
                                   <p className="dashboard-card-meta">
-                                    Ends {formatDateTime(slot.endAt)}
+                                    {copy.ends} {formatDateTime(slot.endAt)}
                                   </p>
                                   <div
                                     style={{ display: 'flex', gap: '0.5rem', marginTop: '0.75rem' }}
@@ -373,7 +388,7 @@ export const ExpertApplications = ({ accessToken }: { accessToken: string }) => 
                                         className="dashboard-primary-btn dashboard-primary-btn--small"
                                         onClick={() => void handleBookInterview(slot.id, 'online')}
                                       >
-                                        Book online
+                                        {copy.bookOnline}
                                       </button>
                                     )}
                                     {slot.supportsOffline && (
@@ -381,7 +396,7 @@ export const ExpertApplications = ({ accessToken }: { accessToken: string }) => 
                                         className="dashboard-btn dashboard-btn--secondary dashboard-btn--small"
                                         onClick={() => void handleBookInterview(slot.id, 'offline')}
                                       >
-                                        Book offline
+                                        {copy.bookOffline}
                                       </button>
                                     )}
                                   </div>
@@ -401,7 +416,7 @@ export const ExpertApplications = ({ accessToken }: { accessToken: string }) => 
                           }}
                         >
                           <p className="dashboard-card-meta" style={{ margin: 0 }}>
-                            Reservation ID: {app.interviewReservationId}
+                            {copy.reservationId}: {app.interviewReservationId}
                           </p>
                           <button
                             className="dashboard-btn dashboard-btn--small dashboard-btn--secondary"
@@ -409,7 +424,7 @@ export const ExpertApplications = ({ accessToken }: { accessToken: string }) => 
                               void openInterviewReservation(app.interviewReservationId!)
                             }
                           >
-                            Open reservation
+                            {copy.openReservation}
                           </button>
                         </div>
                       )}
@@ -417,7 +432,7 @@ export const ExpertApplications = ({ accessToken }: { accessToken: string }) => 
                   )}
 
                   <div>
-                    <h4 style={{ marginBottom: '0.5rem' }}>Application Chat</h4>
+                    <h4 style={{ marginBottom: '0.5rem' }}>{copy.applicationChat}</h4>
                     <ApplicationChat applicationId={app.id} />
                   </div>
                 </div>

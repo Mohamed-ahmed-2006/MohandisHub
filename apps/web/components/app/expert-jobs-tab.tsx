@@ -7,13 +7,22 @@ import { useCallback, useEffect, useState } from 'react';
 import { ExpertApplications } from './jobs/expert-applications';
 import { JobCard } from './jobs/job-card';
 
+import { getJobsCopy, interpolate } from '@/components/app/jobs/jobs-copy';
 import { useToast } from '@/components/app/toast';
+import type { Dictionary } from '@/lib/i18n/types';
 import { jobsApiClient } from '@/lib/jobs/client';
 import { uploadPrivateFile } from '@/lib/upload/client';
 
-export const ExpertJobsTab = ({ accessToken }: { accessToken: string }) => {
+export const ExpertJobsTab = ({
+  accessToken,
+  dictionary,
+}: {
+  accessToken: string;
+  dictionary?: Dictionary;
+}) => {
   const { addToast } = useToast();
   const searchParams = useSearchParams();
+  const copy = getJobsCopy(dictionary);
   const [jobs, setJobs] = useState<Job[]>([]);
   const [loading, setLoading] = useState(true);
   const [applyJob, setApplyJob] = useState<Job | null>(null);
@@ -37,6 +46,7 @@ export const ExpertJobsTab = ({ accessToken }: { accessToken: string }) => {
   }, [loadJobs]);
 
   useEffect(() => {
+    if (searchParams.get('application')) return;
     const jobId = searchParams.get('job');
     if (!jobId || loading || applyJob?.id === jobId) return;
     const job = jobs.find((item) => item.id === jobId);
@@ -52,7 +62,7 @@ export const ExpertJobsTab = ({ accessToken }: { accessToken: string }) => {
       let cvFileUrl: string | undefined;
       if (submissionType === 'cv_upload') {
         if (!cvFile) {
-          throw new Error('Please select a CV file.');
+          throw new Error(copy.chooseCvError);
         }
         const uploaded = await uploadPrivateFile(accessToken, cvFile);
         cvFileUrl = uploaded.url;
@@ -68,27 +78,27 @@ export const ExpertJobsTab = ({ accessToken }: { accessToken: string }) => {
       setSubmissionType('profile_snapshot');
       setCvFile(null);
       await loadJobs();
-      addToast('Success', 'Application submitted successfully.');
+      addToast('Success', copy.applicationSubmitted);
     } catch (err: unknown) {
-      addToast('Error', err instanceof Error ? err.message : 'Failed to apply');
+      addToast('Error', err instanceof Error ? err.message : copy.failedToApply);
     } finally {
       setApplying(false);
     }
   };
 
-  if (loading) return <p>Loading jobs...</p>;
+  if (loading) return <p>{copy.loadingJobs}</p>;
 
   return (
     <div className="dashboard-section">
-      <h3 className="dashboard-section-title">Available Hiring Posts</h3>
+      <h3 className="dashboard-section-title">{copy.expertTitle}</h3>
       {jobs.length === 0 ? (
-        <p className="dashboard-empty">No open jobs found.</p>
+        <p className="dashboard-empty">{copy.noOpenJobs}</p>
       ) : (
         <div className="dashboard-cards">
           {jobs.map((job) => (
-            <JobCard key={job.id} job={job}>
+            <JobCard key={job.id} job={job} copy={copy}>
               <button className="dashboard-primary-btn" onClick={() => setApplyJob(job)}>
-                Apply
+                {copy.apply}
               </button>
             </JobCard>
           ))}
@@ -98,10 +108,13 @@ export const ExpertJobsTab = ({ accessToken }: { accessToken: string }) => {
       {applyJob && (
         <div className="plan-modal-overlay" onClick={() => setApplyJob(null)}>
           <div className="plan-modal" onClick={(e) => e.stopPropagation()}>
-            <h3 className="plan-modal-title">Apply for {applyJob.title}</h3>
+            <h3 className="plan-modal-title">
+              {copy.applyFor} {applyJob.title}
+            </h3>
             <p className="dashboard-card-meta">
-              You will be charged {applyJob.applicationFeeAmount.toFixed(2)} EGP when this
-              application is submitted.
+              {interpolate(copy.applyChargeNotice, {
+                amount: applyJob.applicationFeeAmount.toFixed(2),
+              })}
             </p>
             {applyJob.interviewEnabled && applyJob.interviewInstructions && (
               <p className="dashboard-card-meta">{applyJob.interviewInstructions}</p>
@@ -115,7 +128,7 @@ export const ExpertJobsTab = ({ accessToken }: { accessToken: string }) => {
                     checked={submissionType === 'profile_snapshot'}
                     onChange={() => setSubmissionType('profile_snapshot')}
                   />
-                  App profile
+                  {copy.appProfile}
                 </label>
                 <label style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
                   <input
@@ -124,7 +137,7 @@ export const ExpertJobsTab = ({ accessToken }: { accessToken: string }) => {
                     checked={submissionType === 'cv_upload'}
                     onChange={() => setSubmissionType('cv_upload')}
                   />
-                  CV upload
+                  {copy.cvUpload}
                 </label>
               </div>
               {submissionType === 'cv_upload' && (
@@ -139,7 +152,7 @@ export const ExpertJobsTab = ({ accessToken }: { accessToken: string }) => {
               <textarea
                 name="coverLetter"
                 className="dashboard-textarea"
-                placeholder="Why are you a good fit?"
+                placeholder={copy.coverLetterPlaceholder}
                 required
               />
               <div className="dashboard-form-row">
@@ -148,12 +161,14 @@ export const ExpertJobsTab = ({ accessToken }: { accessToken: string }) => {
                   className="plan-modal-cancel"
                   onClick={() => setApplyJob(null)}
                 >
-                  Cancel
+                  {copy.cancel}
                 </button>
                 <button type="submit" className="dashboard-primary-btn" disabled={applying}>
                   {applying
-                    ? '...'
-                    : `Pay ${applyJob.applicationFeeAmount.toFixed(2)} EGP and submit`}
+                    ? copy.creating
+                    : interpolate(copy.payAndSubmit, {
+                        amount: applyJob.applicationFeeAmount.toFixed(2),
+                      })}
                 </button>
               </div>
             </form>
@@ -161,7 +176,7 @@ export const ExpertJobsTab = ({ accessToken }: { accessToken: string }) => {
         </div>
       )}
 
-      <ExpertApplications accessToken={accessToken} />
+      <ExpertApplications accessToken={accessToken} copy={copy} />
     </div>
   );
 };

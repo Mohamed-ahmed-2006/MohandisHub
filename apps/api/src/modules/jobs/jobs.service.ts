@@ -1,19 +1,20 @@
-import type {
-  EffectivePlanLimits,
-  ApplyJobDto,
-  BookJobInterviewDto,
-  CreateJobDto,
-  CreateJobInterviewSlotDto,
-  CreateMilestoneDto,
-  Job,
-  JobApplication,
-  JobApplicationMessage,
-  JobMilestone,
-  JobSubmission,
-  Reservation,
-  ReservationSlot,
-  SubmitMilestoneDto,
-  UpdateJobInterviewSlotDto,
+import {
+  computeCommissionSplit,
+  type EffectivePlanLimits,
+  type ApplyJobDto,
+  type BookJobInterviewDto,
+  type CreateJobDto,
+  type CreateJobInterviewSlotDto,
+  type CreateMilestoneDto,
+  type Job,
+  type JobApplication,
+  type JobApplicationMessage,
+  type JobMilestone,
+  type JobSubmission,
+  type Reservation,
+  type ReservationSlot,
+  type SubmitMilestoneDto,
+  type UpdateJobInterviewSlotDto,
 } from '@mohandishub/shared';
 import type { PoolClient } from 'pg';
 
@@ -85,57 +86,59 @@ export class JobsService {
   ) {}
 
   async createJob(businessId: string, input: CreateJobDto): Promise<Job> {
-    const appStatus = await this.settingsService.getAppStatus();
-    let planLimits: EffectivePlanLimits | null = null;
-    if (appStatus.featurePlansEnabled) {
-      planLimits = await this.plansService.getEffectivePlanLimits(businessId);
-      if (planLimits.maxJobs != null) {
-        const count = await this.repo.countJobsByBusiness(businessId);
-        if (count >= planLimits.maxJobs) {
-          throw new HttpError({
-            statusCode: 403,
-            code: 'PLAN_LIMIT_REACHED',
-            message: `Your plan allows up to ${planLimits.maxJobs} jobs. Upgrade to post more.`,
-          });
+    return this.usageQuotaService.withActionLock(businessId, 'new_jobs_per_period', async () => {
+      const appStatus = await this.settingsService.getAppStatus();
+      let planLimits: EffectivePlanLimits | null = null;
+      if (appStatus.featurePlansEnabled) {
+        planLimits = await this.plansService.getEffectivePlanLimits(businessId);
+        if (planLimits.maxJobs != null) {
+          const count = await this.repo.countJobsByBusiness(businessId);
+          if (count >= planLimits.maxJobs) {
+            throw new HttpError({
+              statusCode: 403,
+              code: 'PLAN_LIMIT_REACHED',
+              message: `Your plan allows up to ${planLimits.maxJobs} jobs. Upgrade to post more.`,
+            });
+          }
+        }
+        const q = planLimits.usageQuotas.new_jobs_per_period;
+        if (q) {
+          const { start } = await this.usageQuotaService.resolvePeriodBounds(businessId, q.period);
+          const used = await this.usageQuotaService.getCountForWindow(
+            businessId,
+            'new_jobs_per_period',
+            start,
+          );
+          if (used >= q.maxPerPeriod) {
+            throw new HttpError({
+              statusCode: 403,
+              code: 'PLAN_USAGE_QUOTA_EXCEEDED',
+              message: `You have reached your plan limit for new job posts in this period (${q.maxPerPeriod} maximum).`,
+            });
+          }
         }
       }
-      const q = planLimits.usageQuotas.new_jobs_per_period;
-      if (q) {
-        const { start } = await this.usageQuotaService.resolvePeriodBounds(businessId, q.period);
-        const used = await this.usageQuotaService.getCountForWindow(
+      const createInput = {
+        title: input.title,
+        description: input.description,
+        applicationFeeAmount: input.applicationFeeAmount,
+        interviewEnabled: input.interviewEnabled ?? false,
+        ...(input.requirements !== undefined ? { requirements: input.requirements } : {}),
+        ...(input.salaryRange !== undefined ? { salaryRange: input.salaryRange } : {}),
+        ...(input.interviewInstructions !== undefined
+          ? { interviewInstructions: input.interviewInstructions }
+          : {}),
+      };
+      const row = await this.repo.createJob(businessId, createInput);
+      if (planLimits?.usageQuotas.new_jobs_per_period) {
+        await this.usageQuotaService.consumeIfConfigured(
           businessId,
           'new_jobs_per_period',
-          start,
+          planLimits.usageQuotas.new_jobs_per_period,
         );
-        if (used >= q.maxPerPeriod) {
-          throw new HttpError({
-            statusCode: 403,
-            code: 'PLAN_USAGE_QUOTA_EXCEEDED',
-            message: `You have reached your plan limit for new job posts in this period (${q.maxPerPeriod} maximum).`,
-          });
-        }
       }
-    }
-    const createInput = {
-      title: input.title,
-      description: input.description,
-      applicationFeeAmount: input.applicationFeeAmount,
-      interviewEnabled: input.interviewEnabled ?? false,
-      ...(input.requirements !== undefined ? { requirements: input.requirements } : {}),
-      ...(input.salaryRange !== undefined ? { salaryRange: input.salaryRange } : {}),
-      ...(input.interviewInstructions !== undefined
-        ? { interviewInstructions: input.interviewInstructions }
-        : {}),
-    };
-    const row = await this.repo.createJob(businessId, createInput);
-    if (planLimits?.usageQuotas.new_jobs_per_period) {
-      await this.usageQuotaService.consumeIfConfigured(
-        businessId,
-        'new_jobs_per_period',
-        planLimits.usageQuotas.new_jobs_per_period,
-      );
-    }
-    return this.toJob(row);
+      return this.toJob(row);
+    });
   }
 
   async listOpenJobs(page: number = 1, limit: number = 20) {
@@ -175,6 +178,9 @@ export class JobsService {
         code: 'CV_REQUIRED',
         message: 'CV file URL is required for CV submissions.',
       });
+    }
+    if (input.submissionType === 'cv_upload') {
+      await this.assertOwnedPrivateCvUrl(input.cvFileUrl!.trim(), expertId);
     }
 
     const profileSnapshot =
@@ -279,7 +285,7 @@ export class JobsService {
         type: 'job_application',
         title: 'New hiring application',
         message: 'A new provider submitted a paid application to your hiring post.',
-        payload: { jobId: job.id },
+        payload: { jobId: job.id, applicationId: app.id },
       });
       return this.toApplication(app);
     } catch (err: unknown) {
@@ -462,7 +468,7 @@ export class JobsService {
       type: 'application_status',
       title: 'Application Update',
       message: `Your application has been ${updated.status}`,
-      payload: { jobId: job.id },
+      payload: { jobId: job.id, applicationId: updated.id },
     });
 
     return this.toApplication(updated);
@@ -694,32 +700,101 @@ export class JobsService {
     businessId: string,
     input: CreateMilestoneDto,
   ): Promise<JobMilestone> {
-    const app = await this.repo.getApplicationById(applicationId);
-    if (!app) {
-      throw new HttpError({ statusCode: 404, code: 'NOT_FOUND', message: 'Application not found' });
-    }
-    const job = await this.repo.getJobById(app.job_id);
-    if (!job || job.business_id !== businessId) {
-      throw new HttpError({
-        statusCode: 403,
-        code: 'FORBIDDEN',
-        message: 'You do not own this job',
-      });
-    }
+    const settings = await this.settingsService.getAppStatus();
+    const { commission, providerAmount } = computeCommissionSplit(
+      input.amount,
+      settings.commissionPercent,
+      settings.commissionMinEgp,
+    );
+    const pool = getPool();
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      const app = await this.findApplicationForUpdate(client, applicationId);
+      if (!app) {
+        throw new HttpError({
+          statusCode: 404,
+          code: 'NOT_FOUND',
+          message: 'Application not found',
+        });
+      }
+      const job = await this.findJobForUpdate(client, app.job_id);
+      if (!job || job.business_id !== businessId) {
+        throw new HttpError({
+          statusCode: 403,
+          code: 'FORBIDDEN',
+          message: 'You do not own this job',
+        });
+      }
 
-    if (job.status === 'closed') {
-      throw new HttpError({ statusCode: 400, code: 'JOB_CLOSED', message: 'Job is closed' });
-    }
-    if (app.status !== 'accepted') {
-      throw new HttpError({
-        statusCode: 400,
-        code: 'APPLICATION_NOT_ACCEPTED',
-        message: 'Milestones can only be created for accepted applications.',
-      });
-    }
+      if (job.status === 'closed') {
+        throw new HttpError({ statusCode: 400, code: 'JOB_CLOSED', message: 'Job is closed' });
+      }
+      if (app.status !== 'accepted') {
+        throw new HttpError({
+          statusCode: 400,
+          code: 'APPLICATION_NOT_ACCEPTED',
+          message: 'Milestones can only be created for accepted applications.',
+        });
+      }
 
-    const milestone = await this.repo.createMilestone(applicationId, input.title, input.amount);
-    return this.toMilestone(milestone);
+      const businessWallet = await this.walletRepo.getOrCreateUserWalletInTransaction(
+        client,
+        businessId,
+      );
+      const milestone = await this.repo.createMilestone(
+        applicationId,
+        input.title,
+        input.amount,
+        client,
+      );
+      const hold = await this.walletRepo.createHoldInTransaction(
+        client,
+        businessWallet.id,
+        businessId,
+        input.amount,
+        'EGP',
+        'job_milestone',
+        milestone.id,
+        {
+          jobId: job.id,
+          applicationId,
+          commissionAmount: commission,
+          providerPayoutAmount: providerAmount,
+        },
+      );
+      const funded = await this.repo.updateMilestoneEscrow(
+        milestone.id,
+        {
+          status: 'active',
+          walletHoldId: hold.id,
+          commissionAmount: commission,
+          providerPayoutAmount: providerAmount,
+        },
+        client,
+      );
+      await client.query('COMMIT');
+      return this.toMilestone(funded);
+    } catch (err: unknown) {
+      await client.query('ROLLBACK');
+      if (err instanceof Error && err.message === 'INSUFFICIENT_BALANCE') {
+        throw new HttpError({
+          statusCode: 402,
+          code: 'INSUFFICIENT_BALANCE',
+          message: 'Insufficient wallet balance to fund this milestone.',
+        });
+      }
+      if (err instanceof Error && err.message === 'WALLET_FROZEN') {
+        throw new HttpError({
+          statusCode: 423,
+          code: 'WALLET_FROZEN',
+          message: 'Wallet is frozen and cannot fund milestones.',
+        });
+      }
+      throw err;
+    } finally {
+      client.release();
+    }
   }
 
   async getMilestones(applicationId: string, userId: string): Promise<JobMilestone[]> {
@@ -793,7 +868,7 @@ export class JobsService {
       type: 'milestone_submitted',
       title: 'Milestone Submitted',
       message: `Work submitted for milestone: ${milestone.title}`,
-      payload: { applicationId: app.id },
+      payload: { jobId: job.id, applicationId: app.id },
     });
 
     return this.toSubmission(submission);
@@ -804,41 +879,154 @@ export class JobsService {
     businessId: string,
     status: 'approved' | 'rejected',
   ): Promise<JobMilestone> {
-    const milestone = await this.repo.getMilestoneById(milestoneId);
-    if (!milestone) {
-      throw new HttpError({ statusCode: 404, code: 'NOT_FOUND', message: 'Milestone not found' });
-    }
-    const app = await this.repo.getApplicationById(milestone.job_application_id);
-    if (!app) {
-      throw new HttpError({ statusCode: 404, code: 'NOT_FOUND', message: 'Application not found' });
-    }
-    const job = await this.repo.getJobById(app.job_id);
-    if (!job || job.business_id !== businessId) {
-      throw new HttpError({
-        statusCode: 403,
-        code: 'FORBIDDEN',
-        message: 'You do not own this job',
-      });
-    }
-    if (milestone.status !== 'submitted') {
-      throw new HttpError({
-        statusCode: 400,
-        code: 'BAD_REQUEST',
-        message: 'Milestone is not pending review',
-      });
+    const settings = await this.settingsService.getAppStatus();
+    const pool = getPool();
+    const client = await pool.connect();
+    let updated: JobMilestoneRow | null = null;
+    let app: JobApplicationRow | null = null;
+    let job: JobRow | null = null;
+    let milestoneTitle = '';
+    try {
+      await client.query('BEGIN');
+      const milestone = await this.findMilestoneForUpdate(client, milestoneId);
+      if (!milestone) {
+        throw new HttpError({ statusCode: 404, code: 'NOT_FOUND', message: 'Milestone not found' });
+      }
+      milestoneTitle = milestone.title;
+      if (milestone.status === 'approved' && status === 'approved') {
+        updated = milestone;
+        app = await this.findApplicationForUpdate(client, milestone.job_application_id);
+        job = app ? await this.findJobForUpdate(client, app.job_id) : null;
+        if (!app || !job || job.business_id !== businessId) {
+          throw new HttpError({
+            statusCode: 403,
+            code: 'FORBIDDEN',
+            message: 'You do not own this job',
+          });
+        }
+        await client.query('COMMIT');
+      } else {
+        app = await this.findApplicationForUpdate(client, milestone.job_application_id);
+        if (!app) {
+          throw new HttpError({
+            statusCode: 404,
+            code: 'NOT_FOUND',
+            message: 'Application not found',
+          });
+        }
+        job = await this.findJobForUpdate(client, app.job_id);
+        if (!job || job.business_id !== businessId) {
+          throw new HttpError({
+            statusCode: 403,
+            code: 'FORBIDDEN',
+            message: 'You do not own this job',
+          });
+        }
+        if (milestone.status !== 'submitted') {
+          throw new HttpError({
+            statusCode: 400,
+            code: 'BAD_REQUEST',
+            message: 'Milestone is not pending review',
+          });
+        }
+
+        if (job.status === 'closed') {
+          throw new HttpError({ statusCode: 400, code: 'JOB_CLOSED', message: 'Job is closed' });
+        }
+
+        if (status === 'rejected') {
+          updated = await this.repo.updateMilestoneStatus(milestoneId, 'rejected', client);
+        } else {
+          if (!milestone.wallet_hold_id) {
+            throw new HttpError({
+              statusCode: 409,
+              code: 'MILESTONE_ESCROW_MISSING',
+              message: 'Milestone is not funded and cannot be approved.',
+            });
+          }
+          const amount = toNumber(milestone.amount);
+          const { commission, providerAmount } = computeCommissionSplit(
+            amount,
+            settings.commissionPercent,
+            settings.commissionMinEgp,
+          );
+          await this.walletRepo.captureHoldInTransaction(
+            client,
+            milestone.wallet_hold_id,
+            'Job milestone approved',
+            {
+              milestoneId,
+              applicationId: app.id,
+              jobId: job.id,
+              commissionAmount: commission,
+              providerPayoutAmount: providerAmount,
+            },
+          );
+          const providerWallet = await this.walletRepo.getOrCreateUserWalletInTransaction(
+            client,
+            app.expert_id,
+          );
+          const platformWalletId = await this.walletRepo.getOrCreateCommissionWallet(
+            client,
+            settings.commissionReceiverId,
+          );
+          if (providerAmount > 0) {
+            await this.walletRepo.creditWithTypeInTransaction(
+              client,
+              providerWallet.id,
+              app.expert_id,
+              providerAmount,
+              'payment',
+              'Job milestone payout',
+              'job_milestone',
+              milestoneId,
+            );
+          }
+          if (commission > 0) {
+            await this.walletRepo.creditWithTypeInTransaction(
+              client,
+              platformWalletId,
+              settings.commissionReceiverId,
+              commission,
+              'commission',
+              'Job milestone commission',
+              'job_milestone',
+              milestoneId,
+            );
+          }
+          updated = await this.repo.updateMilestoneEscrow(
+            milestoneId,
+            {
+              status: 'approved',
+              commissionAmount: commission,
+              providerPayoutAmount: providerAmount,
+              settledAt: new Date(),
+            },
+            client,
+          );
+        }
+        await client.query('COMMIT');
+      }
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
     }
 
-    if (job.status === 'closed') {
-      throw new HttpError({ statusCode: 400, code: 'JOB_CLOSED', message: 'Job is closed' });
+    if (!updated || !app || !job) {
+      throw new HttpError({
+        statusCode: 500,
+        code: 'INTERNAL_ERROR',
+        message: 'Milestone review failed.',
+      });
     }
-
-    const updated = await this.repo.updateMilestoneStatus(milestoneId, status);
 
     await this.notificationsService.createForUser(app.expert_id, {
       type: 'milestone_reviewed',
       title: 'Milestone Reviewed',
-      message: `Your milestone "${milestone.title}" was ${status}`,
-      payload: { applicationId: app.id },
+      message: `Your milestone "${milestoneTitle}" was ${status}`,
+      payload: { jobId: job.id, applicationId: app.id },
     });
 
     return this.toMilestone(updated);
@@ -934,22 +1122,49 @@ export class JobsService {
       type: 'new_message',
       title: 'New Message',
       message: 'New message on job application',
-      payload: { applicationId },
+      payload: { jobId: job.id, applicationId },
     });
 
     return msgDto;
   }
 
   async closeJob(jobId: string, businessId: string): Promise<Job> {
-    const updated = await this.repo.updateJobStatus(jobId, businessId, 'closed');
-    if (!updated) {
-      throw new HttpError({
-        statusCode: 404,
-        code: 'NOT_FOUND',
-        message: 'Job not found or unauthorized',
-      });
+    const pool = getPool();
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      const job = await this.findJobForUpdate(client, jobId);
+      if (!job || job.business_id !== businessId) {
+        throw new HttpError({
+          statusCode: 404,
+          code: 'NOT_FOUND',
+          message: 'Job not found or unauthorized',
+        });
+      }
+      const refundable = await this.repo.listRefundableMilestonesForJob(jobId, businessId, client);
+      for (const milestone of refundable) {
+        if (!milestone.wallet_hold_id) continue;
+        await this.walletRepo.releaseHoldInTransaction(
+          client,
+          milestone.wallet_hold_id,
+          'Job closed - milestone escrow refunded',
+          { milestoneId: milestone.id, jobId },
+        );
+        await this.repo.updateMilestoneEscrow(
+          milestone.id,
+          { status: 'refunded', settledAt: new Date() },
+          client,
+        );
+      }
+      const updated = await this.repo.updateJobStatus(jobId, businessId, 'closed', client);
+      await client.query('COMMIT');
+      return this.toJob(updated);
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
     }
-    return this.toJob(updated);
   }
 
   private async findApplicationForUpdate(
@@ -979,6 +1194,17 @@ export class JobsService {
       [jobId],
     );
     return rows;
+  }
+
+  private async findMilestoneForUpdate(
+    client: PoolClient,
+    milestoneId: string,
+  ): Promise<JobMilestoneRow | null> {
+    const { rows } = await client.query<JobMilestoneRow>(
+      `SELECT * FROM job_milestones WHERE id = $1 FOR UPDATE`,
+      [milestoneId],
+    );
+    return rows[0] ?? null;
   }
 
   private async hasApplicationWorkStarted(
@@ -1066,6 +1292,10 @@ export class JobsService {
       jobApplicationId: row.job_application_id,
       title: row.title,
       amount: row.amount,
+      walletHoldId: row.wallet_hold_id,
+      commissionAmount: row.commission_amount,
+      providerPayoutAmount: row.provider_payout_amount,
+      settledAt: row.settled_at,
       status: row.status as JobMilestone['status'],
       createdAt: row.created_at,
       updatedAt: row.updated_at,
@@ -1099,5 +1329,31 @@ export class JobsService {
       .catch(() => null);
     if (craftsmanProfile) return craftsmanProfile;
     return this.profilesService.getExpertProfile(expertId);
+  }
+
+  private async assertOwnedPrivateCvUrl(cvFileUrl: string, expertId: string): Promise<void> {
+    const match =
+      /^\/api\/upload\/private\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i.exec(
+        cvFileUrl,
+      );
+    if (!match) {
+      throw new HttpError({
+        statusCode: 400,
+        code: 'INVALID_CV_FILE_URL',
+        message: 'CV uploads must use a private file uploaded through MohandisHub.',
+      });
+    }
+    const pool = getPool();
+    const { rows } = await pool.query<{ user_id: string }>(
+      `SELECT user_id FROM private_uploads WHERE id = $1 LIMIT 1`,
+      [match[1]],
+    );
+    if (rows[0]?.user_id !== expertId) {
+      throw new HttpError({
+        statusCode: 403,
+        code: 'CV_UPLOAD_NOT_OWNED',
+        message: 'CV file was not found for this account.',
+      });
+    }
   }
 }

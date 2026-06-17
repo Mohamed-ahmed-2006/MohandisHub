@@ -611,7 +611,7 @@ export const BusinessDashboard = ({
 
       {tab === 'jobs' && (
         <div id="business-jobs-panel" role="tabpanel" aria-labelledby="business-jobs-tab">
-          <BusinessJobsTab accessToken={accessToken} />
+          <BusinessJobsTab accessToken={accessToken} dictionary={dictionary} />
         </div>
       )}
       {tab === 'team' && (

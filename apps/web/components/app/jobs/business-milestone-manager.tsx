@@ -3,15 +3,19 @@
 import type { JobMilestone } from '@mohandishub/shared';
 import { useCallback, useEffect, useState } from 'react';
 
+import type { JobsCopy } from './jobs-copy';
+import { formatMilestoneStatus } from './jobs-copy';
+
 import { useToast } from '@/components/app/toast';
 import { jobsApiClient } from '@/lib/jobs/client';
 
 type Props = {
   accessToken: string;
   applicationId: string;
+  copy: JobsCopy;
 };
 
-export const BusinessMilestoneManager = ({ accessToken, applicationId }: Props) => {
+export const BusinessMilestoneManager = ({ accessToken, applicationId, copy }: Props) => {
   const { addToast } = useToast();
   const [milestones, setMilestones] = useState<JobMilestone[]>([]);
   const [loading, setLoading] = useState(true);
@@ -44,7 +48,7 @@ export const BusinessMilestoneManager = ({ accessToken, applicationId }: Props) 
       form.reset();
       void loadMilestones();
     } catch (err: unknown) {
-      addToast('Error', err instanceof Error ? err.message : 'Failed to create milestone');
+      addToast('Error', err instanceof Error ? err.message : copy.failedToCreateMilestone);
     } finally {
       setCreating(false);
     }
@@ -54,13 +58,13 @@ export const BusinessMilestoneManager = ({ accessToken, applicationId }: Props) 
     try {
       await jobsApiClient.reviewMilestone(accessToken, milestoneId, status);
       void loadMilestones();
-      addToast('Success', status === 'approved' ? 'Milestone approved' : 'Milestone rejected');
+      addToast('Success', status === 'approved' ? copy.milestoneApproved : copy.milestoneRejected);
     } catch (err: unknown) {
-      addToast('Error', err instanceof Error ? err.message : 'Failed to review milestone');
+      addToast('Error', err instanceof Error ? err.message : copy.failedToReviewMilestone);
     }
   };
 
-  if (loading) return <p style={{ fontSize: '0.9rem', color: '#666' }}>Loading milestones...</p>;
+  if (loading) return <p style={{ fontSize: '0.9rem', color: '#666' }}>{copy.loadingMilestones}</p>;
 
   return (
     <div
@@ -72,11 +76,11 @@ export const BusinessMilestoneManager = ({ accessToken, applicationId }: Props) 
         borderRadius: '4px',
       }}
     >
-      <h5 style={{ marginBottom: '0.5rem' }}>Project Milestones</h5>
+      <h5 style={{ marginBottom: '0.5rem' }}>{copy.projectMilestones}</h5>
 
       {milestones.length === 0 ? (
         <p style={{ fontSize: '0.9rem', color: '#666', marginBottom: '1rem' }}>
-          No milestones created yet.
+          {copy.noMilestones}
         </p>
       ) : (
         <ul style={{ listStyle: 'none', padding: 0, marginBottom: '1rem' }}>
@@ -94,9 +98,16 @@ export const BusinessMilestoneManager = ({ accessToken, applicationId }: Props) 
               >
                 <strong>{m.title}</strong>
                 <span>
-                  {m.amount} EGP - <span className={`badge badge--${m.status}`}>{m.status}</span>
+                  {m.amount} EGP -{' '}
+                  <span className={`badge badge--${m.status}`}>
+                    {formatMilestoneStatus(m.status, copy)}
+                  </span>
                 </span>
               </div>
+              <p className="dashboard-card-meta">
+                {copy.businessGets}: {m.providerPayoutAmount} EGP | {copy.platformGets}:{' '}
+                {m.commissionAmount} EGP
+              </p>
 
               {m.status === 'submitted' && (
                 <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem' }}>
@@ -106,7 +117,7 @@ export const BusinessMilestoneManager = ({ accessToken, applicationId }: Props) 
                       void handleReview(m.id, 'approved');
                     }}
                   >
-                    Approve
+                    {copy.accept}
                   </button>
                   <button
                     className="dashboard-btn dashboard-btn--secondary dashboard-btn--small"
@@ -114,7 +125,7 @@ export const BusinessMilestoneManager = ({ accessToken, applicationId }: Props) 
                       void handleReview(m.id, 'rejected');
                     }}
                   >
-                    Reject
+                    {copy.reject}
                   </button>
                 </div>
               )}
@@ -130,7 +141,7 @@ export const BusinessMilestoneManager = ({ accessToken, applicationId }: Props) 
         <input
           name="title"
           className="dashboard-input"
-          placeholder="Milestone Title"
+          placeholder={copy.milestoneTitlePlaceholder}
           required
           style={{ flex: 2 }}
         />
@@ -138,7 +149,7 @@ export const BusinessMilestoneManager = ({ accessToken, applicationId }: Props) 
           name="amount"
           type="number"
           className="dashboard-input"
-          placeholder="Amount (EGP)"
+          placeholder={copy.milestoneAmountPlaceholder}
           required
           style={{ flex: 1 }}
         />
@@ -148,7 +159,7 @@ export const BusinessMilestoneManager = ({ accessToken, applicationId }: Props) 
           disabled={creating}
           style={{ height: '42px' }}
         >
-          {creating ? 'Adding...' : 'Add'}
+          {creating ? copy.adding : copy.add}
         </button>
       </form>
     </div>

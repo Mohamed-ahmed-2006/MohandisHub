@@ -34,4 +34,41 @@ for (const p of mojibakePatterns) {
   }
 }
 
+const sourceMojibakePatterns = ['Ã', 'Â', 'â', '�', 'Ø', 'Ù'];
+const sourceRoots = [
+  path.join(repoRoot, 'apps/web/components'),
+  path.join(repoRoot, 'apps/web/app'),
+  path.join(repoRoot, 'apps/web/lib'),
+  path.join(repoRoot, 'apps/api/src'),
+  path.join(repoRoot, 'packages/shared/src'),
+];
+const sourceExtensions = new Set(['.ts', '.tsx', '.mts', '.cts', '.js', '.jsx', '.mjs']);
+
+function walk(dir) {
+  if (!fs.existsSync(dir)) return [];
+  const entries = fs.readdirSync(dir, { withFileTypes: true });
+  const files = [];
+  for (const entry of entries) {
+    const full = path.join(dir, entry.name);
+    if (entry.isDirectory()) {
+      if (entry.name === 'node_modules' || entry.name === '.next') continue;
+      files.push(...walk(full));
+    } else if (sourceExtensions.has(path.extname(entry.name))) {
+      files.push(full);
+    }
+  }
+  return files;
+}
+
+for (const file of sourceRoots.flatMap(walk)) {
+  const content = fs.readFileSync(file, 'utf8');
+  for (const pattern of sourceMojibakePatterns) {
+    if (content.includes(pattern)) {
+      throw new Error(
+        `Detected possible encoding corruption pattern "${pattern}" in ${path.relative(repoRoot, file)}.`,
+      );
+    }
+  }
+}
+
 console.log('i18n validation passed.');

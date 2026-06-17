@@ -283,43 +283,7 @@ export class PlansService {
       });
     }
 
-    const { rows: activeSubscriptionRows } = await pool.query<{ plan_id: string; ends_at: string }>(
-      `SELECT plan_id, ends_at
-       FROM plan_subscriptions
-       WHERE user_id = $1 AND ends_at > now()
-       ORDER BY ends_at DESC
-       LIMIT 1`,
-      [userId],
-    );
-    const activeSubscription = activeSubscriptionRows[0] ?? null;
-    if (activeSubscription?.plan_id === planId) {
-      return {
-        plan: this.toPlan(planRow),
-        walletBalance: parseFloat(
-          (await this.walletRepo.findWalletByUserId(userId))?.balance ?? '0',
-        ),
-        subscriptionEndsAt: activeSubscription.ends_at,
-      };
-    }
-
     const price = parseFloat(planRow.price as string);
-
-    const wallet = await this.walletRepo.findWalletByUserId(userId);
-    if (!wallet) {
-      throw new HttpError({
-        statusCode: 400,
-        code: 'NO_WALLET',
-        message: 'No wallet found. Please deposit first.',
-      });
-    }
-    const balance = parseFloat(wallet.balance);
-    if (balance < price) {
-      throw new HttpError({
-        statusCode: 400,
-        code: 'INSUFFICIENT_BALANCE',
-        message: `Insufficient balance. Required: ${price} EGP, Available: ${balance}.`,
-      });
-    }
 
     const billingCycle = (planRow.billing_cycle as string) ?? 'monthly';
     const durationDays =
@@ -333,6 +297,63 @@ export class PlansService {
     const client = await pool.connect();
     try {
       await client.query('BEGIN');
+      await client.query(`SELECT id FROM users WHERE id = $1 FOR UPDATE`, [userId]);
+
+      const { rows: activeSubscriptionRows } = await client.query<{
+        id: string;
+        plan_id: string;
+        ends_at: string;
+      }>(
+        `SELECT id, plan_id, ends_at
+         FROM plan_subscriptions
+         WHERE user_id = $1 AND ends_at > now()
+         ORDER BY ends_at DESC
+         FOR UPDATE`,
+        [userId],
+      );
+      const activeSubscription = activeSubscriptionRows[0] ?? null;
+      if (activeSubscription?.plan_id === planId) {
+        const { rows: walletRows } = await client.query<{ balance: string }>(
+          `SELECT balance::text FROM wallets WHERE user_id = $1 LIMIT 1`,
+          [userId],
+        );
+        await client.query('COMMIT');
+        return {
+          plan: this.toPlan(planRow),
+          walletBalance: parseFloat(walletRows[0]?.balance ?? '0'),
+          subscriptionEndsAt: activeSubscription.ends_at,
+        };
+      }
+
+      const { rows: walletRows } = await client.query<{ id: string; balance: string }>(
+        `SELECT id, balance::text FROM wallets WHERE user_id = $1 FOR UPDATE`,
+        [userId],
+      );
+      const wallet = walletRows[0];
+      if (!wallet) {
+        throw new HttpError({
+          statusCode: 400,
+          code: 'NO_WALLET',
+          message: 'No wallet found. Please deposit first.',
+        });
+      }
+      const balance = parseFloat(wallet.balance);
+      if (balance < price) {
+        throw new HttpError({
+          statusCode: 400,
+          code: 'INSUFFICIENT_BALANCE',
+          message: `Insufficient balance. Required: ${price} EGP, Available: ${balance}.`,
+        });
+      }
+
+      if (activeSubscriptionRows.length > 0) {
+        await client.query(
+          `UPDATE plan_subscriptions
+           SET ends_at = $2
+           WHERE user_id = $1 AND ends_at > $2`,
+          [userId, startsAt.toISOString()],
+        );
+      }
 
       await this.walletRepo.debitWalletInTransaction(
         client,
@@ -354,12 +375,9 @@ export class PlansService {
 
       await client.query('COMMIT');
 
-      const updatedWallet = await this.walletRepo.findWalletByUserId(userId);
-      const newBalance = updatedWallet ? parseFloat(updatedWallet.balance) : balance - price;
-
       return {
         plan: this.toPlan(planRow),
-        walletBalance: newBalance,
+        walletBalance: balance - price,
         subscriptionEndsAt: endsAt.toISOString(),
       };
     } catch (err) {

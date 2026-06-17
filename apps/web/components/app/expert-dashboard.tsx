@@ -376,7 +376,7 @@ export const ExpertDashboard = ({
           </div>
         )
       ) : (
-        <ExpertJobsTab accessToken={accessToken} />
+        <ExpertJobsTab accessToken={accessToken} dictionary={dictionary} />
       )}
 
       {bidNeed && (

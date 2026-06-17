@@ -8,6 +8,26 @@ import { getPool } from '../../db/pool.js';
 import { HttpError } from '../../utils/http-error.js';
 
 export class UsageQuotaService {
+  async withActionLock<T>(
+    subjectId: string,
+    featureKey: UsageQuotaFeatureKey | 'bids_on_need',
+    fn: () => Promise<T>,
+  ): Promise<T> {
+    const pool = getPool();
+    const client = await pool.connect();
+    const lockKey = `${featureKey}:${subjectId}`;
+    try {
+      await client.query(`SELECT pg_advisory_lock(hashtext($1))`, [lockKey]);
+      return await fn();
+    } finally {
+      try {
+        await client.query(`SELECT pg_advisory_unlock(hashtext($1))`, [lockKey]);
+      } finally {
+        client.release();
+      }
+    }
+  }
+
   /**
    * Current window for quota accounting. `billing_cycle` uses active subscription [starts_at, ends_at),
    * or calendar month if there is no active subscription (e.g. free plan).

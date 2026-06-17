@@ -321,8 +321,8 @@ export const AdminSettingsTab = ({ dictionary, accessToken, refreshSession }: Pr
             <div key={flow} className="admin-settings-method-group">
               <p className="admin-settings-method-group-title">
                 {flow === 'deposit'
-                  ? tr('Deposit methods', 'Ø·Ø±Ù‚ Ø§Ù„Ø¥ÙŠØ¯Ø§Ø¹')
-                  : tr('Withdrawal methods', 'Ø·Ø±Ù‚ Ø§Ù„Ø³Ø­Ø¨')}
+                  ? tr('Deposit methods', 'طرق الإيداع')
+                  : tr('Withdrawal methods', 'طرق السحب')}
               </p>
               {methods.map((method) => {
                 const key = method.key;

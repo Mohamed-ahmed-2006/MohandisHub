@@ -53,6 +53,10 @@ export type JobMilestoneRow = {
   job_application_id: string;
   title: string;
   amount: string;
+  wallet_hold_id: string | null;
+  commission_amount: string;
+  provider_payout_amount: string;
+  settled_at: string | null;
   status: string;
   created_at: string;
   updated_at: string;
@@ -286,8 +290,14 @@ export class JobsRepository {
     return rows[0] ?? null;
   }
 
-  async updateJobStatus(jobId: string, businessId: string, status: string): Promise<JobRow> {
-    const { rows } = await this.db.query<JobRow>(
+  async updateJobStatus(
+    jobId: string,
+    businessId: string,
+    status: string,
+    client?: PoolClient,
+  ): Promise<JobRow> {
+    const db = client ?? this.db;
+    const { rows } = await db.query<JobRow>(
       `UPDATE jobs
        SET status = $1, updated_at = now()
        WHERE id = $2 AND business_id = $3
@@ -317,8 +327,10 @@ export class JobsRepository {
     jobApplicationId: string,
     title: string,
     amount: number,
+    client?: PoolClient,
   ): Promise<JobMilestoneRow> {
-    const { rows } = await this.db.query<JobMilestoneRow>(
+    const db = client ?? this.db;
+    const { rows } = await db.query<JobMilestoneRow>(
       `INSERT INTO job_milestones (job_application_id, title, amount)
        VALUES ($1, $2, $3)
        RETURNING *`,
@@ -335,10 +347,53 @@ export class JobsRepository {
     return rows;
   }
 
-  async updateMilestoneStatus(milestoneId: string, status: string): Promise<JobMilestoneRow> {
-    const { rows } = await this.db.query<JobMilestoneRow>(
+  async updateMilestoneStatus(
+    milestoneId: string,
+    status: string,
+    client?: PoolClient,
+  ): Promise<JobMilestoneRow> {
+    const db = client ?? this.db;
+    const { rows } = await db.query<JobMilestoneRow>(
       `UPDATE job_milestones SET status = $1, updated_at = now() WHERE id = $2 RETURNING *`,
       [status, milestoneId],
+    );
+    return rows[0]!;
+  }
+
+  async updateMilestoneEscrow(
+    milestoneId: string,
+    updates: Partial<{
+      status: string;
+      walletHoldId: string | null;
+      commissionAmount: number;
+      providerPayoutAmount: number;
+      settledAt: Date | null;
+    }>,
+    client?: PoolClient,
+  ): Promise<JobMilestoneRow> {
+    const db = client ?? this.db;
+    const entries = Object.entries(updates).filter(([, value]) => value !== undefined);
+    const keyMap: Record<string, string> = {
+      status: 'status',
+      walletHoldId: 'wallet_hold_id',
+      commissionAmount: 'commission_amount',
+      providerPayoutAmount: 'provider_payout_amount',
+      settledAt: 'settled_at',
+    };
+    const values: unknown[] = [];
+    const setClauses = ['updated_at = now()'];
+    let idx = 1;
+    for (const [key, value] of entries) {
+      setClauses.push(`${keyMap[key]} = $${idx++}`);
+      values.push(value);
+    }
+    values.push(milestoneId);
+    const { rows } = await db.query<JobMilestoneRow>(
+      `UPDATE job_milestones
+       SET ${setClauses.join(', ')}
+       WHERE id = $${idx}
+       RETURNING *`,
+      values,
     );
     return rows[0]!;
   }
@@ -357,12 +412,36 @@ export class JobsRepository {
     return rows[0]!;
   }
 
-  async getMilestoneById(milestoneId: string): Promise<JobMilestoneRow | null> {
-    const { rows } = await this.db.query<JobMilestoneRow>(
-      `SELECT * FROM job_milestones WHERE id = $1`,
-      [milestoneId],
-    );
+  async getMilestoneById(
+    milestoneId: string,
+    client?: PoolClient,
+  ): Promise<JobMilestoneRow | null> {
+    const db = client ?? this.db;
+    const { rows } = await db.query<JobMilestoneRow>(`SELECT * FROM job_milestones WHERE id = $1`, [
+      milestoneId,
+    ]);
     return rows[0] ?? null;
+  }
+
+  async listRefundableMilestonesForJob(
+    jobId: string,
+    businessId: string,
+    client: PoolClient,
+  ): Promise<JobMilestoneRow[]> {
+    const { rows } = await client.query<JobMilestoneRow>(
+      `SELECT m.*
+       FROM job_milestones m
+       JOIN job_applications a ON a.id = m.job_application_id
+       JOIN jobs j ON j.id = a.job_id
+       WHERE j.id = $1
+         AND j.business_id = $2
+         AND m.wallet_hold_id IS NOT NULL
+         AND m.status NOT IN ('approved', 'refunded')
+       ORDER BY m.created_at ASC
+       FOR UPDATE OF m`,
+      [jobId, businessId],
+    );
+    return rows;
   }
 
   async createApplicationMessage(

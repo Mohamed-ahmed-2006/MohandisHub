@@ -35,11 +35,11 @@ export const ProjectsScreen = ({ locale, dictionary }: Props) => {
   }
 
   if (authUser.role === 'business') {
-    return <BusinessJobsTab accessToken={accessToken} />;
+    return <BusinessJobsTab accessToken={accessToken} dictionary={dictionary} />;
   }
 
   if (authUser.role === 'expert' || authUser.role === 'craftsman') {
-    return <ExpertJobsTab accessToken={accessToken} />;
+    return <ExpertJobsTab accessToken={accessToken} dictionary={dictionary} />;
   }
 
   return (

@@ -40,10 +40,36 @@ const withBundleAnalyzer = bundleAnalyzer({
   enabled: process.env.ANALYZE === 'true',
 });
 
+const contentSecurityPolicyReportOnly = [
+  "default-src 'self'",
+  "base-uri 'self'",
+  "object-src 'none'",
+  "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
+  "style-src 'self' 'unsafe-inline'",
+  "img-src 'self' data: blob: http: https:",
+  "font-src 'self' data:",
+  "connect-src 'self' http: https: ws: wss:",
+  "frame-src 'self' https:",
+  "form-action 'self'",
+].join('; ');
+
 const nextConfig: NextConfig = {
   transpilePackages: ['@mohandishub/shared'],
   images: {
     remotePatterns: remoteImagePatterns,
+  },
+  headers() {
+    return Promise.resolve([
+      {
+        source: '/:path*',
+        headers: [
+          {
+            key: 'Content-Security-Policy-Report-Only',
+            value: contentSecurityPolicyReportOnly,
+          },
+        ],
+      },
+    ]);
   },
   rewrites() {
     return Promise.resolve([

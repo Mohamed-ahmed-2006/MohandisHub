@@ -88,37 +88,55 @@ END $$;
 
 ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE ALL ON TABLES FROM anon, authenticated;
 
-ALTER TABLE storage.objects ENABLE ROW LEVEL SECURITY;
-
 DO $$
 DECLARE
   policy_name text;
 BEGIN
+  BEGIN
+    ALTER TABLE storage.objects ENABLE ROW LEVEL SECURITY;
+  EXCEPTION
+    WHEN insufficient_privilege THEN
+      RAISE NOTICE 'Skipping storage.objects RLS enablement: migration role is not owner.';
+  END;
+
   FOR policy_name IN
     SELECT policyname
     FROM pg_policies
     WHERE schemaname = 'storage'
       AND tablename = 'objects'
   LOOP
-    EXECUTE format('DROP POLICY IF EXISTS %I ON storage.objects', policy_name);
+    BEGIN
+      EXECUTE format('DROP POLICY IF EXISTS %I ON storage.objects', policy_name);
+    EXCEPTION
+      WHEN insufficient_privilege THEN
+        RAISE NOTICE 'Skipping storage.objects policy drop for %: migration role is not owner.', policy_name;
+    END;
   END LOOP;
 END $$;
 
-CREATE POLICY "Public uploads are readable"
-  ON storage.objects
-  FOR SELECT
-  TO anon, authenticated
-  USING (bucket_id = 'uploads');
+DO $$
+BEGIN
+  CREATE POLICY "Public uploads are readable"
+    ON storage.objects
+    FOR SELECT
+    TO anon, authenticated
+    USING (bucket_id = 'uploads');
 
-COMMENT ON POLICY "Public uploads are readable" ON storage.objects
-  IS 'Only the public uploads bucket is browser-readable. Upload writes and verification-docs access are backend/service-role only.';
+  COMMENT ON POLICY "Public uploads are readable" ON storage.objects
+    IS 'Only the public uploads bucket is browser-readable. Upload writes and verification-docs access are backend/service-role only.';
+EXCEPTION
+  WHEN duplicate_object THEN
+    RAISE NOTICE 'Storage policy "Public uploads are readable" already exists.';
+  WHEN insufficient_privilege THEN
+    RAISE NOTICE 'Skipping storage.objects policy creation: migration role is not owner.';
+END $$;
 
 CREATE INDEX IF NOT EXISTS idx_refresh_tokens_user_revoked_expires
   ON public.refresh_tokens(user_id, revoked_at, expires_at);
 
 CREATE INDEX IF NOT EXISTS idx_verification_codes_lookup_unexpired
   ON public.verification_codes(user_id, channel, destination, expires_at DESC)
-  WHERE consumed_at IS NULL;
+  WHERE verified_at IS NULL;
 
 CREATE INDEX IF NOT EXISTS idx_messages_conversation_created_desc
   ON public.messages(conversation_id, created_at DESC);

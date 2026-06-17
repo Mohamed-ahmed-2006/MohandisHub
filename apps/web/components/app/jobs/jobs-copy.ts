@@ -1,0 +1,161 @@
+import type { JobApplication, JobMilestone } from '@mohandishub/shared';
+
+import type { Dictionary } from '@/lib/i18n/types';
+
+const defaultJobsCopy = {
+  loadingJobs: 'Loading jobs...',
+  loadingMilestones: 'Loading milestones...',
+  loadingApplications: 'Loading my applications...',
+  businessTitle: 'My Hiring Posts',
+  postHiringNeed: 'Post a Hiring Need',
+  hideDetails: 'Hide Details',
+  manageApplications: 'Manage Applications',
+  applications: 'Applications',
+  noApplications: 'No applications yet.',
+  cvUploaded: 'CV uploaded',
+  profileSnapshot: 'Profile snapshot',
+  appProfile: 'App profile',
+  paid: 'Paid',
+  businessGets: 'Business gets',
+  platformGets: 'Platform gets',
+  openCv: 'Open CV',
+  appProfileSnapshotAttached: 'App profile snapshot attached.',
+  interviewInvitedAt: 'Interview invited at',
+  inviteInterview: 'Invite Interview',
+  accept: 'Accept',
+  reject: 'Reject',
+  openInterview: 'Open Interview',
+  joinInterview: 'Join Interview',
+  projectChat: 'Project Chat',
+  applicationChat: 'Application Chat',
+  interviewSlots: 'Interview Slots',
+  interviewSlotsHelp: 'These slots are published for invited experts on this hiring post.',
+  noInterviewSlots: 'No interview slots yet.',
+  ends: 'Ends',
+  online: 'Online',
+  offline: 'Offline',
+  block: 'Block',
+  reopen: 'Reopen',
+  delete: 'Delete',
+  start: 'Start',
+  end: 'End',
+  addInterviewSlot: 'Add Interview Slot',
+  jobTitlePlaceholder: 'Job title',
+  descriptionPlaceholder: 'Description',
+  requirementsPlaceholder: 'Requirements',
+  salaryRangePlaceholder: 'Salary range',
+  applicationFeePlaceholder: 'Application fee (EGP)',
+  enableInterviews: 'Enable interviews',
+  interviewInstructionsPlaceholder: 'Interview instructions (optional)',
+  cancel: 'Cancel',
+  post: 'Post',
+  creating: '...',
+  expertTitle: 'Available Hiring Posts',
+  noOpenJobs: 'No open jobs found.',
+  apply: 'Apply',
+  applyFor: 'Apply for',
+  applyChargeNotice: 'You will be charged {amount} EGP when this application is submitted.',
+  cvUpload: 'CV upload',
+  chooseCvError: 'Please select a CV file.',
+  coverLetterPlaceholder: 'Why are you a good fit?',
+  payAndSubmit: 'Pay {amount} EGP and submit',
+  applicationSubmitted: 'Application submitted successfully.',
+  failedToApply: 'Failed to apply',
+  hiringPostCreated: 'Hiring post created.',
+  failedToCreateHiringPost: 'Failed to create hiring post',
+  failedToUpdateApplication: 'Failed to update application',
+  failedToCreateInterviewSlot: 'Failed to create interview slot',
+  failedToDeleteInterviewSlot: 'Failed to delete interview slot',
+  failedToUpdateInterviewSlot: 'Failed to update interview slot',
+  offlineReservationNotice: 'This interview was booked as an offline reservation.',
+  failedToOpenReservation: 'Failed to open reservation',
+  myApplications: 'My Applications',
+  businessFallback: 'Business',
+  submittedVia: 'Submitted via',
+  openSubmittedCv: 'Open submitted CV',
+  profileSnapshotStored: 'Profile snapshot was attached to this application.',
+  openDetails: 'Open Details',
+  submissionReceipt: 'Submission Receipt',
+  applicationFee: 'Application fee',
+  submissionType: 'Submission type',
+  expertProfileSnapshotStored: 'Your expert profile snapshot was stored with this application.',
+  interviewReservationId: 'Interview reservation ID',
+  projectMilestones: 'Project Milestones',
+  noMilestones: 'No milestones created yet.',
+  submissionNotesPlaceholder: 'Submission notes or link',
+  submit: 'Submit',
+  milestoneSubmitted: 'Milestone submitted',
+  failedToSubmitMilestone: 'Failed to submit milestone',
+  failedToBookInterview: 'Failed to book interview',
+  offlineInterviewNotice: 'This interview reservation is offline.',
+  failedToOpenInterview: 'Failed to open interview',
+  interview: 'Interview',
+  invitedAt: 'Invited at',
+  interviewBookedHelp:
+    'Your interview has been booked. Use the reservation link to join or review details.',
+  interviewCompletedHelp:
+    'The interview is marked completed. You can still open the reservation record below.',
+  noAvailableInterviewSlots: 'No interview slots are available yet.',
+  bookOnline: 'Book online',
+  bookOffline: 'Book offline',
+  reservationId: 'Reservation ID',
+  openReservation: 'Open reservation',
+  milestoneApproved: 'Milestone approved',
+  milestoneRejected: 'Milestone rejected',
+  failedToCreateMilestone: 'Failed to create milestone',
+  failedToReviewMilestone: 'Failed to review milestone',
+  milestoneTitlePlaceholder: 'Milestone Title',
+  milestoneAmountPlaceholder: 'Amount (EGP)',
+  adding: 'Adding...',
+  add: 'Add',
+  noRange: 'No range',
+  interviewsEnabled: 'Interviews enabled',
+  interviewsDisabled: 'Interviews disabled',
+  statusLabels: {
+    pending: 'pending',
+    active: 'active',
+    submitted: 'submitted',
+    approved: 'approved',
+    rejected: 'rejected',
+    refunded: 'refunded',
+    reviewed: 'reviewed',
+    interview_invited: 'interview invited',
+    interview_booked: 'interview booked',
+    interview_completed: 'interview completed',
+    accepted: 'accepted',
+    open: 'open',
+    closed: 'closed',
+    available: 'available',
+    booked: 'booked',
+    blocked: 'blocked',
+  },
+};
+
+export type JobsCopy = typeof defaultJobsCopy;
+
+export function getJobsCopy(dictionary?: Dictionary): JobsCopy {
+  const copy = dictionary?.jobsWorkspace ?? {};
+  return {
+    ...defaultJobsCopy,
+    ...copy,
+    statusLabels: {
+      ...defaultJobsCopy.statusLabels,
+      ...(copy.statusLabels ?? {}),
+    },
+  };
+}
+
+export function interpolate(template: string, values: Record<string, string>): string {
+  return Object.entries(values).reduce(
+    (text, [key, value]) => text.replaceAll(`{${key}}`, value),
+    template,
+  );
+}
+
+export function formatApplicationStatus(status: JobApplication['status'], copy: JobsCopy): string {
+  return copy.statusLabels[status] ?? status.replaceAll('_', ' ');
+}
+
+export function formatMilestoneStatus(status: JobMilestone['status'], copy: JobsCopy): string {
+  return copy.statusLabels[status] ?? status.replaceAll('_', ' ');
+}

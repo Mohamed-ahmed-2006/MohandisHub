@@ -1841,12 +1841,12 @@ export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
                       ?.averageRating ?? 'Average rating'
                   }
                 >
-                  {'â˜…'.repeat(Math.round(craftsmanProfile.averageRating ?? 0))}
-                  {'â˜†'.repeat(5 - Math.round(craftsmanProfile.averageRating ?? 0))}
+                  {'★'.repeat(Math.round(craftsmanProfile.averageRating ?? 0))}
+                  {'☆'.repeat(5 - Math.round(craftsmanProfile.averageRating ?? 0))}
                 </span>
                 <span className="profile-screen-review-count">
                   {craftsmanProfile.averageRating != null &&
-                    `${Number(craftsmanProfile.averageRating).toFixed(1)} Â· `}
+                    `${Number(craftsmanProfile.averageRating).toFixed(1)} · `}
                   {craftsmanProfile.reviewCount ?? 0}{' '}
                   {(dictionary.profile as { reviews?: { reviewCount?: string } }).reviews
                     ?.reviewCount ?? 'reviews'}
@@ -1998,12 +1998,12 @@ export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
                     {reviews.map((r) => (
                       <li key={r.id} className="profile-screen-review-item">
                         <span className="profile-screen-stars small">
-                          {'â˜…'.repeat(r.rating)}
-                          {'â˜†'.repeat(5 - r.rating)}
+                          {'★'.repeat(r.rating)}
+                          {'☆'.repeat(5 - r.rating)}
                         </span>
                         {r.comment && <p className="profile-screen-review-comment">{r.comment}</p>}
                         <p className="profile-screen-review-meta">
-                          {r.reviewerName ?? 'Anonymous'} Â·{' '}
+                          {r.reviewerName ?? 'Anonymous'} ·{' '}
                           {new Date(r.createdAt).toLocaleDateString(locale)}
                         </p>
                         <div className="profile-screen-review-actions">
