@@ -129,7 +129,7 @@ const getMyActivity = asyncHandler(async (req, res) => {
 
   const pool = getPool();
   const { rows } = await pool.query(
-    `SELECT id, type, amount, balance_after, status, description, reference_type, created_at
+    `SELECT id, type, amount, balance_delta, balance_after, status, description, reference_type, created_at
      FROM transactions
      WHERE user_id = $1
      ORDER BY created_at DESC

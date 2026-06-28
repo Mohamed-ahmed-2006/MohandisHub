@@ -1,5 +1,5 @@
 import type { AppStatus } from '@mohandishub/shared';
-import { parsePaymentMethodsEnabled } from '@mohandishub/shared';
+import { parsePaymentMethodsEnabled, parseWithdrawalLimits } from '@mohandishub/shared';
 
 import { getApiBaseUrl } from '@/lib/env';
 
@@ -63,5 +63,6 @@ function getDefaultAppStatus(): AppStatus {
       disableCryptoDeposits: false,
       disableCardDeposits: true,
     }),
+    withdrawalLimits: parseWithdrawalLimits(null),
   };
 }

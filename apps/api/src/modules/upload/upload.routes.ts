@@ -25,6 +25,7 @@ import {
   findPrivateUploadById,
   insertPrivateUpload,
   isJobOwnerOfApplicationWithCv,
+  isMoneyProofVisibleToUser,
 } from './upload.repository.js';
 
 const settingsService = new SettingsService();
@@ -299,7 +300,8 @@ uploadRouter.get(
     const user = req.user!;
     if (row.user_id !== user.id && !canAdminReadPrivateUpload(user)) {
       const jobOwner = await isJobOwnerOfApplicationWithCv(user.id, row.id);
-      if (!jobOwner) {
+      const moneyProofOwner = jobOwner ? true : await isMoneyProofVisibleToUser(user.id, row.id);
+      if (!jobOwner && !moneyProofOwner) {
         throw new HttpError({ statusCode: 403, code: 'FORBIDDEN', message: 'Access denied.' });
       }
     }

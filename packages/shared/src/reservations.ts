@@ -128,6 +128,9 @@ export type ReservationPricingBreakdown = {
   reservationPriceAmount: number;
   originalServicePriceAmount?: number;
   originalReservationPriceAmount?: number;
+  providerAmount?: number;
+  platformFeeAmount?: number;
+  heldTotalAmount?: number;
   couponCode?: string | null;
   couponRedemptionId?: string | null;
   couponDiscountAmount?: number;

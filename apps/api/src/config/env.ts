@@ -129,7 +129,7 @@ const envSchema = z.object({
   NOWPAYMENTS_CUSTODY_ENABLED: booleanEnv(false),
   NOWPAYMENTS_MASS_PAYOUTS_ENABLED: booleanEnv(false),
   NOWPAYMENTS_WITHDRAWALS_ENABLED: booleanEnv(false),
-  NOWPAYMENTS_MANUAL_PAYOUT_VERIFY: booleanEnv(true),
+  NOWPAYMENTS_MANUAL_PAYOUT_VERIFY: booleanEnv(false),
   NOWPAYMENTS_WITHDRAWAL_MIN_AMOUNT: z.coerce.number().positive().default(20),
   NOWPAYMENTS_WITHDRAWAL_DEFAULT_CURRENCY: z.string().default('USDTTRC20'),
   NOWPAYMENTS_ALLOWED_PAY_CURRENCIES: z.string().optional(),
@@ -371,6 +371,11 @@ if (parsed.data.NODE_ENV === 'production') {
     if (!parsed.data.NOWPAYMENTS_AUTH_EMAIL || !parsed.data.NOWPAYMENTS_AUTH_PASSWORD) {
       productionErrors.NOWPAYMENTS_AUTH_EMAIL = [
         'NOWPayments auth email/password are required for mass-payout withdrawals.',
+      ];
+    }
+    if (parsed.data.NOWPAYMENTS_MANUAL_PAYOUT_VERIFY) {
+      productionErrors.NOWPAYMENTS_MANUAL_PAYOUT_VERIFY = [
+        'Crypto withdrawals are configured for automatic launch and must not require manual NOWPayments verification codes.',
       ];
     }
   }

@@ -47,6 +47,7 @@ export const WalletDepositModal = ({
   const [method, setMethod] = useState<'crypto' | 'card' | 'instapay' | 'paymob'>('crypto');
   const [amount, setAmount] = useState('');
   const [senderAccount, setSenderAccount] = useState('');
+  const [transferReference, setTransferReference] = useState('');
   const [payCurrency, setPayCurrency] = useState('USDTTRC20');
   const [availableCurrencies, setAvailableCurrencies] = useState<string[]>(['USDTTRC20']);
   const [estimatedPayAmount, setEstimatedPayAmount] = useState<number | null>(null);
@@ -158,6 +159,7 @@ export const WalletDepositModal = ({
     setStep('choose');
     setAmount('');
     setSenderAccount('');
+    setTransferReference('');
     setError(null);
   };
 
@@ -189,6 +191,7 @@ export const WalletDepositModal = ({
         amountEgp: num,
         proofUploadId,
         senderAccount: sender,
+        transferReference: transferReference.trim() || null,
       });
       onDepositCreated?.();
       onClose();
@@ -299,6 +302,17 @@ export const WalletDepositModal = ({
             placeholder="e.g. +2010xxxxxxx or wallet account"
             value={senderAccount}
             onChange={(e) => setSenderAccount(e.target.value)}
+            disabled={loading}
+          />
+          <label className="deposit-form-label" style={{ marginTop: '0.75rem' }}>
+            Transfer reference (optional)
+          </label>
+          <input
+            type="text"
+            className="deposit-form-input"
+            placeholder="Bank or InstaPay reference"
+            value={transferReference}
+            onChange={(e) => setTransferReference(e.target.value)}
             disabled={loading}
           />
           <label className="deposit-form-label" style={{ marginTop: '0.75rem' }}>

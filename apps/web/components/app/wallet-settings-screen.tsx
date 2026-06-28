@@ -14,6 +14,7 @@ import { Container } from '@/components/ui/container';
 import { isApiClientError } from '@/lib/auth/client';
 import { useI18n } from '@/lib/i18n/context';
 import { buildLocalePath } from '@/lib/i18n/path';
+import { getPrivateFileOpenableUrl } from '@/lib/upload/client';
 import { walletApiClient } from '@/lib/wallet/client';
 
 import './wallet-settings-screen.css';
@@ -82,6 +83,8 @@ export const WalletSettingsScreen = (_props: WalletSettingsScreenProps) => {
   const showWithdrawInstapay = isPaymentMethodEnabled(pm, 'withdrawal_instapay');
   const showWithdrawPaymob = isPaymentMethodEnabled(pm, 'withdrawal_paymob');
   const anyWithdrawMethod = showWithdrawCrypto || showWithdrawInstapay || showWithdrawPaymob;
+  const currentWithdrawalLimit = appStatus?.withdrawalLimits?.[withdrawMethod];
+  const currentMinWithdrawalAmount = currentWithdrawalLimit?.minAmountEgp ?? MIN_WITHDRAWAL_AMOUNT;
 
   const depositResult = useMemo(() => {
     const value = searchParams.get('deposit');
@@ -171,8 +174,15 @@ export const WalletSettingsScreen = (_props: WalletSettingsScreenProps) => {
     if (!accessToken) return;
 
     const amount = Number.parseFloat(withdrawAmount);
-    if (!Number.isFinite(amount) || amount < MIN_WITHDRAWAL_AMOUNT) {
-      setWithdrawError(`Minimum withdrawal amount is ${MIN_WITHDRAWAL_AMOUNT}.`);
+    if (!Number.isFinite(amount) || amount < currentMinWithdrawalAmount) {
+      setWithdrawError(`Minimum withdrawal amount is ${currentMinWithdrawalAmount}.`);
+      return;
+    }
+    if (
+      currentWithdrawalLimit?.maxAmountEgp != null &&
+      amount > currentWithdrawalLimit.maxAmountEgp
+    ) {
+      setWithdrawError(`Maximum withdrawal amount is ${currentWithdrawalLimit.maxAmountEgp}.`);
       return;
     }
     if (withdrawMethod === 'crypto' && !withdrawAddress.trim()) {
@@ -212,7 +222,13 @@ export const WalletSettingsScreen = (_props: WalletSettingsScreenProps) => {
                 saveInstapayRecipient: withdrawSaveInstapay,
               }),
       });
-      setActiveWithdrawalId(created.id);
+      setActiveWithdrawalId(
+        created.method === 'crypto' &&
+          created.verificationRequired &&
+          created.status === 'pending_verification'
+          ? created.id
+          : null,
+      );
       setWithdrawCode('');
       setWithdrawSuccess('Withdrawal request submitted.');
       await loadData();
@@ -247,6 +263,18 @@ export const WalletSettingsScreen = (_props: WalletSettingsScreenProps) => {
       );
     } finally {
       setWithdrawBusy(false);
+    }
+  };
+
+  const openWithdrawalProof = async (uploadId: string) => {
+    if (!accessToken) return;
+    try {
+      const url = await getPrivateFileOpenableUrl(accessToken, uploadId);
+      window.open(url, '_blank', 'noopener,noreferrer');
+    } catch (error) {
+      setWithdrawError(
+        isApiClientError(error) ? error.message : 'Could not open withdrawal proof.',
+      );
     }
   };
 
@@ -316,10 +344,15 @@ export const WalletSettingsScreen = (_props: WalletSettingsScreenProps) => {
             ) : (
               <>
                 <p className="wallet-settings-hint">
-                  Withdraw from your wallet in EGP. Minimum {MIN_WITHDRAWAL_AMOUNT} EGP. Crypto
-                  withdrawals are sent to your wallet address in the selected payout currency.
-                  InstaPay withdrawals are reviewed manually and usually take 1-5 business days to
-                  complete.
+                  Withdraw from your wallet in EGP. Minimum {currentMinWithdrawalAmount} EGP.
+                  {currentWithdrawalLimit?.maxAmountEgp != null
+                    ? ` Maximum per request ${currentWithdrawalLimit.maxAmountEgp} EGP.`
+                    : ''}{' '}
+                  {currentWithdrawalLimit?.dailyMaxAmountEgp != null
+                    ? `Daily user limit ${currentWithdrawalLimit.dailyMaxAmountEgp} EGP.`
+                    : ''}{' '}
+                  Crypto withdrawals are automatic stablecoin payouts. InstaPay withdrawals are
+                  reviewed manually and usually take 1-5 business days to complete.
                 </p>
 
                 {[showWithdrawInstapay, showWithdrawPaymob, showWithdrawCrypto].filter(Boolean)
@@ -354,7 +387,7 @@ export const WalletSettingsScreen = (_props: WalletSettingsScreenProps) => {
                     Amount (EGP)
                     <input
                       type="number"
-                      min={MIN_WITHDRAWAL_AMOUNT}
+                      min={currentMinWithdrawalAmount}
                       step="0.01"
                       className="wallet-settings-input"
                       value={withdrawAmount}
@@ -425,9 +458,9 @@ export const WalletSettingsScreen = (_props: WalletSettingsScreenProps) => {
                           void (async () => {
                             if (!accessToken) return;
                             const amt = Number.parseFloat(withdrawAmount);
-                            if (!Number.isFinite(amt) || amt < MIN_WITHDRAWAL_AMOUNT) {
+                            if (!Number.isFinite(amt) || amt < currentMinWithdrawalAmount) {
                               setWithdrawError(
-                                `Enter at least ${MIN_WITHDRAWAL_AMOUNT} EGP to preview.`,
+                                `Enter at least ${currentMinWithdrawalAmount} EGP to preview.`,
                               );
                               return;
                             }
@@ -613,6 +646,16 @@ export const WalletSettingsScreen = (_props: WalletSettingsScreenProps) => {
                             Cancel request
                           </button>
                         )}
+                      {item.adminProofUploadId && item.status === 'finished' && (
+                        <button
+                          type="button"
+                          className="wallet-settings-secondary"
+                          style={{ marginTop: 8 }}
+                          onClick={() => void openWithdrawalProof(item.adminProofUploadId!)}
+                        >
+                          View withdrawal proof
+                        </button>
+                      )}
                     </div>
                     <span
                       className={`wallet-settings-status wallet-settings-status-${item.status}`}

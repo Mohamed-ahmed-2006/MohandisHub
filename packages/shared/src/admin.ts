@@ -160,6 +160,7 @@ export type AdminTransactionListItem = {
   userDisplayName: string;
   type: string;
   amount: number;
+  balanceDelta: number | null;
   balanceAfter: number;
   status: string;
   description: string | null;

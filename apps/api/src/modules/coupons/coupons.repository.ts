@@ -309,8 +309,8 @@ export class CouponsRepository {
       ]);
       const { rows: debitRows } = await client.query<{ id: string }>(
         `INSERT INTO transactions
-           (wallet_id, user_id, type, amount, balance_after, status, description, reference_type, metadata)
-         VALUES ($1, $2, 'payment', $3, $4, 'completed', $5, 'coupon_campaign_fee', $6)
+           (wallet_id, user_id, type, amount, balance_delta, balance_after, status, description, reference_type, metadata)
+         VALUES ($1, $2, 'payment', $3, -$3, $4, 'completed', $5, 'coupon_campaign_fee', $6)
          RETURNING id`,
         [
           providerWallet.id,
@@ -335,8 +335,8 @@ export class CouponsRepository {
       ]);
       await client.query(
         `INSERT INTO transactions
-           (wallet_id, user_id, type, amount, balance_after, status, description, reference_type, reference_id, metadata)
-         VALUES ($1, $2, 'commission', $3, $4, 'completed', $5, 'coupon_campaign_fee', $6, $7)`,
+           (wallet_id, user_id, type, amount, balance_delta, balance_after, status, description, reference_type, reference_id, metadata)
+         VALUES ($1, $2, 'commission', $3, $3, $4, 'completed', $5, 'coupon_campaign_fee', $6, $7)`,
         [
           platformWallet.id,
           PLATFORM_USER_ID,

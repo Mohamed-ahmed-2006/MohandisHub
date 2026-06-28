@@ -205,6 +205,16 @@ export const updateSettingsSchema = z.object({
       { message: 'sidebarHiddenHrefs must only contain managed sidebar paths' },
     ),
   paymentMethodsEnabled: z.record(z.string(), z.boolean()).optional(),
+  withdrawalLimits: z
+    .record(
+      z.enum(['crypto', 'instapay', 'paymob']),
+      z.object({
+        minAmountEgp: z.number().positive().optional(),
+        maxAmountEgp: z.number().positive().nullable().optional(),
+        dailyMaxAmountEgp: z.number().positive().nullable().optional(),
+      }),
+    )
+    .optional(),
 });
 
 export const approveManualInstapayDepositSchema = z.object({
@@ -219,6 +229,7 @@ export const rejectManualInstapayDepositSchema = z.object({
 export const completeManualInstapayWithdrawalSchema = z.object({
   proofUploadId: z.string().uuid(),
   reason: z.string().min(5).max(1000),
+  transferReference: z.string().max(255).optional(),
 });
 
 export const completePaymobWithdrawalSchema = z.object({

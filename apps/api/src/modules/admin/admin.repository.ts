@@ -545,7 +545,7 @@ export class AdminRepository {
 
     const { rows } = await this.db.query<TransactionListRow>(
       `SELECT t.id, t.wallet_id, t.user_id, u.email AS user_email, u.display_name AS user_display_name,
-              t.type, t.amount::text, t.balance_after::text, t.status, t.description,
+              t.type, t.amount::text, t.balance_delta::text, t.balance_after::text, t.status, t.description,
               t.reference_type, t.created_by, t.created_at
        FROM transactions t
        JOIN users u ON u.id = t.user_id
@@ -623,9 +623,9 @@ export class AdminRepository {
       const newBalance = walletRows[0]!.balance;
 
       const { rows: txnRows } = await client.query<TransactionRow>(
-        `INSERT INTO transactions (wallet_id, user_id, type, amount, balance_after, status, description, reference_type, created_by)
-         VALUES ($1, $2, $3, $4, $5, 'completed', $6, 'manual', $7) RETURNING *`,
-        [walletId, userId, type, amount, newBalance, description, adminId],
+        `INSERT INTO transactions (wallet_id, user_id, type, amount, balance_delta, balance_after, status, description, reference_type, created_by)
+         VALUES ($1, $2, $3, $4, $5, $6, 'completed', $7, 'manual', $8) RETURNING *`,
+        [walletId, userId, type, amount, delta, newBalance, description, adminId],
       );
 
       await client.query('COMMIT');
@@ -667,21 +667,27 @@ export class AdminRepository {
       const orig = origRows[0]!;
       if (orig.status !== 'completed') throw new Error('Transaction not reversible');
 
-      // Reversal must undo the balance effect of the original transaction.
-      // Credit types increased the balance, so reversing them subtracts (-1).
-      // Debit types decreased the balance, so reversing them adds (+1).
-      //   credits: deposit, bonus, refund, commission, release, adjustment
-      //   debits:  withdrawal, hold, payment*
-      // (*) `payment` is used for BOTH customer debits and provider-payout
-      // credits, so it is treated as a debit-reversal here — correct for the
-      // common case of reversing a customer charge. Reversing a provider-payout
-      // `payment` cannot be disambiguated by type alone and would need a signed
-      // ledger column to handle fully.
-      const creditTypes = ['deposit', 'bonus', 'refund', 'commission', 'release', 'adjustment'];
-      const isProviderPayoutPayment =
-        orig.type === 'payment' && /\bpayout\b/i.test(orig.description ?? '');
-      const sign = creditTypes.includes(orig.type) || isProviderPayoutPayment ? -1 : 1;
-      const reverseAmount = parseFloat(orig.amount) * sign;
+      // Reverse the exact signed movement instead of inferring direction from
+      // transaction type. Legacy rows without a signed delta need an audited
+      // adjustment because `payment` can represent either a debit or a payout.
+      if (orig.balance_delta == null) {
+        throw new HttpError({
+          statusCode: 409,
+          code: 'LEGACY_TRANSACTION_DIRECTION_AMBIGUOUS',
+          message:
+            'This legacy transaction has no signed ledger movement and cannot be reversed safely. Create an audited adjustment instead.',
+        });
+      }
+      const originalDelta = parseFloat(orig.balance_delta);
+      if (!Number.isFinite(originalDelta) || originalDelta === 0) {
+        throw new HttpError({
+          statusCode: 409,
+          code: 'TRANSACTION_HAS_NO_BALANCE_EFFECT',
+          message:
+            'This transaction did not change wallet balance directly and cannot be reversed. Create an audited adjustment instead.',
+        });
+      }
+      const reverseAmount = -originalDelta;
 
       const { rows: walletRows } = await client.query<{ balance: string }>(
         `UPDATE wallets
@@ -697,12 +703,13 @@ export class AdminRepository {
       await client.query(`UPDATE transactions SET status = 'reversed' WHERE id = $1`, [txnId]);
 
       const { rows: txnRows } = await client.query<TransactionRow>(
-        `INSERT INTO transactions (wallet_id, user_id, type, amount, balance_after, status, description, reference_type, reference_id, created_by)
-         VALUES ($1, $2, 'adjustment', $3, $4, 'completed', $5, 'reversal', $6, $7) RETURNING *`,
+        `INSERT INTO transactions (wallet_id, user_id, type, amount, balance_delta, balance_after, status, description, reference_type, reference_id, created_by)
+         VALUES ($1, $2, 'adjustment', $3, $4, $5, 'completed', $6, 'reversal', $7, $8) RETURNING *`,
         [
           orig.wallet_id,
           orig.user_id,
           Math.abs(reverseAmount),
+          reverseAmount,
           newBalance,
           `Reversal of transaction ${txnId}: ${reason}`,
           txnId,

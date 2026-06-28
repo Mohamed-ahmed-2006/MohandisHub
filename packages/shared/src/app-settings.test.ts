@@ -13,7 +13,7 @@ describe('payment method settings', () => {
       deposit_card: false,
       deposit_instapay: true,
       deposit_paymob: false,
-      withdrawal_crypto: false,
+      withdrawal_crypto: true,
       withdrawal_instapay: true,
       withdrawal_paymob: false,
     });
@@ -38,8 +38,8 @@ describe('payment method settings', () => {
     expect(
       PAYMENT_METHOD_DEFINITIONS.find((method) => method.key === 'withdrawal_crypto'),
     ).toMatchObject({
-      defaultEnabled: false,
-      launchRecommended: false,
+      defaultEnabled: true,
+      launchRecommended: true,
     });
   });
 

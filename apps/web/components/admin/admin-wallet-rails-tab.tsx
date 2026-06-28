@@ -178,7 +178,11 @@ export const AdminWalletRailsTab = ({ dictionary, accessToken, refreshSession }:
     }
   };
 
-  const submitCompleteWithdrawal = async (file: File | undefined, reason: string) => {
+  const submitCompleteWithdrawal = async (
+    file: File | undefined,
+    reason: string,
+    transferReference: string,
+  ) => {
     if (!modal || modal.kind !== 'complete-wdr') return;
     if (!file) {
       setActionError(d.proofFile);
@@ -195,7 +199,11 @@ export const AdminWalletRailsTab = ({ dictionary, accessToken, refreshSession }:
       await adminApiClient.completeManualInstapayWithdrawal(
         accessToken,
         modal.row.id,
-        { proofUploadId: uploaded.filename, reason: reason.trim() },
+        {
+          proofUploadId: uploaded.filename,
+          reason: reason.trim(),
+          transferReference: transferReference.trim() || null,
+        },
         refreshSession ? { refreshSession } : {},
       );
       closeModal();
@@ -265,6 +273,7 @@ export const AdminWalletRailsTab = ({ dictionary, accessToken, refreshSession }:
                   <tr>
                     <th>{d.userId}</th>
                     <th>{d.amountEgp}</th>
+                    <th>{tr('Reference', 'Reference')}</th>
                     <th>{tr('Sender account', 'حساب المُرسل')}</th>
                     <th>{d.status}</th>
                     <th>{d.created}</th>
@@ -276,6 +285,7 @@ export const AdminWalletRailsTab = ({ dictionary, accessToken, refreshSession }:
                     <tr key={row.id}>
                       <td style={{ fontSize: '0.8rem', wordBreak: 'break-all' }}>{row.userId}</td>
                       <td>{row.amountEgp.toFixed(2)}</td>
+                      <td>{row.transferReference ?? '—'}</td>
                       <td>{row.senderAccount ?? '—'}</td>
                       <td>
                         <span className="admin-badge">{statusLabel(row.status)}</span>
@@ -383,6 +393,7 @@ export const AdminWalletRailsTab = ({ dictionary, accessToken, refreshSession }:
                   <tr>
                     <th>{d.userId}</th>
                     <th>{d.amountEgp}</th>
+                    <th>{tr('Reference', 'Reference')}</th>
                     <th>{d.recipient}</th>
                     <th>{d.status}</th>
                     <th>{d.created}</th>
@@ -394,6 +405,7 @@ export const AdminWalletRailsTab = ({ dictionary, accessToken, refreshSession }:
                     <tr key={row.id}>
                       <td style={{ fontSize: '0.8rem', wordBreak: 'break-all' }}>{row.userId}</td>
                       <td>{row.sourceAmountEgp.toFixed(2)}</td>
+                      <td>{row.adminTransferReference ?? '—'}</td>
                       <td>{row.instapayRecipient ?? '—'}</td>
                       <td>
                         <span className="admin-badge">{statusLabel(row.status)}</span>
@@ -555,7 +567,9 @@ export const AdminWalletRailsTab = ({ dictionary, accessToken, refreshSession }:
                 busy={modalBusy}
                 error={actionError}
                 onCancel={closeModal}
-                onSubmit={(file, reason) => void submitCompleteWithdrawal(file, reason)}
+                onSubmit={(file, reason, transferReference) =>
+                  void submitCompleteWithdrawal(file, reason, transferReference)
+                }
               />
             )}
             {modal.kind === 'reject-wdr' && (
@@ -611,21 +625,32 @@ function CompleteWithdrawalForm({
   busy: boolean;
   error: string | null;
   onCancel: () => void;
-  onSubmit: (file: File | undefined, reason: string) => void;
+  onSubmit: (file: File | undefined, reason: string, transferReference: string) => void;
 }) {
   const [reason, setReason] = useState('');
+  const [transferReference, setTransferReference] = useState('');
   return (
     <form
       onSubmit={(e) => {
         e.preventDefault();
         const input = e.currentTarget.querySelector<HTMLInputElement>('input[type=file]');
-        onSubmit(input?.files?.[0], reason);
+        onSubmit(input?.files?.[0], reason, transferReference);
       }}
     >
       <h2 className="admin-modal-title">{labels.completeTitle}</h2>
       <div className="admin-form-group">
         <label className="admin-form-label">{labels.proofFile}</label>
         <input type="file" accept="image/*" disabled={busy} />
+      </div>
+      <div className="admin-form-group">
+        <label className="admin-form-label">Transfer reference (optional)</label>
+        <input
+          className="admin-form-input"
+          type="text"
+          value={transferReference}
+          onChange={(event) => setTransferReference(event.target.value)}
+          disabled={busy}
+        />
       </div>
       <div className="admin-form-group">
         <label className="admin-form-label">{labels.reason}</label>

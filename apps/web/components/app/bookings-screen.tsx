@@ -403,10 +403,17 @@ export const BookingsScreen = (_props: Props) => {
     if (!accessToken || loading) return;
     if (handledReservationParam.current === rid) return;
     const match = reservations.find((r) => r.id === rid);
-    if (!match) return;
     handledReservationParam.current = rid;
-    void openDetails(match);
-    router.replace(pathname, { scroll: false });
+    void (async () => {
+      try {
+        const reservation =
+          match ?? (await reservationsApiClient.getReservationById(accessToken, rid));
+        await openDetails(reservation);
+        router.replace(pathname, { scroll: false });
+      } catch {
+        handledReservationParam.current = null;
+      }
+    })();
   }, [searchParams, accessToken, loading, reservations, openDetails, router, pathname]);
 
   const closeDetails = () => {
@@ -1046,10 +1053,30 @@ export const BookingsScreen = (_props: Props) => {
                           )}
                       </p>
                       <p>
+                        {`Provider price before platform fee: ${formatMoney(
+                          selectedReservation.pricingBreakdown.providerAmount ??
+                            selectedReservation.expertPriceAmount,
+                        )}`}
+                      </p>
+                      <p>
+                        {(
+                          bp.acceptanceFeeLine ?? 'Platform fee included upfront: {amount}'
+                        ).replace(
+                          '{amount}',
+                          formatMoney(
+                            selectedReservation.pricingBreakdown.platformFeeAmount ??
+                              selectedReservation.adminAcceptanceFee,
+                          ),
+                        )}
+                      </p>
+                      <p>
                         <strong>
-                          {(bp.totalAmountLine ?? 'Total amount: {amount}').replace(
+                          {(bp.totalAmountLine ?? 'Total held upfront: {amount}').replace(
                             '{amount}',
-                            formatMoney(selectedReservation.pricingBreakdown.totalAmount),
+                            formatMoney(
+                              selectedReservation.pricingBreakdown.heldTotalAmount ??
+                                selectedReservation.pricingBreakdown.totalAmount,
+                            ),
                           )}
                         </strong>
                       </p>
@@ -1058,15 +1085,18 @@ export const BookingsScreen = (_props: Props) => {
                       </p>
                     </>
                   ) : null}
-                  <p>
-                    {(bp.acceptanceFeeLine ?? 'Acceptance fee: {amount}').replace(
-                      '{amount}',
-                      formatMoney(selectedReservation.adminAcceptanceFee),
-                    )}
-                  </p>
-                  <p>
-                    {`${isInterviewReservation(selectedReservation) ? (bp.fixedInterviewPrice ?? 'Fixed interview price') : (bp.fixedReservationPrice ?? 'Fixed reservation price')}: ${formatMoney(selectedReservation.expertPriceAmount)}`}
-                  </p>
+                  {!selectedReservation.pricingBreakdown && (
+                    <>
+                      <p>
+                        {(
+                          bp.acceptanceFeeLine ?? 'Platform fee included upfront: {amount}'
+                        ).replace('{amount}', formatMoney(selectedReservation.adminAcceptanceFee))}
+                      </p>
+                      <p>
+                        {`${isInterviewReservation(selectedReservation) ? (bp.fixedInterviewPrice ?? 'Fixed interview price') : (bp.fixedReservationPrice ?? 'Fixed reservation price')}: ${formatMoney(selectedReservation.expertPriceAmount)}`}
+                      </p>
+                    </>
+                  )}
                   {selectedReservation.mode === 'online' &&
                     !isInterviewReservation(selectedReservation) && (
                       <p>

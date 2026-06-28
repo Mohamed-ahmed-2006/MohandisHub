@@ -46,9 +46,11 @@ describe('phase 3 payment reconciliation hardening', () => {
     const adminRepository = readSource('../modules/admin/admin.repository.ts');
 
     expect(adminRepository).toContain("reference_type = 'reversal'");
-    expect(adminRepository).toContain('isProviderPayoutPayment');
+    expect(adminRepository).toContain('orig.balance_delta == null');
+    expect(adminRepository).toContain('LEGACY_TRANSACTION_DIRECTION_AMBIGUOUS');
+    expect(adminRepository).toContain('TRANSACTION_HAS_NO_BALANCE_EFFECT');
+    expect(adminRepository).toContain('const reverseAmount = -originalDelta');
     expect(adminRepository).toContain('balance + $2 >= 0');
-    expect(adminRepository).toContain('Transaction not reversible');
   });
 
   it('adds database uniqueness for payment reconciliation ids', () => {

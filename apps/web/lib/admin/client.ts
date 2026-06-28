@@ -840,7 +840,7 @@ export const adminApiClient = {
   completeManualInstapayWithdrawal: (
     accessToken: string,
     withdrawalId: string,
-    body: { proofUploadId: string; reason: string },
+    body: { proofUploadId: string; reason: string; transferReference?: string | null },
     options?: AdminClientOptions,
   ) =>
     apiRequest<WithdrawalRequest>({

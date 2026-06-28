@@ -39,7 +39,11 @@ adminRouter.get(
 );
 
 // Settings
-adminRouter.get('/settings', adminController.getSettings);
+adminRouter.get(
+  '/settings',
+  requireAdminPermission('manage_settings'),
+  adminController.getSettings,
+);
 adminRouter.patch(
   '/settings',
   requireAdminPermission('manage_settings'),

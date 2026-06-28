@@ -31,6 +31,7 @@ export type Transaction = {
   userId: string;
   type: TransactionType;
   amount: number;
+  balanceDelta: number | null;
   balanceAfter: number;
   status: TransactionStatus;
   description: string | null;
@@ -88,6 +89,7 @@ export type SubmitInstapayDepositBody = {
   amountEgp: number;
   proofUploadId: string;
   senderAccount: string;
+  transferReference?: string;
 };
 
 export type ManualDepositRequestStatus =
@@ -109,6 +111,7 @@ export type ManualDepositRequest = {
   provider: string;
   proofUploadId: string | null;
   senderAccount: string | null;
+  transferReference: string | null;
   destinationAccountSnapshot: Record<string, unknown>;
   reviewedAt: string | null;
   rejectionReason: string | null;
@@ -146,6 +149,7 @@ export type WithdrawalRequest = {
   payoutExtraId: string | null;
   instapayRecipient: string | null;
   adminProofUploadId: string | null;
+  adminTransferReference: string | null;
   rateSnapshot: Record<string, unknown>;
   status: WithdrawalRequestStatus;
   provider: string;

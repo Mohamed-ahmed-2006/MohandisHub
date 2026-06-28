@@ -24,6 +24,7 @@ type TransactionRow = {
   user_id: string;
   type: string;
   amount: string;
+  balance_delta: string | null;
   balance_after: string;
   status: string;
   description: string | null;
@@ -52,6 +53,7 @@ type DepositRequestRow = {
   provider_payload: Record<string, unknown>;
   paid_at: string | null;
   proof_upload_id: string | null;
+  transfer_reference: string | null;
   destination_account_snapshot: Record<string, unknown>;
   reviewed_by: string | null;
   reviewed_at: string | null;
@@ -100,6 +102,7 @@ type WithdrawalRequestRow = {
   paymob_recipient: string | null;
   paymob_payout_reference: string | null;
   admin_proof_upload_id: string | null;
+  admin_transfer_reference: string | null;
   rate_snapshot: Record<string, unknown>;
   reviewed_by: string | null;
   reviewed_at: string | null;
@@ -144,7 +147,7 @@ export class WalletRepository {
   private depositSelectColumns = `id, user_id, wallet_id, amount::text, currency, order_id, cryptomus_uuid, status,
     provider, provider_payment_id, provider_invoice_id, provider_purchase_id, provider_parent_payment_id,
     provider_status, provider_payload, paid_at,
-    proof_upload_id, destination_account_snapshot, reviewed_by, reviewed_at, rejection_reason,
+    proof_upload_id, transfer_reference, destination_account_snapshot, reviewed_by, reviewed_at, rejection_reason,
     credited_transaction_id, rate_snapshot, credited_amount_egp::text,
     paymob_intention_id, paymob_order_id, paymob_transaction_id,
     created_at, updated_at`;
@@ -153,7 +156,7 @@ export class WalletRepository {
     payout_extra_id, status, provider, provider_batch_withdrawal_id, provider_withdrawal_id, provider_status,
     provider_error, provider_payload, verification_required, verified_at, processed_at, failed_at,
     withdrawal_method, source_amount_egp::text, payout_crypto_amount::text, instapay_recipient,
-    paymob_recipient, paymob_payout_reference, admin_proof_upload_id,
+    paymob_recipient, paymob_payout_reference, admin_proof_upload_id, admin_transfer_reference,
     rate_snapshot, reviewed_by, reviewed_at, rejection_reason,
     created_at, updated_at`;
 
@@ -211,7 +214,7 @@ export class WalletRepository {
     const total = parseInt(countResult.rows[0]!.count, 10);
 
     const { rows } = await this.db.query<TransactionRow>(
-      `SELECT id, wallet_id, user_id, type, amount::text, balance_after::text, status,
+      `SELECT id, wallet_id, user_id, type, amount::text, balance_delta::text, balance_after::text, status,
               description, reference_type, reference_id, metadata, created_by, created_at
        FROM transactions WHERE user_id = $1
        ORDER BY created_at DESC
@@ -224,7 +227,7 @@ export class WalletRepository {
 
   async getTransactionById(userId: string, transactionId: string): Promise<TransactionRow | null> {
     const { rows } = await this.db.query<TransactionRow>(
-      `SELECT id, wallet_id, user_id, type, amount::text, balance_after::text, status,
+      `SELECT id, wallet_id, user_id, type, amount::text, balance_delta::text, balance_after::text, status,
               description, reference_type, reference_id, metadata, created_by, created_at
        FROM transactions WHERE id = $1 AND user_id = $2`,
       [transactionId, userId],
@@ -388,16 +391,17 @@ export class WalletRepository {
     amountEgp: number;
     orderId: string;
     proofUploadId: string;
+    transferReference?: string | null;
     destinationAccountSnapshot: Record<string, unknown>;
     providerPayload?: Record<string, unknown>;
   }): Promise<DepositRequestRow> {
     const { rows } = await this.db.query<DepositRequestRow>(
       `INSERT INTO deposit_requests (
         user_id, wallet_id, amount, currency, order_id, provider, status,
-        proof_upload_id, destination_account_snapshot, provider_payload
+        proof_upload_id, transfer_reference, destination_account_snapshot, provider_payload
       )
       VALUES ($1, $2, $3, 'EGP', $4, 'instapay_manual', 'pending_review',
-        $5, $6::jsonb, $7::jsonb)
+        $5, $6, $7::jsonb, $8::jsonb)
       RETURNING ${this.depositSelectColumns}`,
       [
         params.userId,
@@ -405,6 +409,7 @@ export class WalletRepository {
         params.amountEgp,
         params.orderId,
         params.proofUploadId,
+        params.transferReference ?? null,
         JSON.stringify(params.destinationAccountSnapshot),
         JSON.stringify(params.providerPayload ?? {}),
       ],
@@ -488,8 +493,8 @@ export class WalletRepository {
       const balanceAfter = parseFloat(walletRows[0]!.balance);
       const { rows: txIns } = await client.query<{ id: string }>(
         `INSERT INTO transactions (
-          wallet_id, user_id, type, amount, balance_after, status, description, reference_type, reference_id, metadata, created_by
-        ) VALUES ($1, $2, 'deposit', $3, $4, 'completed', $5, 'instapay_manual', NULL,
+          wallet_id, user_id, type, amount, balance_delta, balance_after, status, description, reference_type, reference_id, metadata, created_by
+        ) VALUES ($1, $2, 'deposit', $3, $3, $4, 'completed', $5, 'instapay_manual', NULL,
           $6::jsonb, $7)
         RETURNING id`,
         [
@@ -644,8 +649,8 @@ export class WalletRepository {
       };
       const { rows: txIns } = await client.query<{ id: string }>(
         `INSERT INTO transactions (
-          wallet_id, user_id, type, amount, balance_after, status, description, reference_type, reference_id, metadata
-        ) VALUES ($1, $2, 'deposit', $3, $4, 'completed', $5, $6, $7, $8)
+          wallet_id, user_id, type, amount, balance_delta, balance_after, status, description, reference_type, reference_id, metadata
+        ) VALUES ($1, $2, 'deposit', $3, $3, $4, 'completed', $5, $6, $7, $8)
         RETURNING id`,
         [
           deposit.wallet_id,
@@ -745,8 +750,8 @@ export class WalletRepository {
       }
 
       await client.query(
-        `INSERT INTO transactions (wallet_id, user_id, type, amount, balance_after, status, description, reference_type, reference_id, metadata)
-         VALUES ($1, $2, $3, $4, $5, 'completed', $6, $7, $8, $9)`,
+        `INSERT INTO transactions (wallet_id, user_id, type, amount, balance_delta, balance_after, status, description, reference_type, reference_id, metadata)
+         VALUES ($1, $2, $3, $4, $4, $5, 'completed', $6, $7, $8, $9)`,
         [
           walletId,
           userId,
@@ -816,8 +821,8 @@ export class WalletRepository {
       }
 
       const { rows: txRows } = await client.query<{ id: string }>(
-        `INSERT INTO transactions (wallet_id, user_id, type, amount, balance_after, status, description, reference_type, reference_id, metadata)
-         VALUES ($1, $2, 'payment', $3, $4, 'completed', $5, $6, $7, $8)
+        `INSERT INTO transactions (wallet_id, user_id, type, amount, balance_delta, balance_after, status, description, reference_type, reference_id, metadata)
+         VALUES ($1, $2, 'payment', $3, -$3, $4, 'completed', $5, $6, $7, $8)
          RETURNING id`,
         [
           walletId,
@@ -846,6 +851,78 @@ export class WalletRepository {
       [userId],
     );
     return rows[0] ?? null;
+  }
+
+  async hasCompletedWithdrawalProfile(userId: string, role: string): Promise<boolean> {
+    if (role === 'customer') {
+      const { rows } = await this.db.query<{ ok: boolean }>(
+        `SELECT true AS ok
+         FROM users u
+         JOIN customer_profiles cp ON cp.user_id = u.id
+         WHERE u.id = $1 AND length(trim(COALESCE(u.display_name, ''))) >= 2
+         LIMIT 1`,
+        [userId],
+      );
+      return rows.length > 0;
+    }
+
+    if (role === 'expert') {
+      const { rows } = await this.db.query<{ ok: boolean }>(
+        `SELECT true AS ok
+         FROM expert_profiles ep
+         WHERE ep.user_id = $1
+           AND length(trim(COALESCE(ep.title, ''))) > 0
+           AND length(trim(COALESCE(ep.city, ''))) > 0
+           AND length(trim(COALESCE(ep.country, ''))) > 0
+           AND cardinality(COALESCE(ep.specializations, '{}'::text[])) > 0
+         LIMIT 1`,
+        [userId],
+      );
+      return rows.length > 0;
+    }
+
+    if (role === 'craftsman') {
+      const { rows } = await this.db.query<{ ok: boolean }>(
+        `SELECT true AS ok
+         FROM craftsman_profiles cp
+         WHERE cp.user_id = $1
+           AND cp.onboarding_completed_at IS NOT NULL
+         LIMIT 1`,
+        [userId],
+      );
+      return rows.length > 0;
+    }
+
+    if (role === 'business') {
+      const { rows } = await this.db.query<{ ok: boolean }>(
+        `SELECT true AS ok
+         FROM business_profiles bp
+         WHERE bp.user_id = $1
+           AND bp.onboarding_completed_at IS NOT NULL
+         LIMIT 1`,
+        [userId],
+      );
+      return rows.length > 0;
+    }
+
+    return false;
+  }
+
+  async getWithdrawalTotalForUserSince(params: {
+    userId: string;
+    method: 'crypto' | 'instapay' | 'paymob';
+    since: Date;
+  }): Promise<number> {
+    const { rows } = await this.db.query<{ total: string }>(
+      `SELECT COALESCE(SUM(COALESCE(source_amount_egp, amount)), 0)::text AS total
+       FROM withdrawal_requests
+       WHERE user_id = $1
+         AND withdrawal_method = $2
+         AND created_at >= $3
+         AND status NOT IN ('failed', 'rejected', 'cancelled', 'blocked')`,
+      [params.userId, params.method, params.since],
+    );
+    return parseFloat(rows[0]?.total ?? '0');
   }
 
   /** Get or create wallet for commission receiver. Must be called within transaction. */
@@ -902,8 +979,8 @@ export class WalletRepository {
     }
 
     const { rows: txRows } = await client.query<{ id: string }>(
-      `INSERT INTO transactions (wallet_id, user_id, type, amount, balance_after, status, description, reference_type, reference_id, metadata)
-       VALUES ($1, $2, 'payment', $3, $4, 'completed', $5, $6, $7, $8) RETURNING id`,
+      `INSERT INTO transactions (wallet_id, user_id, type, amount, balance_delta, balance_after, status, description, reference_type, reference_id, metadata)
+       VALUES ($1, $2, 'payment', $3, -$3, $4, 'completed', $5, $6, $7, $8) RETURNING id`,
       [
         walletId,
         userId,
@@ -948,8 +1025,8 @@ export class WalletRepository {
     }
 
     await client.query(
-      `INSERT INTO transactions (wallet_id, user_id, type, amount, balance_after, status, description, reference_type, reference_id, metadata)
-       VALUES ($1, $2, $3, $4, $5, 'completed', $6, $7, $8, $9)`,
+      `INSERT INTO transactions (wallet_id, user_id, type, amount, balance_delta, balance_after, status, description, reference_type, reference_id, metadata)
+       VALUES ($1, $2, $3, $4, $4, $5, 'completed', $6, $7, $8, $9)`,
       [
         walletId,
         userId,
@@ -998,8 +1075,8 @@ export class WalletRepository {
     await client.query(`UPDATE wallets SET balance = $1 WHERE id = $2`, [balanceAfter, walletId]);
 
     await client.query(
-      `INSERT INTO transactions (wallet_id, user_id, type, amount, balance_after, status, description, reference_type, reference_id, metadata)
-       VALUES ($1, $2, 'hold', $3, $4, 'completed', $5, $6, $7, $8)`,
+      `INSERT INTO transactions (wallet_id, user_id, type, amount, balance_delta, balance_after, status, description, reference_type, reference_id, metadata)
+       VALUES ($1, $2, 'hold', $3, -$3, $4, 'completed', $5, $6, $7, $8)`,
       [
         walletId,
         userId,
@@ -1047,8 +1124,8 @@ export class WalletRepository {
     const balanceAfter = parseFloat(walletRows[0]!.balance);
 
     await client.query(
-      `INSERT INTO transactions (wallet_id, user_id, type, amount, balance_after, status, description, reference_type, reference_id, metadata)
-       VALUES ($1, $2, 'release', $3, $4, 'completed', $5, $6, $7, $8)`,
+      `INSERT INTO transactions (wallet_id, user_id, type, amount, balance_delta, balance_after, status, description, reference_type, reference_id, metadata)
+       VALUES ($1, $2, 'release', $3, $3, $4, 'completed', $5, $6, $7, $8)`,
       [
         hold.wallet_id,
         hold.user_id,
@@ -1481,8 +1558,8 @@ export class WalletRepository {
         const egpDebit = parseFloat(row.source_amount_egp ?? row.amount);
         await client.query(
           `INSERT INTO transactions (
-            wallet_id, user_id, type, amount, balance_after, status, description, reference_type, reference_id, metadata
-          ) VALUES ($1, $2, 'withdrawal', $3, $4, 'completed', $5, 'nowpayments_payout', $6, $7)`,
+            wallet_id, user_id, type, amount, balance_delta, balance_after, status, description, reference_type, reference_id, metadata
+          ) VALUES ($1, $2, 'withdrawal', $3, 0, $4, 'completed', $5, 'nowpayments_payout', $6, $7)`,
           [
             row.wallet_id,
             row.user_id,
@@ -1585,6 +1662,7 @@ export class WalletRepository {
     withdrawalId: string;
     adminId: string;
     proofUploadId: string;
+    transferReference?: string | null;
   }): Promise<WithdrawalRequestRow | null> {
     const client = await this.db.connect();
     try {
@@ -1620,8 +1698,8 @@ export class WalletRepository {
       const egpDebit = parseFloat(row.source_amount_egp ?? row.amount);
       await client.query(
         `INSERT INTO transactions (
-          wallet_id, user_id, type, amount, balance_after, status, description, reference_type, reference_id, metadata, created_by
-        ) VALUES ($1, $2, 'withdrawal', $3, $4, 'completed', $5, 'instapay_manual', NULL, $6::jsonb, $7)`,
+          wallet_id, user_id, type, amount, balance_delta, balance_after, status, description, reference_type, reference_id, metadata, created_by
+        ) VALUES ($1, $2, 'withdrawal', $3, 0, $4, 'completed', $5, 'instapay_manual', NULL, $6::jsonb, $7)`,
         [
           row.wallet_id,
           row.user_id,
@@ -1631,6 +1709,7 @@ export class WalletRepository {
           JSON.stringify({
             withdrawal_request_id: row.id,
             admin_proof_upload_id: params.proofUploadId,
+            admin_transfer_reference: params.transferReference ?? null,
           }),
           params.adminId,
         ],
@@ -1638,10 +1717,16 @@ export class WalletRepository {
       const { rows: out } = await client.query<WithdrawalRequestRow>(
         `UPDATE withdrawal_requests
          SET status = 'finished', processed_at = now(), admin_proof_upload_id = $2,
+             admin_transfer_reference = $4,
              reviewed_by = $3, reviewed_at = now(), updated_at = now()
          WHERE id = $1
          RETURNING ${this.withdrawalSelectColumns}`,
-        [params.withdrawalId, params.proofUploadId, params.adminId],
+        [
+          params.withdrawalId,
+          params.proofUploadId,
+          params.adminId,
+          params.transferReference ?? null,
+        ],
       );
       await client.query('COMMIT');
       return out[0] ?? null;
@@ -1689,8 +1774,8 @@ export class WalletRepository {
       );
       await client.query(
         `INSERT INTO transactions (
-          wallet_id, user_id, type, amount, balance_after, status, description, reference_type, reference_id, metadata, created_by
-        ) VALUES ($1, $2, 'withdrawal', $3, $4, 'completed', $5, 'paymob_payout', $6, $7::jsonb, $8)`,
+          wallet_id, user_id, type, amount, balance_delta, balance_after, status, description, reference_type, reference_id, metadata, created_by
+        ) VALUES ($1, $2, 'withdrawal', $3, 0, $4, 'completed', $5, 'paymob_payout', $6, $7::jsonb, $8)`,
         [
           row.wallet_id,
           row.user_id,

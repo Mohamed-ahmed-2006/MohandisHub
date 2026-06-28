@@ -5,9 +5,11 @@
 import {
   MANAGED_SIDEBAR_HREFS,
   parsePaymentMethodsEnabled,
+  parseWithdrawalLimits,
   type AppSettings,
   type AppStatus,
   type UpdateAppSettingsBody,
+  type WithdrawalLimitsConfig,
 } from '@mohandishub/shared';
 
 import { env } from '../../config/env.js';
@@ -36,6 +38,29 @@ function parseSidebarHiddenHrefs(raw: unknown): string[] {
   return [...new Set(out)].sort();
 }
 
+function normalizeWithdrawalLimits(
+  raw: UpdateAppSettingsBody['withdrawalLimits'],
+): WithdrawalLimitsConfig {
+  const parsed = parseWithdrawalLimits(raw);
+  for (const [method, limits] of Object.entries(parsed)) {
+    if (limits.maxAmountEgp != null && limits.maxAmountEgp < limits.minAmountEgp) {
+      throw new HttpError({
+        statusCode: 400,
+        code: 'INVALID_WITHDRAWAL_LIMITS',
+        message: `${method} withdrawal max must be greater than or equal to the minimum.`,
+      });
+    }
+    if (limits.dailyMaxAmountEgp != null && limits.dailyMaxAmountEgp < limits.minAmountEgp) {
+      throw new HttpError({
+        statusCode: 400,
+        code: 'INVALID_WITHDRAWAL_LIMITS',
+        message: `${method} daily withdrawal limit must be greater than or equal to the minimum.`,
+      });
+    }
+  }
+  return parsed;
+}
+
 export class SettingsService {
   constructor(private readonly repo: SettingsRepository = new SettingsRepository()) {}
 
@@ -58,6 +83,7 @@ export class SettingsService {
       disableCryptoDeposits: row.disable_crypto_deposits,
       disableCardDeposits: row.disable_card_deposits,
     });
+    const withdrawalLimits = parseWithdrawalLimits(row.withdrawal_limits);
     return {
       maintenanceMode: row.maintenance_mode,
       maintenanceMessage: row.maintenance_message,
@@ -109,6 +135,7 @@ export class SettingsService {
       walletMigrationUsdToEgpApplied: row.wallet_migration_usd_to_egp_applied ?? false,
       sidebarHiddenHrefs: parseSidebarHiddenHrefs(row.sidebar_hidden_hrefs),
       paymentMethodsEnabled,
+      withdrawalLimits,
     };
   }
 
@@ -196,6 +223,8 @@ export class SettingsService {
       dbPartial.publicUploadAllowedMimes = partial.publicUploadAllowedMimes;
     if (partial.supabaseStorageDashboardUrl !== undefined)
       dbPartial.supabaseStorageDashboardUrl = partial.supabaseStorageDashboardUrl;
+    if (partial.withdrawalLimits !== undefined)
+      dbPartial.withdrawal_limits = normalizeWithdrawalLimits(partial.withdrawalLimits);
 
     if (
       partial.paymentMethodsEnabled !== undefined ||
@@ -238,6 +267,7 @@ export class SettingsService {
       disableCryptoDeposits: row.disable_crypto_deposits,
       disableCardDeposits: row.disable_card_deposits,
     });
+    const withdrawalLimits = parseWithdrawalLimits(row.withdrawal_limits);
     return {
       id: row.id,
       maintenanceMode: row.maintenance_mode,
@@ -295,6 +325,7 @@ export class SettingsService {
       publicUploadAllowedMimes: parsePublicUploadMimes(row.public_upload_allowed_mimes),
       supabaseStorageDashboardUrl: row.supabase_storage_dashboard_url ?? null,
       paymentMethodsEnabled,
+      withdrawalLimits,
     };
   }
 
@@ -343,6 +374,7 @@ export class SettingsService {
         disableCryptoDeposits: false,
         disableCardDeposits: true,
       }),
+      withdrawalLimits: parseWithdrawalLimits(null),
     };
   }
 }

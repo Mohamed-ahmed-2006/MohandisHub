@@ -50,3 +50,24 @@ export async function isJobOwnerOfApplicationWithCv(
   );
   return rows.length > 0;
 }
+
+export async function isMoneyProofVisibleToUser(
+  userId: string,
+  uploadId: string,
+): Promise<boolean> {
+  const db = getPool();
+  const { rows } = await db.query<{ allowed: boolean }>(
+    `SELECT (
+       EXISTS (
+         SELECT 1 FROM deposit_requests
+          WHERE user_id = $1 AND proof_upload_id = $2
+       )
+       OR EXISTS (
+         SELECT 1 FROM withdrawal_requests
+          WHERE user_id = $1 AND admin_proof_upload_id = $2
+       )
+     ) AS allowed`,
+    [userId, uploadId],
+  );
+  return rows[0]?.allowed === true;
+}

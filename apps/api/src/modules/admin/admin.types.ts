@@ -135,6 +135,7 @@ export type TransactionListRow = {
   user_display_name: string;
   type: string;
   amount: string;
+  balance_delta: string | null;
   balance_after: string;
   status: string;
   description: string | null;
@@ -149,6 +150,7 @@ export type TransactionRow = {
   user_id: string;
   type: string;
   amount: string;
+  balance_delta: string | null;
   balance_after: string;
   status: string;
   description: string | null;

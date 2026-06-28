@@ -6,6 +6,8 @@ import {
   PAYMENT_METHOD_DEFINITIONS,
   type AppSettings,
   type UpdateAppSettingsBody,
+  type WithdrawalLimitMethod,
+  type WithdrawalMethodLimit,
 } from '@mohandishub/shared';
 import { useCallback, useEffect, useState } from 'react';
 
@@ -29,6 +31,8 @@ const SIDEBAR_HREF_TO_NAV_KEY: Record<string, string> = {
   '/app/chat': 'chat',
   '/app/history': 'history',
   '/app/support': 'support',
+  '/app/negotiations': 'negotiations',
+  '/app/advertisements': 'advertisements',
   '/app/plan': 'plan',
   '/app/admin': 'admin',
 };
@@ -77,6 +81,7 @@ function Toggle({
 }
 
 const FACTORY_RESET_CONFIRM_PHRASE = 'FACTORY RESET';
+const WITHDRAWAL_LIMIT_METHODS: WithdrawalLimitMethod[] = ['instapay', 'crypto', 'paymob'];
 
 export const AdminSettingsTab = ({ dictionary, accessToken, refreshSession }: Props) => {
   const [settings, setSettings] = useState<AppSettings | null>(null);
@@ -168,6 +173,22 @@ export const AdminSettingsTab = ({ dictionary, accessToken, refreshSession }: Pr
       if (!settings) return;
       void update({
         paymentMethodsEnabled: { ...settings.paymentMethodsEnabled, [key]: enabled },
+      });
+    },
+    [settings, update],
+  );
+
+  const handleWithdrawalLimitChange = useCallback(
+    (method: WithdrawalLimitMethod, field: keyof WithdrawalMethodLimit, value: number | null) => {
+      if (!settings) return;
+      void update({
+        withdrawalLimits: {
+          ...settings.withdrawalLimits,
+          [method]: {
+            ...settings.withdrawalLimits[method],
+            [field]: value,
+          },
+        },
       });
     },
     [settings, update],
@@ -343,6 +364,69 @@ export const AdminSettingsTab = ({ dictionary, accessToken, refreshSession }: Pr
                   />
                 );
               })}
+            </div>
+          );
+        })}
+        <p className="admin-settings-label" style={{ marginTop: '0.75rem' }}>
+          {tr('Withdrawal limits', 'Ø­Ø¯ÙˆØ¯ Ø§Ù„Ø³Ø­Ø¨')}
+        </p>
+        <p className="admin-settings-desc" style={{ marginBottom: '0.75rem' }}>
+          {tr(
+            'Set the minimum, per-request maximum, and daily user maximum for each withdrawal method.',
+            'Ø­Ø¯Ø¯ Ø§Ù„Ø­Ø¯ Ø§Ù„Ø£Ø¯Ù†Ù‰ ÙˆØ§Ù„Ø­Ø¯ Ø§Ù„Ø£Ù‚ØµÙ‰ Ù„ÙƒÙ„ Ø·Ù„Ø¨ ÙˆØ§Ù„Ø­Ø¯ Ø§Ù„ÙŠÙˆÙ…ÙŠ Ù„ÙƒÙ„ Ù…Ø³ØªØ®Ø¯Ù… Ù„ÙƒÙ„ Ø·Ø±ÙŠÙ‚Ø© Ø³Ø­Ø¨.',
+          )}
+        </p>
+        {WITHDRAWAL_LIMIT_METHODS.map((method) => {
+          const limits = settings.withdrawalLimits[method];
+          const label =
+            (d.paymentMethodLabels as Record<string, string> | undefined)?.[
+              `withdrawal_${method}`
+            ] ?? method;
+          return (
+            <div key={method} className="admin-settings-method-group">
+              <p className="admin-settings-method-group-title">{label}</p>
+              {(
+                [
+                  ['minAmountEgp', tr('Minimum (EGP)', 'Ø§Ù„Ø­Ø¯ Ø§Ù„Ø£Ø¯Ù†Ù‰ (Ø¬.Ù…)')],
+                  [
+                    'maxAmountEgp',
+                    tr('Maximum per request (EGP)', 'Ø§Ù„Ø­Ø¯ Ø§Ù„Ø£Ù‚ØµÙ‰ Ù„Ù„Ø·Ù„Ø¨ (Ø¬.Ù…)'),
+                  ],
+                  [
+                    'dailyMaxAmountEgp',
+                    tr(
+                      'Daily user maximum (EGP)',
+                      'Ø§Ù„Ø­Ø¯ Ø§Ù„ÙŠÙˆÙ…ÙŠ Ù„Ù„Ù…Ø³ØªØ®Ø¯Ù… (Ø¬.Ù…)',
+                    ),
+                  ],
+                ] as const
+              ).map(([field, fieldLabel]) => (
+                <div className="admin-settings-row" key={`${method}-${field}`}>
+                  <label className="admin-settings-label">{fieldLabel}</label>
+                  <input
+                    type="number"
+                    min={0}
+                    step={0.01}
+                    className="admin-settings-input admin-settings-input--number"
+                    defaultValue={limits[field] ?? ''}
+                    onBlur={(e) => {
+                      const raw = e.target.value.trim();
+                      const value = raw === '' ? null : parseFloat(raw);
+                      if (value != null && (!Number.isFinite(value) || value < 0)) {
+                        setError(
+                          tr(
+                            'Withdrawal limit must be a positive number or empty.',
+                            'ÙŠØ¬Ø¨ Ø£Ù† ÙŠÙƒÙˆÙ† Ø­Ø¯ Ø§Ù„Ø³Ø­Ø¨ Ø±Ù‚Ù…Ù‹Ø§ Ù…ÙˆØ¬Ø¨Ù‹Ø§ Ø£Ùˆ ÙØ§Ø±ØºÙ‹Ø§.',
+                          ),
+                        );
+                        return;
+                      }
+                      handleWithdrawalLimitChange(method, field, value);
+                    }}
+                    disabled={saving}
+                  />
+                </div>
+              ))}
             </div>
           );
         })}
@@ -565,7 +649,7 @@ export const AdminSettingsTab = ({ dictionary, accessToken, refreshSession }: Pr
             </label>
             <span className="admin-settings-desc">
               {tr(
-                'Charged to customer when provider accepts a reservation.',
+                'Included in the customer upfront hold together with the provider price.',
                 'تُخصم من العميل عند قبول مقدم الخدمة للحجز.',
               )}
             </span>

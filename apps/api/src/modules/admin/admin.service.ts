@@ -1089,6 +1089,7 @@ export class AdminService {
       userDisplayName: row.user_display_name,
       type: row.type,
       amount: parseFloat(row.amount),
+      balanceDelta: row.balance_delta != null ? parseFloat(row.balance_delta) : null,
       balanceAfter: parseFloat(row.balance_after),
       status: row.status,
       description: row.description,
@@ -1105,6 +1106,7 @@ export class AdminService {
       userId: row.user_id,
       type: row.type as Transaction['type'],
       amount: parseFloat(row.amount),
+      balanceDelta: row.balance_delta != null ? parseFloat(row.balance_delta) : null,
       balanceAfter: parseFloat(row.balance_after),
       status: row.status as Transaction['status'],
       description: row.description,
@@ -1294,6 +1296,7 @@ export class AdminService {
       withdrawalId,
       adminId,
       input.proofUploadId,
+      input.transferReference ?? null,
     );
   }
 

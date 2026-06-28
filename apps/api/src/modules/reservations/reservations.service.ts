@@ -675,14 +675,19 @@ export class ReservationsService {
           ? status.reservationVideoMinuteRate
           : status.reservationVoiceMinuteRate
         : 0;
+    const platformFeeAmount = toMoney(Math.max(0, status.reservationAcceptanceFee));
+    const heldTotalAmount = toMoney(expertPrice + platformFeeAmount);
     const policySnapshot = this.buildPolicySnapshot({
       purpose: 'service',
-      adminAcceptanceFee: status.reservationAcceptanceFee,
+      adminAcceptanceFee: platformFeeAmount,
       pricingBreakdown: {
         servicePriceAmount: toMoney(servicePrice),
         reservationPriceAmount: toMoney(reservationModePrice),
         originalServicePriceAmount: toMoney(servicePrice),
         originalReservationPriceAmount: toMoney(reservationModePrice),
+        providerAmount: expertPrice,
+        platformFeeAmount,
+        heldTotalAmount,
         ...(couponPreview
           ? {
               couponCode: couponPreview.code,
@@ -693,13 +698,13 @@ export class ReservationsService {
               couponPlatformFundedAmount: couponPreview.platformFundedAmount,
             }
           : {}),
-        totalAmount: expertPrice,
+        totalAmount: heldTotalAmount,
         currency: reservationCurrency,
         deductionTiming: 'on_reserve_hold',
         releaseTiming: 'on_completion_or_policy',
         explanation: couponPreview
-          ? 'Discounted total amount is held when you click Reserve. It is released based on completion/cancellation policy.'
-          : 'Total amount (service + reservation mode price) is held when you click Reserve. It is released based on completion/cancellation policy.',
+          ? 'Discounted provider price plus the platform fee is held when you click Reserve. No extra acceptance debit is taken later; the hold is released by completion or cancellation policy.'
+          : 'Provider price plus the platform fee is held when you click Reserve. No extra acceptance debit is taken later; the hold is released by completion or cancellation policy.',
       },
     });
 
@@ -712,7 +717,7 @@ export class ReservationsService {
       requestedEndAt: new Date(slot.end_at),
       expertPriceAmount: expertPrice,
       currency: reservationCurrency,
-      adminAcceptanceFee: status.reservationAcceptanceFee,
+      adminAcceptanceFee: platformFeeAmount,
       adminMinuteRate,
       policySnapshot,
     };
@@ -721,7 +726,7 @@ export class ReservationsService {
       createInput.onlineType = input.onlineType;
     }
 
-    const holdAtCreate = expertPrice > 0;
+    const holdAtCreate = heldTotalAmount > 0;
     let reservation: ReservationRow;
 
     if (holdAtCreate) {
@@ -1421,7 +1426,7 @@ export class ReservationsService {
             status: 'waiting_customer_done',
             startedAt: now,
             settlementStatus:
-              toNumber(reservationForUpdate.expert_price_amount) > 0 ? 'held' : 'unsettled',
+              this.getReservationFixedHoldAmount(reservationForUpdate) > 0 ? 'held' : 'unsettled',
             customerDoneDueAt: dueAt,
             donePromptedAt: null,
           },
@@ -1558,6 +1563,7 @@ export class ReservationsService {
           message: 'Reservation not found.',
         });
       }
+      const heldAmount = this.getReservationFixedHoldAmount(reservationForUpdate);
       await this.releaseExpertFixedPayout(
         client,
         reservationForUpdate,
@@ -1569,11 +1575,8 @@ export class ReservationsService {
           status: 'completed',
           completedAt: new Date(),
           endedAt: new Date(),
-          capturedAmount: toNumber(reservationForUpdate.expert_price_amount),
-          settlementStatus:
-            toNumber(reservationForUpdate.expert_price_amount) > 0
-              ? 'released_to_provider'
-              : 'unsettled',
+          capturedAmount: heldAmount,
+          settlementStatus: heldAmount > 0 ? 'released_to_provider' : 'unsettled',
           customerDoneDueAt: null,
           donePromptedAt: null,
           disconnectAutoReleaseAt: null,
@@ -1590,7 +1593,7 @@ export class ReservationsService {
           reservationId,
           eventType: 'hold_captured',
           actorId: userId,
-          metadata: { amount: toNumber(reservationForUpdate.expert_price_amount) },
+          metadata: { amount: heldAmount },
         },
         client,
       );
@@ -1736,7 +1739,7 @@ export class ReservationsService {
             status: 'in_session',
             startedAt: asDate(reservationForUpdate.started_at) ?? now,
             settlementStatus:
-              toNumber(reservationForUpdate.expert_price_amount) > 0 ? 'held' : 'unsettled',
+              this.getReservationFixedHoldAmount(reservationForUpdate) > 0 ? 'held' : 'unsettled',
             disconnectAutoReleaseAt: null,
           },
           client,
@@ -2199,6 +2202,7 @@ export class ReservationsService {
       );
 
       endedByCustomer = reservationForUpdate.customer_id === userId;
+      const heldAmount = this.getReservationFixedHoldAmount(reservationForUpdate);
       if (endedByCustomer) {
         await this.releaseExpertFixedPayout(client, reservationForUpdate, 'Customer ended call');
       } else {
@@ -2211,17 +2215,14 @@ export class ReservationsService {
           status: 'completed',
           endedAt: now,
           completedAt: now,
-          refundAmount: endedByCustomer ? 0 : toNumber(reservationForUpdate.expert_price_amount),
-          capturedAmount: endedByCustomer ? toNumber(reservationForUpdate.expert_price_amount) : 0,
-          refundStatus:
-            endedByCustomer || toNumber(reservationForUpdate.expert_price_amount) <= 0
-              ? 'none'
-              : 'succeeded',
+          refundAmount: endedByCustomer ? 0 : heldAmount,
+          capturedAmount: endedByCustomer ? heldAmount : 0,
+          refundStatus: endedByCustomer || heldAmount <= 0 ? 'none' : 'succeeded',
           settlementStatus: endedByCustomer
-            ? toNumber(reservationForUpdate.expert_price_amount) > 0
+            ? heldAmount > 0
               ? 'released_to_provider'
               : 'unsettled'
-            : toNumber(reservationForUpdate.expert_price_amount) > 0
+            : heldAmount > 0
               ? 'refunded_to_customer'
               : 'unsettled',
           customerDoneDueAt: null,
@@ -2240,7 +2241,7 @@ export class ReservationsService {
           reservationId,
           eventType: endedByCustomer ? 'hold_captured' : 'hold_released',
           actorId: userId,
-          metadata: { amount: toNumber(reservationForUpdate.expert_price_amount) },
+          metadata: { amount: heldAmount },
         },
         client,
       );
@@ -2656,7 +2657,7 @@ export class ReservationsService {
 
       const now = new Date();
       const policy = this.getPolicySnapshot(reservation);
-      const priceAmount = toNumber(reservation.expert_price_amount);
+      const priceAmount = this.getReservationFixedHoldAmount(reservation);
       let refundAmount = 0;
       let capturedAmount = 0;
       let penaltyAmount = 0;
@@ -2721,7 +2722,7 @@ export class ReservationsService {
       } else if (reservation.status === 'pending') {
         outcome = 'none';
         await this.refundFixedHold(client, reservation, 'Reservation cancelled while pending');
-        const pendingRefundAmount = toNumber(reservation.expert_price_amount);
+        const pendingRefundAmount = priceAmount;
         if (pendingRefundAmount > 0) {
           refundAmount = pendingRefundAmount;
           refundStatus = 'succeeded';
@@ -3077,6 +3078,16 @@ export class ReservationsService {
         adminAcceptanceFee: toNumber(reservation.admin_acceptance_fee),
       })
     );
+  }
+
+  private getReservationPlatformFeeAmount(reservation: ReservationRow): number {
+    if (reservation.purpose !== 'service') return 0;
+    return toMoney(Math.max(0, toNumber(reservation.admin_acceptance_fee)));
+  }
+
+  private getReservationFixedHoldAmount(reservation: ReservationRow): number {
+    const providerPrice = toMoney(toNumber(reservation.expert_price_amount));
+    return toMoney(providerPrice + this.getReservationPlatformFeeAmount(reservation));
   }
 
   private async getIdempotentReservationResponse(
@@ -3523,7 +3534,7 @@ export class ReservationsService {
         } else {
           await this.updateSlotStatusInTransaction(client, slot.id, 'booked');
           await this.ensureFixedPriceHold(client, reservation);
-          await this.chargeAcceptanceFee(client, reservation);
+          const heldAmount = this.getReservationFixedHoldAmount(reservation);
           await this.repo.updateReservation(
             params.reservationId,
             {
@@ -3531,8 +3542,7 @@ export class ReservationsService {
               acceptedAt: new Date(),
               rejectionReason: null,
               autoRejected: false,
-              settlementStatus:
-                toNumber(reservation.expert_price_amount) > 0 ? 'held' : 'unsettled',
+              settlementStatus: heldAmount > 0 ? 'held' : 'unsettled',
             },
             client,
           );
@@ -3542,7 +3552,7 @@ export class ReservationsService {
               eventType: 'hold_created',
               actorId: reservation.customer_id,
               metadata: {
-                amount: toNumber(reservation.expert_price_amount),
+                amount: heldAmount,
               },
             },
             client,
@@ -3685,66 +3695,11 @@ export class ReservationsService {
     return mapReservation(updated);
   }
 
-  private async chargeAcceptanceFee(
-    client: PoolClient,
-    reservation: ReservationRow,
-  ): Promise<void> {
-    const fee = toNumber(reservation.admin_acceptance_fee);
-    if (fee <= 0) return;
-
-    const customerWallet = await this.walletRepo.findByUserId(reservation.customer_id);
-    if (!customerWallet) {
-      throw new HttpError({
-        statusCode: 402,
-        code: 'INSUFFICIENT_BALANCE',
-        message: 'Customer wallet is required to pay reservation acceptance fee.',
-      });
-    }
-    const available = toNumber(customerWallet.balance);
-    if (available < fee) {
-      throw new HttpError({
-        statusCode: 402,
-        code: 'INSUFFICIENT_BALANCE',
-        message: `Insufficient balance for reservation acceptance fee. Required ${toMoney(fee)} EGP, available ${toMoney(available)} EGP.`,
-        details: {
-          requiredEgp: toMoney(fee),
-          availableEgp: toMoney(available),
-          component: 'acceptance_fee',
-          customerId: reservation.customer_id,
-          walletId: customerWallet.id,
-        },
-      });
-    }
-
-    const receiverId = await this.getCommissionReceiverId();
-
-    const platformWalletId = await this.walletRepo.getOrCreateCommissionWallet(client, receiverId);
-    await this.walletRepo.debitWalletInTransaction(
-      client,
-      customerWallet.id,
-      reservation.customer_id,
-      fee,
-      'Reservation acceptance fee',
-      'reservation',
-      reservation.id,
-    );
-    await this.walletRepo.creditWithTypeInTransaction(
-      client,
-      platformWalletId,
-      receiverId,
-      fee,
-      'commission',
-      'Reservation acceptance fee',
-      'reservation',
-      reservation.id,
-    );
-  }
-
   private async ensureFixedPriceHold(
     client: PoolClient,
     reservation: ReservationRow,
   ): Promise<string | null> {
-    const holdAmount = toNumber(reservation.expert_price_amount);
+    const holdAmount = this.getReservationFixedHoldAmount(reservation);
     if (holdAmount <= 0) return null;
     if (reservation.fixed_price_hold_id) {
       const hold = await this.walletRepo.findWalletHoldById(reservation.fixed_price_hold_id);
@@ -3785,7 +3740,12 @@ export class ReservationsService {
         reservation.currency,
         'reservation',
         reservation.id,
-        { reservationId: reservation.id, purpose: 'fixed_price' },
+        {
+          reservationId: reservation.id,
+          purpose: 'fixed_price',
+          providerAmount: toNumber(reservation.expert_price_amount),
+          platformFeeAmount: this.getReservationPlatformFeeAmount(reservation),
+        },
       );
     } catch (error) {
       if (error instanceof Error && error.message === 'INSUFFICIENT_BALANCE') {
@@ -3832,7 +3792,7 @@ export class ReservationsService {
     platformCommissionAmount: number;
     settlementStatus: Reservation['settlementStatus'];
   }> {
-    const holdAmount = toMoney(toNumber(reservation.expert_price_amount));
+    const holdAmount = this.getReservationFixedHoldAmount(reservation);
     const settlementOutcome =
       input.settlementOutcome ?? this.inferDisputeSettlementOutcome(input.status);
     if (settlementOutcome === 'none' && holdAmount > 0 && reservation.fixed_price_hold_id) {
@@ -4026,7 +3986,7 @@ export class ReservationsService {
       reservationId: reservation.id,
     });
 
-    const amount = toNumber(reservation.expert_price_amount);
+    const amount = toMoney(toNumber(hold.amount));
     if (amount <= 0) return;
 
     let providerWallet = await this.walletRepo.findByUserId(reservation.provider_id);
@@ -4078,12 +4038,21 @@ export class ReservationsService {
   ): { commission: number; providerAmount: number } {
     const policy = this.getPolicySnapshot(reservation);
     const pricing = policy.pricingBreakdown;
+    const platformFee = toMoney(
+      Math.min(heldAmount, this.getReservationPlatformFeeAmount(reservation)),
+    );
+    const providerGross = toMoney(Math.max(0, heldAmount - platformFee));
     const platformFundedAmount = toMoney(pricing?.couponPlatformFundedAmount ?? 0);
     const originalAmount = toMoney(
       (pricing?.originalServicePriceAmount ?? 0) + (pricing?.originalReservationPriceAmount ?? 0),
     );
     if (!pricing?.couponRedemptionId || originalAmount <= 0) {
-      return computeCommissionSplit(heldAmount, commissionPercent, commissionMinEgp);
+      const split = computeCommissionSplit(providerGross, commissionPercent, commissionMinEgp);
+      const commission = toMoney(Math.min(heldAmount, split.commission + platformFee));
+      return {
+        commission,
+        providerAmount: toMoney(Math.max(0, heldAmount - commission)),
+      };
     }
 
     const originalSplit = computeCommissionSplit(
@@ -4091,10 +4060,11 @@ export class ReservationsService {
       commissionPercent,
       commissionMinEgp,
     );
-    const commission = toMoney(Math.max(0, originalSplit.commission - platformFundedAmount));
+    const serviceCommission = toMoney(Math.max(0, originalSplit.commission - platformFundedAmount));
+    const commission = toMoney(Math.min(heldAmount, serviceCommission + platformFee));
     return {
-      commission: Math.min(heldAmount, commission),
-      providerAmount: toMoney(Math.max(0, heldAmount - Math.min(heldAmount, commission))),
+      commission,
+      providerAmount: toMoney(Math.max(0, heldAmount - commission)),
     };
   }
 
@@ -4141,7 +4111,7 @@ export class ReservationsService {
     const customerBalance = toNumber(customerWallet?.balance);
     const providerBalance = toNumber(providerWallet?.balance);
     const holdRequired =
-      reservation.fixed_price_hold_id == null ? toNumber(reservation.expert_price_amount) : 0;
+      reservation.fixed_price_hold_id == null ? this.getReservationFixedHoldAmount(reservation) : 0;
 
     const customerAfterHold = Math.max(0, customerBalance - holdRequired);
     const customerRemainingMinutes =
@@ -4293,6 +4263,7 @@ export class ReservationsService {
 
     const lowBalanceAutoEnded = secondsToBill < elapsedSeconds;
     if (lowBalanceAutoEnded) {
+      const heldAmount = this.getReservationFixedHoldAmount(reservation);
       await this.repo.updateCallSession(
         session.id,
         {
@@ -4309,9 +4280,8 @@ export class ReservationsService {
           status: 'completed',
           endedAt: new Date(),
           completedAt: new Date(),
-          capturedAmount: toNumber(reservation.expert_price_amount),
-          settlementStatus:
-            toNumber(reservation.expert_price_amount) > 0 ? 'released_to_provider' : 'unsettled',
+          capturedAmount: heldAmount,
+          settlementStatus: heldAmount > 0 ? 'released_to_provider' : 'unsettled',
           customerDoneDueAt: null,
           donePromptedAt: null,
           disconnectAutoReleaseAt: null,
@@ -4326,7 +4296,7 @@ export class ReservationsService {
           actorId: null,
           metadata: {
             source: 'low_balance_auto_end',
-            amount: toNumber(reservation.expert_price_amount),
+            amount: heldAmount,
           },
         },
         client,
@@ -4375,6 +4345,7 @@ export class ReservationsService {
           }
         }
 
+        const heldAmount = this.getReservationFixedHoldAmount(reservation);
         await this.releaseExpertFixedPayout(client, reservation, 'Disconnect timeout auto release');
         await this.repo.updateReservation(
           reservation.id,
@@ -4382,9 +4353,8 @@ export class ReservationsService {
             status: 'completed',
             endedAt: new Date(),
             completedAt: new Date(),
-            capturedAmount: toNumber(reservation.expert_price_amount),
-            settlementStatus:
-              toNumber(reservation.expert_price_amount) > 0 ? 'released_to_provider' : 'unsettled',
+            capturedAmount: heldAmount,
+            settlementStatus: heldAmount > 0 ? 'released_to_provider' : 'unsettled',
             customerDoneDueAt: null,
             donePromptedAt: null,
             disconnectAutoReleaseAt: null,
@@ -4409,7 +4379,7 @@ export class ReservationsService {
             actorId: null,
             metadata: {
               source: 'disconnect_timeout',
-              amount: toNumber(reservation.expert_price_amount),
+              amount: heldAmount,
             },
           },
           client,
@@ -4517,6 +4487,7 @@ export class ReservationsService {
       if (session?.status === 'active') {
         await this.billMinutesInTransaction(client, reservationForUpdate, session);
       }
+      const heldAmount = this.getReservationFixedHoldAmount(reservationForUpdate);
       await this.releaseExpertFixedPayout(
         client,
         reservationForUpdate,
@@ -4528,11 +4499,8 @@ export class ReservationsService {
           status: 'completed',
           completedAt: new Date(),
           endedAt: new Date(),
-          capturedAmount: toNumber(reservationForUpdate.expert_price_amount),
-          settlementStatus:
-            toNumber(reservationForUpdate.expert_price_amount) > 0
-              ? 'released_to_provider'
-              : 'unsettled',
+          capturedAmount: heldAmount,
+          settlementStatus: heldAmount > 0 ? 'released_to_provider' : 'unsettled',
           customerDoneDueAt: null,
           donePromptedAt: null,
           disconnectAutoReleaseAt: null,
@@ -4561,7 +4529,7 @@ export class ReservationsService {
           actorId: null,
           metadata: {
             source: 'disconnect_timeout',
-            amount: toNumber(reservationForUpdate.expert_price_amount),
+            amount: heldAmount,
           },
         },
         client,

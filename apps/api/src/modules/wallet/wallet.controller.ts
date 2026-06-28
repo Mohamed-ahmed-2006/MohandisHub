@@ -297,6 +297,8 @@ const submitInstapayDeposit = asyncHandler(async (req, res) => {
         : NaN;
   const proofUploadId = typeof body?.proofUploadId === 'string' ? body.proofUploadId.trim() : '';
   const senderAccount = typeof body?.senderAccount === 'string' ? body.senderAccount.trim() : '';
+  const transferReference =
+    typeof body?.transferReference === 'string' ? body.transferReference.trim() : '';
   if (!proofUploadId) {
     throw new HttpError({
       statusCode: 400,
@@ -316,6 +318,7 @@ const submitInstapayDeposit = asyncHandler(async (req, res) => {
     amountEgp,
     proofUploadId,
     senderAccount,
+    transferReference: transferReference || null,
   });
   const response: ApiSuccessBody<ManualDepositRequest> = { ok: true, data: result };
   res.status(201).json(response);
@@ -327,7 +330,7 @@ const createWithdrawal = asyncHandler(async (req, res) => {
     throw new HttpError({
       statusCode: 403,
       code: 'FORBIDDEN',
-      message: 'Only providers can request withdrawals.',
+      message: 'This role cannot request withdrawals.',
     });
   }
 
@@ -340,7 +343,7 @@ const createWithdrawal = asyncHandler(async (req, res) => {
     });
   }
 
-  const role = user.role as 'expert' | 'craftsman' | 'business';
+  const role = user.role as 'customer' | 'expert' | 'craftsman' | 'business';
   const result = await walletService.createWithdrawalRequest(user.id, role, {
     method: payload.method,
     amountEgp: payload.amountEgp,
@@ -387,7 +390,7 @@ const verifyWithdrawal = asyncHandler(async (req, res) => {
     throw new HttpError({
       statusCode: 403,
       code: 'FORBIDDEN',
-      message: 'Only providers can verify withdrawals.',
+      message: 'This role cannot verify withdrawals.',
     });
   }
 

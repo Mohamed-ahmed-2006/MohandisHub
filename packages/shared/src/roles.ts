@@ -4,7 +4,7 @@ export type ProviderRole = 'expert' | 'business' | 'craftsman';
 export type IndividualProviderRole = 'expert' | 'craftsman';
 
 /** Roles allowed to request wallet withdrawals (InstaPay or crypto). */
-export type WithdrawalEligibleRole = 'expert' | 'craftsman' | 'business';
+export type WithdrawalEligibleRole = 'customer' | 'expert' | 'craftsman' | 'business';
 
 export type RoleMeta = {
   title: string;
@@ -33,7 +33,7 @@ export const canManageReservationAvailability = (role: string): role is Provider
   isProviderRole(role);
 
 export const canRequestWithdrawal = (role: string): role is WithdrawalEligibleRole =>
-  role === 'expert' || role === 'craftsman' || role === 'business';
+  role === 'customer' || role === 'expert' || role === 'craftsman' || role === 'business';
 
 export const ROLE_META: Record<UserRole, RoleMeta> = {
   customer: {
@@ -64,7 +64,7 @@ export const ROLE_PERMISSION_MATRIX = {
     bidOnNeeds: false,
     manageProviderServices: false,
     manageReservationAvailability: false,
-    requestWithdrawal: false,
+    requestWithdrawal: true,
     accessAdminPanel: false,
   },
   expert: {

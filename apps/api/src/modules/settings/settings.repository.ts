@@ -55,6 +55,7 @@ export type AppSettingsRow = {
   public_upload_allowed_mimes?: unknown;
   supabase_storage_dashboard_url?: string | null;
   payment_methods_enabled?: unknown;
+  withdrawal_limits?: unknown;
 };
 
 export type AppSettingsUpdate = Partial<{
@@ -106,6 +107,7 @@ export type AppSettingsUpdate = Partial<{
   public_upload_allowed_mimes?: string[] | null;
   supabase_storage_dashboard_url?: string | null;
   payment_methods_enabled?: Record<string, boolean>;
+  withdrawal_limits?: Record<string, unknown>;
 }>;
 
 export class SettingsRepository {
@@ -162,6 +164,7 @@ export class SettingsRepository {
     publicUploadAllowedMimes: 'public_upload_allowed_mimes',
     supabaseStorageDashboardUrl: 'supabase_storage_dashboard_url',
     paymentMethodsEnabled: 'payment_methods_enabled',
+    withdrawalLimits: 'withdrawal_limits',
   };
 
   async update(partial: AppSettingsUpdate): Promise<AppSettingsRow | null> {

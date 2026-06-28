@@ -608,6 +608,7 @@ const completeManualInstapayWithdrawal = asyncHandler(async (req, res) => {
     req.params.id!,
     {
       proofUploadId: input.proofUploadId,
+      transferReference: input.transferReference ?? null,
       reason: input.reason,
       userId: row.userId,
       status: row.status,
