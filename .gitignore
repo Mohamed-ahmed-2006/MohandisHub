@@ -8,4 +8,6 @@ coverage/
 .env
 .env.local
 !.env.example
+apps/api/uploads/
+uploads/
 .DS_Store

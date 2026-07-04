@@ -363,7 +363,6 @@ export const AdminUserDetailModal = ({
         phoneCode: account.phoneCode.trim() || null,
         nationality: account.nationality.trim() || null,
         dateOfBirth: toAdminDateOfBirthString(account.dateOfBirth) || null,
-        primaryRole: account.primaryRole,
         isAdmin: account.isAdmin,
         adminPermissions: account.isAdmin ? account.adminPermissions : [],
       };
@@ -849,21 +848,7 @@ export const AdminUserDetailModal = ({
                       </label>
                       <label className="admin-form-group">
                         <span className="admin-form-label">{d.role}</span>
-                        <select
-                          className="admin-form-select"
-                          value={account.primaryRole}
-                          onChange={(e) =>
-                            setAccount((prev) => ({
-                              ...prev,
-                              primaryRole: e.target.value as AccountForm['primaryRole'],
-                            }))
-                          }
-                        >
-                          <option value="customer">Customer</option>
-                          <option value="expert">Expert</option>
-                          <option value="craftsman">Craftsman</option>
-                          <option value="business">Business</option>
-                        </select>
+                        <input className="admin-form-input" value={account.primaryRole} readOnly />
                       </label>
                       <label className="admin-form-group">
                         <span className="admin-form-label">{ud.adminFlag}</span>

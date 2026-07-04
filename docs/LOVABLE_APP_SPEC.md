@@ -40,7 +40,7 @@ Users have a single **primary role** (customer | expert | business); admin is a 
 - **Validation:** Zod (or equivalent) on API; shared types for request/response.
 - **Payments:** Stripe (card) and Cryptomus (crypto) for wallet deposits; webhooks with raw body for Stripe/Cryptomus.
 - **Real-time:** Socket.io (or equivalent) for chat.
-- **Email/SMS:** Configurable providers (e.g. Brevo/SendGrid for email, Twilio for SMS); OTP and password reset.
+- **Email/SMS:** Configurable providers (Resend for launch email, legacy Brevo/SendGrid paths optional, Twilio for SMS); OTP and password reset.
 - **KYC/Verification:** Optional third-party (e.g. Didit/Idenfy) or manual admin review.
 - **File upload:** Multipart; JPEG/PNG/WebP/PDF; max 10 MB; store URLs in DB.
 
@@ -313,7 +313,7 @@ Admin must be loaded from DB (`is_admin`) not only from JWT.
 - Optional: `NODE_ENV`, `PORT` (default 4000), `DATABASE_URL`, `CORS_ORIGIN`, `CORS_EXTRA_ORIGINS`, `API_PUBLIC_URL`, `WEB_PUBLIC_URL`.
 - JWT: `JWT_ACCESS_EXPIRES_IN` (default 900), `JWT_REFRESH_EXPIRES_IN_DAYS` (default 30).
 - Verification: `VERIFICATION_PROVIDER` (didit | idenfy | manual); provider keys and webhooks if used.
-- OTP: `OTP_EMAIL_PROVIDER` (console | brevo | sendgrid), `OTP_SMS_PROVIDER` (console | twilio); provider keys, `EMAIL_FROM`.
+- OTP: `OTP_EMAIL_PROVIDER` (console | resend | brevo | sendgrid), `OTP_SMS_PROVIDER` (console | twilio); provider keys, `EMAIL_FROM`.
 - Payments: Cryptomus (merchant id, api key, webhook key); Stripe (secret, webhook secret, publishable key).
 - Validate env on startup (e.g. Zod).
 

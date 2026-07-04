@@ -28,6 +28,7 @@ const isolatedEnvKeys = [
   'OTP_EMAIL_PROVIDER',
   'OTP_SMS_PROVIDER',
   'BREVO_API_KEY',
+  'RESEND_API_KEY',
   'SENDGRID_API_KEY',
   'EMAIL_FROM',
   'EMAIL_LOGO_URL',
@@ -101,8 +102,9 @@ const requiredProductionEnv: Record<string, string> = {
   API_PUBLIC_URL: 'https://api.mohandishub.app',
   WEB_PUBLIC_URL: 'https://mohandishub.app',
   SENTRY_DSN: 'https://public@example.ingest.sentry.io/1',
-  OTP_EMAIL_PROVIDER: 'brevo',
-  BREVO_API_KEY: 'brevo-key',
+  OTP_EMAIL_PROVIDER: 'resend',
+  RESEND_API_KEY: 'resend-key',
+  EMAIL_FROM: 'MohandisHub <otp@mail.mohandishub.app>',
   VERIFICATION_PROVIDER: 'didit',
   DIDIT_API_KEY: 'didit-key',
   DIDIT_WEBHOOK_SECRET: 'didit-secret',
@@ -147,7 +149,7 @@ describe('production environment validation', () => {
 
     expect(mod.env.NODE_ENV).toBe('production');
     expect(mod.env.DATABASE_URL).toBe(requiredProductionEnv.DATABASE_URL);
-    expect(mod.env.OTP_EMAIL_PROVIDER).toBe('brevo');
+    expect(mod.env.OTP_EMAIL_PROVIDER).toBe('resend');
   });
 
   it('fails fast when the production database URL is missing', async () => {
@@ -172,12 +174,13 @@ describe('production environment validation', () => {
     await expect(importFreshEnv()).rejects.toThrow('Production provider configuration failed');
   });
 
-  it('requires Brevo, Didit, Supabase storage, public URLs, and Sentry in production', async () => {
+  it('requires Resend, Didit, Supabase storage, public URLs, and Sentry in production', async () => {
     stubProductionEnv({
       API_PUBLIC_URL: undefined,
       WEB_PUBLIC_URL: undefined,
       SENTRY_DSN: undefined,
-      BREVO_API_KEY: undefined,
+      RESEND_API_KEY: undefined,
+      EMAIL_FROM: undefined,
       DIDIT_API_KEY: undefined,
       DIDIT_WEBHOOK_SECRET: undefined,
       DIDIT_WORKFLOW_ID: undefined,

@@ -56,8 +56,8 @@ services:
       - key: BACKUP_SUPABASE_ACCESS_TOKEN
         sync: false
       - key: OTP_EMAIL_PROVIDER
-        value: brevo
-      - key: BREVO_API_KEY
+        value: resend
+      - key: RESEND_API_KEY
         sync: false
       - key: EMAIL_FROM
         sync: false
@@ -151,8 +151,8 @@ services:
       - key: SENTRY_DSN
         sync: false
       - key: OTP_EMAIL_PROVIDER
-        value: brevo
-      - key: BREVO_API_KEY
+        value: resend
+      - key: RESEND_API_KEY
         sync: false
       - key: EMAIL_FROM
         sync: false

@@ -24,12 +24,6 @@ export function ImagePreviewModal({
   onClose,
   accessToken,
 }: ImagePreviewModalProps) {
-  console.warn('[ImagePreviewModal] opened', {
-    title,
-    isPrivate: isPrivateUploadUrl(imageUrl),
-    accessTokenPresent: !!accessToken,
-    imageUrl,
-  });
   const [resolvedUrl, setResolvedUrl] = useState<string | null>(() =>
     !isPrivateUploadUrl(imageUrl) ? (resolvePublicAssetUrl(imageUrl) ?? imageUrl) : null,
   );
@@ -64,11 +58,6 @@ export function ImagePreviewModal({
       })
       .catch((err) => {
         if (cancelled) return;
-        console.warn('[ImagePreviewModal] resolve error', {
-          errorMessage: err instanceof Error ? err.message : String(err),
-          accessTokenPresent: !!accessToken,
-          imageUrl,
-        });
         setError(err instanceof Error ? err.message : 'Failed to load image');
         setLoading(false);
       });
@@ -94,18 +83,7 @@ export function ImagePreviewModal({
           (resolvedUrl.startsWith('blob:') || resolvedUrl.startsWith('data:') ? (
             // `next/image` does not reliably render `blob:` sources. Use a plain <img>.
             // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={resolvedUrl}
-              alt={title ?? 'Preview'}
-              className="image-preview-img"
-              onError={() => {
-                console.warn('[ImagePreviewModal] <img> failed to load', {
-                  title,
-                  imageUrl,
-                  resolvedUrlPrefix: resolvedUrl.slice(0, 30),
-                });
-              }}
-            />
+            <img src={resolvedUrl} alt={title ?? 'Preview'} className="image-preview-img" />
           ) : (
             <Image
               src={resolvedUrl}

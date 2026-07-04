@@ -14,7 +14,7 @@ Use custom domains as the public contract. Hosting provider URLs are implementat
 - API: `https://api.mohandishub.app`
 - Render API/worker required values: `CORS_ORIGIN=https://mohandishub.app`, `WEB_PUBLIC_URL=https://mohandishub.app`, `API_PUBLIC_URL=https://api.mohandishub.app`, and `SENTRY_DSN=<real DSN>`.
 - Paymob stays hidden/off until the Paymob account is active and all Paymob env keys are configured.
-- Launch OTP channel is Brevo email only; SMS/WhatsApp OTP remain disabled until configured later.
+- Launch OTP channel is Resend email only; SMS/WhatsApp OTP remain disabled until configured later.
 - Backup/restore launch provider is Supabase: set `BACKUP_PROVIDER=supabase`, `BACKUP_SUPABASE_PROJECT_REF`, and `BACKUP_SUPABASE_ACCESS_TOKEN` on the API service.
 
 ---
@@ -43,7 +43,7 @@ From `apps/api/.env.example`. Required for production:
 - `API_PUBLIC_URL` — e.g. `https://api.mohandishub.app` (for webhooks, emails)
 - `JWT_SECRET`, `JWT_REFRESH_SECRET` — min 32 chars, generate securely
 - `VERIFICATION_PROVIDER`, `DIDIT_*` — KYC
-- `OTP_EMAIL_PROVIDER=brevo`, `BREVO_API_KEY`, `EMAIL_FROM`
+- `OTP_EMAIL_PROVIDER=resend`, `RESEND_API_KEY`, `EMAIL_FROM`
 - NOWPayments launch minimum: `NOWPAYMENTS_API_KEY`, `NOWPAYMENTS_IPN_SECRET`,
   `NOWPAYMENTS_LIVE_REQUIRED=true`, `NOWPAYMENTS_WITHDRAWAL_DEFAULT_CURRENCY=USDTTRC20`,
   and `NOWPAYMENTS_ALLOWED_PAY_CURRENCIES=USDTTRC20`. Add
@@ -52,7 +52,7 @@ From `apps/api/.env.example`. Required for production:
 - `NOWPAYMENTS_*` — deposits + withdrawals
 - `AGORA_APP_ID`, `AGORA_APP_CERTIFICATE` — if using calls
 
-Production startup blocks incomplete provider selections: `OTP_EMAIL_PROVIDER=console/sendgrid`, `OTP_SMS_PROVIDER=twilio`, and `VERIFICATION_PROVIDER=idenfy`. Use Brevo for email, and Didit or manual verification for launch.
+Production startup blocks incomplete provider selections: `OTP_EMAIL_PROVIDER=console/sendgrid`, `OTP_SMS_PROVIDER=twilio`, and `VERIFICATION_PROVIDER=idenfy`. Use Resend for email, and Didit or manual verification for launch.
 
 ### Worker (Render Background Worker)
 

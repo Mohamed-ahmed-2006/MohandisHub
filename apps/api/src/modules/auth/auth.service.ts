@@ -21,6 +21,7 @@ import {
   signAccessToken,
 } from '../../config/jwt.js';
 import { HttpError } from '../../utils/http-error.js';
+import { sendResendEmail } from '../../utils/resend-email.js';
 import { buildTransactionalEmailHtml } from '../../utils/transactional-email-template.js';
 import { SettingsService } from '../settings/settings.service.js';
 
@@ -413,6 +414,30 @@ export class AuthService {
         }),
       });
       return response.ok;
+    }
+
+    if (env.OTP_EMAIL_PROVIDER === 'resend') {
+      const html = buildTransactionalEmailHtml({
+        preheader: 'Reset your MohandisHub password',
+        title: 'Reset your password',
+        greeting: `Hello ${displayName},`,
+        introLines: [
+          'We received a request to reset your password. Use the button below to choose a new password.',
+        ],
+        action: { kind: 'button', label: 'Reset Password', url: resetUrl },
+        safetyText: 'If you did not request this, you can safely ignore this email.',
+      });
+
+      try {
+        await sendResendEmail({
+          to,
+          subject: 'MohandisHub - Reset your password',
+          html,
+        });
+        return true;
+      } catch {
+        return false;
+      }
     }
 
     if (env.OTP_EMAIL_PROVIDER === 'sendgrid') {

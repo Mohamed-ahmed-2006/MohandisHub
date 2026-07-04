@@ -368,12 +368,12 @@ export const AdminSettingsTab = ({ dictionary, accessToken, refreshSession }: Pr
           );
         })}
         <p className="admin-settings-label" style={{ marginTop: '0.75rem' }}>
-          {tr('Withdrawal limits', 'Ø­Ø¯ÙˆØ¯ Ø§Ù„Ø³Ø­Ø¨')}
+          {tr('Withdrawal limits', 'حدود السحب')}
         </p>
         <p className="admin-settings-desc" style={{ marginBottom: '0.75rem' }}>
           {tr(
             'Set the minimum, per-request maximum, and daily user maximum for each withdrawal method.',
-            'Ø­Ø¯Ø¯ Ø§Ù„Ø­Ø¯ Ø§Ù„Ø£Ø¯Ù†Ù‰ ÙˆØ§Ù„Ø­Ø¯ Ø§Ù„Ø£Ù‚ØµÙ‰ Ù„ÙƒÙ„ Ø·Ù„Ø¨ ÙˆØ§Ù„Ø­Ø¯ Ø§Ù„ÙŠÙˆÙ…ÙŠ Ù„ÙƒÙ„ Ù…Ø³ØªØ®Ø¯Ù… Ù„ÙƒÙ„ Ø·Ø±ÙŠÙ‚Ø© Ø³Ø­Ø¨.',
+            'حدد الحد الأدنى والحد الأقصى لكل طلب والحد اليومي لكل مستخدم لكل طريقة سحب.',
           )}
         </p>
         {WITHDRAWAL_LIMIT_METHODS.map((method) => {
@@ -387,17 +387,11 @@ export const AdminSettingsTab = ({ dictionary, accessToken, refreshSession }: Pr
               <p className="admin-settings-method-group-title">{label}</p>
               {(
                 [
-                  ['minAmountEgp', tr('Minimum (EGP)', 'Ø§Ù„Ø­Ø¯ Ø§Ù„Ø£Ø¯Ù†Ù‰ (Ø¬.Ù…)')],
-                  [
-                    'maxAmountEgp',
-                    tr('Maximum per request (EGP)', 'Ø§Ù„Ø­Ø¯ Ø§Ù„Ø£Ù‚ØµÙ‰ Ù„Ù„Ø·Ù„Ø¨ (Ø¬.Ù…)'),
-                  ],
+                  ['minAmountEgp', tr('Minimum (EGP)', 'الحد الأدنى (ج.م)')],
+                  ['maxAmountEgp', tr('Maximum per request (EGP)', 'الحد الأقصى للطلب (ج.م)')],
                   [
                     'dailyMaxAmountEgp',
-                    tr(
-                      'Daily user maximum (EGP)',
-                      'Ø§Ù„Ø­Ø¯ Ø§Ù„ÙŠÙˆÙ…ÙŠ Ù„Ù„Ù…Ø³ØªØ®Ø¯Ù… (Ø¬.Ù…)',
-                    ),
+                    tr('Daily user maximum (EGP)', 'الحد اليومي للمستخدم (ج.م)'),
                   ],
                 ] as const
               ).map(([field, fieldLabel]) => (
@@ -416,7 +410,7 @@ export const AdminSettingsTab = ({ dictionary, accessToken, refreshSession }: Pr
                         setError(
                           tr(
                             'Withdrawal limit must be a positive number or empty.',
-                            'ÙŠØ¬Ø¨ Ø£Ù† ÙŠÙƒÙˆÙ† Ø­Ø¯ Ø§Ù„Ø³Ø­Ø¨ Ø±Ù‚Ù…Ù‹Ø§ Ù…ÙˆØ¬Ø¨Ù‹Ø§ Ø£Ùˆ ÙØ§Ø±ØºÙ‹Ø§.',
+                            'يجب أن يكون حد السحب رقما موجبا أو فارغا.',
                           ),
                         );
                         return;

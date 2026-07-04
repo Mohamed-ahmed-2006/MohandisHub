@@ -3,7 +3,7 @@
 ## Required Pre-Deploy Checks
 
 - Confirm production env values are set in Render or the hosting dashboard.
-- Confirm `DATABASE_URL`, `API_PUBLIC_URL`, `WEB_PUBLIC_URL`, JWT secrets, Sentry DSN, email provider keys, verification provider keys, and Supabase service-role storage keys are present.
+- Confirm `DATABASE_URL`, `API_PUBLIC_URL`, `WEB_PUBLIC_URL`, JWT secrets, Sentry DSN, Resend email provider keys, verification provider keys, and Supabase service-role storage keys are present.
 - Generate unique `JWT_SECRET` and `JWT_REFRESH_SECRET` values. Production startup rejects copied placeholder values and rejects using the same value for both secrets.
 - Tune `DB_POOL_MAX` for the deployed database plan. The default is 10 connections per API/worker process; lower it if your Supabase plan has a small connection cap.
 - Keep Paymob disabled until the account is active and live keys are available. Enable Paymob only after all Paymob env values are set.

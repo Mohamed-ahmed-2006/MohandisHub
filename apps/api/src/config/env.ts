@@ -73,11 +73,12 @@ const envSchema = z.object({
   DIDIT_BASE_URL: z.string().url().default('https://verification.didit.me/v3'),
 
   // OTP delivery providers
-  OTP_EMAIL_PROVIDER: z.enum(['console', 'brevo', 'sendgrid']).default('console'),
+  OTP_EMAIL_PROVIDER: z.enum(['console', 'brevo', 'resend', 'sendgrid']).default('console'),
   OTP_SMS_PROVIDER: z
     .enum(['console', 'twilio', 'http_adapter', 'meta_whatsapp'])
     .default('console'),
   BREVO_API_KEY: z.string().optional(),
+  RESEND_API_KEY: z.string().optional(),
   SENDGRID_API_KEY: z.string().optional(),
   EMAIL_FROM: z.string().default('noreply@mohandishub.app'),
   EMAIL_LOGO_URL: z.string().url().optional(),
@@ -231,18 +232,30 @@ if (parsed.data.NODE_ENV === 'production') {
   }
   if (parsed.data.OTP_EMAIL_PROVIDER === 'console') {
     productionErrors.OTP_EMAIL_PROVIDER = [
-      'Production must use a real email provider. Set OTP_EMAIL_PROVIDER=brevo.',
+      'Production must use a real email provider. Set OTP_EMAIL_PROVIDER=resend.',
     ];
   }
   if (parsed.data.OTP_EMAIL_PROVIDER === 'sendgrid') {
     productionErrors.OTP_EMAIL_PROVIDER = [
-      'SendGrid email is not implemented for production. Use brevo or implement SendGrid first.',
+      'SendGrid email is not implemented for production. Use resend or implement SendGrid first.',
     ];
   }
   if (parsed.data.OTP_EMAIL_PROVIDER === 'brevo' && !parsed.data.BREVO_API_KEY) {
     productionErrors.BREVO_API_KEY = [
       'BREVO_API_KEY is required when OTP_EMAIL_PROVIDER=brevo in production.',
     ];
+  }
+  if (parsed.data.OTP_EMAIL_PROVIDER === 'resend') {
+    if (!parsed.data.RESEND_API_KEY) {
+      productionErrors.RESEND_API_KEY = [
+        'RESEND_API_KEY is required when OTP_EMAIL_PROVIDER=resend in production.',
+      ];
+    }
+    if (!process.env.EMAIL_FROM?.trim()) {
+      productionErrors.EMAIL_FROM = [
+        'EMAIL_FROM is required when OTP_EMAIL_PROVIDER=resend in production.',
+      ];
+    }
   }
   if (parsed.data.OTP_SMS_PROVIDER === 'twilio') {
     if (

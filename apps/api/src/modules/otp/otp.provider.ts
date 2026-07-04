@@ -9,6 +9,7 @@
 import type { OtpChannel } from '@mohandishub/shared';
 
 import { logger } from '../../config/logger.js';
+import { sendResendEmail } from '../../utils/resend-email.js';
 import { buildTransactionalEmailHtml } from '../../utils/transactional-email-template.js';
 
 /**
@@ -109,6 +110,49 @@ export class BrevoEmailSender implements IOtpSender {
     }
 
     return true;
+  }
+}
+
+// -- Resend email sender (production) ---------------------------------------
+
+export class ResendEmailSender implements IOtpSender {
+  readonly channel: OtpChannel = 'email';
+
+  async send(params: { destination: string; code: string; displayName: string }): Promise<boolean> {
+    const html = buildTransactionalEmailHtml({
+      preheader: 'Your MohandisHub verification code',
+      title: 'Verify your email',
+      greeting: `Hello ${params.displayName},`,
+      introLines: ['Use the verification code below to continue with your sign-in request.'],
+      action: {
+        kind: 'code',
+        label: 'Verification code',
+        value: params.code,
+      },
+      expiryText: 'This code expires in 10 minutes.',
+      safetyText: 'If you did not request this code, you can safely ignore this email.',
+      footerText: 'For your security, never share this code with anyone.',
+    });
+
+    try {
+      await sendResendEmail({
+        to: params.destination,
+        subject: 'MohandisHub - Verify your email',
+        html,
+      });
+      return true;
+    } catch (error) {
+      if (
+        error instanceof Error &&
+        error.message.startsWith('Resend email sender not configured')
+      ) {
+        throw error;
+      }
+      logger.error('Resend email send failed', {
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return false;
+    }
   }
 }
 
@@ -256,6 +300,8 @@ export const createOtpSender = (
         return new ConsoleEmailSender();
       case 'brevo':
         return new BrevoEmailSender();
+      case 'resend':
+        return new ResendEmailSender();
       case 'sendgrid':
         return new SendGridEmailSender();
       default:

@@ -6,7 +6,7 @@ with the phase gates listed in the implementation plan.
 
 ## P0 - Launch Blockers
 
-- [x] Production env fails fast for missing `DATABASE_URL`, public URLs, Brevo, Didit, Supabase storage, Sentry, unsafe retention, and enabled payment-provider credentials.
+- [x] Production env fails fast for missing `DATABASE_URL`, public URLs, Resend, Didit, Supabase storage, Sentry, unsafe retention, and enabled payment-provider credentials.
 - [x] Render API/worker config uses real production-safe settings, shared manual JWT secrets, `TRUST_PROXY=1`, worker Sentry, and non-free production plans.
 - [x] Manual migration script requires explicit production confirmation.
 - [x] Login/register enforce `lockLogins` and `signupsLocked`.

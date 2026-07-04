@@ -49,6 +49,7 @@ describe('AuthService password reset flow', () => {
   const originalEmailProvider = env.OTP_EMAIL_PROVIDER;
   const originalWebPublicUrl = env.WEB_PUBLIC_URL;
   const originalBrevoApiKey = env.BREVO_API_KEY;
+  const originalResendApiKey = env.RESEND_API_KEY;
   const originalEmailFrom = env.EMAIL_FROM;
   const originalEmailLogoUrl = env.EMAIL_LOGO_URL;
 
@@ -61,6 +62,7 @@ describe('AuthService password reset flow', () => {
     env.OTP_EMAIL_PROVIDER = originalEmailProvider;
     env.WEB_PUBLIC_URL = originalWebPublicUrl;
     env.BREVO_API_KEY = originalBrevoApiKey;
+    env.RESEND_API_KEY = originalResendApiKey;
     env.EMAIL_FROM = originalEmailFrom;
     env.EMAIL_LOGO_URL = originalEmailLogoUrl;
     vi.restoreAllMocks();
@@ -125,21 +127,22 @@ describe('AuthService password reset flow', () => {
     expect(repo.setPasswordResetToken).toHaveBeenCalledTimes(1);
   });
 
-  it('forgotPassword sends branded Brevo HTML when Brevo is configured', async () => {
+  it('forgotPassword sends branded Resend HTML when Resend is configured', async () => {
     const repo = createRepositoryMock();
     repo.findUserByEmail.mockResolvedValue(makeUserRow());
     repo.setPasswordResetToken.mockResolvedValue(undefined);
 
-    env.OTP_EMAIL_PROVIDER = 'brevo';
-    env.BREVO_API_KEY = 'brevo_test_key';
-    env.EMAIL_FROM = 'noreply@mohandishub.app';
+    env.OTP_EMAIL_PROVIDER = 'resend';
+    env.RESEND_API_KEY = 'resend_test_key';
+    env.EMAIL_FROM = 'MohandisHub <otp@mail.mohandishub.app>';
     env.EMAIL_LOGO_URL = 'https://cdn.example.com/brand/logo.png';
 
-    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
-      ok: true,
-      status: 201,
-      text: () => Promise.resolve(''),
-    } as Response);
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ id: 'email_123' }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }),
+    );
 
     const service = new AuthService(repo as never);
     const result = await service.forgotPassword({ email: 'user@example.com' });
@@ -148,19 +151,23 @@ describe('AuthService password reset flow', () => {
     expect(fetchSpy).toHaveBeenCalledTimes(1);
 
     const [url, init] = fetchSpy.mock.calls[0] as [string, RequestInit];
-    expect(url).toBe('https://api.brevo.com/v3/smtp/email');
+    expect(url).toBe('https://api.resend.com/emails');
 
     expect(typeof init.body).toBe('string');
     const payload = JSON.parse(init.body as string) as {
+      from: string;
+      to: string;
       subject: string;
-      htmlContent: string;
+      html: string;
     };
 
+    expect(payload.from).toBe('MohandisHub <otp@mail.mohandishub.app>');
+    expect(payload.to).toBe('user@example.com');
     expect(payload.subject).toContain('Reset your password');
-    expect(payload.htmlContent).toContain('Reset your password');
-    expect(payload.htmlContent).toContain('Reset Password');
-    expect(payload.htmlContent).toContain('If you did not request this');
-    expect(payload.htmlContent).toContain('cdn.example.com/brand/logo.png');
+    expect(payload.html).toContain('Reset your password');
+    expect(payload.html).toContain('Reset Password');
+    expect(payload.html).toContain('If you did not request this');
+    expect(payload.html).toContain('cdn.example.com/brand/logo.png');
   });
 
   it('resetPassword rejects invalid token', async () => {

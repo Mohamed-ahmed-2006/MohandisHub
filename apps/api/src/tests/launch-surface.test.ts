@@ -58,7 +58,8 @@ describe('launch surface hardening', () => {
     expect(workerSection).toContain('value: 1');
     expect(workerSection).toContain('key: SENTRY_DSN');
     expect(workerSection).toContain('key: OTP_EMAIL_PROVIDER');
-    expect(workerSection).toContain('value: brevo');
+    expect(workerSection).toContain('value: resend');
+    expect(workerSection).toContain('key: RESEND_API_KEY');
     expect(workerSection).toContain('key: VERIFICATION_PROVIDER');
     expect(workerSection).toContain('key: CORS_ORIGIN');
     expect(workerSection).toContain('key: API_PUBLIC_URL');

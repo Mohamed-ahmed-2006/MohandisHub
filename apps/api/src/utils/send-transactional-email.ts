@@ -5,6 +5,7 @@
 import { env } from '../config/env.js';
 import { logger } from '../config/logger.js';
 
+import { sendResendEmail } from './resend-email.js';
 import { buildTransactionalEmailHtml } from './transactional-email-template.js';
 
 export type SendTransactionalEmailParams = {
@@ -72,6 +73,26 @@ export async function sendTransactionalEmail(params: SendTransactionalEmailParam
       const errorText = await response.text();
       throw new Error(`Brevo email send failed: ${response.status} ${errorText}`);
     }
+    return;
+  }
+
+  if (env.OTP_EMAIL_PROVIDER === 'resend') {
+    const html = buildTransactionalEmailHtml({
+      preheader: params.preheader,
+      title: params.title,
+      introLines: params.introLines,
+      ...(params.greeting !== undefined && params.greeting !== '' && { greeting: params.greeting }),
+      ...(params.action !== undefined && { action: params.action }),
+      ...(params.expiryText !== undefined && { expiryText: params.expiryText }),
+      ...(params.safetyText !== undefined && { safetyText: params.safetyText }),
+      ...(params.footerText !== undefined && { footerText: params.footerText }),
+    });
+
+    await sendResendEmail({
+      to: params.to,
+      subject: params.subject,
+      html,
+    });
     return;
   }
 

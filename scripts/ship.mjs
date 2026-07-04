@@ -8,7 +8,7 @@ function run(command) {
   try {
     execSync(command, { stdio: 'inherit' });
   } catch (error) {
-    console.error(`\n❌ Command failed: ${command}`);
+    console.error(`\nCommand failed: ${command}`);
     process.exit(1);
   }
 }
@@ -44,27 +44,27 @@ function ensureSupabaseCli() {
   }
 }
 
-console.log('🚀 Starting ship: check, build, and migrate (no git commit)...');
+console.log('Starting ship: check, build, and migrate (no git commit)...');
 
 // 1. Check for errors (Typecheck)
-console.log('\n1️⃣  Checking for errors (typecheck)...');
+console.log('\n1. Checking for errors (typecheck)...');
 run('npm run typecheck');
 
 // 2. Lint
-console.log('\n2️⃣  Running lint...');
+console.log('\n2. Running lint...');
 run('npm run lint');
 
 // 3. Build npm
-console.log('\n3️⃣  Building the project...');
+console.log('\n3. Building the project...');
 run('npm run build');
 
 // 4. Migrate database
-console.log('\n4️⃣  Pushing database migrations...');
+console.log('\n4. Pushing database migrations...');
 // Uses local DATABASE_URL when available to avoid requiring a linked Supabase project in local dev.
 const dbUrl = getApiDatabaseUrl();
 if (process.env.SHIP_CONFIRM !== 'YES') {
   console.error(
-    '\n❌ Refusing to run migrations without explicit confirmation. Set SHIP_CONFIRM=YES and rerun.',
+    '\nRefusing to run migrations without explicit confirmation. Set SHIP_CONFIRM=YES and rerun.',
   );
   process.exit(1);
 }
@@ -78,5 +78,5 @@ if (dbUrl) {
 }
 
 console.log(
-  '\n🎉 Ship completed: checks, build, and migrations all passed. You can now commit and push.',
+  '\nShip completed: checks, build, and migrations all passed. You can now commit and push.',
 );
