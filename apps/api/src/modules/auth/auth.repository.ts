@@ -127,6 +127,7 @@ export class AuthRepository {
       phone?: string | null;
       phoneCode?: string | null;
       nationality?: string | null;
+      avatarUrl?: string | null;
       dateOfBirth?: string | null;
     },
   ): Promise<UserRow | null> {
@@ -149,6 +150,10 @@ export class AuthRepository {
     if (fields.nationality !== undefined) {
       setClauses.push(`nationality = $${idx++}`);
       values.push(fields.nationality);
+    }
+    if (fields.avatarUrl !== undefined) {
+      setClauses.push(`avatar_url = $${idx++}`);
+      values.push(fields.avatarUrl);
     }
     if (fields.dateOfBirth !== undefined) {
       setClauses.push(`date_of_birth = $${idx++}`);

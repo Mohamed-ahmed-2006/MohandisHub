@@ -23,6 +23,7 @@ import type {
   UpdateAppSettingsBody,
 } from '@mohandishub/shared';
 
+import { env } from '../../config/env.js';
 import { hasAdminPermission } from '../../middleware/require-role.js';
 import { asyncHandler } from '../../utils/async-handler.js';
 import { HttpError } from '../../utils/http-error.js';
@@ -61,6 +62,7 @@ import {
   completeManualInstapayWithdrawalSchema,
   completePaymobWithdrawalSchema,
   createCategorySchema,
+  factoryResetSchema,
   createPlanSchema,
   rejectManualInstapayDepositSchema,
   rejectManualInstapayWithdrawalSchema,
@@ -281,7 +283,6 @@ const updateUser = asyncHandler(async (req, res) => {
     await logAdminAction(req, 'admin.user.update', 'user', req.params.id!, {
       changedFields,
       after: {
-        ...(input.primaryRole !== undefined && { primaryRole: input.primaryRole }),
         ...(input.isAdmin !== undefined && { isAdmin: input.isAdmin }),
         ...(input.adminPermissions !== undefined && { adminPermissions: input.adminPermissions }),
         ...(input.planId !== undefined && { planId: input.planId }),
@@ -816,6 +817,15 @@ const updateSettings = asyncHandler(async (req, res) => {
 });
 
 const factoryReset = asyncHandler(async (req, res) => {
+  parseValidation(factoryResetSchema, req.body);
+  if (env.NODE_ENV === 'production' && !env.ALLOW_FACTORY_RESET) {
+    throw new HttpError({
+      statusCode: 403,
+      code: 'FACTORY_RESET_DISABLED',
+      message: 'Factory reset is disabled in production.',
+    });
+  }
+
   const adminId = getAdminId(req);
   const usersDeleted = await adminService.factoryReset(adminId);
   await logAudit({

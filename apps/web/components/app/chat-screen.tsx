@@ -50,6 +50,7 @@ export const ChatScreen = ({ locale, dictionary }: Props) => {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { authUser, accessToken, isAuthenticated, isReady, authGuard } = useAuth();
+  const { openProfileModal } = useProfileModal();
 
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [activeConvId, setActiveConvId] = useState<string | null>(null);
@@ -229,7 +230,6 @@ export const ChatScreen = ({ locale, dictionary }: Props) => {
     );
   }
 
-  const { openProfileModal } = useProfileModal();
   const activeConv = conversations.find((c) => c.id === activeConvId);
   const isClosed = convStatus === 'closed';
   const t = dictionary.chatPage ?? {

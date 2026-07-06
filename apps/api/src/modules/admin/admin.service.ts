@@ -151,6 +151,14 @@ export class AdminService {
   }
 
   async updateUser(userId: string, input: UpdateUserInput): Promise<AdminUserListItem> {
+    if (Object.prototype.hasOwnProperty.call(input, 'primaryRole')) {
+      throw new HttpError({
+        statusCode: 400,
+        code: 'PRIMARY_ROLE_CHANGE_DISABLED',
+        message: 'Primary role changes are disabled until role migration is supported.',
+      });
+    }
+
     const dbFields: Record<string, unknown> = {};
     if (input.displayName !== undefined) dbFields.display_name = input.displayName;
     if (input.phone !== undefined) dbFields.phone = input.phone;
@@ -158,7 +166,6 @@ export class AdminService {
     if (input.nationality !== undefined) dbFields.nationality = input.nationality;
     if (input.dateOfBirth !== undefined) dbFields.date_of_birth = input.dateOfBirth;
     if (input.isActive !== undefined) dbFields.is_active = input.isActive;
-    if (input.primaryRole !== undefined) dbFields.primary_role = input.primaryRole;
     if (input.isAdmin !== undefined) dbFields.is_admin = input.isAdmin;
     if (input.adminPermissions !== undefined)
       dbFields.admin_permissions = Array.isArray(input.adminPermissions)
@@ -168,7 +175,6 @@ export class AdminService {
     const revokeExistingSessions =
       input.isAdmin !== undefined ||
       input.adminPermissions !== undefined ||
-      input.primaryRole !== undefined ||
       input.isActive === false;
 
     if (Object.keys(dbFields).length === 0) {

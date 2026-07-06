@@ -24,10 +24,14 @@ export const updateUserSchema = z.object({
     .nullable()
     .optional(),
   isActive: z.boolean().optional(),
-  primaryRole: z.enum(['customer', 'expert', 'business', 'craftsman']).optional(),
+  primaryRole: z.undefined().optional(),
   isAdmin: z.boolean().optional(),
   adminPermissions: z.array(z.enum(ADMIN_PERMISSIONS)).optional(),
   planId: z.string().uuid().nullable().optional(),
+});
+
+export const factoryResetSchema = z.object({
+  confirm: z.literal('FACTORY RESET'),
 });
 
 export const changeUserEmailSchema = z.object({
@@ -242,6 +246,7 @@ export const rejectManualInstapayWithdrawalSchema = z.object({
 });
 
 export type UpdateUserInput = z.infer<typeof updateUserSchema>;
+export type FactoryResetInput = z.infer<typeof factoryResetSchema>;
 export type ChangeUserEmailInput = z.infer<typeof changeUserEmailSchema>;
 export type UserActivityTypeInput = z.infer<typeof userActivityTypeSchema>;
 export type UpdateExpertProfileByAdminInput = z.infer<typeof updateExpertProfileSchema>;

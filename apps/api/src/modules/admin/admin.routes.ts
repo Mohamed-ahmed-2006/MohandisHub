@@ -51,7 +51,7 @@ adminRouter.patch(
 );
 adminRouter.post(
   '/factory-reset',
-  requireAdminPermission('manage_settings'),
+  requireAdminPermission('super_admin'),
   adminController.factoryReset,
 );
 

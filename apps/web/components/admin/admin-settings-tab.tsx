@@ -1066,9 +1066,11 @@ export const AdminSettingsTab = ({ dictionary, accessToken, refreshSession }: Pr
                     setFactoryResetError(null);
                     setFactoryResetLoading(true);
                     try {
-                      await adminApiClient.factoryReset(accessToken, {
-                        refreshSession,
-                      });
+                      await adminApiClient.factoryReset(
+                        accessToken,
+                        { confirm: FACTORY_RESET_CONFIRM_PHRASE },
+                        { refreshSession },
+                      );
                       setFactoryResetModalOpen(false);
                       setSuccessMessage(d.factoryResetSuccess);
                       setSuccess(true);

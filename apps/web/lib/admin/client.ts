@@ -195,10 +195,15 @@ export const adminApiClient = {
       ...(options?.refreshSession ? { refreshSession: options.refreshSession } : {}),
     }),
 
-  factoryReset: (accessToken: string, options?: AdminClientOptions) =>
+  factoryReset: (
+    accessToken: string,
+    body: { confirm: 'FACTORY RESET' },
+    options?: AdminClientOptions,
+  ) =>
     apiRequest<{ usersDeleted: number }>({
       method: 'POST',
       path: '/api/admin/factory-reset',
+      body,
       accessToken,
       ...(options?.refreshSession ? { refreshSession: options.refreshSession } : {}),
     }),

@@ -60,6 +60,7 @@ const envSchema = z.object({
       return value;
     }, z.boolean())
     .default(false),
+  ALLOW_FACTORY_RESET: booleanEnv(false),
 
   // Verification provider
   VERIFICATION_PROVIDER: z.enum(['didit', 'idenfy', 'manual']).default('manual'),

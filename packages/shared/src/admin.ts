@@ -112,7 +112,6 @@ export type AdminUpdateUserBody = {
   nationality?: string | null;
   dateOfBirth?: string | null;
   isActive?: boolean;
-  primaryRole?: UserRole;
   isAdmin?: boolean;
   adminPermissions?: AdminPermission[];
   planId?: string | null;

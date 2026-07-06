@@ -1,6 +1,7 @@
 import js from '@eslint/js';
 import nextPlugin from '@next/eslint-plugin-next';
 import importPlugin from 'eslint-plugin-import';
+import reactHooksPlugin from 'eslint-plugin-react-hooks';
 import globals from 'globals';
 import tseslint from 'typescript-eslint';
 
@@ -30,6 +31,7 @@ export default [
     },
     plugins: {
       import: importPlugin,
+      'react-hooks': reactHooksPlugin,
     },
     rules: {
       '@typescript-eslint/no-explicit-any': 'error',
@@ -38,6 +40,7 @@ export default [
         { argsIgnorePattern: '^_', varsIgnorePattern: '^_' },
       ],
       '@typescript-eslint/consistent-type-imports': ['error', { prefer: 'type-imports' }],
+      'react-hooks/rules-of-hooks': 'error',
       'import/order': [
         'error',
         {
