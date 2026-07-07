@@ -72,18 +72,20 @@ There are **no** P0-severity auth/security/data-exposure/deployment issues. FIND
 ## Findings
 
 ### FIND-001 — Chat screen calls a hook after a conditional early return (crash)
+
 - **ID:** FIND-001
 - **Severity:** P0 (scoped to the chat feature)
 - **Category:** Logic bug / core-flow breakage (React Rules of Hooks)
 - **File/path:** `apps/web/components/app/chat-screen.tsx:222` (early return) and `:232` (`const { openProfileModal } = useProfileModal();`)
-- **What is wrong:** `useProfileModal()` (which calls `useContext`, `apps/web/components/app/profile-modal-context.tsx:46`) is invoked at line 232, *after* the conditional early return `if (!isReady || !authUser) return …` at line 222. `isReady` initializes to `false` (`apps/web/components/auth/auth-provider.tsx:68`) and flips to `true` after session bootstrap. On the first render the component returns early and never calls `useProfileModal`; on the next render it does — changing the hook count between renders. React then throws "Rendered more hooks than during the previous render." `AppShell` renders `{children}` unconditionally (`apps/web/components/app/app-shell.tsx:274`), so the chat page mounts before `isReady` is true and this transition always happens on a cold load.
-- **Why it matters:** Chat is a core tester flow, and "refresh the page while logged in" is an explicit self-test step. Refreshing on `/app/chat`, opening a chat deep-link (`/app/chat?c=<id>`), or landing on chat right after login white-screens the page. It does *not* reproduce when navigating to chat from another in-app page (session already ready), which can hide it.
+- **What is wrong:** `useProfileModal()` (which calls `useContext`, `apps/web/components/app/profile-modal-context.tsx:46`) is invoked at line 232, _after_ the conditional early return `if (!isReady || !authUser) return …` at line 222. `isReady` initializes to `false` (`apps/web/components/auth/auth-provider.tsx:68`) and flips to `true` after session bootstrap. On the first render the component returns early and never calls `useProfileModal`; on the next render it does — changing the hook count between renders. React then throws "Rendered more hooks than during the previous render." `AppShell` renders `{children}` unconditionally (`apps/web/components/app/app-shell.tsx:274`), so the chat page mounts before `isReady` is true and this transition always happens on a cold load.
+- **Why it matters:** Chat is a core tester flow, and "refresh the page while logged in" is an explicit self-test step. Refreshing on `/app/chat`, opening a chat deep-link (`/app/chat?c=<id>`), or landing on chat right after login white-screens the page. It does _not_ reproduce when navigating to chat from another in-app page (session already ready), which can hide it.
 - **How to verify manually:** Log in, navigate to `/en/app/chat`, then press browser refresh (F5). Expect the chat UI to blank out / show an error overlay. Check the browser console for "Rendered more hooks than during the previous render." Compare: navigating to chat via the sidebar (no refresh) works.
 - **Suggested smallest safe fix:** Move `const { openProfileModal } = useProfileModal();` up to the other hooks near line 52 (before the `if (!isReady …)` early return). No behavior change; just relocates one line so hook order is stable.
 - **Fix risk:** small
 - **Should it block testers:** **yes**
 
 ### FIND-002 — `eslint-plugin-react-hooks` not configured
+
 - **ID:** FIND-002
 - **Severity:** P1
 - **Category:** Build/release readiness (missing safety net)
@@ -96,6 +98,7 @@ There are **no** P0-severity auth/security/data-exposure/deployment issues. FIND
 - **Should it block testers:** no (but strongly recommended before the next round)
 
 ### FIND-003 — Silent `catch {}` in main data loads hides API errors
+
 - **ID:** FIND-003
 - **Severity:** P2
 - **Category:** UX / missing error state
@@ -108,6 +111,7 @@ There are **no** P0-severity auth/security/data-exposure/deployment issues. FIND
 - **Should it block testers:** no
 
 ### FIND-004 — No route-level error boundaries in the web app
+
 - **ID:** FIND-004
 - **Severity:** P2
 - **Category:** UX / resilience
@@ -120,6 +124,7 @@ There are **no** P0-severity auth/security/data-exposure/deployment issues. FIND
 - **Should it block testers:** no
 
 ### FIND-005 — `/app/projects` reachable only by URL (not in nav)
+
 - **ID:** FIND-005 · **Severity:** P2 · **Category:** Navigation/UX
 - **File/path:** route `apps/web/app/[locale]/app/projects/page.tsx`; sidebar `apps/web/components/app/app-sidebar.tsx` (no `projects` entry).
 - **What is wrong / why it matters:** The route exists and renders (for customers it shows an informational line) but has no nav entry, so testers won't discover it and may report "missing feature."
@@ -128,6 +133,7 @@ There are **no** P0-severity auth/security/data-exposure/deployment issues. FIND
 - **Fix risk:** small · **Should it block testers:** no
 
 ### FIND-006 — `/app/settings` and `/app/profile` render the same component
+
 - **ID:** FIND-006 · **Severity:** P2 · **Category:** UX/navigation
 - **File/path:** `apps/web/app/[locale]/app/settings/page.tsx` and `apps/web/app/[locale]/app/profile/page.tsx` both mount `ProfileScreen`.
 - **What is wrong / why it matters:** "Settings" duplicates "Profile"; testers may be confused about where account settings live (actual wallet lives at `/app/settings/wallet`).
@@ -136,6 +142,7 @@ There are **no** P0-severity auth/security/data-exposure/deployment issues. FIND
 - **Fix risk:** medium (product decision) · **Should it block testers:** no
 
 ### FIND-007 — Wallet unread dot attached to the wrong nav item
+
 - **ID:** FIND-007 · **Severity:** P2 · **Category:** UX
 - **File/path:** `apps/web/components/app/app-sidebar.tsx` (indicator on `/app/settings`; wallet page is `/app/settings/wallet`).
 - **What is wrong / why it matters:** The wallet "unread"/new-activity dot shows on Settings, and is cleared by visiting the wallet page — mildly misleading, not functional.
@@ -144,14 +151,16 @@ There are **no** P0-severity auth/security/data-exposure/deployment issues. FIND
 - **Fix risk:** small · **Should it block testers:** no
 
 ### FIND-008 — `NEXT_PUBLIC_PAYMOB_ENABLED` is a dead flag
+
 - **ID:** FIND-008 · **Severity:** P2 · **Category:** Config clarity
 - **File/path:** declared `apps/web/.env.example:25`; **referenced nowhere** in `apps/web` code (verified). Paymob is gated server-side by `paymentMethodsEnabled` + `PAYMOB_DEPOSITS_ENABLED=false`.
-- **What is wrong / why it matters:** Setting this env var does nothing; a QA/ops person could believe they enabled/disabled Paymob when they did not. (Contrast `NEXT_PUBLIC_NOWPAYMENTS_FIAT_ENABLED`, which *is* wired at `apps/web/components/app/wallet-deposit-modal.tsx:33`.)
+- **What is wrong / why it matters:** Setting this env var does nothing; a QA/ops person could believe they enabled/disabled Paymob when they did not. (Contrast `NEXT_PUBLIC_NOWPAYMENTS_FIAT_ENABLED`, which _is_ wired at `apps/web/components/app/wallet-deposit-modal.tsx:33`.)
 - **How to verify manually:** Grep the web app for `NEXT_PUBLIC_PAYMOB_ENABLED` — only the `.env.example` line matches.
 - **Suggested smallest safe fix:** Remove the line from `.env.example` or wire it. Not a blocker because Paymob is disabled anyway.
 - **Fix risk:** small · **Should it block testers:** no
 
 ### FIND-009 — Hard-coded English strings in a few wallet/services sub-sections
+
 - **ID:** FIND-009 · **Severity:** P2 · **Category:** i18n
 - **File/path:** e.g. `apps/web/components/app/wallet-settings-screen.tsx` ("Withdraw", "Withdrawal history", "Create withdrawal"); `apps/web/components/app/services-screen.tsx` ("Coupon campaigns" block). (Reported by the UI sweep; these are provider-only/secondary sections.)
 - **What is wrong / why it matters:** Arabic/RTL testers see English labels in those specific sub-panels. Core auth/onboarding/needs/chat flows are fully localized; these are edge panels.
@@ -160,6 +169,7 @@ There are **no** P0-severity auth/security/data-exposure/deployment issues. FIND
 - **Fix risk:** small · **Should it block testers:** no
 
 ### FIND-010 — Disputes nav shown to all roles
+
 - **ID:** FIND-010 · **Severity:** P2 · **Category:** UX
 - **File/path:** `apps/web/components/app/app-sidebar.tsx` (Disputes item has no role filter); `apps/web/components/app/disputes-screen.tsx` shows "No dispute cases yet."
 - **What is wrong / why it matters:** A plain customer sees a Disputes tab that is always empty for them. Harmless, mildly confusing.
@@ -168,6 +178,7 @@ There are **no** P0-severity auth/security/data-exposure/deployment issues. FIND
 - **Fix risk:** small · **Should it block testers:** no
 
 ### FIND-011 — CSP is report-only (not enforced)
+
 - **ID:** FIND-011 · **Severity:** P3 · **Category:** Security hardening
 - **File/path:** `apps/api/src/app.ts:33` (`reportOnly: true`); `apps/web/next.config.ts:67` (`Content-Security-Policy-Report-Only`). Both also allow `'unsafe-inline'`/`'unsafe-eval'` in `script-src`.
 - **What is wrong / why it matters:** CSP is observe-only, so it won't block injection. Not a tester blocker; a hardening item for later. Note: enforcing it later needs care because of `unsafe-inline`/`unsafe-eval`.
@@ -176,6 +187,7 @@ There are **no** P0-severity auth/security/data-exposure/deployment issues. FIND
 - **Fix risk:** medium · **Should it block testers:** no
 
 ### FIND-012 — Dead "coming soon" code
+
 - **ID:** FIND-012 · **Severity:** P3 · **Category:** Cleanup
 - **File/path:** `apps/web/components/app/coming-soon-page.tsx` (`ComingSoonPage` never imported); `common.comingSoon` in `en.ts:7`/`ar.ts:7` only consumed by it.
 - **What is wrong / why it matters:** Unused; no route renders it. No tester impact. (`companyUploadComingSoon` is separate — it's descriptive onboarding copy, not a blocked feature.)
@@ -184,6 +196,7 @@ There are **no** P0-severity auth/security/data-exposure/deployment issues. FIND
 - **Fix risk:** small · **Should it block testers:** no
 
 ### FIND-013 — Per-request DB lookup in `authenticate`
+
 - **ID:** FIND-013 · **Severity:** P3 · **Category:** Performance (note only)
 - **File/path:** `apps/api/src/middleware/authenticate.ts:79-112`
 - **What is wrong / why it matters:** Every authenticated request runs a `SELECT` on `users` to re-check active/role/admin/email-verified. This is a deliberate security choice (revocations take effect immediately) and is fine at tester scale; flagging only so it's on the radar for load later. A `user-status-cache` exists in the codebase but is not used by this path.
@@ -192,6 +205,7 @@ There are **no** P0-severity auth/security/data-exposure/deployment issues. FIND
 - **Fix risk:** n/a · **Should it block testers:** no
 
 ### FIND-014 — Admin update endpoint still accepts `primaryRole`
+
 - **ID:** FIND-014 · **Severity:** P3 · **Category:** Data consistency / defense-in-depth
 - **File/path:** `apps/api/src/modules/admin/admin.service.ts:161`, `admin.validation.ts:27`, `admin.controller.ts:284`. UI no longer sends it (see "Admin role edit status" below).
 - **What is wrong / why it matters:** The API still lets an admin change `primary_role` without provisioning the matching role profile, which could create a role/profile mismatch. The web UI has already disabled this (field is read-only and not sent), so a normal admin cannot trigger it. Only a hand-crafted API call by an authenticated admin with `manage_users` could. This matches the stated intent ("disabled, not fully migrated").
@@ -266,9 +280,10 @@ _These cannot be proven from the repo — confirm in the provider dashboards._
 
 ## External Tester Script (for non-technical testers)
 
-You'll get a login (or sign up with your own email). Please try to actually *use* the app like a real customer/provider and tell us what happens.
+You'll get a login (or sign up with your own email). Please try to actually _use_ the app like a real customer/provider and tell us what happens.
 
 **Do this, in order:**
+
 1. Sign up with your email and verify the code we email you.
 2. Log in, then **refresh the page** on a couple of screens (especially **Chat**).
 3. Fill in your profile / onboarding.
@@ -278,6 +293,7 @@ You'll get a login (or sign up with your own email). Please try to actually *use
 7. Try it on your phone.
 
 **For anything odd, please report:**
+
 - What confused you (where you didn't know what to do next).
 - What broke (error message, blank page, spinning forever).
 - What looked unfinished or "empty" when you expected content.
@@ -295,12 +311,15 @@ Please **do not** test payments/deposits/withdrawals — those are turned off on
 **Fix P0 first, then self-test.** — Fix the one chat hooks bug (FIND-001, a one-line move), then run the self-test order above. Everything else is green and safe.
 
 ### 1) Top 5 fixes (only P0/P1 exist here)
+
 1. **FIND-001 (P0):** Move `useProfileModal()` above the `if (!isReady || !authUser) return` early return in `apps/web/components/app/chat-screen.tsx`. Prevents the chat page from crashing on refresh/deep-link.
 2. **FIND-002 (P1):** Add `eslint-plugin-react-hooks` (`rules-of-hooks: error`) so this class of bug can't ship again.
    _(Recommended-but-optional polish before external testers: FIND-003 surface errors instead of silent-empty; FIND-004 add a route `error.tsx`.)_
 
 ### 2) Exact manual self-test order
+
 Use the 18-step "Exact Manual Self-Test Order" section above, in that order, starting with a fresh-email signup and paying special attention to step 4 (refresh, including on Chat) and step 12 (chat + attachments).
 
 ### 3) Should you send to external testers after self-testing?
+
 **Yes — after** FIND-001 is fixed and your self-test passes through at least steps 1–12 and 15–17 without a crash. The security, auth, email, and deployment foundations are solid; the remaining P2/P3 items are cosmetic/UX and do not need to block an external tester round (just list the known gaps — orphaned `/app/projects`, Settings≈Profile, a few English strings in Arabic, disputes tab for customers — in the tester notes so they aren't reported as new bugs).
