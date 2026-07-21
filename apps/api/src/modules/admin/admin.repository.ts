@@ -265,10 +265,10 @@ export class AdminRepository {
         return null;
       }
 
-      await client.query(
-        `UPDATE users SET primary_role = $2, updated_at = now() WHERE id = $1`,
-        [userId, role],
-      );
+      await client.query(`UPDATE users SET primary_role = $2, updated_at = now() WHERE id = $1`, [
+        userId,
+        role,
+      ]);
 
       switch (role) {
         case 'customer':

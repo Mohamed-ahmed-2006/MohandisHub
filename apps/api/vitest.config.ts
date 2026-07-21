@@ -5,6 +5,7 @@ export default defineConfig({
     environment: 'node',
     env: {
       NODE_ENV: 'test',
+      DATABASE_URL: 'postgresql://postgres:postgres@127.0.0.1:5432/mohandishub_test',
       JWT_SECRET: 'test-access-secret-for-vitest-only-0001',
       JWT_REFRESH_SECRET: 'test-refresh-secret-for-vitest-only-0002',
     },

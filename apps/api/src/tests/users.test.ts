@@ -1,6 +1,12 @@
 import type { ApiErrorBody } from '@mohandishub/shared';
 import request from 'supertest';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+
+vi.mock('../modules/settings/settings.repository.js', () => ({
+  SettingsRepository: vi.fn(function SettingsRepositoryMock() {
+    return { get: vi.fn().mockResolvedValue(null) };
+  }),
+}));
 
 import { createApp } from '../app.js';
 
