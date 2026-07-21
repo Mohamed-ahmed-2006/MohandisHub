@@ -176,6 +176,8 @@ const envSchema = z.object({
   RETENTION_NEED_REFERENCE_DAYS_AFTER_COMPLETED: z.coerce.number().int().min(0).default(0),
   RETENTION_BID_MESSAGE_ATTACHMENT_DAYS: z.coerce.number().int().min(0).default(0),
   RETENTION_VERIFIED_PRIVATE_UPLOADS_DAYS: z.coerce.number().int().min(0).default(0),
+  /** Purge accounts that never verified their email after N days (0 = disabled). Never touches admins or verified users. */
+  RETENTION_UNVERIFIED_ACCOUNTS_DAYS: z.coerce.number().int().min(0).default(0),
 
   /** Hard ceiling for public upload size (bytes). Admin/settings cannot exceed this. */
   PUBLIC_UPLOAD_MAX_BYTES_CEILING: z.coerce.number().int().positive().default(52_428_800), // 50 * 1024 * 1024

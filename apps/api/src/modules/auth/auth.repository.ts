@@ -114,6 +114,127 @@ export class AuthRepository {
     await this.db.query(`DELETE FROM users WHERE id = $1`, [userId]);
   }
 
+  /**
+   * Atomically register a user: serialize on the email via a transaction-scoped
+   * advisory lock, reclaim any abandoned unverified account for the same email
+   * (any role), then insert the user row and its role-specific profile in one
+   * transaction. This closes the check-then-delete-then-insert race and ensures
+   * a user is never left without a profile row.
+   *
+   * An account is "abandoned" (safe to reclaim) when its email was never
+   * verified. For business accounts we additionally require that onboarding was
+   * never completed.
+   *
+   * Returns `{ ok: false, reason: 'email_exists' }` when a live, non-reclaimable
+   * account already uses the email.
+   */
+  async reclaimAndCreateUser(params: {
+    email: string;
+    passwordHash: string;
+    displayName: string;
+    role: UserRole;
+    phone?: string | undefined;
+    phoneCode?: string | undefined;
+    nationality?: string | undefined;
+    dateOfBirth: string;
+    acceptedTermsAt?: string | undefined;
+    termsVersion?: string | undefined;
+    companyName?: string | undefined;
+  }): Promise<{ ok: true; user: UserRow } | { ok: false; reason: 'email_exists' }> {
+    const email = params.email.toLowerCase();
+    const client = await this.db.connect();
+    try {
+      await client.query('BEGIN');
+      // Serialize concurrent registrations for the same email for this txn.
+      await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', [email]);
+
+      const existing = await client.query<{
+        id: string;
+        primary_role: UserRole;
+        email_verified_at: Date | null;
+        business_onboarding: Date | null;
+      }>(
+        `SELECT u.id, u.primary_role, u.email_verified_at,
+                bp.onboarding_completed_at AS business_onboarding
+           FROM users u
+           LEFT JOIN business_profiles bp ON bp.user_id = u.id
+          WHERE u.email = $1 AND u.deleted_at IS NULL
+          LIMIT 1`,
+        [email],
+      );
+      const row = existing.rows[0];
+      if (row) {
+        const abandoned =
+          row.email_verified_at === null &&
+          (row.primary_role !== 'business' || row.business_onboarding === null);
+        if (!abandoned) {
+          await client.query('ROLLBACK');
+          return { ok: false, reason: 'email_exists' };
+        }
+        // CASCADE removes the old profile/tokens for the abandoned account.
+        await client.query('DELETE FROM users WHERE id = $1', [row.id]);
+      }
+
+      await client.query(
+        `INSERT INTO users (email, password_hash, display_name, primary_role, phone, phone_code, nationality, date_of_birth, accepted_terms_at, terms_version)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::timestamptz, $10)`,
+        [
+          email,
+          params.passwordHash,
+          params.displayName,
+          params.role,
+          params.phone ?? null,
+          params.phoneCode ?? null,
+          params.nationality ?? null,
+          params.dateOfBirth,
+          params.acceptedTermsAt ?? null,
+          params.termsVersion ?? null,
+        ],
+      );
+
+      const createdRes = await client.query<UserRow>(
+        `SELECT u.id, u.email, u.password_hash, u.phone, u.phone_code, u.nationality,
+                u.display_name, u.avatar_url, u.date_of_birth, u.primary_role,
+                u.is_admin, COALESCE(u.admin_permissions, '[]'::jsonb) AS admin_permissions,
+                u.plan_id, COALESCE(p.slug, 'free') AS plan_slug, p.plan_limits AS plan_limits,
+                u.email_verified_at, u.phone_verified_at, u.is_active, u.created_at, u.updated_at
+           FROM users u
+           LEFT JOIN plans p ON u.plan_id = p.id
+          WHERE u.email = $1 AND u.deleted_at IS NULL
+          LIMIT 1`,
+        [email],
+      );
+      const created = createdRes.rows[0];
+      if (!created) throw new Error('User creation failed');
+
+      switch (params.role) {
+        case 'customer':
+          await client.query('INSERT INTO customer_profiles (user_id) VALUES ($1)', [created.id]);
+          break;
+        case 'expert':
+          await client.query('INSERT INTO expert_profiles (user_id) VALUES ($1)', [created.id]);
+          break;
+        case 'craftsman':
+          await client.query('INSERT INTO craftsman_profiles (user_id) VALUES ($1)', [created.id]);
+          break;
+        case 'business':
+          await client.query(
+            'INSERT INTO business_profiles (user_id, company_name) VALUES ($1, $2)',
+            [created.id, params.companyName ?? 'Unnamed Company'],
+          );
+          break;
+      }
+
+      await client.query('COMMIT');
+      return { ok: true, user: created };
+    } catch (error) {
+      await client.query('ROLLBACK').catch(() => undefined);
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
   /** Set last_login_at to now() for the user. */
   async updateLastLoginAt(userId: string): Promise<void> {
     await this.db.query('UPDATE users SET last_login_at = now() WHERE id = $1', [userId]);

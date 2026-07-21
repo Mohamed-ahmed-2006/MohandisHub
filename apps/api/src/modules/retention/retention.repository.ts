@@ -142,6 +142,31 @@ export class RetentionRepository {
     return rowCount ?? 0;
   }
 
+  /**
+   * Hard-delete accounts that never verified their email and are older than the
+   * threshold. Never removes admins or any already email-verified account.
+   * CASCADE removes the role profile, tokens, etc.
+   */
+  async deleteStaleUnverifiedAccountsHours(
+    client: PoolClient,
+    hours: number,
+    dryRun: boolean,
+  ): Promise<number> {
+    const predicate = `email_verified_at IS NULL
+         AND deleted_at IS NULL
+         AND COALESCE(is_admin, false) = false
+         AND created_at < NOW() - ($1::int * INTERVAL '1 hour')`;
+    if (dryRun) {
+      const { rows } = await client.query<{ c: string }>(
+        `SELECT count(*)::text AS c FROM users WHERE ${predicate}`,
+        [hours],
+      );
+      return parseInt(rows[0]?.c ?? '0', 10);
+    }
+    const { rowCount } = await client.query(`DELETE FROM users WHERE ${predicate}`, [hours]);
+    return rowCount ?? 0;
+  }
+
   async deleteOtpRateLimitsStaleHours(
     client: PoolClient,
     hours: number,

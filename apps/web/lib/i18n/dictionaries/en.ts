@@ -1052,11 +1052,6 @@ export const enDictionary: Dictionary = {
               label: 'Advertisement scheduling',
               hint: 'Force ad start/end windows and control campaign timing.',
             },
-            {
-              id: 'manage_ad_targeting',
-              label: 'Advertisement targeting',
-              hint: 'Control AdCenter targeting/relevance policy and audience controls.',
-            },
           ],
           account: {
             title: 'Account Controls',

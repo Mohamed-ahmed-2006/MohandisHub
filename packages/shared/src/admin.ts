@@ -29,7 +29,6 @@ export const ADMIN_PERMISSIONS = [
   'manage_ads',
   'manage_ad_pricing',
   'manage_ad_scheduling',
-  'manage_ad_targeting',
 ] as const;
 
 export type AdminPermission = (typeof ADMIN_PERMISSIONS)[number];

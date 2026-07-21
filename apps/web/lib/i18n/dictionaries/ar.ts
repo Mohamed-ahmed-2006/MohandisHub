@@ -1001,11 +1001,6 @@ export const arDictionary: Dictionary = {
               label: 'جدولة الإعلانات',
               hint: 'فرض وقت البدء/الانتهاء والتحكم في توقيت الحملات.',
             },
-            {
-              id: 'manage_ad_targeting',
-              label: 'استهداف الإعلانات',
-              hint: 'التحكم في سياسات الاستهداف والملاءمة داخل AdCenter.',
-            },
           ],
           account: {
             title: 'التحكم في الحساب',

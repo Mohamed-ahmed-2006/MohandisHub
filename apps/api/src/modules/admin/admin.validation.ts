@@ -39,6 +39,10 @@ export const changeUserEmailSchema = z.object({
   sendVerificationEmail: z.boolean().optional(),
 });
 
+export const changeUserRoleSchema = z.object({
+  role: z.enum(['customer', 'expert', 'business', 'craftsman']),
+});
+
 export const userActivityTypeSchema = z.enum([
   'needs',
   'bids',
@@ -248,6 +252,7 @@ export const rejectManualInstapayWithdrawalSchema = z.object({
 export type UpdateUserInput = z.infer<typeof updateUserSchema>;
 export type FactoryResetInput = z.infer<typeof factoryResetSchema>;
 export type ChangeUserEmailInput = z.infer<typeof changeUserEmailSchema>;
+export type ChangeUserRoleInput = z.infer<typeof changeUserRoleSchema>;
 export type UserActivityTypeInput = z.infer<typeof userActivityTypeSchema>;
 export type UpdateExpertProfileByAdminInput = z.infer<typeof updateExpertProfileSchema>;
 export type UpdateBusinessProfileByAdminInput = z.infer<typeof updateBusinessProfileSchema>;

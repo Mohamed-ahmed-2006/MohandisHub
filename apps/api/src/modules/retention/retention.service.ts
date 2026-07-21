@@ -284,6 +284,22 @@ export class RetentionService {
         results.verifiedPrivateUploads = { skipped: true, reason: 'disabled' };
       }
 
+      const unverifiedHours = mergeRetentionHours(
+        cat.unverifiedAccounts,
+        env.RETENTION_UNVERIFIED_ACCOUNTS_DAYS,
+        'days',
+      );
+      if (unverifiedHours != null) {
+        const n = await this.repo.deleteStaleUnverifiedAccountsHours(
+          client,
+          unverifiedHours,
+          dryRun,
+        );
+        results.unverifiedAccounts = { deletedRows: n };
+      } else {
+        results.unverifiedAccounts = { skipped: true, reason: 'disabled' };
+      }
+
       await client.query('COMMIT');
     } catch (e) {
       await client.query('ROLLBACK');
@@ -341,6 +357,7 @@ export class RetentionService {
           env.RETENTION_NEED_REFERENCE_DAYS_AFTER_COMPLETED,
         RETENTION_BID_MESSAGE_ATTACHMENT_DAYS: env.RETENTION_BID_MESSAGE_ATTACHMENT_DAYS,
         RETENTION_VERIFIED_PRIVATE_UPLOADS_DAYS: env.RETENTION_VERIFIED_PRIVATE_UPLOADS_DAYS,
+        RETENTION_UNVERIFIED_ACCOUNTS_DAYS: env.RETENTION_UNVERIFIED_ACCOUNTS_DAYS,
       },
       recentLogs: await this.repo.listSweepLogs(20),
     };

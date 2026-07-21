@@ -244,6 +244,75 @@ export class AdminRepository {
     await this.db.query('UPDATE users SET email_verified_at = now() WHERE id = $1', [userId]);
   }
 
+  /**
+   * Change a user's primary role and ensure the target role's profile row
+   * exists (idempotent), atomically. Existing profile rows for other roles are
+   * left in place so no data is lost if the role is switched back.
+   */
+  async changeUserRole(
+    userId: string,
+    role: 'customer' | 'expert' | 'business' | 'craftsman',
+  ): Promise<UserListRow | null> {
+    const client = await this.db.connect();
+    try {
+      await client.query('BEGIN');
+      const cur = await client.query<{ display_name: string | null }>(
+        `SELECT display_name FROM users WHERE id = $1 AND deleted_at IS NULL FOR UPDATE`,
+        [userId],
+      );
+      if (cur.rows.length === 0) {
+        await client.query('ROLLBACK');
+        return null;
+      }
+
+      await client.query(
+        `UPDATE users SET primary_role = $2, updated_at = now() WHERE id = $1`,
+        [userId, role],
+      );
+
+      switch (role) {
+        case 'customer':
+          await client.query(
+            `INSERT INTO customer_profiles (user_id) VALUES ($1) ON CONFLICT (user_id) DO NOTHING`,
+            [userId],
+          );
+          break;
+        case 'expert':
+          await client.query(
+            `INSERT INTO expert_profiles (user_id) VALUES ($1) ON CONFLICT (user_id) DO NOTHING`,
+            [userId],
+          );
+          break;
+        case 'craftsman':
+          await client.query(
+            `INSERT INTO craftsman_profiles (user_id) VALUES ($1) ON CONFLICT (user_id) DO NOTHING`,
+            [userId],
+          );
+          break;
+        case 'business':
+          await client.query(
+            `INSERT INTO business_profiles (user_id, company_name) VALUES ($1, $2) ON CONFLICT (user_id) DO NOTHING`,
+            [userId, cur.rows[0]?.display_name?.trim() || 'Unnamed Company'],
+          );
+          break;
+      }
+
+      const { rows } = await client.query<UserListRow>(
+        `SELECT u.*, (SELECT slug FROM plans WHERE id = u.plan_id) AS plan_slug,
+                     (SELECT name FROM plans WHERE id = u.plan_id) AS plan_name
+           FROM users u WHERE u.id = $1`,
+        [userId],
+      );
+      await client.query('COMMIT');
+      return rows[0] ?? null;
+    } catch (error) {
+      await client.query('ROLLBACK').catch(() => undefined);
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
   async updateUserEmail(userId: string, newEmail: string): Promise<UserListRow | null> {
     const { rows } = await this.db.query<UserListRow>(
       `UPDATE users

@@ -38,6 +38,7 @@ import type {
   AdjustBalanceInput,
   ApproveManualInstapayDepositInput,
   ChangeUserEmailInput,
+  ChangeUserRoleInput,
   CompleteManualInstapayWithdrawalInput,
   CompletePaymobWithdrawalInput,
   CreateCategoryInput,
@@ -61,6 +62,7 @@ import {
   changeUserEmailSchema,
   completeManualInstapayWithdrawalSchema,
   completePaymobWithdrawalSchema,
+  changeUserRoleSchema,
   createCategorySchema,
   factoryResetSchema,
   createPlanSchema,
@@ -290,6 +292,23 @@ const updateUser = asyncHandler(async (req, res) => {
       },
     });
   }
+  const response: ApiSuccessBody<AdminUserListItem> = { ok: true, data: user };
+  res.json(response);
+});
+
+const changeUserRole = asyncHandler(async (req, res) => {
+  const input = parseValidation<ChangeUserRoleInput>(changeUserRoleSchema, req.body);
+  if (req.params.id === getAdminId(req)) {
+    throw new HttpError({
+      statusCode: 403,
+      code: 'SELF_ROLE_CHANGE_FORBIDDEN',
+      message: 'You cannot change your own account role.',
+    });
+  }
+  const user = await adminService.changeUserRole(req.params.id!, input);
+  await logAdminAction(req, 'admin.user.change-role', 'user', req.params.id!, {
+    role: input.role,
+  });
   const response: ApiSuccessBody<AdminUserListItem> = { ok: true, data: user };
   res.json(response);
 });
@@ -946,6 +965,7 @@ export const adminController = {
   updateUserExpertProfile,
   updateUserBusinessProfile,
   updateUserCraftsmanProfile,
+  changeUserRole,
   deleteUser,
   activateUser,
   deactivateUser,

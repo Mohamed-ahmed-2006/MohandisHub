@@ -31,12 +31,8 @@ adminRouter.post(
   adminController.sendNotification,
 );
 
-// Dashboard
-adminRouter.get(
-  '/dashboard/stats',
-  requireAdminPermission('super_admin'),
-  adminController.getDashboardStats,
-);
+// Dashboard — read-only aggregate landing page, available to any admin.
+adminRouter.get('/dashboard/stats', adminController.getDashboardStats);
 
 // Settings
 adminRouter.get(
@@ -115,6 +111,11 @@ adminRouter.get(
   adminController.getUserActivity,
 );
 adminRouter.patch('/users/:id', requireAdminPermission('manage_users'), adminController.updateUser);
+adminRouter.patch(
+  '/users/:id/role',
+  requireAdminPermission('manage_users'),
+  adminController.changeUserRole,
+);
 adminRouter.patch(
   '/users/:id/expert-profile',
   requireAdminPermission('manage_users'),

@@ -87,7 +87,7 @@ export const AdminPanel = ({ locale, dictionary }: AdminPanelProps) => {
 
   // Must be called unconditionally (Rules of Hooks) - before any early return
   const tabs: { id: TabId; label: string; permission?: string }[] = [
-    { id: 'dashboard', label: dictionary.admin.tabs.dashboard, permission: 'super_admin' },
+    { id: 'dashboard', label: dictionary.admin.tabs.dashboard },
     { id: 'users', label: dictionary.admin.tabs.users, permission: 'manage_users' },
     { id: 'plans', label: dictionary.admin.tabs.plans, permission: 'manage_plans' },
     { id: 'coupons', label: 'Coupons', permission: 'manage_plans' },

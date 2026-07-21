@@ -63,27 +63,14 @@ export class AuthService {
       });
     }
 
-    const existing = await this.authRepository.findUserByEmail(input.email);
-    if (existing) {
-      const abandoned = await this.authRepository.isAbandonedUnverifiedBusinessSignup(existing.id);
-      if (abandoned) {
-        await this.authRepository.hardDeleteUserById(existing.id);
-      } else {
-        throw new HttpError({
-          statusCode: 409,
-          code: 'EMAIL_ALREADY_EXISTS',
-          message: 'An account with this email address already exists.',
-        });
-      }
-    }
-
     // Hash password
     const passwordHash = await bcrypt.hash(input.password, SALT_ROUNDS);
 
-    // Create user row
+    // Atomically reclaim any abandoned unverified account for this email and
+    // create the user row + role profile in one transaction.
     let userRow: UserRow;
     try {
-      userRow = await this.authRepository.createUser({
+      const result = await this.authRepository.reclaimAndCreateUser({
         email: input.email,
         passwordHash,
         displayName: input.displayName,
@@ -94,8 +81,18 @@ export class AuthService {
         dateOfBirth: input.dateOfBirth,
         acceptedTermsAt: input.acceptedTermsAt,
         termsVersion: input.termsVersion,
+        companyName: input.companyName,
       });
+      if (!result.ok) {
+        throw new HttpError({
+          statusCode: 409,
+          code: 'EMAIL_ALREADY_EXISTS',
+          message: 'An account with this email address already exists.',
+        });
+      }
+      userRow = result.user;
     } catch (error: unknown) {
+      if (error instanceof HttpError) throw error;
       const pgError = error as { code?: string; constraint?: string };
       if (pgError.code === '23505') {
         throw new HttpError({
@@ -119,25 +116,6 @@ export class AuthService {
         });
       }
       throw error;
-    }
-
-    // Create role-specific profile
-    switch (input.role) {
-      case 'customer':
-        await this.authRepository.createCustomerProfile(userRow.id);
-        break;
-      case 'expert':
-        await this.authRepository.createExpertProfile(userRow.id);
-        break;
-      case 'craftsman':
-        await this.authRepository.createCraftsmanProfile(userRow.id);
-        break;
-      case 'business':
-        await this.authRepository.createBusinessProfile(
-          userRow.id,
-          input.companyName ?? 'Unnamed Company',
-        );
-        break;
     }
 
     // Build tokens

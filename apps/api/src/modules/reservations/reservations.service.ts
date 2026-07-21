@@ -465,11 +465,18 @@ export class ReservationsService {
   ): Promise<ReservationSlot> {
     this.ensureProviderRole(role);
     const slot = await this.repo.findSlotById(slotId);
-    if (!slot || slot.provider_id !== userId) {
+    if (!slot) {
       throw new HttpError({
         statusCode: 404,
         code: 'SLOT_NOT_FOUND',
         message: 'Reservation slot not found.',
+      });
+    }
+    if (slot.provider_id !== userId) {
+      throw new HttpError({
+        statusCode: 403,
+        code: 'FORBIDDEN',
+        message: 'You do not own this reservation slot.',
       });
     }
     const slotUpdates: Parameters<ReservationsRepository['updateSlot']>[1] = {};
@@ -503,11 +510,25 @@ export class ReservationsService {
   async deleteSlot(userId: string, role: string, slotId: string): Promise<{ deleted: boolean }> {
     this.ensureProviderRole(role);
     const slot = await this.repo.findSlotById(slotId);
-    if (!slot || slot.provider_id !== userId) {
+    if (!slot) {
       throw new HttpError({
         statusCode: 404,
         code: 'SLOT_NOT_FOUND',
         message: 'Reservation slot not found.',
+      });
+    }
+    if (slot.provider_id !== userId) {
+      throw new HttpError({
+        statusCode: 403,
+        code: 'FORBIDDEN',
+        message: 'You do not own this reservation slot.',
+      });
+    }
+    if (slot.status === 'booked') {
+      throw new HttpError({
+        statusCode: 409,
+        code: 'SLOT_BOOKED',
+        message: 'A booked slot cannot be deleted. Cancel the reservation first.',
       });
     }
     const deleted = await this.repo.deleteSlot(slotId);

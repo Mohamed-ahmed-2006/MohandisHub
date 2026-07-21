@@ -141,11 +141,6 @@ const FALLBACK_ADMIN_PERMISSION_DEFS: AdminPermissionDef[] = [
     label: 'Ad scheduling',
     hint: 'Set campaign start and end windows.',
   },
-  {
-    id: 'manage_ad_targeting',
-    label: 'Ad targeting',
-    hint: 'Control ad targeting and relevance policy.',
-  },
 ];
 
 function readPermissionDefsFromUser360(user360: unknown): AdminPermissionDef[] {

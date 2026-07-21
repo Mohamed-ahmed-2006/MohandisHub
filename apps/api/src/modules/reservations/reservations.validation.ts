@@ -10,8 +10,8 @@ export const upsertReservationProfileSchema = z.object({
 
 export const createReservationSlotSchema = z
   .object({
-    startAt: z.string().datetime(),
-    endAt: z.string().datetime(),
+    startAt: z.string().datetime({ offset: true }),
+    endAt: z.string().datetime({ offset: true }),
     supportsOnline: z.boolean().optional(),
     supportsOffline: z.boolean().optional(),
   })
@@ -32,8 +32,8 @@ export const createReservationSlotSchema = z
   });
 
 export const updateReservationSlotSchema = z.object({
-  startAt: z.string().datetime().optional(),
-  endAt: z.string().datetime().optional(),
+  startAt: z.string().datetime({ offset: true }).optional(),
+  endAt: z.string().datetime({ offset: true }).optional(),
   status: z.enum(['available', 'booked', 'blocked']).optional(),
   supportsOnline: z.boolean().optional(),
   supportsOffline: z.boolean().optional(),

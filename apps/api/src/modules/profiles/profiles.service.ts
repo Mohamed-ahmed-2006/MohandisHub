@@ -266,6 +266,25 @@ export class ProfilesService {
         message: 'Craftsman profile not found.',
       });
     }
+    const avatarUrl = await this.repo.getUserAvatarUrl(userId);
+    const missing: string[] = [];
+    if (!avatarUrl?.trim()) missing.push('avatar');
+    if (!row.trade?.trim() && !row.title?.trim()) missing.push('trade');
+    if (!row.bio?.trim()) missing.push('bio');
+    if (!Array.isArray(row.specializations) || row.specializations.length === 0)
+      missing.push('specializations');
+    if (!row.city?.trim()) missing.push('city');
+    if (!row.country?.trim()) missing.push('country');
+    if (!row.workshop_name?.trim()) missing.push('workshopName');
+    if (!row.workshop_address?.trim()) missing.push('workshopAddress');
+    if (missing.length > 0) {
+      throw new HttpError({
+        statusCode: 400,
+        code: 'ONBOARDING_INCOMPLETE',
+        message: `Complete your profile before finishing onboarding. Missing: ${missing.join(', ')}.`,
+        details: { missing },
+      });
+    }
     await this.repo.setCraftsmanOnboardingCompletedAt(userId);
   }
 
@@ -435,6 +454,21 @@ export class ProfilesService {
         statusCode: 404,
         code: 'PROFILE_NOT_FOUND',
         message: 'Business profile not found.',
+      });
+    }
+    const missing: string[] = [];
+    if (!row.company_name?.trim()) missing.push('companyName');
+    if (!row.industry?.trim()) missing.push('industry');
+    if (!row.logo_url?.trim()) missing.push('logo');
+    if (!row.city?.trim()) missing.push('city');
+    if (!row.country?.trim()) missing.push('country');
+    if (!row.description?.trim()) missing.push('description');
+    if (missing.length > 0) {
+      throw new HttpError({
+        statusCode: 400,
+        code: 'ONBOARDING_INCOMPLETE',
+        message: `Complete your profile before finishing onboarding. Missing: ${missing.join(', ')}.`,
+        details: { missing },
       });
     }
     await this.repo.setBusinessOnboardingCompletedAt(userId);

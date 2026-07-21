@@ -7,6 +7,7 @@ export const RETENTION_CATEGORY_KEYS = [
   'needReferenceAfterCompleted',
   'bidMessageAttachments',
   'verifiedPrivateUploads',
+  'unverifiedAccounts',
 ] as const;
 
 export type RetentionCategoryKey = (typeof RETENTION_CATEGORY_KEYS)[number];
