@@ -33,9 +33,9 @@ When creating your webhook in Stripe Dashboard (Developers → Webhooks → Add 
 Add to `apps/api/.env`:
 
 ```
-STRIPE_SECRET_KEY=sk_test_51T7wm3Q8MrsPsHKNhavXTYSaxO6XIZJjl4qQD8BCSBMNyScrrngjCO9VdQY6UvDUmjX5GxoeHbs5vyjxtMtkpFmy00kfnCKEC0
-STRIPE_WEBHOOK_SECRET=whsec_g4CZXYUx6HsQ0xgJ7DtAR0YFgGcwCBTO
-STRIPE_PUBLISHABLE_KEY=pk_test_51T7wm3Q8MrsPsHKNBPwmkvsOkgpG4YD0gGloaDDMpxt16ioCdvYd2DECzTq75dNNVwoxDxd2UcSIR0ET7FYUCug600d7CTGyPT
+STRIPE_SECRET_KEY=sk_test_REPLACE_ME
+STRIPE_WEBHOOK_SECRET=whsec_REPLACE_ME
+STRIPE_PUBLISHABLE_KEY=pk_test_REPLACE_ME
 ```
 
 Add to `apps/api/src/config/env.ts` (in the env schema):
