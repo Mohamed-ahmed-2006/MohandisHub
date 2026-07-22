@@ -64,9 +64,14 @@ const nextConfig: NextConfig = {
         source: '/:path*',
         headers: [
           {
+            key: 'Content-Security-Policy',
+            value: "frame-ancestors 'none'; base-uri 'self'; object-src 'none'",
+          },
+          {
             key: 'Content-Security-Policy-Report-Only',
             value: contentSecurityPolicyReportOnly,
           },
+          { key: 'X-Frame-Options', value: 'DENY' },
         ],
       },
     ]);
