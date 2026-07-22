@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+
 import { describe, expect, it } from 'vitest';
 
 import { parseEgpAmount } from '../modules/wallet/wallet.amount.js';
@@ -23,5 +25,13 @@ describe('parseEgpAmount', () => {
     ]) {
       expect(parseEgpAmount(value)).toBeNull();
     }
+  });
+
+  it('uses the strict parser at every wallet HTTP amount boundary', () => {
+    const controller = readFileSync(
+      new URL('../modules/wallet/wallet.controller.ts', import.meta.url),
+      'utf8',
+    );
+    expect(controller).not.toContain('parseFloat(');
   });
 });

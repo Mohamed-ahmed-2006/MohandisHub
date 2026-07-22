@@ -164,13 +164,8 @@ const getDepositCurrencies = asyncHandler(async (_req, res) => {
 
 const getDepositEstimate = asyncHandler(async (req, res) => {
   const amountRaw = req.query.amount;
-  const amount =
-    typeof amountRaw === 'number'
-      ? amountRaw
-      : typeof amountRaw === 'string'
-        ? parseFloat(amountRaw)
-        : NaN;
-  if (!Number.isFinite(amount) || amount <= 0) {
+  const amount = parseEgpAmount(amountRaw);
+  if (amount == null) {
     throw new HttpError({
       statusCode: 400,
       code: 'INVALID_AMOUNT',
@@ -211,15 +206,10 @@ const createLegacyCryptoDeposit = asyncHandler(async (req, res) => {
   const source =
     req.body && typeof req.body === 'object' ? (req.body as Record<string, unknown>) : {};
   const amountRaw = source.amount;
-  const amount =
-    typeof amountRaw === 'number'
-      ? amountRaw
-      : typeof amountRaw === 'string'
-        ? parseFloat(amountRaw)
-        : NaN;
+  const amount = parseEgpAmount(amountRaw);
   const payCurrency = typeof source.currency === 'string' ? source.currency : 'USDTTRC20';
   const returnUrl = typeof source.returnUrl === 'string' ? source.returnUrl : undefined;
-  if (!Number.isFinite(amount) || amount <= 0) {
+  if (amount == null) {
     throw new HttpError({
       statusCode: 400,
       code: 'INVALID_AMOUNT',
@@ -241,15 +231,10 @@ const createLegacyCardDeposit = asyncHandler(async (req, res) => {
   const source =
     req.body && typeof req.body === 'object' ? (req.body as Record<string, unknown>) : {};
   const amountRaw = source.amount;
-  const amount =
-    typeof amountRaw === 'number'
-      ? amountRaw
-      : typeof amountRaw === 'string'
-        ? parseFloat(amountRaw)
-        : NaN;
+  const amount = parseEgpAmount(amountRaw);
   const currency = typeof source.currency === 'string' ? source.currency : 'EGP';
   const returnUrl = typeof source.returnUrl === 'string' ? source.returnUrl : undefined;
-  if (!Number.isFinite(amount) || amount <= 0) {
+  if (amount == null) {
     throw new HttpError({
       statusCode: 400,
       code: 'INVALID_AMOUNT',
@@ -271,12 +256,7 @@ const confirmLegacyStripeSession = asyncHandler((_req, res) => {
 
 const getWithdrawalQuote = asyncHandler(async (req, res) => {
   const amountRaw = req.query.amountEgp;
-  const amountEgp =
-    typeof amountRaw === 'string'
-      ? parseFloat(amountRaw)
-      : typeof amountRaw === 'number'
-        ? amountRaw
-        : NaN;
+  const amountEgp = parseEgpAmount(amountRaw);
   const payoutCurrency =
     typeof req.query.payoutCurrency === 'string' ? req.query.payoutCurrency : undefined;
   if (!payoutCurrency) {
@@ -284,6 +264,13 @@ const getWithdrawalQuote = asyncHandler(async (req, res) => {
       statusCode: 400,
       code: 'INVALID_REQUEST',
       message: 'payoutCurrency is required.',
+    });
+  }
+  if (amountEgp == null) {
+    throw new HttpError({
+      statusCode: 400,
+      code: 'INVALID_AMOUNT',
+      message: 'Amount must be positive and have at most two decimal places.',
     });
   }
   const quote = await walletService.estimateWithdrawalQuote(amountEgp, payoutCurrency);
@@ -300,12 +287,7 @@ const submitInstapayDeposit = asyncHandler(async (req, res) => {
   const user = getUser(req);
   const body = req.body as Record<string, unknown> | undefined;
   const amountRaw = body?.amountEgp ?? body?.amount;
-  const amountEgp =
-    typeof amountRaw === 'number'
-      ? amountRaw
-      : typeof amountRaw === 'string'
-        ? parseFloat(amountRaw)
-        : NaN;
+  const amountEgp = parseEgpAmount(amountRaw);
   const proofUploadId = typeof body?.proofUploadId === 'string' ? body.proofUploadId.trim() : '';
   const senderAccount = typeof body?.senderAccount === 'string' ? body.senderAccount.trim() : '';
   const transferReference =
@@ -322,6 +304,13 @@ const submitInstapayDeposit = asyncHandler(async (req, res) => {
       statusCode: 400,
       code: 'INVALID_REQUEST',
       message: 'senderAccount is required.',
+    });
+  }
+  if (amountEgp == null) {
+    throw new HttpError({
+      statusCode: 400,
+      code: 'INVALID_AMOUNT',
+      message: 'Amount must be positive and have at most two decimal places.',
     });
   }
   const result = await walletService.submitInstapayManualDeposit({
