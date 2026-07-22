@@ -19,6 +19,7 @@ type Props = {
   dictionary: Dictionary;
   accessToken: string;
   refreshSession: () => Promise<string | null>;
+  canFactoryReset: boolean;
 };
 
 /** Map sidebar href → `dictionary.nav` key for labels */
@@ -83,7 +84,12 @@ function Toggle({
 const FACTORY_RESET_CONFIRM_PHRASE = 'FACTORY RESET';
 const WITHDRAWAL_LIMIT_METHODS: WithdrawalLimitMethod[] = ['instapay', 'crypto', 'paymob'];
 
-export const AdminSettingsTab = ({ dictionary, accessToken, refreshSession }: Props) => {
+export const AdminSettingsTab = ({
+  dictionary,
+  accessToken,
+  refreshSession,
+  canFactoryReset,
+}: Props) => {
   const [settings, setSettings] = useState<AppSettings | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -985,29 +991,31 @@ export const AdminSettingsTab = ({ dictionary, accessToken, refreshSession }: Pr
         })}
       </section>
 
-      <section className="admin-settings-section admin-settings-section--danger">
-        <h3 className="admin-settings-section-title">{d.dangerZone ?? 'Danger zone'}</h3>
-        <p className="admin-settings-desc admin-settings-desc--block">
-          {d.factoryResetWarning ??
-            'Factory reset permanently removes all user accounts and their data except the platform and your admin account. This cannot be undone.'}
-        </p>
-        <div className="admin-settings-row">
-          <button
-            type="button"
-            className="admin-btn admin-btn--danger"
-            onClick={() => {
-              setFactoryResetModalOpen(true);
-              setFactoryResetConfirmPhrase('');
-              setFactoryResetError(null);
-            }}
-            disabled={saving}
-          >
-            {d.factoryReset ?? 'Factory reset'}
-          </button>
-        </div>
-      </section>
+      {canFactoryReset && (
+        <section className="admin-settings-section admin-settings-section--danger">
+          <h3 className="admin-settings-section-title">{d.dangerZone ?? 'Danger zone'}</h3>
+          <p className="admin-settings-desc admin-settings-desc--block">
+            {d.factoryResetWarning ??
+              'Factory reset permanently removes all user accounts and their data except the platform and your admin account. This cannot be undone.'}
+          </p>
+          <div className="admin-settings-row">
+            <button
+              type="button"
+              className="admin-btn admin-btn--danger"
+              onClick={() => {
+                setFactoryResetModalOpen(true);
+                setFactoryResetConfirmPhrase('');
+                setFactoryResetError(null);
+              }}
+              disabled={saving}
+            >
+              {d.factoryReset ?? 'Factory reset'}
+            </button>
+          </div>
+        </section>
+      )}
 
-      {factoryResetModalOpen && (
+      {canFactoryReset && factoryResetModalOpen && (
         <div
           className="admin-modal-overlay"
           onClick={(e) => {

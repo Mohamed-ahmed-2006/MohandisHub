@@ -47,6 +47,15 @@ describe('release-audit-ui fixes', () => {
     expect(toast).not.toContain("right: '20px'");
   });
 
+  it('only renders factory-reset controls for a super admin', () => {
+    const settingsTab = read('components/admin/admin-settings-tab.tsx');
+    const adminPanel = read('components/admin/admin-panel.tsx');
+
+    expect(settingsTab).toContain('canFactoryReset && (');
+    expect(settingsTab).toContain('canFactoryReset && factoryResetModalOpen');
+    expect(adminPanel).toContain("adminPermissions ?? []).includes('super_admin')");
+  });
+
   it('gives the chat share-location icon button an accessible name', () => {
     const chat = read('components/app/chat-screen.tsx');
     // The location button now carries an aria-label and hides the emoji glyph.

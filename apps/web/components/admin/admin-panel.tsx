@@ -282,6 +282,7 @@ export const AdminPanel = ({ locale, dictionary }: AdminPanelProps) => {
             dictionary={dictionary}
             accessToken={accessToken}
             refreshSession={refreshSession}
+            canFactoryReset={(authUser.adminPermissions ?? []).includes('super_admin')}
           />
         )}
         {activeTab === 'operations' && (
