@@ -3,26 +3,13 @@ import { logger } from '../../config/logger.js';
 import type { RetentionAlertsJson } from './retention.types.js';
 import type { SweepResults } from './retention.types.js';
 
-export async function sendRetentionAlert(
+export function sendRetentionAlert(
   alerts: RetentionAlertsJson,
   payload: { type: string; message: string; results?: SweepResults },
 ): Promise<void> {
   const url = alerts.webhookUrl?.trim();
   if (url) {
-    try {
-      await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          source: 'mohandishub-retention',
-          ...payload,
-        }),
-      });
-    } catch (e) {
-      logger.warn('Retention webhook failed', {
-        error: e instanceof Error ? e.message : 'unknown',
-      });
-    }
+    logger.warn('Retention webhook delivery is disabled until destinations can be allowlisted');
   }
   if (alerts.alertEmail?.trim()) {
     logger.info('Retention alert email configured (no mailer wired)', {
@@ -30,6 +17,7 @@ export async function sendRetentionAlert(
       type: payload.type,
     });
   }
+  return Promise.resolve();
 }
 
 export function checkDeleteThresholds(

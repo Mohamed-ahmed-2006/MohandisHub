@@ -16,10 +16,7 @@ export const patchRetentionGovernanceSchema = z.object({
     .optional(),
   alerts: z
     .object({
-      webhookUrl: z
-        .union([z.string().url(), z.literal('')])
-        .optional()
-        .nullable(),
+      webhookUrl: z.literal('').optional().nullable(),
       alertEmail: z
         .union([z.string().email(), z.literal('')])
         .optional()
