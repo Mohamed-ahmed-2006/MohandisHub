@@ -17,10 +17,15 @@ const booleanEnv = (defaultValue: boolean) =>
     }, z.boolean())
     .default(defaultValue);
 
+const optionalUrlEnv = z.preprocess(
+  (value) => (typeof value === 'string' && value.trim() === '' ? undefined : value),
+  z.string().url().optional(),
+);
+
 const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   PORT: z.coerce.number().int().positive().default(4000),
-  DATABASE_URL: z.string().url().optional(),
+  DATABASE_URL: optionalUrlEnv,
   CORS_ORIGIN: z.string().default('http://localhost:3000'),
   // Comma-separated origins also supported (e.g. "https://mohandishub.app,https://www.mohandishub.app")
   CORS_EXTRA_ORIGINS: z.string().optional(),

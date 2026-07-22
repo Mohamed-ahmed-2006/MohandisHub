@@ -158,6 +158,9 @@ describe('production environment validation', () => {
     stubProductionEnv({ DATABASE_URL: undefined });
 
     await expect(importFreshEnv()).rejects.toThrow('Production provider configuration failed');
+
+    stubProductionEnv({ DATABASE_URL: '' });
+    await expect(importFreshEnv()).rejects.toThrow('Production provider configuration failed');
   });
 
   it('fails fast when the production database URL permits an unencrypted connection', async () => {
