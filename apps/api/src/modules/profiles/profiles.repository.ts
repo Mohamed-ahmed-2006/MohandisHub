@@ -375,6 +375,16 @@ export class ProfilesRepository {
     return rows[0] ?? null;
   }
 
+  async privateUploadBelongsToUser(uploadId: string, userId: string): Promise<boolean> {
+    const { rows } = await this.db.query<{ exists: boolean }>(
+      `SELECT EXISTS (
+         SELECT 1 FROM private_uploads WHERE id = $1 AND user_id = $2
+       ) AS exists`,
+      [uploadId, userId],
+    );
+    return rows[0]?.exists === true;
+  }
+
   async updateAcademicRecordStatus(
     recordId: string,
     status: string,
@@ -450,7 +460,12 @@ export class ProfilesRepository {
     const userIdParam = i + 1;
     values.push(recordId, userId);
     const { rows } = await this.db.query<AcademicRecordRow>(
-      `UPDATE academic_records SET ${setClauses.join(', ')} WHERE id = $${idParam} AND user_id = $${userIdParam} RETURNING *`,
+      `UPDATE academic_records
+       SET ${setClauses.join(', ')}
+       WHERE id = $${idParam}
+         AND user_id = $${userIdParam}
+         AND status <> 'approved'
+       RETURNING *`,
       values,
     );
     return rows[0] ?? null;

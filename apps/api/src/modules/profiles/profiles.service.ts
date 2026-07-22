@@ -19,6 +19,7 @@ import type {
   PublicUserProfile,
 } from '@mohandishub/shared';
 
+import { parsePrivateUploadIdFromUrl } from '../../lib/supabase-storage.js';
 import { HttpError } from '../../utils/http-error.js';
 import { sendTransactionalEmail } from '../../utils/send-transactional-email.js';
 import { AdminRepository } from '../admin/admin.repository.js';
@@ -54,6 +55,23 @@ export class ProfilesService {
     private readonly walletRepo: WalletRepository = new WalletRepository(),
     private readonly verificationRepo: VerificationRepository = new VerificationRepository(),
   ) {}
+
+  private async assertPrivateUploadsBelongToUser(
+    userId: string,
+    urls: Array<string | null | undefined>,
+  ): Promise<void> {
+    for (const url of urls) {
+      if (url == null) continue;
+      const uploadId = parsePrivateUploadIdFromUrl(url);
+      if (!uploadId || !(await this.repo.privateUploadBelongsToUser(uploadId, userId))) {
+        throw new HttpError({
+          statusCode: 400,
+          code: 'INVALID_PRIVATE_UPLOAD',
+          message: 'Verification files must be private uploads owned by your account.',
+        });
+      }
+    }
+  }
 
   // ── Expert profile ─────────────────────────────────────────────────────
 
@@ -499,6 +517,12 @@ export class ProfilesService {
       });
     }
 
+    await this.assertPrivateUploadsBelongToUser(userId, [
+      input.frontImageUrl,
+      input.backImageUrl,
+      input.selfieImageUrl,
+    ]);
+
     await assertRequiredVerificationImage(this.repo, userId, role);
 
     const existingDocs = await this.repo.findIdentityDocuments(userId);
@@ -619,6 +643,11 @@ export class ProfilesService {
       });
     }
 
+    await this.assertPrivateUploadsBelongToUser(userId, [
+      input.certificateImageUrl,
+      input.transcriptImageUrl,
+    ]);
+
     const row = await this.repo.createAcademicRecord({
       userId,
       ...input,
@@ -655,8 +684,20 @@ export class ProfilesService {
       transcriptImageUrl?: string | null | undefined;
     },
   ): Promise<AcademicRecord> {
+    await this.assertPrivateUploadsBelongToUser(userId, [
+      input.certificateImageUrl,
+      input.transcriptImageUrl,
+    ]);
     const row = await this.repo.updateAcademicRecord(recordId, userId, input);
     if (!row) {
+      const existing = await this.repo.findAcademicRecordById(recordId);
+      if (existing?.user_id === userId && existing.status === 'approved') {
+        throw new HttpError({
+          statusCode: 409,
+          code: 'APPROVED_ACADEMIC_RECORD_IMMUTABLE',
+          message: 'Approved academic records cannot be edited. Submit a new record for review.',
+        });
+      }
       throw new HttpError({
         statusCode: 404,
         code: 'ACADEMIC_RECORD_NOT_FOUND',
