@@ -1,6 +1,6 @@
 'use client';
 
-import type { ServiceCategory } from '@mohandishub/shared';
+import { computeCommissionSplit, type ServiceCategory } from '@mohandishub/shared';
 import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
 
@@ -43,6 +43,15 @@ export const ExpertDashboard = ({
   const [bidding, setBidding] = useState(false);
   const [tab, setTab] = useState<'needs' | 'bids' | 'jobs'>('needs');
   const [bidAmountInput, setBidAmountInput] = useState<string>('');
+  const bidAmount = Number(bidAmountInput);
+  const bidPayout =
+    bidAmountInput && Number.isFinite(bidAmount) && bidAmount > 0
+      ? computeCommissionSplit(
+          bidAmount,
+          status?.commissionPercent ?? 10,
+          status?.commissionMinEgp ?? 0,
+        ).providerAmount
+      : null;
 
   const [chatBid, setChatBid] = useState<Bid | null>(null);
   const [messages, setMessages] = useState<BidMessage[]>([]);
@@ -406,11 +415,11 @@ export const ExpertDashboard = ({
                 className="dashboard-form-hint"
                 style={{ marginTop: '-0.5rem', marginBottom: '0.5rem' }}
               >
-                {bidAmountInput && !isNaN(Number(bidAmountInput)) ? (
+                {bidPayout != null ? (
                   <>
-                    You will receive approximately{' '}
-                    <strong>{(Number(bidAmountInput) * 0.9).toFixed(2)} EGP</strong> after the 10%
-                    platform commission.
+                    {tr('You will receive approximately', 'ستحصل تقريبًا على')}{' '}
+                    <strong>{bidPayout.toFixed(2)} EGP</strong>{' '}
+                    {tr('after the configured platform commission.', 'بعد عمولة المنصة المحددة.')}
                   </>
                 ) : (
                   <>

@@ -205,9 +205,21 @@ export const computeCommissionSplit = (
   commissionPercent: number,
   commissionMinEgp: number,
 ): { commission: number; providerAmount: number } => {
-  const safeAmount = Number.isFinite(amount) && amount > 0 ? amount : 0;
-  const percentPart = safeAmount * (commissionPercent / 100);
-  const commission = Math.min(safeAmount, Math.max(percentPart, commissionMinEgp));
-  const providerAmount = Math.max(0, safeAmount - commission);
-  return { commission, providerAmount };
+  const amountCents =
+    Number.isFinite(amount) && amount > 0 ? Math.round((amount + Number.EPSILON) * 100) : 0;
+  if (amountCents === 0) return { commission: 0, providerAmount: 0 };
+
+  const safePercent =
+    Number.isFinite(commissionPercent) && commissionPercent > 0 ? commissionPercent : 0;
+  const minCents =
+    Number.isFinite(commissionMinEgp) && commissionMinEgp > 0
+      ? Math.round((commissionMinEgp + Number.EPSILON) * 100)
+      : 0;
+  const percentCents = Math.round((amountCents * safePercent) / 100);
+  const commissionCents = Math.min(amountCents, Math.max(percentCents, minCents));
+  const providerCents = amountCents - commissionCents;
+  return {
+    commission: commissionCents / 100,
+    providerAmount: providerCents / 100,
+  };
 };
