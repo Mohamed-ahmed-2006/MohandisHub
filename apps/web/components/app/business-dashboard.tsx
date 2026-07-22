@@ -8,6 +8,7 @@ import { BusinessJobsTab } from './business-jobs-tab';
 import { BusinessTeamPanel } from './business-team-panel';
 
 import { analyticsApiClient } from '@/lib/analytics/client';
+import { formatConversionRate } from '@/lib/analytics/format';
 import { buildLocalePath } from '@/lib/i18n/path';
 import type { Dictionary, Locale } from '@/lib/i18n/types';
 import { negotiationsApiClient } from '@/lib/negotiations/client';
@@ -499,7 +500,7 @@ export const BusinessDashboard = ({
               <div className="dashboard-card">
                 <h4 className="dashboard-card-title">Conversion</h4>
                 <p className="dashboard-card-meta" style={{ fontSize: '1.25rem', fontWeight: 600 }}>
-                  {analytics.conversion ? `${analytics.conversion.rate.toFixed(1)}%` : '0%'}
+                  {formatConversionRate(analytics.conversion?.rate)}
                 </p>
                 <p className="dashboard-card-meta">
                   {analytics.conversion?.orders ?? 0} orders / {analytics.conversion?.views ?? 0}{' '}
