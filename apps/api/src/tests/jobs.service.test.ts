@@ -146,17 +146,17 @@ describe('JobsService hardening', () => {
     });
   });
 
-  it('stores paid profile snapshot applications and splits wallet amounts', async () => {
+  it('stores paid profile snapshot applications and splits wallet amounts in whole cents', async () => {
     queryMock.mockResolvedValueOnce({}).mockResolvedValueOnce({});
 
     const repo = {
-      getJobById: vi.fn().mockResolvedValue(makeJob({ application_fee_amount: '20' })),
+      getJobById: vi.fn().mockResolvedValue(makeJob({ application_fee_amount: '1.00' })),
       applyForJob: vi.fn().mockResolvedValue(
         makeApp({
           profile_snapshot: { headline: 'Expert snapshot' },
-          application_fee_amount: '20',
-          application_commission_amount: '3',
-          business_payout_amount: '17',
+          application_fee_amount: '1.00',
+          application_commission_amount: '0.03',
+          business_payout_amount: '0.97',
         }),
       ),
     };
@@ -176,8 +176,8 @@ describe('JobsService hardening', () => {
     };
     const settingsService = {
       getAppStatus: vi.fn().mockResolvedValue({
-        commissionPercent: 10,
-        commissionMinEgp: 3,
+        commissionPercent: 2.5,
+        commissionMinEgp: 0,
         commissionReceiverId: 'platform-1',
       }),
     };
@@ -207,9 +207,9 @@ describe('JobsService hardening', () => {
       expect.objectContaining({
         submissionType: 'profile_snapshot',
         profileSnapshot: { headline: 'Expert snapshot' },
-        applicationFeeAmount: 20,
-        applicationCommissionAmount: 3,
-        businessPayoutAmount: 17,
+        applicationFeeAmount: 1,
+        applicationCommissionAmount: 0.03,
+        businessPayoutAmount: 0.97,
       }),
       expect.any(Object),
     );
@@ -217,7 +217,7 @@ describe('JobsService hardening', () => {
       expect.any(Object),
       'wallet-expert',
       'expert-1',
-      20,
+      1,
       'Paid hiring application submission',
       'job_application',
       'app-1',
@@ -227,7 +227,7 @@ describe('JobsService hardening', () => {
       expect.any(Object),
       'wallet-business',
       'business-1',
-      17,
+      0.97,
       'payment',
       'Hiring application payout',
       'job_application',
@@ -238,15 +238,15 @@ describe('JobsService hardening', () => {
       expect.any(Object),
       'wallet-platform',
       'platform-1',
-      3,
+      0.03,
       'commission',
       'Hiring application commission',
       'job_application',
       'app-1',
     );
     expect(result.submissionType).toBe('profile_snapshot');
-    expect(result.applicationCommissionAmount).toBe(3);
-    expect(result.businessPayoutAmount).toBe(17);
+    expect(result.applicationCommissionAmount).toBe(0.03);
+    expect(result.businessPayoutAmount).toBe(0.97);
   });
 
   it('blocks paid applications when expert wallet is missing', async () => {

@@ -189,14 +189,12 @@ export class JobsService {
         : null;
     const applicationFeeAmount = toNumber(job.application_fee_amount);
     const settings = await this.settingsService.getAppStatus();
-    const applicationCommissionAmount = Math.min(
-      applicationFeeAmount,
-      Math.max(
-        applicationFeeAmount * (settings.commissionPercent / 100),
+    const { commission: applicationCommissionAmount, providerAmount: businessPayoutAmount } =
+      computeCommissionSplit(
+        applicationFeeAmount,
+        settings.commissionPercent,
         settings.commissionMinEgp,
-      ),
-    );
-    const businessPayoutAmount = Math.max(0, applicationFeeAmount - applicationCommissionAmount);
+      );
 
     let expertWallet = null;
     if (applicationFeeAmount > 0) {
