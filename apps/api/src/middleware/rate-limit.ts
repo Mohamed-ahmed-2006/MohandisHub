@@ -77,3 +77,15 @@ export const otpRateLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
 });
+
+/**
+ * File uploads are expensive because object-storage mode buffers each accepted
+ * file in memory. This limiter runs after authentication and keys by account.
+ */
+export const uploadRateLimiter = rateLimit({
+  windowMs: ONE_HOUR_MS,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => req.user?.id ?? 'unauthenticated',
+});

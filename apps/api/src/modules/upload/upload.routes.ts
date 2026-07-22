@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import type { ApiSuccessBody } from '@mohandishub/shared';
-import type { Request } from 'express';
+import type { NextFunction, Request, Response } from 'express';
 import { Router } from 'express';
 import multer from 'multer';
 
@@ -15,6 +15,7 @@ import {
 } from '../../lib/supabase-storage.js';
 import { authenticate } from '../../middleware/authenticate.js';
 import { loadAdminFromDb } from '../../middleware/load-admin-from-db.js';
+import { uploadRateLimiter } from '../../middleware/rate-limit.js';
 import { requireEmailVerified } from '../../middleware/require-email-verified.js';
 import { hasAdminPermission } from '../../middleware/require-role.js';
 import { asyncHandler } from '../../utils/async-handler.js';
@@ -49,7 +50,30 @@ const ALLOWED_MIME = [
   'video/mp4',
   'video/webm',
 ];
-const DEFAULT_MAX_SIZE = 50 * 1024 * 1024; // 50 MB for video
+const DEFAULT_MAX_SIZE = 15 * 1024 * 1024;
+const MAX_CONCURRENT_UPLOADS = 2;
+let activeUploads = 0;
+
+function uploadConcurrencyGuard(_req: Request, res: Response, next: NextFunction): void {
+  if (activeUploads >= MAX_CONCURRENT_UPLOADS) {
+    throw new HttpError({
+      statusCode: 429,
+      code: 'UPLOAD_CONCURRENCY_LIMIT',
+      message: 'Too many uploads are in progress. Please retry shortly.',
+    });
+  }
+
+  activeUploads += 1;
+  let released = false;
+  const release = (): void => {
+    if (released) return;
+    released = true;
+    activeUploads = Math.max(0, activeUploads - 1);
+  };
+  res.once('finish', release);
+  res.once('close', release);
+  next();
+}
 
 function parseSettingsMimes(raw: unknown): string[] | null {
   if (raw == null) return null;
@@ -104,6 +128,8 @@ const requireDurableStorageInProduction = asyncHandler((_req, _res, next) => {
 uploadRouter.post(
   '/',
   authenticate,
+  uploadRateLimiter,
+  uploadConcurrencyGuard,
   requireEmailVerified,
   asyncHandler(async (_req, res, next) => {
     const status = await settingsService.getAppStatus();
@@ -175,6 +201,8 @@ uploadRouter.post(
 uploadRouter.post(
   '/private',
   authenticate,
+  uploadRateLimiter,
+  uploadConcurrencyGuard,
   requireEmailVerified,
   asyncHandler(async (req, res, next) => {
     const status = await settingsService.getAppStatus();

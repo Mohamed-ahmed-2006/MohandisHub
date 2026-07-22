@@ -180,7 +180,7 @@ const envSchema = z.object({
   RETENTION_UNVERIFIED_ACCOUNTS_DAYS: z.coerce.number().int().min(0).default(0),
 
   /** Hard ceiling for public upload size (bytes). Admin/settings cannot exceed this. */
-  PUBLIC_UPLOAD_MAX_BYTES_CEILING: z.coerce.number().int().positive().default(52_428_800), // 50 * 1024 * 1024
+  PUBLIC_UPLOAD_MAX_BYTES_CEILING: z.coerce.number().int().positive().default(15_728_640), // 15 * 1024 * 1024
 });
 
 const parsed = envSchema.safeParse(process.env);
