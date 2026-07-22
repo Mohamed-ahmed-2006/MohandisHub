@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { getApiBaseUrl, getAuthApiBaseUrl } from '../lib/env';
+import { resolveApiTarget } from '../next.config';
 
 describe('getApiBaseUrl', () => {
   it('returns configured NEXT_PUBLIC_API_URL when present', () => {
@@ -52,5 +53,25 @@ describe('getAuthApiBaseUrl', () => {
     vi.stubGlobal('window', {} as Window & typeof globalThis);
 
     expect(getAuthApiBaseUrl()).toBe('');
+  });
+});
+
+describe('resolveApiTarget', () => {
+  it('uses the public API URL when an internal rewrite target is not set', () => {
+    expect(
+      resolveApiTarget({
+        NODE_ENV: 'production',
+        NEXT_PUBLIC_API_URL: 'https://api.mohandishub.app',
+      }),
+    ).toBe('https://api.mohandishub.app');
+  });
+
+  it('fails closed for missing or loopback production targets', () => {
+    expect(() => resolveApiTarget({ NODE_ENV: 'production' })).toThrow(
+      'Production requires API_INTERNAL_URL or NEXT_PUBLIC_API_URL.',
+    );
+    expect(() =>
+      resolveApiTarget({ NODE_ENV: 'production', API_INTERNAL_URL: 'http://localhost:4000' }),
+    ).toThrow('Production API target must be a public HTTPS URL.');
   });
 });

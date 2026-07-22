@@ -203,6 +203,32 @@ const looksLikePlaceholderSecret = (value: string): boolean => {
   );
 };
 
+const databaseUrlRequiresTls = (value: string): boolean => {
+  const sslMode = new URL(value).searchParams.get('sslmode')?.trim().toLowerCase();
+  return sslMode === 'require' || sslMode === 'verify-ca' || sslMode === 'verify-full';
+};
+
+const splitOrigins = (value: string | undefined): string[] =>
+  (value ?? '')
+    .split(',')
+    .map((origin) => origin.trim())
+    .filter(Boolean);
+
+const isSecurePublicOrigin = (value: string): boolean => {
+  try {
+    const url = new URL(value);
+    return (
+      url.protocol === 'https:' &&
+      url.origin === value &&
+      url.hostname !== 'localhost' &&
+      url.hostname !== '127.0.0.1' &&
+      url.hostname !== '::1'
+    );
+  } catch {
+    return false;
+  }
+};
+
 if (parsed.data.NODE_ENV === 'production') {
   const productionErrors: Record<string, string[]> = {};
   if (looksLikePlaceholderSecret(parsed.data.JWT_SECRET)) {
@@ -222,12 +248,33 @@ if (parsed.data.NODE_ENV === 'production') {
   }
   if (!parsed.data.DATABASE_URL) {
     productionErrors.DATABASE_URL = ['DATABASE_URL is required in production.'];
+  } else if (!databaseUrlRequiresTls(parsed.data.DATABASE_URL)) {
+    productionErrors.DATABASE_URL = [
+      'Production DATABASE_URL must require TLS with sslmode=require, verify-ca, or verify-full.',
+    ];
   }
   if (!parsed.data.API_PUBLIC_URL) {
     productionErrors.API_PUBLIC_URL = ['API_PUBLIC_URL is required in production.'];
   }
   if (!parsed.data.WEB_PUBLIC_URL) {
     productionErrors.WEB_PUBLIC_URL = ['WEB_PUBLIC_URL is required in production.'];
+  }
+  const productionCorsOrigins = [
+    ...splitOrigins(parsed.data.CORS_ORIGIN),
+    ...splitOrigins(parsed.data.CORS_EXTRA_ORIGINS),
+  ];
+  if (
+    productionCorsOrigins.length === 0 ||
+    productionCorsOrigins.some((origin) => !isSecurePublicOrigin(origin))
+  ) {
+    productionErrors.CORS_ORIGIN = [
+      'Production CORS origins must be explicit HTTPS origins and cannot use loopback hosts.',
+    ];
+  } else if (
+    parsed.data.WEB_PUBLIC_URL &&
+    !productionCorsOrigins.includes(new URL(parsed.data.WEB_PUBLIC_URL).origin)
+  ) {
+    productionErrors.CORS_ORIGIN = ['Production CORS origins must include WEB_PUBLIC_URL.'];
   }
   if (!parsed.data.SENTRY_DSN) {
     productionErrors.SENTRY_DSN = [

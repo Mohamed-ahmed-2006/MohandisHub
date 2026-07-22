@@ -98,7 +98,8 @@ const requiredProductionEnv: Record<string, string> = {
   NODE_ENV: 'production',
   JWT_SECRET: 'x'.repeat(40),
   JWT_REFRESH_SECRET: 'y'.repeat(40),
-  DATABASE_URL: 'postgresql://postgres:password@db.example.supabase.co:5432/postgres',
+  DATABASE_URL:
+    'postgresql://postgres:password@db.example.supabase.co:5432/postgres?sslmode=require',
   CORS_ORIGIN: 'https://mohandishub.app',
   API_PUBLIC_URL: 'https://api.mohandishub.app',
   WEB_PUBLIC_URL: 'https://mohandishub.app',
@@ -156,6 +157,30 @@ describe('production environment validation', () => {
   it('fails fast when the production database URL is missing', async () => {
     stubProductionEnv({ DATABASE_URL: undefined });
 
+    await expect(importFreshEnv()).rejects.toThrow('Production provider configuration failed');
+  });
+
+  it('fails fast when the production database URL permits an unencrypted connection', async () => {
+    stubProductionEnv({
+      DATABASE_URL: 'postgresql://postgres:password@db.example.supabase.co:5432/postgres',
+    });
+    await expect(importFreshEnv()).rejects.toThrow('Production provider configuration failed');
+
+    stubProductionEnv({
+      DATABASE_URL:
+        'postgresql://postgres:password@db.example.supabase.co:5432/postgres?sslmode=disable',
+    });
+    await expect(importFreshEnv()).rejects.toThrow('Production provider configuration failed');
+  });
+
+  it('rejects loopback, insecure, or mismatched production CORS origins', async () => {
+    stubProductionEnv({ CORS_ORIGIN: 'http://localhost:3000' });
+    await expect(importFreshEnv()).rejects.toThrow('Production provider configuration failed');
+
+    stubProductionEnv({ CORS_ORIGIN: 'http://mohandishub.app' });
+    await expect(importFreshEnv()).rejects.toThrow('Production provider configuration failed');
+
+    stubProductionEnv({ CORS_ORIGIN: 'https://admin.mohandishub.app' });
     await expect(importFreshEnv()).rejects.toThrow('Production provider configuration failed');
   });
 

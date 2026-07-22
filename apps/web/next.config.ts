@@ -1,7 +1,26 @@
 import bundleAnalyzer from '@next/bundle-analyzer';
 import type { NextConfig } from 'next';
 
-const apiTarget = process.env.API_INTERNAL_URL || 'http://localhost:4000';
+export const resolveApiTarget = (source: Record<string, string | undefined>): string => {
+  const configured = source.API_INTERNAL_URL?.trim() || source.NEXT_PUBLIC_API_URL?.trim();
+  if (source.NODE_ENV !== 'production') return configured || 'http://localhost:4000';
+
+  if (!configured) {
+    throw new Error('Production requires API_INTERNAL_URL or NEXT_PUBLIC_API_URL.');
+  }
+  const url = new URL(configured);
+  if (
+    url.protocol !== 'https:' ||
+    url.hostname === 'localhost' ||
+    url.hostname === '127.0.0.1' ||
+    url.hostname === '::1'
+  ) {
+    throw new Error('Production API target must be a public HTTPS URL.');
+  }
+  return configured.replace(/\/$/, '');
+};
+
+const apiTarget = resolveApiTarget(process.env);
 const imageRemoteUrls = [
   process.env.NEXT_PUBLIC_API_URL,
   process.env.API_PUBLIC_URL,
