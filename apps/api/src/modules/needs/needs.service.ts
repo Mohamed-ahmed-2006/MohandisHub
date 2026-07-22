@@ -583,6 +583,7 @@ export class NeedsService {
       const amount = parseFloat(bid.amount);
       const commissionPercent = status.commissionPercent ?? 10;
       const commissionMinEgp = status.commissionMinEgp ?? 0;
+      const commissionReceiverId = status.commissionReceiverId || PLATFORM_USER_ID;
       // Single source of truth for the split. Caps commission at `amount` so the
       // expert payout can never be negative and the platform can never be
       // credited more than the customer paid.
@@ -616,7 +617,7 @@ export class NeedsService {
 
       const platformWalletId = await this.walletRepo.getOrCreateCommissionWallet(
         client,
-        PLATFORM_USER_ID,
+        commissionReceiverId,
       );
       const paymentTxId = await this.walletRepo.debitWalletInTransaction(
         client,
@@ -641,7 +642,7 @@ export class NeedsService {
         await this.walletRepo.creditWithTypeInTransaction(
           client,
           platformWalletId,
-          PLATFORM_USER_ID,
+          commissionReceiverId,
           commission,
           'commission',
           `Commission from bid`,

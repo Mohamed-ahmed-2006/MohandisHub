@@ -1,11 +1,29 @@
 import { z } from 'zod';
 
+import { parseEgpAmount } from '../wallet/wallet.amount.js';
+
+const budgetAmountSchema = z.coerce
+  .number()
+  .min(1)
+  .max(1_000_000)
+  .refine((amount) => parseEgpAmount(amount) != null, {
+    message: 'Amount must have at most two decimal places.',
+  });
+
+const bidAmountSchema = z
+  .number()
+  .min(1)
+  .max(1_000_000)
+  .refine((amount) => parseEgpAmount(amount) != null, {
+    message: 'Amount must have at most two decimal places.',
+  });
+
 export const createNeedSchema = z.object({
   title: z.string().min(3).max(300).trim(),
   description: z.string().min(10).max(5000).trim(),
   categoryId: z.string().uuid(),
   budgetType: z.enum(['fixed', 'hourly']),
-  budgetAmount: z.coerce.number().min(1).max(1000000),
+  budgetAmount: budgetAmountSchema,
   currency: z.string().max(10).default('EGP'),
   timelineDays: z
     .union([z.literal(''), z.undefined(), z.coerce.number().int().min(1).max(365)])
@@ -31,7 +49,7 @@ export const updateNeedSchema = z.object({
 export type UpdateNeedInput = z.infer<typeof updateNeedSchema>;
 
 export const createBidSchema = z.object({
-  amount: z.number().min(1).max(1000000),
+  amount: bidAmountSchema,
   message: z.string().min(5).max(3000),
   deliveryDays: z.number().int().min(1).max(365).optional(),
   estimatedHours: z.number().int().min(1).max(168).optional(),
@@ -39,7 +57,7 @@ export const createBidSchema = z.object({
 export type CreateBidInput = z.infer<typeof createBidSchema>;
 
 export const updateBidSchema = z.object({
-  amount: z.number().min(1).max(1000000).optional(),
+  amount: bidAmountSchema.optional(),
   message: z.string().min(5).max(3000).optional(),
   deliveryDays: z.number().int().min(1).max(365).optional(),
   estimatedHours: z.number().int().min(1).max(168).optional(),

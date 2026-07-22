@@ -46,6 +46,8 @@ const toNumber = (value: string | number | null | undefined): number => {
   return Number.isFinite(parsed) ? parsed : 0;
 };
 
+const toPiastres = (value: number): number => Math.round(value * 100);
+
 const mapInterviewSlot = (row: {
   id: string;
   provider_id: string;
@@ -943,11 +945,19 @@ export class JobsService {
             });
           }
           const amount = toNumber(milestone.amount);
-          const { commission, providerAmount } = computeCommissionSplit(
-            amount,
-            settings.commissionPercent,
-            settings.commissionMinEgp,
-          );
+          const commission = toNumber(milestone.commission_amount);
+          const providerAmount = toNumber(milestone.provider_payout_amount);
+          if (
+            commission < 0 ||
+            providerAmount < 0 ||
+            toPiastres(commission) + toPiastres(providerAmount) !== toPiastres(amount)
+          ) {
+            throw new HttpError({
+              statusCode: 409,
+              code: 'MILESTONE_PAYOUT_SPLIT_INVALID',
+              message: 'The funded milestone payout split is invalid and must be reconciled.',
+            });
+          }
           await this.walletRepo.captureHoldInTransaction(
             client,
             milestone.wallet_hold_id,

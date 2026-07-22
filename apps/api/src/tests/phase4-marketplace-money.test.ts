@@ -41,6 +41,8 @@ describe('Phase 4 marketplace money invariants', () => {
     expect(service).toContain('Reservation dispute split refund');
     expect(service).toContain('Reservation dispute split provider release');
     expect(service).toContain('DISPUTE_SETTLEMENT_REQUIRED');
+    expect(service).toContain('const holdAmount = toMoney(toNumber(currentHold.amount))');
+    expect(service).toContain('providerPayoutAmount: payout.providerAmount');
   });
 
   it('refunds unused prepaid ad spend on cancellation through wallet ledger entries', () => {

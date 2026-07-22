@@ -138,6 +138,8 @@ export type ReservationPricingBreakdown = {
   couponCommissionDiscountAmount?: number;
   couponProviderFundedAmount?: number;
   couponPlatformFundedAmount?: number;
+  commissionPercent?: number;
+  commissionMinEgp?: number;
   totalAmount: number;
   currency: string;
   deductionTiming: 'on_reserve_hold';

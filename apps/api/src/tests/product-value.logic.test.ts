@@ -121,4 +121,34 @@ describe('product value logic', () => {
     expect(preview.finalCommissionAmount).toBe(10);
     expect(preview.finalAmount).toBe(95);
   });
+
+  it('caps provider-funded discounts at the customer subtotal', async () => {
+    const repo = {
+      findCandidates: vi.fn().mockResolvedValue([
+        {
+          ...activeCoupon,
+          type: 'fixed',
+          value: '110',
+          discount_target: 'both',
+          funding_source: 'provider',
+          provider_share_percent: '100',
+          platform_share_percent: '0',
+          min_spend: '0',
+          max_discount: null,
+        },
+      ]),
+      countUserRedemptions: vi.fn().mockResolvedValue(0),
+    };
+    const service = new CouponsService(repo as never);
+
+    const preview = await service.preview(
+      { surface: 'service', subtotal: 100, commissionAmount: 10, currency: 'EGP' },
+      { id: 'user-1', role: 'customer' },
+    );
+
+    expect(preview.valid).toBe(true);
+    expect(preview.discountAmount).toBe(100);
+    expect(preview.providerFundedAmount).toBe(100);
+    expect(preview.finalAmount).toBe(0);
+  });
 });

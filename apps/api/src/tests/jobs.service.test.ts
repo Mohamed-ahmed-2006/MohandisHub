@@ -454,8 +454,8 @@ describe('JobsService hardening', () => {
       walletRepo as never,
       {
         getAppStatus: vi.fn().mockResolvedValue({
-          commissionPercent: 10,
-          commissionMinEgp: 0,
+          commissionPercent: 90,
+          commissionMinEgp: 49,
           commissionReceiverId: 'platform-1',
         }),
       } as never,
@@ -495,6 +495,52 @@ describe('JobsService hardening', () => {
       'milestone-1',
     );
     expect(result.status).toBe('approved');
+  });
+
+  it('rejects a funded milestone whose stored payout split does not conserve the hold', async () => {
+    queryMock
+      .mockResolvedValueOnce({}) // BEGIN
+      .mockResolvedValueOnce({
+        rows: [
+          makeMilestone({
+            status: 'submitted',
+            amount: '50',
+            commission_amount: '5',
+            provider_payout_amount: '40',
+          }),
+        ],
+      })
+      .mockResolvedValueOnce({ rows: [makeApp({ status: 'accepted' })] })
+      .mockResolvedValueOnce({ rows: [makeJob()] })
+      .mockResolvedValueOnce({}); // ROLLBACK
+    const walletRepo = {
+      captureHoldInTransaction: vi.fn(),
+      getOrCreateUserWalletInTransaction: vi.fn(),
+      getOrCreateCommissionWallet: vi.fn(),
+      creditWithTypeInTransaction: vi.fn(),
+    };
+    const service = new JobsService(
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      walletRepo as never,
+      {
+        getAppStatus: vi.fn().mockResolvedValue({
+          commissionPercent: 10,
+          commissionMinEgp: 0,
+          commissionReceiverId: 'platform-1',
+        }),
+      } as never,
+    );
+
+    await expect(
+      service.reviewMilestone('milestone-1', 'business-1', 'approved'),
+    ).rejects.toMatchObject({
+      statusCode: 409,
+      code: 'MILESTONE_PAYOUT_SPLIT_INVALID',
+    });
+    expect(walletRepo.captureHoldInTransaction).not.toHaveBeenCalled();
   });
 
   it('rejects submitted milestones without releasing the hold', async () => {

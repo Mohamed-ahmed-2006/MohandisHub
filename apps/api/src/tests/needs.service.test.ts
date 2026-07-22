@@ -2,6 +2,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { BidRow, NeedRow } from '../modules/needs/needs.repository.js';
 import { NeedsService } from '../modules/needs/needs.service.js';
+import {
+  createBidSchema,
+  createNeedSchema,
+  updateBidSchema,
+} from '../modules/needs/needs.validation.js';
 
 const queryMock = vi.fn();
 const releaseMock = vi.fn();
@@ -138,5 +143,70 @@ describe('NeedsService hardening', () => {
       statusCode: 400,
     });
     expect(repo.updateNeed).not.toHaveBeenCalled();
+  });
+
+  it('rejects need and bid amounts with fractional piastres', () => {
+    expect(
+      createNeedSchema.safeParse({
+        title: 'Need title',
+        description: 'Detailed need description',
+        categoryId: '11111111-1111-4111-8111-111111111111',
+        budgetType: 'fixed',
+        budgetAmount: 100.001,
+      }).success,
+    ).toBe(false);
+    expect(createBidSchema.safeParse({ amount: 10.001, message: 'Detailed bid' }).success).toBe(
+      false,
+    );
+    expect(updateBidSchema.safeParse({ amount: 10.001 }).success).toBe(false);
+    expect(createBidSchema.safeParse({ amount: 10.01, message: 'Detailed bid' }).success).toBe(
+      true,
+    );
+  });
+
+  it('routes awarded-bid commission to the configured receiver', async () => {
+    queryMock
+      .mockResolvedValueOnce({}) // BEGIN
+      .mockResolvedValueOnce({ rows: [makeNeed()] })
+      .mockResolvedValueOnce({ rows: [makeBid()] })
+      .mockResolvedValueOnce({}) // UPDATE bid paid marker
+      .mockResolvedValueOnce({}); // COMMIT
+    const settingsService = {
+      getAppStatus: vi.fn().mockResolvedValue({
+        ...enabledNeedsStatus,
+        commissionPercent: 10,
+        commissionMinEgp: 0,
+        commissionReceiverId: 'commission-receiver',
+      }),
+    };
+    const walletRepo = {
+      findByUserId: vi
+        .fn()
+        .mockResolvedValueOnce({ id: 'customer-wallet', balance: '100' })
+        .mockResolvedValueOnce({ id: 'expert-wallet', balance: '0' }),
+      getOrCreateCommissionWallet: vi.fn().mockResolvedValue('commission-wallet'),
+      debitWalletInTransaction: vi.fn().mockResolvedValue('payment-tx'),
+      creditWithTypeInTransaction: vi.fn().mockResolvedValue(undefined),
+    };
+    const service = new NeedsService({} as never, settingsService as never, walletRepo as never);
+
+    await expect(service.payBid('need-1', 'bid-1', 'customer-1')).resolves.toMatchObject({
+      paid: true,
+      alreadyPaid: false,
+    });
+    expect(walletRepo.getOrCreateCommissionWallet).toHaveBeenCalledWith(
+      expect.any(Object),
+      'commission-receiver',
+    );
+    expect(walletRepo.creditWithTypeInTransaction).toHaveBeenLastCalledWith(
+      expect.any(Object),
+      'commission-wallet',
+      'commission-receiver',
+      10,
+      'commission',
+      'Commission from bid',
+      'bid',
+      'bid-1',
+    );
   });
 });

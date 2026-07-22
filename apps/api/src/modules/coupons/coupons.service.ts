@@ -294,7 +294,7 @@ export class CouponsService {
     let discount = row.type === 'percent' ? eligible * (value / 100) : value;
     const maxDiscount = toNumber(row.max_discount);
     if (maxDiscount != null) discount = Math.min(discount, maxDiscount);
-    discount = Math.min(eligible, Math.max(0, Number(discount.toFixed(2))));
+    discount = Math.min(subtotal, eligible, Math.max(0, Number(discount.toFixed(2))));
     const serviceDiscount =
       eligible > 0
         ? Number(

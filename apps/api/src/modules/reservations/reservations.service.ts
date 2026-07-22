@@ -36,6 +36,11 @@ import { ServicesRepository } from '../services/services.repository.js';
 import { SettingsService } from '../settings/settings.service.js';
 import { WalletRepository } from '../wallet/wallet.repository.js';
 
+import {
+  computeFixedReservationPayoutSplit,
+  normalizeCustomDisputeSplit,
+  resolveReservationCommissionRates,
+} from './reservations.money.js';
 import { ReservationsRepository } from './reservations.repository.js';
 import type {
   ReservationActionFailureRow,
@@ -719,6 +724,8 @@ export class ReservationsService {
               couponPlatformFundedAmount: couponPreview.platformFundedAmount,
             }
           : {}),
+        commissionPercent: status.commissionPercent,
+        commissionMinEgp: status.commissionMinEgp,
         totalAmount: heldTotalAmount,
         currency: reservationCurrency,
         deductionTiming: 'on_reserve_hold',
@@ -3810,25 +3817,19 @@ export class ReservationsService {
     refundAmount: number;
     capturedAmount: number;
     providerReleaseAmount: number;
+    providerPayoutAmount: number;
     platformCommissionAmount: number;
     settlementStatus: Reservation['settlementStatus'];
   }> {
-    const holdAmount = this.getReservationFixedHoldAmount(reservation);
     const settlementOutcome =
       input.settlementOutcome ?? this.inferDisputeSettlementOutcome(input.status);
-    if (settlementOutcome === 'none' && holdAmount > 0 && reservation.fixed_price_hold_id) {
-      throw new HttpError({
-        statusCode: 400,
-        code: 'DISPUTE_SETTLEMENT_REQUIRED',
-        message: 'A dispute with held funds must be resolved with refund, release, or split.',
-      });
-    }
-    if (settlementOutcome === 'none' || holdAmount <= 0 || !reservation.fixed_price_hold_id) {
+    if (!reservation.fixed_price_hold_id) {
       return {
         settlementOutcome,
         refundAmount: 0,
         capturedAmount: 0,
         providerReleaseAmount: 0,
+        providerPayoutAmount: 0,
         platformCommissionAmount: 0,
         settlementStatus: reservation.settlement_status as Reservation['settlementStatus'],
       };
@@ -3841,6 +3842,25 @@ export class ReservationsService {
         message: 'Reservation hold is already settled.',
       });
     }
+    const holdAmount = toMoney(toNumber(currentHold.amount));
+    if (settlementOutcome === 'none' && holdAmount > 0) {
+      throw new HttpError({
+        statusCode: 400,
+        code: 'DISPUTE_SETTLEMENT_REQUIRED',
+        message: 'A dispute with held funds must be resolved with refund, release, or split.',
+      });
+    }
+    if (settlementOutcome === 'none' || holdAmount <= 0) {
+      return {
+        settlementOutcome,
+        refundAmount: 0,
+        capturedAmount: 0,
+        providerReleaseAmount: 0,
+        providerPayoutAmount: 0,
+        platformCommissionAmount: 0,
+        settlementStatus: reservation.settlement_status as Reservation['settlementStatus'],
+      };
+    }
 
     if (settlementOutcome === 'refund') {
       await this.refundFixedHold(client, reservation, 'Dispute resolved with full customer refund');
@@ -3849,19 +3869,14 @@ export class ReservationsService {
         refundAmount: holdAmount,
         capturedAmount: 0,
         providerReleaseAmount: 0,
+        providerPayoutAmount: 0,
         platformCommissionAmount: 0,
         settlementStatus: 'refunded_to_customer',
       };
     }
 
     if (settlementOutcome === 'release') {
-      const settings = await this.settingsService.getAppStatus();
-      const split = computeCommissionSplit(
-        holdAmount,
-        settings.commissionPercent,
-        settings.commissionMinEgp,
-      );
-      await this.releaseExpertFixedPayout(
+      const payout = await this.releaseExpertFixedPayout(
         client,
         reservation,
         'Dispute resolved with full provider release',
@@ -3871,28 +3886,26 @@ export class ReservationsService {
         refundAmount: 0,
         capturedAmount: holdAmount,
         providerReleaseAmount: holdAmount,
-        platformCommissionAmount: split.commission,
+        providerPayoutAmount: payout.providerAmount,
+        platformCommissionAmount: payout.commission,
         settlementStatus: 'released_to_provider',
       };
     }
 
-    const refundAmount = toMoney(input.customerRefundAmount ?? 0);
-    const providerReleaseAmount = toMoney(input.providerReleaseAmount ?? 0);
-    if (refundAmount <= 0 && providerReleaseAmount <= 0) {
+    const customSplit = normalizeCustomDisputeSplit(
+      holdAmount,
+      input.customerRefundAmount ?? 0,
+      input.providerReleaseAmount ?? 0,
+    );
+    if (!customSplit) {
       throw new HttpError({
         statusCode: 400,
         code: 'INVALID_DISPUTE_SPLIT',
         message:
-          'Custom dispute split requires a customer refund amount or provider release amount.',
+          'Custom dispute split must contain positive refund and release amounts that exactly equal the held reservation amount.',
       });
     }
-    if (refundAmount + providerReleaseAmount > holdAmount + 0.01) {
-      throw new HttpError({
-        statusCode: 400,
-        code: 'INVALID_DISPUTE_SPLIT',
-        message: 'Custom dispute split cannot exceed the held reservation amount.',
-      });
-    }
+    const { refundAmount, providerReleaseAmount } = customSplit;
 
     await this.walletRepo.captureHoldInTransaction(
       client,
@@ -3923,14 +3936,22 @@ export class ReservationsService {
     }
 
     let platformCommissionAmount = 0;
+    let providerPayoutAmount = 0;
     if (providerReleaseAmount > 0) {
       const settings = await this.settingsService.getAppStatus();
-      const split = computeCommissionSplit(
-        providerReleaseAmount,
+      const policy = this.getPolicySnapshot(reservation);
+      const rates = resolveReservationCommissionRates(
+        policy.pricingBreakdown,
         settings.commissionPercent,
         settings.commissionMinEgp,
       );
+      const split = computeCommissionSplit(
+        providerReleaseAmount,
+        rates.commissionPercent,
+        rates.commissionMinEgp,
+      );
       platformCommissionAmount = split.commission;
+      providerPayoutAmount = split.providerAmount;
       const providerWallet = await this.walletRepo.getOrCreateUserWalletInTransaction(
         client,
         reservation.provider_id,
@@ -3971,6 +3992,7 @@ export class ReservationsService {
       refundAmount,
       capturedAmount: providerReleaseAmount,
       providerReleaseAmount,
+      providerPayoutAmount,
       platformCommissionAmount,
       settlementStatus:
         refundAmount > 0 && providerReleaseAmount > 0
@@ -3994,21 +4016,21 @@ export class ReservationsService {
     client: PoolClient,
     reservation: ReservationRow,
     reason: string,
-  ): Promise<void> {
+  ): Promise<{ commission: number; providerAmount: number }> {
     const holdId = reservation.fixed_price_hold_id;
-    if (!holdId) return;
+    if (!holdId) return { commission: 0, providerAmount: 0 };
     const hold = await this.walletRepo.findWalletHoldById(holdId);
-    if (!hold) return;
+    if (!hold) return { commission: 0, providerAmount: 0 };
     // Idempotency: only a hold still in `held` state should ever be captured and
     // paid out. If it is already captured/released/cancelled, the payout has run
     // (or the funds are gone) and re-crediting would mint duplicate payouts.
-    if (hold.status !== 'held') return;
+    if (hold.status !== 'held') return { commission: 0, providerAmount: 0 };
     await this.walletRepo.captureHoldInTransaction(client, holdId, reason, {
       reservationId: reservation.id,
     });
 
     const amount = toMoney(toNumber(hold.amount));
-    if (amount <= 0) return;
+    if (amount <= 0) return { commission: 0, providerAmount: 0 };
 
     let providerWallet = await this.walletRepo.findByUserId(reservation.provider_id);
     if (!providerWallet) {
@@ -4049,6 +4071,7 @@ export class ReservationsService {
         reservation.id,
       );
     }
+    return { commission, providerAmount };
   }
 
   private computeReservationPayoutSplit(
@@ -4057,36 +4080,13 @@ export class ReservationsService {
     commissionPercent: number,
     commissionMinEgp: number,
   ): { commission: number; providerAmount: number } {
-    const policy = this.getPolicySnapshot(reservation);
-    const pricing = policy.pricingBreakdown;
-    const platformFee = toMoney(
-      Math.min(heldAmount, this.getReservationPlatformFeeAmount(reservation)),
-    );
-    const providerGross = toMoney(Math.max(0, heldAmount - platformFee));
-    const platformFundedAmount = toMoney(pricing?.couponPlatformFundedAmount ?? 0);
-    const originalAmount = toMoney(
-      (pricing?.originalServicePriceAmount ?? 0) + (pricing?.originalReservationPriceAmount ?? 0),
-    );
-    if (!pricing?.couponRedemptionId || originalAmount <= 0) {
-      const split = computeCommissionSplit(providerGross, commissionPercent, commissionMinEgp);
-      const commission = toMoney(Math.min(heldAmount, split.commission + platformFee));
-      return {
-        commission,
-        providerAmount: toMoney(Math.max(0, heldAmount - commission)),
-      };
-    }
-
-    const originalSplit = computeCommissionSplit(
-      originalAmount,
-      commissionPercent,
-      commissionMinEgp,
-    );
-    const serviceCommission = toMoney(Math.max(0, originalSplit.commission - platformFundedAmount));
-    const commission = toMoney(Math.min(heldAmount, serviceCommission + platformFee));
-    return {
-      commission,
-      providerAmount: toMoney(Math.max(0, heldAmount - commission)),
-    };
+    return computeFixedReservationPayoutSplit({
+      heldAmount,
+      platformFeeAmount: this.getReservationPlatformFeeAmount(reservation),
+      pricing: this.getPolicySnapshot(reservation).pricingBreakdown,
+      fallbackCommissionPercent: commissionPercent,
+      fallbackCommissionMinEgp: commissionMinEgp,
+    });
   }
 
   private async ensurePrejoinBalances(
