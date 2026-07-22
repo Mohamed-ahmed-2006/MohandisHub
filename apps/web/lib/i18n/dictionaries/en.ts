@@ -86,6 +86,9 @@ export const enDictionary: Dictionary = {
     howItWorksTitle: 'How it works',
     stepLabel: 'Step',
     footerText: '© 2026 Eng. Mohamed Ahmed · Contact us · Privacy Policy · Terms',
+    footerLegalNavAria: 'Legal links',
+    footerPrivacy: 'Privacy Policy',
+    footerTerms: 'Terms & Conditions',
     features: [
       {
         title: 'Find expert help quickly',

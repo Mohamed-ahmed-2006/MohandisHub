@@ -85,6 +85,9 @@ export const arDictionary: Dictionary = {
     howItWorksTitle: 'كيف تعمل المنصة',
     stepLabel: 'الخطوة',
     footerText: '© 2026 م. محمد أحمد · تواصل معنا · سياسة الخصوصية · الشروط والأحكام',
+    footerLegalNavAria: 'روابط قانونية',
+    footerPrivacy: 'سياسة الخصوصية',
+    footerTerms: 'الشروط والأحكام',
     features: [
       {
         title: 'اعثر على الخبراء بسرعة',

@@ -53,9 +53,15 @@ describe('i18n dictionaries', () => {
 
   it('preserves known high-value strings at runtime', () => {
     expect(enDictionary.home.footerText.length).toBeGreaterThan(0);
+    expect(enDictionary.home.footerLegalNavAria).toBe('Legal links');
+    expect(enDictionary.home.footerPrivacy).toBe('Privacy Policy');
+    expect(enDictionary.home.footerTerms).toBe('Terms & Conditions');
     expect(arDictionary.common.appName).toBe('مهندس هب');
     expect(enDictionary.jobsWorkspace.businessTitle).toBe('My Hiring Posts');
     expect(arDictionary.jobsWorkspace.businessTitle).toBe('منشورات التوظيف الخاصة بي');
     expect(arDictionary.home.footerText.length).toBeGreaterThan(0);
+    expect(arDictionary.home.footerLegalNavAria).toBe('روابط قانونية');
+    expect(arDictionary.home.footerPrivacy).toBe('سياسة الخصوصية');
+    expect(arDictionary.home.footerTerms).toBe('الشروط والأحكام');
   });
 });
