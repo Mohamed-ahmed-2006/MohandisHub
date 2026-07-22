@@ -33,7 +33,7 @@ export async function sendResendEmail(params: SendResendEmailParams): Promise<vo
   });
 
   if (error) {
-    throw new Error(`Resend email send failed: ${error.message}`);
+    throw new Error('Resend email send failed.');
   }
   if (!data?.id) {
     throw new Error('Resend email send failed: missing email id in response.');

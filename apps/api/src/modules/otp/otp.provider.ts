@@ -104,8 +104,7 @@ export class BrevoEmailSender implements IOtpSender {
     });
 
     if (!response.ok) {
-      const errorText = await response.text();
-      logger.error('Brevo email send failed', { status: response.status, body: errorText });
+      logger.error('Brevo email send failed', { status: response.status });
       return false;
     }
 
@@ -200,7 +199,6 @@ export class TwilioSmsSender implements IOtpSender {
     if (!response.ok) {
       logger.error('Twilio SMS send failed', {
         status: response.status,
-        body: await response.text(),
       });
       return false;
     }
@@ -235,7 +233,6 @@ export class HttpAdapterSmsSender implements IOtpSender {
     if (!response.ok) {
       logger.error('HTTP SMS adapter send failed', {
         status: response.status,
-        body: await response.text(),
       });
       return false;
     }
@@ -279,7 +276,6 @@ export class MetaWhatsAppOtpSender implements IOtpSender {
     if (!response.ok) {
       logger.error('Meta WhatsApp OTP send failed', {
         status: response.status,
-        body: await response.text(),
       });
       return false;
     }

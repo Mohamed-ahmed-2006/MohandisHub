@@ -70,8 +70,7 @@ export async function sendTransactionalEmail(params: SendTransactionalEmailParam
     });
 
     if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`Brevo email send failed: ${response.status} ${errorText}`);
+      throw new Error(`Brevo email send failed: ${response.status}`);
     }
     return;
   }
