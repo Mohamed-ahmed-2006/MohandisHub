@@ -6,6 +6,7 @@ import { useEffect, useState } from 'react';
 
 import { useAppStatus } from '@/components/app-status-provider';
 import { SiteLogo } from '@/components/site-logo';
+import { isAdsUiEnabled } from '@/lib/advertisements/feature';
 import { getChatSocket } from '@/lib/chat/socket';
 import { buildLocalePath } from '@/lib/i18n/path';
 import type { Dictionary, Locale } from '@/lib/i18n/types';
@@ -132,6 +133,7 @@ export const AppSidebar = ({
   const hiddenHrefs = status?.sidebarHiddenHrefs ?? [];
 
   const visibleItems = navItems.filter((item) => {
+    if (item.href === '/app/advertisements' && !isAdsUiEnabled()) return false;
     if (hiddenHrefs.includes(item.href)) return false;
     if (item.href === '/app/plan' && status?.featurePlansEnabled === false) return false;
     if (!item.roles) return true;

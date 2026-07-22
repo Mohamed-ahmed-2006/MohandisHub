@@ -42,7 +42,7 @@ export const MyAdsScreen = ({ locale, dictionary }: MyAdsScreenProps) => {
   const [uploading, setUploading] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [adControls, setAdControls] = useState<AdminAdControls>({
-    acceptAds: true,
+    acceptAds: false,
     pricePerDay: 0,
   });
 

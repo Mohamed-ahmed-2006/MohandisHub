@@ -99,6 +99,8 @@ services:
         sync: false
       - key: PAYMOB_DEPOSITS_ENABLED
         value: false
+      - key: ADVERTISEMENTS_ENABLED
+        value: false
       - key: PAYMOB_WITHDRAWALS_ENABLED
         value: false
       - key: PAYMOB_PAYOUT_CLIENT_ID

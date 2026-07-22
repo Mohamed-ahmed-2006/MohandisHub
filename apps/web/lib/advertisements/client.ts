@@ -94,7 +94,7 @@ export const advertisementsApiClient = {
   getAdControls: (token: string) =>
     apiReq<AdminAdControls>('/api/advertisements/controls', {
       token,
-      allow404As: { acceptAds: true, pricePerDay: 0 },
+      allow404As: { acceptAds: false, pricePerDay: 0 },
     }),
   createAd: (
     token: string,
@@ -172,7 +172,7 @@ export const advertisementsApiClient = {
   adminGetControls: (token: string) =>
     apiReq<AdminAdControls>('/api/advertisements/admin/controls', {
       token,
-      allow404As: { acceptAds: true, pricePerDay: 0 },
+      allow404As: { acceptAds: false, pricePerDay: 0 },
     }),
   adminUpdateControls: (token: string, body: AdminAdControls) =>
     apiReq<AdminAdControls>('/api/advertisements/admin/controls', { method: 'PUT', token, body }),

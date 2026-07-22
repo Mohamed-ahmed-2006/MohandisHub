@@ -21,7 +21,7 @@ const hasPermission = (permissions: string[], permission: string): boolean =>
 
 export const AdminAdsTab = ({ dictionary, accessToken, adminPermissions }: AdminAdsTabProps) => {
   const [rows, setRows] = useState<Advertisement[]>([]);
-  const [controls, setControls] = useState<AdminAdControls>({ acceptAds: true, pricePerDay: 0 });
+  const [controls, setControls] = useState<AdminAdControls>({ acceptAds: false, pricePerDay: 0 });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<string>('');
@@ -56,7 +56,7 @@ export const AdminAdsTab = ({ dictionary, accessToken, adminPermissions }: Admin
         advertisementsApiClient.adminListAds(accessToken, status ? { status } : undefined),
         canManageAdPricing
           ? advertisementsApiClient.adminGetControls(accessToken)
-          : Promise.resolve({ acceptAds: true, pricePerDay: 0 }),
+          : Promise.resolve({ acceptAds: false, pricePerDay: 0 }),
       ]);
       setRows(data.rows);
       setControls(adControls);

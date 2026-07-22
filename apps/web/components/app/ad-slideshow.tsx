@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
 
 import { advertisementsApiClient, type Advertisement } from '@/lib/advertisements/client';
+import { isAdsUiEnabled } from '@/lib/advertisements/feature';
 import { toAbsoluteAssetUrl } from '@/lib/asset-url';
 import { buildLocalePath } from '@/lib/i18n/path';
 import type { Dictionary, Locale } from '@/lib/i18n/types';
@@ -20,7 +21,7 @@ export const AdSlideshow = ({ locale, dictionary, accessToken, role }: AdSlidesh
   const [ads, setAds] = useState<Advertisement[]>([]);
   const [slide, setSlide] = useState(0);
   const [loading, setLoading] = useState(true);
-  const adsEnabled = process.env.NEXT_PUBLIC_ENABLE_ADS === 'true';
+  const adsEnabled = isAdsUiEnabled();
 
   useEffect(() => {
     if (!adsEnabled) {

@@ -1,3 +1,4 @@
+import { env } from '../../config/env.js';
 import { getPool } from '../../db/pool.js';
 import { HttpError } from '../../utils/http-error.js';
 import { WalletRepository } from '../wallet/wallet.repository.js';
@@ -16,7 +17,7 @@ import type {
 
 const PLATFORM_USER_ID = '00000000-0000-0000-0000-000000000001';
 
-const DEFAULT_AD_CONTROLS = { acceptAds: true, pricePerDay: 0 };
+const DEFAULT_AD_CONTROLS = { acceptAds: false, pricePerDay: 0 };
 
 export class AdvertisementsService {
   constructor(
@@ -26,6 +27,7 @@ export class AdvertisementsService {
   ) {}
 
   private async getControls() {
+    if (!env.ADVERTISEMENTS_ENABLED) return DEFAULT_AD_CONTROLS;
     return (await this.repo.getGlobalAdControls()) ?? DEFAULT_AD_CONTROLS;
   }
 
@@ -244,6 +246,7 @@ export class AdvertisementsService {
   }
 
   async resolveActiveAds(input: AdCenterResolveInput) {
+    if (!env.ADVERTISEMENTS_ENABLED) return [];
     await this.repo.expireStaleAds();
     const limit = input.limit ?? 5;
     const candidates = await this.repo.listActiveAdsForAdCenter(100);

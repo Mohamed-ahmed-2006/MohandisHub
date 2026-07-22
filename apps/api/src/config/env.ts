@@ -96,6 +96,7 @@ const envSchema = z.object({
 
   // Web Push (PWA/browser push). Keys stay in env; subscriptions are stored per device.
   WEB_PUSH_ENABLED: booleanEnv(false),
+  ADVERTISEMENTS_ENABLED: booleanEnv(false),
   WEB_PUSH_VAPID_PUBLIC_KEY: z.string().optional(),
   WEB_PUSH_VAPID_PRIVATE_KEY: z.string().optional(),
   WEB_PUSH_SUBJECT: z.string().optional(),
