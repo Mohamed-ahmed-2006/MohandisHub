@@ -1,54 +1,22 @@
 import { env } from '../../config/env.js';
 import { logger } from '../../config/logger.js';
 import { getPool } from '../../db/pool.js';
-import {
-  deleteLocalUploadBasenameIfExists,
-  deleteLocalUploadRelativePathIfExists,
-} from '../../lib/local-upload-storage.js';
+import { deleteLocalUploadRelativePathIfExists } from '../../lib/local-upload-storage.js';
 import {
   deleteObjectsFromBucket,
   isSupabaseStorageConfigured,
   parsePrivateUploadIdFromUrl,
-  resolvePublicUploadRef,
-  UPLOADS_BUCKET,
 } from '../../lib/supabase-storage.js';
 
 import { checkDeleteThresholds, sendRetentionAlert } from './retention.alerts.js';
 import { mergeRetentionHours } from './retention.merge.js';
 import { RetentionRepository } from './retention.repository.js';
 import type { RetentionAlertsJson, RetentionPolicyJson, SweepResults } from './retention.types.js';
-import { parseNeedReferenceUrls } from './retention.urls.js';
 
 const ADVISORY_LOCK_KEY = 912_345_678_901;
 
 export class RetentionService {
   private readonly repo = new RetentionRepository();
-
-  private async deletePublicMediaUrls(urls: string[], dryRun: boolean): Promise<number> {
-    if (dryRun) return 0;
-    let n = 0;
-    const supaPaths: string[] = [];
-    for (const url of urls) {
-      const ref = resolvePublicUploadRef(url);
-      if (!ref) continue;
-      if (ref.kind === 'supabase') {
-        supaPaths.push(ref.path);
-      } else if (deleteLocalUploadBasenameIfExists(ref.basename)) {
-        n += 1;
-      }
-    }
-    if (supaPaths.length > 0 && isSupabaseStorageConfigured()) {
-      try {
-        await deleteObjectsFromBucket(UPLOADS_BUCKET, supaPaths);
-        n += supaPaths.length;
-      } catch (e) {
-        logger.error('Retention: Supabase delete batch failed', {
-          error: e instanceof Error ? e.message : 'unknown',
-        });
-      }
-    }
-    return n;
-  }
 
   private async deletePrivateUploadObjects(
     rows: Array<{ bucket: string; storage_path: string }>,
@@ -198,15 +166,12 @@ export class RetentionService {
       );
       if (needHours != null) {
         const rows = await this.repo.listCompletedNeedsWithOldReferences(client, needHours);
-        let deletedFiles = 0;
         for (const row of rows) {
-          const urls = parseNeedReferenceUrls(row.reference_url);
-          deletedFiles += await this.deletePublicMediaUrls(urls, dryRun);
           await this.repo.clearNeedReferenceUrl(client, row.id, dryRun);
         }
         results.needReferenceAfterCompleted = {
           deletedRows: rows.length,
-          deletedFiles,
+          deletedFiles: 0,
         };
       } else {
         results.needReferenceAfterCompleted = { skipped: true, reason: 'disabled' };
@@ -219,15 +184,10 @@ export class RetentionService {
       );
       if (bidHours != null) {
         const rows = await this.repo.listBidMessagesWithOldAttachments(client, bidHours);
-        let deletedFiles = 0;
         for (const row of rows) {
-          const u = row.attachment_url?.trim();
-          if (u) {
-            deletedFiles += await this.deletePublicMediaUrls([u], dryRun);
-          }
           await this.repo.clearBidMessageAttachment(client, row.id, dryRun);
         }
-        results.bidMessageAttachments = { deletedRows: rows.length, deletedFiles };
+        results.bidMessageAttachments = { deletedRows: rows.length, deletedFiles: 0 };
       } else {
         results.bidMessageAttachments = { skipped: true, reason: 'disabled' };
       }

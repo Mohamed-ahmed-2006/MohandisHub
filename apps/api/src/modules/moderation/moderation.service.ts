@@ -1,34 +1,8 @@
 import { getPool } from '../../db/pool.js';
-import { deleteLocalUploadBasenameIfExists } from '../../lib/local-upload-storage.js';
-import {
-  deleteObjectsFromBucket,
-  isSupabaseStorageConfigured,
-  resolvePublicUploadRef,
-  UPLOADS_BUCKET,
-} from '../../lib/supabase-storage.js';
 import { HttpError } from '../../utils/http-error.js';
 import { parseNeedReferenceUrls } from '../retention/retention.urls.js';
 
 import { ModerationRepository } from './moderation.repository.js';
-
-async function deleteUrlsFromStorage(urls: string[]): Promise<number> {
-  let n = 0;
-  const supaPaths: string[] = [];
-  for (const url of urls) {
-    const ref = resolvePublicUploadRef(url);
-    if (!ref) continue;
-    if (ref.kind === 'supabase') {
-      supaPaths.push(ref.path);
-    } else if (deleteLocalUploadBasenameIfExists(ref.basename)) {
-      n += 1;
-    }
-  }
-  if (supaPaths.length > 0 && isSupabaseStorageConfigured()) {
-    await deleteObjectsFromBucket(UPLOADS_BUCKET, supaPaths);
-    n += supaPaths.length;
-  }
-  return n;
-}
 
 export class ModerationService {
   private readonly logRepo = new ModerationRepository();
@@ -44,7 +18,7 @@ export class ModerationService {
       throw new HttpError({ statusCode: 404, code: 'NOT_FOUND', message: 'Need not found.' });
     }
     const urls = parseNeedReferenceUrls(row.reference_url);
-    const filesRemoved = await deleteUrlsFromStorage(urls);
+    const filesRemoved = 0;
     await pool.query(`UPDATE needs SET reference_url = NULL, updated_at = now() WHERE id = $1`, [
       needId,
     ]);
@@ -68,8 +42,7 @@ export class ModerationService {
     if (!row) {
       throw new HttpError({ statusCode: 404, code: 'NOT_FOUND', message: 'Message not found.' });
     }
-    const u = row.attachment_url?.trim();
-    const filesRemoved = u ? await deleteUrlsFromStorage([u]) : 0;
+    const filesRemoved = 0;
     await pool.query(`UPDATE bid_messages SET attachment_url = NULL WHERE id = $1`, [messageId]);
     await this.logRepo.insertLog({
       adminUserId: adminId,
@@ -103,9 +76,8 @@ export class ModerationService {
         message: 'Invalid image index.',
       });
     }
-    const removed = images[urlIndex]!;
     const next = images.filter((_, i) => i !== urlIndex);
-    const filesRemoved = removed ? await deleteUrlsFromStorage([removed]) : 0;
+    const filesRemoved = 0;
     await pool.query(`UPDATE services SET images = $2::text[], updated_at = now() WHERE id = $1`, [
       serviceId,
       next,
