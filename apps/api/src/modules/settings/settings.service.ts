@@ -143,6 +143,35 @@ export class SettingsService {
     partial: UpdateAppSettingsBody,
     adminId?: string,
   ): Promise<AppSettings | null> {
+    if (partial.minDepositAmount !== undefined || partial.maxDepositAmount !== undefined) {
+      const current =
+        partial.minDepositAmount === undefined || partial.maxDepositAmount === undefined
+          ? await this.repo.get()
+          : null;
+      const minDepositAmount =
+        partial.minDepositAmount !== undefined
+          ? partial.minDepositAmount
+          : current?.min_deposit_amount != null
+            ? Number.parseFloat(current.min_deposit_amount)
+            : null;
+      const maxDepositAmount =
+        partial.maxDepositAmount !== undefined
+          ? partial.maxDepositAmount
+          : current?.max_deposit_amount != null
+            ? Number.parseFloat(current.max_deposit_amount)
+            : null;
+      if (
+        minDepositAmount != null &&
+        maxDepositAmount != null &&
+        maxDepositAmount < minDepositAmount
+      ) {
+        throw new HttpError({
+          statusCode: 400,
+          code: 'INVALID_DEPOSIT_LIMITS',
+          message: 'Maximum deposit amount must be greater than or equal to the minimum.',
+        });
+      }
+    }
     if (
       partial.maxPublicUploadBytes != null &&
       partial.maxPublicUploadBytes > env.PUBLIC_UPLOAD_MAX_BYTES_CEILING

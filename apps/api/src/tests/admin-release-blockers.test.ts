@@ -3,7 +3,12 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it, vi } from 'vitest';
 
 import { AdminService } from '../modules/admin/admin.service.js';
-import { factoryResetSchema, updateUserSchema } from '../modules/admin/admin.validation.js';
+import {
+  adjustBalanceSchema,
+  approveManualInstapayDepositSchema,
+  factoryResetSchema,
+  updateUserSchema,
+} from '../modules/admin/admin.validation.js';
 
 const readSource = (relative: string): string =>
   readFileSync(new URL(relative, import.meta.url), 'utf8');
@@ -69,5 +74,26 @@ describe('admin release blocker hardening', () => {
     const adminController = readSource('../modules/admin/admin.controller.ts');
     expect(adminController).toContain('assertCanMutateUserAccount(req, input.isActive === false)');
     expect(adminController).toContain('assertCanMutateUserAccount(req, true)');
+  });
+
+  it('rejects privileged money writes that cannot fit the EGP database precision', () => {
+    const adjustment = (amount: number) => ({
+      userId: '11111111-1111-4111-8111-111111111111',
+      type: 'adjustment',
+      amount,
+      description: 'Release audit adjustment',
+    });
+    const approval = (creditedAmountEgp: number) => ({
+      creditedAmountEgp,
+      reason: 'Release audit approval',
+    });
+
+    expect(adjustBalanceSchema.safeParse(adjustment(125.5)).success).toBe(true);
+    expect(approveManualInstapayDepositSchema.safeParse(approval(125.5)).success).toBe(true);
+
+    for (const invalid of [0, -1, 0.001, 10_000_000_000, Number.POSITIVE_INFINITY]) {
+      expect(adjustBalanceSchema.safeParse(adjustment(invalid)).success).toBe(false);
+      expect(approveManualInstapayDepositSchema.safeParse(approval(invalid)).success).toBe(false);
+    }
   });
 });

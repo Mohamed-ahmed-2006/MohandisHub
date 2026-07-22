@@ -10,6 +10,7 @@ import {
   updateCraftsmanProfileSchema,
   updateExpertProfileSchema,
 } from '../profiles/profiles.validation.js';
+import { parseEgpAmount } from '../wallet/wallet.amount.js';
 
 export { updateBusinessProfileSchema, updateCraftsmanProfileSchema, updateExpertProfileSchema };
 
@@ -116,10 +117,20 @@ export const updatePlanSchema = createPlanSchema.partial().extend({
   isActive: z.boolean().optional(),
 });
 
+const egpAmountSchema = z.number().refine((amount) => parseEgpAmount(amount) != null, {
+  message: 'Amount must be positive and have at most two decimal places.',
+});
+const nonnegativeEgpAmountSchema = z
+  .number()
+  .min(0)
+  .refine((amount) => amount === 0 || parseEgpAmount(amount) != null, {
+    message: 'Amount must have at most two decimal places.',
+  });
+
 export const adjustBalanceSchema = z.object({
   userId: z.string().uuid(),
   type: z.enum(['deposit', 'withdrawal', 'adjustment', 'bonus', 'commission']),
-  amount: z.number().positive(),
+  amount: egpAmountSchema,
   description: z.string().min(5).max(500),
 });
 
@@ -179,8 +190,8 @@ export const updateSettingsSchema = z.object({
   lockLogins: z.boolean().optional(),
   disableCryptoDeposits: z.boolean().optional(),
   disableCardDeposits: z.boolean().optional(),
-  minDepositAmount: z.number().min(0).nullable().optional(),
-  maxDepositAmount: z.number().min(0).nullable().optional(),
+  minDepositAmount: nonnegativeEgpAmountSchema.nullable().optional(),
+  maxDepositAmount: nonnegativeEgpAmountSchema.nullable().optional(),
   pausePlanSubscriptions: z.boolean().optional(),
   pauseNeeds: z.boolean().optional(),
   pauseBids: z.boolean().optional(),
@@ -228,7 +239,7 @@ export const updateSettingsSchema = z.object({
 });
 
 export const approveManualInstapayDepositSchema = z.object({
-  creditedAmountEgp: z.number().positive().optional(),
+  creditedAmountEgp: egpAmountSchema.optional(),
   reason: z.string().min(5).max(1000),
 });
 
