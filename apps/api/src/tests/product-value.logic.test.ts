@@ -62,12 +62,63 @@ describe('product value logic', () => {
     const service = new CouponsService(repo as never);
 
     const preview = await service.preview(
-      { surface: 'service', subtotal: 800, currency: 'EGP' },
+      { surface: 'service', subtotal: 800, commissionAmount: 80, currency: 'EGP' },
       { id: 'user-1', role: 'customer' },
     );
 
     expect(preview.valid).toBe(true);
     expect(preview.discountAmount).toBe(50);
     expect(preview.finalAmount).toBe(750);
+  });
+
+  it('rejects service coupons that claim more platform funding than commission can cover', async () => {
+    const repo = {
+      findCandidates: vi.fn().mockResolvedValue([
+        {
+          ...activeCoupon,
+          type: 'fixed',
+          value: '50',
+          min_spend: '0',
+          max_discount: null,
+        },
+      ]),
+      countUserRedemptions: vi.fn().mockResolvedValue(0),
+    };
+    const service = new CouponsService(repo as never);
+
+    const preview = await service.preview(
+      { surface: 'service', subtotal: 100, commissionAmount: 10, currency: 'EGP' },
+      { id: 'user-1', role: 'customer' },
+    );
+
+    expect(preview.valid).toBe(false);
+    expect(preview.finalAmount).toBe(100);
+  });
+
+  it('does not add embedded platform commission back onto a discounted reservation total', async () => {
+    const repo = {
+      findCandidates: vi.fn().mockResolvedValue([
+        {
+          ...activeCoupon,
+          type: 'fixed',
+          value: '5',
+          min_spend: '0',
+          max_discount: null,
+        },
+      ]),
+      countUserRedemptions: vi.fn().mockResolvedValue(0),
+    };
+    const service = new CouponsService(repo as never);
+
+    const preview = await service.preview(
+      { surface: 'service', subtotal: 100, commissionAmount: 10, currency: 'EGP' },
+      { id: 'user-1', role: 'customer' },
+    );
+
+    expect(preview.valid).toBe(true);
+    expect(preview.discountAmount).toBe(5);
+    expect(preview.finalServiceAmount).toBe(95);
+    expect(preview.finalCommissionAmount).toBe(10);
+    expect(preview.finalAmount).toBe(95);
   });
 });

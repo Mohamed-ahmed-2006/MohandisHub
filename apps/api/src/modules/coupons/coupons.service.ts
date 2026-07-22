@@ -310,6 +310,13 @@ export class CouponsService {
     const providerShare = this.providerFundingShare(row);
     const providerFundedAmount = Number((discount * providerShare).toFixed(2));
     const platformFundedAmount = Number((discount - providerFundedAmount).toFixed(2));
+    if (input.surface === 'service' && platformFundedAmount > Number(commission.toFixed(2))) {
+      return this.invalidPreview(
+        input,
+        'The platform-funded discount exceeds the available platform commission.',
+        row,
+      );
+    }
     return {
       valid: discount > 0,
       code: row.code,
@@ -319,7 +326,7 @@ export class CouponsService {
       commissionDiscountAmount: commissionDiscount,
       finalServiceAmount: Number((subtotal - serviceDiscount).toFixed(2)),
       finalCommissionAmount: Number((commission - commissionDiscount).toFixed(2)),
-      finalAmount: Number((subtotal + commission - discount).toFixed(2)),
+      finalAmount: Number((subtotal - discount).toFixed(2)),
       currency: row.currency ?? input.currency ?? 'EGP',
       fundingSource: row.funding_source,
       discountTarget: row.discount_target,
