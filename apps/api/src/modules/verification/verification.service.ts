@@ -29,16 +29,15 @@ export class VerificationService {
   constructor(
     private readonly verificationRepo: VerificationRepository = new VerificationRepository(),
     private readonly profilesRepo: ProfilesRepository = new ProfilesRepository(),
+    provider: IVerificationProvider = createVerificationProvider(env.VERIFICATION_PROVIDER),
   ) {
-    this.provider = createVerificationProvider(env.VERIFICATION_PROVIDER);
+    this.provider = provider;
   }
 
   // ── Initiate verification ──────────────────────────────────────────────
 
   async initiate(params: {
     userId: string;
-    email: string;
-    displayName: string;
     role: string;
   }): Promise<{
     requestId: string;
@@ -78,11 +77,20 @@ export class VerificationService {
     const requestType: VerificationRequestType =
       params.role === 'business' ? 'business' : 'identity';
 
+    const account = await this.profilesRepo.findUserBasicById(params.userId);
+    if (!account) {
+      throw new HttpError({
+        statusCode: 404,
+        code: 'USER_NOT_FOUND',
+        message: 'User not found.',
+      });
+    }
+
     // Call the provider
     const session = await this.provider.createSession({
       userId: params.userId,
-      email: params.email,
-      displayName: params.displayName,
+      email: account.email,
+      displayName: account.display_name,
       type: requestType,
     });
 
@@ -211,9 +219,20 @@ export class VerificationService {
 
     if (isTerminal) {
       const newStatus = result.approved ? 'approved' : 'rejected';
-      await this.verificationRepo.updateStatus(request.id, newStatus, {
-        providerResponse: result.rawPayload,
-      });
+      const transitioned = await this.verificationRepo.transitionStatus(
+        request.id,
+        ['initiated', 'submitted'],
+        newStatus,
+        { providerResponse: result.rawPayload },
+      );
+      if (!transitioned) {
+        logger.warn('Webhook: ignored duplicate or conflicting terminal transition', {
+          sessionId: result.sessionId,
+          currentStatus: request.status,
+          attemptedStatus: newStatus,
+        });
+        return;
+      }
 
       const role = await this.resolveRequestRole(request.user_id, request.request_type);
       const hasRequiredImage = await hasRequiredVerificationImage(
@@ -255,9 +274,13 @@ export class VerificationService {
     }
 
     // Under review: provider sent "In Progress" / "In Review" etc.
-    await this.verificationRepo.updateStatus(request.id, 'submitted', {
-      providerResponse: result.rawPayload,
-    });
+    const transitioned = await this.verificationRepo.transitionStatus(
+      request.id,
+      ['initiated'],
+      'submitted',
+      { providerResponse: result.rawPayload },
+    );
+    if (!transitioned) return;
 
     const role = await this.resolveRequestRole(request.user_id, request.request_type);
     await this.verificationRepo.updateProfileVerificationStatus(

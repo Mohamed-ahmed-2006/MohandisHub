@@ -129,6 +129,29 @@ export class VerificationRepository {
     );
   }
 
+  async transitionStatus(
+    requestId: string,
+    fromStatuses: VerificationRequestStatus[],
+    status: VerificationRequestStatus,
+    extra?: { providerResponse?: unknown },
+  ): Promise<boolean> {
+    const { rows } = await this.db.query<{ id: string }>(
+      `UPDATE verification_requests
+       SET status = $1,
+           provider_response = COALESCE($2, provider_response)
+       WHERE id = $3
+         AND status::text = ANY($4::text[])
+       RETURNING id`,
+      [
+        status,
+        extra?.providerResponse ? JSON.stringify(extra.providerResponse) : null,
+        requestId,
+        fromStatuses,
+      ],
+    );
+    return rows.length === 1;
+  }
+
   /**
    * Update the verification_status on the user's role-specific profile.
    * Called when a verification is approved or rejected.
@@ -148,11 +171,17 @@ export class VerificationRepository {
           : 'business_profiles';
     const verifiedAt = status === 'verified' ? 'now()' : 'NULL';
     const identityVerified =
-      role !== 'business' && status === 'verified' ? ', identity_verified = true' : '';
+      status === 'verified'
+        ? ', identity_verified = true'
+        : status === 'rejected'
+          ? ', identity_verified = false'
+          : '';
     const methodSet =
       role !== 'business' && status === 'verified' && identityVerificationMethod
         ? ', identity_verification_method = $3'
-        : '';
+        : role !== 'business' && status === 'rejected'
+          ? ', identity_verification_method = NULL'
+          : '';
 
     const params = identityVerificationMethod
       ? [status, userId, identityVerificationMethod]

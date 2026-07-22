@@ -25,14 +25,9 @@ const initiate = asyncHandler(async (req, res) => {
     });
   }
 
-  // We need the full user info — get it from the auth service via the token
-  // For the provider we need email & displayName, which aren't in the JWT.
-  // In a production system you'd fetch from DB. Here we accept them in body
-  // or fetch from the users table.
+  // Contact and expected-identity details are loaded from the authenticated account.
   const result = await verificationService.initiate({
     userId: user.id,
-    email: (req.body as { email?: string }).email ?? '',
-    displayName: (req.body as { displayName?: string }).displayName ?? '',
     role: user.role,
   });
 

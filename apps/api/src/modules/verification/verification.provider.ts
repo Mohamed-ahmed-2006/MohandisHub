@@ -138,12 +138,10 @@ export class DiditVerificationProvider implements IVerificationProvider {
     });
 
     if (!response.ok) {
-      const errorText = await response.text();
       logger.error('Didit API error creating session', {
         status: response.status,
-        body: errorText,
       });
-      throw new Error(`Didit API error: ${response.status} — ${errorText}`);
+      throw new Error(`Didit API error: ${response.status}`);
     }
 
     const data = (await response.json()) as DiditCreateSessionResponse;
@@ -222,10 +220,22 @@ export class DiditVerificationProvider implements IVerificationProvider {
     if (!timestamp) return false;
 
     // Check timestamp freshness (within 5 minutes)
+    if (!/^\d+$/.test(timestamp)) return false;
     const currentTime = Math.floor(Date.now() / 1000);
-    const incomingTime = parseInt(timestamp, 10);
+    const incomingTime = Number(timestamp);
+    if (!Number.isSafeInteger(incomingTime)) return false;
     if (Math.abs(currentTime - incomingTime) > 300) {
       logger.warn('Didit webhook: stale timestamp');
+      return false;
+    }
+
+    const bodyTimestamp = (payload as Partial<DiditWebhookPayload> | null)?.timestamp;
+    if (
+      typeof bodyTimestamp !== 'number' ||
+      !Number.isSafeInteger(bodyTimestamp) ||
+      bodyTimestamp !== incomingTime
+    ) {
+      logger.warn('Didit webhook: signed body timestamp does not match header');
       return false;
     }
 
