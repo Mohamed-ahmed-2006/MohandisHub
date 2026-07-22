@@ -21,7 +21,9 @@ export default [
     files: ['apps/**/*.{ts,tsx}', 'packages/**/*.{ts,tsx}'],
     languageOptions: {
       parserOptions: {
-        projectService: true,
+        projectService: {
+          allowDefaultProject: ['packages/shared/src/*.test.ts'],
+        },
         tsconfigRootDir: import.meta.dirname,
       },
       globals: {

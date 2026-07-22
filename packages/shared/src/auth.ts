@@ -2,8 +2,8 @@
 // Auth-related shared types — DTOs exchanged between API and frontend
 // ---------------------------------------------------------------------------
 
-import type { UserRole } from './roles.js';
 import type { AdminPermission } from './admin.js';
+import type { UserRole } from './roles.js';
 import type { VerificationStatus } from './verification.js';
 
 /** Payload sent when registering a new user. */

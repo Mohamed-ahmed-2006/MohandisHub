@@ -35,7 +35,7 @@ export interface JobApplication {
   businessName?: string | undefined;
   coverLetter?: string | null | undefined;
   submissionType: JobApplicationSubmissionType;
-  profileSnapshot: unknown | null;
+  profileSnapshot: unknown;
   cvFileUrl: string | null;
   applicationFeeAmount: number;
   applicationCommissionAmount: number;
