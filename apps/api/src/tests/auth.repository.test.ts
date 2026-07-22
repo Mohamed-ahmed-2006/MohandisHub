@@ -57,4 +57,27 @@ describe('AuthRepository.updateUser', () => {
     expect(user?.avatar_url).toBe(avatarUrl);
     expect(query).toHaveBeenCalledTimes(2);
   });
+
+  it('consumes a password reset token in the same statement that updates the password', async () => {
+    const query = vi.fn((sql: string, values: unknown[]) => {
+      expect(sql).toContain('UPDATE users');
+      expect(sql).toContain('password_hash = $2');
+      expect(sql).toContain('password_reset_token = NULL');
+      expect(sql).toContain('password_reset_expires > now()');
+      expect(sql).toContain('RETURNING id');
+      expect(values).toEqual(['token-hash', 'new-password-hash']);
+      return Promise.resolve({ rows: [{ id: 'user-1' }] });
+    });
+
+    vi.doMock('../db/pool.js', () => ({
+      getPool: () => ({ query }),
+    }));
+
+    const { AuthRepository } = await import('../modules/auth/auth.repository.js');
+    const repo = new AuthRepository();
+    await expect(repo.resetPasswordWithToken('token-hash', 'new-password-hash')).resolves.toBe(
+      'user-1',
+    );
+    expect(query).toHaveBeenCalledTimes(1);
+  });
 });

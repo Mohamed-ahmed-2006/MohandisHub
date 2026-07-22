@@ -20,6 +20,7 @@ import {
   hashToken,
   signAccessToken,
 } from '../../config/jwt.js';
+import { logger } from '../../config/logger.js';
 import { HttpError } from '../../utils/http-error.js';
 import { sendResendEmail } from '../../utils/resend-email.js';
 import { buildTransactionalEmailHtml } from '../../utils/transactional-email-template.js';
@@ -306,16 +307,19 @@ export class AuthService {
     const webBase = (env.WEB_PUBLIC_URL ?? 'http://localhost:3000').replace(/\/$/, '');
     const resetUrl = `${webBase}/en/auth/reset-password#token=${encodeURIComponent(rawToken)}`;
 
-    const emailSent = await this.sendPasswordResetEmail(
-      userRow.email,
-      userRow.display_name,
-      resetUrl,
-    );
+    let emailSent = false;
+    try {
+      emailSent = await this.sendPasswordResetEmail(
+        userRow.email,
+        userRow.display_name,
+        resetUrl,
+      );
+    } catch {
+      emailSent = false;
+    }
     if (!emailSent) {
-      return {
-        message:
-          'We could not send a password reset email right now. Please try again later or contact support.',
-      };
+      logger.warn('Password reset email delivery failed');
+      return generic;
     }
 
     return {
@@ -330,8 +334,9 @@ export class AuthService {
 
   async resetPassword(input: ResetPasswordInput): Promise<{ message: string }> {
     const tokenHash = hashToken(input.token);
-    const userRow = await this.authRepository.findUserByPasswordResetToken(tokenHash);
-    if (!userRow) {
+    const passwordHash = await bcrypt.hash(input.password, SALT_ROUNDS);
+    const userId = await this.authRepository.resetPasswordWithToken(tokenHash, passwordHash);
+    if (!userId) {
       throw new HttpError({
         statusCode: 400,
         code: 'INVALID_RESET_TOKEN',
@@ -339,10 +344,7 @@ export class AuthService {
       });
     }
 
-    const passwordHash = await bcrypt.hash(input.password, SALT_ROUNDS);
-    await this.authRepository.updatePasswordHash(userRow.id, passwordHash);
-    await this.authRepository.clearPasswordResetToken(userRow.id);
-    await this.authRepository.revokeAllUserTokens(userRow.id);
+    await this.authRepository.revokeAllUserTokens(userId);
 
     return { message: 'Password has been reset successfully. You can now sign in.' };
   }

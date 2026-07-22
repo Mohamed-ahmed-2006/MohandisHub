@@ -425,36 +425,20 @@ export class AuthRepository {
     );
   }
 
-  async findUserByPasswordResetToken(tokenHash: string): Promise<UserRow | null> {
-    const { rows } = await this.db.query<UserRow>(
-      `SELECT u.id, u.email, u.password_hash, u.phone, u.phone_code, u.nationality,
-              u.display_name, u.avatar_url, u.date_of_birth, u.primary_role,
-              u.is_admin, COALESCE(u.admin_permissions, '[]'::jsonb) AS admin_permissions,
-              u.plan_id, COALESCE(p.slug, 'free') AS plan_slug, p.plan_limits AS plan_limits,
-              u.email_verified_at, u.phone_verified_at, u.is_active, u.created_at, u.updated_at
-       FROM users u
-       LEFT JOIN plans p ON u.plan_id = p.id
-       WHERE u.password_reset_token = $1
-         AND u.password_reset_expires > now()
-         AND u.deleted_at IS NULL
-       LIMIT 1`,
-      [tokenHash],
+  async resetPasswordWithToken(tokenHash: string, passwordHash: string): Promise<string | null> {
+    const { rows } = await this.db.query<{ id: string }>(
+      `UPDATE users
+       SET password_hash = $2,
+           password_reset_token = NULL,
+           password_reset_expires = NULL,
+           updated_at = now()
+       WHERE password_reset_token = $1
+         AND password_reset_expires > now()
+         AND deleted_at IS NULL
+       RETURNING id`,
+      [tokenHash, passwordHash],
     );
-    return rows[0] ?? null;
-  }
-
-  async updatePasswordHash(userId: string, passwordHash: string): Promise<void> {
-    await this.db.query(
-      `UPDATE users SET password_hash = $2, updated_at = now() WHERE id = $1 AND deleted_at IS NULL`,
-      [userId, passwordHash],
-    );
-  }
-
-  async clearPasswordResetToken(userId: string): Promise<void> {
-    await this.db.query(
-      `UPDATE users SET password_reset_token = NULL, password_reset_expires = NULL, updated_at = now() WHERE id = $1`,
-      [userId],
-    );
+    return rows[0]?.id ?? null;
   }
 
   // ── Refresh tokens ────────────────────────────────────────────────────

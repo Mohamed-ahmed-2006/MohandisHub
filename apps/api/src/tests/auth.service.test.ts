@@ -8,9 +8,7 @@ import type { UserRow } from '../modules/auth/auth.types.js';
 type AuthRepositoryMock = {
   findUserByEmail: ReturnType<typeof vi.fn>;
   setPasswordResetToken: ReturnType<typeof vi.fn>;
-  findUserByPasswordResetToken: ReturnType<typeof vi.fn>;
-  updatePasswordHash: ReturnType<typeof vi.fn>;
-  clearPasswordResetToken: ReturnType<typeof vi.fn>;
+  resetPasswordWithToken: ReturnType<typeof vi.fn>;
   revokeAllUserTokens: ReturnType<typeof vi.fn>;
 };
 
@@ -39,9 +37,7 @@ const makeUserRow = (): UserRow => ({
 const createRepositoryMock = (): AuthRepositoryMock => ({
   findUserByEmail: vi.fn(),
   setPasswordResetToken: vi.fn(),
-  findUserByPasswordResetToken: vi.fn(),
-  updatePasswordHash: vi.fn(),
-  clearPasswordResetToken: vi.fn(),
+  resetPasswordWithToken: vi.fn(),
   revokeAllUserTokens: vi.fn(),
 });
 
@@ -113,7 +109,7 @@ describe('AuthService password reset flow', () => {
     expect(result.devResetLink).not.toContain('reset-password?token=');
   });
 
-  it('forgotPassword returns send-failed message when email sending fails', async () => {
+  it('forgotPassword does not reveal whether a registered user had a delivery failure', async () => {
     const repo = createRepositoryMock();
     repo.findUserByEmail.mockResolvedValue(makeUserRow());
     repo.setPasswordResetToken.mockResolvedValue(undefined);
@@ -123,7 +119,9 @@ describe('AuthService password reset flow', () => {
     const service = new AuthService(repo as never);
     const result = await service.forgotPassword({ email: 'user@example.com' });
 
-    expect(result.message).toContain('could not send');
+    expect(result.message).toBe(
+      'If your email is registered, a password reset link has been sent.',
+    );
     expect(repo.setPasswordResetToken).toHaveBeenCalledTimes(1);
   });
 
@@ -172,7 +170,7 @@ describe('AuthService password reset flow', () => {
 
   it('resetPassword rejects invalid token', async () => {
     const repo = createRepositoryMock();
-    repo.findUserByPasswordResetToken.mockResolvedValue(null);
+    repo.resetPasswordWithToken.mockResolvedValue(null);
 
     const service = new AuthService(repo as never);
 
@@ -186,11 +184,9 @@ describe('AuthService password reset flow', () => {
     });
   });
 
-  it('resetPassword updates password, clears token and revokes sessions', async () => {
+  it('resetPassword atomically consumes the token while updating the password', async () => {
     const repo = createRepositoryMock();
-    repo.findUserByPasswordResetToken.mockResolvedValue(makeUserRow());
-    repo.updatePasswordHash.mockResolvedValue(undefined);
-    repo.clearPasswordResetToken.mockResolvedValue(undefined);
+    repo.resetPasswordWithToken.mockResolvedValue('usr_123');
     repo.revokeAllUserTokens.mockResolvedValue(undefined);
 
     const service = new AuthService(repo as never);
@@ -200,11 +196,10 @@ describe('AuthService password reset flow', () => {
     });
 
     expect(result.message).toContain('Password has been reset successfully');
-    expect(repo.updatePasswordHash).toHaveBeenCalledTimes(1);
-    expect(repo.clearPasswordResetToken).toHaveBeenCalledWith('usr_123');
+    expect(repo.resetPasswordWithToken).toHaveBeenCalledTimes(1);
     expect(repo.revokeAllUserTokens).toHaveBeenCalledWith('usr_123');
 
-    const [, updatedHash] = repo.updatePasswordHash.mock.calls[0] as [string, string];
+    const [, updatedHash] = repo.resetPasswordWithToken.mock.calls[0] as [string, string];
     await expect(bcrypt.compare('ValidPass123', updatedHash)).resolves.toBe(true);
   });
 });
