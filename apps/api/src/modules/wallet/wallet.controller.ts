@@ -18,6 +18,7 @@ import type { NextFunction, Request, Response } from 'express';
 import { asyncHandler } from '../../utils/async-handler.js';
 import { HttpError } from '../../utils/http-error.js';
 
+import { parseEgpAmount } from './wallet.amount.js';
 import { WalletService } from './wallet.service.js';
 
 const walletService = new WalletService();
@@ -42,12 +43,7 @@ function getUser(req: { user?: { id: string; role: string } }): { id: string; ro
 function parseDepositBody(body: unknown): CreateDepositCheckoutBody {
   const source = body && typeof body === 'object' ? (body as Record<string, unknown>) : {};
   const amountRaw = source.amount;
-  const amount =
-    typeof amountRaw === 'number'
-      ? amountRaw
-      : typeof amountRaw === 'string'
-        ? parseFloat(amountRaw)
-        : NaN;
+  const amount = parseEgpAmount(amountRaw);
   const method = source.method;
   if (method === 'instapay') {
     throw new HttpError({
@@ -61,6 +57,13 @@ function parseDepositBody(body: unknown): CreateDepositCheckoutBody {
       statusCode: 400,
       code: 'INVALID_METHOD',
       message: 'Deposit method must be crypto, card, or paymob.',
+    });
+  }
+  if (amount == null) {
+    throw new HttpError({
+      statusCode: 400,
+      code: 'INVALID_AMOUNT',
+      message: 'Amount must be positive and have at most two decimal places.',
     });
   }
 
@@ -77,15 +80,23 @@ function parseDepositBody(body: unknown): CreateDepositCheckoutBody {
 function parseWithdrawalBody(body: unknown): CreateWithdrawalRequestBody {
   const source = body && typeof body === 'object' ? (body as Record<string, unknown>) : {};
   const methodRaw = source.method;
-  const method: CreateWithdrawalRequestBody['method'] =
-    methodRaw === 'instapay' ? 'instapay' : methodRaw === 'paymob' ? 'paymob' : 'crypto';
+  if (methodRaw !== 'crypto' && methodRaw !== 'instapay' && methodRaw !== 'paymob') {
+    throw new HttpError({
+      statusCode: 400,
+      code: 'INVALID_METHOD',
+      message: 'Withdrawal method must be crypto, instapay, or paymob.',
+    });
+  }
+  const method: CreateWithdrawalRequestBody['method'] = methodRaw;
   const amountRaw = source.amountEgp ?? source.amount;
-  const amountEgp =
-    typeof amountRaw === 'number'
-      ? amountRaw
-      : typeof amountRaw === 'string'
-        ? parseFloat(amountRaw)
-        : NaN;
+  const amountEgp = parseEgpAmount(amountRaw);
+  if (amountEgp == null) {
+    throw new HttpError({
+      statusCode: 400,
+      code: 'INVALID_AMOUNT',
+      message: 'Amount must be positive and have at most two decimal places.',
+    });
+  }
 
   return {
     method,
