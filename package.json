@@ -18,7 +18,7 @@
     "dev:api": "npm run dev -w @mohandishub/api",
     "build": "npm run build -w @mohandishub/shared && npm run build -w @mohandishub/api && npm run build -w @mohandishub/web",
     "typecheck": "npm run build -w @mohandishub/shared && npm run typecheck -w @mohandishub/shared && npm run typecheck -w @mohandishub/api && npm run typecheck -w @mohandishub/web",
-    "lint": "npm run lint -w @mohandishub/api && npm run lint -w @mohandishub/web",
+    "lint": "npm run lint -w @mohandishub/shared && npm run lint -w @mohandishub/api && npm run lint -w @mohandishub/web",
     "test": "npm run build -w @mohandishub/shared && npm run test -w @mohandishub/shared && npm run test -w @mohandishub/api && npm run test -w @mohandishub/web",
     "test:coverage": "npm run test:coverage -w @mohandishub/api && npm run test:coverage -w @mohandishub/web",
     "e2e": "npm run e2e -w @mohandishub/e2e",
