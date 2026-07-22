@@ -114,7 +114,11 @@ export class ReviewsRepository {
 
   async getAvgRating(targetUserId: string, targetType: string): Promise<number | null> {
     const { rows } = await getPool().query<{ avg: string }>(
-      `SELECT AVG(rating)::text FROM reviews WHERE target_user_id = $1 AND target_type = $2`,
+      `SELECT AVG(rating)::text
+       FROM reviews
+       WHERE target_user_id = $1
+         AND target_type = $2
+         AND hidden IS NOT TRUE`,
       [targetUserId, targetType],
     );
     const avg = rows[0]?.avg;
@@ -123,7 +127,11 @@ export class ReviewsRepository {
 
   async getReviewCount(targetUserId: string, targetType: string): Promise<number> {
     const { rows } = await getPool().query<{ count: string }>(
-      `SELECT COUNT(*)::text FROM reviews WHERE target_user_id = $1 AND target_type = $2 AND (hidden IS NOT TRUE OR hidden = false)`,
+      `SELECT COUNT(*)::text
+       FROM reviews
+       WHERE target_user_id = $1
+         AND target_type = $2
+         AND hidden IS NOT TRUE`,
       [targetUserId, targetType],
     );
     return parseInt(rows[0]?.count ?? '0', 10);
