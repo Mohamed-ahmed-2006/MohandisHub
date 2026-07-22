@@ -64,17 +64,30 @@ const isValidPassword = (value: string): boolean => {
   return /[A-Z]/.test(value) && /[a-z]/.test(value) && /[0-9]/.test(value);
 };
 
-const isValidDateFormat = (value: string): boolean => /^\d{4}-\d{2}-\d{2}$/.test(value);
+const isValidDateFormat = (value: string): boolean => {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const [year, month, day] = value.split('-').map(Number);
+  if (year == null || month == null || day == null) return false;
+  const parsed = new Date(Date.UTC(year, month - 1, day));
+  return (
+    parsed.getUTCFullYear() === year &&
+    parsed.getUTCMonth() === month - 1 &&
+    parsed.getUTCDate() === day
+  );
+};
 
 const hasMinimumAge = (dateOfBirth: string, minimumAge: number): boolean => {
-  const date = new Date(dateOfBirth);
-  if (Number.isNaN(date.getTime())) return false;
+  if (!isValidDateFormat(dateOfBirth)) return false;
+  const [year, month, day] = dateOfBirth.split('-').map(Number) as [number, number, number];
   const today = new Date();
-  const years = today.getFullYear() - date.getFullYear();
-  const monthDiff = today.getMonth() - date.getMonth();
-  const dayDiff = today.getDate() - date.getDate();
-  const adjustedAge = monthDiff < 0 || (monthDiff === 0 && dayDiff < 0) ? years - 1 : years;
-  return adjustedAge >= minimumAge;
+  let age = today.getUTCFullYear() - year;
+  if (
+    today.getUTCMonth() + 1 < month ||
+    (today.getUTCMonth() + 1 === month && today.getUTCDate() < day)
+  ) {
+    age -= 1;
+  }
+  return age >= minimumAge;
 };
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>

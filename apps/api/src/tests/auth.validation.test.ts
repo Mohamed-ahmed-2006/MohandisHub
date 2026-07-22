@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 
 import { env } from '../config/env.js';
 import { hashToken } from '../config/jwt.js';
-import { loginSchema } from '../modules/auth/auth.validation.js';
+import { isValidCalendarDate, loginSchema, registerSchema } from '../modules/auth/auth.validation.js';
 
 describe('auth validation', () => {
   const originalRefreshSecret = env.JWT_REFRESH_SECRET;
@@ -33,5 +33,21 @@ describe('auth validation', () => {
     expect(firstHash).toMatch(/^[a-f0-9]{64}$/);
     expect(secondHash).toMatch(/^[a-f0-9]{64}$/);
     expect(firstHash).not.toBe(secondHash);
+  });
+
+  it('rejects impossible calendar dates instead of normalizing them', () => {
+    expect(isValidCalendarDate('2000-02-29')).toBe(true);
+    expect(isValidCalendarDate('2001-02-29')).toBe(false);
+    expect(isValidCalendarDate('2000-02-31')).toBe(false);
+    expect(
+      registerSchema.safeParse({
+        email: 'user@example.com',
+        password: 'ValidPass123',
+        displayName: 'Test User',
+        role: 'customer',
+        dateOfBirth: '2000-02-31',
+        acceptedTermsAt: new Date().toISOString(),
+      }).success,
+    ).toBe(false);
   });
 });

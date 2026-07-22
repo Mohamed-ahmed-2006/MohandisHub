@@ -4,6 +4,32 @@
 
 import { z } from 'zod';
 
+export const isValidCalendarDate = (value: string): boolean => {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const [year, month, day] = value.split('-').map(Number);
+  if (year == null || month == null || day == null) return false;
+  const parsed = new Date(Date.UTC(year, month - 1, day));
+  return (
+    parsed.getUTCFullYear() === year &&
+    parsed.getUTCMonth() === month - 1 &&
+    parsed.getUTCDate() === day
+  );
+};
+
+const hasMinimumAge = (value: string, minimumAge: number): boolean => {
+  if (!isValidCalendarDate(value)) return false;
+  const [year, month, day] = value.split('-').map(Number) as [number, number, number];
+  const today = new Date();
+  let age = today.getUTCFullYear() - year;
+  if (
+    today.getUTCMonth() + 1 < month ||
+    (today.getUTCMonth() + 1 === month && today.getUTCDate() < day)
+  ) {
+    age -= 1;
+  }
+  return age >= minimumAge;
+};
+
 export const registerSchema = z
   .object({
     email: z.string().email('Invalid email format.').max(255),
@@ -31,16 +57,9 @@ export const registerSchema = z
     dateOfBirth: z
       .string()
       .regex(/^\d{4}-\d{2}-\d{2}$/, 'Date of birth must be in YYYY-MM-DD format.')
+      .refine(isValidCalendarDate, { message: 'Date of birth must be a valid calendar date.' })
       .refine(
-        (val) => {
-          const dob = new Date(val);
-          const today = new Date();
-          const age = today.getFullYear() - dob.getFullYear();
-          const monthDiff = today.getMonth() - dob.getMonth();
-          const dayDiff = today.getDate() - dob.getDate();
-          const actualAge = monthDiff < 0 || (monthDiff === 0 && dayDiff < 0) ? age - 1 : age;
-          return actualAge >= 20;
-        },
+        (val) => hasMinimumAge(val, 20),
         { message: 'You must be at least 20 years old to register.' },
       ),
     acceptedTermsAt: z.string().min(1, 'Accepted terms timestamp is required.').optional(),
