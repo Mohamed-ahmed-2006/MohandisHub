@@ -70,11 +70,7 @@ describe('verification trust boundaries', () => {
       markIdentityApproved: vi.fn(),
       updateProfileVerificationStatus: vi.fn(),
     };
-    const service = new VerificationService(
-      verificationRepo as never,
-      {} as never,
-      provider,
-    );
+    const service = new VerificationService(verificationRepo as never, {} as never, provider);
 
     await service.handleWebhook({}, {});
 

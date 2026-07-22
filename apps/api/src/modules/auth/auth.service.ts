@@ -309,11 +309,7 @@ export class AuthService {
 
     let emailSent = false;
     try {
-      emailSent = await this.sendPasswordResetEmail(
-        userRow.email,
-        userRow.display_name,
-        resetUrl,
-      );
+      emailSent = await this.sendPasswordResetEmail(userRow.email, userRow.display_name, resetUrl);
     } catch {
       emailSent = false;
     }

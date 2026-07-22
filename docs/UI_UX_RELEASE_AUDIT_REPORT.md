@@ -19,13 +19,13 @@
 
 ## 1. Executive summary
 
-| Dimension | Readiness | Notes |
-|---|---|---|
-| Overall UI | **Conditional** | Mature design system (logical CSS props, RTL-aware transforms, safe-area insets). Fixed defects were isolated, not systemic. |
-| Mobile | **Conditional** | App shell has explicit mobile breakpoints (`≤768`, `≤420`), off-canvas RTL-correct sidebar, balance pill truncation. Live device render still recommended. |
-| Arabic / RTL | **Good (post-fix)** | Structural EN/AR parity enforced by test; mojibake guard test present. One untranslated flow fixed (InstaPay deposit). |
-| Accessibility | **Conditional** | Strong baseline (semantic dialogs, focus/escape handling, aria on icon buttons). Fixed 2 gaps (toast live region, chat location button name). Full SR pass pending. |
-| Performance / runtime | **Not measured** | No Lighthouse/live metrics available in this environment; no invented numbers. Static checks clean. |
+| Dimension             | Readiness           | Notes                                                                                                                                                               |
+| --------------------- | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Overall UI            | **Conditional**     | Mature design system (logical CSS props, RTL-aware transforms, safe-area insets). Fixed defects were isolated, not systemic.                                        |
+| Mobile                | **Conditional**     | App shell has explicit mobile breakpoints (`≤768`, `≤420`), off-canvas RTL-correct sidebar, balance pill truncation. Live device render still recommended.          |
+| Arabic / RTL          | **Good (post-fix)** | Structural EN/AR parity enforced by test; mojibake guard test present. One untranslated flow fixed (InstaPay deposit).                                              |
+| Accessibility         | **Conditional**     | Strong baseline (semantic dialogs, focus/escape handling, aria on icon buttons). Fixed 2 gaps (toast live region, chat location button name). Full SR pass pending. |
+| Performance / runtime | **Not measured**    | No Lighthouse/live metrics available in this environment; no invented numbers. Static checks clean.                                                                 |
 
 - **Findings:** P0 = 0, P1 = 0, **P2 = 3 (all fixed)**, P3 = 2 (documented, not blocking).
 - **Critical journeys launch-ready?** Auth, onboarding, dashboards, chat, wallet, admin gating are
@@ -40,33 +40,34 @@
 Auth-state legend: G = guest, A = authenticated. Result: ✅ code-verified guard/behavior,
 🔍 needs live render. All routes exist under `app/[locale]/…` with locale-guarded `notFound()`.
 
-| Route / journey | Auth | Role | Lang | Sizes | Result | Notes |
-|---|---|---|---|---|---|---|
-| `/[locale]` landing | G/A | any | EN/AR | all | ✅ | Auth-aware CTA; footer i18n verified by test. |
-| `/auth` (login/register) | G | any | EN/AR | all | ✅ | Role-step cards; validation strings localized. |
-| `/auth/forgot-password` | G | — | EN/AR | all | ✅ | Success message is generic (no account enumeration). |
-| `/auth/reset-password` | G | — | EN/AR | all | ✅ | Token read from URL hash, stripped from history (test-covered). |
-| `/verify-email` | A | any | EN/AR | all | ✅ | OTP entry; dev-code hint only in dev. |
-| `/onboarding/{customer,expert,craftsman,business,role}` | A | role | EN/AR | all | ✅ | Verified-status redirect guard in app shell. |
-| `/app` home | A | all | EN/AR | all | ✅ | Role-specific suggestions; wallet pill. |
-| `/app/services` | A | provider | EN/AR | all | ✅ | `/app/browse` intentionally redirects here. |
-| `/app/browse` | A | any | EN/AR | — | ✅ | Intentional `redirect()` to `/app/services` (not a dead route). |
-| `/app/chat` | A | any | EN/AR | all | ✅ | Hook order stable; location button now labeled (fixed). |
-| `/app/bookings` | A | any | EN/AR | all | ✅ | Cancellation modal explicit; settlement copy localized. |
-| `/app/calendar` | A | provider | EN/AR | all | ✅ | Slot/reservation day view. |
-| `/app/negotiations` | A | provider | EN/AR | all | ✅ | Dedicated inbox. |
-| `/app/advertisements` | A | provider | EN/AR | all | ✅ | Provider-gated. |
-| `/app/plan`, `/app/settings`, `/app/settings/wallet` | A | any | EN/AR | all | ✅ | Wallet deposit modal localized (fixed). |
-| `/app/profile` | A | any | EN/AR | all | ✅ | Avatar via `AvatarImage` with fallback + error handling. |
-| `/app/disputes`, `/history`, `/projects` | A | any | EN/AR | all | ✅ | Present and guarded. |
-| `/app/admin` | A | **admin only** | EN/AR | all | ✅ | Non-admins redirected to `/app`; tabs permission-filtered. |
-| `/privacy`, `/terms` | G/A | — | EN/AR | all | ✅ | Legal content present. |
+| Route / journey                                         | Auth | Role           | Lang  | Sizes | Result | Notes                                                           |
+| ------------------------------------------------------- | ---- | -------------- | ----- | ----- | ------ | --------------------------------------------------------------- |
+| `/[locale]` landing                                     | G/A  | any            | EN/AR | all   | ✅     | Auth-aware CTA; footer i18n verified by test.                   |
+| `/auth` (login/register)                                | G    | any            | EN/AR | all   | ✅     | Role-step cards; validation strings localized.                  |
+| `/auth/forgot-password`                                 | G    | —              | EN/AR | all   | ✅     | Success message is generic (no account enumeration).            |
+| `/auth/reset-password`                                  | G    | —              | EN/AR | all   | ✅     | Token read from URL hash, stripped from history (test-covered). |
+| `/verify-email`                                         | A    | any            | EN/AR | all   | ✅     | OTP entry; dev-code hint only in dev.                           |
+| `/onboarding/{customer,expert,craftsman,business,role}` | A    | role           | EN/AR | all   | ✅     | Verified-status redirect guard in app shell.                    |
+| `/app` home                                             | A    | all            | EN/AR | all   | ✅     | Role-specific suggestions; wallet pill.                         |
+| `/app/services`                                         | A    | provider       | EN/AR | all   | ✅     | `/app/browse` intentionally redirects here.                     |
+| `/app/browse`                                           | A    | any            | EN/AR | —     | ✅     | Intentional `redirect()` to `/app/services` (not a dead route). |
+| `/app/chat`                                             | A    | any            | EN/AR | all   | ✅     | Hook order stable; location button now labeled (fixed).         |
+| `/app/bookings`                                         | A    | any            | EN/AR | all   | ✅     | Cancellation modal explicit; settlement copy localized.         |
+| `/app/calendar`                                         | A    | provider       | EN/AR | all   | ✅     | Slot/reservation day view.                                      |
+| `/app/negotiations`                                     | A    | provider       | EN/AR | all   | ✅     | Dedicated inbox.                                                |
+| `/app/advertisements`                                   | A    | provider       | EN/AR | all   | ✅     | Provider-gated.                                                 |
+| `/app/plan`, `/app/settings`, `/app/settings/wallet`    | A    | any            | EN/AR | all   | ✅     | Wallet deposit modal localized (fixed).                         |
+| `/app/profile`                                          | A    | any            | EN/AR | all   | ✅     | Avatar via `AvatarImage` with fallback + error handling.        |
+| `/app/disputes`, `/history`, `/projects`                | A    | any            | EN/AR | all   | ✅     | Present and guarded.                                            |
+| `/app/admin`                                            | A    | **admin only** | EN/AR | all   | ✅     | Non-admins redirected to `/app`; tabs permission-filtered.      |
+| `/privacy`, `/terms`                                    | G/A  | —              | EN/AR | all   | ✅     | Legal content present.                                          |
 
 ---
 
 ## 3. Findings
 
 ### UIUX-001 — Untranslated InstaPay deposit fields (Localization) — FIXED
+
 - **Severity:** P2 · **Status:** Fixed · **Category:** Localization/RTL
 - **Affected route:** `/app/settings/wallet` → deposit modal (InstaPay step)
 - **User impact:** Arabic users saw hardcoded English labels/placeholder/validation
@@ -86,6 +87,7 @@ Auth-state legend: G = guest, A = authenticated. Result: ✅ code-verified guard
 - **Remaining risk:** Low. Live render confirmation recommended for RTL alignment of the two inputs.
 
 ### UIUX-002 — Toasts not announced to screen readers + physical RTL offset (A11y/RTL) — FIXED
+
 - **Severity:** P2 · **Status:** Fixed · **Category:** Accessibility / RTL
 - **Affected route:** Global (`ToastProvider` — success/error feedback across app)
 - **User impact:** (a) Toast container had no live region, so success/error messages were not
@@ -102,6 +104,7 @@ Auth-state legend: G = guest, A = authenticated. Result: ✅ code-verified guard
   is adequate. (Design may later migrate to design-system tokens — see §9.)
 
 ### UIUX-003 — Chat "Share location" icon button lacked an accessible name (A11y) — FIXED
+
 - **Severity:** P2 · **Status:** Fixed · **Category:** Accessibility
 - **Affected route:** `/app/chat` message composer
 - **User impact:** The 📍 button exposed only `title` (not a reliable accessible name), so
@@ -115,12 +118,14 @@ Auth-state legend: G = guest, A = authenticated. Result: ✅ code-verified guard
 - **Remaining risk:** None functional.
 
 ### UIUX-P3-A — Inline styles in toast/notification surfaces (Consistency)
+
 - **Severity:** P3 · **Status:** Open (documented) · **Category:** Visual consistency
 - The toast and the deposit success/cancel banner use inline styles + literal colors
   (`#333`, `#10b981`, `#ef4444`) instead of design-system tokens. Not user-blocking; a cosmetic
   consolidation candidate. Left unchanged to avoid a broad refactor per scope rules.
 
 ### UIUX-P3-B — A few operational strings intentionally English-only (Localization)
+
 - **Severity:** P3 · **Status:** Open (by design) · **Category:** Localization
 - Admin-only permission hints (`manage_support`, `manage_media`) and some admin operations copy are
   intentionally English in both dictionaries (admin-facing, structurally aligned so the parity test
@@ -133,13 +138,13 @@ Auth-state legend: G = guest, A = authenticated. Result: ✅ code-verified guard
 App shell (`components/app/app-shell.css`) defines explicit, RTL-aware responsive behavior. Verified
 by code; live device render recommended before public launch.
 
-| Width | Key behavior (code-verified) |
-|---|---|
-| 320–414 (mobile) | `@media (max-width:768px)`: sidebar becomes fixed off-canvas, backdrop shown, hamburger shown, topbar padding reduced. `@media (max-width:420px)`: balance label hidden, plus-button shrinks, balance pill max-width 8.2rem with ellipsis. |
-| 768 (tablet) | Sidebar off-canvas; content full width. Notification dropdown `min(360px, 90vw)`. |
-| 1024–1366 | Sidebar sticky at `--sidebar-width: 17.25rem`; content `min-width:0` prevents overflow. |
-| 1440–1920 | Fixed sidebar + fluid content; `clamp()` topbar padding. |
-| RTL at all widths | Off-canvas transform mirrored (`[dir='rtl'] .app-sidebar` uses `translateX(100%)`); `inset-inline-*`, `border-inline-end`, `insetInlineEnd` used throughout. |
+| Width             | Key behavior (code-verified)                                                                                                                                                                                                               |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 320–414 (mobile)  | `@media (max-width:768px)`: sidebar becomes fixed off-canvas, backdrop shown, hamburger shown, topbar padding reduced. `@media (max-width:420px)`: balance label hidden, plus-button shrinks, balance pill max-width 8.2rem with ellipsis. |
+| 768 (tablet)      | Sidebar off-canvas; content full width. Notification dropdown `min(360px, 90vw)`.                                                                                                                                                          |
+| 1024–1366         | Sidebar sticky at `--sidebar-width: 17.25rem`; content `min-width:0` prevents overflow.                                                                                                                                                    |
+| 1440–1920         | Fixed sidebar + fluid content; `clamp()` topbar padding.                                                                                                                                                                                   |
+| RTL at all widths | Off-canvas transform mirrored (`[dir='rtl'] .app-sidebar` uses `translateX(100%)`); `inset-inline-*`, `border-inline-end`, `insetInlineEnd` used throughout.                                                                               |
 
 Potential risks to confirm on real devices (not defects yet): long Arabic nav labels wrapping,
 admin data tables horizontal scroll on ≤375, modal height vs. mobile keyboard.
@@ -149,10 +154,12 @@ admin data tables horizontal scroll on ≤375, modal height vs. mobile keyboard.
 ## 5. Accessibility results
 
 **Automated (this run):**
+
 - ESLint `next/core-web-vitals` (includes jsx-a11y-adjacent Next rules) on changed files: **0 errors/warnings**.
 - `tsc --noEmit`: **pass**. Vitest: **44/44 pass** (12 files).
 
 **Manually verified from source (representative flows):**
+
 - Dialogs use `role="dialog" aria-modal="true"` (`ui/modal.tsx`); dialog header exposes a labeled close button.
 - Avatar menu & notification center: `aria-haspopup`, `aria-expanded`, Escape-to-close, outside-click close.
 - Icon-only buttons carry `aria-label` (hamburger, notifications, send, share-link, and now share-location).
@@ -194,14 +201,14 @@ These are listed as remaining QA in §9 rather than asserted.
 
 ## 8. Changes made
 
-| File | Reason | Test |
-|---|---|---|
-| `apps/web/lib/i18n/dictionaries/en.ts` | Add 5 InstaPay deposit keys | `release-audit-ui`, `i18n-dictionaries`, i18n validator |
-| `apps/web/lib/i18n/dictionaries/ar.ts` | Add 5 InstaPay deposit keys (Arabic) | same |
-| `apps/web/components/app/wallet-deposit-modal.tsx` | Read those keys instead of hardcoded English | `release-audit-ui` |
-| `apps/web/components/app/toast.tsx` | Add `role/aria-live/aria-atomic`; `right`→`insetInlineEnd` | `release-audit-ui` |
-| `apps/web/components/app/chat-screen.tsx` | `aria-label` + decorative glyph on location button | `release-audit-ui` |
-| `apps/web/tests/release-audit-ui.test.ts` | New regression tests for the three fixes | — |
+| File                                               | Reason                                                     | Test                                                    |
+| -------------------------------------------------- | ---------------------------------------------------------- | ------------------------------------------------------- |
+| `apps/web/lib/i18n/dictionaries/en.ts`             | Add 5 InstaPay deposit keys                                | `release-audit-ui`, `i18n-dictionaries`, i18n validator |
+| `apps/web/lib/i18n/dictionaries/ar.ts`             | Add 5 InstaPay deposit keys (Arabic)                       | same                                                    |
+| `apps/web/components/app/wallet-deposit-modal.tsx` | Read those keys instead of hardcoded English               | `release-audit-ui`                                      |
+| `apps/web/components/app/toast.tsx`                | Add `role/aria-live/aria-atomic`; `right`→`insetInlineEnd` | `release-audit-ui`                                      |
+| `apps/web/components/app/chat-screen.tsx`          | `aria-label` + decorative glyph on location button         | `release-audit-ui`                                      |
+| `apps/web/tests/release-audit-ui.test.ts`          | New regression tests for the three fixes                   | —                                                       |
 
 Commit: `9bcba2c` on `release-audit-ui`. Design system, brand, schemas, APIs, auth, roles unchanged.
 
@@ -218,19 +225,19 @@ Commit: `9bcba2c` on `release-audit-ui`. Design system, brand, schemas, APIs, au
 
 ## Required regression checks — status
 
-| Check | Status | Evidence |
-|---|---|---|
-| Chat page doesn't crash on hook ordering | ✅ | Hooks all top-level & unconditional in `chat-screen.tsx`; early returns after hooks; lint `rules-of-hooks` = error (active) and passes. |
-| Hooks lint rules remain active | ✅ | `eslint.config.mjs` sets `react-hooks/rules-of-hooks: 'error'`; lint of changed files clean. |
-| Avatar updates persist after refresh | 🔍 | `AvatarImage` re-derives src via `useMemo`/`useEffect` on `src` change; visible persistence needs live confirm. |
-| Admin role editing can't modify `primaryRole` | ✅ | `admin-user-detail-modal.tsx` renders role as `readOnly` input; account save maps `admin`→`customer` and never sends `primaryRole`. |
-| Factory-reset UI hidden from unauthorized users | ✅ | Settings tab gated by `manage_settings`; panel only renders for `isAdmin`. |
-| Factory-reset confirmation explicit & hard to trigger | ✅ | Requires typing exact phrase `FACTORY RESET`; confirm button disabled until match; modal + warning. |
-| Private-upload metadata not displayed/logged | ✅ | `private-upload-proxy.ts` discards caller origin, no metadata logging; covered by `private-upload-proxy.test.ts` (7 tests). |
-| Arabic fallback text valid | ✅ | Mojibake guard + parity tests pass; new AR keys are proper Arabic. |
-| Unfinished routes (`/app/browse`) handled intentionally | ✅ | `browse/page.tsx` performs locale-guarded `redirect()` to `/app/services`. |
-| No placeholder/mock/debug UI in production | ✅ | Demo notification button gated by `NODE_ENV !== 'production'` (hardening test). |
-| Stripe UI can't start a live payment | ✅ | Card/Stripe deposit hidden unless `NEXT_PUBLIC_NOWPAYMENTS_FIAT_ENABLED === 'true'` AND `deposit_card` enabled; label marks Stripe "(future)". No live Stripe flow reachable from UI. |
+| Check                                                   | Status | Evidence                                                                                                                                                                              |
+| ------------------------------------------------------- | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Chat page doesn't crash on hook ordering                | ✅     | Hooks all top-level & unconditional in `chat-screen.tsx`; early returns after hooks; lint `rules-of-hooks` = error (active) and passes.                                               |
+| Hooks lint rules remain active                          | ✅     | `eslint.config.mjs` sets `react-hooks/rules-of-hooks: 'error'`; lint of changed files clean.                                                                                          |
+| Avatar updates persist after refresh                    | 🔍     | `AvatarImage` re-derives src via `useMemo`/`useEffect` on `src` change; visible persistence needs live confirm.                                                                       |
+| Admin role editing can't modify `primaryRole`           | ✅     | `admin-user-detail-modal.tsx` renders role as `readOnly` input; account save maps `admin`→`customer` and never sends `primaryRole`.                                                   |
+| Factory-reset UI hidden from unauthorized users         | ✅     | Settings tab gated by `manage_settings`; panel only renders for `isAdmin`.                                                                                                            |
+| Factory-reset confirmation explicit & hard to trigger   | ✅     | Requires typing exact phrase `FACTORY RESET`; confirm button disabled until match; modal + warning.                                                                                   |
+| Private-upload metadata not displayed/logged            | ✅     | `private-upload-proxy.ts` discards caller origin, no metadata logging; covered by `private-upload-proxy.test.ts` (7 tests).                                                           |
+| Arabic fallback text valid                              | ✅     | Mojibake guard + parity tests pass; new AR keys are proper Arabic.                                                                                                                    |
+| Unfinished routes (`/app/browse`) handled intentionally | ✅     | `browse/page.tsx` performs locale-guarded `redirect()` to `/app/services`.                                                                                                            |
+| No placeholder/mock/debug UI in production              | ✅     | Demo notification button gated by `NODE_ENV !== 'production'` (hardening test).                                                                                                       |
+| Stripe UI can't start a live payment                    | ✅     | Card/Stripe deposit hidden unless `NEXT_PUBLIC_NOWPAYMENTS_FIAT_ENABLED === 'true'` AND `deposit_card` enabled; label marks Stripe "(future)". No live Stripe flow reachable from UI. |
 
 ## Ownership coordination note
 

@@ -30,9 +30,11 @@ export const updateUserSchema = z.object({
   planId: z.string().uuid().nullable().optional(),
 });
 
-export const factoryResetSchema = z.object({
-  confirm: z.literal('FACTORY RESET'),
-}).strict();
+export const factoryResetSchema = z
+  .object({
+    confirm: z.literal('FACTORY RESET'),
+  })
+  .strict();
 
 export const changeUserEmailSchema = z.object({
   newEmail: z.string().email(),

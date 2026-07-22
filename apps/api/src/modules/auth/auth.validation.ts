@@ -58,10 +58,9 @@ export const registerSchema = z
       .string()
       .regex(/^\d{4}-\d{2}-\d{2}$/, 'Date of birth must be in YYYY-MM-DD format.')
       .refine(isValidCalendarDate, { message: 'Date of birth must be a valid calendar date.' })
-      .refine(
-        (val) => hasMinimumAge(val, 20),
-        { message: 'You must be at least 20 years old to register.' },
-      ),
+      .refine((val) => hasMinimumAge(val, 20), {
+        message: 'You must be at least 20 years old to register.',
+      }),
     acceptedTermsAt: z.string().min(1, 'Accepted terms timestamp is required.').optional(),
     termsVersion: z.string().max(20).optional(),
   })

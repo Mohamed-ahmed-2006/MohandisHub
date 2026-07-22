@@ -30,7 +30,11 @@ export class OtpService {
   // ── Send OTP ──────────────────────────────────────────────────────────
 
   async sendCode(userId: string, channel: OtpChannel): Promise<SendOtpResult> {
-    if (channel === 'phone' && env.NODE_ENV === 'production' && env.OTP_SMS_PROVIDER === 'console') {
+    if (
+      channel === 'phone' &&
+      env.NODE_ENV === 'production' &&
+      env.OTP_SMS_PROVIDER === 'console'
+    ) {
       throw new HttpError({
         statusCode: 503,
         code: 'PHONE_OTP_UNAVAILABLE',

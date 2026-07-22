@@ -19,9 +19,9 @@ describe('retention alert outbound-request safety', () => {
         alerts: { webhookUrl: 'https://hooks.example.com/retention' },
       }).success,
     ).toBe(false);
-    expect(
-      patchRetentionGovernanceSchema.safeParse({ alerts: { webhookUrl: '' } }).success,
-    ).toBe(true);
+    expect(patchRetentionGovernanceSchema.safeParse({ alerts: { webhookUrl: '' } }).success).toBe(
+      true,
+    );
   });
 
   it('does not call stored legacy webhook URLs', async () => {

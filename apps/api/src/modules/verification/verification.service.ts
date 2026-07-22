@@ -36,10 +36,7 @@ export class VerificationService {
 
   // ── Initiate verification ──────────────────────────────────────────────
 
-  async initiate(params: {
-    userId: string;
-    role: string;
-  }): Promise<{
+  async initiate(params: { userId: string; role: string }): Promise<{
     requestId: string;
     redirectUrl?: string | undefined;
     sessionToken?: string | undefined;

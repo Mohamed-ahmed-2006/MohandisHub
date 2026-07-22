@@ -2,7 +2,11 @@ import { afterEach, describe, expect, it } from 'vitest';
 
 import { env } from '../config/env.js';
 import { hashToken } from '../config/jwt.js';
-import { isValidCalendarDate, loginSchema, registerSchema } from '../modules/auth/auth.validation.js';
+import {
+  isValidCalendarDate,
+  loginSchema,
+  registerSchema,
+} from '../modules/auth/auth.validation.js';
 
 describe('auth validation', () => {
   const originalRefreshSecret = env.JWT_REFRESH_SECRET;
