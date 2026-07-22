@@ -32,7 +32,7 @@ export const updateUserSchema = z.object({
 
 export const factoryResetSchema = z.object({
   confirm: z.literal('FACTORY RESET'),
-});
+}).strict();
 
 export const changeUserEmailSchema = z.object({
   newEmail: z.string().email(),

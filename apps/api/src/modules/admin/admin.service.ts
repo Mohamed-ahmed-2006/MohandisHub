@@ -201,17 +201,16 @@ export class AdminService {
     return this.toUserListItem(row);
   }
 
-  async changeUserRole(userId: string, input: ChangeUserRoleInput): Promise<AdminUserListItem> {
-    const row = await this.repo.changeUserRole(userId, input.role);
-    if (!row) {
-      throw new HttpError({ statusCode: 404, code: 'USER_NOT_FOUND', message: 'User not found.' });
-    }
-    // Cut sessions so clients pick up the new role on next login (the access
-    // token role is refreshed from the DB on each request, but the cached
-    // status and client-side role must be refreshed too).
-    await this.authRepository.revokeAllUserTokens(userId);
-    invalidateUserStatusCache(userId);
-    return this.toUserListItem(row);
+  changeUserRole(userId: string, input: ChangeUserRoleInput): Promise<AdminUserListItem> {
+    void userId;
+    void input;
+    return Promise.reject(
+      new HttpError({
+        statusCode: 400,
+        code: 'PRIMARY_ROLE_CHANGE_DISABLED',
+        message: 'Primary role changes are disabled until role migration is supported.',
+      }),
+    );
   }
 
   async deleteUser(userId: string): Promise<void> {
