@@ -574,3 +574,20 @@
     height: auto;
   }
 }
+
+@media (max-width: 374px) {
+  .home-page-navbar-right {
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  .home-page-header-controls {
+    justify-content: center;
+  }
+
+  .home-page-nav-actions,
+  [dir='rtl'] .home-page-nav-actions {
+    flex: 1 0 100%;
+    justify-content: center;
+  }
+}
