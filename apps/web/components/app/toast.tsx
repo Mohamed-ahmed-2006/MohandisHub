@@ -29,10 +29,13 @@ export const ToastProvider = ({ children }: { children: React.ReactNode }) => {
     <ToastContext.Provider value={{ addToast }}>
       {children}
       <div
+        role="status"
+        aria-live="polite"
+        aria-atomic="true"
         style={{
           position: 'fixed',
           bottom: '20px',
-          right: '20px',
+          insetInlineEnd: '20px',
           display: 'flex',
           flexDirection: 'column',
           gap: '10px',
