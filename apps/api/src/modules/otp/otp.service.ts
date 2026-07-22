@@ -115,8 +115,23 @@ export class OtpService {
       });
     }
 
-    // 6. The replacement is deliverable: retire older codes and count the send.
-    await this.otpRepo.invalidatePreviousCodes(userId, channel, created.id);
+    // 6. Atomically make this delivered candidate the sole active code. A
+    // concurrent successful resend may already have expired it, so activation
+    // must also restore this candidate's original expiry in the same statement.
+    const activated = await this.otpRepo.activateDeliveredCode(
+      userId,
+      channel,
+      created.id,
+      expiresAt,
+    );
+    if (!activated) {
+      logger.error('Failed to activate delivered OTP', { channel });
+      throw new HttpError({
+        statusCode: 502,
+        code: 'OTP_ACTIVATION_FAILED',
+        message: 'Failed to activate the verification code. Please request a new code.',
+      });
+    }
     await this.otpRepo.upsertRateLimit(userId, channel);
 
     return {

@@ -13,7 +13,7 @@ const makeRepo = () => ({
   getRateLimit: vi.fn().mockResolvedValue(null),
   createCode: vi.fn().mockResolvedValue({ id: '11111111-1111-4111-8111-111111111111' }),
   expireCode: vi.fn(),
-  invalidatePreviousCodes: vi.fn(),
+  activateDeliveredCode: vi.fn().mockResolvedValue(true),
   upsertRateLimit: vi.fn(),
 });
 
@@ -41,7 +41,7 @@ describe('OtpService delivery ordering', () => {
     });
 
     expect(repo.expireCode).toHaveBeenCalledWith('11111111-1111-4111-8111-111111111111');
-    expect(repo.invalidatePreviousCodes).not.toHaveBeenCalled();
+    expect(repo.activateDeliveredCode).not.toHaveBeenCalled();
     expect(repo.upsertRateLimit).not.toHaveBeenCalled();
   });
 
@@ -52,13 +52,27 @@ describe('OtpService delivery ordering', () => {
 
     await expect(service.sendCode('user-1', 'email')).resolves.toMatchObject({ channel: 'email' });
 
-    expect(repo.invalidatePreviousCodes).toHaveBeenCalledWith(
+    expect(repo.activateDeliveredCode).toHaveBeenCalledWith(
       'user-1',
       'email',
       '11111111-1111-4111-8111-111111111111',
+      expect.any(Date),
     );
     expect(repo.upsertRateLimit).toHaveBeenCalledWith('user-1', 'email');
     expect(repo.expireCode).not.toHaveBeenCalled();
+  });
+
+  it('does not charge quota when a delivered candidate cannot be activated', async () => {
+    const repo = makeRepo();
+    repo.activateDeliveredCode.mockResolvedValue(false);
+    const sender: IOtpSender = { channel: 'email', send: vi.fn().mockResolvedValue(true) };
+    const service = new OtpService(repo as never, settings as never, () => sender);
+
+    await expect(service.sendCode('user-1', 'email')).rejects.toMatchObject({
+      statusCode: 502,
+      code: 'OTP_ACTIVATION_FAILED',
+    });
+    expect(repo.upsertRateLimit).not.toHaveBeenCalled();
   });
 
   it('disables console-backed phone OTP in production before creating a code', async () => {

@@ -63,23 +63,38 @@ export class OtpRepository {
   }
 
   /**
-   * Invalidate all previous codes for a user + channel (when sending a new one).
+   * Make a delivered candidate the sole active code for this user/channel.
+   * The candidate may have been expired by another concurrent successful send;
+   * reviving it and retiring the other candidates in one statement guarantees
+   * that the last completed activation always leaves one delivered code usable.
    */
-  async invalidatePreviousCodes(
+  async activateDeliveredCode(
     userId: string,
     channel: OtpChannel,
-    exceptCodeId?: string,
-  ): Promise<void> {
-    await this.db.query(
-      `UPDATE verification_codes
-       SET expires_at = now()
-       WHERE user_id = $1
-         AND channel = $2
-         AND verified_at IS NULL
-         AND expires_at > now()
-         AND ($3::uuid IS NULL OR id <> $3::uuid)`,
-      [userId, channel, exceptCodeId ?? null],
+    codeId: string,
+    expiresAt: Date,
+  ): Promise<boolean> {
+    const { rows } = await this.db.query<{ activated: boolean }>(
+      `WITH candidate AS (
+         SELECT id
+         FROM verification_codes
+         WHERE id = $3
+           AND user_id = $1
+           AND channel = $2
+           AND verified_at IS NULL
+       ), updated AS (
+         UPDATE verification_codes v
+         SET expires_at = CASE WHEN v.id = $3 THEN $4 ELSE now() END
+         WHERE v.user_id = $1
+           AND v.channel = $2
+           AND v.verified_at IS NULL
+           AND EXISTS (SELECT 1 FROM candidate)
+         RETURNING v.id
+       )
+       SELECT EXISTS (SELECT 1 FROM updated WHERE id = $3) AS activated`,
+      [userId, channel, codeId, expiresAt],
     );
+    return rows[0]?.activated === true;
   }
 
   async expireCode(codeId: string): Promise<void> {
