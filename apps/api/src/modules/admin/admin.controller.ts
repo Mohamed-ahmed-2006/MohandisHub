@@ -141,6 +141,34 @@ function hasPermission(
   return req.user ? hasAdminPermission(req.user, permission) : false;
 }
 
+async function assertCanMutateUserAccount(
+  req: {
+    params: { id?: string };
+    user?: { id: string; isAdmin?: boolean; adminPermissions?: string[] };
+  },
+  forbidSelf = false,
+): Promise<void> {
+  const targetId = req.params.id;
+  if (!targetId) {
+    throw new HttpError({
+      statusCode: 400,
+      code: 'INVALID_USER_ID',
+      message: 'User id is required.',
+    });
+  }
+
+  const actorId = getAdminId(req);
+  if (forbidSelf && targetId === actorId) {
+    throw new HttpError({
+      statusCode: 403,
+      code: 'SELF_ACCOUNT_ACTION_FORBIDDEN',
+      message: 'You cannot perform this account action on yourself.',
+    });
+  }
+
+  await adminService.assertUserCanBeManaged(targetId, hasPermission(req, 'super_admin'));
+}
+
 function parseValidation<T>(
   schema: {
     safeParse: (data: unknown) => {
@@ -264,6 +292,7 @@ const getUserActivity = asyncHandler(async (req, res) => {
 
 const updateUser = asyncHandler(async (req, res) => {
   const input = parseValidation<UpdateUserInput>(updateUserSchema, req.body);
+  await assertCanMutateUserAccount(req, input.isActive === false);
   const changesAdminPower = input.isAdmin !== undefined || input.adminPermissions !== undefined;
   if (changesAdminPower && !hasPermission(req, 'super_admin')) {
     throw new HttpError({
@@ -314,6 +343,7 @@ const changeUserRole = asyncHandler(async (req, res) => {
 });
 
 const deleteUser = asyncHandler(async (req, res) => {
+  await assertCanMutateUserAccount(req, true);
   await adminService.deleteUser(req.params.id!);
   await logAdminAction(req, 'admin.user.delete', 'user', req.params.id!, { deleted: true });
   const response: ApiSuccessBody<{ deleted: true }> = { ok: true, data: { deleted: true } };
@@ -321,6 +351,7 @@ const deleteUser = asyncHandler(async (req, res) => {
 });
 
 const activateUser = asyncHandler(async (req, res) => {
+  await assertCanMutateUserAccount(req);
   const user = await adminService.activateUser(req.params.id!);
   await logAdminAction(req, 'admin.user.activate', 'user', req.params.id!, { isActive: true });
   const response: ApiSuccessBody<AdminUserListItem> = { ok: true, data: user };
@@ -328,6 +359,7 @@ const activateUser = asyncHandler(async (req, res) => {
 });
 
 const deactivateUser = asyncHandler(async (req, res) => {
+  await assertCanMutateUserAccount(req, true);
   const user = await adminService.deactivateUser(req.params.id!);
   await logAdminAction(req, 'admin.user.deactivate', 'user', req.params.id!, { isActive: false });
   const response: ApiSuccessBody<AdminUserListItem> = { ok: true, data: user };
@@ -335,6 +367,7 @@ const deactivateUser = asyncHandler(async (req, res) => {
 });
 
 const sendVerificationEmail = asyncHandler(async (req, res) => {
+  await assertCanMutateUserAccount(req);
   const result = await adminService.sendVerificationEmail(req.params.id!);
   await logAdminAction(req, 'admin.user.send_verification_email', 'user', req.params.id!, {
     destination: result.destination,
@@ -344,6 +377,7 @@ const sendVerificationEmail = asyncHandler(async (req, res) => {
 });
 
 const verifyEmail = asyncHandler(async (req, res) => {
+  await assertCanMutateUserAccount(req);
   const user = await adminService.verifyEmail(req.params.id!);
   await logAdminAction(req, 'admin.user.verify_email', 'user', req.params.id!, {
     emailVerified: true,
@@ -353,6 +387,7 @@ const verifyEmail = asyncHandler(async (req, res) => {
 });
 
 const updateUserExpertProfile = asyncHandler(async (req, res) => {
+  await assertCanMutateUserAccount(req);
   const input = parseValidation<UpdateExpertProfileByAdminInput>(
     updateExpertProfileSchema,
     req.body,
@@ -363,6 +398,7 @@ const updateUserExpertProfile = asyncHandler(async (req, res) => {
 });
 
 const updateUserBusinessProfile = asyncHandler(async (req, res) => {
+  await assertCanMutateUserAccount(req);
   const input = parseValidation<UpdateBusinessProfileByAdminInput>(
     updateBusinessProfileSchema,
     req.body,
@@ -373,6 +409,7 @@ const updateUserBusinessProfile = asyncHandler(async (req, res) => {
 });
 
 const updateUserCraftsmanProfile = asyncHandler(async (req, res) => {
+  await assertCanMutateUserAccount(req);
   const input = parseValidation<UpdateCraftsmanProfileByAdminInput>(
     updateCraftsmanProfileSchema,
     req.body,
@@ -383,6 +420,7 @@ const updateUserCraftsmanProfile = asyncHandler(async (req, res) => {
 });
 
 const freezeUserWallet = asyncHandler(async (req, res) => {
+  await assertCanMutateUserAccount(req);
   const result = await adminService.freezeUserWallet(req.params.id!);
   await logAdminAction(req, 'admin.wallet.freeze', 'wallet', req.params.id!, {
     userId: req.params.id!,
@@ -393,6 +431,7 @@ const freezeUserWallet = asyncHandler(async (req, res) => {
 });
 
 const unfreezeUserWallet = asyncHandler(async (req, res) => {
+  await assertCanMutateUserAccount(req);
   const result = await adminService.unfreezeUserWallet(req.params.id!);
   await logAdminAction(req, 'admin.wallet.unfreeze', 'wallet', req.params.id!, {
     userId: req.params.id!,
@@ -403,6 +442,7 @@ const unfreezeUserWallet = asyncHandler(async (req, res) => {
 });
 
 const forceLogoutUser = asyncHandler(async (req, res) => {
+  await assertCanMutateUserAccount(req, true);
   const result = await adminService.forceLogoutUser(req.params.id!);
   await logAdminAction(req, 'admin.user.force_logout', 'user', req.params.id!, {
     revoked: true,
@@ -412,6 +452,7 @@ const forceLogoutUser = asyncHandler(async (req, res) => {
 });
 
 const changeUserEmail = asyncHandler(async (req, res) => {
+  await assertCanMutateUserAccount(req, true);
   const input = parseValidation<ChangeUserEmailInput>(changeUserEmailSchema, req.body);
   const result = await adminService.changeUserEmail(req.params.id!, input);
   await logAdminAction(req, 'admin.user.change_email', 'user', req.params.id!, {

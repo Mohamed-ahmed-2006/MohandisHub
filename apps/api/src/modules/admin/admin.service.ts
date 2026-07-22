@@ -80,6 +80,8 @@ import type {
   UserActivityTypeInput,
 } from './admin.validation.js';
 
+const PLATFORM_USER_ID = '00000000-0000-0000-0000-000000000001';
+
 export class AdminService {
   constructor(
     private readonly repo: AdminRepository = new AdminRepository(),
@@ -90,6 +92,31 @@ export class AdminService {
     private readonly walletService: WalletService = new WalletService(),
     private readonly notificationsService: NotificationsService = new NotificationsService(),
   ) {}
+
+  async assertUserCanBeManaged(userId: string, actorIsSuperAdmin: boolean): Promise<void> {
+    if (userId === PLATFORM_USER_ID) {
+      throw new HttpError({
+        statusCode: 403,
+        code: 'SYSTEM_ACCOUNT_PROTECTED',
+        message: 'The platform system account cannot be changed through user administration.',
+      });
+    }
+
+    const target = await this.repo.getUserById(userId);
+    if (!target) {
+      throw new HttpError({ statusCode: 404, code: 'USER_NOT_FOUND', message: 'User not found.' });
+    }
+
+    const targetIsAdmin =
+      target.is_admin === true || target.admin_permissions?.includes('super_admin') === true;
+    if (targetIsAdmin && !actorIsSuperAdmin) {
+      throw new HttpError({
+        statusCode: 403,
+        code: 'SUPER_ADMIN_REQUIRED',
+        message: 'Only a super admin can change another administrator account.',
+      });
+    }
+  }
 
   // ── Dashboard ───────────────────────────────────────────────────────────
 

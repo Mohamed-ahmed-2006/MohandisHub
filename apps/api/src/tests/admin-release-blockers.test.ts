@@ -30,9 +30,9 @@ describe('admin release blocker hardening', () => {
   it('requires factory reset confirmation and production opt-in in the API', () => {
     expect(factoryResetSchema.safeParse({ confirm: 'FACTORY RESET' }).success).toBe(true);
     expect(factoryResetSchema.safeParse({}).success).toBe(false);
-    expect(
-      factoryResetSchema.safeParse({ confirm: 'FACTORY RESET', extra: true }).success,
-    ).toBe(false);
+    expect(factoryResetSchema.safeParse({ confirm: 'FACTORY RESET', extra: true }).success).toBe(
+      false,
+    );
 
     const adminRoutes = readSource('../modules/admin/admin.routes.ts');
     const adminController = readSource('../modules/admin/admin.controller.ts');
@@ -42,5 +42,32 @@ describe('admin release blocker hardening', () => {
     expect(adminController).toContain("env.NODE_ENV === 'production'");
     expect(adminController).toContain('!env.ALLOW_FACTORY_RESET');
     expect(adminController).toContain('FACTORY_RESET_DISABLED');
+  });
+
+  it('prevents delegated admins from mutating administrators and protects the system account', async () => {
+    const repo = {
+      getUserById: vi.fn().mockResolvedValue({
+        id: 'super-1',
+        is_admin: true,
+        admin_permissions: ['super_admin'],
+      }),
+    };
+    const service = new AdminService(repo as never, {} as never);
+
+    await expect(service.assertUserCanBeManaged('super-1', false)).rejects.toMatchObject({
+      statusCode: 403,
+      code: 'SUPER_ADMIN_REQUIRED',
+    });
+    await expect(service.assertUserCanBeManaged('super-1', true)).resolves.toBeUndefined();
+    await expect(
+      service.assertUserCanBeManaged('00000000-0000-0000-0000-000000000001', true),
+    ).rejects.toMatchObject({
+      statusCode: 403,
+      code: 'SYSTEM_ACCOUNT_PROTECTED',
+    });
+
+    const adminController = readSource('../modules/admin/admin.controller.ts');
+    expect(adminController).toContain('assertCanMutateUserAccount(req, input.isActive === false)');
+    expect(adminController).toContain('assertCanMutateUserAccount(req, true)');
   });
 });
