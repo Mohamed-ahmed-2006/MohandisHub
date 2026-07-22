@@ -673,8 +673,9 @@ export const ChatScreen = ({ locale, dictionary }: Props) => {
                             );
                           }}
                           title={t.shareLocation}
+                          aria-label={t.shareLocation}
                         >
-                          📍
+                          <span aria-hidden>📍</span>
                         </button>
                       </div>
                       <input

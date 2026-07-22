@@ -179,7 +179,7 @@ export const WalletDepositModal = ({
     }
     const sender = senderAccount.trim();
     if (!sender) {
-      setError('Sender InstaPay number/account is required.');
+      setError(d.instapaySenderRequired ?? 'Sender InstaPay number/account is required.');
       return;
     }
     setLoading(true);
@@ -294,23 +294,23 @@ export const WalletDepositModal = ({
             disabled={loading}
           />
           <label className="deposit-form-label" style={{ marginTop: '0.75rem' }}>
-            Sender InstaPay number / account
+            {d.instapaySenderLabel ?? 'Sender InstaPay number / account'}
           </label>
           <input
             type="text"
             className="deposit-form-input"
-            placeholder="e.g. +2010xxxxxxx or wallet account"
+            placeholder={d.instapaySenderPlaceholder ?? 'e.g. +2010xxxxxxx or wallet account'}
             value={senderAccount}
             onChange={(e) => setSenderAccount(e.target.value)}
             disabled={loading}
           />
           <label className="deposit-form-label" style={{ marginTop: '0.75rem' }}>
-            Transfer reference (optional)
+            {d.instapayReferenceLabel ?? 'Transfer reference (optional)'}
           </label>
           <input
             type="text"
             className="deposit-form-input"
-            placeholder="Bank or InstaPay reference"
+            placeholder={d.instapayReferencePlaceholder ?? 'Bank or InstaPay reference'}
             value={transferReference}
             onChange={(e) => setTransferReference(e.target.value)}
             disabled={loading}
