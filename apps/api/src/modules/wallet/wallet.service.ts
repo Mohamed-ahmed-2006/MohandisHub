@@ -843,22 +843,8 @@ export class WalletService {
         message: `Maximum withdrawal amount is ${methodLimits.maxAmountEgp} EGP.`,
       });
     }
-    if (methodLimits.dailyMaxAmountEgp != null) {
-      const since = new Date();
-      since.setUTCHours(0, 0, 0, 0);
-      const usedToday = await this.repo.getWithdrawalTotalForUserSince({
-        userId,
-        method: input.method,
-        since,
-      });
-      if (usedToday + input.amountEgp > methodLimits.dailyMaxAmountEgp) {
-        throw new HttpError({
-          statusCode: 400,
-          code: 'DAILY_WITHDRAWAL_LIMIT_EXCEEDED',
-          message: `Daily withdrawal limit is ${methodLimits.dailyMaxAmountEgp} EGP.`,
-        });
-      }
-    }
+    const dailyLimitSince = new Date();
+    dailyLimitSince.setUTCHours(0, 0, 0, 0);
 
     if (
       input.method === 'instapay' &&
@@ -934,6 +920,8 @@ export class WalletService {
           initialStatus: 'awaiting_transfer',
           rateSnapshot: {},
           providerPayload: { created_via: 'wallet_withdrawal_instapay' },
+          dailyMaxAmountEgp: methodLimits.dailyMaxAmountEgp,
+          dailyLimitSince,
         });
       } catch (error) {
         this.rethrowWalletCreateErrors(error);
@@ -975,6 +963,8 @@ export class WalletService {
           initialStatus: 'processing',
           rateSnapshot: {},
           providerPayload: { created_via: 'wallet_withdrawal_paymob' },
+          dailyMaxAmountEgp: methodLimits.dailyMaxAmountEgp,
+          dailyLimitSince,
         });
       } catch (error) {
         this.rethrowWalletCreateErrors(error);
@@ -1080,6 +1070,8 @@ export class WalletService {
           created_via: 'wallet_withdrawal_crypto',
           custody_enabled: env.NOWPAYMENTS_CUSTODY_ENABLED,
         },
+        dailyMaxAmountEgp: methodLimits.dailyMaxAmountEgp,
+        dailyLimitSince,
       });
     } catch (error) {
       this.rethrowWalletCreateErrors(error);
@@ -1110,6 +1102,13 @@ export class WalletService {
         statusCode: 403,
         code: 'WALLET_FROZEN',
         message: 'Wallet is frozen.',
+      });
+    }
+    if (message === 'DAILY_WITHDRAWAL_LIMIT_EXCEEDED') {
+      throw new HttpError({
+        statusCode: 400,
+        code: 'DAILY_WITHDRAWAL_LIMIT_EXCEEDED',
+        message: 'Daily withdrawal limit exceeded.',
       });
     }
     throw error;

@@ -1231,6 +1231,8 @@ export class WalletRepository {
     initialStatus: 'pending_verification' | 'awaiting_transfer' | 'processing';
     rateSnapshot?: Record<string, unknown>;
     providerPayload?: Record<string, unknown>;
+    dailyMaxAmountEgp?: number | null;
+    dailyLimitSince: Date;
   }): Promise<WithdrawalRequestRow> {
     const client = await this.db.connect();
     try {
@@ -1260,6 +1262,21 @@ export class WalletRepository {
           withdrawal_method: params.withdrawalMethod,
         },
       );
+      if (params.dailyMaxAmountEgp != null) {
+        const { rows: dailyRows } = await client.query<{ total: string }>(
+          `SELECT COALESCE(SUM(COALESCE(source_amount_egp, amount)), 0)::text AS total
+           FROM withdrawal_requests
+           WHERE user_id = $1
+             AND withdrawal_method = $2
+             AND created_at >= $3
+             AND status NOT IN ('failed', 'rejected', 'cancelled', 'blocked')`,
+          [params.userId, params.withdrawalMethod, params.dailyLimitSince],
+        );
+        const usedToday = parseFloat(dailyRows[0]?.total ?? '0');
+        if (usedToday + params.amountEgp > params.dailyMaxAmountEgp) {
+          throw new Error('DAILY_WITHDRAWAL_LIMIT_EXCEEDED');
+        }
+      }
       const { rows } = await client.query<WithdrawalRequestRow>(
         `INSERT INTO withdrawal_requests (
           user_id, wallet_id, hold_id, amount, currency, payout_address, payout_extra_id,
