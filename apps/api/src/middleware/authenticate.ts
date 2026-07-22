@@ -83,14 +83,24 @@ export const authenticate: RequestHandler = (req, _res, next) => {
           admin_permissions: string[] | null;
           is_active: boolean;
           email_verified_at: Date | null;
+          verification_status: string | null;
         }>(
           `SELECT primary_role,
                   COALESCE(is_admin, false) AS is_admin,
                   COALESCE(admin_permissions, '[]'::jsonb) AS admin_permissions,
                   COALESCE(is_active, false) AS is_active,
-                  email_verified_at
-             FROM users
-            WHERE id = $1 AND deleted_at IS NULL
+                  email_verified_at,
+                  CASE primary_role
+                    WHEN 'expert' THEN ep.verification_status
+                    WHEN 'business' THEN bp.verification_status
+                    WHEN 'craftsman' THEN cp.verification_status
+                    ELSE NULL
+                  END AS verification_status
+             FROM users u
+             LEFT JOIN expert_profiles ep ON ep.user_id = u.id
+             LEFT JOIN business_profiles bp ON bp.user_id = u.id
+             LEFT JOIN craftsman_profiles cp ON cp.user_id = u.id
+            WHERE u.id = $1 AND u.deleted_at IS NULL
             LIMIT 1`,
           [payload.sub],
         );
@@ -107,6 +117,7 @@ export const authenticate: RequestHandler = (req, _res, next) => {
           role: row.primary_role,
           isAdmin: row.is_admin === true,
           adminPermissions: Array.isArray(row.admin_permissions) ? row.admin_permissions : [],
+          verified: row.verification_status === 'verified',
           emailVerified: row.email_verified_at !== null,
         };
       }

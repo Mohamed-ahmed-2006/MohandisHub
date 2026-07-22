@@ -220,6 +220,8 @@ describe('phase 2 admin money controls', () => {
     expect(authenticate).toContain('SELECT primary_role');
     expect(authenticate).toContain('admin_permissions');
     expect(authenticate).toContain('email_verified_at');
+    expect(authenticate).toContain('END AS verification_status');
+    expect(authenticate).toContain("verified: row.verification_status === 'verified'");
     expect(usersService).toContain('EMAIL_CHANGE_MAX_CONFIRM_ATTEMPTS');
     expect(usersService).toContain('EMAIL_CHANGE_ATTEMPTS_EXCEEDED');
     expect(authRoutes).toContain('requireTrustedAuthOrigin');

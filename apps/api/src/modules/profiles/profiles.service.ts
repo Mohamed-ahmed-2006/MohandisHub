@@ -109,7 +109,7 @@ export class ProfilesService {
       verificationStatus: effectiveStatus,
       averageRating: averageRating ?? null,
       reviewCount,
-      verificationBadgeEarned: badgeEligible,
+      verificationBadgeEarned: platformVerifiedAt !== null,
       platformVerifiedAt: platformVerifiedAt?.toISOString() ?? null,
     };
   }
@@ -212,7 +212,7 @@ export class ProfilesService {
       verificationStatus: effectiveStatus,
       averageRating: averageRating ?? null,
       reviewCount,
-      verificationBadgeEarned: badgeEligible,
+      verificationBadgeEarned: platformVerifiedAt !== null,
       platformVerifiedAt: platformVerifiedAt?.toISOString() ?? null,
     };
   }
@@ -391,7 +391,7 @@ export class ProfilesService {
       verificationStatus: effectiveStatus,
       averageRating: averageRating ?? null,
       reviewCount,
-      verificationBadgeEarned: badgeEligible,
+      verificationBadgeEarned: platformVerifiedAt !== null,
       platformVerifiedAt: platformVerifiedAt?.toISOString() ?? null,
     };
   }
@@ -1095,6 +1095,8 @@ export class ProfilesService {
       displayName: user.display_name,
       avatarUrl: user.avatar_url,
     };
+    const platformVerifiedAt =
+      role === 'customer' ? null : await this.repo.getPlatformVerifiedAt(userId);
 
     if (role === 'expert') {
       const row = await this.repo.findExpertProfile(userId);
@@ -1120,7 +1122,7 @@ export class ProfilesService {
         educationSummary: row.education_summary,
         certificationsCount: row.certifications_count ?? 0,
         verificationStatus: row.verification_status,
-        verificationBadgeEarned: row.verification_status === 'verified',
+        verificationBadgeEarned: platformVerifiedAt !== null,
         averageRating: averageRating ?? null,
         reviewCount,
       };
@@ -1148,7 +1150,7 @@ export class ProfilesService {
         country: row.country ?? 'Egypt',
         workshopName: row.workshop_name,
         verificationStatus: row.verification_status,
-        verificationBadgeEarned: row.verification_status === 'verified',
+        verificationBadgeEarned: platformVerifiedAt !== null,
         averageRating: averageRating ?? null,
         reviewCount,
       };
@@ -1180,7 +1182,7 @@ export class ProfilesService {
         country: row.country ?? 'Egypt',
         description: row.description,
         verificationStatus: row.verification_status,
-        verificationBadgeEarned: row.verification_status === 'verified',
+        verificationBadgeEarned: platformVerifiedAt !== null,
         averageRating: averageRating ?? null,
         reviewCount,
       };
