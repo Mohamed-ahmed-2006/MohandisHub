@@ -56,6 +56,13 @@ describe('release-audit-ui fixes', () => {
     expect(adminPanel).toContain("adminPermissions ?? []).includes('super_admin')");
   });
 
+  it('gives the registration phone-number input a localized accessible name', () => {
+    const authForm = read('components/auth/auth-form.tsx');
+
+    expect(authForm).toContain('autoComplete="tel-national"');
+    expect(authForm).toContain('aria-label={phoneLabel}');
+  });
+
   it('gives the chat share-location icon button an accessible name', () => {
     const chat = read('components/app/chat-screen.tsx');
     // The location button now carries an aria-label and hides the emoji glyph.

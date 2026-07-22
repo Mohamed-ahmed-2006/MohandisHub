@@ -655,6 +655,7 @@ export const AuthForm = ({
                     setRegisterValues((prev) => ({ ...prev, phone: e.target.value }))
                   }
                   autoComplete="tel-national"
+                  aria-label={phoneLabel}
                   dir="ltr"
                 />
               </div>
