@@ -65,12 +65,29 @@ export class OtpRepository {
   /**
    * Invalidate all previous codes for a user + channel (when sending a new one).
    */
-  async invalidatePreviousCodes(userId: string, channel: OtpChannel): Promise<void> {
+  async invalidatePreviousCodes(
+    userId: string,
+    channel: OtpChannel,
+    exceptCodeId?: string,
+  ): Promise<void> {
     await this.db.query(
       `UPDATE verification_codes
        SET expires_at = now()
-       WHERE user_id = $1 AND channel = $2 AND verified_at IS NULL AND expires_at > now()`,
-      [userId, channel],
+       WHERE user_id = $1
+         AND channel = $2
+         AND verified_at IS NULL
+         AND expires_at > now()
+         AND ($3::uuid IS NULL OR id <> $3::uuid)`,
+      [userId, channel, exceptCodeId ?? null],
+    );
+  }
+
+  async expireCode(codeId: string): Promise<void> {
+    await this.db.query(
+      `UPDATE verification_codes
+       SET expires_at = now()
+       WHERE id = $1 AND verified_at IS NULL`,
+      [codeId],
     );
   }
 

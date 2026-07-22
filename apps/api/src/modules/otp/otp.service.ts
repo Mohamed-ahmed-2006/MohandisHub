@@ -24,11 +24,20 @@ export class OtpService {
   constructor(
     private readonly otpRepo: OtpRepository = new OtpRepository(),
     private readonly settingsService: SettingsService = new SettingsService(),
+    private readonly senderFactory: typeof createOtpSender = createOtpSender,
   ) {}
 
   // ── Send OTP ──────────────────────────────────────────────────────────
 
   async sendCode(userId: string, channel: OtpChannel): Promise<SendOtpResult> {
+    if (channel === 'phone' && env.NODE_ENV === 'production' && env.OTP_SMS_PROVIDER === 'console') {
+      throw new HttpError({
+        statusCode: 503,
+        code: 'PHONE_OTP_UNAVAILABLE',
+        message: 'Phone verification is temporarily unavailable.',
+      });
+    }
+
     const status = await this.settingsService.getAppStatus();
     if (status.pauseOtpEmails) {
       throw new HttpError({
@@ -64,16 +73,14 @@ export class OtpService {
     // 2. Rate-limit check
     await this.enforceRateLimit(userId, channel);
 
-    // 3. Invalidate any existing codes for this user+channel
-    await this.otpRepo.invalidatePreviousCodes(userId, channel);
-
-    // 4. Generate a 6-digit code
+    // 3. Generate a 6-digit code. Keep any previously delivered code valid
+    // until the replacement has actually been delivered.
     const code = this.generateCode();
     const codeHash = this.hashCode(code);
     const expiresAt = new Date(Date.now() + CODE_TTL_MINUTES * 60 * 1000);
 
-    // 5. Persist
-    await this.otpRepo.createCode({
+    // 4. Persist the candidate code.
+    const created = await this.otpRepo.createCode({
       userId,
       channel,
       destination,
@@ -81,25 +88,32 @@ export class OtpService {
       expiresAt,
     });
 
-    // 6. Update rate-limit counter
-    await this.otpRepo.upsertRateLimit(userId, channel);
-
-    // 7. Send the code
-    const sender = createOtpSender(channel, env.OTP_EMAIL_PROVIDER, env.OTP_SMS_PROVIDER);
-    const sent = await sender.send({
-      destination,
-      code,
-      displayName: user.display_name,
-    });
+    // 5. Send before invalidating the last known-good code or charging quota.
+    const sender = this.senderFactory(channel, env.OTP_EMAIL_PROVIDER, env.OTP_SMS_PROVIDER);
+    let sent = false;
+    try {
+      sent = await sender.send({
+        destination,
+        code,
+        displayName: user.display_name,
+      });
+    } catch {
+      sent = false;
+    }
 
     if (!sent) {
-      logger.error('Failed to send OTP', { userId, channel, destination });
+      await this.otpRepo.expireCode(created.id);
+      logger.error('Failed to send OTP', { channel });
       throw new HttpError({
         statusCode: 502,
         code: 'OTP_SEND_FAILED',
         message: 'Failed to send the verification code. Please try again.',
       });
     }
+
+    // 6. The replacement is deliverable: retire older codes and count the send.
+    await this.otpRepo.invalidatePreviousCodes(userId, channel, created.id);
+    await this.otpRepo.upsertRateLimit(userId, channel);
 
     return {
       channel,
