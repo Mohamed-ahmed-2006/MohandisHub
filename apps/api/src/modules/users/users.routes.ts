@@ -22,7 +22,5 @@ usersRouter.post(
 );
 
 usersRouter.get('/me/activity', authenticate, requireEmailVerified, usersController.getMyActivity);
-usersRouter.get('/', authenticate, requireEmailVerified, usersController.listUsers);
-usersRouter.get('/:id', authenticate, requireEmailVerified, usersController.getUserById);
 
 export { usersRouter };

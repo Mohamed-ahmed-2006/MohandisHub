@@ -1,4 +1,3 @@
-import type { ApiErrorBody } from '@mohandishub/shared';
 import request from 'supertest';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -11,26 +10,19 @@ vi.mock('../modules/settings/settings.repository.js', () => ({
 import { createApp } from '../app.js';
 
 describe('users module', () => {
-  it('requires auth for users list', async () => {
+  it('does not expose the legacy seeded users list', async () => {
     const app = createApp();
 
     const response = await request(app).get('/api/users');
-    const body = response.body as ApiErrorBody;
 
-    expect(response.status).toBe(401);
-    expect(body.ok).toBe(false);
-    expect(body.error.code).toBe('UNAUTHORIZED');
+    expect(response.status).toBe(404);
   }, 15_000);
 
-  it('requires auth for user details', async () => {
+  it('does not expose legacy seeded user details', async () => {
     const app = createApp();
 
     const response = await request(app).get('/api/users/unknown_user');
-    const body = response.body as ApiErrorBody;
 
-    expect(response.status).toBe(401);
-    expect(body.ok).toBe(false);
-    expect(body.error.code).toBe('UNAUTHORIZED');
-    expect(body.error.requestId).toBeTypeOf('string');
+    expect(response.status).toBe(404);
   }, 15_000);
 });
