@@ -9,4 +9,10 @@ describe('web security headers', () => {
     expect(config).toContain("frame-ancestors 'none'");
     expect(config).toContain("{ key: 'X-Frame-Options', value: 'DENY' }");
   });
+
+  it('keeps the vulnerable transitive image optimizer disabled', () => {
+    const config = readFileSync(new URL('../next.config.ts', import.meta.url), 'utf8');
+
+    expect(config).toContain('unoptimized: true');
+  });
 });

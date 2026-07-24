@@ -75,6 +75,10 @@ const contentSecurityPolicyReportOnly = [
 const nextConfig: NextConfig = {
   transpilePackages: ['@mohandishub/shared'],
   images: {
+    // Next 15 currently pulls a sharp release affected by GHSA-f88m-g3jw-g9cj.
+    // Keep user-controlled images out of the built-in optimizer until Next ships
+    // a stable release that depends on sharp >= 0.35.0.
+    unoptimized: true,
     remotePatterns: remoteImagePatterns,
   },
   headers() {
