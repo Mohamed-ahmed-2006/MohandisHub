@@ -1,5 +1,12 @@
-export type AdLinkType = 'profile' | 'service' | 'need';
-export type AdStatus = 'pending_payment' | 'active' | 'expired' | 'cancelled' | 'paused_by_admin';
+export type AdLinkType = 'profile' | 'service';
+export type AdStatus =
+  | 'pending_review'
+  | 'scheduled'
+  | 'active'
+  | 'paused_by_admin'
+  | 'rejected'
+  | 'expired'
+  | 'cancelled';
 
 export type AdPricingRuleRow = {
   id: string;
@@ -49,9 +56,24 @@ export type AdvertisementRow = {
   admin_forced_expires_at: string | null;
   admin_status_reason: string | null;
   admin_price_override: string | null;
+  duration_days: number | null;
+  daily_price_piastres: number | null;
+  quoted_amount_piastres: string | null;
+  wallet_hold_id: string | null;
+  banner_upload_id: string | null;
+  destination_provider_id: string | null;
+  destination_service_id: string | null;
+  reviewed_by: string | null;
+  reviewed_at: string | null;
+  rejection_reason: string | null;
+  paused_at: string | null;
+  paused_seconds: string;
+  cancellation_refund_piastres: string;
+  content_locked_at: string | null;
   impressions: number;
   clicks: number;
   created_at: string;
   updated_at: string;
   advertiser_name?: string;
+  deliveryToken?: string;
 };

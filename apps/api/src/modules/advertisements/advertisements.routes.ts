@@ -22,6 +22,12 @@ advertisementsRouter.get(
   requireEmailVerified,
   advertisementsController.getAdControls,
 );
+advertisementsRouter.get(
+  '/quote',
+  authenticate,
+  requireEmailVerified,
+  advertisementsController.quoteAd,
+);
 advertisementsRouter.post(
   '/',
   authenticate,
@@ -35,6 +41,12 @@ advertisementsRouter.get(
   authenticate,
   requireEmailVerified,
   advertisementsController.listMyAds,
+);
+advertisementsRouter.post(
+  '/:id/impression',
+  authenticate,
+  requireEmailVerified,
+  advertisementsController.trackImpression,
 );
 advertisementsRouter.post(
   '/:id/click',
@@ -53,6 +65,15 @@ advertisementsRouter.get(
   advertisementsController.listAllAds,
 );
 advertisementsRouter.put(
+  '/admin/:id/review',
+  authenticate,
+  requireEmailVerified,
+  loadAdminFromDb,
+  requireRole('admin'),
+  requireAdminPermission('manage_ads'),
+  advertisementsController.adminReview,
+);
+advertisementsRouter.put(
   '/admin/:id/status',
   authenticate,
   requireEmailVerified,
@@ -69,15 +90,6 @@ advertisementsRouter.post(
   requireRole('admin'),
   requireAdminPermission('manage_ad_scheduling'),
   advertisementsController.adminSchedule,
-);
-advertisementsRouter.put(
-  '/admin/:id/pricing',
-  authenticate,
-  requireEmailVerified,
-  loadAdminFromDb,
-  requireRole('admin'),
-  requireAdminPermission('manage_ad_pricing'),
-  advertisementsController.adminPricingOverride,
 );
 advertisementsRouter.get(
   '/admin/controls',

@@ -1,3 +1,6 @@
+import { createHmac } from 'node:crypto';
+
+import { env } from '../../config/env.js';
 import { asyncHandler } from '../../utils/async-handler.js';
 import { HttpError } from '../../utils/http-error.js';
 import { logAudit } from '../audit/audit.service.js';
@@ -5,9 +8,12 @@ import { logAudit } from '../audit/audit.service.js';
 import { AdvertisementsService } from './advertisements.service.js';
 import {
   adCenterResolveSchema,
+  adDeliveryEventSchema,
+  adQuoteQuerySchema,
   adminAdControlsSchema,
-  adminPricingOverrideSchema,
+  adminReviewSchema,
   adminScheduleSchema,
+  adminStatusSchema,
   createAdSchema,
   listAdsQuerySchema,
   updateAdSchema,
@@ -26,6 +32,18 @@ function requestIp(req: {
   socket?: { remoteAddress?: string | undefined };
 }): string | null {
   return req.ip ?? req.socket?.remoteAddress ?? null;
+}
+
+function viewerHash(req: {
+  user?: { id: string };
+  ip?: string | undefined;
+  socket?: { remoteAddress?: string | undefined };
+  get: (name: string) => string | undefined;
+}): string {
+  const value = `${req.user?.id ?? 'anonymous'}|${requestIp(req) ?? 'unknown'}|${
+    req.get('user-agent') ?? 'unknown'
+  }`;
+  return createHmac('sha256', env.JWT_SECRET).update(value).digest('hex');
 }
 
 function parseBody<T>(
@@ -55,6 +73,12 @@ const createAd = asyncHandler(async (req, res) => {
   const input = parseBody(createAdSchema, req.body);
   const data = await svc.createAd(user.id, input);
   res.status(201).json({ ok: true, data });
+});
+
+const quoteAd = asyncHandler(async (req, res) => {
+  const input = parseBody(adQuoteQuerySchema, req.query);
+  const data = await svc.quote(input.durationDays);
+  res.json({ ok: true, data });
 });
 
 const getAd = asyncHandler(async (req, res) => {
@@ -90,29 +114,41 @@ const deleteAd = asyncHandler(async (req, res) => {
 
 const listActiveResolved = asyncHandler(async (req, res) => {
   const input = parseBody(adCenterResolveSchema, req.query);
-  const data = await svc.resolveActiveAds(input);
+  const data = await svc.resolveActiveAds(input, viewerHash(req));
+  res.json({ ok: true, data });
+});
+
+const trackImpression = asyncHandler(async (req, res) => {
+  const input = parseBody(adDeliveryEventSchema, req.body);
+  const data = await svc.trackImpression(req.params.id!, input.deliveryToken, viewerHash(req));
   res.json({ ok: true, data });
 });
 
 const trackClick = asyncHandler(async (req, res) => {
-  const data = await svc.trackClick(req.params.id!);
+  const input = parseBody(adDeliveryEventSchema, req.body);
+  const data = await svc.trackClick(req.params.id!, input.deliveryToken, viewerHash(req));
+  res.json({ ok: true, data });
+});
+
+const adminReview = asyncHandler(async (req, res) => {
+  const user = requireUser(req);
+  const input = parseBody(adminReviewSchema, req.body);
+  const data = await svc.reviewAd(req.params.id!, user.id, input);
+  await logAudit({
+    actorId: user.id,
+    action: `admin.ad.${input.decision}`,
+    resourceType: 'advertisement',
+    resourceId: req.params.id!,
+    details: { decision: input.decision, reason: input.reason ?? null },
+    ip: requestIp(req),
+  });
   res.json({ ok: true, data });
 });
 
 const adminSetStatus = asyncHandler(async (req, res) => {
   const user = requireUser(req);
-  const input = req.body as {
-    status?: 'active' | 'paused_by_admin' | 'cancelled';
-    reason?: string;
-  };
-  if (!input.status) {
-    throw new HttpError({
-      statusCode: 400,
-      code: 'VALIDATION_ERROR',
-      message: 'status is required.',
-    });
-  }
-  const data = await svc.applyAdminStatus(req.params.id!, input.status, input.reason);
+  const input = parseBody(adminStatusSchema, req.body);
+  const data = await svc.applyAdminStatus(req.params.id!, user.id, input.status, input.reason);
   await logAudit({
     actorId: user.id,
     action: 'admin.ad.status',
@@ -143,21 +179,6 @@ const adminSchedule = asyncHandler(async (req, res) => {
   res.json({ ok: true, data });
 });
 
-const adminPricingOverride = asyncHandler(async (req, res) => {
-  const user = requireUser(req);
-  const input = parseBody(adminPricingOverrideSchema, req.body);
-  const data = await svc.applyAdminPricingOverride(req.params.id!, input);
-  await logAudit({
-    actorId: user.id,
-    action: 'admin.ad.pricing_override',
-    resourceType: 'advertisement',
-    resourceId: req.params.id!,
-    details: { amount: input.amount },
-    ip: requestIp(req),
-  });
-  res.json({ ok: true, data });
-});
-
 const getAdControls = asyncHandler(async (_req, res) => {
   const data = await svc.getAdminAdControls();
   res.json({ ok: true, data });
@@ -180,16 +201,18 @@ const updateAdminAdControls = asyncHandler(async (req, res) => {
 
 export const advertisementsController = {
   createAd,
+  quoteAd,
   getAd,
   listMyAds,
   listAllAds,
   updateAd,
   deleteAd,
   listActiveResolved,
+  trackImpression,
   trackClick,
+  adminReview,
   adminSetStatus,
   adminSchedule,
-  adminPricingOverride,
   getAdControls,
   updateAdminAdControls,
 };

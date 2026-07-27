@@ -11,44 +11,6 @@
   max-width: 84rem;
 }
 
-.home-stripe-message {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
-  padding: 0.75rem 1rem;
-  margin-bottom: 1rem;
-  border-radius: 0.5rem;
-  font-size: 0.9rem;
-}
-
-.home-stripe-message--success {
-  background-color: color-mix(in srgb, hsl(var(--success) / 0.15), transparent);
-  border: 1px solid hsl(var(--success) / 0.4);
-  color: hsl(var(--success));
-}
-
-.home-stripe-message--cancelled {
-  background-color: color-mix(in srgb, hsl(var(--muted-foreground) / 0.15), transparent);
-  border: 1px solid hsl(var(--border));
-  color: hsl(var(--muted-foreground));
-}
-
-.home-stripe-message-dismiss {
-  padding: 0.2rem 0.4rem;
-  border: none;
-  background: transparent;
-  font-size: 1.2rem;
-  line-height: 1;
-  cursor: pointer;
-  color: inherit;
-  opacity: 0.8;
-}
-
-.home-stripe-message-dismiss:hover {
-  opacity: 1;
-}
-
 .home-welcome-section {
   margin-bottom: 1.2rem;
 }

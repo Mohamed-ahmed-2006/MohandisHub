@@ -1,7 +1,7 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { advertisementsApiClient, type Advertisement } from '@/lib/advertisements/client';
 import { isAdsUiEnabled } from '@/lib/advertisements/feature';
@@ -21,6 +21,7 @@ export const AdSlideshow = ({ locale, dictionary, accessToken, role }: AdSlidesh
   const [ads, setAds] = useState<Advertisement[]>([]);
   const [slide, setSlide] = useState(0);
   const [loading, setLoading] = useState(true);
+  const panelRef = useRef<HTMLDivElement | null>(null);
   const adsEnabled = isAdsUiEnabled();
 
   useEffect(() => {
@@ -60,6 +61,37 @@ export const AdSlideshow = ({ locale, dictionary, accessToken, role }: AdSlidesh
 
   const active = useMemo(() => (total > 0 ? ads[slide % total] : null), [ads, slide, total]);
 
+  useEffect(() => {
+    const panel = panelRef.current;
+    if (!panel || !active?.deliveryToken) return;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    let recorded = false;
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (recorded) return;
+        if (entry?.isIntersecting && entry.intersectionRatio >= 0.5) {
+          if (!timer) {
+            timer = setTimeout(() => {
+              recorded = true;
+              void advertisementsApiClient
+                .trackAdImpression(accessToken, active.id, active.deliveryToken!)
+                .catch(() => undefined);
+            }, 1000);
+          }
+        } else if (timer) {
+          clearTimeout(timer);
+          timer = null;
+        }
+      },
+      { threshold: [0, 0.5, 1] },
+    );
+    observer.observe(panel);
+    return () => {
+      observer.disconnect();
+      if (timer) clearTimeout(timer);
+    };
+  }, [accessToken, active]);
+
   if (loading || !active) return null;
 
   const title = locale === 'ar' ? active.title_ar || active.title_en : active.title_en;
@@ -69,21 +101,19 @@ export const AdSlideshow = ({ locale, dictionary, accessToken, role }: AdSlidesh
   const imageUrl = toAbsoluteAssetUrl(active.image_url);
 
   const onClick = async () => {
-    try {
-      await advertisementsApiClient.trackAdClick(accessToken, active.id);
-    } catch {
-      // no-op
+    if (active.deliveryToken) {
+      try {
+        await advertisementsApiClient.trackAdClick(accessToken, active.id, active.deliveryToken);
+      } catch {
+        // Navigation remains available even when a deduplicated metric is rejected.
+      }
     }
     if (active.link_type === 'profile') {
-      router.push(buildLocalePath(locale, `/app/profile/${active.advertiser_id}`));
+      router.push(buildLocalePath(locale, `/app/providers/${active.advertiser_id}`));
       return;
     }
     if (active.link_type === 'service' && active.link_target) {
       router.push(buildLocalePath(locale, `/app/services/${active.link_target}`));
-      return;
-    }
-    if (active.link_type === 'need' && active.link_target) {
-      router.push(buildLocalePath(locale, `/app/needs/${active.link_target}`));
       return;
     }
   };
@@ -94,6 +124,7 @@ export const AdSlideshow = ({ locale, dictionary, accessToken, role }: AdSlidesh
       aria-label={dictionary.advertisements?.title ?? 'Advertisements'}
     >
       <div
+        ref={panelRef}
         id="ad-slideshow-panel"
         className="ad-slideshow-banner"
         style={{ backgroundImage: `url(${imageUrl})` }}

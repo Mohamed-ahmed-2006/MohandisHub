@@ -272,6 +272,7 @@ export const AdminPanel = ({ locale, dictionary }: AdminPanelProps) => {
         )}
         {activeTab === 'ads' && (
           <AdminAdsTab
+            locale={locale}
             dictionary={dictionary}
             accessToken={accessToken}
             adminPermissions={authUser.adminPermissions ?? []}

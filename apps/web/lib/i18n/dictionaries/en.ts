@@ -1144,10 +1144,10 @@ export const enDictionary: Dictionary = {
         'Block deposits, plan subscriptions, and admin balance adjustments.',
       paymentMethodsSection: 'Payment methods (wallet)',
       paymentMethodsSectionDesc:
-        'Turn each method on or off for users. Launch default is NOWPayments crypto + manual InstaPay on, card off. Hidden methods disappear from deposit/withdraw screens and are rejected by the API. Future provider keys are preserved.',
+        'These controls can further restrict methods, but cannot override server kill switches. Only explicitly configured NOWPayments crypto sandbox deposits are eligible in staging; card and unfinished rails remain disabled.',
       paymentMethodLabels: {
         deposit_crypto: 'Deposits: cryptocurrency (NOWPayments)',
-        deposit_card: 'Deposits: card / Stripe (future)',
+        deposit_card: 'Deposits: card (disabled)',
         deposit_instapay: 'Deposits: InstaPay (manual)',
         deposit_paymob: 'Deposits: Paymob (card / wallet, EGP)',
         withdrawal_crypto: 'Withdrawals: cryptocurrency (NOWPayments)',
@@ -1157,7 +1157,7 @@ export const enDictionary: Dictionary = {
       disableCryptoDeposits: 'Disable crypto deposits',
       disableCryptoDepositsDesc: 'Hide/block Cryptomus deposits.',
       disableCardDeposits: 'Disable card deposits',
-      disableCardDepositsDesc: 'Hide/block Stripe deposits.',
+      disableCardDepositsDesc: 'Card deposits are also blocked by the server kill switch.',
       pausePlanSubscriptions: 'Pause plan subscriptions',
       pausePlanSubscriptionsDesc: 'Users cannot subscribe or change plans.',
       pauseNeeds: 'Pause posting needs',

@@ -4,8 +4,15 @@ import { getApiBaseUrl } from '@/lib/env';
 type ApiSuccess<T> = { ok: true; data: T };
 type ApiError = { error?: { code?: string; message?: string } };
 
-export type AdLinkType = 'profile' | 'service' | 'need';
-export type AdStatus = 'pending_payment' | 'active' | 'expired' | 'cancelled' | 'paused_by_admin';
+export type AdLinkType = 'profile' | 'service';
+export type AdStatus =
+  | 'pending_review'
+  | 'scheduled'
+  | 'active'
+  | 'paused_by_admin'
+  | 'rejected'
+  | 'expired'
+  | 'cancelled';
 
 export type Advertisement = {
   id: string;
@@ -32,6 +39,9 @@ export type Advertisement = {
   impressions: number;
   clicks: number;
   advertiser_name?: string;
+  deliveryToken?: string;
+  rejection_reason?: string | null;
+  cancellation_refund_piastres?: string;
 };
 
 export type AdminAdControls = {
@@ -106,6 +116,7 @@ export const advertisementsApiClient = {
       descriptionEn?: string;
       descriptionAr?: string;
       imageUrl: string;
+      bannerUploadId: string;
       ctaTextEn?: string;
       ctaTextAr?: string;
       linkType: AdLinkType;
@@ -119,6 +130,13 @@ export const advertisementsApiClient = {
       targetMaxBudget?: number;
     },
   ) => apiReq<Advertisement>('/api/advertisements', { method: 'POST', token, body }),
+  getQuote: (token: string, durationDays: number) =>
+    apiReq<{
+      durationDays: number;
+      dailyPriceEgp: number;
+      totalEgp: number;
+      currency: 'EGP';
+    }>(`/api/advertisements/quote?durationDays=${durationDays}`, { token }),
   getMyAds: (token: string, params?: { page?: number; limit?: number; status?: AdStatus }) => {
     const qs = new URLSearchParams();
     if (params?.page) qs.set('page', String(params.page));
@@ -130,8 +148,23 @@ export const advertisementsApiClient = {
       { token, allow404As: { rows: [], total: 0 } },
     );
   },
-  trackAdClick: (token: string, adId: string) =>
-    apiReq<{ ok: true }>(`/api/advertisements/${adId}/click`, { method: 'POST', token, body: {} }),
+  cancelAd: (token: string, adId: string) =>
+    apiReq<{ advertisement: Advertisement; cancelled: true; refundAmount: number }>(
+      `/api/advertisements/${adId}`,
+      { method: 'DELETE', token },
+    ),
+  trackAdImpression: (token: string, adId: string, deliveryToken: string) =>
+    apiReq<{ accepted: true }>(`/api/advertisements/${adId}/impression`, {
+      method: 'POST',
+      token,
+      body: { deliveryToken },
+    }),
+  trackAdClick: (token: string, adId: string, deliveryToken: string) =>
+    apiReq<{ accepted: true }>(`/api/advertisements/${adId}/click`, {
+      method: 'POST',
+      token,
+      body: { deliveryToken },
+    }),
   adminListAds: (token: string, params?: { page?: number; limit?: number; status?: AdStatus }) => {
     const qs = new URLSearchParams();
     if (params?.page) qs.set('page', String(params.page));
@@ -153,6 +186,16 @@ export const advertisementsApiClient = {
       token,
       body,
     }),
+  adminReview: (
+    token: string,
+    adId: string,
+    body: { decision: 'approve' | 'reject'; reason?: string },
+  ) =>
+    apiReq<Advertisement>(`/api/advertisements/admin/${adId}/review`, {
+      method: 'PUT',
+      token,
+      body,
+    }),
   adminSchedule: (
     token: string,
     adId: string,
@@ -162,12 +205,6 @@ export const advertisementsApiClient = {
       method: 'POST',
       token,
       body,
-    }),
-  adminPricingOverride: (token: string, adId: string, amount: number) =>
-    apiReq<Advertisement>(`/api/advertisements/admin/${adId}/pricing`, {
-      method: 'PUT',
-      token,
-      body: { amount },
     }),
   adminGetControls: (token: string) =>
     apiReq<AdminAdControls>('/api/advertisements/admin/controls', {

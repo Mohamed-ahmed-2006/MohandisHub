@@ -70,25 +70,32 @@ export class AdvertisementsRepository {
 
   async createAdInTx(
     client: PoolClient,
+    id: string,
     advertiserId: string,
     input: CreateAdInput,
-    amountPaid: number,
+    dailyPricePiastres: number,
+    quotedAmountPiastres: number,
+    walletHoldId: string | null,
     startsAt: Date,
     expiresAt: Date,
   ): Promise<AdvertisementRow> {
     const { rows } = await client.query<AdvertisementRow>(
       `INSERT INTO advertisements (
-        advertiser_id, title_en, title_ar, description_en, description_ar, image_url,
+        id, advertiser_id, title_en, title_ar, description_en, description_ar, image_url,
         cta_text_en, cta_text_ar, link_type, link_target, starts_at, expires_at, amount_paid, status, priority,
         target_roles, target_countries, target_cities, target_categories, target_languages,
-        target_min_budget, target_max_budget
+        target_min_budget, target_max_budget, duration_days, daily_price_piastres,
+        quoted_amount_piastres, wallet_hold_id, banner_upload_id,
+        destination_provider_id, destination_service_id
       ) VALUES (
-        $1, $2, $3, $4, $5, $6,
-        $7, $8, $9, $10, $11, $12, $13, 'active', $14,
-        $15::text[], $16::text[], $17::text[], $18::uuid[], $19::text[],
-        $20, $21
+        $1, $2, $3, $4, $5, $6, $7,
+        $8, $9, $10, $11, $12, $13, 0, 'pending_review', 0,
+        $14::text[], $15::text[], $16::text[], $17::uuid[], $18::text[],
+        $19, $20, $21, $22, $23, $24, $25,
+        $26, $27
       ) RETURNING *`,
       [
+        id,
         advertiserId,
         input.titleEn,
         input.titleAr ?? null,
@@ -98,11 +105,9 @@ export class AdvertisementsRepository {
         input.ctaTextEn ?? null,
         input.ctaTextAr ?? null,
         input.linkType,
-        input.linkTarget ?? null,
+        input.linkType === 'profile' ? advertiserId : input.linkTarget!,
         startsAt.toISOString(),
         expiresAt.toISOString(),
-        amountPaid,
-        input.priority ?? 0,
         input.targetRoles ?? [],
         input.targetCountries ?? [],
         input.targetCities ?? [],
@@ -110,9 +115,69 @@ export class AdvertisementsRepository {
         input.targetLanguages ?? [],
         input.targetMinBudget ?? null,
         input.targetMaxBudget ?? null,
+        input.durationDays,
+        dailyPricePiastres,
+        quotedAmountPiastres,
+        walletHoldId,
+        input.bannerUploadId,
+        input.linkType === 'profile' ? advertiserId : null,
+        input.linkType === 'service' ? input.linkTarget! : null,
       ],
     );
     return rows[0]!;
+  }
+
+  async validateBannerUpload(
+    client: PoolClient,
+    advertiserId: string,
+    uploadId: string,
+    storagePath: string,
+  ): Promise<boolean> {
+    const { rowCount } = await client.query(
+      `SELECT 1
+       FROM upload_objects
+       WHERE id = $1
+         AND user_id = $2
+         AND storage_path = $3
+         AND visibility = 'public'
+         AND state = 'active'
+         AND detected_mime IN ('image/jpeg', 'image/png', 'image/webp')
+       FOR SHARE`,
+      [uploadId, advertiserId, storagePath],
+    );
+    return (rowCount ?? 0) === 1;
+  }
+
+  async validateDestination(
+    client: PoolClient,
+    advertiserId: string,
+    linkType: 'profile' | 'service',
+    linkTarget?: string,
+  ): Promise<boolean> {
+    if (linkType === 'profile') {
+      const { rowCount } = await client.query(
+        `SELECT 1
+         FROM users
+         WHERE id = $1
+           AND deleted_at IS NULL
+           AND is_active = true
+           AND primary_role IN ('expert', 'business', 'craftsman')
+         FOR SHARE`,
+        [advertiserId],
+      );
+      return (rowCount ?? 0) === 1;
+    }
+    if (!linkTarget) return false;
+    const { rowCount } = await client.query(
+      `SELECT 1
+       FROM services
+       WHERE id = $1
+         AND provider_id = $2
+         AND status = 'active'
+       FOR SHARE`,
+      [linkTarget, advertiserId],
+    );
+    return (rowCount ?? 0) === 1;
   }
 
   async getAdById(id: string): Promise<AdvertisementRow | null> {
@@ -191,7 +256,11 @@ export class AdvertisementsRepository {
     return { rows, total: parseInt(countRows[0]?.count ?? '0', 10) };
   }
 
-  async updateAd(id: string, input: UpdateAdInput): Promise<AdvertisementRow | null> {
+  async updateAd(
+    id: string,
+    input: UpdateAdInput,
+    client?: PoolClient,
+  ): Promise<AdvertisementRow | null> {
     const fields: Record<string, unknown> = {
       ...(input.titleEn !== undefined ? { title_en: input.titleEn } : {}),
       ...(input.titleAr !== undefined ? { title_ar: input.titleAr } : {}),
@@ -200,11 +269,7 @@ export class AdvertisementsRepository {
       ...(input.imageUrl !== undefined ? { image_url: input.imageUrl } : {}),
       ...(input.ctaTextEn !== undefined ? { cta_text_en: input.ctaTextEn } : {}),
       ...(input.ctaTextAr !== undefined ? { cta_text_ar: input.ctaTextAr } : {}),
-      ...(input.linkType !== undefined ? { link_type: input.linkType } : {}),
-      ...(input.linkTarget !== undefined ? { link_target: input.linkTarget } : {}),
-      ...(input.startsAt !== undefined ? { starts_at: input.startsAt } : {}),
-      ...(input.status !== undefined ? { status: input.status } : {}),
-      ...(input.priority !== undefined ? { priority: input.priority } : {}),
+      ...(input.bannerUploadId !== undefined ? { banner_upload_id: input.bannerUploadId } : {}),
       ...(input.targetRoles !== undefined ? { target_roles: input.targetRoles } : {}),
       ...(input.targetCountries !== undefined ? { target_countries: input.targetCountries } : {}),
       ...(input.targetCities !== undefined ? { target_cities: input.targetCities } : {}),
@@ -219,8 +284,12 @@ export class AdvertisementsRepository {
     if (keys.length === 0) return this.getAdById(id);
     const setSql = keys.map((key, i) => `${key} = $${i + 2}`).join(', ');
     const values = keys.map((key) => fields[key]);
-    const { rows } = await getPool().query<AdvertisementRow>(
-      `UPDATE advertisements SET ${setSql}, updated_at = now() WHERE id = $1 RETURNING *`,
+    const query = client ?? getPool();
+    const { rows } = await query.query<AdvertisementRow>(
+      `UPDATE advertisements
+       SET ${setSql}, updated_at = now()
+       WHERE id = $1 AND status = 'pending_review' AND content_locked_at IS NULL
+       RETURNING *`,
       [id, ...values],
     );
     return rows[0] ?? null;
@@ -237,15 +306,17 @@ export class AdvertisementsRepository {
     client: PoolClient,
     id: string,
     reason: string,
+    refundPiastres = 0,
   ): Promise<AdvertisementRow | null> {
     const { rows } = await client.query<AdvertisementRow>(
       `UPDATE advertisements
        SET status = 'cancelled',
            admin_status_reason = $2,
+           cancellation_refund_piastres = $3,
            updated_at = now()
        WHERE id = $1
        RETURNING *`,
-      [id, reason],
+      [id, reason, refundPiastres],
     );
     return rows[0] ?? null;
   }
@@ -253,8 +324,13 @@ export class AdvertisementsRepository {
   async expireStaleAds(): Promise<void> {
     await getPool().query(
       `UPDATE advertisements
+       SET status = 'active', updated_at = now()
+       WHERE status = 'scheduled'
+         AND COALESCE(admin_forced_starts_at, starts_at) <= now();
+
+       UPDATE advertisements
        SET status = 'expired', updated_at = now()
-       WHERE status = 'active'
+       WHERE status IN ('active', 'scheduled')
          AND COALESCE(admin_forced_expires_at, expires_at) IS NOT NULL
          AND COALESCE(admin_forced_expires_at, expires_at) <= now()`,
     );
@@ -263,15 +339,252 @@ export class AdvertisementsRepository {
   async listActiveAdsForAdCenter(limit: number): Promise<AdvertisementRow[]> {
     const { rows } = await getPool().query<AdvertisementRow>(
       `SELECT *
-       FROM advertisements
-       WHERE status = 'active'
-         AND COALESCE(admin_forced_starts_at, starts_at, now()) <= now()
-         AND COALESCE(admin_forced_expires_at, expires_at, now() + interval '100 years') > now()
-       ORDER BY priority DESC, created_at DESC
+       FROM advertisements a
+       WHERE a.status = 'active'
+         AND COALESCE(a.admin_forced_starts_at, a.starts_at, now()) <= now()
+         AND COALESCE(a.admin_forced_expires_at, a.expires_at, now() + interval '100 years') > now()
+         AND EXISTS (
+           SELECT 1 FROM upload_objects o
+           WHERE o.id = a.banner_upload_id
+             AND o.user_id = a.advertiser_id
+             AND o.visibility = 'public'
+             AND o.state = 'active'
+             AND o.detected_mime IN ('image/jpeg', 'image/png', 'image/webp')
+         )
+         AND (
+           (
+             a.link_type = 'profile'
+             AND a.destination_provider_id = a.advertiser_id
+             AND EXISTS (
+               SELECT 1 FROM users u
+               WHERE u.id = a.advertiser_id
+                 AND u.deleted_at IS NULL
+                 AND u.is_active = true
+                 AND u.primary_role IN ('expert', 'business', 'craftsman')
+             )
+           )
+           OR
+           (
+             a.link_type = 'service'
+             AND EXISTS (
+               SELECT 1 FROM services s
+               WHERE s.id = a.destination_service_id
+                 AND s.provider_id = a.advertiser_id
+                 AND s.status = 'active'
+             )
+           )
+         )
+       ORDER BY a.priority DESC, a.created_at DESC
        LIMIT $1::int`,
       [limit],
     );
     return rows;
+  }
+
+  async approveAdInTx(
+    client: PoolClient,
+    id: string,
+    adminId: string,
+  ): Promise<AdvertisementRow | null> {
+    const { rows } = await client.query<AdvertisementRow>(
+      `UPDATE advertisements
+       SET status = CASE WHEN starts_at > now() THEN 'scheduled' ELSE 'active' END,
+           starts_at = GREATEST(COALESCE(starts_at, now()), now()),
+           expires_at = GREATEST(COALESCE(starts_at, now()), now())
+             + (COALESCE(duration_days, 1) * interval '1 day'),
+           amount_paid = COALESCE(quoted_amount_piastres, 0)::numeric / 100,
+           reviewed_by = $2,
+           reviewed_at = now(),
+           rejection_reason = NULL,
+           content_locked_at = now(),
+           updated_at = now()
+       WHERE id = $1 AND status = 'pending_review'
+       RETURNING *`,
+      [id, adminId],
+    );
+    return rows[0] ?? null;
+  }
+
+  async rejectAdInTx(
+    client: PoolClient,
+    id: string,
+    adminId: string,
+    reason: string,
+  ): Promise<AdvertisementRow | null> {
+    const { rows } = await client.query<AdvertisementRow>(
+      `UPDATE advertisements
+       SET status = 'rejected',
+           reviewed_by = $2,
+           reviewed_at = now(),
+           rejection_reason = $3,
+           admin_status_reason = $3,
+           updated_at = now()
+       WHERE id = $1 AND status = 'pending_review'
+       RETURNING *`,
+      [id, adminId, reason],
+    );
+    return rows[0] ?? null;
+  }
+
+  async pauseAdInTx(
+    client: PoolClient,
+    id: string,
+    reason: string,
+  ): Promise<AdvertisementRow | null> {
+    const { rows } = await client.query<AdvertisementRow>(
+      `UPDATE advertisements
+       SET status = 'paused_by_admin',
+           paused_at = now(),
+           admin_status_reason = $2,
+           updated_at = now()
+       WHERE id = $1 AND status IN ('active', 'scheduled')
+       RETURNING *`,
+      [id, reason],
+    );
+    return rows[0] ?? null;
+  }
+
+  async resumeAdInTx(
+    client: PoolClient,
+    id: string,
+    reason: string | null,
+  ): Promise<AdvertisementRow | null> {
+    const { rows } = await client.query<AdvertisementRow>(
+      `UPDATE advertisements
+       SET status = CASE WHEN starts_at > now() THEN 'scheduled' ELSE 'active' END,
+           expires_at = CASE
+             WHEN paused_at IS NULL THEN expires_at
+             ELSE expires_at + (now() - paused_at)
+           END,
+           paused_seconds = paused_seconds + CASE
+             WHEN paused_at IS NULL THEN 0
+             ELSE GREATEST(0, EXTRACT(EPOCH FROM (now() - paused_at))::bigint)
+           END,
+           paused_at = NULL,
+           admin_status_reason = $2,
+           updated_at = now()
+       WHERE id = $1 AND status = 'paused_by_admin'
+       RETURNING *`,
+      [id, reason],
+    );
+    return rows[0] ?? null;
+  }
+
+  async recordImpression(params: {
+    adId: string;
+    viewerHash: string;
+    nonce: string;
+    bucket: string;
+  }): Promise<string | null> {
+    const { rows } = await getPool().query<{ id: string }>(
+      `WITH inserted AS (
+         INSERT INTO advertisement_delivery_events (
+           advertisement_id, event_type, viewer_hash, delivery_nonce, event_bucket
+         )
+         SELECT a.id, 'impression', $2, $3, $4::timestamptz
+         FROM advertisements a
+         WHERE a.id = $1
+           AND a.status = 'active'
+           AND a.starts_at <= now()
+           AND a.expires_at > now()
+         ON CONFLICT DO NOTHING
+         RETURNING id
+       )
+       SELECT id FROM inserted
+       UNION ALL
+       SELECT id
+       FROM advertisement_delivery_events
+       WHERE advertisement_id = $1
+         AND event_type = 'impression'
+         AND viewer_hash = $2
+         AND event_bucket = $4::timestamptz
+       LIMIT 1`,
+      [params.adId, params.viewerHash, params.nonce, params.bucket],
+    );
+    return rows[0]?.id ?? null;
+  }
+
+  async recordClick(params: {
+    adId: string;
+    viewerHash: string;
+    nonce: string;
+    bucket: string;
+  }): Promise<boolean> {
+    const { rows } = await getPool().query<{ accepted: boolean }>(
+      `WITH impression AS (
+         SELECT impression.id
+         FROM advertisement_delivery_events impression
+         JOIN advertisements a ON a.id = impression.advertisement_id
+         WHERE impression.advertisement_id = $1
+           AND impression.event_type = 'impression'
+           AND impression.viewer_hash = $2
+           AND impression.event_bucket = $4::timestamptz
+           AND a.status = 'active'
+           AND a.starts_at <= now()
+           AND a.expires_at > now()
+           AND EXISTS (
+             SELECT 1 FROM upload_objects o
+             WHERE o.id = a.banner_upload_id
+               AND o.user_id = a.advertiser_id
+               AND o.visibility = 'public'
+               AND o.state = 'active'
+               AND o.detected_mime IN ('image/jpeg', 'image/png', 'image/webp')
+           )
+           AND (
+             (
+               a.link_type = 'profile'
+               AND a.destination_provider_id = a.advertiser_id
+               AND EXISTS (
+                 SELECT 1 FROM users u
+                 WHERE u.id = a.advertiser_id
+                   AND u.deleted_at IS NULL
+                   AND u.is_active = true
+                   AND u.primary_role IN ('expert', 'business', 'craftsman')
+               )
+             )
+             OR
+             (
+               a.link_type = 'service'
+               AND EXISTS (
+                 SELECT 1 FROM services s
+                 WHERE s.id = a.destination_service_id
+                   AND s.provider_id = a.advertiser_id
+                   AND s.status = 'active'
+               )
+             )
+           )
+         LIMIT 1
+       ), inserted AS (
+         INSERT INTO advertisement_delivery_events (
+           advertisement_id, event_type, viewer_hash, impression_event_id,
+           delivery_nonce, event_bucket
+         )
+         SELECT $1, 'click', $2, impression.id, $3, $4::timestamptz
+         FROM impression
+         ON CONFLICT DO NOTHING
+         RETURNING id
+       )
+       SELECT EXISTS(SELECT 1 FROM impression) AS accepted`,
+      [params.adId, params.viewerHash, params.nonce, params.bucket],
+    );
+    return rows[0]?.accepted === true;
+  }
+
+  async refreshDeliveryCounters(adId: string): Promise<void> {
+    await getPool().query(
+      `UPDATE advertisements a
+       SET impressions = (
+             SELECT COUNT(*) FROM advertisement_delivery_events e
+             WHERE e.advertisement_id = a.id AND e.event_type = 'impression'
+           ),
+           clicks = (
+             SELECT COUNT(*) FROM advertisement_delivery_events e
+             WHERE e.advertisement_id = a.id AND e.event_type = 'click'
+           ),
+           updated_at = now()
+       WHERE a.id = $1`,
+      [adId],
+    );
   }
 
   async incrementClick(id: string): Promise<void> {
@@ -294,11 +607,15 @@ export class AdvertisementsRepository {
   ): Promise<AdvertisementRow | null> {
     const { rows } = await getPool().query<AdvertisementRow>(
       `UPDATE advertisements
-       SET admin_forced_starts_at = $2,
-           admin_forced_expires_at = $3,
+       SET starts_at = $2,
+           expires_at = $3,
+           admin_forced_starts_at = NULL,
+           admin_forced_expires_at = NULL,
            admin_status_reason = $4,
            updated_at = now()
        WHERE id = $1
+         AND status = 'pending_review'
+         AND content_locked_at IS NULL
        RETURNING *`,
       [id, input.startsAt ?? null, input.expiresAt ?? null, input.reason ?? null],
     );
