@@ -4,6 +4,8 @@
 
 import { createHash } from 'node:crypto';
 
+import { fetchWithTimeout } from './fetch-with-timeout.js';
+
 const CRYPTOMUS_BASE = 'https://api.cryptomus.com';
 
 export type CryptomusCreatePaymentParams = {
@@ -57,7 +59,7 @@ export async function createPayment(
   const bodyStr = JSON.stringify(body);
   const sign = buildSign(bodyStr, apiKey);
 
-  const res = await fetch(`${CRYPTOMUS_BASE}/v1/payment`, {
+  const res = await fetchWithTimeout(`${CRYPTOMUS_BASE}/v1/payment`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',

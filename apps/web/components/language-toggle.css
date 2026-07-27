@@ -24,7 +24,7 @@
 }
 
 .language-toggle-target {
-  opacity: 0.9;
+  opacity: 1;
   color: hsl(var(--accent));
   transition:
     transform 360ms ease,

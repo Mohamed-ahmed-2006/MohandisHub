@@ -2,7 +2,9 @@
 
 Deployment targets: **Vercel** (web), **Render** (API + worker), **Supabase** (Postgres + storage).
 
-**Production is gated:** Do not auto-deploy or auto-migrate production from CI. Run CI (including all 5 e2e journeys when `STAGING_WEB_URL` is set) before production release; then use `npm run ship` or a documented manual process to run migrations against production and deploy.
+**Production is gated:** Do not auto-deploy or auto-migrate production from CI. Run the complete
+staging gate before requesting a separate production migration/deployment approval. `npm run ship`
+and `scripts/push-migrations.mjs` are staging-only.
 
 ---
 
@@ -70,9 +72,9 @@ When `NOWPAYMENTS_LIVE_REQUIRED=true`, the worker must also have `CORS_ORIGIN`, 
 ## 2. Migrations
 
 - **Staging:** Run in CI on push/PR or on merge to `main` against staging DB (`DATABASE_URL` secret for staging).
-- **Production:** **Gated / manual only.** Do **not** auto-run migrations against production from CI.
-  - Option A: From a trusted machine with Supabase CLI installed, set `DATABASE_URL` to production and run: `supabase db push` (or from repo root with Supabase CLI linked to prod).
-  - Option B: Use `npm run ship` which runs `supabase db push` after typecheck/lint/build; run ship only when intentionally releasing to production.
+- **Production:** **Gated / manual only.** Do **not** auto-run migrations against production from
+  CI or repository helper scripts. Take a backup, approve the exact additive migration set and
+  rollback notes, then execute through the production change-control process.
 
 ---
 

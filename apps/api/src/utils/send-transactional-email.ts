@@ -4,6 +4,7 @@
 
 import { env } from '../config/env.js';
 import { logger } from '../config/logger.js';
+import { fetchWithTimeout } from '../lib/fetch-with-timeout.js';
 
 import { sendResendEmail } from './resend-email.js';
 import { buildTransactionalEmailHtml } from './transactional-email-template.js';
@@ -54,7 +55,7 @@ export async function sendTransactionalEmail(params: SendTransactionalEmailParam
       ...(params.footerText !== undefined && { footerText: params.footerText }),
     });
 
-    const response = await fetch('https://api.brevo.com/v3/smtp/email', {
+    const response = await fetchWithTimeout('https://api.brevo.com/v3/smtp/email', {
       method: 'POST',
       headers: {
         accept: 'application/json',

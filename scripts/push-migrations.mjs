@@ -1,42 +1,42 @@
-import { execSync } from 'child_process';
-import fs from 'fs';
+import { spawnSync } from 'node:child_process';
 
-const envPath = 'apps/api/.env';
-if (!fs.existsSync(envPath)) {
-  console.error('apps/api/.env not found');
-  process.exit(1);
-}
-const line = fs
-  .readFileSync(envPath, 'utf8')
-  .split(/\r?\n/)
-  .find((l) => l.startsWith('DATABASE_URL=') && l.trim().length > 'DATABASE_URL='.length);
-if (!line) {
-  console.error('DATABASE_URL not found in apps/api/.env');
-  process.exit(1);
-}
-const url = line
-  .slice('DATABASE_URL='.length)
-  .trim()
-  .replace(/^['"]|['"]$/g, '');
-const confirmation = process.env.CONFIRM_PRODUCTION_MIGRATION;
-const looksProduction = /mohandishub|prod|production/i.test(url);
+const databaseUrl = process.env.MIGRATION_DATABASE_URL?.trim();
+const deploymentEnv = process.env.MIGRATION_DEPLOYMENT_ENV?.trim();
+const confirmation = process.env.MIGRATION_CONFIRM?.trim();
+const projectRef = process.env.NON_PRODUCTION_SUPABASE_PROJECT_REF?.trim().toLowerCase();
 
-if (looksProduction && confirmation !== 'I_UNDERSTAND_RUN_PRODUCTION_MIGRATIONS') {
-  console.error('Refusing to push migrations to a production-looking database URL.');
+if (
+  !databaseUrl ||
+  deploymentEnv !== 'staging' ||
+  confirmation !== 'MIGRATE_DEDICATED_STAGING' ||
+  !projectRef
+) {
   console.error(
-    'Set CONFIRM_PRODUCTION_MIGRATION=I_UNDERSTAND_RUN_PRODUCTION_MIGRATIONS after taking a backup.',
+    'Refusing migration. Provide MIGRATION_DATABASE_URL, MIGRATION_DEPLOYMENT_ENV=staging, ' +
+      'MIGRATION_CONFIRM=MIGRATE_DEDICATED_STAGING, and NON_PRODUCTION_SUPABASE_PROJECT_REF.',
   );
   process.exit(1);
 }
 
-console.log('Pushing migrations to database...');
+let parsed;
 try {
-  execSync('supabase --version', { stdio: 'ignore' });
+  parsed = new URL(databaseUrl);
 } catch {
-  console.error(
-    'Supabase CLI is not installed. Install it from https://github.com/supabase/cli before pushing migrations.',
-  );
+  console.error('MIGRATION_DATABASE_URL is invalid.');
   process.exit(1);
 }
-execSync(`supabase db push --db-url "${url.replace(/"/g, '\\"')}"`, { stdio: 'inherit' });
-console.log('Done.');
+
+if (
+  !['postgres:', 'postgresql:'].includes(parsed.protocol) ||
+  !parsed.hostname.toLowerCase().includes(projectRef) ||
+  /(^|[.-])(prod|production)([.-]|$)/i.test(parsed.hostname)
+) {
+  console.error('Migration target does not match the dedicated non-production Supabase project.');
+  process.exit(1);
+}
+
+const command = spawnSync('supabase', ['db', 'push', '--db-url', databaseUrl], {
+  stdio: 'inherit',
+  shell: process.platform === 'win32',
+});
+process.exit(command.status ?? 1);

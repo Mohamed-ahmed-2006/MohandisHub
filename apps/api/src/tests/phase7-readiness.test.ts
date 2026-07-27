@@ -42,14 +42,20 @@ describe('Phase 7 publish readiness hardening', () => {
     expect(retentionWorker).toContain('captureException(error)');
   });
 
-  it('configures E2E for both web and API targets', () => {
+  it('configures isolated local E2E targets without starting the database-backed API', () => {
     const config = readFromRoot('apps/e2e/playwright.config.ts');
+    const webLauncher = readFromRoot('scripts/e2e-dev-web.mjs');
+    const apiStub = readFromRoot('scripts/e2e-local-stub-api.mjs');
 
     expect(config).toContain('const apiBaseURL');
     expect(config).toContain('process.env.E2E_API_BASE_URL');
-    expect(config).toContain('node scripts/e2e-dev-api.mjs');
+    expect(config).toContain('node scripts/e2e-local-stub-api.mjs');
+    expect(config).toContain('node scripts/e2e-dev-web.mjs');
     expect(config).toContain('/health');
-    expect(config).toContain('npm run dev:web');
+    expect(config).not.toContain('node scripts/e2e-dev-api.mjs');
+    expect(webLauncher).toContain("DEPLOYMENT_ENV: 'test'");
+    expect(webLauncher).toContain('NEXT_PUBLIC_API_URL: apiUrl.origin');
+    expect(apiStub).toContain('only accepts a loopback');
   });
 
   it('enforces the current API coverage baseline', () => {

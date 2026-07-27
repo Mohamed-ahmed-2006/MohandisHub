@@ -1,7 +1,32 @@
+import { resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
 import { config as loadEnv } from 'dotenv';
 import { z } from 'zod';
 
-loadEnv();
+type DeploymentEnvironment = 'development' | 'test' | 'staging' | 'production';
+
+const deploymentEnvironment: DeploymentEnvironment =
+  process.env.DEPLOYMENT_ENV === 'development' ||
+  process.env.DEPLOYMENT_ENV === 'test' ||
+  process.env.DEPLOYMENT_ENV === 'staging' ||
+  process.env.DEPLOYMENT_ENV === 'production'
+    ? process.env.DEPLOYMENT_ENV
+    : process.env.NODE_ENV === 'production'
+      ? 'production'
+      : process.env.NODE_ENV === 'test'
+        ? 'test'
+        : 'development';
+
+const apiRoot = fileURLToPath(new URL('../../', import.meta.url));
+
+// Hosted environments receive variables from the platform. Local development and
+// E2E use deliberately named files; the legacy apps/api/.env is never loaded.
+if (deploymentEnvironment === 'development') {
+  loadEnv({ path: resolve(apiRoot, '.env.development.local') });
+} else if (deploymentEnvironment === 'test' && process.env.MOHANDISHUB_E2E === '1') {
+  loadEnv({ path: resolve(apiRoot, '.env.e2e.local') });
+}
 
 const booleanEnv = (defaultValue: boolean) =>
   z
@@ -23,6 +48,9 @@ const optionalUrlEnv = z.preprocess(
 );
 
 const envSchema = z.object({
+  DEPLOYMENT_ENV: z
+    .enum(['development', 'test', 'staging', 'production'])
+    .default(deploymentEnvironment),
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   PORT: z.coerce.number().int().positive().default(4000),
   DATABASE_URL: optionalUrlEnv,
@@ -123,16 +151,20 @@ const envSchema = z.object({
   CRYPTOMUS_API_KEY: z.string().optional(),
   CRYPTOMUS_WEBHOOK_KEY: z.string().optional(),
 
-  // Stripe — card payments (wallet deposit)
-  STRIPE_SECRET_KEY: z.string().optional(),
-  STRIPE_WEBHOOK_SECRET: z.string().optional(),
-  STRIPE_PUBLISHABLE_KEY: z.string().optional(),
-
   // NOWPayments — deposits + payouts
+  NOWPAYMENTS_API_BASE_URL: z
+    .string()
+    .url()
+    .default(
+      deploymentEnvironment === 'production'
+        ? 'https://api.nowpayments.io/v1'
+        : 'https://api-sandbox.nowpayments.io/v1',
+    ),
   NOWPAYMENTS_API_KEY: z.string().optional(),
   NOWPAYMENTS_IPN_SECRET: z.string().optional(),
   NOWPAYMENTS_AUTH_EMAIL: z.string().email().optional(),
   NOWPAYMENTS_AUTH_PASSWORD: z.string().optional(),
+  NOWPAYMENTS_CRYPTO_DEPOSITS_ENABLED: booleanEnv(false),
   NOWPAYMENTS_FIAT_ENABLED: booleanEnv(false),
   NOWPAYMENTS_CUSTODY_ENABLED: booleanEnv(false),
   NOWPAYMENTS_MASS_PAYOUTS_ENABLED: booleanEnv(false),
@@ -141,6 +173,7 @@ const envSchema = z.object({
   NOWPAYMENTS_WITHDRAWAL_MIN_AMOUNT: z.coerce.number().positive().default(20),
   NOWPAYMENTS_WITHDRAWAL_DEFAULT_CURRENCY: z.string().default('USDTTRC20'),
   NOWPAYMENTS_ALLOWED_PAY_CURRENCIES: z.string().optional(),
+  FX_RATE_MAX_AGE_HOURS: z.coerce.number().positive().max(168).default(24),
   // When true, production startup requires NOWPayments deposit keys + public URLs.
   // Keep false until crypto/card deposits are enabled and keys are configured.
   NOWPAYMENTS_LIVE_REQUIRED: booleanEnv(false),
@@ -158,6 +191,8 @@ const envSchema = z.object({
   PAYMOB_PAYOUT_CLIENT_ID: z.string().optional(),
   PAYMOB_PAYOUT_CLIENT_SECRET: z.string().optional(),
   PAYMOB_PAYOUT_BASE_URL: z.string().url().optional(),
+  INSTAPAY_DEPOSITS_ENABLED: booleanEnv(false),
+  INSTAPAY_WITHDRAWALS_ENABLED: booleanEnv(false),
 
   // Agora RTC
   AGORA_APP_ID: z.string().optional(),
@@ -166,6 +201,11 @@ const envSchema = z.object({
   // Supabase Storage (optional; when set, uploads go to Supabase instead of local disk)
   SUPABASE_URL: z.string().url().optional(),
   SUPABASE_SERVICE_ROLE_KEY: z.string().optional(),
+  ALLOW_TEST_REMOTE_SERVICES: booleanEnv(false),
+  NON_PRODUCTION_SUPABASE_PROJECT_REF: z
+    .string()
+    .regex(/^[a-z0-9]{8,40}$/)
+    .optional(),
 
   // Sentry (optional; when set, 5xx and unhandled errors are reported)
   SENTRY_DSN: z.string().url().optional(),
@@ -184,6 +224,9 @@ const envSchema = z.object({
   RETENTION_VERIFIED_PRIVATE_UPLOADS_DAYS: z.coerce.number().int().min(0).default(0),
   /** Purge accounts that never verified their email after N days (0 = disabled). Never touches admins or verified users. */
   RETENTION_UNVERIFIED_ACCOUNTS_DAYS: z.coerce.number().int().min(0).default(0),
+  STORAGE_DELETION_INTERVAL_MS: z.coerce.number().int().positive().default(30_000),
+  STORAGE_DELETION_MAX_ATTEMPTS: z.coerce.number().int().positive().max(20).default(8),
+  PAYMENT_RECONCILIATION_INTERVAL_MS: z.coerce.number().int().positive().default(60_000),
 
   /** Hard ceiling for public upload size (bytes). Admin/settings cannot exceed this. */
   PUBLIC_UPLOAD_MAX_BYTES_CEILING: z.coerce.number().int().positive().default(15_728_640), // 15 * 1024 * 1024
@@ -195,6 +238,70 @@ if (!parsed.success) {
   console.error('Invalid environment configuration', parsed.error.flatten().fieldErrors);
   throw new Error('Environment validation failed');
 }
+
+const isLoopbackUrl = (value: string): boolean => {
+  try {
+    const hostname = new URL(value).hostname.toLowerCase();
+    return hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1';
+  } catch {
+    return false;
+  }
+};
+
+const isMohandisHubPublicUrl = (value: string): boolean => {
+  try {
+    const hostname = new URL(value).hostname.toLowerCase();
+    return ['mohandishub.app', 'www.mohandishub.app', 'api.mohandishub.app'].includes(hostname);
+  } catch {
+    return false;
+  }
+};
+
+const assertSafeNonProductionConfiguration = (): void => {
+  if (parsed.data.DEPLOYMENT_ENV === 'production') {
+    if (parsed.data.NODE_ENV !== 'production') {
+      throw new Error('Production deployment requires NODE_ENV=production');
+    }
+    return;
+  }
+
+  if (parsed.data.DEPLOYMENT_ENV === 'test' && parsed.data.NODE_ENV !== 'test') {
+    throw new Error('Test deployment requires NODE_ENV=test');
+  }
+
+  const publicUrls = [
+    parsed.data.API_PUBLIC_URL,
+    parsed.data.WEB_PUBLIC_URL,
+    ...splitOrigins(parsed.data.CORS_ORIGIN),
+    ...splitOrigins(parsed.data.CORS_EXTRA_ORIGINS),
+  ].filter((value): value is string => Boolean(value));
+
+  if (publicUrls.some(isMohandisHubPublicUrl)) {
+    throw new Error('Non-production process refused a MohandisHub production public host');
+  }
+
+  const remoteServiceUrls = [parsed.data.DATABASE_URL, parsed.data.SUPABASE_URL].filter(
+    (value): value is string => typeof value === 'string' && !isLoopbackUrl(value),
+  );
+  if (remoteServiceUrls.length === 0) return;
+
+  if (parsed.data.DEPLOYMENT_ENV !== 'staging' && !parsed.data.ALLOW_TEST_REMOTE_SERVICES) {
+    throw new Error(
+      'Remote services are disabled outside staging unless ALLOW_TEST_REMOTE_SERVICES=true',
+    );
+  }
+
+  const usesSupabase = remoteServiceUrls.some((value) => value.toLowerCase().includes('supabase'));
+  if (!usesSupabase) return;
+
+  const projectRef = parsed.data.NON_PRODUCTION_SUPABASE_PROJECT_REF?.toLowerCase();
+  if (!projectRef) {
+    throw new Error('Remote Supabase use requires NON_PRODUCTION_SUPABASE_PROJECT_REF');
+  }
+  if (!remoteServiceUrls.every((value) => value.toLowerCase().includes(projectRef))) {
+    throw new Error('Configured Supabase target does not match the non-production project ref');
+  }
+};
 
 const looksLikePlaceholderSecret = (value: string): boolean => {
   const normalized = value.trim().toLowerCase();
@@ -219,6 +326,8 @@ const splitOrigins = (value: string | undefined): string[] =>
     .map((origin) => origin.trim())
     .filter(Boolean);
 
+assertSafeNonProductionConfiguration();
+
 const isSecurePublicOrigin = (value: string): boolean => {
   try {
     const url = new URL(value);
@@ -234,7 +343,67 @@ const isSecurePublicOrigin = (value: string): boolean => {
   }
 };
 
-if (parsed.data.NODE_ENV === 'production') {
+if (parsed.data.DEPLOYMENT_ENV === 'staging') {
+  const stagingErrors: string[] = [];
+  if (!parsed.data.DATABASE_URL) stagingErrors.push('DATABASE_URL is required.');
+  if (!parsed.data.API_PUBLIC_URL || !parsed.data.WEB_PUBLIC_URL) {
+    stagingErrors.push('API_PUBLIC_URL and WEB_PUBLIC_URL are required.');
+  }
+  if (
+    !parsed.data.SUPABASE_URL ||
+    !parsed.data.SUPABASE_SERVICE_ROLE_KEY ||
+    !parsed.data.NON_PRODUCTION_SUPABASE_PROJECT_REF
+  ) {
+    stagingErrors.push(
+      'Dedicated Supabase URL, service key, and NON_PRODUCTION_SUPABASE_PROJECT_REF are required.',
+    );
+  }
+  if (parsed.data.OTP_EMAIL_PROVIDER !== 'resend' || !parsed.data.RESEND_API_KEY) {
+    stagingErrors.push('Resend sandbox credentials are required for staging email journeys.');
+  }
+  if (
+    parsed.data.VERIFICATION_PROVIDER !== 'didit' ||
+    !parsed.data.DIDIT_API_KEY ||
+    !parsed.data.DIDIT_WEBHOOK_SECRET ||
+    !parsed.data.DIDIT_WORKFLOW_ID
+  ) {
+    stagingErrors.push('Didit sandbox credentials are required for staging identity journeys.');
+  }
+  if (parsed.data.NOWPAYMENTS_API_BASE_URL !== 'https://api-sandbox.nowpayments.io/v1') {
+    stagingErrors.push('Staging NOWPayments must use the official sandbox API endpoint.');
+  }
+  if (
+    !parsed.data.NOWPAYMENTS_CRYPTO_DEPOSITS_ENABLED ||
+    !parsed.data.NOWPAYMENTS_API_KEY ||
+    !parsed.data.NOWPAYMENTS_IPN_SECRET
+  ) {
+    stagingErrors.push(
+      'NOWPayments sandbox credentials and crypto deposits are required for staging.',
+    );
+  }
+  if (
+    parsed.data.NOWPAYMENTS_FIAT_ENABLED ||
+    parsed.data.NOWPAYMENTS_WITHDRAWALS_ENABLED ||
+    parsed.data.NOWPAYMENTS_MASS_PAYOUTS_ENABLED ||
+    parsed.data.PAYMOB_DEPOSITS_ENABLED ||
+    parsed.data.PAYMOB_WITHDRAWALS_ENABLED ||
+    parsed.data.INSTAPAY_DEPOSITS_ENABLED ||
+    parsed.data.INSTAPAY_WITHDRAWALS_ENABLED
+  ) {
+    stagingErrors.push(
+      'Only NOWPayments crypto deposits may be enabled for the final-test staging gate.',
+    );
+  }
+  if (!parsed.data.ADVERTISEMENTS_ENABLED) {
+    stagingErrors.push('ADVERTISEMENTS_ENABLED must be true for the staging advertising suite.');
+  }
+  if (stagingErrors.length > 0) {
+    console.error('Invalid staging provider configuration', stagingErrors);
+    throw new Error('Staging provider configuration failed');
+  }
+}
+
+if (parsed.data.DEPLOYMENT_ENV === 'production') {
   const productionErrors: Record<string, string[]> = {};
   if (looksLikePlaceholderSecret(parsed.data.JWT_SECRET)) {
     productionErrors.JWT_SECRET = [
@@ -396,6 +565,43 @@ if (parsed.data.NODE_ENV === 'production') {
       'RETENTION_UPLOADS_DAYS is not a safe production cleanup path. Use category-specific retention settings for private uploads, need references, and bid attachments.',
     ];
   }
+  if (parsed.data.ADVERTISEMENTS_ENABLED) {
+    productionErrors.ADVERTISEMENTS_ENABLED = [
+      'Advertisements remain staging-only until the advertising release gate is approved.',
+    ];
+  }
+  if (parsed.data.NOWPAYMENTS_FIAT_ENABLED) {
+    productionErrors.NOWPAYMENTS_FIAT_ENABLED = [
+      'NOWPayments fiat/card deposits are not approved for production.',
+    ];
+  }
+  if (parsed.data.NOWPAYMENTS_API_BASE_URL !== 'https://api.nowpayments.io/v1') {
+    productionErrors.NOWPAYMENTS_API_BASE_URL = [
+      'Production NOWPayments configuration must use the official API endpoint.',
+    ];
+  }
+  if (parsed.data.PAYMOB_DEPOSITS_ENABLED || parsed.data.PAYMOB_WITHDRAWALS_ENABLED) {
+    productionErrors.PAYMOB_DEPOSITS_ENABLED = [
+      'Paymob deposits and withdrawals are not approved for production.',
+    ];
+  }
+  if (parsed.data.INSTAPAY_DEPOSITS_ENABLED || parsed.data.INSTAPAY_WITHDRAWALS_ENABLED) {
+    productionErrors.INSTAPAY_DEPOSITS_ENABLED = [
+      'InstaPay deposits and withdrawals are not approved for production.',
+    ];
+  }
+  if (parsed.data.NOWPAYMENTS_CRYPTO_DEPOSITS_ENABLED) {
+    if (!parsed.data.NOWPAYMENTS_API_KEY || !parsed.data.NOWPAYMENTS_IPN_SECRET) {
+      productionErrors.NOWPAYMENTS_CRYPTO_DEPOSITS_ENABLED = [
+        'NOWPayments crypto deposits require an API key and IPN secret.',
+      ];
+    }
+    if (!parsed.data.API_PUBLIC_URL || !parsed.data.WEB_PUBLIC_URL) {
+      productionErrors.NOWPAYMENTS_CRYPTO_DEPOSITS_ENABLED = [
+        'NOWPayments crypto deposits require public API and web URLs.',
+      ];
+    }
+  }
   // NOWPayments live checks only apply once the API key is actually configured.
   // NOWPAYMENTS_LIVE_REQUIRED=true without a key is treated as "not yet configured" — no hard-fail.
   if (parsed.data.NOWPAYMENTS_LIVE_REQUIRED && parsed.data.NOWPAYMENTS_API_KEY) {
@@ -451,6 +657,27 @@ if (parsed.data.NODE_ENV === 'production') {
   if (parsed.data.PAYMOB_PAYOUT_BASE_URL?.includes('staging')) {
     productionErrors.PAYMOB_PAYOUT_BASE_URL = [
       'Paymob production withdrawals must not use a staging payout endpoint.',
+    ];
+  }
+  if (
+    parsed.data.PAYMOB_DEPOSITS_ENABLED &&
+    (!parsed.data.PAYMOB_SECRET_KEY ||
+      !parsed.data.PAYMOB_PUBLIC_KEY ||
+      !parsed.data.PAYMOB_HMAC_SECRET ||
+      !parsed.data.PAYMOB_INTEGRATION_IDS)
+  ) {
+    productionErrors.PAYMOB_DEPOSITS_ENABLED = [
+      'Enabled Paymob deposits require all checkout and webhook credentials.',
+    ];
+  }
+  if (
+    parsed.data.PAYMOB_WITHDRAWALS_ENABLED &&
+    (!parsed.data.PAYMOB_PAYOUT_CLIENT_ID ||
+      !parsed.data.PAYMOB_PAYOUT_CLIENT_SECRET ||
+      !parsed.data.PAYMOB_PAYOUT_BASE_URL)
+  ) {
+    productionErrors.PAYMOB_WITHDRAWALS_ENABLED = [
+      'Enabled Paymob withdrawals require all payout credentials.',
     ];
   }
   if (Object.keys(productionErrors).length > 0) {

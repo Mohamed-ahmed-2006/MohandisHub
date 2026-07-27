@@ -3,7 +3,7 @@
  * Login → open wallet → initiate deposit or reach payment step and assert expected UI/state.
  * Shallow: wallet/settings wallet page loads.
  */
-import { test, expect } from '@playwright/test';
+import { expect, test } from '../fixtures';
 
 test.describe('Wallet / payment flow', () => {
   test('wallet or settings wallet route loads', async ({ page }) => {

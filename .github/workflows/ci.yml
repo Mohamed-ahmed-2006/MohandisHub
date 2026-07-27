@@ -44,13 +44,20 @@ jobs:
       - name: Format check
         run: npm run format:check
 
+      - name: Production build
+        run: npm run build
+
+      - name: Dependency audit
+        run: npm run audit:release
+
   migrate-staging:
     name: Migrate staging DB
     runs-on: ubuntu-latest
-    needs: check
+    needs: [check, validate-staging-config]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     env:
       STAGING_DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL }}
+      NON_PRODUCTION_SUPABASE_PROJECT_REF: ${{ secrets.STAGING_SUPABASE_PROJECT_REF }}
     steps:
       - uses: actions/checkout@v4
 
@@ -63,28 +70,100 @@ jobs:
       - name: Install
         run: npm ci
 
+      - name: Require staging database
+        shell: bash
+        run: |
+          test -n "$STAGING_DATABASE_URL" || {
+            echo "STAGING_DATABASE_URL is required; staging migrations cannot be skipped."
+            exit 1
+          }
+
       - name: Setup Supabase CLI
-        if: env.STAGING_DATABASE_URL != ''
         uses: supabase/setup-cli@v1
         with:
           version: latest
 
-      - name: Run migrations against staging
-        if: env.STAGING_DATABASE_URL != ''
-        run: supabase db push --db-url "$STAGING_DATABASE_URL"
+      - name: Run migrations against the confirmed staging target
+        run: node scripts/push-migrations.mjs
         env:
-          DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL }}
+          MIGRATION_DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL }}
+          MIGRATION_DEPLOYMENT_ENV: staging
+          MIGRATION_CONFIRM: MIGRATE_DEDICATED_STAGING
+          NON_PRODUCTION_SUPABASE_PROJECT_REF: ${{ secrets.STAGING_SUPABASE_PROJECT_REF }}
 
-      - name: Skip migrations (no secret)
-        if: env.STAGING_DATABASE_URL == ''
-        run: echo "STAGING_DATABASE_URL not set; skipping staging migrations."
+  validate-staging-config:
+    name: Validate staging provider isolation
+    runs-on: ubuntu-latest
+    needs: check
+    env:
+      DEPLOYMENT_ENV: staging
+      NODE_ENV: production
+      DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL }}
+      CORS_ORIGIN: ${{ secrets.STAGING_WEB_URL }}
+      API_PUBLIC_URL: ${{ secrets.STAGING_API_URL }}
+      WEB_PUBLIC_URL: ${{ secrets.STAGING_WEB_URL }}
+      JWT_SECRET: ${{ secrets.STAGING_JWT_SECRET }}
+      JWT_REFRESH_SECRET: ${{ secrets.STAGING_JWT_REFRESH_SECRET }}
+      SUPABASE_URL: ${{ secrets.STAGING_SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.STAGING_SUPABASE_SERVICE_ROLE_KEY }}
+      NON_PRODUCTION_SUPABASE_PROJECT_REF: ${{ secrets.STAGING_SUPABASE_PROJECT_REF }}
+      OTP_EMAIL_PROVIDER: resend
+      RESEND_API_KEY: ${{ secrets.STAGING_RESEND_API_KEY }}
+      EMAIL_FROM: ${{ secrets.STAGING_EMAIL_FROM }}
+      VERIFICATION_PROVIDER: didit
+      DIDIT_API_KEY: ${{ secrets.STAGING_DIDIT_API_KEY }}
+      DIDIT_WEBHOOK_SECRET: ${{ secrets.STAGING_DIDIT_WEBHOOK_SECRET }}
+      DIDIT_WORKFLOW_ID: ${{ secrets.STAGING_DIDIT_WORKFLOW_ID }}
+      NOWPAYMENTS_API_BASE_URL: https://api-sandbox.nowpayments.io/v1
+      NOWPAYMENTS_API_KEY: ${{ secrets.STAGING_NOWPAYMENTS_API_KEY }}
+      NOWPAYMENTS_IPN_SECRET: ${{ secrets.STAGING_NOWPAYMENTS_IPN_SECRET }}
+      NOWPAYMENTS_CRYPTO_DEPOSITS_ENABLED: true
+      NOWPAYMENTS_FIAT_ENABLED: false
+      NOWPAYMENTS_WITHDRAWALS_ENABLED: false
+      NOWPAYMENTS_MASS_PAYOUTS_ENABLED: false
+      PAYMOB_DEPOSITS_ENABLED: false
+      PAYMOB_WITHDRAWALS_ENABLED: false
+      INSTAPAY_DEPOSITS_ENABLED: false
+      INSTAPAY_WITHDRAWALS_ENABLED: false
+      ADVERTISEMENTS_ENABLED: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install
+        run: npm ci
+
+      - name: Build API configuration
+        run: npm run build -w @mohandishub/shared && npm run build -w @mohandishub/api
+
+      - name: Fail closed on missing or unsafe staging providers
+        run: node --input-type=module -e "await import('./apps/api/dist/config/env.js')"
 
   e2e:
     name: E2E (staging)
     runs-on: ubuntu-latest
-    needs: check
+    needs: [check, validate-staging-config]
     env:
       PLAYWRIGHT_BASE_URL: ${{ secrets.STAGING_WEB_URL }}
+      E2E_API_BASE_URL: ${{ secrets.STAGING_API_URL }}
+      E2E_DEPLOYMENT_ENV: staging
+      E2E_NON_PRODUCTION_CONFIRMATION: MOHANDISHUB_STAGING_ONLY
+      E2E_CUSTOMER_EMAIL: ${{ secrets.E2E_CUSTOMER_EMAIL }}
+      E2E_CUSTOMER_PASSWORD: ${{ secrets.E2E_CUSTOMER_PASSWORD }}
+      E2E_PROVIDER_EMAIL: ${{ secrets.E2E_PROVIDER_EMAIL }}
+      E2E_PROVIDER_PASSWORD: ${{ secrets.E2E_PROVIDER_PASSWORD }}
+      E2E_PAID_PROVIDER_ID: ${{ secrets.E2E_PAID_PROVIDER_ID }}
+      E2E_PAID_SERVICE_ID: ${{ secrets.E2E_PAID_SERVICE_ID }}
+      E2E_PAID_SLOT_ID: ${{ secrets.E2E_PAID_SLOT_ID }}
+      E2E_ADMIN_EMAIL: ${{ secrets.E2E_ADMIN_EMAIL }}
+      E2E_ADMIN_PASSWORD: ${{ secrets.E2E_ADMIN_PASSWORD }}
+      E2E_SCOPED_ADMIN_EMAIL: ${{ secrets.E2E_SCOPED_ADMIN_EMAIL }}
+      E2E_SCOPED_ADMIN_PASSWORD: ${{ secrets.E2E_SCOPED_ADMIN_PASSWORD }}
     steps:
       - uses: actions/checkout@v4
 
@@ -100,6 +179,20 @@ jobs:
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium
         working-directory: apps/e2e
+
+      - name: Require staging test credentials
+        shell: bash
+        run: |
+          for name in PLAYWRIGHT_BASE_URL E2E_API_BASE_URL E2E_CUSTOMER_EMAIL \
+            E2E_CUSTOMER_PASSWORD E2E_PROVIDER_EMAIL E2E_PROVIDER_PASSWORD \
+            E2E_PAID_PROVIDER_ID E2E_PAID_SERVICE_ID E2E_PAID_SLOT_ID \
+            E2E_ADMIN_EMAIL E2E_ADMIN_PASSWORD E2E_SCOPED_ADMIN_EMAIL \
+            E2E_SCOPED_ADMIN_PASSWORD; do
+            test -n "${!name}" || {
+              echo "$name is required; staging browser tests cannot be skipped."
+              exit 1
+            }
+          done
 
       - name: Run E2E
         run: npm run e2e

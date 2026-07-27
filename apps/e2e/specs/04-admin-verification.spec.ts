@@ -3,7 +3,7 @@
  * Login as admin → open verification list → approve or reject an item.
  * Shallow: admin route and verification tab entry exist.
  */
-import { test, expect } from '@playwright/test';
+import { expect, test } from '../fixtures';
 
 test.describe('Admin verification flow', () => {
   test('admin route requires auth and loads', async ({ page }) => {

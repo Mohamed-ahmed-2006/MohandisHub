@@ -21,6 +21,7 @@ import {
   signAccessToken,
 } from '../../config/jwt.js';
 import { logger } from '../../config/logger.js';
+import { fetchWithTimeout } from '../../lib/fetch-with-timeout.js';
 import { HttpError } from '../../utils/http-error.js';
 import { sendResendEmail } from '../../utils/resend-email.js';
 import { buildTransactionalEmailHtml } from '../../utils/transactional-email-template.js';
@@ -375,7 +376,7 @@ export class AuthService {
         action: { kind: 'button', label: 'Reset Password', url: resetUrl },
         safetyText: 'If you did not request this, you can safely ignore this email.',
       });
-      const response = await fetch('https://api.brevo.com/v3/smtp/email', {
+      const response = await fetchWithTimeout('https://api.brevo.com/v3/smtp/email', {
         method: 'POST',
         headers: {
           accept: 'application/json',

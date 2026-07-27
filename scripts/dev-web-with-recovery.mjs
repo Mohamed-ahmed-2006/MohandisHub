@@ -12,6 +12,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const rootDir = path.resolve(__dirname, '..');
 const webDir = path.join(rootDir, 'apps', 'web');
 const nextDir = path.join(webDir, '.next');
+const nextBin = path.join(rootDir, 'node_modules', 'next', 'dist', 'bin', 'next');
 
 function clearNextCache() {
   if (fs.existsSync(nextDir)) {
@@ -22,11 +23,10 @@ function clearNextCache() {
 
 function run() {
   return new Promise((resolve) => {
-    const isWin = process.platform === 'win32';
-    const child = spawn(isWin ? 'npm.cmd' : 'npm', ['run', 'dev'], {
+    const child = spawn(process.execPath, [nextBin, 'dev', '-p', '3000'], {
       cwd: webDir,
       stdio: 'inherit',
-      shell: isWin,
+      shell: false,
     });
 
     child.on('exit', (code) => {

@@ -4,7 +4,11 @@
 
 import { createHmac } from 'node:crypto';
 
-const NOWPAYMENTS_BASE = 'https://api.nowpayments.io/v1';
+import { env } from '../config/env.js';
+
+import { fetchWithTimeout } from './fetch-with-timeout.js';
+
+const NOWPAYMENTS_BASE = env.NOWPAYMENTS_API_BASE_URL.replace(/\/+$/, '');
 
 type NowPaymentsInvoicePayload = {
   price_amount: number;
@@ -153,7 +157,7 @@ export function verifyNowPaymentsIpnSignature(
 
 export async function getAvailableCurrencies(apiKey: string): Promise<string[]> {
   const normalized = normalizeNowPaymentsApiKey(apiKey);
-  const res = await fetch(`${NOWPAYMENTS_BASE}/currencies`, {
+  const res = await fetchWithTimeout(`${NOWPAYMENTS_BASE}/currencies`, {
     method: 'GET',
     headers: { 'x-api-key': normalized },
   });
@@ -166,7 +170,7 @@ export async function getAvailableCurrencies(apiKey: string): Promise<string[]> 
 
 export async function getAvailableCurrenciesDetailed(apiKey: string): Promise<string[]> {
   const normalized = normalizeNowPaymentsApiKey(apiKey);
-  const res = await fetch(`${NOWPAYMENTS_BASE}/full-currencies`, {
+  const res = await fetchWithTimeout(`${NOWPAYMENTS_BASE}/full-currencies`, {
     method: 'GET',
     headers: { 'x-api-key': normalized },
   });
@@ -191,7 +195,7 @@ export async function createInvoice(
     'Content-Type': 'application/json',
   };
   if (originIp) headers['origin-ip'] = originIp;
-  const res = await fetch(`${NOWPAYMENTS_BASE}/invoice`, {
+  const res = await fetchWithTimeout(`${NOWPAYMENTS_BASE}/invoice`, {
     method: 'POST',
     headers,
     body: JSON.stringify(payload),
@@ -207,7 +211,7 @@ export async function authenticateNowPayments(
   email: string,
   password: string,
 ): Promise<NowPaymentsAuthResponse> {
-  const res = await fetch(`${NOWPAYMENTS_BASE}/auth`, {
+  const res = await fetchWithTimeout(`${NOWPAYMENTS_BASE}/auth`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email, password }),
@@ -225,7 +229,7 @@ export async function createPayout(
   payload: NowPaymentsCreatePayoutPayload,
 ): Promise<NowPaymentsCreatePayoutResponse> {
   const normalized = normalizeNowPaymentsApiKey(apiKey);
-  const res = await fetch(`${NOWPAYMENTS_BASE}/payout`, {
+  const res = await fetchWithTimeout(`${NOWPAYMENTS_BASE}/payout`, {
     method: 'POST',
     headers: {
       'x-api-key': normalized,
@@ -248,7 +252,7 @@ export async function verifyPayout(
   verificationCode: string,
 ): Promise<NowPaymentsVerifyPayoutResponse> {
   const normalized = normalizeNowPaymentsApiKey(apiKey);
-  const res = await fetch(`${NOWPAYMENTS_BASE}/payout/${batchWithdrawalId}/verify`, {
+  const res = await fetchWithTimeout(`${NOWPAYMENTS_BASE}/payout/${batchWithdrawalId}/verify`, {
     method: 'POST',
     headers: {
       'x-api-key': normalized,
@@ -277,7 +281,7 @@ export async function estimatePrice(
     currency_to: currencyTo.toUpperCase(),
   });
 
-  const res = await fetch(`${NOWPAYMENTS_BASE}/estimate?${query.toString()}`, {
+  const res = await fetchWithTimeout(`${NOWPAYMENTS_BASE}/estimate?${query.toString()}`, {
     method: 'GET',
     headers: { 'x-api-key': normalized },
   });

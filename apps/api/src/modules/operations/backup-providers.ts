@@ -1,4 +1,5 @@
 import { env } from '../../config/env.js';
+import { fetchWithTimeout } from '../../lib/fetch-with-timeout.js';
 import { HttpError } from '../../utils/http-error.js';
 
 export type BackupProviderName = 'supabase' | 'custom_http' | 'disabled';
@@ -29,15 +30,19 @@ const jsonFetch = async (
   headers: Record<string, string>,
   options: { method?: 'GET' | 'POST'; body?: unknown } = {},
 ): Promise<unknown> => {
-  const response = await fetch(url, {
-    method: options.method ?? 'GET',
-    headers: {
-      Accept: 'application/json',
-      ...(options.body != null ? { 'Content-Type': 'application/json' } : {}),
-      ...headers,
+  const response = await fetchWithTimeout(
+    url,
+    {
+      method: options.method ?? 'GET',
+      headers: {
+        Accept: 'application/json',
+        ...(options.body != null ? { 'Content-Type': 'application/json' } : {}),
+        ...headers,
+      },
+      ...(options.body != null ? { body: JSON.stringify(options.body) } : {}),
     },
-    ...(options.body != null ? { body: JSON.stringify(options.body) } : {}),
-  });
+    { timeoutMs: 15_000 },
+  );
   const data = await response.json().catch(() => null);
   if (!response.ok) {
     const message =

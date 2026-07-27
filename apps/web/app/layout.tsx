@@ -95,7 +95,7 @@ const RootLayout = async ({ children }: RootLayoutProps) => {
             </AppStatusProvider>
           </AuthProvider>
         </ThemeProvider>
-        <SpeedInsightsClient />
+        {process.env.VERCEL === '1' ? <SpeedInsightsClient /> : null}
       </body>
     </html>
   );

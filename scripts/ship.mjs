@@ -1,5 +1,4 @@
 import { execSync } from 'child_process';
-import fs from 'fs';
 import process from 'process';
 import { URL } from 'url';
 
@@ -11,17 +10,6 @@ function run(command) {
     console.error(`\nCommand failed: ${command}`);
     process.exit(1);
   }
-}
-
-function getApiDatabaseUrl() {
-  const envPath = 'apps/api/.env';
-  if (!fs.existsSync(envPath)) return null;
-  const content = fs.readFileSync(envPath, 'utf8');
-  const line = content
-    .split(/\r?\n/)
-    .find((l) => l.startsWith('DATABASE_URL=') && l.trim().length > 'DATABASE_URL='.length);
-  if (!line) return null;
-  return line.slice('DATABASE_URL='.length).trim();
 }
 
 function getDbTargetLabel(dbUrl) {
@@ -44,7 +32,11 @@ function ensureSupabaseCli() {
   }
 }
 
-console.log('Starting ship: check, build, and migrate (no git commit)...');
+const shouldMigrate = process.argv.includes('--migrate');
+
+console.log(
+  `Starting release validation${shouldMigrate ? ' with an explicit staging migration' : ''}...`,
+);
 
 // 1. Check for errors (Typecheck)
 console.log('\n1. Checking for errors (typecheck)...');
@@ -58,25 +50,46 @@ run('npm run lint');
 console.log('\n3. Building the project...');
 run('npm run build');
 
-// 4. Migrate database
-console.log('\n4. Pushing database migrations...');
-// Uses local DATABASE_URL when available to avoid requiring a linked Supabase project in local dev.
-const dbUrl = getApiDatabaseUrl();
-if (process.env.SHIP_CONFIRM !== 'YES') {
-  console.error(
-    '\nRefusing to run migrations without explicit confirmation. Set SHIP_CONFIRM=YES and rerun.',
-  );
-  process.exit(1);
-}
-ensureSupabaseCli();
-if (dbUrl) {
-  console.log(`Target database: ${getDbTargetLabel(dbUrl)}`);
-  run(`supabase db push --db-url "${dbUrl}"`);
+if (shouldMigrate) {
+  console.log('\n4. Pushing migrations to the explicitly selected staging database...');
+  const dbUrl = process.env.SHIP_DATABASE_URL?.trim();
+  if (
+    process.env.SHIP_CONFIRM !== 'MIGRATE_DEDICATED_STAGING' ||
+    process.env.SHIP_DEPLOYMENT_ENV !== 'staging' ||
+    !dbUrl
+  ) {
+    console.error(
+      '\nRefusing migration. --migrate requires SHIP_CONFIRM=MIGRATE_DEDICATED_STAGING, SHIP_DEPLOYMENT_ENV=staging, and SHIP_DATABASE_URL.',
+    );
+    process.exit(1);
+  }
+  const target = new URL(dbUrl);
+  if (
+    ['localhost', '127.0.0.1', '::1'].includes(target.hostname) ||
+    target.hostname === 'mohandishub.app' ||
+    target.hostname.endsWith('.mohandishub.app')
+  ) {
+    console.error('\nSHIP_DATABASE_URL must identify a dedicated remote staging database.');
+    process.exit(1);
+  }
+  const projectRef = process.env.NON_PRODUCTION_SUPABASE_PROJECT_REF?.trim().toLowerCase();
+  if (
+    target.hostname.includes('supabase') &&
+    (!projectRef || !dbUrl.toLowerCase().includes(projectRef))
+  ) {
+    console.error(
+      '\nSupabase staging migrations require a matching NON_PRODUCTION_SUPABASE_PROJECT_REF.',
+    );
+    process.exit(1);
+  }
+  ensureSupabaseCli();
+  console.log(`Target staging database: ${getDbTargetLabel(dbUrl)}`);
+  process.env.MIGRATION_DATABASE_URL = dbUrl;
+  process.env.MIGRATION_DEPLOYMENT_ENV = 'staging';
+  process.env.MIGRATION_CONFIRM = 'MIGRATE_DEDICATED_STAGING';
+  run('node scripts/push-migrations.mjs');
 } else {
-  console.log('Target database: linked Supabase project (no DATABASE_URL in apps/api/.env)');
-  run('supabase db push');
+  console.log('\n4. Migration skipped (validation-only default).');
 }
 
-console.log(
-  '\nShip completed: checks, build, and migrations all passed. You can now commit and push.',
-);
+console.log('\nRelease validation completed.');

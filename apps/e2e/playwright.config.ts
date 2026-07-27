@@ -28,6 +28,25 @@ const apiBaseURL =
 process.env.E2E_API_BASE_URL ??= apiBaseURL;
 
 const isLocalWeb = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?/i.test(baseURL);
+const isLocalApi = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?/i.test(apiBaseURL);
+const productionHosts = new Set(['mohandishub.app', 'www.mohandishub.app', 'api.mohandishub.app']);
+
+for (const target of [baseURL, apiBaseURL]) {
+  const host = new URL(target).hostname.toLowerCase();
+  if (productionHosts.has(host)) {
+    throw new Error(`E2E refused production host: ${host}`);
+  }
+}
+
+if ((!isLocalWeb || !isLocalApi) && process.env.E2E_DEPLOYMENT_ENV !== 'staging') {
+  throw new Error('Remote E2E requires E2E_DEPLOYMENT_ENV=staging');
+}
+if (
+  (!isLocalWeb || !isLocalApi) &&
+  process.env.E2E_NON_PRODUCTION_CONFIRMATION !== 'MOHANDISHUB_STAGING_ONLY'
+) {
+  throw new Error('Remote E2E requires E2E_NON_PRODUCTION_CONFIRMATION=MOHANDISHUB_STAGING_ONLY');
+}
 
 export default defineConfig({
   testDir: './specs',
@@ -45,14 +64,14 @@ export default defineConfig({
   webServer: isLocalWeb
     ? [
         {
-          command: 'node scripts/e2e-dev-api.mjs',
+          command: 'node scripts/e2e-local-stub-api.mjs',
           cwd: '../..',
           reuseExistingServer: !process.env.CI,
           timeout: 120_000,
           url: `${apiBaseURL.replace(/\/$/, '')}/health`,
         },
         {
-          command: 'npm run dev:web',
+          command: 'node scripts/e2e-dev-web.mjs',
           cwd: '../..',
           reuseExistingServer: !process.env.CI,
           timeout: 120_000,

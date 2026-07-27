@@ -4,7 +4,9 @@
  * These tests intentionally require sandbox/staging credentials. They do not run against
  * production credentials and are skipped until the environment is explicitly configured.
  */
-import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
+import type { APIRequestContext, Page } from '@playwright/test';
+
+import { expect, test } from '../fixtures';
 
 const apiBaseUrl = process.env.E2E_API_BASE_URL ?? process.env.API_BASE_URL;
 const customerEmail = process.env.E2E_CUSTOMER_EMAIL;

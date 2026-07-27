@@ -2,6 +2,7 @@
 // Geo controller — server-side IP -> country lookup
 // ---------------------------------------------------------------------------
 
+import { fetchWithTimeout } from '../../lib/fetch-with-timeout.js';
 import { asyncHandler } from '../../utils/async-handler.js';
 
 const FALLBACK_COUNTRY_CODE = 'EG';
@@ -34,14 +35,12 @@ export const geoController = {
 
     // ipapi.co doesn't require an API key for a basic JSON response.
     // We use the provided IP to avoid returning the server's own IP.
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 2500);
-
     try {
-      const response = await fetch(`https://ipapi.co/${encodeURIComponent(clientIp)}/json/`, {
-        headers: { Accept: 'application/json' },
-        signal: controller.signal,
-      });
+      const response = await fetchWithTimeout(
+        `https://ipapi.co/${encodeURIComponent(clientIp)}/json/`,
+        { headers: { Accept: 'application/json' } },
+        { timeoutMs: 2_000, retries: 1 },
+      );
 
       if (!response.ok) {
         res.json({ ok: true, data: FALLBACK_COUNTRY_CODE });
@@ -56,8 +55,6 @@ export const geoController = {
       res.json({ ok: true, data: countryCode ?? FALLBACK_COUNTRY_CODE });
     } catch {
       res.json({ ok: true, data: FALLBACK_COUNTRY_CODE });
-    } finally {
-      clearTimeout(timeout);
     }
   }),
 };

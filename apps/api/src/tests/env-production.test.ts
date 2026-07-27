@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 const originalProcessEnv = { ...process.env };
 
 const isolatedEnvKeys = [
+  'DEPLOYMENT_ENV',
   'NODE_ENV',
   'PORT',
   'DATABASE_URL',
@@ -50,13 +51,12 @@ const isolatedEnvKeys = [
   'CRYPTOMUS_MERCHANT_ID',
   'CRYPTOMUS_API_KEY',
   'CRYPTOMUS_WEBHOOK_KEY',
-  'STRIPE_SECRET_KEY',
-  'STRIPE_WEBHOOK_SECRET',
-  'STRIPE_PUBLISHABLE_KEY',
   'NOWPAYMENTS_API_KEY',
+  'NOWPAYMENTS_API_BASE_URL',
   'NOWPAYMENTS_IPN_SECRET',
   'NOWPAYMENTS_AUTH_EMAIL',
   'NOWPAYMENTS_AUTH_PASSWORD',
+  'NOWPAYMENTS_CRYPTO_DEPOSITS_ENABLED',
   'NOWPAYMENTS_FIAT_ENABLED',
   'NOWPAYMENTS_CUSTODY_ENABLED',
   'NOWPAYMENTS_MASS_PAYOUTS_ENABLED',
@@ -76,10 +76,14 @@ const isolatedEnvKeys = [
   'PAYMOB_PAYOUT_CLIENT_ID',
   'PAYMOB_PAYOUT_CLIENT_SECRET',
   'PAYMOB_PAYOUT_BASE_URL',
+  'INSTAPAY_DEPOSITS_ENABLED',
+  'INSTAPAY_WITHDRAWALS_ENABLED',
   'AGORA_APP_ID',
   'AGORA_APP_CERTIFICATE',
   'SUPABASE_URL',
   'SUPABASE_SERVICE_ROLE_KEY',
+  'ALLOW_TEST_REMOTE_SERVICES',
+  'NON_PRODUCTION_SUPABASE_PROJECT_REF',
   'SENTRY_DSN',
   'RETENTION_SWEEP_INTERVAL_MS',
   'RETENTION_VERIFICATION_CODES_AFTER_EXPIRY_HOURS',
@@ -95,6 +99,7 @@ const isolatedEnvKeys = [
 ];
 
 const requiredProductionEnv: Record<string, string> = {
+  DEPLOYMENT_ENV: 'production',
   NODE_ENV: 'production',
   JWT_SECRET: 'x'.repeat(40),
   JWT_REFRESH_SECRET: 'y'.repeat(40),
@@ -250,7 +255,7 @@ describe('production environment validation', () => {
     await expect(importFreshEnv()).rejects.toThrow('Production provider configuration failed');
   });
 
-  it('allows Paymob deposits to be runtime-gated when production keys are not active yet', async () => {
+  it('rejects enabled Paymob deposits until every production credential is present', async () => {
     stubProductionEnv({
       PAYMOB_DEPOSITS_ENABLED: 'true',
       PAYMOB_SECRET_KEY: 'secret',
@@ -259,11 +264,7 @@ describe('production environment validation', () => {
       PAYMOB_INTEGRATION_IDS: undefined,
     });
 
-    const mod = await importFreshEnv();
-
-    expect(mod.env.PAYMOB_DEPOSITS_ENABLED).toBe(true);
-    expect(mod.env.PAYMOB_PUBLIC_KEY).toBeUndefined();
-    expect(mod.env.PAYMOB_HMAC_SECRET).toBeUndefined();
+    await expect(importFreshEnv()).rejects.toThrow('Production provider configuration failed');
   });
 
   it('rejects unsafe global upload retention in production', async () => {

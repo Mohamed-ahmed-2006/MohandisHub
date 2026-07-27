@@ -96,7 +96,7 @@ describe('launch surface hardening', () => {
     expect(apiSection).toContain('key: NOWPAYMENTS_AUTH_PASSWORD');
   });
 
-  it('keeps Paymob disabled by default but ready for explicit production credentials', () => {
+  it('keeps Paymob disabled by default and blocked from production activation', () => {
     const envExample = readSource('../../.env.example');
     const envSource = readSource('../config/env.ts');
     const renderBlueprint = readSource('../../../../render.yaml');
@@ -115,6 +115,7 @@ describe('launch surface hardening', () => {
     expect(envSource).toContain(
       'Paymob production withdrawals must not use a staging payout endpoint.',
     );
+    expect(envSource).toContain('Paymob deposits and withdrawals are not approved for production.');
     expect(apiSection).toContain('key: PAYMOB_SECRET_KEY');
     expect(apiSection).toContain('key: PAYMOB_HMAC_SECRET');
     expect(apiSection).toContain('key: PAYMOB_PAYOUT_CLIENT_ID');
@@ -123,14 +124,59 @@ describe('launch surface hardening', () => {
     expect(apiSection).toContain('value: false');
   });
 
-  it('guards manual production migration pushes behind an explicit confirmation', () => {
+  it('keeps Stripe absent while returning a deterministic legacy error', () => {
+    const apiPackage = JSON.parse(readSource('../../package.json')) as {
+      dependencies?: Record<string, string>;
+      devDependencies?: Record<string, string>;
+    };
+    const webPackage = JSON.parse(readSource('../../../../apps/web/package.json')) as {
+      dependencies?: Record<string, string>;
+      devDependencies?: Record<string, string>;
+    };
+    const walletController = readSource('../modules/wallet/wallet.controller.ts');
+    const walletRoutes = readSource('../modules/wallet/wallet.routes.ts');
+    const webWalletClient = readSource('../../../../apps/web/lib/wallet/client.ts');
+    const envSource = readSource('../config/env.ts');
+
+    expect({ ...apiPackage.dependencies, ...apiPackage.devDependencies }).not.toHaveProperty(
+      'stripe',
+    );
+    expect({ ...webPackage.dependencies, ...webPackage.devDependencies }).not.toHaveProperty(
+      '@stripe/stripe-js',
+    );
+    expect({ ...webPackage.dependencies, ...webPackage.devDependencies }).not.toHaveProperty(
+      '@stripe/react-stripe-js',
+    );
+    expect(walletRoutes).toContain("walletRouter.post('/deposit/stripe'");
+    expect(walletRoutes).toContain("walletRouter.post('/deposit/confirm-stripe'");
+    expect(walletController.match(/code: 'STRIPE_DISABLED'/g)).toHaveLength(2);
+    expect(walletController).not.toContain('stripe.');
+    expect(webWalletClient).not.toContain('createStripeCheckout');
+    expect(envSource).not.toContain('STRIPE_SECRET_KEY');
+    expect(envSource).not.toContain('STRIPE_WEBHOOK_SECRET');
+  });
+
+  it('filters every unfinished payment rail through server capabilities', () => {
+    const settingsService = readSource('../modules/settings/settings.service.ts');
+
+    expect(settingsService).toContain('deposit_card: false');
+    expect(settingsService).toContain('env.NOWPAYMENTS_CRYPTO_DEPOSITS_ENABLED');
+    expect(settingsService).toContain('env.PAYMOB_DEPOSITS_ENABLED');
+    expect(settingsService).toContain('env.PAYMOB_WITHDRAWALS_ENABLED');
+    expect(settingsService).toContain('env.INSTAPAY_DEPOSITS_ENABLED');
+    expect(settingsService).toContain('env.INSTAPAY_WITHDRAWALS_ENABLED');
+  });
+
+  it('makes repository migration helpers staging-only with an exact confirmation', () => {
     const migrationScript = readSource('../../../../scripts/push-migrations.mjs');
 
-    expect(migrationScript).toContain('CONFIRM_PRODUCTION_MIGRATION');
-    expect(migrationScript).toContain('I_UNDERSTAND_RUN_PRODUCTION_MIGRATIONS');
+    expect(migrationScript).toContain('MIGRATION_DEPLOYMENT_ENV');
+    expect(migrationScript).toContain('MIGRATE_DEDICATED_STAGING');
+    expect(migrationScript).toContain('NON_PRODUCTION_SUPABASE_PROJECT_REF');
     expect(migrationScript).toContain(
-      'Refusing to push migrations to a production-looking database URL.',
+      'Migration target does not match the dedicated non-production',
     );
+    expect(migrationScript).not.toContain("resolve(root, 'apps/api/.env')");
   });
 
   it('does not allow credentialed localhost CORS by default in production', () => {

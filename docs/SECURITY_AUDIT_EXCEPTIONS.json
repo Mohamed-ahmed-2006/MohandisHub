@@ -1,0 +1,18 @@
+{
+  "exceptions": [
+    {
+      "id": "NEXT-15-TRANSITIVE-2026-07",
+      "owner": "release-engineering",
+      "expiresOn": "2026-08-27",
+      "packages": ["next", "postcss", "sharp"],
+      "advisorySources": [1117015, 1124066, 1124252, 1124288],
+      "requiredNextVersion": "15.5.22",
+      "reason": "Next 15.5.22 is the latest compatible 15.5 patch. Its nested PostCSS only processes repository-controlled CSS during build, and Next image optimization is disabled so untrusted images do not reach its bundled Sharp path.",
+      "mitigations": [
+        "apps/web/next.config.ts must keep images.unoptimized=true",
+        "The release build must not accept attacker-controlled CSS or source maps",
+        "Recheck Next 15.5 patches and npm advisories before the expiry date"
+      ]
+    }
+  ]
+}

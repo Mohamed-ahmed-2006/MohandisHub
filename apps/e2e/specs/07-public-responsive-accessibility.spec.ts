@@ -1,4 +1,6 @@
-import { expect, test } from '@playwright/test';
+import AxeBuilder from '@axe-core/playwright';
+
+import { expect, test } from '../fixtures';
 
 type InteractiveRect = {
   height: number;
@@ -37,43 +39,35 @@ const findOverlaps = (items: InteractiveRect[]) => {
 
 test.describe('Public responsive accessibility', () => {
   for (const locale of ['en', 'ar']) {
-    test(`${locale} mobile header keeps interactive targets separate`, async ({ page }) => {
-      const consoleErrors: string[] = [];
-      const failedRequests: string[] = [];
-      page.on('console', (message) => {
-        if (message.type() === 'error') consoleErrors.push(message.text());
+    for (const width of [320, 768, 1366, 1920]) {
+      test(`${locale} ${width}px public UI is stable and accessible`, async ({ page }) => {
+        await page.setViewportSize({ width, height: width <= 768 ? 900 : 1080 });
+        await page.goto(`/${locale}`);
+        await expect(page.locator('h1')).toBeVisible();
+
+        const interactiveRects = await page.locator('header').evaluate((header) =>
+          Array.from(header.querySelectorAll<HTMLAnchorElement | HTMLButtonElement>('a, button'))
+            .map((element) => {
+              const rect = element.getBoundingClientRect();
+              return {
+                height: rect.height,
+                name:
+                  element.getAttribute('aria-label') ||
+                  element.textContent?.trim() ||
+                  element.tagName,
+                width: rect.width,
+                x: rect.x,
+                y: rect.y,
+              };
+            })
+            .filter((rect) => rect.width > 0 && rect.height > 0),
+        );
+
+        expect(findOverlaps(interactiveRects)).toEqual([]);
+        await expect(page.locator('html')).toHaveAttribute('dir', locale === 'ar' ? 'rtl' : 'ltr');
+        const accessibility = await new AxeBuilder({ page }).analyze();
+        expect(accessibility.violations).toEqual([]);
       });
-      page.on('pageerror', (error) => consoleErrors.push(error.message));
-      page.on('requestfailed', (request) => {
-        failedRequests.push(`${request.method()} ${request.url()}`);
-      });
-
-      await page.setViewportSize({ width: 320, height: 568 });
-      await page.goto(`/${locale}`);
-      await expect(page.locator('h1')).toBeVisible();
-
-      const interactiveRects = await page.locator('header').evaluate((header) =>
-        Array.from(header.querySelectorAll<HTMLAnchorElement | HTMLButtonElement>('a, button'))
-          .map((element) => {
-            const rect = element.getBoundingClientRect();
-            return {
-              height: rect.height,
-              name:
-                element.getAttribute('aria-label') ||
-                element.textContent?.trim() ||
-                element.tagName,
-              width: rect.width,
-              x: rect.x,
-              y: rect.y,
-            };
-          })
-          .filter((rect) => rect.width > 0 && rect.height > 0),
-      );
-
-      expect(findOverlaps(interactiveRects)).toEqual([]);
-      await expect(page.locator('html')).toHaveAttribute('dir', locale === 'ar' ? 'rtl' : 'ltr');
-      expect(consoleErrors).toEqual([]);
-      expect(failedRequests).toEqual([]);
-    });
+    }
   }
 });

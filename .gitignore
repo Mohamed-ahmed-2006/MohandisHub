@@ -8,6 +8,8 @@ coverage/
 .env
 .env.local
 !.env.example
+apps/api/.env.development.local
+apps/api/.env.e2e.local
 apps/api/uploads/
 uploads/
 .DS_Store

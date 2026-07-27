@@ -36,8 +36,8 @@
   --foreground: 222 32% 14%;
   --muted: 38 28% 93%;
   --muted-foreground: 220 12% 42%;
-  --accent: 24 95% 53%;
-  --primary: 24 95% 53%;
+  --accent: 24 90% 39%;
+  --primary: 24 90% 39%;
   --primary-foreground: 0 0% 100%;
   --card: 0 0% 100%;
   --border: 30 18% 86%;
@@ -48,8 +48,8 @@
   --warning: 38 92% 42%;
   --destructive: 0 72% 46%;
   --info: 221 78% 52%;
-  --ring: 24 95% 53%;
-  --focus-ring: 24 95% 53%;
+  --ring: 24 90% 39%;
+  --focus-ring: 24 90% 39%;
   --focus-shadow: 0 0 0 3px hsl(var(--focus-ring) / 0.22);
   --surface-elevated: 0 0% 100% / 0.88;
   --surface-panel: 40 35% 98% / 0.78;

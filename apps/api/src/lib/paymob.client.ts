@@ -8,6 +8,8 @@ import { createHmac } from 'node:crypto';
 
 import { env } from '../config/env.js';
 
+import { fetchWithTimeout } from './fetch-with-timeout.js';
+
 export const PAYMOB_NOT_CONFIGURED = 'PAYMOB_NOT_CONFIGURED';
 
 export class PaymobNotConfiguredError extends Error {
@@ -111,7 +113,7 @@ export async function createPaymobIntention(
     throw new PaymobNotConfiguredError('No Paymob integration ids configured.');
 
   const amountCents = Math.round(params.amountEgp * 100);
-  const res = await fetch(`${env.PAYMOB_API_BASE_URL}/v1/intention/`, {
+  const res = await fetchWithTimeout(`${env.PAYMOB_API_BASE_URL}/v1/intention/`, {
     method: 'POST',
     headers: {
       Authorization: `Token ${env.PAYMOB_SECRET_KEY}`,
@@ -213,7 +215,7 @@ export function verifyPaymobHmac(
 export async function authenticatePaymobPayout(): Promise<string> {
   if (!isPaymobPayoutConfigured())
     throw new PaymobNotConfiguredError('Paymob payouts are not configured yet.');
-  const res = await fetch(`${env.PAYMOB_PAYOUT_BASE_URL}/api/secure/o/token/`, {
+  const res = await fetchWithTimeout(`${env.PAYMOB_PAYOUT_BASE_URL}/api/secure/o/token/`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -246,7 +248,7 @@ export async function createPaymobDisbursement(
 ): Promise<PaymobDisbursementResult> {
   if (!isPaymobPayoutConfigured())
     throw new PaymobNotConfiguredError('Paymob payouts are not configured yet.');
-  const res = await fetch(`${env.PAYMOB_PAYOUT_BASE_URL}/api/secure/disburse/`, {
+  const res = await fetchWithTimeout(`${env.PAYMOB_PAYOUT_BASE_URL}/api/secure/disburse/`, {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${accessToken}`,

@@ -2,7 +2,7 @@
  * Must-pass journey 1: Auth + onboarding
  * Register or login, verify email (stub/skip in e2e), complete role onboarding.
  */
-import { test, expect } from '@playwright/test';
+import { expect, test } from '../fixtures';
 
 test.describe('Auth + onboarding', () => {
   test('auth page loads and has login or register', async ({ page }) => {

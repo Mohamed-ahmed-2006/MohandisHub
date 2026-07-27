@@ -12,12 +12,9 @@
 ## Database Migration Safety
 
 - Take a Supabase backup before production migrations.
-- Run migrations only through `scripts/push-migrations.mjs`.
-- For production-looking database URLs, set:
-
-```bash
-CONFIRM_PRODUCTION_MIGRATION=I_UNDERSTAND_RUN_PRODUCTION_MIGRATIONS
-```
+- `scripts/push-migrations.mjs` is staging-only and refuses production targets.
+- Production migration is a separate, explicitly approved release operation after backup,
+  staging validation, and rollback review. It is not automated by this repository.
 
 - If a migration changes money, auth, storage, or RLS behavior, run a staging dry run first.
 - Do not run destructive manual SQL in production without a fresh backup and rollback notes.

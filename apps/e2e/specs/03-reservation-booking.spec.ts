@@ -3,7 +3,7 @@
  * Create or accept reservation → move through key states.
  * Shallow: bookings/calendar routes load.
  */
-import { test, expect } from '@playwright/test';
+import { expect, test } from '../fixtures';
 
 test.describe('Reservation / booking lifecycle', () => {
   test('bookings or calendar route loads', async ({ page }) => {

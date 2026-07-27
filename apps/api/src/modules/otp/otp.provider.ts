@@ -9,6 +9,7 @@
 import type { OtpChannel } from '@mohandishub/shared';
 
 import { logger } from '../../config/logger.js';
+import { fetchWithTimeout } from '../../lib/fetch-with-timeout.js';
 import { sendResendEmail } from '../../utils/resend-email.js';
 import { buildTransactionalEmailHtml } from '../../utils/transactional-email-template.js';
 
@@ -75,7 +76,7 @@ export class BrevoEmailSender implements IOtpSender {
       throw new Error('Brevo email sender not configured. Set BREVO_API_KEY in .env');
     }
 
-    const response = await fetch('https://api.brevo.com/v3/smtp/email', {
+    const response = await fetchWithTimeout('https://api.brevo.com/v3/smtp/email', {
       method: 'POST',
       headers: {
         accept: 'application/json',
@@ -185,7 +186,7 @@ export class TwilioSmsSender implements IOtpSender {
       From: env.TWILIO_PHONE_NUMBER,
       Body: `MohandisHub: your verification code is ${params.code}. It expires in 10 minutes.`,
     });
-    const response = await fetch(
+    const response = await fetchWithTimeout(
       `https://api.twilio.com/2010-04-01/Accounts/${env.TWILIO_ACCOUNT_SID}/Messages.json`,
       {
         method: 'POST',
@@ -216,7 +217,7 @@ export class HttpAdapterSmsSender implements IOtpSender {
         'HTTP SMS adapter not configured. Set SMS_HTTP_ENDPOINT and SMS_HTTP_API_KEY.',
       );
     }
-    const response = await fetch(env.SMS_HTTP_ENDPOINT, {
+    const response = await fetchWithTimeout(env.SMS_HTTP_ENDPOINT, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${env.SMS_HTTP_API_KEY}`,
@@ -248,7 +249,7 @@ export class MetaWhatsAppOtpSender implements IOtpSender {
     if (!env.META_WHATSAPP_TOKEN || !env.META_WHATSAPP_PHONE_NUMBER_ID) {
       throw new Error('Meta WhatsApp sender not configured. Set WhatsApp env keys.');
     }
-    const response = await fetch(
+    const response = await fetchWithTimeout(
       `https://graph.facebook.com/v20.0/${env.META_WHATSAPP_PHONE_NUMBER_ID}/messages`,
       {
         method: 'POST',

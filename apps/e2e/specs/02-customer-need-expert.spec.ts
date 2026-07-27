@@ -3,7 +3,7 @@
  * Login as customer → create need → (as expert) view/place bid or equivalent.
  * Shallow: assert app shell and needs/dashboard entry points load when authenticated.
  */
-import { test, expect } from '@playwright/test';
+import { expect, test } from '../fixtures';
 
 test.describe('Customer need to expert engagement', () => {
   test('needs or projects entry point exists in app', async ({ page }) => {

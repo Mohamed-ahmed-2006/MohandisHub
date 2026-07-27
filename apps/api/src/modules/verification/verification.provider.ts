@@ -12,6 +12,7 @@ import type { VerificationRequestType } from '@mohandishub/shared';
 
 import { env } from '../../config/env.js';
 import { logger } from '../../config/logger.js';
+import { fetchWithTimeout } from '../../lib/fetch-with-timeout.js';
 
 import type {
   DiditCreateSessionResponse,
@@ -128,7 +129,7 @@ export class DiditVerificationProvider implements IVerificationProvider {
       };
     }
 
-    const response = await fetch(`${this.baseUrl}/session/`, {
+    const response = await fetchWithTimeout(`${this.baseUrl}/session/`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
