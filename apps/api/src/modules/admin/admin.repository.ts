@@ -31,6 +31,195 @@ export class AdminRepository {
     return getPool();
   }
 
+  async getWalletFundingLiquiditySnapshot(): Promise<{
+    liabilities: Array<{ rail: string; amount: string }>;
+    reviewRequiredWallets: number;
+    pendingCryptoPayouts: Array<{ currency: string; amount: string }>;
+  }> {
+    const [liabilitiesResult, reviewResult, payoutsResult] = await Promise.all([
+      this.db.query<{ rail: string; amount: string }>(
+        `SELECT rail, COALESCE(SUM(amount), 0)::text AS amount
+         FROM wallet_fund_balances
+         GROUP BY rail
+         ORDER BY rail`,
+      ),
+      this.db.query<{ count: string }>(
+        `SELECT COUNT(*)::text AS count
+         FROM wallets
+         WHERE source_reconciliation_status = 'review_required'`,
+      ),
+      this.db.query<{ currency: string; amount: string }>(
+        `SELECT UPPER(currency) AS currency,
+                COALESCE(SUM(payout_crypto_amount), 0)::text AS amount
+         FROM withdrawal_requests
+         WHERE withdrawal_method = 'crypto'
+           AND status IN ('pending_verification', 'processing')
+         GROUP BY UPPER(currency)
+         ORDER BY UPPER(currency)`,
+      ),
+    ]);
+
+    return {
+      liabilities: liabilitiesResult.rows,
+      reviewRequiredWallets: Number(reviewResult.rows[0]?.count ?? 0),
+      pendingCryptoPayouts: payoutsResult.rows,
+    };
+  }
+
+  async reserveBulkUserOperation(params: {
+    operationId: string;
+    actorId: string;
+    action: string;
+    payload: Record<string, unknown>;
+    requestHash: string;
+    userIds: string[];
+  }): Promise<'created' | 'existing' | 'conflict'> {
+    const client = await this.db.connect();
+    try {
+      await client.query('BEGIN');
+      const { rows: existing } = await client.query<{ request_hash: string; actor_id: string }>(
+        `SELECT request_hash, actor_id FROM admin_bulk_operations WHERE id = $1 FOR UPDATE`,
+        [params.operationId],
+      );
+      if (existing[0]) {
+        await client.query('COMMIT');
+        return existing[0].request_hash === params.requestHash &&
+          existing[0].actor_id === params.actorId
+          ? 'existing'
+          : 'conflict';
+      }
+      await client.query(
+        `INSERT INTO admin_bulk_operations (
+           id, actor_id, action, payload, request_hash, requested_count
+         ) VALUES ($1, $2, $3, $4::jsonb, $5, $6)`,
+        [
+          params.operationId,
+          params.actorId,
+          params.action,
+          JSON.stringify(params.payload),
+          params.requestHash,
+          params.userIds.length,
+        ],
+      );
+      await client.query(
+        `INSERT INTO admin_bulk_operation_items (operation_id, user_id)
+         SELECT $1, unnest($2::uuid[])`,
+        [params.operationId, params.userIds],
+      );
+      await client.query('COMMIT');
+      return 'created';
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  async getBulkUserOperation(operationId: string): Promise<{
+    id: string;
+    action: string;
+    status: 'processing' | 'completed';
+    requested_count: number;
+    succeeded_count: number;
+    skipped_count: number;
+    failed_count: number;
+    items: Array<{
+      user_id: string;
+      status: 'pending' | 'processing' | 'succeeded' | 'skipped' | 'failed';
+      code: string | null;
+      message: string | null;
+    }>;
+  } | null> {
+    const { rows } = await this.db.query<{
+      id: string;
+      action: string;
+      status: 'processing' | 'completed';
+      requested_count: number;
+      succeeded_count: number;
+      skipped_count: number;
+      failed_count: number;
+    }>(
+      `SELECT id, action, status, requested_count, succeeded_count, skipped_count, failed_count
+       FROM admin_bulk_operations WHERE id = $1`,
+      [operationId],
+    );
+    const operation = rows[0];
+    if (!operation) return null;
+    const { rows: items } = await this.db.query<{
+      user_id: string;
+      status: 'pending' | 'processing' | 'succeeded' | 'skipped' | 'failed';
+      code: string | null;
+      message: string | null;
+    }>(
+      `SELECT user_id, status, code, message
+       FROM admin_bulk_operation_items
+       WHERE operation_id = $1
+       ORDER BY user_id`,
+      [operationId],
+    );
+    return { ...operation, items };
+  }
+
+  async claimBulkUserOperationItem(operationId: string, userId: string): Promise<boolean> {
+    const result = await this.db.query(
+      `UPDATE admin_bulk_operation_items
+       SET status = 'processing', code = NULL, message = NULL, updated_at = now()
+       WHERE operation_id = $1
+         AND user_id = $2
+         AND (
+           status = 'pending'
+           OR (status = 'processing' AND updated_at < now() - interval '5 minutes')
+         )`,
+      [operationId, userId],
+    );
+    return result.rowCount === 1;
+  }
+
+  async completeBulkUserOperationItem(params: {
+    operationId: string;
+    userId: string;
+    status: 'succeeded' | 'skipped' | 'failed';
+    code?: string | null;
+    message?: string | null;
+  }): Promise<void> {
+    await this.db.query(
+      `UPDATE admin_bulk_operation_items
+       SET status = $3, code = $4, message = $5, updated_at = now()
+       WHERE operation_id = $1 AND user_id = $2 AND status = 'processing'`,
+      [
+        params.operationId,
+        params.userId,
+        params.status,
+        params.code ?? null,
+        params.message ?? null,
+      ],
+    );
+  }
+
+  async finishBulkUserOperation(operationId: string): Promise<void> {
+    await this.db.query(
+      `UPDATE admin_bulk_operations o
+       SET status = 'completed',
+           succeeded_count = counts.succeeded_count,
+           skipped_count = counts.skipped_count,
+           failed_count = counts.failed_count,
+           completed_at = now(),
+           updated_at = now()
+       FROM (
+         SELECT
+           COUNT(*) FILTER (WHERE status = 'succeeded')::int AS succeeded_count,
+           COUNT(*) FILTER (WHERE status = 'skipped')::int AS skipped_count,
+           COUNT(*) FILTER (WHERE status = 'failed')::int AS failed_count,
+           COUNT(*) FILTER (WHERE status IN ('pending', 'processing'))::int AS unfinished_count
+         FROM admin_bulk_operation_items
+         WHERE operation_id = $1
+       ) counts
+       WHERE o.id = $1 AND counts.unfinished_count = 0`,
+      [operationId],
+    );
+  }
+
   // ── Dashboard ───────────────────────────────────────────────────────────
 
   async getDashboardStats(): Promise<DashboardStatsRow> {
@@ -649,6 +838,20 @@ export class AdminRepository {
        RETURNING id, balance::text`,
       [userId],
     );
+    await this.db.query(
+      `INSERT INTO wallet_fund_balances (wallet_id, user_id, rail, amount)
+       SELECT $1, $2, rail, 0
+       FROM (VALUES ('crypto'), ('instapay'), ('paymob'), ('card'), ('restricted')) AS rails(rail)
+       ON CONFLICT (wallet_id, rail) DO NOTHING`,
+      [rows[0]!.id, userId],
+    );
+    await this.db.query(
+      `UPDATE wallets
+       SET source_reconciliation_status = 'ready',
+           source_reconciled_at = COALESCE(source_reconciled_at, now())
+       WHERE id = $1 AND balance = 0 AND source_reconciliation_status = 'pending'`,
+      [rows[0]!.id],
+    );
     return rows[0]!;
   }
 
@@ -659,6 +862,7 @@ export class AdminRepository {
     amount: number,
     description: string | null,
     adminId: string,
+    fundingRail: 'crypto' | 'instapay' | 'paymob' | 'card' | 'restricted',
   ): Promise<TransactionRow> {
     const client = await this.db.connect();
     try {
@@ -685,6 +889,49 @@ export class AdminRepository {
         });
       }
 
+      const fundingAllocations: Record<string, number> = {};
+      if (delta < 0) {
+        const { rows: sourceRows } = await client.query<{ rail: string; amount: string }>(
+          `SELECT b.rail, b.amount::text
+           FROM wallet_fund_balances b
+           JOIN wallets w ON w.id = b.wallet_id
+           WHERE b.wallet_id = $1
+             AND w.source_reconciliation_status = 'ready'
+           FOR UPDATE OF b`,
+          [walletId],
+        );
+        const sourceAmounts = new Map(
+          sourceRows.map((row) => [row.rail, Math.round(parseFloat(row.amount) * 100)]),
+        );
+        const order =
+          fundingRail !== 'restricted'
+            ? [fundingRail]
+            : ['crypto', 'instapay', 'paymob', 'card', 'restricted'];
+        let remainingCents = Math.round(Math.abs(delta) * 100);
+        for (const rail of order) {
+          if (remainingCents <= 0) break;
+          const availableCents = sourceAmounts.get(rail) ?? 0;
+          const takeCents = Math.min(availableCents, remainingCents);
+          if (takeCents <= 0) continue;
+          const take = takeCents / 100;
+          fundingAllocations[rail] = take;
+          await client.query(
+            `UPDATE wallet_fund_balances
+             SET amount = amount - $3, updated_at = now()
+             WHERE wallet_id = $1 AND rail = $2`,
+            [walletId, rail, take],
+          );
+          remainingCents -= takeCents;
+        }
+        if (remainingCents > 0) {
+          throw new HttpError({
+            statusCode: 409,
+            code: 'INSUFFICIENT_FUNDING_SOURCE_BALANCE',
+            message: 'The adjustment exceeds the reconciled funding-source balance.',
+          });
+        }
+      }
+
       const { rows: walletRows } = await client.query<{ balance: string }>(
         `UPDATE wallets SET balance = balance + $2 WHERE id = $1 RETURNING balance::text`,
         [walletId, delta],
@@ -696,6 +943,33 @@ export class AdminRepository {
          VALUES ($1, $2, $3, $4, $5, $6, 'completed', $7, 'manual', $8) RETURNING *`,
         [walletId, userId, type, amount, delta, newBalance, description, adminId],
       );
+
+      if (delta > 0) {
+        fundingAllocations[fundingRail] = amount;
+        await client.query(
+          `UPDATE wallet_fund_balances
+           SET amount = amount + $3, updated_at = now()
+           WHERE wallet_id = $1 AND rail = $2`,
+          [walletId, fundingRail, amount],
+        );
+      }
+      for (const [rail, railAmount] of Object.entries(fundingAllocations)) {
+        await client.query(
+          `INSERT INTO wallet_fund_movements (
+             wallet_id, user_id, rail, amount_delta, transaction_id, reason, metadata
+           )
+           VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb)`,
+          [
+            walletId,
+            userId,
+            rail,
+            railAmount * (delta > 0 ? 1 : -1),
+            txnRows[0]!.id,
+            description ?? 'Admin balance adjustment',
+            JSON.stringify({ admin_id: adminId, adjustment_type: type }),
+          ],
+        );
+      }
 
       await client.query('COMMIT');
       return txnRows[0]!;
@@ -757,6 +1031,47 @@ export class AdminRepository {
         });
       }
       const reverseAmount = -originalDelta;
+      const { rows: sourceRows } = await client.query<{ rail: string; amount_delta: string }>(
+        `SELECT rail, SUM(amount_delta)::text AS amount_delta
+         FROM wallet_fund_movements
+         WHERE transaction_id = $1
+         GROUP BY rail`,
+        [txnId],
+      );
+      if (sourceRows.length === 0) {
+        throw new HttpError({
+          statusCode: 409,
+          code: 'TRANSACTION_SOURCE_AMBIGUOUS',
+          message: 'This transaction has no funding-source movements and cannot be reversed safely.',
+        });
+      }
+
+      await client.query(
+        `SELECT rail
+         FROM wallet_fund_balances
+         WHERE wallet_id = $1
+         FOR UPDATE`,
+        [orig.wallet_id],
+      );
+      for (const source of sourceRows) {
+        const sourceDelta = parseFloat(source.amount_delta);
+        const reversalSourceDelta = -sourceDelta;
+        const { rowCount } = await client.query(
+          `UPDATE wallet_fund_balances
+           SET amount = amount + $3, updated_at = now()
+           WHERE wallet_id = $1
+             AND rail = $2
+             AND amount + $3 >= 0`,
+          [orig.wallet_id, source.rail, reversalSourceDelta],
+        );
+        if (rowCount !== 1) {
+          throw new HttpError({
+            statusCode: 409,
+            code: 'REVERSAL_SOURCE_BALANCE_INSUFFICIENT',
+            message: `Reversal would overdraw the ${source.rail} funding source.`,
+          });
+        }
+      }
 
       const { rows: walletRows } = await client.query<{ balance: string }>(
         `UPDATE wallets
@@ -785,6 +1100,23 @@ export class AdminRepository {
           adminId,
         ],
       );
+      for (const source of sourceRows) {
+        await client.query(
+          `INSERT INTO wallet_fund_movements (
+             wallet_id, user_id, rail, amount_delta, transaction_id, reason, metadata
+           )
+           VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb)`,
+          [
+            orig.wallet_id,
+            orig.user_id,
+            source.rail,
+            -parseFloat(source.amount_delta),
+            txnRows[0]!.id,
+            `Funding-source reversal of ${txnId}`,
+            JSON.stringify({ original_transaction_id: txnId, admin_id: adminId }),
+          ],
+        );
+      }
 
       await client.query('COMMIT');
       return txnRows[0]!;

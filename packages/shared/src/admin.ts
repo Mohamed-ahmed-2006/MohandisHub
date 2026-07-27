@@ -13,6 +13,7 @@ import type {
   UpdateExpertProfileBody,
 } from './profiles.js';
 import type { UserRole } from './roles.js';
+import type { WalletFundingRail } from './wallet.js';
 
 export const ADMIN_PERMISSIONS = [
   'super_admin',
@@ -74,6 +75,24 @@ export type AdminDashboardStats = {
   platformWalletBalance: number;
 };
 
+export type AdminWalletFundingLiquidity = {
+  liabilitiesEgp: Record<WalletFundingRail, number>;
+  reviewRequiredWallets: number;
+  pendingCryptoPayouts: Array<{
+    currency: string;
+    amount: number;
+  }>;
+  providerBalances: Record<
+    string,
+    {
+      amount: number;
+      pendingAmount: number;
+    }
+  > | null;
+  providerBalanceError: string | null;
+  checkedAt: string;
+};
+
 /** Primary role is customer | expert | business. Admin is a separate isAdmin flag. */
 export type AdminUserListItem = {
   id: string;
@@ -128,6 +147,42 @@ export type AdminForceLogoutResponse = {
 export type AdminWalletFreezeResponse = {
   userId: string;
   walletFrozen: boolean;
+};
+
+export type AdminBulkUserAction =
+  | 'activate'
+  | 'deactivate'
+  | 'soft_delete'
+  | 'force_logout'
+  | 'send_verification_email'
+  | 'verify_email'
+  | 'freeze_wallet'
+  | 'unfreeze_wallet'
+  | 'assign_plan';
+
+export type AdminBulkUserActionBody = {
+  operationId: string;
+  userIds: string[];
+  action: AdminBulkUserAction;
+  planId?: string | null;
+};
+
+export type AdminBulkUserActionItem = {
+  userId: string;
+  status: 'succeeded' | 'skipped' | 'failed';
+  code: string | null;
+  message: string | null;
+};
+
+export type AdminBulkUserActionResult = {
+  operationId: string;
+  action: AdminBulkUserAction;
+  status: 'processing' | 'completed';
+  requestedCount: number;
+  succeededCount: number;
+  skippedCount: number;
+  failedCount: number;
+  items: AdminBulkUserActionItem[];
 };
 
 export type AdminUserFilters = PaginationParams & {

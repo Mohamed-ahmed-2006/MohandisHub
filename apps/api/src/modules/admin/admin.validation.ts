@@ -46,6 +46,47 @@ export const changeUserRoleSchema = z.object({
   role: z.enum(['customer', 'expert', 'business', 'craftsman']),
 });
 
+export const bulkUserActionSchema = z
+  .object({
+    operationId: z.string().uuid(),
+    userIds: z.array(z.string().uuid()).min(1).max(100),
+    action: z.enum([
+      'activate',
+      'deactivate',
+      'soft_delete',
+      'force_logout',
+      'send_verification_email',
+      'verify_email',
+      'freeze_wallet',
+      'unfreeze_wallet',
+      'assign_plan',
+    ]),
+    planId: z.string().uuid().nullable().optional(),
+  })
+  .superRefine((value, ctx) => {
+    if (new Set(value.userIds).size !== value.userIds.length) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['userIds'],
+        message: 'User ids must be unique.',
+      });
+    }
+    if (value.action === 'assign_plan' && value.planId === undefined) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['planId'],
+        message: 'planId is required for plan assignment; use null to remove the plan.',
+      });
+    }
+    if (value.action !== 'assign_plan' && value.planId !== undefined) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['planId'],
+        message: 'planId is only allowed for plan assignment.',
+      });
+    }
+  });
+
 export const userActivityTypeSchema = z.enum([
   'needs',
   'bids',
@@ -132,6 +173,9 @@ export const adjustBalanceSchema = z.object({
   type: z.enum(['deposit', 'withdrawal', 'adjustment', 'bonus', 'commission']),
   amount: egpAmountSchema,
   description: z.string().min(5).max(500),
+  fundingRail: z
+    .enum(['crypto', 'instapay', 'paymob', 'card', 'restricted'])
+    .default('restricted'),
 });
 
 export const reverseTransactionSchema = z.object({
@@ -266,6 +310,7 @@ export type UpdateUserInput = z.infer<typeof updateUserSchema>;
 export type FactoryResetInput = z.infer<typeof factoryResetSchema>;
 export type ChangeUserEmailInput = z.infer<typeof changeUserEmailSchema>;
 export type ChangeUserRoleInput = z.infer<typeof changeUserRoleSchema>;
+export type BulkUserActionInput = z.infer<typeof bulkUserActionSchema>;
 export type UserActivityTypeInput = z.infer<typeof userActivityTypeSchema>;
 export type UpdateExpertProfileByAdminInput = z.infer<typeof updateExpertProfileSchema>;
 export type UpdateBusinessProfileByAdminInput = z.infer<typeof updateBusinessProfileSchema>;

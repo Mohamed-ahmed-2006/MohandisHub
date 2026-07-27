@@ -95,6 +95,11 @@ adminRouter.post(
 
 // Users
 adminRouter.get('/users', requireAdminPermission('manage_users'), adminController.listUsers);
+adminRouter.post(
+  '/users/bulk-actions',
+  requireAdminAnyPermission('manage_users', 'manage_transactions'),
+  adminController.bulkUserAction,
+);
 adminRouter.get(
   '/users/:id',
   requireAdminPermission('manage_users'),
@@ -178,7 +183,11 @@ adminRouter.post(
 );
 
 // Plans
-adminRouter.get('/plans', requireAdminPermission('manage_plans'), adminController.listPlans);
+adminRouter.get(
+  '/plans',
+  requireAdminAnyPermission('manage_plans', 'manage_users'),
+  adminController.listPlans,
+);
 adminRouter.post('/plans', requireAdminPermission('manage_plans'), adminController.createPlan);
 adminRouter.patch('/plans/:id', requireAdminPermission('manage_plans'), adminController.updatePlan);
 adminRouter.delete(
@@ -249,6 +258,11 @@ adminRouter.post(
   adminController.reverseTransaction,
 );
 
+adminRouter.get(
+  '/wallet/funding-liquidity',
+  requireAdminPermission('manage_transactions'),
+  adminController.getWalletFundingLiquidity,
+);
 adminRouter.get(
   '/wallet/manual-deposits',
   requireAdminPermission('manage_transactions'),

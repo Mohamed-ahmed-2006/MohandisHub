@@ -1,6 +1,10 @@
 'use client';
 
-import type { ManualDepositRequest, WithdrawalRequest } from '@mohandishub/shared';
+import type {
+  AdminWalletFundingLiquidity,
+  ManualDepositRequest,
+  WithdrawalRequest,
+} from '@mohandishub/shared';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 
@@ -55,6 +59,24 @@ export const AdminWalletRailsTab = ({ dictionary, accessToken, refreshSession }:
   const [modalReason, setModalReason] = useState('');
   const [modalBusy, setModalBusy] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [liquidity, setLiquidity] = useState<AdminWalletFundingLiquidity | null>(null);
+  const [liquidityLoading, setLiquidityLoading] = useState(true);
+
+  const loadLiquidity = useCallback(async () => {
+    setLiquidityLoading(true);
+    try {
+      setLiquidity(
+        await adminApiClient.getWalletFundingLiquidity(
+          accessToken,
+          refreshSession ? { refreshSession } : {},
+        ),
+      );
+    } catch {
+      setLiquidity(null);
+    } finally {
+      setLiquidityLoading(false);
+    }
+  }, [accessToken, refreshSession]);
 
   const loadDeposits = useCallback(async () => {
     setDepLoading(true);
@@ -103,6 +125,10 @@ export const AdminWalletRailsTab = ({ dictionary, accessToken, refreshSession }:
   useEffect(() => {
     void loadWithdrawals();
   }, [loadWithdrawals]);
+
+  useEffect(() => {
+    void loadLiquidity();
+  }, [loadLiquidity]);
 
   const depTotalPages = depData ? Math.max(1, Math.ceil(depData.total / LIMIT)) : 1;
   const wTotalPages = wData ? Math.max(1, Math.ceil(wData.total / LIMIT)) : 1;
@@ -243,6 +269,77 @@ export const AdminWalletRailsTab = ({ dictionary, accessToken, refreshSession }:
   return (
     <>
       <h2 className="admin-settings-title">{d.title}</h2>
+
+      <section className="admin-settings-section" style={{ marginTop: '1.5rem' }}>
+        <h3 className="admin-settings-section-title">
+          {tr('Funding liquidity', 'سيولة مصادر التمويل')}
+        </h3>
+        {liquidityLoading ? (
+          <p className="admin-empty">{tr('Loading...', 'جارٍ التحميل...')}</p>
+        ) : liquidity ? (
+          <>
+            <div className="admin-stats-grid">
+              <div className="admin-stat-card">
+                <p className="admin-stat-label">
+                  {tr('Crypto-backed liability', 'رصيد مدعوم بالعملات الرقمية')}
+                </p>
+                <p className="admin-stat-value">
+                  {liquidity.liabilitiesEgp.crypto.toLocaleString()} EGP
+                </p>
+              </div>
+              <div className="admin-stat-card">
+                <p className="admin-stat-label">
+                  {tr('InstaPay-backed liability', 'رصيد مدعوم بإنستاباي')}
+                </p>
+                <p className="admin-stat-value">
+                  {liquidity.liabilitiesEgp.instapay.toLocaleString()} EGP
+                </p>
+              </div>
+              <div className="admin-stat-card">
+                <p className="admin-stat-label">
+                  {tr('Wallets needing reconciliation', 'محافظ تحتاج إلى تسوية')}
+                </p>
+                <p className="admin-stat-value">{liquidity.reviewRequiredWallets}</p>
+              </div>
+              <div className="admin-stat-card">
+                <p className="admin-stat-label">
+                  {tr('Pending crypto payouts', 'مدفوعات رقمية معلقة')}
+                </p>
+                <p className="admin-stat-value">
+                  {liquidity.pendingCryptoPayouts.length
+                    ? liquidity.pendingCryptoPayouts
+                        .map((row) => `${row.amount.toLocaleString()} ${row.currency}`)
+                        .join(' · ')
+                    : '0'}
+                </p>
+              </div>
+            </div>
+            <div className="admin-stat-card" style={{ marginTop: '0.75rem' }}>
+              <p className="admin-stat-label">
+                {tr('NOWPayments available balances', 'أرصدة NOWPayments المتاحة')}
+              </p>
+              <p className="admin-stat-value">
+                {liquidity.providerBalances
+                  ? Object.entries(liquidity.providerBalances)
+                      .map(
+                        ([currency, balance]) =>
+                          `${balance.amount.toLocaleString()} ${currency}${
+                            balance.pendingAmount
+                              ? ` (${balance.pendingAmount.toLocaleString()} pending)`
+                              : ''
+                          }`,
+                      )
+                      .join(' · ') || '0'
+                  : liquidity.providerBalanceError}
+              </p>
+            </div>
+          </>
+        ) : (
+          <p className="admin-empty">
+            {tr('Liquidity data is unavailable.', 'بيانات السيولة غير متاحة.')}
+          </p>
+        )}
+      </section>
 
       <section className="admin-settings-section" style={{ marginTop: '1.5rem' }}>
         <h3 className="admin-settings-section-title">{d.depositsTitle}</h3>

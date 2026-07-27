@@ -3,6 +3,7 @@
 // ---------------------------------------------------------------------------
 
 import type {
+  AdminBulkUserActionResult,
   AdminForceLogoutResponse,
   AdminDashboardStats,
   AdminServiceListItem,
@@ -10,6 +11,7 @@ import type {
   AdminUserDetail,
   AdminUserListItem,
   AdminUserOverview,
+  AdminWalletFundingLiquidity,
   AdminWalletFreezeResponse,
   ApiSuccessBody,
   AppSettings,
@@ -37,6 +39,7 @@ import { SupportService } from '../support/support.service.js';
 import { AdminService } from './admin.service.js';
 import type {
   AdjustBalanceInput,
+  BulkUserActionInput,
   ApproveManualInstapayDepositInput,
   ChangeUserEmailInput,
   ChangeUserRoleInput,
@@ -60,6 +63,7 @@ import type {
 import {
   adjustBalanceSchema,
   approveManualInstapayDepositSchema,
+  bulkUserActionSchema,
   changeUserEmailSchema,
   completeManualInstapayWithdrawalSchema,
   completePaymobWithdrawalSchema,
@@ -286,6 +290,41 @@ const getUserActivity = asyncHandler(async (req, res) => {
   const { page, limit } = parsePagination(req.query, { defaultLimit: 10, maxLimit: 50 });
   const result = await adminService.getUserActivity(req.params.id!, parsedType.data, page, limit);
   const response: ApiSuccessBody<typeof result> = { ok: true, data: result };
+  res.json(response);
+});
+
+const bulkUserAction = asyncHandler(async (req, res) => {
+  const input = parseValidation<BulkUserActionInput>(bulkUserActionSchema, req.body);
+  const walletAction = input.action === 'freeze_wallet' || input.action === 'unfreeze_wallet';
+  const requiredPermission = walletAction ? 'manage_transactions' : 'manage_users';
+  if (!hasPermission(req, requiredPermission)) {
+    throw new HttpError({
+      statusCode: 403,
+      code: 'FORBIDDEN',
+      message: `The ${requiredPermission} permission is required for this bulk action.`,
+    });
+  }
+  const result = await adminService.bulkUserAction(input, {
+    actorId: getAdminId(req),
+    actorIsSuperAdmin: hasPermission(req, 'super_admin'),
+  });
+  for (const item of result.items) {
+    await logAdminAction(req, `admin.user.bulk_item.${input.action}`, 'user', item.userId, {
+      operationId: input.operationId,
+      status: item.status,
+      code: item.code,
+      message: item.message,
+      planId: input.planId ?? null,
+    });
+  }
+  await logAdminAction(req, `admin.user.bulk.${input.action}`, 'bulk_user_operation', input.operationId, {
+    requestedCount: result.requestedCount,
+    succeededCount: result.succeededCount,
+    skippedCount: result.skippedCount,
+    failedCount: result.failedCount,
+    planId: input.planId ?? null,
+  });
+  const response: ApiSuccessBody<AdminBulkUserActionResult> = { ok: true, data: result };
   res.json(response);
 });
 
@@ -583,6 +622,12 @@ const adjustBalance = asyncHandler(async (req, res) => {
   });
   const response: ApiSuccessBody<Transaction> = { ok: true, data: txn };
   res.status(201).json(response);
+});
+
+const getWalletFundingLiquidity = asyncHandler(async (_req, res) => {
+  const liquidity = await adminService.getWalletFundingLiquidity();
+  const response: ApiSuccessBody<AdminWalletFundingLiquidity> = { ok: true, data: liquidity };
+  res.json(response);
 });
 
 const listManualInstapayDeposits = asyncHandler(async (req, res) => {
@@ -993,6 +1038,7 @@ export const adminController = {
   getUserDetail,
   getUserOverview,
   getUserActivity,
+  bulkUserAction,
   updateUser,
   updateUserExpertProfile,
   updateUserBusinessProfile,
@@ -1016,6 +1062,7 @@ export const adminController = {
   getPaymobReadiness,
   getTransactionDetail,
   adjustBalance,
+  getWalletFundingLiquidity,
   listManualInstapayDeposits,
   approveManualInstapayDeposit,
   rejectManualInstapayDeposit,

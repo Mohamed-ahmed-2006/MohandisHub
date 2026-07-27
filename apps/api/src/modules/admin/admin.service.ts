@@ -2,7 +2,10 @@
 // Admin service — business logic for admin operations
 // ---------------------------------------------------------------------------
 
+import { createHash } from 'node:crypto';
+
 import type {
+  AdminBulkUserActionResult,
   AdminBidActivityItem,
   AdminBookingActivityItem,
   AdminDashboardStats,
@@ -18,6 +21,7 @@ import type {
   AdminUserDetail,
   AdminUserListItem,
   AdminUserOverview,
+  AdminWalletFundingLiquidity,
   AdminWalletFreezeResponse,
   BusinessProfile,
   CraftsmanProfile,
@@ -33,6 +37,7 @@ import type {
 import { normalizeAdminPermissions, normalizePlanAllowedRoles } from '@mohandishub/shared';
 
 import { env } from '../../config/env.js';
+import { getPayoutBalances } from '../../lib/nowpayments.client.js';
 import { isPaymobDepositConfigured, isPaymobPayoutConfigured } from '../../lib/paymob.client.js';
 import { invalidateUserStatusCache } from '../../middleware/user-status-cache.js';
 import { HttpError } from '../../utils/http-error.js';
@@ -61,6 +66,7 @@ import type {
 } from './admin.types.js';
 import type {
   AdjustBalanceInput,
+  BulkUserActionInput,
   ChangeUserEmailInput,
   ChangeUserRoleInput,
   CompleteManualInstapayWithdrawalInput,
@@ -92,6 +98,55 @@ export class AdminService {
     private readonly walletService: WalletService = new WalletService(),
     private readonly notificationsService: NotificationsService = new NotificationsService(),
   ) {}
+
+  async getWalletFundingLiquidity(): Promise<AdminWalletFundingLiquidity> {
+    const snapshot = await this.repo.getWalletFundingLiquiditySnapshot();
+    const liabilitiesEgp: AdminWalletFundingLiquidity['liabilitiesEgp'] = {
+      crypto: 0,
+      instapay: 0,
+      paymob: 0,
+      card: 0,
+      restricted: 0,
+    };
+    for (const row of snapshot.liabilities) {
+      if (row.rail in liabilitiesEgp) {
+        liabilitiesEgp[row.rail as keyof typeof liabilitiesEgp] = Number(row.amount);
+      }
+    }
+
+    let providerBalances: AdminWalletFundingLiquidity['providerBalances'] = null;
+    let providerBalanceError: string | null = null;
+    if (!env.NOWPAYMENTS_API_KEY) {
+      providerBalanceError = 'NOWPayments API key is not configured.';
+    } else {
+      try {
+        const rawBalances = await getPayoutBalances(env.NOWPAYMENTS_API_KEY);
+        providerBalances = Object.fromEntries(
+          Object.entries(rawBalances).map(([currency, balance]) => [
+            currency.toUpperCase(),
+            {
+              amount: Number(balance.amount ?? 0),
+              pendingAmount: Number(balance.pendingAmount ?? 0),
+            },
+          ]),
+        );
+      } catch {
+        providerBalanceError = 'NOWPayments balances are temporarily unavailable.';
+      }
+    }
+
+    return {
+      liabilitiesEgp,
+      reviewRequiredWallets: snapshot.reviewRequiredWallets,
+      pendingCryptoPayouts: snapshot.pendingCryptoPayouts.map((row) => ({
+        currency: row.currency,
+        amount: Number(row.amount),
+      })),
+      providerBalances,
+      providerBalanceError,
+      checkedAt: new Date().toISOString(),
+    };
+  }
 
   async assertUserCanBeManaged(userId: string, actorIsSuperAdmin: boolean): Promise<void> {
     if (userId === PLATFORM_USER_ID) {
@@ -164,6 +219,186 @@ export class AdminService {
       limit,
       totalPages: Math.ceil(total / limit),
     };
+  }
+
+  async bulkUserAction(
+    input: BulkUserActionInput,
+    context: { actorId: string; actorIsSuperAdmin: boolean },
+  ): Promise<AdminBulkUserActionResult> {
+    const userIds = [...input.userIds].sort();
+    const payload = input.action === 'assign_plan' ? { planId: input.planId ?? null } : {};
+    const requestHash = createHash('sha256')
+      .update(JSON.stringify({ action: input.action, userIds, payload }))
+      .digest('hex');
+    const reservation = await this.repo.reserveBulkUserOperation({
+      operationId: input.operationId,
+      actorId: context.actorId,
+      action: input.action,
+      payload,
+      requestHash,
+      userIds,
+    });
+    if (reservation === 'conflict') {
+      throw new HttpError({
+        statusCode: 409,
+        code: 'BULK_OPERATION_ID_CONFLICT',
+        message: 'This bulk operation id was already used for a different request.',
+      });
+    }
+
+    let operation = await this.repo.getBulkUserOperation(input.operationId);
+    if (!operation) {
+      throw new HttpError({
+        statusCode: 500,
+        code: 'BULK_OPERATION_NOT_FOUND',
+        message: 'Bulk operation could not be loaded.',
+      });
+    }
+    if (operation.status === 'completed') return this.toBulkUserActionResult(operation);
+
+    for (const item of operation.items.filter(
+      (row) => row.status === 'pending' || row.status === 'processing',
+    )) {
+      const claimed = await this.repo.claimBulkUserOperationItem(input.operationId, item.user_id);
+      if (!claimed) continue;
+      let result: {
+        status: 'succeeded' | 'skipped' | 'failed';
+        code?: string | null;
+        message?: string | null;
+      };
+      try {
+        const target = await this.repo.getUserById(item.user_id);
+        if (!target) {
+          result = { status: 'failed', code: 'USER_NOT_FOUND', message: 'User not found.' };
+        } else {
+          await this.assertUserCanBeManaged(item.user_id, context.actorIsSuperAdmin);
+          if (
+            item.user_id === context.actorId &&
+            ['deactivate', 'soft_delete', 'force_logout'].includes(input.action)
+          ) {
+            throw new HttpError({
+              statusCode: 403,
+              code: 'SELF_ACCOUNT_ACTION_FORBIDDEN',
+              message: 'You cannot perform this account action on yourself.',
+            });
+          }
+
+          switch (input.action) {
+            case 'activate':
+              if (target.is_active) {
+                result = { status: 'skipped', code: 'ALREADY_ACTIVE', message: 'Already active.' };
+              } else {
+                await this.activateUser(item.user_id);
+                result = { status: 'succeeded' };
+              }
+              break;
+            case 'deactivate':
+              if (!target.is_active) {
+                result = {
+                  status: 'skipped',
+                  code: 'ALREADY_INACTIVE',
+                  message: 'Already inactive.',
+                };
+              } else {
+                await this.deactivateUser(item.user_id);
+                result = { status: 'succeeded' };
+              }
+              break;
+            case 'soft_delete':
+              await this.deleteUser(item.user_id);
+              result = { status: 'succeeded' };
+              break;
+            case 'force_logout':
+              await this.forceLogoutUser(item.user_id);
+              result = { status: 'succeeded' };
+              break;
+            case 'send_verification_email':
+              if (target.email_verified_at) {
+                result = {
+                  status: 'skipped',
+                  code: 'EMAIL_ALREADY_VERIFIED',
+                  message: 'Email is already verified.',
+                };
+              } else {
+                await this.sendVerificationEmail(item.user_id);
+                result = { status: 'succeeded' };
+              }
+              break;
+            case 'verify_email':
+              if (target.email_verified_at) {
+                result = {
+                  status: 'skipped',
+                  code: 'EMAIL_ALREADY_VERIFIED',
+                  message: 'Email is already verified.',
+                };
+              } else {
+                await this.verifyEmail(item.user_id);
+                result = { status: 'succeeded' };
+              }
+              break;
+            case 'freeze_wallet':
+            case 'unfreeze_wallet': {
+              const detail = await this.repo.getUserDetail(item.user_id);
+              if (detail?.wallet_frozen == null) {
+                result = {
+                  status: 'skipped',
+                  code: 'WALLET_NOT_FOUND',
+                  message: 'User has no wallet.',
+                };
+              } else {
+                const freeze = input.action === 'freeze_wallet';
+                if (detail.wallet_frozen === freeze) {
+                  result = {
+                    status: 'skipped',
+                    code: freeze ? 'WALLET_ALREADY_FROZEN' : 'WALLET_ALREADY_UNFROZEN',
+                    message: freeze ? 'Wallet is already frozen.' : 'Wallet is already unfrozen.',
+                  };
+                } else {
+                  if (freeze) await this.freezeUserWallet(item.user_id);
+                  else await this.unfreezeUserWallet(item.user_id);
+                  result = { status: 'succeeded' };
+                }
+              }
+              break;
+            }
+            case 'assign_plan':
+              if (target.plan_id === (input.planId ?? null)) {
+                result = {
+                  status: 'skipped',
+                  code: 'PLAN_ALREADY_ASSIGNED',
+                  message: 'The selected plan is already assigned.',
+                };
+              } else {
+                await this.updateUser(item.user_id, { planId: input.planId ?? null });
+                result = { status: 'succeeded' };
+              }
+              break;
+          }
+        }
+      } catch (error) {
+        result = {
+          status: 'failed',
+          code: error instanceof HttpError ? error.code : 'ACTION_FAILED',
+          message: error instanceof Error ? error.message : 'Bulk action failed.',
+        };
+      }
+      await this.repo.completeBulkUserOperationItem({
+        operationId: input.operationId,
+        userId: item.user_id,
+        ...result,
+      });
+    }
+
+    await this.repo.finishBulkUserOperation(input.operationId);
+    operation = await this.repo.getBulkUserOperation(input.operationId);
+    if (!operation) {
+      throw new HttpError({
+        statusCode: 500,
+        code: 'BULK_OPERATION_NOT_FOUND',
+        message: 'Bulk operation result could not be loaded.',
+      });
+    }
+    return this.toBulkUserActionResult(operation);
   }
 
   async listUserIds(filters: { role?: string; isActive?: boolean }): Promise<string[]> {
@@ -763,6 +998,7 @@ export class AdminService {
       input.amount,
       input.description ?? null,
       adminId,
+      input.fundingRail,
     );
     return this.toTransaction(row);
   }
@@ -1060,6 +1296,28 @@ export class AdminService {
     }
 
     throw error;
+  }
+
+  private toBulkUserActionResult(
+    operation: NonNullable<Awaited<ReturnType<AdminRepository['getBulkUserOperation']>>>,
+  ): AdminBulkUserActionResult {
+    return {
+      operationId: operation.id,
+      action: operation.action as AdminBulkUserActionResult['action'],
+      status: operation.status,
+      requestedCount: operation.requested_count,
+      succeededCount: operation.succeeded_count,
+      skippedCount: operation.skipped_count,
+      failedCount: operation.failed_count,
+      items: operation.items
+        .filter((item) => item.status !== 'pending' && item.status !== 'processing')
+        .map((item) => ({
+          userId: item.user_id,
+          status: item.status as 'succeeded' | 'skipped' | 'failed',
+          code: item.code,
+          message: item.message,
+        })),
+    };
   }
 
   private toUserListItem(row: UserListRow): AdminUserListItem {

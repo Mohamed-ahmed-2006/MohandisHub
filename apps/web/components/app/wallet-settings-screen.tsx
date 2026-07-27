@@ -85,6 +85,7 @@ export const WalletSettingsScreen = (_props: WalletSettingsScreenProps) => {
   const anyWithdrawMethod = showWithdrawCrypto || showWithdrawInstapay || showWithdrawPaymob;
   const currentWithdrawalLimit = appStatus?.withdrawalLimits?.[withdrawMethod];
   const currentMinWithdrawalAmount = currentWithdrawalLimit?.minAmountEgp ?? MIN_WITHDRAWAL_AMOUNT;
+  const currentRailAvailability = wallet?.withdrawalAvailability?.[withdrawMethod] ?? 0;
 
   const depositResult = useMemo(() => {
     const value = searchParams.get('deposit');
@@ -183,6 +184,19 @@ export const WalletSettingsScreen = (_props: WalletSettingsScreenProps) => {
       amount > currentWithdrawalLimit.maxAmountEgp
     ) {
       setWithdrawError(`Maximum withdrawal amount is ${currentWithdrawalLimit.maxAmountEgp}.`);
+      return;
+    }
+    if (amount > currentRailAvailability) {
+      const alternative =
+        withdrawMethod === 'crypto'
+          ? (wallet?.withdrawalAvailability.instapay ?? 0)
+          : (wallet?.withdrawalAvailability.crypto ?? 0);
+      setWithdrawError(
+        `You can withdraw up to ${currentRailAvailability.toFixed(2)} EGP via ${withdrawMethod === 'instapay' ? 'InstaPay' : withdrawMethod}.` +
+          (alternative > 0
+            ? ` Another ${alternative.toFixed(2)} EGP is available via ${withdrawMethod === 'crypto' ? 'InstaPay' : 'crypto'}.`
+            : ''),
+      );
       return;
     }
     if (withdrawMethod === 'crypto' && !withdrawAddress.trim()) {
@@ -398,6 +412,13 @@ export const WalletSettingsScreen = (_props: WalletSettingsScreenProps) => {
                       required
                     />
                   </label>
+                  <p className="wallet-settings-hint">
+                    Available via {withdrawMethod === 'instapay' ? 'InstaPay' : withdrawMethod}:{' '}
+                    {currentRailAvailability.toFixed(2)} EGP
+                    {wallet?.sourceReconciliationStatus === 'review_required'
+                      ? ' — withdrawals are paused pending wallet reconciliation.'
+                      : ''}
+                  </p>
 
                   {withdrawMethod === 'crypto' && showWithdrawCrypto && (
                     <>

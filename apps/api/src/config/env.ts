@@ -171,6 +171,7 @@ const envSchema = z.object({
   NOWPAYMENTS_WITHDRAWALS_ENABLED: booleanEnv(false),
   NOWPAYMENTS_MANUAL_PAYOUT_VERIFY: booleanEnv(false),
   NOWPAYMENTS_WITHDRAWAL_MIN_AMOUNT: z.coerce.number().positive().default(20),
+  NOWPAYMENTS_PAYOUT_LIQUIDITY_BUFFER_PERCENT: z.coerce.number().min(0).max(50).default(2),
   NOWPAYMENTS_WITHDRAWAL_DEFAULT_CURRENCY: z.string().default('USDTTRC20'),
   NOWPAYMENTS_ALLOWED_PAY_CURRENCIES: z.string().optional(),
   FX_RATE_MAX_AGE_HOURS: z.coerce.number().positive().max(168).default(24),

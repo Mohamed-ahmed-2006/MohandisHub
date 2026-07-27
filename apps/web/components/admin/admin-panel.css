@@ -285,6 +285,44 @@
   user-select: none;
 }
 
+.admin-bulk-toolbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+  margin: 0 0 1rem;
+  padding: 0.75rem;
+  border: 1px solid hsl(var(--primary) / 0.25);
+  border-radius: var(--radius-lg);
+  background: hsl(var(--primary) / 0.06);
+}
+
+.admin-bulk-limit {
+  color: hsl(var(--text-soft));
+  font-size: 0.75rem;
+}
+
+.admin-bulk-result {
+  margin: 0 0 1rem;
+  padding: 0.75rem 1rem;
+  border: 1px solid hsl(142 55% 72%);
+  border-radius: var(--radius-lg);
+  background: hsl(142 55% 95%);
+  color: hsl(142 55% 25%);
+  font-size: 0.85rem;
+}
+
+.admin-bulk-result--warning {
+  border-color: hsl(38 85% 72%);
+  background: hsl(38 85% 95%);
+  color: hsl(28 65% 28%);
+}
+
+.admin-bulk-result ul {
+  margin: 0.55rem 0 0;
+  padding-inline-start: 1.25rem;
+}
+
 .admin-toolbar-checkbox input {
   cursor: pointer;
 }

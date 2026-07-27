@@ -8,8 +8,22 @@ export type Wallet = {
   balance: number;
   currency: string;
   isFrozen: boolean;
+  sourceReconciliationStatus: WalletSourceReconciliationStatus;
+  withdrawalAvailability: WithdrawalAvailability;
   createdAt: string;
   updatedAt: string;
+};
+
+export type WalletFundingRail = 'crypto' | 'instapay' | 'paymob' | 'card' | 'restricted';
+
+export type WalletSourceReconciliationStatus = 'pending' | 'ready' | 'review_required';
+
+export type WalletFundingAllocation = Partial<Record<WalletFundingRail, number>>;
+
+export type WithdrawalAvailability = {
+  crypto: number;
+  instapay: number;
+  paymob: number;
 };
 
 export type TransactionType =
@@ -47,6 +61,7 @@ export type AdjustBalanceBody = {
   type: 'deposit' | 'withdrawal' | 'adjustment' | 'bonus';
   amount: number;
   description?: string;
+  fundingRail?: WalletFundingRail;
 };
 
 export type WalletHoldStatus = 'held' | 'released' | 'captured' | 'cancelled';

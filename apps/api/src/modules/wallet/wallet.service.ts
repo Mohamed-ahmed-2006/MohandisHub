@@ -22,6 +22,7 @@ import {
   estimatePrice,
   getAvailableCurrencies,
   getAvailableCurrenciesDetailed,
+  getPayoutBalances,
   NowPaymentsApiError,
   verifyNowPaymentsIpnSignature,
   verifyPayout,
@@ -42,6 +43,7 @@ import { SettingsService } from '../settings/settings.service.js';
 
 import { WalletFxService } from './wallet-fx.service.js';
 import {
+  WalletFundingError,
   WalletRepository,
   type DepositRequestRow,
   type TransactionRow,
@@ -114,7 +116,16 @@ export class WalletService {
     if (!row) {
       row = await this.repo.createForUser(userId);
     }
-    return this.toWallet(row);
+    const availability =
+      typeof this.repo.getWithdrawalAvailability === 'function'
+        ? await this.repo.getWithdrawalAvailability(userId)
+        : {
+            crypto: 0,
+            instapay: 0,
+            paymob: 0,
+            sourceReconciliationStatus: 'ready' as const,
+          };
+    return this.toWallet(row, availability);
   }
 
   async getTransactions(
@@ -1262,10 +1273,40 @@ export class WalletService {
     }
 
     const started = await this.tryStartPayout(created);
+    if (started.status === 'blocked') {
+      throw new HttpError({
+        statusCode: 503,
+        code: 'CRYPTO_TREASURY_UNAVAILABLE',
+        message:
+          started.provider_error ||
+          'Crypto withdrawals are temporarily unavailable because platform liquidity could not be confirmed.',
+      });
+    }
     return this.toWithdrawalRequest(started);
   }
 
   private rethrowWalletCreateErrors(error: unknown): never {
+    if (error instanceof WalletFundingError) {
+      if (error.code === 'SOURCE_RECONCILIATION_REQUIRED') {
+        throw new HttpError({
+          statusCode: 409,
+          code: error.code,
+          message: 'Wallet funding sources require finance review before withdrawals.',
+        });
+      }
+      throw new HttpError({
+        statusCode: 400,
+        code: error.code,
+        message:
+          error.rail === 'crypto'
+            ? `You can withdraw up to ${error.availableAmountEgp.toFixed(2)} EGP via crypto. Withdraw the remaining eligible balance via InstaPay.`
+            : `You can withdraw up to ${error.availableAmountEgp.toFixed(2)} EGP via ${error.rail ?? 'this method'}.`,
+        details: {
+          rail: error.rail,
+          availableAmountEgp: error.availableAmountEgp,
+        },
+      });
+    }
     const message = error instanceof Error ? error.message : '';
     if (message === 'INSUFFICIENT_BALANCE') {
       throw new HttpError({
@@ -1718,6 +1759,7 @@ export class WalletService {
     }
 
     try {
+      await this.assertCryptoTreasuryLiquidity(row);
       const jwt = await this.getPayoutJwtToken();
       const verifyResult = await verifyPayout(
         env.NOWPAYMENTS_API_KEY,
@@ -1895,43 +1937,44 @@ export class WalletService {
     }
 
     try {
-      const jwt = await this.getPayoutJwtToken();
-      const apiBase = (env.API_PUBLIC_URL || `http://localhost:${env.PORT}`).replace(/\/$/, '');
-      const payoutResult = await createPayout(env.NOWPAYMENTS_API_KEY, jwt, {
-        payout_description: `Freelancer withdrawal ${row.id}`,
-        ipn_callback_url: `${apiBase}/api/wallet/nowpayments/ipn`,
-        withdrawals: [
-          {
-            address: row.payout_address,
-            currency: row.currency,
-            amount:
-              row.payout_crypto_amount != null && String(row.payout_crypto_amount).length > 0
-                ? parseFloat(row.payout_crypto_amount)
-                : parseFloat(row.amount),
-            ...(row.payout_extra_id ? { extra_id: row.payout_extra_id } : {}),
-          },
-        ],
-      });
+      return await this.repo.withCryptoPayoutCurrencyLock(row.currency, async () => {
+        const payoutAmount = await this.assertCryptoTreasuryLiquidity(row);
+        const jwt = await this.getPayoutJwtToken();
+        const apiBase = (env.API_PUBLIC_URL || `http://localhost:${env.PORT}`).replace(/\/$/, '');
+        const payoutResult = await createPayout(env.NOWPAYMENTS_API_KEY!, jwt, {
+          payout_description: `Freelancer withdrawal ${row.id}`,
+          ipn_callback_url: `${apiBase}/api/wallet/nowpayments/ipn`,
+          withdrawals: [
+            {
+              address: row.payout_address!,
+              currency: row.currency,
+              amount: payoutAmount,
+              ...(row.payout_extra_id ? { extra_id: row.payout_extra_id } : {}),
+            },
+          ],
+        });
 
-      const firstWithdrawal = payoutResult.withdrawals?.[0];
-      const batchWithdrawalId =
-        this.toStringOrNull(payoutResult.batch_withdrawal_id) ||
-        this.toStringOrNull(firstWithdrawal?.batch_withdrawal_id) ||
-        this.toStringOrNull(payoutResult.id);
-      const providerWithdrawalId =
-        this.toStringOrNull(payoutResult.withdrawal_id) || this.toStringOrNull(firstWithdrawal?.id);
-      const providerStatus =
-        this.toStringOrNull(firstWithdrawal?.status) || this.toStringOrNull(payoutResult.status);
+        const firstWithdrawal = payoutResult.withdrawals?.[0];
+        const batchWithdrawalId =
+          this.toStringOrNull(payoutResult.batch_withdrawal_id) ||
+          this.toStringOrNull(firstWithdrawal?.batch_withdrawal_id) ||
+          this.toStringOrNull(payoutResult.id);
+        const providerWithdrawalId =
+          this.toStringOrNull(payoutResult.withdrawal_id) ||
+          this.toStringOrNull(firstWithdrawal?.id);
+        const providerStatus =
+          this.toStringOrNull(firstWithdrawal?.status) || this.toStringOrNull(payoutResult.status);
 
-      const updated = await this.repo.setWithdrawalAfterPayoutCreate({
-        withdrawalId: row.id,
-        batchWithdrawalId,
-        providerWithdrawalId,
-        providerStatus,
-        providerPayload: payoutResult as unknown as Record<string, unknown>,
-        status: 'processing',
+        const updated = await this.repo.setWithdrawalAfterPayoutCreate({
+          withdrawalId: row.id,
+          batchWithdrawalId,
+          providerWithdrawalId,
+          providerStatus,
+          providerPayload: payoutResult as unknown as Record<string, unknown>,
+          status: 'processing',
+        });
+        return updated ?? row;
       });
-      return updated ?? row;
     } catch (error) {
       const is403 = error instanceof NowPaymentsApiError && error.status === 403;
       const blockedParams: {
@@ -1956,6 +1999,39 @@ export class WalletService {
       });
       return blocked ?? row;
     }
+  }
+
+  private async assertCryptoTreasuryLiquidity(row: WithdrawalRequestRow): Promise<number> {
+    if (!env.NOWPAYMENTS_API_KEY) {
+      throw new HttpError({
+        statusCode: 503,
+        code: 'CRYPTO_TREASURY_UNAVAILABLE',
+        message: 'NOWPayments API key is missing.',
+      });
+    }
+    const payoutAmount =
+      row.payout_crypto_amount != null && String(row.payout_crypto_amount).length > 0
+        ? parseFloat(row.payout_crypto_amount)
+        : parseFloat(row.amount);
+    const balances = await getPayoutBalances(env.NOWPAYMENTS_API_KEY);
+    const balanceEntry = Object.entries(balances).find(
+      ([currency]) => currency.toUpperCase() === row.currency.toUpperCase(),
+    )?.[1];
+    const settledBalance = Number(balanceEntry?.amount);
+    const requiredBalance =
+      payoutAmount * (1 + env.NOWPAYMENTS_PAYOUT_LIQUIDITY_BUFFER_PERCENT / 100);
+    if (!Number.isFinite(settledBalance) || settledBalance < requiredBalance) {
+      throw new HttpError({
+        statusCode: 503,
+        code: 'CRYPTO_TREASURY_INSUFFICIENT',
+        message: `Crypto payout liquidity is temporarily insufficient for ${row.currency}.`,
+        details: {
+          currency: row.currency,
+          requiredAmount: requiredBalance,
+        },
+      });
+    }
+    return payoutAmount;
   }
 
   private async getPayoutJwtToken(): Promise<string> {
@@ -2057,13 +2133,22 @@ export class WalletService {
     }, obj);
   }
 
-  private toWallet(row: WalletRow): Wallet {
+  private toWallet(
+    row: WalletRow,
+    availability: Awaited<ReturnType<WalletRepository['getWithdrawalAvailability']>>,
+  ): Wallet {
     return {
       id: row.id,
       userId: row.user_id,
       balance: parseFloat(row.balance),
       currency: 'EGP',
       isFrozen: row.is_frozen,
+      sourceReconciliationStatus: availability.sourceReconciliationStatus,
+      withdrawalAvailability: {
+        crypto: availability.crypto,
+        instapay: availability.instapay,
+        paymob: availability.paymob,
+      },
       createdAt: row.created_at,
       updatedAt: row.updated_at,
     };

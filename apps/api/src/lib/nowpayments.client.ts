@@ -88,6 +88,14 @@ type NowPaymentsEstimateResponse = {
   rate?: number | string;
 };
 
+export type NowPaymentsBalanceResponse = Record<
+  string,
+  {
+    amount?: number | string;
+    pendingAmount?: number | string;
+  }
+>;
+
 export class NowPaymentsApiError extends Error {
   status: number;
   payload: unknown;
@@ -240,6 +248,19 @@ export async function createPayout(
   });
   const body = (await parseJsonSafe(res)) as NowPaymentsCreatePayoutResponse | null;
   if (!res.ok || !body) {
+    throw new NowPaymentsApiError(res.status, body);
+  }
+  return body;
+}
+
+export async function getPayoutBalances(apiKey: string): Promise<NowPaymentsBalanceResponse> {
+  const normalized = normalizeNowPaymentsApiKey(apiKey);
+  const res = await fetchWithTimeout(`${NOWPAYMENTS_BASE}/balance`, {
+    method: 'GET',
+    headers: { 'x-api-key': normalized },
+  });
+  const body = (await parseJsonSafe(res)) as NowPaymentsBalanceResponse | null;
+  if (!res.ok || !body || typeof body !== 'object') {
     throw new NowPaymentsApiError(res.status, body);
   }
   return body;

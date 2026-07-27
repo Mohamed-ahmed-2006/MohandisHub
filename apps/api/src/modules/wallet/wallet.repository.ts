@@ -2,11 +2,31 @@
 // Wallet repository — database access layer
 // ---------------------------------------------------------------------------
 
+import type { WalletFundingAllocation, WalletFundingRail } from '@mohandishub/shared';
 import type { Pool, PoolClient } from 'pg';
 
 import { getPool } from '../../db/pool.js';
 
+import {
+  computeSpendAllocation,
+  WALLET_FUNDING_RAILS,
+} from './wallet-funding.js';
+
 const PLATFORM_USER_ID = '00000000-0000-0000-0000-000000000001';
+const FUNDING_RAILS = WALLET_FUNDING_RAILS;
+
+export class WalletFundingError extends Error {
+  constructor(
+    public readonly code:
+      | 'SOURCE_RECONCILIATION_REQUIRED'
+      | 'INSUFFICIENT_WITHDRAWABLE_BALANCE',
+    public readonly rail: WalletFundingRail | null,
+    public readonly availableAmountEgp: number,
+  ) {
+    super(code);
+    this.name = 'WalletFundingError';
+  }
+}
 
 type WalletRow = {
   id: string;
@@ -125,6 +145,7 @@ type WalletHoldRow = {
   reference_type: string;
   reference_id: string | null;
   metadata: Record<string, unknown>;
+  funding_allocations: WalletFundingAllocation;
   created_at: string;
   updated_at: string;
   released_at: string | null;
@@ -134,6 +155,21 @@ type WalletHoldRow = {
 export class WalletRepository {
   private get db(): Pool {
     return getPool();
+  }
+
+  async withCryptoPayoutCurrencyLock<T>(
+    currency: string,
+    operation: () => Promise<T>,
+  ): Promise<T> {
+    const client = await this.db.connect();
+    const lockKey = `wallet-crypto-payout:${currency.toUpperCase()}`;
+    try {
+      await client.query(`SELECT pg_advisory_lock(hashtext($1))`, [lockKey]);
+      return await operation();
+    } finally {
+      await client.query(`SELECT pg_advisory_unlock(hashtext($1))`, [lockKey]).catch(() => {});
+      client.release();
+    }
   }
 
   private splitReferenceId(referenceId: string | null): {
@@ -146,6 +182,266 @@ export class WalletRepository {
       return { validReferenceId: referenceId, metadata: {} };
     }
     return { validReferenceId: null, metadata: { original_reference_id: referenceId } };
+  }
+
+  private toCents(value: number): number {
+    return Math.round((value + Number.EPSILON) * 100);
+  }
+
+  private fromCents(value: number): number {
+    return value / 100;
+  }
+
+  private normalizeAllocation(input: WalletFundingAllocation): WalletFundingAllocation {
+    const normalized: WalletFundingAllocation = {};
+    for (const rail of FUNDING_RAILS) {
+      const value = input[rail] ?? 0;
+      if (Number.isFinite(value) && this.toCents(value) > 0) {
+        normalized[rail] = this.fromCents(this.toCents(value));
+      }
+    }
+    return normalized;
+  }
+
+  private scaleAllocation(
+    source: WalletFundingAllocation,
+    targetAmount: number,
+  ): WalletFundingAllocation {
+    const targetCents = this.toCents(targetAmount);
+    const entries = FUNDING_RAILS.map((rail) => ({
+      rail,
+      cents: this.toCents(source[rail] ?? 0),
+    })).filter((entry) => entry.cents > 0);
+    const totalCents = entries.reduce((sum, entry) => sum + entry.cents, 0);
+    if (targetCents <= 0 || totalCents <= 0) return {};
+
+    const shares = entries.map((entry) => {
+      const exact = (entry.cents * targetCents) / totalCents;
+      const base = Math.floor(exact);
+      return { ...entry, base, remainder: exact - base };
+    });
+    let remaining = targetCents - shares.reduce((sum, entry) => sum + entry.base, 0);
+    shares.sort(
+      (a, b) =>
+        b.remainder - a.remainder || FUNDING_RAILS.indexOf(a.rail) - FUNDING_RAILS.indexOf(b.rail),
+    );
+    for (const share of shares) {
+      if (remaining <= 0) break;
+      share.base += 1;
+      remaining -= 1;
+    }
+    const result: WalletFundingAllocation = {};
+    for (const share of shares) {
+      if (share.base > 0) result[share.rail] = this.fromCents(share.base);
+    }
+    return result;
+  }
+
+  private async ensureFundingRowsInTransaction(
+    client: PoolClient,
+    walletId: string,
+    userId: string,
+  ): Promise<void> {
+    await client.query(
+      `INSERT INTO wallet_fund_balances (wallet_id, user_id, rail, amount)
+       SELECT $1, $2, rail, 0
+       FROM (VALUES ('crypto'), ('instapay'), ('paymob'), ('card'), ('restricted')) AS rails(rail)
+       ON CONFLICT (wallet_id, rail) DO NOTHING`,
+      [walletId, userId],
+    );
+    await client.query(
+      `UPDATE wallets
+       SET source_reconciliation_status = 'ready',
+           source_reconciled_at = COALESCE(source_reconciled_at, now())
+       WHERE id = $1
+         AND balance = 0
+         AND source_reconciliation_status = 'pending'`,
+      [walletId],
+    );
+  }
+
+  private async allocateFundingInTransaction(
+    client: PoolClient,
+    walletId: string,
+    userId: string,
+    amount: number,
+    onlyRail?: WalletFundingRail,
+  ): Promise<WalletFundingAllocation> {
+    await this.ensureFundingRowsInTransaction(client, walletId, userId);
+    const { rows: walletRows } = await client.query<{
+      source_reconciliation_status: string;
+    }>(
+      `SELECT source_reconciliation_status
+       FROM wallets
+       WHERE id = $1
+       FOR UPDATE`,
+      [walletId],
+    );
+    if (walletRows[0]?.source_reconciliation_status !== 'ready') {
+      throw new WalletFundingError('SOURCE_RECONCILIATION_REQUIRED', onlyRail ?? null, 0);
+    }
+
+    const { rows } = await client.query<{ rail: WalletFundingRail; amount: string }>(
+      `SELECT rail, amount::text
+       FROM wallet_fund_balances
+       WHERE wallet_id = $1
+       FOR UPDATE`,
+      [walletId],
+    );
+    const byRail: Partial<Record<WalletFundingRail, number>> = {};
+    for (const row of rows) byRail[row.rail] = parseFloat(row.amount);
+    const computed = computeSpendAllocation(byRail, amount, onlyRail);
+    if (!computed.sufficient) {
+      throw new WalletFundingError(
+        'INSUFFICIENT_WITHDRAWABLE_BALANCE',
+        onlyRail ?? null,
+        computed.availableAmountEgp,
+      );
+    }
+
+    for (const [rail, take] of Object.entries(computed.allocation) as Array<
+      [WalletFundingRail, number]
+    >) {
+      await client.query(
+        `UPDATE wallet_fund_balances
+         SET amount = amount - $3, updated_at = now()
+         WHERE wallet_id = $1 AND rail = $2`,
+        [walletId, rail, take],
+      );
+    }
+    return computed.allocation;
+  }
+
+  private async recordFundingMovementsInTransaction(
+    client: PoolClient,
+    params: {
+      walletId: string;
+      userId: string;
+      allocation: WalletFundingAllocation;
+      sign: 1 | -1;
+      reason: string;
+      transactionId?: string | null;
+      holdId?: string | null;
+      eventKey?: string | null;
+      metadata?: Record<string, unknown>;
+    },
+  ): Promise<void> {
+    for (const [rail, amount] of Object.entries(this.normalizeAllocation(params.allocation)) as Array<
+      [WalletFundingRail, number]
+    >) {
+      await client.query(
+        `INSERT INTO wallet_fund_movements (
+           wallet_id, user_id, rail, amount_delta, transaction_id, hold_id,
+           reason, event_key, metadata
+         )
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb)
+         ON CONFLICT (wallet_id, event_key, rail) WHERE event_key IS NOT NULL DO NOTHING`,
+        [
+          params.walletId,
+          params.userId,
+          rail,
+          amount * params.sign,
+          params.transactionId ?? null,
+          params.holdId ?? null,
+          params.reason,
+          params.eventKey ?? null,
+          JSON.stringify(params.metadata ?? {}),
+        ],
+      );
+    }
+  }
+
+  private async creditFundingInTransaction(
+    client: PoolClient,
+    params: {
+      walletId: string;
+      userId: string;
+      allocation: WalletFundingAllocation;
+      reason: string;
+      transactionId?: string | null;
+      holdId?: string | null;
+      eventKey?: string | null;
+      metadata?: Record<string, unknown>;
+    },
+  ): Promise<void> {
+    await this.ensureFundingRowsInTransaction(client, params.walletId, params.userId);
+    for (const [rail, amount] of Object.entries(
+      this.normalizeAllocation(params.allocation),
+    ) as Array<[WalletFundingRail, number]>) {
+      await client.query(
+        `UPDATE wallet_fund_balances
+         SET amount = amount + $3, updated_at = now()
+         WHERE wallet_id = $1 AND rail = $2`,
+        [params.walletId, rail, amount],
+      );
+    }
+    await this.recordFundingMovementsInTransaction(client, {
+      ...params,
+      sign: 1,
+    });
+  }
+
+  private railForDepositProvider(provider: string, referenceType: string): WalletFundingRail {
+    if (provider === 'instapay_manual' || referenceType === 'instapay_manual') return 'instapay';
+    if (provider === 'paymob' || referenceType === 'paymob') return 'paymob';
+    if (provider === 'stripe' || referenceType === 'stripe') return 'card';
+    if (
+      provider === 'nowpayments' ||
+      provider === 'cryptomus' ||
+      referenceType === 'nowpayments' ||
+      referenceType === 'cryptomus'
+    ) {
+      return 'crypto';
+    }
+    return 'restricted';
+  }
+
+  private async resolveInheritedFundingInTransaction(
+    client: PoolClient,
+    referenceType: string,
+    referenceId: string | null,
+    amount: number,
+  ): Promise<WalletFundingAllocation> {
+    if (!referenceId) return { restricted: amount };
+    const { rows } = await client.query<{ rail: WalletFundingRail; amount: string }>(
+      `WITH source_tx AS (
+         SELECT id
+         FROM transactions
+         WHERE reference_type = $1
+           AND balance_delta < 0
+           AND (
+             reference_id::text = $2
+             OR metadata->>'original_reference_id' = $2
+           )
+         ORDER BY created_at DESC, id DESC
+         LIMIT 1
+       )
+       SELECT m.rail, SUM(ABS(m.amount_delta))::text AS amount
+       FROM wallet_fund_movements m
+       JOIN source_tx s ON s.id = m.transaction_id
+       WHERE m.amount_delta < 0
+       GROUP BY m.rail`,
+      [referenceType, referenceId],
+    );
+    if (rows.length > 0) {
+      const source: WalletFundingAllocation = {};
+      for (const row of rows) source[row.rail] = parseFloat(row.amount);
+      return this.scaleAllocation(source, amount);
+    }
+
+    const { rows: holdRows } = await client.query<{ funding_allocations: WalletFundingAllocation }>(
+      `SELECT funding_allocations
+       FROM wallet_holds
+       WHERE reference_type = $1
+         AND reference_id::text = $2
+       ORDER BY created_at DESC, id DESC
+       LIMIT 1`,
+      [referenceType, referenceId],
+    );
+    const holdAllocation = holdRows[0]?.funding_allocations;
+    return holdAllocation && Object.keys(holdAllocation).length > 0
+      ? this.scaleAllocation(holdAllocation, amount)
+      : { restricted: amount };
   }
 
   private depositSelectColumns = `id, user_id, wallet_id, amount::text, currency, order_id, cryptomus_uuid, status,
@@ -174,6 +470,66 @@ export class WalletRepository {
     return rows[0] ?? null;
   }
 
+  async getWithdrawalAvailability(userId: string): Promise<{
+    crypto: number;
+    instapay: number;
+    paymob: number;
+    sourceReconciliationStatus: 'pending' | 'ready' | 'review_required';
+  }> {
+    const client = await this.db.connect();
+    try {
+      await client.query('BEGIN');
+      const { rows: walletRows } = await client.query<{
+        id: string;
+        balance: string;
+        source_reconciliation_status: 'pending' | 'ready' | 'review_required';
+      }>(
+        `SELECT id, balance::text, source_reconciliation_status
+         FROM wallets
+         WHERE user_id = $1
+         FOR UPDATE`,
+        [userId],
+      );
+      const wallet = walletRows[0];
+      if (!wallet) {
+        await client.query('ROLLBACK');
+        return {
+          crypto: 0,
+          instapay: 0,
+          paymob: 0,
+          sourceReconciliationStatus: 'pending',
+        };
+      }
+      await this.ensureFundingRowsInTransaction(client, wallet.id, userId);
+      const { rows } = await client.query<{ rail: WalletFundingRail; amount: string }>(
+        `SELECT rail, amount::text
+         FROM wallet_fund_balances
+         WHERE wallet_id = $1`,
+        [wallet.id],
+      );
+      const amounts = new Map(rows.map((row) => [row.rail, parseFloat(row.amount)]));
+      const { rows: statusRows } = await client.query<{
+        source_reconciliation_status: 'pending' | 'ready' | 'review_required';
+      }>(
+        `SELECT source_reconciliation_status FROM wallets WHERE id = $1`,
+        [wallet.id],
+      );
+      await client.query('COMMIT');
+      return {
+        crypto: amounts.get('crypto') ?? 0,
+        instapay: amounts.get('instapay') ?? 0,
+        paymob: amounts.get('paymob') ?? 0,
+        sourceReconciliationStatus:
+          statusRows[0]?.source_reconciliation_status ?? wallet.source_reconciliation_status,
+      };
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
   /** Sum of completed deposit transaction amounts for the user (for verification badge). */
   async getTotalDeposited(userId: string): Promise<number> {
     const { rows } = await this.db.query<{ sum: string }>(
@@ -186,13 +542,24 @@ export class WalletRepository {
   }
 
   async createForUser(userId: string): Promise<WalletRow> {
-    const { rows } = await this.db.query<WalletRow>(
-      `INSERT INTO wallets (user_id, currency) VALUES ($1, 'EGP')
-       ON CONFLICT (user_id) DO UPDATE SET user_id = wallets.user_id
-       RETURNING id, user_id, balance::text, currency, is_frozen, created_at, updated_at`,
-      [userId],
-    );
-    return rows[0]!;
+    const client = await this.db.connect();
+    try {
+      await client.query('BEGIN');
+      const { rows } = await client.query<WalletRow>(
+        `INSERT INTO wallets (user_id, currency) VALUES ($1, 'EGP')
+         ON CONFLICT (user_id) DO UPDATE SET user_id = wallets.user_id
+         RETURNING id, user_id, balance::text, currency, is_frozen, created_at, updated_at`,
+        [userId],
+      );
+      await this.ensureFundingRowsInTransaction(client, rows[0]!.id, userId);
+      await client.query('COMMIT');
+      return rows[0]!;
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
   }
 
   async getOrCreateUserWalletInTransaction(client: PoolClient, userId: string): Promise<WalletRow> {
@@ -202,6 +569,7 @@ export class WalletRepository {
        RETURNING id, user_id, balance::text, currency, is_frozen, created_at, updated_at`,
       [userId],
     );
+    await this.ensureFundingRowsInTransaction(client, rows[0]!.id, userId);
     return rows[0]!;
   }
 
@@ -582,6 +950,14 @@ export class WalletRepository {
           params.adminId,
         ],
       );
+      await this.creditFundingInTransaction(client, {
+        walletId: deposit.wallet_id,
+        userId: deposit.user_id,
+        allocation: { instapay: amount },
+        reason: 'InstaPay deposit approved',
+        transactionId: txIns[0]!.id,
+        eventKey: `deposit:${deposit.id}`,
+      });
       await client.query(
         `UPDATE deposit_requests
          SET status = 'paid', paid_at = now(), reviewed_by = $2, reviewed_at = now(),
@@ -734,6 +1110,19 @@ export class WalletRepository {
           metadata,
         ],
       );
+      const fundingRail = this.railForDepositProvider(deposit.provider, params.referenceType);
+      await this.creditFundingInTransaction(client, {
+        walletId: deposit.wallet_id,
+        userId: deposit.user_id,
+        allocation: { [fundingRail]: amount },
+        reason: `${fundingRail} deposit settled`,
+        transactionId: txIns[0]!.id,
+        eventKey: `deposit:${deposit.id}`,
+        metadata: {
+          provider: deposit.provider,
+          provider_status: params.providerStatus,
+        },
+      });
       await client.query(
         `UPDATE deposit_requests
          SET status = 'paid', paid_at = now(), credited_amount_egp = $2, credited_transaction_id = $3, updated_at = now()
@@ -820,9 +1209,10 @@ export class WalletRepository {
         }
       }
 
-      await client.query(
+      const { rows: transactionRows } = await client.query<{ id: string }>(
         `INSERT INTO transactions (wallet_id, user_id, type, amount, balance_delta, balance_after, status, description, reference_type, reference_id, metadata)
-         VALUES ($1, $2, $3, $4, $4, $5, 'completed', $6, $7, $8, $9)`,
+         VALUES ($1, $2, $3, $4, $4, $5, 'completed', $6, $7, $8, $9)
+         RETURNING id`,
         [
           walletId,
           userId,
@@ -835,6 +1225,22 @@ export class WalletRepository {
           extraMetadata,
         ],
       );
+      const allocation =
+        txType === 'deposit'
+          ? { [this.railForDepositProvider(referenceType, referenceType)]: amount }
+          : await this.resolveInheritedFundingInTransaction(
+              client,
+              referenceType,
+              referenceId,
+              amount,
+            );
+      await this.creditFundingInTransaction(client, {
+        walletId,
+        userId,
+        allocation,
+        reason: description,
+        transactionId: transactionRows[0]!.id,
+      });
       await client.query('COMMIT');
     } catch (e) {
       await client.query('ROLLBACK');
@@ -874,6 +1280,12 @@ export class WalletRepository {
         await client.query('ROLLBACK');
         throw new Error('INSUFFICIENT_BALANCE');
       }
+      const fundingAllocation = await this.allocateFundingInTransaction(
+        client,
+        walletId,
+        userId,
+        amount,
+      );
       const balanceAfter = currentBalance - amount;
       await client.query(`UPDATE wallets SET balance = balance - $1 WHERE id = $2`, [
         amount,
@@ -906,6 +1318,14 @@ export class WalletRepository {
           extraMetadata,
         ],
       );
+      await this.recordFundingMovementsInTransaction(client, {
+        walletId,
+        userId,
+        allocation: fundingAllocation,
+        sign: -1,
+        reason: description,
+        transactionId: txRows[0]!.id,
+      });
       await client.query('COMMIT');
       return txRows[0]!.id;
     } catch (e) {
@@ -1007,7 +1427,9 @@ export class WalletRepository {
         `INSERT INTO wallets (user_id, currency) VALUES ($1, 'EGP') RETURNING id`,
         [receiverId],
       );
-      return ins.rows[0]!.id;
+      const walletId = ins.rows[0]!.id;
+      await this.ensureFundingRowsInTransaction(client, walletId, receiverId);
+      return walletId;
     }
     return rows[0]!.id;
   }
@@ -1035,6 +1457,12 @@ export class WalletRepository {
     if (lockRows[0]!.is_frozen) throw new Error('WALLET_FROZEN');
     const currentBalance = parseFloat(lockRows[0]!.balance);
     if (currentBalance < amount) throw new Error('INSUFFICIENT_BALANCE');
+    const fundingAllocation = await this.allocateFundingInTransaction(
+      client,
+      walletId,
+      userId,
+      amount,
+    );
     const balanceAfter = currentBalance - amount;
     await client.query(`UPDATE wallets SET balance = $1 WHERE id = $2`, [balanceAfter, walletId]);
 
@@ -1063,6 +1491,14 @@ export class WalletRepository {
         extraMetadata,
       ],
     );
+    await this.recordFundingMovementsInTransaction(client, {
+      walletId,
+      userId,
+      allocation: fundingAllocation,
+      sign: -1,
+      reason: description,
+      transactionId: txRows[0]!.id,
+    });
     return txRows[0]!.id;
   }
 
@@ -1095,9 +1531,10 @@ export class WalletRepository {
       }
     }
 
-    await client.query(
+    const { rows: transactionRows } = await client.query<{ id: string }>(
       `INSERT INTO transactions (wallet_id, user_id, type, amount, balance_delta, balance_after, status, description, reference_type, reference_id, metadata)
-       VALUES ($1, $2, $3, $4, $4, $5, 'completed', $6, $7, $8, $9)`,
+       VALUES ($1, $2, $3, $4, $4, $5, 'completed', $6, $7, $8, $9)
+       RETURNING id`,
       [
         walletId,
         userId,
@@ -1110,11 +1547,25 @@ export class WalletRepository {
         extraMetadata,
       ],
     );
+    const allocation = await this.resolveInheritedFundingInTransaction(
+      client,
+      referenceType,
+      referenceId,
+      amount,
+    );
+    await this.creditFundingInTransaction(client, {
+      walletId,
+      userId,
+      allocation,
+      reason: description,
+      transactionId: transactionRows[0]!.id,
+    });
   }
 
   async findWalletHoldById(id: string): Promise<WalletHoldRow | null> {
     const { rows } = await this.db.query<WalletHoldRow>(
-      `SELECT id, wallet_id, user_id, amount::text, currency, status, reference_type, reference_id, metadata,
+      `SELECT id, wallet_id, user_id, amount::text, currency, status, reference_type, reference_id,
+              metadata, funding_allocations,
               created_at, updated_at, released_at, captured_at
        FROM wallet_holds
        WHERE id = $1`,
@@ -1128,7 +1579,8 @@ export class WalletRepository {
     id: string,
   ): Promise<WalletHoldRow | null> {
     const { rows } = await client.query<WalletHoldRow>(
-      `SELECT id, wallet_id, user_id, amount::text, currency, status, reference_type, reference_id, metadata,
+      `SELECT id, wallet_id, user_id, amount::text, currency, status, reference_type, reference_id,
+              metadata, funding_allocations,
               created_at, updated_at, released_at, captured_at
        FROM wallet_holds
        WHERE id = $1
@@ -1156,13 +1608,27 @@ export class WalletRepository {
     if (lockRows[0]!.is_frozen) throw new Error('WALLET_FROZEN');
     const currentBalance = parseFloat(lockRows[0]!.balance);
     if (currentBalance < amount) throw new Error('INSUFFICIENT_BALANCE');
+    const requestedRail =
+      metadata.withdrawal_method === 'crypto' ||
+      metadata.withdrawal_method === 'instapay' ||
+      metadata.withdrawal_method === 'paymob'
+        ? (metadata.withdrawal_method as WalletFundingRail)
+        : undefined;
+    const fundingAllocation = await this.allocateFundingInTransaction(
+      client,
+      walletId,
+      userId,
+      amount,
+      requestedRail,
+    );
     const balanceAfter = currentBalance - amount;
 
     await client.query(`UPDATE wallets SET balance = $1 WHERE id = $2`, [balanceAfter, walletId]);
 
-    await client.query(
+    const { rows: transactionRows } = await client.query<{ id: string }>(
       `INSERT INTO transactions (wallet_id, user_id, type, amount, balance_delta, balance_after, status, description, reference_type, reference_id, metadata)
-       VALUES ($1, $2, 'hold', $3, -$3, $4, 'completed', $5, $6, $7, $8)`,
+       VALUES ($1, $2, 'hold', $3, -$3, $4, 'completed', $5, $6, $7, $8)
+       RETURNING id`,
       [
         walletId,
         userId,
@@ -1176,12 +1642,34 @@ export class WalletRepository {
     );
 
     const { rows } = await client.query<WalletHoldRow>(
-      `INSERT INTO wallet_holds (wallet_id, user_id, amount, currency, status, reference_type, reference_id, metadata)
-       VALUES ($1, $2, $3, $4, 'held', $5, $6, $7)
-       RETURNING id, wallet_id, user_id, amount::text, currency, status, reference_type, reference_id, metadata,
+      `INSERT INTO wallet_holds (
+         wallet_id, user_id, amount, currency, status, reference_type, reference_id,
+         metadata, funding_allocations
+       )
+       VALUES ($1, $2, $3, $4, 'held', $5, $6, $7, $8::jsonb)
+       RETURNING id, wallet_id, user_id, amount::text, currency, status, reference_type, reference_id,
+                 metadata, funding_allocations,
                  created_at, updated_at, released_at, captured_at`,
-      [walletId, userId, amount, currency, referenceType, referenceId, metadata],
+      [
+        walletId,
+        userId,
+        amount,
+        currency,
+        referenceType,
+        referenceId,
+        metadata,
+        JSON.stringify(fundingAllocation),
+      ],
     );
+    await this.recordFundingMovementsInTransaction(client, {
+      walletId,
+      userId,
+      allocation: fundingAllocation,
+      sign: -1,
+      reason: `Hold created for ${referenceType}`,
+      transactionId: transactionRows[0]!.id,
+      holdId: rows[0]!.id,
+    });
     return rows[0]!;
   }
 
@@ -1192,7 +1680,8 @@ export class WalletRepository {
     metadata: Record<string, unknown> = {},
   ): Promise<WalletHoldRow> {
     const { rows: holdRows } = await client.query<WalletHoldRow>(
-      `SELECT id, wallet_id, user_id, amount::text, currency, status, reference_type, reference_id, metadata,
+      `SELECT id, wallet_id, user_id, amount::text, currency, status, reference_type, reference_id,
+              metadata, funding_allocations,
               created_at, updated_at, released_at, captured_at
        FROM wallet_holds
        WHERE id = $1
@@ -1209,9 +1698,10 @@ export class WalletRepository {
     );
     const balanceAfter = parseFloat(walletRows[0]!.balance);
 
-    await client.query(
+    const { rows: transactionRows } = await client.query<{ id: string }>(
       `INSERT INTO transactions (wallet_id, user_id, type, amount, balance_delta, balance_after, status, description, reference_type, reference_id, metadata)
-       VALUES ($1, $2, 'release', $3, $3, $4, 'completed', $5, $6, $7, $8)`,
+       VALUES ($1, $2, 'release', $3, $3, $4, 'completed', $5, $6, $7, $8)
+       RETURNING id`,
       [
         hold.wallet_id,
         hold.user_id,
@@ -1223,12 +1713,21 @@ export class WalletRepository {
         metadata,
       ],
     );
+    await this.creditFundingInTransaction(client, {
+      walletId: hold.wallet_id,
+      userId: hold.user_id,
+      allocation: hold.funding_allocations,
+      reason,
+      transactionId: transactionRows[0]!.id,
+      holdId,
+    });
 
     const { rows } = await client.query<WalletHoldRow>(
       `UPDATE wallet_holds
        SET status = 'released', released_at = now(), updated_at = now(), metadata = metadata || $2::jsonb
        WHERE id = $1
-       RETURNING id, wallet_id, user_id, amount::text, currency, status, reference_type, reference_id, metadata,
+       RETURNING id, wallet_id, user_id, amount::text, currency, status, reference_type, reference_id,
+                 metadata, funding_allocations,
                  created_at, updated_at, released_at, captured_at`,
       [holdId, JSON.stringify(metadata)],
     );
@@ -1242,7 +1741,8 @@ export class WalletRepository {
     metadata: Record<string, unknown> = {},
   ): Promise<WalletHoldRow> {
     const { rows: holdRows } = await client.query<WalletHoldRow>(
-      `SELECT id, wallet_id, user_id, amount::text, currency, status, reference_type, reference_id, metadata,
+      `SELECT id, wallet_id, user_id, amount::text, currency, status, reference_type, reference_id,
+              metadata, funding_allocations,
               created_at, updated_at, released_at, captured_at
        FROM wallet_holds
        WHERE id = $1
@@ -1257,7 +1757,8 @@ export class WalletRepository {
       `UPDATE wallet_holds
        SET status = 'captured', captured_at = now(), updated_at = now(), metadata = metadata || $2::jsonb
        WHERE id = $1
-       RETURNING id, wallet_id, user_id, amount::text, currency, status, reference_type, reference_id, metadata,
+       RETURNING id, wallet_id, user_id, amount::text, currency, status, reference_type, reference_id,
+                 metadata, funding_allocations,
                  created_at, updated_at, released_at, captured_at`,
       [holdId, JSON.stringify({ ...metadata, capture_reason: reason })],
     );

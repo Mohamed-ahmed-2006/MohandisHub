@@ -1,5 +1,7 @@
 import type {
   AcademicRecord,
+  AdminBulkUserActionBody,
+  AdminBulkUserActionResult,
   AdminBidActivityItem,
   AdminBookingActivityItem,
   AdminChangeUserEmailBody,
@@ -20,6 +22,7 @@ import type {
   AdminUserDetail,
   AdminUserActivityType,
   AdminUserOverview,
+  AdminWalletFundingLiquidity,
   AdminWalletFreezeResponse,
   AdminUserListItem,
   AdjustBalanceBody,
@@ -244,6 +247,19 @@ export const adminApiClient = {
       ...(options?.refreshSession ? { refreshSession: options.refreshSession } : {}),
     });
   },
+
+  bulkUserAction: (
+    accessToken: string,
+    body: AdminBulkUserActionBody,
+    options?: AdminClientOptions,
+  ) =>
+    apiRequest<AdminBulkUserActionResult>({
+      method: 'POST',
+      path: '/api/admin/users/bulk-actions',
+      body,
+      accessToken,
+      ...(options?.refreshSession ? { refreshSession: options.refreshSession } : {}),
+    }),
 
   getUserDetail: (accessToken: string, userId: string, options?: AdminClientOptions) =>
     apiRequest<AdminUserDetail>({
@@ -774,6 +790,14 @@ export const adminApiClient = {
       method: 'POST',
       path: `/api/reservations/disputes/${disputeId}/resolve`,
       body,
+      accessToken,
+      ...(options?.refreshSession ? { refreshSession: options.refreshSession } : {}),
+    }),
+
+  getWalletFundingLiquidity: (accessToken: string, options?: AdminClientOptions) =>
+    apiRequest<AdminWalletFundingLiquidity>({
+      method: 'GET',
+      path: '/api/admin/wallet/funding-liquidity',
       accessToken,
       ...(options?.refreshSession ? { refreshSession: options.refreshSession } : {}),
     }),
