@@ -51,9 +51,8 @@ describe('Phase 5 database and storage hardening', () => {
   it('documents production backup, migration, storage, and Paymob operations', () => {
     const runbook = readFromRoot('docs/PRODUCTION_RUNBOOK.md');
 
-    expect(runbook).toContain(
-      'CONFIRM_PRODUCTION_MIGRATION=I_UNDERSTAND_RUN_PRODUCTION_MIGRATIONS',
-    );
+    expect(runbook).toContain('scripts/push-migrations.mjs` is staging-only');
+    expect(runbook).toContain('Production migration is a separate, explicitly approved');
     expect(runbook).toContain('Take a Supabase backup before production migrations');
     expect(runbook).toContain('Browser access to database tables is intentionally denied');
     expect(runbook).toContain('Paymob deposits and withdrawals are implemented');

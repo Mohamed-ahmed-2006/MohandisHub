@@ -38,8 +38,8 @@ import { WalletRepository } from '../wallet/wallet.repository.js';
 
 import {
   computeFixedReservationPayoutSplit,
+  computePartialReservationPayoutSplit,
   normalizeCustomDisputeSplit,
-  resolveReservationCommissionRates,
 } from './reservations.money.js';
 import { ReservationsRepository } from './reservations.repository.js';
 import type {
@@ -2684,7 +2684,9 @@ export class ReservationsService {
       }
 
       const now = new Date();
-      const policy = this.getPolicySnapshot(reservation);
+      const policy = reservation.fixed_price_hold_id
+        ? this.requireStoredPolicySnapshot(reservation)
+        : this.getPolicySnapshot(reservation);
       const priceAmount = this.getReservationFixedHoldAmount(reservation);
       let refundAmount = 0;
       let capturedAmount = 0;
@@ -3106,6 +3108,19 @@ export class ReservationsService {
         adminAcceptanceFee: toNumber(reservation.admin_acceptance_fee),
       })
     );
+  }
+
+  private requireStoredPolicySnapshot(reservation: ReservationRow): ReservationPolicySnapshot {
+    const snapshot = reservation.policy_snapshot as ReservationPolicySnapshot | null;
+    if (!snapshot || !snapshot.pricingBreakdown) {
+      throw new HttpError({
+        statusCode: 409,
+        code: 'LEGACY_RESERVATION_RECONCILIATION_REQUIRED',
+        message:
+          'This legacy reservation has no pricing snapshot and requires audited reconciliation.',
+      });
+    }
+    return snapshot;
   }
 
   private getReservationPlatformFeeAmount(reservation: ReservationRow): number {
@@ -3939,17 +3954,22 @@ export class ReservationsService {
     let providerPayoutAmount = 0;
     if (providerReleaseAmount > 0) {
       const settings = await this.settingsService.getAppStatus();
-      const policy = this.getPolicySnapshot(reservation);
-      const rates = resolveReservationCommissionRates(
-        policy.pricingBreakdown,
-        settings.commissionPercent,
-        settings.commissionMinEgp,
-      );
-      const split = computeCommissionSplit(
+      const policy = this.requireStoredPolicySnapshot(reservation);
+      const split = computePartialReservationPayoutSplit({
+        heldAmount: holdAmount,
         providerReleaseAmount,
-        rates.commissionPercent,
-        rates.commissionMinEgp,
-      );
+        platformFeeAmount: this.getReservationPlatformFeeAmount(reservation),
+        pricing: policy.pricingBreakdown,
+        fallbackCommissionPercent: settings.commissionPercent,
+        fallbackCommissionMinEgp: settings.commissionMinEgp,
+      });
+      if (!split) {
+        throw new HttpError({
+          statusCode: 400,
+          code: 'INVALID_DISPUTE_SPLIT',
+          message: 'The dispute split cannot be represented safely in integer piastres.',
+        });
+      }
       platformCommissionAmount = split.commission;
       providerPayoutAmount = split.providerAmount;
       const providerWallet = await this.walletRepo.getOrCreateUserWalletInTransaction(
@@ -4083,7 +4103,7 @@ export class ReservationsService {
     return computeFixedReservationPayoutSplit({
       heldAmount,
       platformFeeAmount: this.getReservationPlatformFeeAmount(reservation),
-      pricing: this.getPolicySnapshot(reservation).pricingBreakdown,
+      pricing: this.requireStoredPolicySnapshot(reservation).pricingBreakdown,
       fallbackCommissionPercent: commissionPercent,
       fallbackCommissionMinEgp: commissionMinEgp,
     });

@@ -66,16 +66,21 @@ describe('verification trust boundaries', () => {
         provider: 'didit',
         status: 'initiated',
       }),
-      transitionStatus: vi.fn().mockResolvedValue(false),
-      markIdentityApproved: vi.fn(),
-      updateProfileVerificationStatus: vi.fn(),
+      applyTerminalOutcome: vi.fn().mockResolvedValue(null),
     };
-    const service = new VerificationService(verificationRepo as never, {} as never, provider);
+    const profilesRepo = {
+      findUserBasicById: vi.fn().mockResolvedValue({ primary_role: 'expert' }),
+      getUserAvatarUrl: vi.fn().mockResolvedValue('/avatar.png'),
+    };
+    const service = new VerificationService(
+      verificationRepo as never,
+      profilesRepo as never,
+      provider,
+    );
 
     await service.handleWebhook({}, {});
 
-    expect(verificationRepo.markIdentityApproved).not.toHaveBeenCalled();
-    expect(verificationRepo.updateProfileVerificationStatus).not.toHaveBeenCalled();
+    expect(verificationRepo.applyTerminalOutcome).toHaveBeenCalledOnce();
   });
 });
 

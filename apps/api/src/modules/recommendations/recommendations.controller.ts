@@ -3,6 +3,7 @@ import { z } from 'zod';
 
 import { asyncHandler } from '../../utils/async-handler.js';
 import { HttpError } from '../../utils/http-error.js';
+import { parseLimit } from '../../utils/pagination.js';
 import { ServicesService } from '../services/services.service.js';
 
 import { RecommendationsRepository } from './recommendations.repository.js';
@@ -76,8 +77,7 @@ export const clearEvents = asyncHandler(async (req, res) => {
 
 export const listRecommendations = asyncHandler(async (req, res) => {
   const user = requireUser(req);
-  const limitRaw = typeof req.query.limit === 'string' ? req.query.limit : '10';
-  const limit = Math.min(Math.max(parseInt(limitRaw, 10) || 10, 1), 20);
+  const limit = parseLimit(req.query.limit, { defaultLimit: 10, maxLimit: 20 });
   const consent = await repo.getConsent(user.id);
   const categoryId = consent.personalizedRecommendationsEnabled
     ? await repo.getTopCategory(user.id)

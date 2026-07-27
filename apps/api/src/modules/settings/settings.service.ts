@@ -20,6 +20,25 @@ import type { AppSettingsRow } from './settings.repository.js';
 
 const MANAGED_SIDEBAR_SET = new Set<string>(MANAGED_SIDEBAR_HREFS);
 
+function applyServerPaymentCapabilities(
+  configured: Record<string, boolean>,
+): Record<string, boolean> {
+  return {
+    ...configured,
+    deposit_crypto: configured.deposit_crypto === true && env.NOWPAYMENTS_CRYPTO_DEPOSITS_ENABLED,
+    deposit_card: false,
+    deposit_instapay: configured.deposit_instapay === true && env.INSTAPAY_DEPOSITS_ENABLED,
+    deposit_paymob: configured.deposit_paymob === true && env.PAYMOB_DEPOSITS_ENABLED,
+    withdrawal_crypto:
+      configured.withdrawal_crypto === true &&
+      env.NOWPAYMENTS_WITHDRAWALS_ENABLED &&
+      env.NOWPAYMENTS_MASS_PAYOUTS_ENABLED,
+    withdrawal_instapay:
+      configured.withdrawal_instapay === true && env.INSTAPAY_WITHDRAWALS_ENABLED,
+    withdrawal_paymob: configured.withdrawal_paymob === true && env.PAYMOB_WITHDRAWALS_ENABLED,
+  };
+}
+
 function parsePublicUploadMimes(raw: unknown): string[] | null {
   if (raw == null) return null;
   if (Array.isArray(raw)) {
@@ -79,10 +98,12 @@ export class SettingsService {
     if (!row) {
       return this.defaultAppStatus();
     }
-    const paymentMethodsEnabled = parsePaymentMethodsEnabled(row.payment_methods_enabled, {
-      disableCryptoDeposits: row.disable_crypto_deposits,
-      disableCardDeposits: row.disable_card_deposits,
-    });
+    const paymentMethodsEnabled = applyServerPaymentCapabilities(
+      parsePaymentMethodsEnabled(row.payment_methods_enabled, {
+        disableCryptoDeposits: row.disable_crypto_deposits,
+        disableCardDeposits: row.disable_card_deposits,
+      }),
+    );
     const withdrawalLimits = parseWithdrawalLimits(row.withdrawal_limits);
     return {
       maintenanceMode: row.maintenance_mode,
@@ -91,8 +112,8 @@ export class SettingsService {
       lockLogins: row.lock_logins,
       depositsPaused: row.deposits_paused,
       moneyMovementsPaused: row.money_movements_paused,
-      disableCryptoDeposits: !paymentMethodsEnabled.deposit_crypto,
-      disableCardDeposits: !paymentMethodsEnabled.deposit_card,
+      disableCryptoDeposits: paymentMethodsEnabled.deposit_crypto !== true,
+      disableCardDeposits: true,
       minDepositAmount: row.min_deposit_amount != null ? parseFloat(row.min_deposit_amount) : null,
       maxDepositAmount: row.max_deposit_amount != null ? parseFloat(row.max_deposit_amount) : null,
       pausePlanSubscriptions: row.pause_plan_subscriptions,
@@ -366,8 +387,8 @@ export class SettingsService {
       lockLogins: false,
       depositsPaused: false,
       moneyMovementsPaused: false,
-      disableCryptoDeposits: false,
-      disableCardDeposits: false,
+      disableCryptoDeposits: !env.NOWPAYMENTS_CRYPTO_DEPOSITS_ENABLED,
+      disableCardDeposits: true,
       minDepositAmount: null,
       maxDepositAmount: null,
       pausePlanSubscriptions: false,
@@ -399,10 +420,12 @@ export class SettingsService {
       walletUsdToEgpMigrationRate: null,
       walletMigrationUsdToEgpApplied: false,
       sidebarHiddenHrefs: [],
-      paymentMethodsEnabled: parsePaymentMethodsEnabled(null, {
-        disableCryptoDeposits: false,
-        disableCardDeposits: true,
-      }),
+      paymentMethodsEnabled: applyServerPaymentCapabilities(
+        parsePaymentMethodsEnabled(null, {
+          disableCryptoDeposits: false,
+          disableCardDeposits: true,
+        }),
+      ),
       withdrawalLimits: parseWithdrawalLimits(null),
     };
   }

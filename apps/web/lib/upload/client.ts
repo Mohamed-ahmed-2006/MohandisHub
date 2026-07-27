@@ -1,12 +1,14 @@
 import { fetchWithAuthRetry } from '@/lib/auth/fetch-with-auth-retry';
 import { getApiBaseUrl } from '@/lib/env';
 
-type UploadResponse = { data: { url: string; filename: string; originalName: string } };
+type UploadResponse = {
+  data: { url: string; filename: string; originalName: string; uploadId: string };
+};
 
 export async function uploadFile(
   accessToken: string,
   file: File,
-): Promise<{ url: string; filename: string; originalName: string }> {
+): Promise<{ url: string; filename: string; originalName: string; uploadId: string }> {
   const formData = new FormData();
   formData.append('file', file);
 

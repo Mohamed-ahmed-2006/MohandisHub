@@ -64,6 +64,10 @@ type DepositRequestRow = {
   paymob_intention_id: string | null;
   paymob_order_id: string | null;
   paymob_transaction_id: string | null;
+  client_idempotency_key: string | null;
+  checkout_url: string | null;
+  provider_requested_at: string | null;
+  provider_responded_at: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -150,6 +154,7 @@ export class WalletRepository {
     proof_upload_id, transfer_reference, destination_account_snapshot, reviewed_by, reviewed_at, rejection_reason,
     credited_transaction_id, rate_snapshot, credited_amount_egp::text,
     paymob_intention_id, paymob_order_id, paymob_transaction_id,
+    client_idempotency_key, checkout_url, provider_requested_at, provider_responded_at,
     created_at, updated_at`;
 
   private withdrawalSelectColumns = `id, user_id, wallet_id, hold_id, amount::text, currency, payout_address,
@@ -235,48 +240,91 @@ export class WalletRepository {
     return rows[0] ?? null;
   }
 
-  async createDepositRequest(
-    userId: string,
-    walletId: string,
-    amount: number,
-    currency: string,
-    orderId: string,
-    provider: string = 'legacy',
-    providerInvoiceId: string | null = null,
-    providerPayload: Record<string, unknown> = {},
-  ): Promise<DepositRequestRow> {
-    const paymobIntentionId =
-      typeof providerPayload.paymob_intention_id === 'string'
-        ? providerPayload.paymob_intention_id
-        : null;
-    const paymobOrderId =
-      typeof providerPayload.paymob_order_id === 'string' ? providerPayload.paymob_order_id : null;
-    const paymobTransactionId =
-      typeof providerPayload.paymob_transaction_id === 'string'
-        ? providerPayload.paymob_transaction_id
-        : null;
-    const { rows } = await this.db.query<DepositRequestRow>(
+  async createDepositIntent(params: {
+    userId: string;
+    walletId: string;
+    amount: number;
+    currency: string;
+    orderId: string;
+    provider: 'nowpayments' | 'paymob';
+    idempotencyKey: string;
+    providerPayload: Record<string, unknown>;
+  }): Promise<{ row: DepositRequestRow; created: boolean }> {
+    const inserted = await this.db.query<DepositRequestRow>(
       `INSERT INTO deposit_requests (
-        user_id, wallet_id, amount, currency, order_id, provider, provider_invoice_id, provider_payload,
-        paymob_intention_id, paymob_order_id, paymob_transaction_id
-      )
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9, $10, $11)
+         user_id, wallet_id, amount, currency, order_id, provider, status,
+         client_idempotency_key, provider_payload, provider_requested_at
+       )
+       VALUES ($1, $2, $3, $4, $5, $6, 'initiating', $7, $8::jsonb, now())
+       ON CONFLICT (user_id, provider, client_idempotency_key)
+         WHERE client_idempotency_key IS NOT NULL
+       DO NOTHING
        RETURNING ${this.depositSelectColumns}`,
       [
-        userId,
-        walletId,
-        amount,
-        currency,
-        orderId,
-        provider,
-        providerInvoiceId,
-        JSON.stringify(providerPayload),
-        paymobIntentionId,
-        paymobOrderId,
-        paymobTransactionId,
+        params.userId,
+        params.walletId,
+        params.amount,
+        params.currency,
+        params.orderId,
+        params.provider,
+        params.idempotencyKey,
+        JSON.stringify(params.providerPayload),
       ],
     );
-    return rows[0]!;
+    if (inserted.rows[0]) return { row: inserted.rows[0], created: true };
+
+    const existing = await this.db.query<DepositRequestRow>(
+      `SELECT ${this.depositSelectColumns}
+         FROM deposit_requests
+        WHERE user_id = $1 AND provider = $2 AND client_idempotency_key = $3
+        LIMIT 1`,
+      [params.userId, params.provider, params.idempotencyKey],
+    );
+    if (!existing.rows[0]) throw new Error('Idempotent deposit intent could not be loaded');
+    return { row: existing.rows[0], created: false };
+  }
+
+  async completeDepositIntent(params: {
+    id: string;
+    checkoutUrl: string;
+    providerInvoiceId: string | null;
+    providerPayload: Record<string, unknown>;
+    paymobIntentionId?: string | null;
+  }): Promise<DepositRequestRow> {
+    const { rows } = await this.db.query<DepositRequestRow>(
+      `UPDATE deposit_requests
+          SET status = 'pending',
+              checkout_url = $2,
+              provider_invoice_id = COALESCE($3, provider_invoice_id),
+              provider_payload = provider_payload || $4::jsonb,
+              paymob_intention_id = COALESCE($5, paymob_intention_id),
+              provider_status = 'checkout_created',
+              provider_responded_at = now(),
+              updated_at = now()
+        WHERE id = $1 AND status = 'initiating'
+        RETURNING ${this.depositSelectColumns}`,
+      [
+        params.id,
+        params.checkoutUrl,
+        params.providerInvoiceId,
+        JSON.stringify(params.providerPayload),
+        params.paymobIntentionId ?? null,
+      ],
+    );
+    if (!rows[0]) throw new Error('Deposit intent is no longer initiating');
+    return rows[0];
+  }
+
+  async markDepositIntentProviderFailure(id: string, outcome: 'failed' | 'unknown'): Promise<void> {
+    await this.db.query(
+      `UPDATE deposit_requests
+          SET status = CASE WHEN $2 = 'failed' THEN 'failed' ELSE status END,
+              provider_status = $2,
+              provider_responded_at = now(),
+              updated_at = now()
+        WHERE id = $1 AND status = 'initiating'`,
+      [id, outcome],
+    );
   }
 
   async getUserBillingInfo(
@@ -316,6 +364,29 @@ export class WalletRepository {
       [providerPaymentId],
     );
     return rows[0] ?? null;
+  }
+
+  async listPendingFxDeposits(limit = 20): Promise<DepositRequestRow[]> {
+    const { rows } = await this.db.query<DepositRequestRow>(
+      `SELECT ${this.depositSelectColumns}
+         FROM deposit_requests
+        WHERE status = 'pending_fx' AND provider = 'nowpayments'
+        ORDER BY updated_at
+        LIMIT $1`,
+      [limit],
+    );
+    return rows;
+  }
+
+  async markStaleDepositIntentsForReconciliation(): Promise<number> {
+    const result = await this.db.query(
+      `UPDATE deposit_requests
+          SET provider_status = 'reconciliation_required', updated_at = now()
+        WHERE status = 'initiating'
+          AND provider_requested_at < now() - interval '15 minutes'
+          AND provider_status IS DISTINCT FROM 'reconciliation_required'`,
+    );
+    return result.rowCount ?? 0;
   }
 
   async updateDepositProviderStateByOrderId(params: {
@@ -606,7 +677,7 @@ export class WalletRepository {
         ],
       );
 
-      if (deposit.status !== 'pending') {
+      if (!['initiating', 'pending', 'pending_fx'].includes(deposit.status)) {
         const { rows: currentRows } = await client.query<DepositRequestRow>(
           `SELECT ${this.depositSelectColumns}
            FROM deposit_requests WHERE id = $1`,
@@ -736,7 +807,7 @@ export class WalletRepository {
 
       // Check schema if reference_id is UUID or text. It's usually text, but if it was defined as UUID, we need to pass NULL if it's not a valid UUID.
       // In MohandisHub schema it is defined as: reference_id UUID
-      // So if referenceId is a Stripe string like 'cs_test_...', we cannot store it here without a cast error.
+      // Provider references are not guaranteed to be UUIDs, so keep them in the text reference column.
       // We will store it in metadata if it's not a valid UUID.
       let validReferenceId: string | null = null;
       let extraMetadata = {};
@@ -1052,6 +1123,21 @@ export class WalletRepository {
     return rows[0] ?? null;
   }
 
+  async findWalletHoldByIdInTransaction(
+    client: PoolClient,
+    id: string,
+  ): Promise<WalletHoldRow | null> {
+    const { rows } = await client.query<WalletHoldRow>(
+      `SELECT id, wallet_id, user_id, amount::text, currency, status, reference_type, reference_id, metadata,
+              created_at, updated_at, released_at, captured_at
+       FROM wallet_holds
+       WHERE id = $1
+       FOR UPDATE`,
+      [id],
+    );
+    return rows[0] ?? null;
+  }
+
   async createHoldInTransaction(
     client: PoolClient,
     walletId: string,
@@ -1232,7 +1318,6 @@ export class WalletRepository {
     rateSnapshot?: Record<string, unknown>;
     providerPayload?: Record<string, unknown>;
     dailyMaxAmountEgp?: number | null;
-    dailyLimitSince: Date;
   }): Promise<WithdrawalRequestRow> {
     const client = await this.db.connect();
     try {
@@ -1268,9 +1353,16 @@ export class WalletRepository {
            FROM withdrawal_requests
            WHERE user_id = $1
              AND withdrawal_method = $2
-             AND created_at >= $3
+             AND created_at >= (
+               (now() AT TIME ZONE 'Africa/Cairo')::date
+               AT TIME ZONE 'Africa/Cairo'
+             )
+             AND created_at < (
+               ((now() AT TIME ZONE 'Africa/Cairo')::date + 1)
+               AT TIME ZONE 'Africa/Cairo'
+             )
              AND status NOT IN ('failed', 'rejected', 'cancelled', 'blocked')`,
-          [params.userId, params.withdrawalMethod, params.dailyLimitSince],
+          [params.userId, params.withdrawalMethod],
         );
         const usedToday = parseFloat(dailyRows[0]?.total ?? '0');
         if (usedToday + params.amountEgp > params.dailyMaxAmountEgp) {

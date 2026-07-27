@@ -6,6 +6,7 @@ import type { ApiSuccessBody } from '@mohandishub/shared';
 
 import { asyncHandler } from '../../utils/async-handler.js';
 import { HttpError } from '../../utils/http-error.js';
+import { parsePagination } from '../../utils/pagination.js';
 
 import { SupportService } from './support.service.js';
 import { createTicketSchema, replySchema } from './support.validation.js';
@@ -51,8 +52,7 @@ const createTicket = asyncHandler(async (req, res) => {
 
 const listMyTickets = asyncHandler(async (req, res) => {
   const user = requireUser(req);
-  const page = Math.max(parseInt((req.query.page as string) ?? '1', 10), 1);
-  const limit = Math.min(parseInt((req.query.limit as string) ?? '20', 10), 100);
+  const { page, limit } = parsePagination(req.query, { defaultLimit: 20, maxLimit: 100 });
   const data = await supportService.listMyTickets(user.id, page, limit);
   res.json({ ok: true, data });
 });

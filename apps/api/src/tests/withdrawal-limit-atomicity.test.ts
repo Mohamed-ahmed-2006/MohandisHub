@@ -21,6 +21,9 @@ describe('daily withdrawal limit atomicity', () => {
     expect(dailyCheck).toBeGreaterThan(walletLock);
     expect(insert).toBeGreaterThan(dailyCheck);
     expect(repository).toContain("throw new Error('DAILY_WITHDRAWAL_LIMIT_EXCEEDED')");
+    expect(repository).toContain("now() AT TIME ZONE 'Africa/Cairo'");
+    expect(repository).not.toContain('dailyLimitSince');
+    expect(service).not.toContain('setUTCHours(0, 0, 0, 0)');
     expect(service).toContain("message === 'DAILY_WITHDRAWAL_LIMIT_EXCEEDED'");
     expect(service).not.toContain('getWithdrawalTotalForUserSince({');
   });

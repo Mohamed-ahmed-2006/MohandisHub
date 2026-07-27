@@ -44,7 +44,7 @@ export class AdminRepository {
         (SELECT COUNT(*) FROM users WHERE primary_role = 'craftsman' AND deleted_at IS NULL)::text AS role_craftsman,
         (SELECT COUNT(*) FROM users WHERE is_admin = true AND deleted_at IS NULL)::text AS role_admin,
         (SELECT COUNT(*) FROM transactions)::text AS total_transactions,
-        (SELECT COALESCE(SUM(amount), 0) FROM transactions WHERE type = 'deposit' AND status = 'completed')::text AS total_revenue,
+        (SELECT COALESCE(SUM(amount), 0) FROM transactions WHERE type = 'commission' AND status = 'completed')::text AS total_revenue,
         (SELECT COALESCE(SUM(amount), 0) FROM transactions WHERE status = 'completed')::text AS transaction_volume,
         (SELECT COALESCE(SUM(amount), 0) FROM transactions WHERE type = 'commission' AND status = 'completed')::text AS platform_commission_volume,
         (SELECT COUNT(*) FROM identity_documents WHERE status IN ('pending', 'under_review'))::text AS pending_verifications,

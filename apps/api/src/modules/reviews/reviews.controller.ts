@@ -1,5 +1,6 @@
 import { asyncHandler } from '../../utils/async-handler.js';
 import { HttpError } from '../../utils/http-error.js';
+import { parsePagination } from '../../utils/pagination.js';
 
 import { ReviewsService } from './reviews.service.js';
 import {
@@ -56,8 +57,7 @@ const list = asyncHandler(async (req, res) => {
       message: 'targetUserId is required.',
     });
   }
-  const page = parseInt(req.query.page as string, 10) || 1;
-  const limit = Math.min(parseInt(req.query.limit as string, 10) || 20, 50);
+  const { page, limit } = parsePagination(req.query, { defaultLimit: 20, maxLimit: 50 });
   const data = await svc.listByTarget(targetUserId, targetType, page, limit);
   res.json({ ok: true, data });
 });

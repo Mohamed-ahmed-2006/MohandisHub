@@ -2,6 +2,8 @@
 // Wallet controller - HTTP handlers
 // ---------------------------------------------------------------------------
 
+import { randomUUID } from 'node:crypto';
+
 import type {
   ApiSuccessBody,
   CreateDepositCheckoutBody,
@@ -17,6 +19,7 @@ import type { NextFunction, Request, Response } from 'express';
 
 import { asyncHandler } from '../../utils/async-handler.js';
 import { HttpError } from '../../utils/http-error.js';
+import { parsePagination } from '../../utils/pagination.js';
 
 import { parseEgpAmount } from './wallet.amount.js';
 import { WalletService } from './wallet.service.js';
@@ -38,6 +41,19 @@ function getUser(req: { user?: { id: string; role: string } }): { id: string; ro
     });
   }
   return req.user;
+}
+
+function getIdempotencyKey(req: Request): string {
+  const value = req.get('Idempotency-Key')?.trim();
+  if (!value) return randomUUID();
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)) {
+    throw new HttpError({
+      statusCode: 400,
+      code: 'INVALID_IDEMPOTENCY_KEY',
+      message: 'Idempotency-Key must be a UUID.',
+    });
+  }
+  return value;
 }
 
 function parseDepositBody(body: unknown): CreateDepositCheckoutBody {
@@ -129,8 +145,7 @@ const getMyWallet = asyncHandler(async (req, res) => {
 
 const getMyTransactions = asyncHandler(async (req, res) => {
   const user = getUser(req);
-  const page = parseInt(req.query.page as string, 10) || 1;
-  const limit = Math.min(parseInt(req.query.limit as string, 10) || 20, 100);
+  const { page, limit } = parsePagination(req.query, { defaultLimit: 20, maxLimit: 100 });
   const result = await walletService.getTransactions(user.id, page, limit);
   const response: ApiSuccessBody<typeof result> = { ok: true, data: result };
   res.json(response);
@@ -196,7 +211,11 @@ const createDepositCheckout = asyncHandler(async (req, res) => {
     });
   }
 
-  const result = await walletService.createDepositCheckout(user.id, payload);
+  const result = await walletService.createDepositCheckout(
+    user.id,
+    payload,
+    getIdempotencyKey(req),
+  );
   const response: ApiSuccessBody<DepositCheckoutResponse> = { ok: true, data: result };
   res.json(response);
 });
@@ -216,42 +235,36 @@ const createLegacyCryptoDeposit = asyncHandler(async (req, res) => {
       message: 'Valid amount is required.',
     });
   }
-  const result = await walletService.createDepositCheckout(user.id, {
-    amount,
-    method: 'crypto',
-    currency: 'EGP',
-    payCurrency,
-    ...(returnUrl ? { returnUrl } : {}),
-  });
+  const result = await walletService.createDepositCheckout(
+    user.id,
+    {
+      amount,
+      method: 'crypto',
+      currency: 'EGP',
+      payCurrency,
+      ...(returnUrl ? { returnUrl } : {}),
+    },
+    getIdempotencyKey(req),
+  );
   res.json({ ok: true, data: { paymentUrl: result.checkoutUrl, orderId: result.orderId } });
 });
 
-const createLegacyCardDeposit = asyncHandler(async (req, res) => {
-  const user = getUser(req);
-  const source =
-    req.body && typeof req.body === 'object' ? (req.body as Record<string, unknown>) : {};
-  const amountRaw = source.amount;
-  const amount = parseEgpAmount(amountRaw);
-  const currency = typeof source.currency === 'string' ? source.currency : 'EGP';
-  const returnUrl = typeof source.returnUrl === 'string' ? source.returnUrl : undefined;
-  if (amount == null) {
-    throw new HttpError({
-      statusCode: 400,
-      code: 'INVALID_AMOUNT',
-      message: 'Valid amount is required.',
-    });
-  }
-  const result = await walletService.createDepositCheckout(user.id, {
-    amount,
-    method: 'card',
-    currency,
-    ...(returnUrl ? { returnUrl } : {}),
+const createLegacyCardDeposit = asyncHandler((req, _res) => {
+  getUser(req);
+  throw new HttpError({
+    statusCode: 503,
+    code: 'STRIPE_DISABLED',
+    message: 'Stripe payments are not available.',
   });
-  res.json({ ok: true, data: { checkoutUrl: result.checkoutUrl, sessionId: result.orderId } });
 });
 
-const confirmLegacyStripeSession = asyncHandler((_req, res) => {
-  res.json({ ok: true, data: { credited: false } });
+const confirmLegacyStripeSession = asyncHandler((req, _res) => {
+  getUser(req);
+  throw new HttpError({
+    statusCode: 503,
+    code: 'STRIPE_DISABLED',
+    message: 'Stripe payments are not available.',
+  });
 });
 
 const getWithdrawalQuote = asyncHandler(async (req, res) => {

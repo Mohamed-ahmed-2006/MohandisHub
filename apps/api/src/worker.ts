@@ -3,14 +3,20 @@ import { captureException, initSentry } from './config/sentry.js';
 import { closePool } from './db/pool.js';
 import { startReservationLifecycleWorker } from './modules/reservations/reservations.lifecycle-worker.js';
 import { startRetentionWorker } from './modules/retention/retention.worker.js';
+import { startStorageDeletionWorker } from './modules/upload/storage-deletion.worker.js';
+import { startWalletReconciliationWorker } from './modules/wallet/wallet-reconciliation.worker.js';
 
 initSentry();
 
 const reservationWorker = startReservationLifecycleWorker();
 const retentionWorker = startRetentionWorker();
+const storageDeletionWorker = startStorageDeletionWorker();
+const walletReconciliationWorker = startWalletReconciliationWorker();
 
 logger.info('Reservation lifecycle worker started');
 logger.info('Retention worker started');
+logger.info('Storage deletion worker started');
+logger.info('Payment reconciliation worker started');
 logger.info('Worker ready', { pid: process.pid });
 
 const heartbeat = setInterval(() => {
@@ -27,6 +33,8 @@ const shutdown = async (signal: string): Promise<void> => {
   clearInterval(heartbeat);
   await reservationWorker.stop();
   await retentionWorker.stop();
+  await storageDeletionWorker.stop();
+  await walletReconciliationWorker.stop();
   await closePool();
   logger.info('Worker shutdown finished');
   process.exit(0);

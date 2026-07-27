@@ -17,6 +17,8 @@ const toNonnegativePiastres = (amount: number): number | null => {
   return Number.isSafeInteger(piastres) ? piastres : null;
 };
 
+const fromPiastres = (amount: number): number => amount / PIASTER_PER_EGP;
+
 /**
  * Normalize a custom dispute split to integer piastres and require it to
  * account for the entire held amount. Returning null keeps invalid money out
@@ -100,5 +102,51 @@ export const computeFixedReservationPayoutSplit = (input: {
   return {
     commission,
     providerAmount: toMoney(Math.max(0, heldAmount - commission)),
+  };
+};
+
+/**
+ * Prorate the complete reservation split for a partial dispute release.
+ * Integer-piastre arithmetic guarantees commission + provider = release.
+ */
+export const computePartialReservationPayoutSplit = (input: {
+  heldAmount: number;
+  providerReleaseAmount: number;
+  platformFeeAmount: number;
+  pricing: ReservationPricingBreakdown | null | undefined;
+  fallbackCommissionPercent: number;
+  fallbackCommissionMinEgp: number;
+}): { commission: number; providerAmount: number } | null => {
+  const heldPiastres = toNonnegativePiastres(input.heldAmount);
+  const releasePiastres = toNonnegativePiastres(input.providerReleaseAmount);
+  if (
+    heldPiastres == null ||
+    heldPiastres <= 0 ||
+    releasePiastres == null ||
+    releasePiastres <= 0 ||
+    releasePiastres > heldPiastres
+  ) {
+    return null;
+  }
+
+  const fullSplit = computeFixedReservationPayoutSplit({
+    heldAmount: fromPiastres(heldPiastres),
+    platformFeeAmount: input.platformFeeAmount,
+    pricing: input.pricing,
+    fallbackCommissionPercent: input.fallbackCommissionPercent,
+    fallbackCommissionMinEgp: input.fallbackCommissionMinEgp,
+  });
+  const fullCommissionPiastres = toNonnegativePiastres(fullSplit.commission);
+  if (fullCommissionPiastres == null) return null;
+
+  const commissionPiastres = Math.min(
+    releasePiastres,
+    Math.round((fullCommissionPiastres * releasePiastres) / heldPiastres),
+  );
+  const providerPiastres = releasePiastres - commissionPiastres;
+
+  return {
+    commission: fromPiastres(commissionPiastres),
+    providerAmount: fromPiastres(providerPiastres),
   };
 };

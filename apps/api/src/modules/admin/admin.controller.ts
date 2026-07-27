@@ -27,6 +27,7 @@ import { env } from '../../config/env.js';
 import { hasAdminPermission } from '../../middleware/require-role.js';
 import { asyncHandler } from '../../utils/async-handler.js';
 import { HttpError } from '../../utils/http-error.js';
+import { parsePagination } from '../../utils/pagination.js';
 import { logAudit } from '../audit/audit.service.js';
 import { NotificationsService } from '../notifications/notifications.service.js';
 import { ReviewsService } from '../reviews/reviews.service.js';
@@ -230,8 +231,7 @@ const getDashboardStats = asyncHandler(async (_req, res) => {
 // ── Users ─────────────────────────────────────────────────────────────────
 
 const listUsers = asyncHandler(async (req, res) => {
-  const page = parseInt(req.query.page as string, 10) || 1;
-  const limit = Math.min(parseInt(req.query.limit as string, 10) || 20, 100);
+  const { page, limit } = parsePagination(req.query, { defaultLimit: 20, maxLimit: 100 });
   const filters: {
     role?: string;
     isActive?: boolean;
@@ -283,8 +283,7 @@ const getUserActivity = asyncHandler(async (req, res) => {
     });
   }
 
-  const page = parseInt(req.query.page as string, 10) || 1;
-  const limit = Math.min(parseInt(req.query.limit as string, 10) || 10, 50);
+  const { page, limit } = parsePagination(req.query, { defaultLimit: 10, maxLimit: 50 });
   const result = await adminService.getUserActivity(req.params.id!, parsedType.data, page, limit);
   const response: ApiSuccessBody<typeof result> = { ok: true, data: result };
   res.json(response);
@@ -509,8 +508,7 @@ const deletePlan = asyncHandler(async (req, res) => {
 // ── Transactions ──────────────────────────────────────────────────────────
 
 const listTransactions = asyncHandler(async (req, res) => {
-  const page = parseInt(req.query.page as string, 10) || 1;
-  const limit = Math.min(parseInt(req.query.limit as string, 10) || 20, 100);
+  const { page, limit } = parsePagination(req.query, { defaultLimit: 20, maxLimit: 100 });
   const filters: {
     userId?: string;
     type?: string;
@@ -533,8 +531,7 @@ const listTransactions = asyncHandler(async (req, res) => {
 });
 
 const listMoneyAuditEvents = asyncHandler(async (req, res) => {
-  const page = parseInt(req.query.page as string, 10) || 1;
-  const limit = Math.min(parseInt(req.query.limit as string, 10) || 20, 100);
+  const { page, limit } = parsePagination(req.query, { defaultLimit: 20, maxLimit: 100 });
   const filters: {
     userId?: string;
     reservationId?: string;
@@ -589,8 +586,7 @@ const adjustBalance = asyncHandler(async (req, res) => {
 });
 
 const listManualInstapayDeposits = asyncHandler(async (req, res) => {
-  const page = parseInt(req.query.page as string, 10) || 1;
-  const limit = Math.min(parseInt(req.query.limit as string, 10) || 20, 100);
+  const { page, limit } = parsePagination(req.query, { defaultLimit: 20, maxLimit: 100 });
   const status = typeof req.query.status === 'string' ? req.query.status : undefined;
   const result = await adminService.listManualInstapayDeposits({
     page,
@@ -644,8 +640,7 @@ const rejectManualInstapayDeposit = asyncHandler(async (req, res) => {
 });
 
 const listManualInstapayWithdrawals = asyncHandler(async (req, res) => {
-  const page = parseInt(req.query.page as string, 10) || 1;
-  const limit = Math.min(parseInt(req.query.limit as string, 10) || 20, 100);
+  const { page, limit } = parsePagination(req.query, { defaultLimit: 20, maxLimit: 100 });
   const status = typeof req.query.status === 'string' ? req.query.status : undefined;
   const result = await adminService.listManualInstapayWithdrawals({
     page,
@@ -739,8 +734,7 @@ const reverseTransaction = asyncHandler(async (req, res) => {
 // ── Services ──────────────────────────────────────────────────────────────
 
 const listServices = asyncHandler(async (req, res) => {
-  const page = parseInt(req.query.page as string, 10) || 1;
-  const limit = Math.min(parseInt(req.query.limit as string, 10) || 20, 100);
+  const { page, limit } = parsePagination(req.query, { defaultLimit: 20, maxLimit: 100 });
   const filters: { status?: string; categoryId?: string; providerId?: string } = {};
   if (req.query.status) filters.status = req.query.status as string;
   if (req.query.categoryId) filters.categoryId = req.query.categoryId as string;
@@ -900,16 +894,14 @@ const factoryReset = asyncHandler(async (req, res) => {
 });
 
 const listReviewReports = asyncHandler(async (req, res) => {
-  const page = parseInt(req.query.page as string, 10) || 1;
-  const limit = Math.min(parseInt(req.query.limit as string, 10) || 20, 100);
+  const { page, limit } = parsePagination(req.query, { defaultLimit: 20, maxLimit: 100 });
   const status = (req.query.status as string) === 'all' ? 'all' : 'pending';
   const data = await reviewsService.listReports(page, limit, status);
   res.json({ ok: true, data });
 });
 
 const listReviewDisputes = asyncHandler(async (req, res) => {
-  const page = parseInt(req.query.page as string, 10) || 1;
-  const limit = Math.min(parseInt(req.query.limit as string, 10) || 20, 100);
+  const { page, limit } = parsePagination(req.query, { defaultLimit: 20, maxLimit: 100 });
   const status = (req.query.status as string) === 'all' ? 'all' : 'pending';
   const data = await reviewsService.listDisputes(page, limit, status);
   res.json({ ok: true, data });
@@ -946,8 +938,7 @@ const resolveReviewDispute = asyncHandler(async (req, res) => {
 // ── Support tickets ───────────────────────────────────────────────────────
 
 const listSupportTickets = asyncHandler(async (req, res) => {
-  const page = parseInt(req.query.page as string, 10) || 1;
-  const limit = Math.min(parseInt(req.query.limit as string, 10) || 20, 100);
+  const { page, limit } = parsePagination(req.query, { defaultLimit: 20, maxLimit: 100 });
   const status = req.query.status as string | undefined;
   const category = req.query.category as string | undefined;
   const filters: { status?: string; category?: string } = {};

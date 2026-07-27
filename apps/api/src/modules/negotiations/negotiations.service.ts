@@ -291,8 +291,7 @@ export class NegotiationsService {
         }
         validHours = input.validForHours;
       }
-      const until = new Date();
-      until.setHours(until.getHours() + validHours);
+      const until = new Date(Date.now() + validHours * 60 * 60 * 1000);
       const updated = await this.repo.updatePendingToAccepted(negotiationId, agreed, until);
       if (!updated) {
         throw new HttpError({

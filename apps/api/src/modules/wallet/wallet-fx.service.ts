@@ -3,10 +3,13 @@
 // ---------------------------------------------------------------------------
 
 import { env } from '../../config/env.js';
+import { fetchWithTimeout } from '../../lib/fetch-with-timeout.js';
 import { estimatePrice } from '../../lib/nowpayments.client.js';
+import { HttpError } from '../../utils/http-error.js';
 import type { SettingsService } from '../settings/settings.service.js';
 
 export type RateSnapshot = Record<string, unknown>;
+type ResolvedRate = { value: number; source: 'live' | 'admin'; fetchedAt: string };
 
 export class WalletFxService {
   constructor(private readonly settingsService: SettingsService) {}
@@ -16,21 +19,11 @@ export class WalletFxService {
     if (liveUsdRate != null) {
       return liveUsdRate;
     }
-    return await this.getEgpPerUsdtDeposit();
+    return (await this.resolveDepositRate()).value;
   }
 
   async getEgpPerUsdtDeposit(): Promise<number> {
-    const liveRate = await this.fetchLiveEgpPerUsdtRate();
-    if (liveRate != null) {
-      return liveRate;
-    }
-
-    // Fallback when live lookup fails (network/provider issue)
-    const configuredRate = await this.getConfiguredDepositRate();
-    if (configuredRate != null) {
-      return configuredRate;
-    }
-    return 48.5;
+    return (await this.resolveDepositRate()).value;
   }
 
   async getEgpPerUsdtWithdrawal(): Promise<number> {
@@ -39,14 +32,15 @@ export class WalletFxService {
       return liveRate;
     }
 
-    // Fallback when live lookup fails (network/provider issue)
     const row = await this.settingsService.getRawRow();
-    const v = row?.wallet_egp_per_usdt_withdrawal;
-    const parsed = this.parseNum(v);
-    if (parsed != null && parsed > 0) {
-      return parsed;
+    const configured = this.freshConfiguredRate(
+      row?.wallet_egp_per_usdt_withdrawal,
+      row?.wallet_egp_per_usdt_withdrawal_updated_at,
+    );
+    if (configured) {
+      return configured.value;
     }
-    return await this.getEgpPerUsdtDeposit();
+    return (await this.resolveDepositRate()).value;
   }
 
   /**
@@ -62,32 +56,35 @@ export class WalletFxService {
       params.providerPayload.actually_paid ?? params.providerPayload.pay_amount,
     );
     const priceCurrency = (params.invoicePriceCurrency || 'EGP').toUpperCase();
-    const egpPerUsdt = await this.getEgpPerUsdtDeposit();
 
     let egp: number;
+    let resolvedRate: ResolvedRate | null = null;
     if (priceCurrency === 'EGP') {
       egp = this.round2(params.invoicePriceAmount);
-    } else if (this.isLikelyUsdtFamily(payCurrency) && actuallyPaid != null && actuallyPaid > 0) {
-      egp = this.round2(actuallyPaid * egpPerUsdt);
-    } else if (actuallyPaid != null && actuallyPaid > 0 && payCurrency) {
-      if (!env.NOWPAYMENTS_API_KEY) {
-        egp = this.round2(params.invoicePriceAmount * egpPerUsdt);
-      } else {
-        const est = await estimatePrice(
-          env.NOWPAYMENTS_API_KEY,
-          actuallyPaid,
-          payCurrency,
-          'USDTTRC20',
-        );
-        const usdtEq = Number(est.estimated_amount);
-        if (Number.isFinite(usdtEq) && usdtEq > 0) {
-          egp = this.round2(usdtEq * egpPerUsdt);
-        } else {
-          egp = this.round2(params.invoicePriceAmount * egpPerUsdt);
-        }
-      }
     } else {
-      egp = this.round2(params.invoicePriceAmount * egpPerUsdt);
+      resolvedRate = await this.resolveDepositRate();
+      if (this.isLikelyUsdtFamily(payCurrency) && actuallyPaid != null && actuallyPaid > 0) {
+        egp = this.round2(actuallyPaid * resolvedRate.value);
+      } else if (actuallyPaid != null && actuallyPaid > 0 && payCurrency) {
+        if (!env.NOWPAYMENTS_API_KEY) {
+          throw this.fxUnavailable();
+        } else {
+          const est = await estimatePrice(
+            env.NOWPAYMENTS_API_KEY,
+            actuallyPaid,
+            payCurrency,
+            'USDTTRC20',
+          );
+          const usdtEq = Number(est.estimated_amount);
+          if (Number.isFinite(usdtEq) && usdtEq > 0) {
+            egp = this.round2(usdtEq * resolvedRate.value);
+          } else {
+            throw this.fxUnavailable();
+          }
+        }
+      } else {
+        egp = this.round2(params.invoicePriceAmount * resolvedRate.value);
+      }
     }
 
     const snapshot: RateSnapshot = {
@@ -96,7 +93,9 @@ export class WalletFxService {
       invoice_price_currency: priceCurrency,
       pay_currency: payCurrency || null,
       actually_paid: actuallyPaid,
-      egp_per_usdt_applied: egpPerUsdt,
+      egp_per_usdt_applied: resolvedRate?.value ?? null,
+      rate_source: resolvedRate?.source ?? 'invoice_egp',
+      rate_fetched_at: resolvedRate?.fetchedAt ?? null,
       computed_egp: egp,
       computed_at: new Date().toISOString(),
     };
@@ -171,7 +170,7 @@ export class WalletFxService {
 
   private async fetchLiveEgpPerUsdtRate(): Promise<number | null> {
     try {
-      const res = await fetch(
+      const res = await fetchWithTimeout(
         'https://api.coingecko.com/api/v3/simple/price?ids=tether&vs_currencies=egp',
         {
           method: 'GET',
@@ -189,7 +188,7 @@ export class WalletFxService {
 
   private async fetchLiveEgpPerUsdRate(): Promise<number | null> {
     try {
-      const res = await fetch('https://open.er-api.com/v6/latest/USD', {
+      const res = await fetchWithTimeout('https://open.er-api.com/v6/latest/USD', {
         method: 'GET',
         headers: { Accept: 'application/json' },
       });
@@ -203,10 +202,38 @@ export class WalletFxService {
     }
   }
 
-  private async getConfiguredDepositRate(): Promise<number | null> {
+  private async resolveDepositRate(): Promise<ResolvedRate> {
+    const liveRate = await this.fetchLiveEgpPerUsdtRate();
+    if (liveRate != null) {
+      return { value: liveRate, source: 'live', fetchedAt: new Date().toISOString() };
+    }
     const row = await this.settingsService.getRawRow();
-    const v = row?.wallet_egp_per_usdt_deposit;
-    const parsed = this.parseNum(v);
-    return parsed != null && parsed > 0 ? parsed : null;
+    const configured = this.freshConfiguredRate(
+      row?.wallet_egp_per_usdt_deposit,
+      row?.wallet_egp_per_usdt_deposit_updated_at,
+    );
+    if (configured) return configured;
+    throw this.fxUnavailable();
+  }
+
+  private freshConfiguredRate(
+    raw: unknown,
+    updatedAt: Date | string | null | undefined,
+  ): ResolvedRate | null {
+    const value = this.parseNum(raw);
+    if (value == null || value <= 0 || !updatedAt) return null;
+    const timestamp = new Date(updatedAt).getTime();
+    if (!Number.isFinite(timestamp)) return null;
+    const maxAgeMs = env.FX_RATE_MAX_AGE_HOURS * 60 * 60 * 1000;
+    if (Date.now() - timestamp > maxAgeMs || timestamp > Date.now() + 5 * 60 * 1000) return null;
+    return { value, source: 'admin', fetchedAt: new Date(timestamp).toISOString() };
+  }
+
+  private fxUnavailable(): HttpError {
+    return new HttpError({
+      statusCode: 503,
+      code: 'FX_RATE_UNAVAILABLE',
+      message: 'A fresh exchange rate is unavailable. Please retry later.',
+    });
   }
 }

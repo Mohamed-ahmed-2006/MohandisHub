@@ -1,12 +1,7 @@
 import { env } from '../../config/env.js';
 import { logger } from '../../config/logger.js';
 import { getPool } from '../../db/pool.js';
-import { deleteLocalUploadRelativePathIfExists } from '../../lib/local-upload-storage.js';
-import {
-  deleteObjectsFromBucket,
-  isSupabaseStorageConfigured,
-  parsePrivateUploadIdFromUrl,
-} from '../../lib/supabase-storage.js';
+import { parsePrivateUploadIdFromUrl } from '../../lib/supabase-storage.js';
 
 import { checkDeleteThresholds, sendRetentionAlert } from './retention.alerts.js';
 import { mergeRetentionHours } from './retention.merge.js';
@@ -17,40 +12,6 @@ const ADVISORY_LOCK_KEY = 912_345_678_901;
 
 export class RetentionService {
   private readonly repo = new RetentionRepository();
-
-  private async deletePrivateUploadObjects(
-    rows: Array<{ bucket: string; storage_path: string }>,
-    dryRun: boolean,
-  ): Promise<number> {
-    if (dryRun) return 0;
-    let n = 0;
-    const supabaseByBucket = new Map<string, string[]>();
-    for (const row of rows) {
-      if (row.bucket === 'local') {
-        if (deleteLocalUploadRelativePathIfExists(row.storage_path)) {
-          n += 1;
-        }
-        continue;
-      }
-      const paths = supabaseByBucket.get(row.bucket) ?? [];
-      paths.push(row.storage_path);
-      supabaseByBucket.set(row.bucket, paths);
-    }
-    if (isSupabaseStorageConfigured()) {
-      for (const [bucket, paths] of supabaseByBucket.entries()) {
-        try {
-          await deleteObjectsFromBucket(bucket, paths);
-          n += paths.length;
-        } catch (e) {
-          logger.error('Retention: private storage delete batch failed', {
-            bucket,
-            error: e instanceof Error ? e.message : 'unknown',
-          });
-        }
-      }
-    }
-    return n;
-  }
 
   /**
    * Run data retention sweep. Uses advisory lock; returns null if another worker holds the lock.
@@ -230,15 +191,14 @@ export class RetentionService {
         const uploadRows = dryRun
           ? await this.repo.listPrivateUploadsByIds(client, privateUploadIds)
           : await this.repo.listUnreferencedPrivateUploadsByIds(client, privateUploadIds);
-        const deletedFiles = await this.deletePrivateUploadObjects(uploadRows, dryRun);
-        const deletedUploadRows = await this.repo.deletePrivateUploadsIfUnreferenced(
+        const deletedUploadRows = await this.repo.enqueuePrivateUploadDeletionIfUnreferenced(
           client,
           uploadRows.map((row) => row.id),
           dryRun,
         );
         results.verifiedPrivateUploads = {
           deletedRows: clearedIdentity + clearedAcademic + deletedUploadRows,
-          deletedFiles,
+          deletedFiles: 0,
         };
       } else {
         results.verifiedPrivateUploads = { skipped: true, reason: 'disabled' };

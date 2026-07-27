@@ -8,7 +8,6 @@ import { isVerifiableRole } from '@mohandishub/shared';
 import { env } from '../../config/env.js';
 import { logger } from '../../config/logger.js';
 import { HttpError } from '../../utils/http-error.js';
-import { logAudit } from '../audit/audit.service.js';
 import { ProfilesRepository } from '../profiles/profiles.repository.js';
 import {
   assertRequiredVerificationImage,
@@ -216,21 +215,6 @@ export class VerificationService {
 
     if (isTerminal) {
       const newStatus = result.approved ? 'approved' : 'rejected';
-      const transitioned = await this.verificationRepo.transitionStatus(
-        request.id,
-        ['initiated', 'submitted'],
-        newStatus,
-        { providerResponse: result.rawPayload },
-      );
-      if (!transitioned) {
-        logger.warn('Webhook: ignored duplicate or conflicting terminal transition', {
-          sessionId: result.sessionId,
-          currentStatus: request.status,
-          attemptedStatus: newStatus,
-        });
-        return;
-      }
-
       const role = await this.resolveRequestRole(request.user_id, request.request_type);
       const hasRequiredImage = await hasRequiredVerificationImage(
         this.profilesRepo,
@@ -250,23 +234,23 @@ export class VerificationService {
             : 'didit'
           : undefined;
 
-      if (result.approved) {
-        await this.verificationRepo.markIdentityApproved(request.user_id, role, identityMethod);
-      }
-
-      await this.verificationRepo.updateProfileVerificationStatus(
-        request.user_id,
+      const transitioned = await this.verificationRepo.applyTerminalOutcome({
+        requestId: request.id,
+        status: newStatus,
+        providerResponse: result.rawPayload,
         role,
         profileStatus,
-        identityMethod,
-      );
-      await logAudit({
-        actorId: null,
-        action: 'verification.webhook_result',
-        resourceType: 'verification_request',
-        resourceId: request.id,
-        details: { approved: result.approved },
+        identityApproved: result.approved === true,
+        ...(identityMethod ? { identityVerificationMethod: identityMethod } : {}),
+        auditAction: 'verification.webhook_result',
       });
+      if (!transitioned) {
+        logger.warn('Webhook: ignored duplicate or conflicting terminal transition', {
+          sessionId: result.sessionId,
+          currentStatus: request.status,
+          attemptedStatus: newStatus,
+        });
+      }
       return;
     }
 
@@ -305,13 +289,6 @@ export class VerificationService {
       });
     }
 
-    const newStatus = params.approved ? 'approved' : 'rejected';
-
-    await this.verificationRepo.updateStatus(request.id, newStatus, {
-      reviewerNotes: params.reviewerNotes,
-      reviewedBy: params.reviewedBy,
-    });
-
     const role = await this.resolveRequestRole(request.user_id, request.request_type);
     const hasRequiredImage = params.approved
       ? await hasRequiredVerificationImage(this.profilesRepo, request.user_id, role)
@@ -324,23 +301,24 @@ export class VerificationService {
           : 'rejected';
     const identityMethod = params.approved && role !== 'business' ? 'manual' : undefined;
 
-    if (params.approved) {
-      await this.verificationRepo.markIdentityApproved(request.user_id, role, identityMethod);
-    }
-
-    await this.verificationRepo.updateProfileVerificationStatus(
-      request.user_id,
+    const transitioned = await this.verificationRepo.applyTerminalOutcome({
+      requestId: request.id,
+      status: params.approved ? 'approved' : 'rejected',
+      ...(params.reviewerNotes ? { reviewerNotes: params.reviewerNotes } : {}),
+      reviewedBy: params.reviewedBy,
       role,
       profileStatus,
-      identityMethod,
-    );
-    await logAudit({
-      actorId: params.reviewedBy,
-      action: 'verification.admin_review',
-      resourceType: 'verification_request',
-      resourceId: request.id,
-      details: { approved: params.approved },
+      identityApproved: params.approved,
+      ...(identityMethod ? { identityVerificationMethod: identityMethod } : {}),
+      auditAction: 'verification.admin_review',
     });
+    if (!transitioned) {
+      throw new HttpError({
+        statusCode: 409,
+        code: 'VERIFICATION_ALREADY_REVIEWED',
+        message: 'This verification request has already reached a terminal state.',
+      });
+    }
   }
 
   private async resolveRequestRole(

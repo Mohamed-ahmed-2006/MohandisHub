@@ -20,6 +20,7 @@ type RequestOptions = {
   path: string;
   method?: 'GET' | 'POST';
   body?: unknown;
+  headers?: Record<string, string>;
 };
 
 async function requestJson<T>({
@@ -27,6 +28,7 @@ async function requestJson<T>({
   path,
   method = 'GET',
   body,
+  headers,
 }: RequestOptions): Promise<T> {
   const response = await fetchWithAuthRetry(
     `${getApiBaseUrl()}${path}`,
@@ -36,6 +38,7 @@ async function requestJson<T>({
       headers: {
         ...(body ? { 'Content-Type': 'application/json' } : {}),
         Authorization: `Bearer ${accessToken}`,
+        ...headers,
       },
       ...(body ? { body: JSON.stringify(body) } : {}),
     },
@@ -110,6 +113,7 @@ export const walletApiClient = {
       path: '/api/wallet/deposit/checkout',
       method: 'POST',
       body: payload,
+      headers: { 'Idempotency-Key': crypto.randomUUID() },
     }),
 
   // Backward compatibility wrappers
@@ -125,21 +129,6 @@ export const walletApiClient = {
       payCurrency,
     });
     return { paymentUrl: result.checkoutUrl, orderId: result.orderId };
-  },
-
-  createStripeCheckout: async (
-    accessToken: string,
-    amount: number,
-    currency: string = 'EGP',
-    returnUrl?: string,
-  ): Promise<{ checkoutUrl: string; sessionId: string }> => {
-    const result = await walletApiClient.createDepositCheckout(accessToken, {
-      amount,
-      currency: currency === 'USD' ? 'EGP' : currency,
-      method: 'card',
-      ...(returnUrl ? { returnUrl } : {}),
-    });
-    return { checkoutUrl: result.checkoutUrl, sessionId: result.orderId };
   },
 
   createWithdrawal: async (

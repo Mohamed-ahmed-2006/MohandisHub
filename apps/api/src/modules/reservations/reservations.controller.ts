@@ -1,5 +1,6 @@
 import { asyncHandler } from '../../utils/async-handler.js';
 import { HttpError } from '../../utils/http-error.js';
+import { parseLimit, parsePagination } from '../../utils/pagination.js';
 import { logAudit } from '../audit/audit.service.js';
 
 import { ReservationsService } from './reservations.service.js';
@@ -183,11 +184,7 @@ const createReservation = asyncHandler(async (req, res) => {
 const listMyReservations = asyncHandler(async (req, res) => {
   const user = requireUser(req);
   const role = (req.query.role as string | undefined) ?? user.role ?? 'customer';
-  const page = Math.max(parseInt((req.query.page as string | undefined) ?? '1', 10), 1);
-  const limit = Math.min(
-    Math.max(parseInt((req.query.limit as string | undefined) ?? '20', 10), 1),
-    50,
-  );
+  const { page, limit } = parsePagination(req.query, { defaultLimit: 20, maxLimit: 50 });
   const data = await svc.listMyReservations(user.id, role, page, limit);
   res.json({ ok: true, data });
 });
@@ -440,11 +437,7 @@ const getCallSnapshot = asyncHandler(async (req, res) => {
 
 const listDisputes = asyncHandler(async (req, res) => {
   const user = requireUser(req);
-  const page = Math.max(parseInt((req.query.page as string | undefined) ?? '1', 10), 1);
-  const limit = Math.min(
-    Math.max(parseInt((req.query.limit as string | undefined) ?? '20', 10), 1),
-    100,
-  );
+  const { page, limit } = parsePagination(req.query, { defaultLimit: 20, maxLimit: 100 });
   const status = (req.query.status as string | undefined) ?? undefined;
   const data = await svc.listDisputes(user.id, reservationAdminRole(user), page, limit, status);
   res.json({ ok: true, data });
@@ -458,11 +451,7 @@ const listMyDisputeCases = asyncHandler(async (req, res) => {
 
 const listDisputeCases = asyncHandler(async (req, res) => {
   const user = requireUser(req);
-  const page = Math.max(parseInt((req.query.page as string | undefined) ?? '1', 10), 1);
-  const limit = Math.min(
-    Math.max(parseInt((req.query.limit as string | undefined) ?? '20', 10), 1),
-    100,
-  );
+  const { page, limit } = parsePagination(req.query, { defaultLimit: 20, maxLimit: 100 });
   const status = (req.query.status as string | undefined) ?? undefined;
   const data = await svc.listDisputeCases(user.id, reservationAdminRole(user), page, limit, status);
   res.json({ ok: true, data });
@@ -555,10 +544,7 @@ const resolveDispute = asyncHandler(async (req, res) => {
 const listActionFailures = asyncHandler(async (req, res) => {
   const user = requireUser(req);
   const onlyOpen = ((req.query.onlyOpen as string | undefined) ?? 'true').toLowerCase() !== 'false';
-  const limit = Math.min(
-    Math.max(parseInt((req.query.limit as string | undefined) ?? '50', 10), 1),
-    200,
-  );
+  const limit = parseLimit(req.query.limit, { defaultLimit: 50, maxLimit: 200 });
   const data = await svc.listActionFailures(user.id, reservationAdminRole(user), onlyOpen, limit);
   res.json({ ok: true, data });
 });

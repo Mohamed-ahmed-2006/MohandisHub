@@ -6,6 +6,7 @@ import type {
 
 import { asyncHandler } from '../../utils/async-handler.js';
 import { HttpError } from '../../utils/http-error.js';
+import { parsePagination } from '../../utils/pagination.js';
 
 import { NegotiationsService } from './negotiations.service.js';
 import { createNegotiationSchema, respondNegotiationSchema } from './negotiations.validation.js';
@@ -47,10 +48,7 @@ const list = asyncHandler(async (req, res) => {
   }
   const status = typeof req.query.status === 'string' ? req.query.status : undefined;
   const serviceId = typeof req.query.serviceId === 'string' ? req.query.serviceId : undefined;
-  const pageStr = typeof req.query.page === 'string' ? req.query.page : undefined;
-  const limitStr = typeof req.query.limit === 'string' ? req.query.limit : undefined;
-  const page = Math.max(1, parseInt(pageStr ?? '1', 10) || 1);
-  const limit = Math.min(50, Math.max(1, parseInt(limitStr ?? '20', 10) || 20));
+  const { page, limit } = parsePagination(req.query, { defaultLimit: 20, maxLimit: 50 });
   const data = await svc.listNegotiations(userId, role, status, serviceId, page, limit);
   res.json({ ok: true, data } as ApiSuccessBody<NegotiationListResponse>);
 });

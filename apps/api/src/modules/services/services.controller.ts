@@ -2,10 +2,14 @@
 // Services controller — public and provider HTTP handlers
 // ---------------------------------------------------------------------------
 
+import { createHmac } from 'node:crypto';
+
 import type { ApiSuccessBody, Service, ServiceCategory, UserRole } from '@mohandishub/shared';
 
+import { env } from '../../config/env.js';
 import { asyncHandler } from '../../utils/async-handler.js';
 import { HttpError } from '../../utils/http-error.js';
+import { parseLimit, parsePagination } from '../../utils/pagination.js';
 
 import { ServicesService } from './services.service.js';
 import { createServiceSchema, updateServiceSchema } from './services.validation.js';
@@ -41,7 +45,7 @@ function parseBody<T>(
 }
 
 const getRecommendations = asyncHandler(async (req, res) => {
-  const limit = Math.min(parseInt(req.query.limit as string, 10) || 10, 20);
+  const limit = parseLimit(req.query.limit, { defaultLimit: 10, maxLimit: 20 });
   const categoryId = req.query.categoryId as string | undefined;
   const items = await servicesService.getRecommendedServices(limit, categoryId);
   res.json({ ok: true, data: { items } });
@@ -54,8 +58,7 @@ const listCategories = asyncHandler(async (_req, res) => {
 });
 
 const searchServices = asyncHandler(async (req, res) => {
-  const page = parseInt(req.query.page as string, 10) || 1;
-  const limit = Math.min(parseInt(req.query.limit as string, 10) || 20, 100);
+  const { page, limit } = parsePagination(req.query, { defaultLimit: 20, maxLimit: 100 });
   const filters: {
     categoryId?: string;
     city?: string;
@@ -88,7 +91,10 @@ const searchServices = asyncHandler(async (req, res) => {
 });
 
 const getServiceDetail = asyncHandler(async (req, res) => {
-  const service = await servicesService.getServiceDetail(req.params.id!);
+  const viewerHash = createHmac('sha256', env.JWT_SECRET)
+    .update(`${req.ip}|${req.get('user-agent') ?? ''}`)
+    .digest('hex');
+  const service = await servicesService.getServiceDetail(req.params.id!, viewerHash);
   const response: ApiSuccessBody<Service> = { ok: true, data: service };
   res.json(response);
 });
@@ -103,8 +109,7 @@ const createService = asyncHandler(async (req, res) => {
 
 const listMyServices = asyncHandler(async (req, res) => {
   const user = requireUser(req);
-  const page = parseInt(req.query.page as string, 10) || 1;
-  const limit = Math.min(parseInt(req.query.limit as string, 10) || 20, 50);
+  const { page, limit } = parsePagination(req.query, { defaultLimit: 20, maxLimit: 50 });
   const result = await servicesService.listMyServices(user.id, page, limit);
   res.json({ ok: true, data: result });
 });

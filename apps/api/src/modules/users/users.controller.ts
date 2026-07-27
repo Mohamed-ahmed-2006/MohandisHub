@@ -3,6 +3,7 @@ import type { ApiSuccessBody, AuthUser } from '@mohandishub/shared';
 import { getPool } from '../../db/pool.js';
 import { asyncHandler } from '../../utils/async-handler.js';
 import { HttpError } from '../../utils/http-error.js';
+import { parsePagination } from '../../utils/pagination.js';
 
 import { UsersService } from './users.service.js';
 import type { UserSummary } from './users.types.js';
@@ -123,8 +124,7 @@ const getMyActivity = asyncHandler(async (req, res) => {
     });
   }
 
-  const page = parseInt(req.query.page as string, 10) || 1;
-  const limit = Math.min(parseInt(req.query.limit as string, 10) || 20, 50);
+  const { page, limit } = parsePagination(req.query, { defaultLimit: 20, maxLimit: 50 });
   const offset = (page - 1) * limit;
 
   const pool = getPool();

@@ -161,7 +161,8 @@ describe('phase 2 admin money controls', () => {
     ]) {
       expect(adminController).toContain(action);
     }
-    expect(adsController).toContain('admin.ad.pricing_override');
+    expect(adsController).toContain('admin.ad.controls_update');
+    expect(adsController).toContain('admin.ad.${input.decision}');
     expect(adsController).toContain('admin.ad.schedule');
     expect(reservationsController).toContain('admin.reservation.reconcile');
     expect(mediaRoutes).toContain('admin.media.create');
@@ -171,7 +172,7 @@ describe('phase 2 admin money controls', () => {
   it('fails production startup for incomplete payment-adjacent providers', () => {
     const envConfig = readSource('../config/env.ts');
 
-    expect(envConfig).toContain("parsed.data.NODE_ENV === 'production'");
+    expect(envConfig).toContain("parsed.data.DEPLOYMENT_ENV === 'production'");
     expect(envConfig).toContain("parsed.data.OTP_EMAIL_PROVIDER === 'console'");
     expect(envConfig).toContain("parsed.data.OTP_EMAIL_PROVIDER === 'sendgrid'");
     expect(envConfig).toContain("parsed.data.OTP_SMS_PROVIDER === 'http_adapter'");

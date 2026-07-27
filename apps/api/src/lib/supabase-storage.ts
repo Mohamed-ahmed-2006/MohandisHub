@@ -111,15 +111,14 @@ export type PrivateUploadResult = { path: string };
 /** Upload to public bucket; returns public URL. Use for non-sensitive assets only. */
 export async function uploadToSupabase(
   buffer: Buffer,
-  filename: string,
+  objectPath: string,
   contentType: string,
 ): Promise<UploadResult> {
   const supabase = getSupabaseStorageClient();
   if (!supabase) {
     throw new Error('Supabase Storage is not configured');
   }
-  const path = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}-${filename}`;
-  const { data, error } = await supabase.storage.from(UPLOADS_BUCKET).upload(path, buffer, {
+  const { data, error } = await supabase.storage.from(UPLOADS_BUCKET).upload(objectPath, buffer, {
     contentType,
     upsert: false,
   });
@@ -133,22 +132,23 @@ export async function uploadToSupabase(
 /** Upload to private bucket (verification-docs). Returns storage path only; do not return public URL. */
 export async function uploadToSupabasePrivate(
   buffer: Buffer,
-  filename: string,
+  objectPath: string,
   contentType: string,
 ): Promise<PrivateUploadResult> {
   const supabase = getSupabaseStorageClient();
   if (!supabase) {
     throw new Error('Supabase Storage is not configured');
   }
-  const path = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}-${filename}`;
-  const { error } = await supabase.storage.from(VERIFICATION_DOCS_BUCKET).upload(path, buffer, {
-    contentType,
-    upsert: false,
-  });
+  const { error } = await supabase.storage
+    .from(VERIFICATION_DOCS_BUCKET)
+    .upload(objectPath, buffer, {
+      contentType,
+      upsert: false,
+    });
   if (error) {
     throw new Error(`Supabase private upload failed: ${error.message}`);
   }
-  return { path };
+  return { path: objectPath };
 }
 
 /** Create a short-lived signed URL for a file in a private bucket. Expiry in seconds. */

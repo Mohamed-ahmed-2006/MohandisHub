@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -8,6 +9,7 @@ import multer from 'multer';
 
 import { env } from '../../config/env.js';
 import {
+  UPLOADS_BUCKET,
   createPrivateSignedUrl,
   isSupabaseStorageConfigured,
   uploadToSupabase,
@@ -23,10 +25,18 @@ import { HttpError } from '../../utils/http-error.js';
 import { SettingsService } from '../settings/settings.service.js';
 
 import {
+  ALLOWED_UPLOAD_MIMES,
+  detectAndValidateUpload,
+  removeTemporaryUpload,
+} from './upload-file.js';
+import {
+  activatePublicUploadObject,
+  createPlannedUploadObject,
   findPrivateUploadById,
   insertPrivateUpload,
   isJobOwnerOfApplicationWithCv,
   isMoneyProofVisibleToUser,
+  markUploadObjectFailed,
 } from './upload.repository.js';
 
 const settingsService = new SettingsService();
@@ -42,14 +52,6 @@ if (!fs.existsSync(UPLOAD_PRIVATE_DIR)) {
   fs.mkdirSync(UPLOAD_PRIVATE_DIR, { recursive: true });
 }
 
-const ALLOWED_MIME = [
-  'image/jpeg',
-  'image/png',
-  'image/webp',
-  'application/pdf',
-  'video/mp4',
-  'video/webm',
-];
 const DEFAULT_MAX_SIZE = 15 * 1024 * 1024;
 const MAX_CONCURRENT_UPLOADS = 2;
 let activeUploads = 0;
@@ -95,11 +97,7 @@ const permissiveFileFilter = (
 
 const diskStorage = multer.diskStorage({
   destination: (_req, _file, cb) => cb(null, UPLOAD_DIR),
-  filename: (_req, file, cb) => {
-    const ext = path.extname(file.originalname);
-    const name = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}${ext}`;
-    cb(null, name);
-  },
+  filename: (_req, _file, cb) => cb(null, `tmp-${randomUUID()}`),
 });
 
 const memoryStorage = multer.memoryStorage();
@@ -148,47 +146,80 @@ uploadRouter.post(
     if (!req.file) {
       throw new HttpError({ statusCode: 400, code: 'NO_FILE', message: 'No file provided.' });
     }
-    const settingsRow = await settingsService.getRawRow();
-    const customMimes = parseSettingsMimes(settingsRow?.public_upload_allowed_mimes);
-    const effectiveMimes = customMimes ?? ALLOWED_MIME;
-    if (!effectiveMimes.includes(req.file.mimetype)) {
-      throw new HttpError({
-        statusCode: 400,
-        code: 'INVALID_FILE_TYPE',
-        message: 'This file type is not allowed.',
-      });
-    }
-    const maxBytes = Math.min(
-      env.PUBLIC_UPLOAD_MAX_BYTES_CEILING,
-      settingsRow?.max_public_upload_bytes ?? DEFAULT_MAX_SIZE,
-    );
-    if (req.file.size > maxBytes) {
-      throw new HttpError({
-        statusCode: 413,
-        code: 'FILE_TOO_LARGE',
-        message: `File exceeds maximum size of ${maxBytes} bytes.`,
-      });
-    }
-    let fileUrl: string;
-    let filename: string;
-    if (isSupabaseStorageConfigured() && req.file.buffer) {
-      const result = await uploadToSupabase(
-        req.file.buffer,
-        req.file.originalname,
-        req.file.mimetype,
+    let uploadObjectId: string | null = null;
+    let storageMayExist = false;
+    try {
+      const settingsRow = await settingsService.getRawRow();
+      const customMimes = parseSettingsMimes(settingsRow?.public_upload_allowed_mimes);
+      const effectiveMimes = customMimes ?? ALLOWED_UPLOAD_MIMES;
+      const detected = await detectAndValidateUpload(req.file, effectiveMimes);
+      const maxBytes = Math.min(
+        env.PUBLIC_UPLOAD_MAX_BYTES_CEILING,
+        settingsRow?.max_public_upload_bytes ?? DEFAULT_MAX_SIZE,
       );
-      fileUrl = result.url;
-      filename = result.path;
-    } else {
-      const diskFile = req.file as Express.Multer.File & { filename?: string };
-      filename = diskFile.filename ?? req.file.originalname;
-      fileUrl = `/uploads/${filename}`;
+      if (detected.size > maxBytes) {
+        throw new HttpError({
+          statusCode: 413,
+          code: 'FILE_TOO_LARGE',
+          message: `File exceeds maximum size of ${maxBytes} bytes.`,
+        });
+      }
+
+      const useSupabase = isSupabaseStorageConfigured();
+      const objectPath = `${randomUUID()}.${detected.extension}`;
+      const bucket = useSupabase ? UPLOADS_BUCKET : 'local-public';
+      const planned = await createPlannedUploadObject({
+        userId: req.user!.id,
+        bucket,
+        storagePath: objectPath,
+        visibility: 'public',
+        originalName: req.file.originalname,
+        detectedMime: detected.mime,
+        sizeBytes: detected.size,
+        sha256: detected.sha256,
+      });
+      uploadObjectId = planned.id;
+
+      let fileUrl: string;
+      if (useSupabase) {
+        const result = await uploadToSupabase(detected.buffer, objectPath, detected.mime);
+        storageMayExist = true;
+        fileUrl = result.url;
+      } else {
+        if (!req.file.path) throw new Error('Temporary upload path is missing');
+        fs.renameSync(req.file.path, path.join(UPLOAD_DIR, objectPath));
+        storageMayExist = true;
+        fileUrl = `/uploads/${objectPath}`;
+      }
+
+      await activatePublicUploadObject(planned.id);
+      const response: ApiSuccessBody<{
+        url: string;
+        filename: string;
+        originalName: string;
+        uploadId: string;
+      }> = {
+        ok: true,
+        data: {
+          url: fileUrl,
+          filename: objectPath,
+          originalName: req.file.originalname,
+          uploadId: planned.id,
+        },
+      };
+      res.status(201).json(response);
+    } catch (error) {
+      if (uploadObjectId) {
+        try {
+          await markUploadObjectFailed(uploadObjectId, storageMayExist);
+        } catch {
+          // Preserve the original upload error; the planned row remains reconcilable.
+        }
+      }
+      throw error;
+    } finally {
+      await removeTemporaryUpload(req.file);
     }
-    const response: ApiSuccessBody<{ url: string; filename: string; originalName: string }> = {
-      ok: true,
-      data: { url: fileUrl, filename, originalName: req.file.originalname },
-    };
-    res.status(201).json(response);
   }),
 );
 
@@ -221,69 +252,89 @@ uploadRouter.post(
     if (!req.file) {
       throw new HttpError({ statusCode: 400, code: 'NO_FILE', message: 'No file provided.' });
     }
-    const settingsRow = await settingsService.getRawRow();
-    const customMimes = parseSettingsMimes(settingsRow?.public_upload_allowed_mimes);
-    const effectiveMimes = customMimes ?? ALLOWED_MIME;
-    if (!effectiveMimes.includes(req.file.mimetype)) {
-      throw new HttpError({
-        statusCode: 400,
-        code: 'INVALID_FILE_TYPE',
-        message: 'This file type is not allowed.',
-      });
-    }
-    const maxBytes = Math.min(
-      env.PUBLIC_UPLOAD_MAX_BYTES_CEILING,
-      settingsRow?.max_public_upload_bytes ?? DEFAULT_MAX_SIZE,
-    );
-    if (req.file.size > maxBytes) {
-      throw new HttpError({
-        statusCode: 413,
-        code: 'FILE_TOO_LARGE',
-        message: `File exceeds maximum size of ${maxBytes} bytes.`,
-      });
-    }
-    const user = req.user!;
-    const useSupabase = isSupabaseStorageConfigured();
-    let storagePath: string;
-    let bucket: string;
-    if (useSupabase && req.file.buffer) {
-      const result = await uploadToSupabasePrivate(
-        req.file.buffer,
-        req.file.originalname,
-        req.file.mimetype,
+    let uploadObjectId: string | null = null;
+    let storageMayExist = false;
+    try {
+      const settingsRow = await settingsService.getRawRow();
+      const customMimes = parseSettingsMimes(settingsRow?.public_upload_allowed_mimes);
+      const effectiveMimes = customMimes ?? ALLOWED_UPLOAD_MIMES;
+      const detected = await detectAndValidateUpload(req.file, effectiveMimes);
+      const maxBytes = Math.min(
+        env.PUBLIC_UPLOAD_MAX_BYTES_CEILING,
+        settingsRow?.max_public_upload_bytes ?? DEFAULT_MAX_SIZE,
       );
-      storagePath = result.path;
-      bucket = PRIVATE_BUCKET;
-    } else {
-      const diskFile = req.file as Express.Multer.File & { path?: string; filename?: string };
-      const srcPath = diskFile.path;
-      const filename =
-        diskFile.filename ??
-        `${Date.now()}-${Math.random().toString(36).slice(2, 10)}${path.extname(req.file.originalname)}`;
-      if (!srcPath || !filename) {
+      if (detected.size > maxBytes) {
         throw new HttpError({
-          statusCode: 400,
-          code: 'NO_FILE',
-          message: 'File data missing.',
+          statusCode: 413,
+          code: 'FILE_TOO_LARGE',
+          message: `File exceeds maximum size of ${maxBytes} bytes.`,
         });
       }
-      const destPath = path.join(UPLOAD_PRIVATE_DIR, filename);
-      fs.renameSync(srcPath, destPath);
-      storagePath = `private/${filename}`;
-      bucket = PRIVATE_BUCKET_LOCAL;
+
+      const user = req.user!;
+      const useSupabase = isSupabaseStorageConfigured();
+      const filename = `${randomUUID()}.${detected.extension}`;
+      const storagePath = useSupabase ? filename : `private/${filename}`;
+      const bucket = useSupabase ? PRIVATE_BUCKET : PRIVATE_BUCKET_LOCAL;
+      const planned = await createPlannedUploadObject({
+        userId: user.id,
+        bucket,
+        storagePath,
+        visibility: 'private',
+        originalName: req.file.originalname,
+        detectedMime: detected.mime,
+        sizeBytes: detected.size,
+        sha256: detected.sha256,
+      });
+      uploadObjectId = planned.id;
+
+      if (useSupabase) {
+        await uploadToSupabasePrivate(detected.buffer, storagePath, detected.mime);
+        storageMayExist = true;
+      } else {
+        if (!req.file.path) throw new Error('Temporary upload path is missing');
+        fs.renameSync(req.file.path, path.join(UPLOAD_PRIVATE_DIR, filename));
+        storageMayExist = true;
+      }
+
+      const row = await insertPrivateUpload({
+        uploadObjectId: planned.id,
+        storagePath,
+        bucket,
+        userId: user.id,
+        originalName: req.file.originalname,
+        detectedMime: detected.mime,
+        sizeBytes: detected.size,
+        sha256: detected.sha256,
+      });
+      const url = `/api/upload/private/${row.id}`;
+      const response: ApiSuccessBody<{
+        url: string;
+        filename: string;
+        originalName: string;
+        uploadId: string;
+      }> = {
+        ok: true,
+        data: {
+          url,
+          filename: row.id,
+          originalName: req.file.originalname,
+          uploadId: planned.id,
+        },
+      };
+      res.status(201).json(response);
+    } catch (error) {
+      if (uploadObjectId) {
+        try {
+          await markUploadObjectFailed(uploadObjectId, storageMayExist);
+        } catch {
+          // Preserve the original upload error; the planned row remains reconcilable.
+        }
+      }
+      throw error;
+    } finally {
+      await removeTemporaryUpload(req.file);
     }
-    const row = await insertPrivateUpload({
-      storagePath,
-      bucket,
-      userId: user.id,
-      originalName: req.file.originalname,
-    });
-    const url = `/api/upload/private/${row.id}`;
-    const response: ApiSuccessBody<{ url: string; filename: string; originalName: string }> = {
-      ok: true,
-      data: { url, filename: row.id, originalName: req.file.originalname },
-    };
-    res.status(201).json(response);
   }),
 );
 
@@ -344,7 +395,13 @@ uploadRouter.get(
         const url = `${baseUrl}/api/upload/private/${row.id}`;
         res.json({ ok: true, data: { url } });
       } else {
-        res.sendFile(localPath, { headers: { 'Content-Disposition': 'inline' } });
+        res.sendFile(localPath, {
+          headers: {
+            'Content-Disposition': 'inline',
+            'Content-Type': row.detected_mime ?? 'application/octet-stream',
+            'X-Content-Type-Options': 'nosniff',
+          },
+        });
       }
       return;
     }

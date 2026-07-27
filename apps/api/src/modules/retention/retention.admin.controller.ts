@@ -4,6 +4,7 @@ import type { ZodType } from 'zod';
 import { env } from '../../config/env.js';
 import { asyncHandler } from '../../utils/async-handler.js';
 import { HttpError } from '../../utils/http-error.js';
+import { parseLimit } from '../../utils/pagination.js';
 import { ModerationService } from '../moderation/moderation.service.js';
 import { SettingsRepository } from '../settings/settings.repository.js';
 
@@ -141,10 +142,10 @@ export const postRetentionRun = asyncHandler(async (req, res) => {
 
 export const getRetentionSweepLogExport = asyncHandler(async (req, res) => {
   const format = firstQueryString(req.query.format) === 'csv' ? 'csv' : 'json';
-  const limit = Math.min(
-    5000,
-    Math.max(1, parseInt(firstQueryString(req.query.limit) ?? '500', 10) || 500),
-  );
+  const limit = parseLimit(firstQueryString(req.query.limit), {
+    defaultLimit: 500,
+    maxLimit: 5000,
+  });
   const range: { from?: Date; to?: Date; limit: number } = { limit };
   const fromQ = firstQueryString(req.query.from);
   const toQ = firstQueryString(req.query.to);
@@ -174,10 +175,10 @@ export const getRetentionSweepLogExport = asyncHandler(async (req, res) => {
 
 export const getModerationLogExport = asyncHandler(async (req, res) => {
   const format = firstQueryString(req.query.format) === 'csv' ? 'csv' : 'json';
-  const limit = Math.min(
-    5000,
-    Math.max(1, parseInt(firstQueryString(req.query.limit) ?? '500', 10) || 500),
-  );
+  const limit = parseLimit(firstQueryString(req.query.limit), {
+    defaultLimit: 500,
+    maxLimit: 5000,
+  });
   const modRange: { from?: Date; to?: Date; limit: number } = { limit };
   const fromQ = firstQueryString(req.query.from);
   const toQ = firstQueryString(req.query.to);

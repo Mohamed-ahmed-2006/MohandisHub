@@ -87,7 +87,7 @@ reservationsRouter.post(
   '/admin/:reservationId/reconcile',
   loadAdminFromDb,
   requireRole('admin'),
-  requireAdminPermission('manage_transactions'),
+  requireAdminPermission('super_admin'),
   reservationsController.reconcileReservation,
 );
 reservationsRouter.post(

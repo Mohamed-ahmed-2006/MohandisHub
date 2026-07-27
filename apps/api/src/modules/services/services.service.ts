@@ -83,7 +83,7 @@ export class ServicesService {
     return rows.map((r) => this.toSearchResult(r));
   }
 
-  async getServiceDetail(serviceId: string): Promise<Service> {
+  async getServiceDetail(serviceId: string, viewerHash: string = '0'.repeat(64)): Promise<Service> {
     const row = await this.repo.getActiveServiceById(serviceId);
     if (!row) {
       throw new HttpError({
@@ -92,7 +92,7 @@ export class ServicesService {
         message: 'Service not found.',
       });
     }
-    void this.repo.incrementViewCount(serviceId);
+    await this.repo.recordView(serviceId, viewerHash);
     return this.toService(row);
   }
 

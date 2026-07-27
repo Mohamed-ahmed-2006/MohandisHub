@@ -152,6 +152,99 @@ export class VerificationRepository {
     return rows.length === 1;
   }
 
+  async applyTerminalOutcome(params: {
+    requestId: string;
+    status: 'approved' | 'rejected';
+    providerResponse?: unknown;
+    reviewerNotes?: string;
+    reviewedBy?: string;
+    role: 'expert' | 'business' | 'craftsman';
+    profileStatus: 'under_review' | 'verified' | 'rejected';
+    identityApproved: boolean;
+    identityVerificationMethod?: 'didit' | 'manual';
+    auditAction: 'verification.webhook_result' | 'verification.admin_review';
+  }): Promise<boolean> {
+    const client = await this.db.connect();
+    try {
+      await client.query('BEGIN');
+      const locked = await client.query<VerificationRequestRow>(
+        `SELECT * FROM verification_requests WHERE id = $1 FOR UPDATE`,
+        [params.requestId],
+      );
+      const request = locked.rows[0];
+      if (!request || !['initiated', 'submitted'].includes(request.status)) {
+        await client.query('ROLLBACK');
+        return false;
+      }
+
+      const requestUpdate = await client.query(
+        `UPDATE verification_requests
+            SET status = $2,
+                provider_response = COALESCE($3::jsonb, provider_response),
+                reviewer_notes = COALESCE($4, reviewer_notes),
+                reviewed_by = COALESCE($5, reviewed_by)
+          WHERE id = $1`,
+        [
+          params.requestId,
+          params.status,
+          params.providerResponse ? JSON.stringify(params.providerResponse) : null,
+          params.reviewerNotes ?? null,
+          params.reviewedBy ?? null,
+        ],
+      );
+      if (requestUpdate.rowCount !== 1) throw new Error('Verification request update failed');
+
+      const table =
+        params.role === 'expert'
+          ? 'expert_profiles'
+          : params.role === 'craftsman'
+            ? 'craftsman_profiles'
+            : 'business_profiles';
+      const methodSql =
+        params.role === 'business'
+          ? ''
+          : `, identity_verification_method = CASE
+               WHEN $3 THEN COALESCE($4, identity_verification_method)
+               ELSE NULL
+             END`;
+      const profileUpdate = await client.query(
+        `UPDATE ${table}
+            SET verification_status = $1,
+                verified_at = CASE WHEN $1 = 'verified' THEN now() ELSE NULL END,
+                identity_verified = $3
+                ${methodSql}
+          WHERE user_id = $2`,
+        [
+          params.profileStatus,
+          request.user_id,
+          params.identityApproved,
+          params.identityVerificationMethod ?? null,
+        ],
+      );
+      if (profileUpdate.rowCount !== 1) {
+        throw new Error('Verification profile update failed');
+      }
+
+      await client.query(
+        `INSERT INTO audit_log (actor_id, action, resource_type, resource_id, details)
+         VALUES ($1, $2, 'verification_request', $3, $4::jsonb)`,
+        [
+          params.reviewedBy ?? null,
+          params.auditAction,
+          params.requestId,
+          JSON.stringify({ approved: params.status === 'approved' }),
+        ],
+      );
+      await client.query('COMMIT');
+      return true;
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
   /**
    * Update the verification_status on the user's role-specific profile.
    * Called when a verification is approved or rejected.

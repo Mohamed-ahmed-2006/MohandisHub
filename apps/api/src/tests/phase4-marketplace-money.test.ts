@@ -52,8 +52,8 @@ describe('Phase 4 marketplace money invariants', () => {
     expect(repo).toContain('findAdForUpdate');
     expect(repo).toContain('cancelAdInTx');
     expect(service).toContain('computeAdCancellationRefund');
-    expect(service).toContain('Advertisement cancellation refund funded');
-    expect(service).toContain('Advertisement cancellation refund');
+    expect(service).toContain('Advertisement unused-time refund');
+    expect(service).toContain('Advertisement cancelled before review');
     expect(service).toContain('AD_REFUND_PLATFORM_BALANCE_INSUFFICIENT');
   });
 

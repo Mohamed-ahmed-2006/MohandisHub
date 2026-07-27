@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   computeFixedReservationPayoutSplit,
+  computePartialReservationPayoutSplit,
   normalizeCustomDisputeSplit,
 } from '../modules/reservations/reservations.money.js';
 
@@ -82,5 +83,68 @@ describe('funded reservation payout snapshots', () => {
     });
     expect(split).toEqual({ commission: 0.08, providerAmount: 0.97 });
     expect(split.commission + split.providerAmount).toBe(1.05);
+  });
+
+  it('prorates the snapshotted split for a partial dispute and conserves piastres', () => {
+    const split = computePartialReservationPayoutSplit({
+      heldAmount: 105,
+      providerReleaseAmount: 52.5,
+      platformFeeAmount: 5,
+      pricing: {
+        servicePriceAmount: 100,
+        reservationPriceAmount: 0,
+        commissionPercent: 10,
+        commissionMinEgp: 0,
+        totalAmount: 105,
+        currency: 'EGP',
+        deductionTiming: 'on_reserve_hold',
+        releaseTiming: 'on_completion_or_policy',
+        explanation: 'test',
+      },
+      fallbackCommissionPercent: 90,
+      fallbackCommissionMinEgp: 99,
+    });
+    expect(split).toEqual({ commission: 7.5, providerAmount: 45 });
+    expect((split!.commission + split!.providerAmount) * 100).toBe(5250);
+  });
+
+  it('assigns the rounding remainder without creating or destroying a piaster', () => {
+    const split = computePartialReservationPayoutSplit({
+      heldAmount: 1.05,
+      providerReleaseAmount: 0.53,
+      platformFeeAmount: 0.05,
+      pricing: {
+        servicePriceAmount: 1,
+        reservationPriceAmount: 0,
+        commissionPercent: 2.5,
+        commissionMinEgp: 0,
+        totalAmount: 1.05,
+        currency: 'EGP',
+        deductionTiming: 'on_reserve_hold',
+        releaseTiming: 'on_completion_or_policy',
+        explanation: 'test',
+      },
+      fallbackCommissionPercent: 50,
+      fallbackCommissionMinEgp: 0,
+    });
+    expect(split).toEqual({ commission: 0.04, providerAmount: 0.49 });
+    expect((split!.commission + split!.providerAmount) * 100).toBe(53);
+  });
+
+  it('rejects unsafe partial release boundaries', () => {
+    const base = {
+      heldAmount: 100,
+      platformFeeAmount: 0,
+      pricing: null,
+      fallbackCommissionPercent: 10,
+      fallbackCommissionMinEgp: 0,
+    };
+    expect(
+      computePartialReservationPayoutSplit({ ...base, providerReleaseAmount: 100.001 }),
+    ).toBeNull();
+    expect(
+      computePartialReservationPayoutSplit({ ...base, providerReleaseAmount: 101 }),
+    ).toBeNull();
+    expect(computePartialReservationPayoutSplit({ ...base, providerReleaseAmount: 0 })).toBeNull();
   });
 });

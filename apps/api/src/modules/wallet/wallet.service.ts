@@ -2,6 +2,8 @@
 // Wallet service - business logic
 // ---------------------------------------------------------------------------
 
+import { randomUUID } from 'node:crypto';
+
 import type {
   DepositCheckoutResponse,
   ManualDepositRequest,
@@ -30,6 +32,7 @@ import {
   createPaymobIntention,
   isPaymobDepositConfigured,
   isPaymobPayoutConfigured,
+  PaymobApiError,
   PaymobNotConfiguredError,
   verifyPaymobHmac,
 } from '../../lib/paymob.client.js';
@@ -236,6 +239,7 @@ export class WalletService {
   async createDepositCheckout(
     userId: string,
     input: CreateDepositCheckoutInput,
+    idempotencyKey: string = randomUUID(),
   ): Promise<DepositCheckoutResponse> {
     await this.assertWalletFeatureEnabled();
     const status = await this.settingsService.getAppStatus();
@@ -287,7 +291,12 @@ export class WalletService {
     }
 
     if (input.method === 'paymob') {
-      return this.createPaymobDepositCheckout(userId, input, status.paymentMethodsEnabled);
+      return this.createPaymobDepositCheckout(
+        userId,
+        input,
+        status.paymentMethodsEnabled,
+        idempotencyKey,
+      );
     }
 
     if (!env.NOWPAYMENTS_API_KEY) {
@@ -299,7 +308,7 @@ export class WalletService {
     }
 
     const wallet = await this.getOrCreateWallet(userId);
-    const orderId = `np_dep_${wallet.id.replace(/-/g, '')}_${Date.now()}`.slice(0, 128);
+    const orderId = `np_dep_${randomUUID().replace(/-/g, '')}`;
     const requestedPriceCurrency = (input.currency || 'EGP').toUpperCase();
     let invoicePriceAmount = input.amount;
     let invoicePriceCurrency = requestedPriceCurrency;
@@ -341,27 +350,15 @@ export class WalletService {
     const successUrl = this.withQueryParams(webBase, { deposit: 'success', order_id: orderId });
     const cancelUrl = this.withQueryParams(webBase, { deposit: 'cancelled', order_id: orderId });
 
-    const invoice = await createInvoice(env.NOWPAYMENTS_API_KEY, {
-      price_amount: invoicePriceAmount,
-      price_currency: invoicePriceCurrency,
-      ...(payCurrency ? { pay_currency: payCurrency } : {}),
-      order_id: orderId,
-      order_description: `Wallet deposit ${input.amount.toFixed(2)} ${requestedPriceCurrency}`,
-      ipn_callback_url: `${apiBase}/api/wallet/nowpayments/ipn`,
-      success_url: successUrl,
-      cancel_url: cancelUrl,
-      is_fee_paid_by_user: false,
-    });
-
-    await this.repo.createDepositRequest(
+    const intent = await this.repo.createDepositIntent({
       userId,
-      wallet.id,
-      invoicePriceAmount,
-      invoicePriceCurrency,
+      walletId: wallet.id,
+      amount: invoicePriceAmount,
+      currency: invoicePriceCurrency,
       orderId,
-      'nowpayments',
-      this.toStringOrNull(invoice.id),
-      {
+      provider: 'nowpayments',
+      idempotencyKey,
+      providerPayload: {
         method: input.method,
         requested_price_amount: input.amount,
         requested_price_currency: requestedPriceCurrency,
@@ -369,16 +366,62 @@ export class WalletService {
         provider_price_currency: invoicePriceCurrency,
         pay_currency: payCurrency ?? null,
       },
-    );
+    });
+    if (!intent.created) {
+      return this.existingDepositCheckout(intent.row, input.method, 'nowpayments');
+    }
+
+    let invoice: Awaited<ReturnType<typeof createInvoice>>;
+    try {
+      invoice = await createInvoice(env.NOWPAYMENTS_API_KEY, {
+        price_amount: invoicePriceAmount,
+        price_currency: invoicePriceCurrency,
+        ...(payCurrency ? { pay_currency: payCurrency } : {}),
+        order_id: orderId,
+        order_description: `Wallet deposit ${input.amount.toFixed(2)} ${requestedPriceCurrency}`,
+        ipn_callback_url: `${apiBase}/api/wallet/nowpayments/ipn`,
+        success_url: successUrl,
+        cancel_url: cancelUrl,
+        is_fee_paid_by_user: false,
+      });
+    } catch (error) {
+      const deterministic =
+        error instanceof NowPaymentsApiError &&
+        error.status >= 400 &&
+        error.status < 500 &&
+        ![408, 409, 429].includes(error.status);
+      await this.repo.markDepositIntentProviderFailure(
+        intent.row.id,
+        deterministic ? 'failed' : 'unknown',
+      );
+      throw new HttpError({
+        statusCode: 502,
+        code: deterministic ? 'PAYMENT_GATEWAY_ERROR' : 'PAYMENT_PROVIDER_OUTCOME_UNKNOWN',
+        message: deterministic
+          ? 'Could not create NOWPayments checkout link.'
+          : 'The payment provider outcome is being reconciled. Do not submit again.',
+      });
+    }
 
     const checkoutUrl = invoice.invoice_url;
     if (!checkoutUrl) {
+      await this.repo.markDepositIntentProviderFailure(intent.row.id, 'failed');
       throw new HttpError({
         statusCode: 502,
         code: 'PAYMENT_GATEWAY_ERROR',
         message: 'Could not create NOWPayments checkout link.',
       });
     }
+
+    await this.repo.completeDepositIntent({
+      id: intent.row.id,
+      checkoutUrl,
+      providerInvoiceId: this.toStringOrNull(invoice.id),
+      providerPayload: {
+        invoice_id: this.toStringOrNull(invoice.id),
+        provider_order_id: invoice.order_id ?? orderId,
+      },
+    });
 
     return {
       checkoutUrl,
@@ -392,6 +435,7 @@ export class WalletService {
     userId: string,
     input: CreateDepositCheckoutInput,
     paymentMethodsEnabled: Record<string, boolean>,
+    idempotencyKey: string,
   ): Promise<DepositCheckoutResponse> {
     if (!isPaymentMethodEnabled(paymentMethodsEnabled, 'deposit_paymob')) {
       throw new HttpError({
@@ -410,7 +454,7 @@ export class WalletService {
 
     const wallet = await this.getOrCreateWallet(userId);
     // Paymob is EGP-native: no FX, store the EGP amount directly.
-    const orderId = `pm_dep_${wallet.id.replace(/-/g, '')}_${Date.now()}`.slice(0, 128);
+    const orderId = `pm_dep_${randomUUID().replace(/-/g, '')}`;
     const webBase = this.resolveTrustedWebReturnBase(input.returnUrl);
     const apiBase = (env.API_PUBLIC_URL || `http://localhost:${env.PORT}`).replace(/\/$/, '');
     const redirectionUrl = this.withQueryParams(webBase, { deposit: 'success', order_id: orderId });
@@ -418,6 +462,24 @@ export class WalletService {
 
     const billing = await this.repo.getUserBillingInfo(userId);
     const billingData = this.toPaymobBillingData(billing);
+
+    const intent = await this.repo.createDepositIntent({
+      userId,
+      walletId: wallet.id,
+      amount: input.amount,
+      currency: 'EGP',
+      orderId,
+      provider: 'paymob',
+      idempotencyKey,
+      providerPayload: {
+        method: 'paymob',
+        requested_price_amount: input.amount,
+        requested_price_currency: 'EGP',
+      },
+    });
+    if (!intent.created) {
+      return this.existingDepositCheckout(intent.row, 'paymob', 'paymob');
+    }
 
     try {
       const intention = await createPaymobIntention({
@@ -428,21 +490,18 @@ export class WalletService {
         redirectionUrl,
       });
 
-      await this.repo.createDepositRequest(
-        userId,
-        wallet.id,
-        input.amount,
-        'EGP',
-        orderId,
-        'paymob',
-        intention.intentionId || null,
-        {
+      await this.repo.completeDepositIntent({
+        id: intent.row.id,
+        checkoutUrl: intention.checkoutUrl,
+        providerInvoiceId: intention.intentionId || null,
+        paymobIntentionId: intention.intentionId || null,
+        providerPayload: {
           method: 'paymob',
           requested_price_amount: input.amount,
           requested_price_currency: 'EGP',
           paymob_intention_id: intention.intentionId,
         },
-      );
+      });
 
       return {
         checkoutUrl: intention.checkoutUrl,
@@ -452,18 +511,57 @@ export class WalletService {
       };
     } catch (error) {
       if (error instanceof PaymobNotConfiguredError) {
+        await this.repo.markDepositIntentProviderFailure(intent.row.id, 'failed');
         throw new HttpError({
           statusCode: 503,
           code: 'PAYMOB_NOT_CONFIGURED',
           message: 'Paymob is not configured yet.',
         });
       }
+      const deterministic =
+        error instanceof PaymobApiError &&
+        error.status >= 400 &&
+        error.status < 500 &&
+        ![408, 409, 429].includes(error.status);
+      await this.repo.markDepositIntentProviderFailure(
+        intent.row.id,
+        deterministic ? 'failed' : 'unknown',
+      );
       throw new HttpError({
         statusCode: 502,
-        code: 'PAYMENT_GATEWAY_ERROR',
-        message: 'Could not create Paymob checkout link.',
+        code: deterministic ? 'PAYMENT_GATEWAY_ERROR' : 'PAYMENT_PROVIDER_OUTCOME_UNKNOWN',
+        message: deterministic
+          ? 'Could not create Paymob checkout link.'
+          : 'The payment provider outcome is being reconciled. Do not submit again.',
       });
     }
+  }
+
+  private existingDepositCheckout(
+    row: DepositRequestRow,
+    method: 'crypto' | 'card' | 'paymob',
+    provider: 'nowpayments' | 'paymob',
+  ): DepositCheckoutResponse {
+    if (row.checkout_url && ['pending', 'paid', 'pending_fx'].includes(row.status)) {
+      return {
+        checkoutUrl: row.checkout_url,
+        orderId: row.order_id,
+        method,
+        provider,
+      };
+    }
+    if (row.status === 'initiating') {
+      throw new HttpError({
+        statusCode: 409,
+        code: 'DEPOSIT_IN_PROGRESS',
+        message: 'This deposit request is still being reconciled.',
+      });
+    }
+    throw new HttpError({
+      statusCode: 409,
+      code: 'DEPOSIT_IDEMPOTENCY_CONFLICT',
+      message: 'This idempotency key belongs to a completed or failed deposit request.',
+    });
   }
 
   private toPaymobBillingData(billing: {
@@ -551,7 +649,7 @@ export class WalletService {
         paymobTransactionId: transactionId,
         providerPayload: { paymob: transaction, reconciliation },
       });
-      if (deposit.status === 'pending') {
+      if (['initiating', 'pending'].includes(deposit.status)) {
         await this.repo.updateDepositRequestStatus(orderId, 'failed');
       }
       return;
@@ -570,7 +668,7 @@ export class WalletService {
           error: 'invalid_currency_or_amount',
         },
       });
-      if (deposit.status === 'pending') {
+      if (['initiating', 'pending'].includes(deposit.status)) {
         await this.repo.updateDepositRequestStatus(orderId, 'failed');
       }
       return;
@@ -585,7 +683,7 @@ export class WalletService {
         paymobTransactionId: transactionId,
         providerPayload: { paymob: transaction, reconciliation, error: 'underpaid' },
       });
-      if (deposit.status === 'pending') {
+      if (['initiating', 'pending'].includes(deposit.status)) {
         await this.repo.updateDepositRequestStatus(orderId, 'failed');
       }
       return;
@@ -618,6 +716,75 @@ export class WalletService {
       creditAmountEgp,
       rateSnapshot,
     });
+  }
+
+  async reconcilePendingFxDeposits(): Promise<number> {
+    const rows = await this.repo.listPendingFxDeposits();
+    let creditedCount = 0;
+    for (const deposit of rows) {
+      const providerPayload = deposit.provider_payload?.nowpayments;
+      if (
+        !providerPayload ||
+        typeof providerPayload !== 'object' ||
+        Array.isArray(providerPayload)
+      ) {
+        continue;
+      }
+      try {
+        const { egp, snapshot } = await this.fx.computeDepositCreditEgp({
+          providerPayload: providerPayload as Record<string, unknown>,
+          invoicePriceAmount: parseFloat(deposit.amount),
+          invoicePriceCurrency: deposit.currency,
+        });
+        const requestedAmount = this.toNumberOrNull(
+          deposit.provider_payload?.requested_price_amount,
+        );
+        const requestedCurrency =
+          typeof deposit.provider_payload?.requested_price_currency === 'string'
+            ? deposit.provider_payload.requested_price_currency.toUpperCase()
+            : null;
+        const requestedCreditEgp =
+          requestedCurrency === 'EGP' && requestedAmount != null && requestedAmount > 0
+            ? requestedAmount
+            : egp;
+        if (egp + 0.01 < requestedCreditEgp) {
+          await this.repo.updateDepositProviderStateByOrderId({
+            orderId: deposit.order_id,
+            providerStatus: 'underpaid',
+            providerPaymentId: deposit.provider_payment_id,
+            providerInvoiceId: deposit.provider_invoice_id,
+            providerPurchaseId: deposit.provider_purchase_id,
+            providerParentPaymentId: deposit.provider_parent_payment_id,
+            providerPayload: { settlement: snapshot },
+          });
+          await this.repo.updateDepositRequestStatus(deposit.order_id, 'failed');
+          continue;
+        }
+        const credited = await this.repo.creditDepositIfPendingByOrderId({
+          orderId: deposit.order_id,
+          providerStatus: 'finished',
+          referenceType: 'nowpayments',
+          referenceId: deposit.provider_payment_id ?? deposit.provider_invoice_id,
+          description: 'Wallet deposit (NOWPayments)',
+          providerPaymentId: deposit.provider_payment_id,
+          providerInvoiceId: deposit.provider_invoice_id,
+          providerPurchaseId: deposit.provider_purchase_id,
+          providerParentPaymentId: deposit.provider_parent_payment_id,
+          providerPayload: { settlement: snapshot },
+          creditAmountEgp: Math.min(egp, requestedCreditEgp),
+          rateSnapshot: snapshot,
+        });
+        if (credited.credited) creditedCount += 1;
+      } catch (error) {
+        if (error instanceof HttpError && error.code === 'FX_RATE_UNAVAILABLE') continue;
+        throw error;
+      }
+    }
+    return creditedCount;
+  }
+
+  async markStaleDepositIntentsForReconciliation(): Promise<number> {
+    return this.repo.markStaleDepositIntentsForReconciliation();
   }
 
   async handleNowPaymentsDepositIpn(rawBody: string, signatureHeader: string): Promise<void> {
@@ -670,11 +837,30 @@ export class WalletService {
       if (!dep) return;
       const invoiceAmount = dep ? parseFloat(dep.amount) : 0;
       const invoiceCurrency = dep?.currency ?? 'EGP';
-      const { egp, snapshot } = await this.fx.computeDepositCreditEgp({
-        providerPayload,
-        invoicePriceAmount: invoiceAmount,
-        invoicePriceCurrency: invoiceCurrency,
-      });
+      let settlement: Awaited<ReturnType<WalletFxService['computeDepositCreditEgp']>>;
+      try {
+        settlement = await this.fx.computeDepositCreditEgp({
+          providerPayload,
+          invoicePriceAmount: invoiceAmount,
+          invoicePriceCurrency: invoiceCurrency,
+        });
+      } catch (error) {
+        if (error instanceof HttpError && error.code === 'FX_RATE_UNAVAILABLE') {
+          await this.repo.updateDepositProviderStateByOrderId({
+            orderId,
+            providerStatus: 'pending_fx',
+            providerPaymentId,
+            providerInvoiceId,
+            providerPurchaseId,
+            providerParentPaymentId,
+            providerPayload: { nowpayments: providerPayload },
+          });
+          await this.repo.updateDepositRequestStatus(orderId, 'pending_fx');
+          return;
+        }
+        throw error;
+      }
+      const { egp, snapshot } = settlement;
       const requestedAmount = this.toNumberOrNull(dep.provider_payload?.requested_price_amount);
       const requestedCurrency =
         typeof dep.provider_payload?.requested_price_currency === 'string'
@@ -702,7 +888,7 @@ export class WalletService {
             },
           },
         });
-        if (dep.status === 'pending') {
+        if (['initiating', 'pending', 'pending_fx'].includes(dep.status)) {
           await this.repo.updateDepositRequestStatus(orderId, 'failed');
         }
         return;
@@ -756,7 +942,11 @@ export class WalletService {
       providerPayload,
     });
 
-    if (row?.status === 'pending' && FAILED_DEPOSIT_STATUSES.has(providerStatus)) {
+    if (
+      row &&
+      ['initiating', 'pending', 'pending_fx'].includes(row.status) &&
+      FAILED_DEPOSIT_STATUSES.has(providerStatus)
+    ) {
       const mappedStatus =
         providerStatus === 'expired'
           ? 'expired'
@@ -843,9 +1033,6 @@ export class WalletService {
         message: `Maximum withdrawal amount is ${methodLimits.maxAmountEgp} EGP.`,
       });
     }
-    const dailyLimitSince = new Date();
-    dailyLimitSince.setUTCHours(0, 0, 0, 0);
-
     if (
       input.method === 'instapay' &&
       !isPaymentMethodEnabled(status.paymentMethodsEnabled, 'withdrawal_instapay')
@@ -921,7 +1108,6 @@ export class WalletService {
           rateSnapshot: {},
           providerPayload: { created_via: 'wallet_withdrawal_instapay' },
           dailyMaxAmountEgp: methodLimits.dailyMaxAmountEgp,
-          dailyLimitSince,
         });
       } catch (error) {
         this.rethrowWalletCreateErrors(error);
@@ -964,7 +1150,6 @@ export class WalletService {
           rateSnapshot: {},
           providerPayload: { created_via: 'wallet_withdrawal_paymob' },
           dailyMaxAmountEgp: methodLimits.dailyMaxAmountEgp,
-          dailyLimitSince,
         });
       } catch (error) {
         this.rethrowWalletCreateErrors(error);
@@ -1071,7 +1256,6 @@ export class WalletService {
           custody_enabled: env.NOWPAYMENTS_CUSTODY_ENABLED,
         },
         dailyMaxAmountEgp: methodLimits.dailyMaxAmountEgp,
-        dailyLimitSince,
       });
     } catch (error) {
       this.rethrowWalletCreateErrors(error);

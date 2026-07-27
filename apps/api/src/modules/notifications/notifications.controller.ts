@@ -9,6 +9,7 @@ import { z } from 'zod';
 import { env } from '../../config/env.js';
 import { asyncHandler } from '../../utils/async-handler.js';
 import { HttpError } from '../../utils/http-error.js';
+import { parsePagination } from '../../utils/pagination.js';
 
 import { NotificationsService } from './notifications.service.js';
 
@@ -49,10 +50,7 @@ function requireUserId(req: Request): string {
 
 export const getNotifications = asyncHandler(async (req, res) => {
   const userId = requireUserId(req);
-  const pageRaw = typeof req.query.page === 'string' ? req.query.page : '1';
-  const limitRaw = typeof req.query.limit === 'string' ? req.query.limit : '20';
-  const page = Math.max(1, parseInt(pageRaw, 10) || 1);
-  const limit = Math.min(50, Math.max(1, parseInt(limitRaw, 10) || 20));
+  const { page, limit } = parsePagination(req.query, { defaultLimit: 20, maxLimit: 50 });
   const result = await notificationsService.listByUserId(userId, page, limit);
   const response: ApiSuccessBody<typeof result> = { ok: true, data: result };
   res.json(response);

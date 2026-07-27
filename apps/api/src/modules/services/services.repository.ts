@@ -226,10 +226,24 @@ export class ServicesRepository {
     return rows[0] ?? null;
   }
 
-  async incrementViewCount(serviceId: string): Promise<void> {
-    await this.db.query(`UPDATE services SET view_count = view_count + 1 WHERE id = $1`, [
-      serviceId,
-    ]);
+  async recordView(serviceId: string, viewerHash: string): Promise<boolean> {
+    const result = await this.db.query(
+      `WITH inserted AS (
+         INSERT INTO service_view_events (service_id, viewer_hash, view_bucket)
+         VALUES (
+           $1,
+           $2,
+           date_bin(interval '30 minutes', now(), timestamptz '2000-01-01 00:00:00+00')
+         )
+         ON CONFLICT (service_id, viewer_hash, view_bucket) DO NOTHING
+         RETURNING 1
+       )
+       UPDATE services
+          SET view_count = view_count + 1
+        WHERE id = $1 AND EXISTS (SELECT 1 FROM inserted)`,
+      [serviceId, viewerHash],
+    );
+    return (result.rowCount ?? 0) === 1;
   }
 
   async createService(

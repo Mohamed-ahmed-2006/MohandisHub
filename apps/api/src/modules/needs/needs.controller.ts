@@ -2,6 +2,7 @@ import { canBidOnNeeds, canManageNeeds } from '@mohandishub/shared';
 
 import { asyncHandler } from '../../utils/async-handler.js';
 import { HttpError } from '../../utils/http-error.js';
+import { parsePagination } from '../../utils/pagination.js';
 
 import { NeedsService } from './needs.service.js';
 import {
@@ -76,15 +77,13 @@ const createNeed = asyncHandler(async (req, res) => {
 
 const listMyNeeds = asyncHandler(async (req, res) => {
   const user = requireUser(req);
-  const page = parseInt(req.query.page as string, 10) || 1;
-  const limit = Math.min(parseInt(req.query.limit as string, 10) || 20, 50);
+  const { page, limit } = parsePagination(req.query, { defaultLimit: 20, maxLimit: 50 });
   const data = await svc.listMyNeeds(user.id, page, limit);
   res.json({ ok: true, data });
 });
 
 const listOpenNeeds = asyncHandler(async (req, res) => {
-  const page = parseInt(req.query.page as string, 10) || 1;
-  const limit = Math.min(parseInt(req.query.limit as string, 10) || 20, 50);
+  const { page, limit } = parsePagination(req.query, { defaultLimit: 20, maxLimit: 50 });
   const categoryId = req.query.categoryId as string | undefined;
   const data = await svc.listOpenNeeds(page, limit, categoryId);
   res.json({ ok: true, data });
@@ -130,8 +129,7 @@ const listBidsForNeed = asyncHandler(async (req, res) => {
 
 const listMyBids = asyncHandler(async (req, res) => {
   const user = requireBidder(req);
-  const page = parseInt(req.query.page as string, 10) || 1;
-  const limit = Math.min(parseInt(req.query.limit as string, 10) || 20, 50);
+  const { page, limit } = parsePagination(req.query, { defaultLimit: 20, maxLimit: 50 });
   const data = await svc.listMyBids(user.id, page, limit);
   res.json({ ok: true, data });
 });

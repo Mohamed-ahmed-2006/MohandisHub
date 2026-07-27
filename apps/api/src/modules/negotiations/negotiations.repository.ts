@@ -37,6 +37,7 @@ export type PriceNegotiationRoundRow = {
 
 const MAX_ROUNDS = 10;
 const INACTIVITY_HOURS = 48;
+const hoursFromNow = (hours: number): Date => new Date(Date.now() + hours * 60 * 60 * 1000);
 
 export { MAX_ROUNDS, INACTIVITY_HOURS };
 
@@ -104,8 +105,7 @@ export class NegotiationsRepository {
     },
     client?: PoolClient,
   ): Promise<PriceNegotiationRow> {
-    const expiresAt = new Date();
-    expiresAt.setHours(expiresAt.getHours() + INACTIVITY_HOURS);
+    const expiresAt = hoursFromNow(INACTIVITY_HOURS);
     const q = client ?? this.db;
     const { rows } = await q.query<PriceNegotiationRow>(
       `INSERT INTO price_negotiations (
@@ -151,8 +151,7 @@ export class NegotiationsRepository {
 
   /** Bump inactivity expiry from now. */
   async touchExpiresAt(negotiationId: string, client?: PoolClient): Promise<void> {
-    const expiresAt = new Date();
-    expiresAt.setHours(expiresAt.getHours() + INACTIVITY_HOURS);
+    const expiresAt = hoursFromNow(INACTIVITY_HOURS);
     const q = client ?? this.db;
     await q.query(
       `UPDATE price_negotiations SET expires_at = $2, updated_at = now() WHERE id = $1`,
@@ -191,8 +190,7 @@ export class NegotiationsRepository {
     latestOfferedBy: string,
     latestAmount: number,
   ): Promise<PriceNegotiationRow | null> {
-    const expiresAt = new Date();
-    expiresAt.setHours(expiresAt.getHours() + INACTIVITY_HOURS);
+    const expiresAt = hoursFromNow(INACTIVITY_HOURS);
     const { rows } = await this.db.query<PriceNegotiationRow>(
       `UPDATE price_negotiations
        SET latest_offered_by = $2, latest_amount = $3, expires_at = $4, updated_at = now()

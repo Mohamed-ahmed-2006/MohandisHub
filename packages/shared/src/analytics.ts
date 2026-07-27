@@ -20,6 +20,8 @@ export type ProviderAnalytics = {
     from: string;
     to: string;
   };
+  /** View-based analytics are complete only from this event-collection timestamp onward. */
+  analyticsAvailableFrom?: string | null;
   earningsTrend?: Array<{
     date: string;
     amount: number;

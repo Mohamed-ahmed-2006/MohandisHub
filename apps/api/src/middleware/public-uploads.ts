@@ -14,8 +14,9 @@ const extToMime: Record<string, string> = {
   '.jpg': 'image/jpeg',
   '.jpeg': 'image/jpeg',
   '.webp': 'image/webp',
-  '.gif': 'image/gif',
   '.pdf': 'application/pdf',
+  '.mp4': 'video/mp4',
+  '.webm': 'video/webm',
 };
 
 /**
@@ -42,7 +43,14 @@ export const publicUploadsHandler = asyncHandler(
     }
 
     if (fs.existsSync(localPath)) {
-      res.sendFile(localPath, { headers: { 'Content-Disposition': 'inline' } });
+      const mime = extToMime[path.extname(safe).toLowerCase()] ?? 'application/octet-stream';
+      res.sendFile(localPath, {
+        headers: {
+          'Content-Disposition': 'inline',
+          'Content-Type': mime,
+          'X-Content-Type-Options': 'nosniff',
+        },
+      });
       return;
     }
 
@@ -54,7 +62,11 @@ export const publicUploadsHandler = asyncHandler(
           const buf = Buffer.from(await data.arrayBuffer());
           const ext = path.extname(safe).toLowerCase();
           const mime = extToMime[ext] ?? 'application/octet-stream';
-          res.type(mime).set('Cache-Control', 'public, max-age=86400').send(buf);
+          res
+            .type(mime)
+            .set('Cache-Control', 'public, max-age=86400')
+            .set('X-Content-Type-Options', 'nosniff')
+            .send(buf);
           return;
         }
       }

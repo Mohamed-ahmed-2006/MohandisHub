@@ -45,6 +45,8 @@ export type AppSettingsRow = {
   coupon_generation_fee_egp?: string;
   wallet_egp_per_usdt_deposit?: string | null;
   wallet_egp_per_usdt_withdrawal?: string | null;
+  wallet_egp_per_usdt_deposit_updated_at?: Date | null;
+  wallet_egp_per_usdt_withdrawal_updated_at?: Date | null;
   platform_instapay_display?: Record<string, unknown> | null;
   wallet_usd_to_egp_migration_rate?: string | null;
   wallet_migration_usd_to_egp_applied?: boolean;

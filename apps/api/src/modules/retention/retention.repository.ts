@@ -379,7 +379,7 @@ export class RetentionRepository {
     return rowCount ?? 0;
   }
 
-  async deletePrivateUploadsIfUnreferenced(
+  async enqueuePrivateUploadDeletionIfUnreferenced(
     client: PoolClient,
     ids: string[],
     dryRun: boolean,
@@ -417,8 +417,33 @@ export class RetentionRepository {
       ]);
       return parseInt(rows[0]?.c ?? '0', 10);
     }
-    const { rowCount } = await client.query(`DELETE ${sql}`, [ids]);
-    return rowCount ?? 0;
+    const candidates = await client.query<{ id: string; upload_object_id: string | null }>(
+      `SELECT pu.id, pu.upload_object_id ${sql} FOR UPDATE OF pu`,
+      [ids],
+    );
+    const uploadObjectIds = candidates.rows
+      .map((row) => row.upload_object_id)
+      .filter((id): id is string => Boolean(id));
+    if (uploadObjectIds.length > 0) {
+      await client.query(
+        `UPDATE upload_objects
+            SET state = 'pending_delete', updated_at = now()
+          WHERE id = ANY($1::uuid[]) AND state <> 'deleted'`,
+        [uploadObjectIds],
+      );
+      await client.query(
+        `INSERT INTO storage_deletion_jobs (upload_object_id, state, next_attempt_at)
+         SELECT unnest($1::uuid[]), 'pending', now()
+         ON CONFLICT (upload_object_id) DO UPDATE
+           SET state = 'pending', next_attempt_at = now(), updated_at = now()`,
+        [uploadObjectIds],
+      );
+    }
+    const candidateIds = candidates.rows.map((row) => row.id);
+    if (candidateIds.length > 0) {
+      await client.query('DELETE FROM private_uploads WHERE id = ANY($1::uuid[])', [candidateIds]);
+    }
+    return candidateIds.length;
   }
 
   async listUnreferencedPrivateUploadsByIds(

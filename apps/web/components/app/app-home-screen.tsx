@@ -293,9 +293,6 @@ export const AppHomeScreen = ({ locale, dictionary }: AppHomeScreenProps) => {
     return [t];
   }, []);
 
-  // Remove the redundant Stripe checking from AppHomeScreen as it's now handled globally in AppShell
-  // ...
-
   useEffect(() => {
     const post = searchParams.get('post');
     if (post === '1' && authUser?.role === 'customer') {

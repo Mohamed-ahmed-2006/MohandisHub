@@ -2,6 +2,7 @@ import type { Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
 
 import { HttpError } from '../../utils/http-error.js';
+import { parsePagination } from '../../utils/pagination.js';
 
 import { JobsService } from './jobs.service.js';
 
@@ -124,8 +125,7 @@ class JobsController {
 
   listOpenJobs = async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const page = Math.max(1, parseInt((req.query.page as string) || '1', 10));
-      const limit = Math.max(1, Math.min(50, parseInt((req.query.limit as string) || '20', 10)));
+      const { page, limit } = parsePagination(req.query, { defaultLimit: 20, maxLimit: 50 });
       const result = await this.service.listOpenJobs(page, limit);
       res.json({ ok: true, data: result });
     } catch (err) {
@@ -157,8 +157,7 @@ class JobsController {
   listBusinessJobs = async (req: Request, res: Response, next: NextFunction) => {
     try {
       const user = req.user!;
-      const page = Math.max(1, parseInt((req.query.page as string) || '1', 10));
-      const limit = Math.max(1, Math.min(50, parseInt((req.query.limit as string) || '20', 10)));
+      const { page, limit } = parsePagination(req.query, { defaultLimit: 20, maxLimit: 50 });
       const result = await this.service.listBusinessJobs(user.id, page, limit);
       res.json({ ok: true, data: result });
     } catch (err) {

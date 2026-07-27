@@ -32,6 +32,12 @@ async function apiReq<T>(path: string, token: string, opts?: RequestInit): Promi
 }
 
 export const servicesApiClient = {
+  getServiceDetail: async (id: string): Promise<Service> => {
+    const response = await fetch(`${getApiBaseUrl()}/api/services/${id}`);
+    if (!response.ok) throw new Error('Service not found');
+    const body = (await response.json()) as ApiSuccessBody<Service>;
+    return body.data;
+  },
   getCategories: async (): Promise<ServiceCategory[]> => {
     const response = await fetch(`${getApiBaseUrl()}/api/services/categories`);
     if (!response.ok) return [];
