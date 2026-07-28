@@ -15,8 +15,13 @@ CREATE TABLE IF NOT EXISTS plans (
   created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-INSERT INTO plans (slug, name)
-VALUES ('free', 'Free')
+-- The fixed UUID is load-bearing: users.plan_id defaults to it (see
+-- 20260729110000_schema_reconciliation_from_live.sql), so every user lands on the
+-- free plan without a lookup. The original apps/api/src/db/migrations/005_plans.sql
+-- seeded this exact id; the 2026-03-09 rewrite dropped it and let the id be
+-- random, which made a clean replay diverge from every existing database.
+INSERT INTO plans (id, slug, name)
+VALUES ('00000000-0000-4000-a000-000000000001'::uuid, 'free', 'Free')
 ON CONFLICT (slug) DO NOTHING;
 
 -- --------------------------------------------------------------------------
