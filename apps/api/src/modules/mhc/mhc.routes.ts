@@ -24,6 +24,8 @@ mhcRouter.get('/action-prices', mhcController.getActionPrices);
 // Purchase credits via manual InstaPay transfer (launch rail).
 mhcRouter.get('/purchase/instapay/info', mhcController.getInstapayPurchaseInfo);
 mhcRouter.post('/purchase/instapay', mhcController.submitInstapayPurchase);
+// Automated crypto purchase (NOWPayments). Fail-closed on missing config.
+mhcRouter.post('/purchase/nowpayments', mhcController.createNowPaymentsPurchase);
 // The provider's own purchase history, including requests awaiting review.
 mhcRouter.get('/purchases', mhcController.getMyCreditPurchases);
 

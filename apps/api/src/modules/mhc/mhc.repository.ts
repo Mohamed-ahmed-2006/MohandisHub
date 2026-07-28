@@ -281,6 +281,10 @@ export class MhcRepository {
     transferReference?: string | null;
     destinationAccountSnapshot?: Record<string, unknown>;
     providerPayload?: Record<string, unknown>;
+    /** NOWPayments invoice id, so a callback can be matched even without order_id. */
+    providerInvoiceId?: string | null;
+    /** Hosted checkout URL the provider is sent to. */
+    checkoutUrl?: string | null;
   }): Promise<{ id: string; order_id: string; status: string }> {
     const creditWallet = await this.getOrCreateCreditWallet(params.userId);
     const externalPrice = parseFloat(params.pkg.external_price_amount);
@@ -289,11 +293,13 @@ export class MhcRepository {
          user_id, wallet_id, amount, currency, order_id, provider, status,
          purpose, target_account_type, credit_package_id, mhc_grant_amount,
          external_price_amount, external_price_currency,
-         proof_upload_id, transfer_reference, destination_account_snapshot, provider_payload
+         proof_upload_id, transfer_reference, destination_account_snapshot, provider_payload,
+         provider_invoice_id, checkout_url, provider_requested_at
        ) VALUES ($1, $2, $3, $4, $5, $6, $7,
          'credit_purchase', 'provider_credit', $8, $9,
          $3, $4,
-         $10, $11, $12::jsonb, $13::jsonb)
+         $10, $11, $12::jsonb, $13::jsonb,
+         $14, $15, now())
        RETURNING id, order_id, status`,
       [
         params.userId,
@@ -309,6 +315,8 @@ export class MhcRepository {
         params.transferReference ?? null,
         JSON.stringify(params.destinationAccountSnapshot ?? {}),
         JSON.stringify(params.providerPayload ?? {}),
+        params.providerInvoiceId ?? null,
+        params.checkoutUrl ?? null,
       ],
     );
     return rows[0]!;

@@ -1,7 +1,20 @@
+import { createHmac } from 'node:crypto';
+
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { MhcService } from '../modules/mhc/mhc.service.js';
 import { HttpError } from '../utils/http-error.js';
+
+// The IPN handler reads the secret from env at call time; set it before the
+// service module is imported so signature verification is exercised for real
+// rather than short-circuited by a missing-config guard.
+vi.mock('../config/env.js', () => ({
+  env: {
+    NOWPAYMENTS_IPN_SECRET: 'test-ipn-secret',
+    NOWPAYMENTS_API_KEY: 'test-api-key',
+    API_PUBLIC_URL: 'https://api.example.test',
+  },
+}));
 
 const poolQueryMock = vi.fn();
 const clientQueryMock = vi.fn();
@@ -732,6 +745,216 @@ describe('MhcService — webhook fulfilment', () => {
     await expect(
       service.fulfilPurchaseFromWebhook({ orderId: 'nope', providerStatus: 'finished' }),
     ).resolves.toBeNull();
+  });
+});
+
+describe('MhcService — NOWPayments IPN', () => {
+  const IPN_SECRET = 'test-ipn-secret';
+
+  /** Build a body + matching signature the way NOWPayments does (sorted keys, HMAC-SHA512). */
+  const sign = (payload: Record<string, unknown>): { raw: string; signature: string } => {
+    const sortDeep = (v: unknown): unknown => {
+      if (Array.isArray(v)) return v.map(sortDeep);
+      if (v && typeof v === 'object') {
+        return Object.keys(v as Record<string, unknown>)
+          .sort()
+          .reduce<Record<string, unknown>>((acc, k) => {
+            acc[k] = sortDeep((v as Record<string, unknown>)[k]);
+            return acc;
+          }, {});
+      }
+      return v;
+    };
+    const raw = JSON.stringify(payload);
+    const signature = createHmac('sha512', IPN_SECRET)
+      .update(JSON.stringify(sortDeep(JSON.parse(raw))))
+      .digest('hex');
+    return { raw, signature };
+  };
+
+  const purchaseRow = {
+    id: 'dep-np-1',
+    user_id: 'provider-1',
+    order_id: 'MHC-NP-1',
+    status: 'pending',
+    provider: 'nowpayments',
+    purpose: 'credit_purchase',
+    mhc_grant_amount: '100',
+    external_price_amount: '250',
+    external_price_currency: 'EGP',
+    credit_package_id: 'pkg-1',
+    credited_transaction_id: null,
+  };
+
+  const settledBody = {
+    order_id: 'MHC-NP-1',
+    payment_status: 'finished',
+    payment_id: 'np-99',
+    price_amount: 250,
+    price_currency: 'EGP',
+    actually_paid: 250,
+  };
+
+  const mockPurchaseLookup = () =>
+    poolQueryMock.mockImplementation(
+      routeQuery([{ match: /FROM deposit_requests\s+WHERE order_id/, rows: [purchaseRow] }]),
+    );
+
+  const mockFulfilment = () =>
+    clientQueryMock.mockImplementation(
+      routeQuery([
+        {
+          match: /FROM deposit_requests\s+WHERE id = \$1 AND purpose = 'credit_purchase'\s+FOR UPDATE/,
+          rows: [
+            {
+              id: 'dep-np-1',
+              user_id: 'provider-1',
+              status: 'pending',
+              mhc_grant_amount: '100',
+              order_id: 'MHC-NP-1',
+            },
+          ],
+        },
+        { match: /INSERT INTO wallets/, rows: [CREDIT_WALLET] },
+        {
+          match: /SELECT balance::text FROM wallets WHERE id = \$1 FOR UPDATE/,
+          rows: [{ balance: '0' }],
+        },
+        { match: /INSERT INTO transactions/, rows: [{ id: 'tx-np-1' }] },
+      ]),
+    );
+
+  it('rejects a callback with an invalid signature before touching the database', async () => {
+    const service = new MhcService();
+    const { raw } = sign(settledBody);
+
+    await expect(
+      service.handleNowPaymentsCreditIpn(raw, 'deadbeef'),
+    ).rejects.toMatchObject({ code: 'INVALID_SIGNATURE', statusCode: 400 });
+
+    expect(poolQueryMock).not.toHaveBeenCalled();
+    expect(connectMock).not.toHaveBeenCalled();
+  });
+
+  it('rejects a callback whose body was tampered with after signing', async () => {
+    const service = new MhcService();
+    const { signature } = sign(settledBody);
+    // Same signature, inflated amount.
+    const tampered = JSON.stringify({ ...settledBody, price_amount: 999999 });
+
+    await expect(
+      service.handleNowPaymentsCreditIpn(tampered, signature),
+    ).rejects.toMatchObject({ code: 'INVALID_SIGNATURE' });
+    expect(connectMock).not.toHaveBeenCalled();
+  });
+
+  it('credits exactly once on a verified settled callback', async () => {
+    const service = new MhcService();
+    mockPurchaseLookup();
+    mockFulfilment();
+    const { raw, signature } = sign(settledBody);
+
+    const result = await service.handleNowPaymentsCreditIpn(raw, signature);
+    expect(result).toMatchObject({ handled: true, fulfilled: true });
+
+    const sql = clientQueryMock.mock.calls.map((c) => String(c[0]));
+    expect(sql.filter((s) => /INSERT INTO transactions/.test(s))).toHaveLength(1);
+  });
+
+  it.each(['waiting', 'confirming', 'sending', 'partially_paid', 'failed', 'refunded', 'expired'])(
+    'does not credit on a verified but non-settled status: %s',
+    async (payment_status) => {
+      const service = new MhcService();
+      mockPurchaseLookup();
+      const { raw, signature } = sign({ ...settledBody, payment_status });
+
+      const result = await service.handleNowPaymentsCreditIpn(raw, signature);
+      expect(result).toMatchObject({ handled: true, fulfilled: false });
+      expect(connectMock).not.toHaveBeenCalled();
+    },
+  );
+
+  // Underpayment and overpayment are commercial decisions, not something a
+  // webhook handler should guess at.
+  it.each([
+    ['underpayment', 200],
+    ['overpayment', 400],
+  ])('holds a settled %s for admin review instead of guessing', async (_label, price_amount) => {
+    const service = new MhcService();
+    mockPurchaseLookup();
+    const { raw, signature } = sign({ ...settledBody, price_amount, actually_paid: price_amount });
+
+    const result = await service.handleNowPaymentsCreditIpn(raw, signature);
+    expect(result).toMatchObject({ handled: true, fulfilled: false });
+    expect(result.reason).toMatch(/review/);
+    // No credits moved.
+    expect(connectMock).not.toHaveBeenCalled();
+    // Flagged with the numbers a reviewer needs.
+    const recorded = poolQueryMock.mock.calls.find((c) =>
+      /UPDATE deposit_requests/.test(String(c[0])),
+    );
+    expect(JSON.stringify(recorded?.[1])).toContain('amount_mismatch_review');
+    expect(JSON.stringify(recorded?.[1])).toContain('reconciliation');
+  });
+
+  it('holds a settled payment in the wrong currency for review', async () => {
+    const service = new MhcService();
+    mockPurchaseLookup();
+    const { raw, signature } = sign({ ...settledBody, price_currency: 'USD' });
+
+    const result = await service.handleNowPaymentsCreditIpn(raw, signature);
+    expect(result).toMatchObject({ handled: true, fulfilled: false });
+    expect(connectMock).not.toHaveBeenCalled();
+  });
+
+  it('ignores child payments so a split settlement cannot double-credit', async () => {
+    const service = new MhcService();
+    mockPurchaseLookup();
+    const { raw, signature } = sign({ ...settledBody, parent_payment_id: 'np-parent' });
+
+    const result = await service.handleNowPaymentsCreditIpn(raw, signature);
+    expect(result).toMatchObject({ handled: true, fulfilled: false });
+    expect(result.reason).toMatch(/child/);
+    expect(connectMock).not.toHaveBeenCalled();
+  });
+
+  it('ignores a callback for an unknown order', async () => {
+    const service = new MhcService();
+    poolQueryMock.mockImplementation(routeQuery([]));
+    const { raw, signature } = sign({ ...settledBody, order_id: 'MHC-NP-UNKNOWN' });
+
+    const result = await service.handleNowPaymentsCreditIpn(raw, signature);
+    expect(result).toMatchObject({ handled: false, fulfilled: false });
+  });
+
+  it('is idempotent when the same settled callback arrives twice', async () => {
+    const service = new MhcService();
+    mockPurchaseLookup();
+    // Second delivery: the row is already 'paid'.
+    clientQueryMock.mockImplementation(
+      routeQuery([
+        {
+          match: /FROM deposit_requests\s+WHERE id = \$1 AND purpose = 'credit_purchase'\s+FOR UPDATE/,
+          rows: [
+            {
+              id: 'dep-np-1',
+              user_id: 'provider-1',
+              status: 'paid',
+              mhc_grant_amount: '100',
+              order_id: 'MHC-NP-1',
+            },
+          ],
+        },
+        { match: /INSERT INTO wallets/, rows: [CREDIT_WALLET] },
+      ]),
+    );
+    const { raw, signature } = sign(settledBody);
+
+    const result = await service.handleNowPaymentsCreditIpn(raw, signature);
+    expect(result).toMatchObject({ fulfilled: false });
+    expect(result.reason).toMatch(/already fulfilled/);
+    const sql = clientQueryMock.mock.calls.map((c) => String(c[0]));
+    expect(sql.some((s) => /INSERT INTO transactions/.test(s))).toBe(false);
   });
 });
 

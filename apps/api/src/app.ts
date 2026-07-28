@@ -13,6 +13,7 @@ import { notFoundHandler } from './middleware/not-found.js';
 import { publicUploadsHandler } from './middleware/public-uploads.js';
 import { requestIdMiddleware } from './middleware/request-id.js';
 import { requestLoggingMiddleware } from './middleware/request-logging.js';
+import { mhcController } from './modules/mhc/mhc.controller.js';
 import { walletController } from './modules/wallet/wallet.controller.js';
 import { healthRouter } from './routes/health.routes.js';
 import { apiRouter } from './routes/index.js';
@@ -79,6 +80,15 @@ export const createApp = () => {
     express.raw({ type: 'application/json' }),
     (req, res, next) => {
       void walletController.nowPaymentsPayoutIpn(req, res, next);
+    },
+  );
+  // MHC credit purchases have their own IPN endpoint so credit fulfilment never
+  // shares a code path with legacy EGP wallet deposits.
+  app.use(
+    '/api/credits/nowpayments/ipn',
+    express.raw({ type: 'application/json' }),
+    (req, res, next) => {
+      void mhcController.nowPaymentsIpn(req, res, next);
     },
   );
   app.use(

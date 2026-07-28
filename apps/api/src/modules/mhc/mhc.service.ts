@@ -10,7 +10,9 @@
 // between users, it is a prepaid access product rather than stored value.
 // ---------------------------------------------------------------------------
 
+import { env } from '../../config/env.js';
 import { getPool } from '../../db/pool.js';
+import { createInvoice, verifyNowPaymentsIpnSignature } from '../../lib/nowpayments.client.js';
 import { HttpError } from '../../utils/http-error.js';
 
 import {
@@ -250,6 +252,221 @@ export class MhcService {
       }
       throw e;
     }
+  }
+
+  // -------------------------------------------------------------------------
+  // Purchases — NOWPayments (automated crypto rail)
+  // -------------------------------------------------------------------------
+  /**
+   * Create a NOWPayments invoice for an MHC package.
+   *
+   * The price is taken from the SERVER-side package row, never from the client:
+   * a client-supplied amount would let a provider buy any package for any price.
+   * The package is snapshotted onto the purchase so a later admin price edit
+   * cannot retroactively change what this purchase was for.
+   *
+   * Nothing is credited here. Credits are granted only by a signature-verified
+   * IPN reporting a settled payment (see handleNowPaymentsCreditIpn).
+   */
+  async createNowPaymentsCreditPurchase(params: {
+    userId: string;
+    role: string;
+    packageId: string;
+    payCurrency?: string | null;
+  }): Promise<{ id: string; orderId: string; invoiceUrl: string | null; mhcOnPayment: number }> {
+    this.assertProviderRole(params.role);
+    await this.assertFeatureEnabled('credit_purchase_nowpayments');
+
+    // Fail CLOSED on incomplete configuration. Creating an invoice we cannot
+    // later verify the callback for would leave paid purchases unfulfillable.
+    if (!env.NOWPAYMENTS_API_KEY || !env.NOWPAYMENTS_IPN_SECRET) {
+      throw new HttpError({
+        statusCode: 503,
+        code: 'MHC_CRYPTO_NOT_CONFIGURED',
+        message: 'Crypto credit purchase is not available right now.',
+      });
+    }
+
+    const pkg = await this.repo.findCreditPackageById(params.packageId);
+    if (!pkg || !pkg.is_active) {
+      throw new HttpError({
+        statusCode: 404,
+        code: 'MHC_PACKAGE_NOT_FOUND',
+        message: 'Credit package not found or inactive.',
+      });
+    }
+
+    const pending = await this.repo.countPendingCreditPurchasesForUser(params.userId);
+    if (pending >= MAX_PENDING_PURCHASES_PER_USER) {
+      throw new HttpError({
+        statusCode: 429,
+        code: 'MHC_TOO_MANY_PENDING_PURCHASES',
+        message: 'You already have credit purchases awaiting payment or review.',
+      });
+    }
+
+    const orderId = `MHC-NP-${Date.now()}-${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
+    const priceAmount = parseFloat(pkg.external_price_amount);
+    const apiBase = env.API_PUBLIC_URL?.replace(/\/$/, '') ?? '';
+
+    const invoice = await createInvoice(env.NOWPAYMENTS_API_KEY, {
+      price_amount: priceAmount,
+      price_currency: pkg.external_price_currency,
+      ...(params.payCurrency ? { pay_currency: params.payCurrency } : {}),
+      order_id: orderId,
+      order_description: `MohandisHub credits: ${pkg.name}`,
+      ipn_callback_url: `${apiBase}/api/credits/nowpayments/ipn`,
+      is_fixed_rate: true,
+    });
+
+    const created = await this.repo.createCreditPurchase({
+      userId: params.userId,
+      orderId,
+      provider: 'nowpayments',
+      status: 'pending',
+      pkg,
+      providerInvoiceId: invoice.id != null ? String(invoice.id) : null,
+      checkoutUrl: invoice.invoice_url ?? null,
+      // Everything needed to reconcile the callback against what we sold.
+      providerPayload: {
+        package_snapshot: {
+          id: pkg.id,
+          code: pkg.code,
+          name: pkg.name,
+          mhc_amount: pkg.mhc_amount,
+          external_price_amount: pkg.external_price_amount,
+          external_price_currency: pkg.external_price_currency,
+          snapshotted_at: new Date().toISOString(),
+        },
+        expected_price_amount: priceAmount,
+        expected_price_currency: pkg.external_price_currency,
+        nowpayments_invoice: {
+          id: invoice.id != null ? String(invoice.id) : null,
+          invoice_url: invoice.invoice_url ?? null,
+          pay_currency: invoice.pay_currency ?? null,
+        },
+      },
+    });
+
+    return {
+      id: created.id,
+      orderId: created.order_id,
+      invoiceUrl: invoice.invoice_url ?? null,
+      mhcOnPayment: parseFloat(pkg.mhc_amount),
+    };
+  }
+
+  /**
+   * Handle a NOWPayments IPN for an MHC credit purchase.
+   *
+   * Order of operations matters and is deliberate:
+   *   1. Reject unverified callbacks outright — no database work at all.
+   *   2. Resolve the purchase; ignore callbacks for unknown orders.
+   *   3. Reconcile the amount actually paid against the price we snapshotted.
+   *      Any shortfall routes to ADMIN REVIEW rather than being guessed at.
+   *   4. Only then hand off to fulfilment, which independently re-checks the
+   *      provider status and locks the row.
+   */
+  async handleNowPaymentsCreditIpn(
+    rawBody: string,
+    signatureHeader: string,
+  ): Promise<{ handled: boolean; fulfilled: boolean; reason?: string }> {
+    if (!env.NOWPAYMENTS_IPN_SECRET) {
+      throw new HttpError({
+        statusCode: 503,
+        code: 'IPN_NOT_CONFIGURED',
+        message: 'NOWPayments IPN secret is not configured.',
+      });
+    }
+    if (!verifyNowPaymentsIpnSignature(rawBody, signatureHeader, env.NOWPAYMENTS_IPN_SECRET)) {
+      throw new HttpError({
+        statusCode: 400,
+        code: 'INVALID_SIGNATURE',
+        message: 'Invalid NOWPayments IPN signature.',
+      });
+    }
+
+    const payload = JSON.parse(rawBody) as Record<string, unknown>;
+    const readString = (v: unknown): string | null =>
+      typeof v === 'string' && v.trim().length > 0 ? v.trim() : null;
+    const readNumber = (v: unknown): number | null => {
+      const n = typeof v === 'number' ? v : typeof v === 'string' ? parseFloat(v) : NaN;
+      return Number.isFinite(n) ? n : null;
+    };
+
+    const providerStatus = (
+      readString(payload.payment_status) ??
+      readString(payload.status) ??
+      'unknown'
+    ).toLowerCase();
+    const orderId = readString(payload.order_id);
+    const providerPaymentId = readString(payload.payment_id) ?? readString(payload.id);
+
+    if (!orderId) return { handled: false, fulfilled: false, reason: 'no order_id' };
+
+    const purchase = await this.repo.findCreditPurchaseByOrderId(orderId);
+    if (!purchase) return { handled: false, fulfilled: false, reason: 'unknown order' };
+
+    // A child payment of a split/partial settlement. The parent callback is the
+    // authoritative one; crediting on a child would double-count.
+    if (readString(payload.parent_payment_id)) {
+      await this.repo.recordPurchaseProviderState({
+        purchaseId: purchase.id,
+        providerStatus: `${providerStatus}_child`,
+        providerPaymentId,
+        providerPayload: { nowpayments: payload },
+      });
+      return { handled: true, fulfilled: false, reason: 'child payment ignored' };
+    }
+
+    // Amount reconciliation. `actually_paid` is in the pay currency, so we
+    // compare the invoice-denominated fields NOWPayments echoes back.
+    const expected = parseFloat(purchase.external_price_amount ?? '0');
+    const outcomeAmount = readNumber(payload.price_amount);
+    const paidAmount = readNumber(payload.actually_paid) ?? readNumber(payload.pay_amount);
+    const outcomeCurrency = readString(payload.price_currency)?.toUpperCase() ?? null;
+    const expectedCurrency = (purchase.external_price_currency ?? 'EGP').toUpperCase();
+
+    const currencyMismatch = outcomeCurrency != null && outcomeCurrency !== expectedCurrency;
+    const amountMismatch =
+      outcomeAmount != null && expected > 0 && Math.abs(outcomeAmount - expected) > 0.01;
+
+    if (SETTLED_PROVIDER_STATUSES.has(providerStatus) && (currencyMismatch || amountMismatch)) {
+      // DO NOT GUESS. A settled payment that does not match what we sold is an
+      // exception, and the decision (credit less, credit in full, refund) is a
+      // commercial one. Park it for a human with everything they need.
+      await this.repo.recordPurchaseProviderState({
+        purchaseId: purchase.id,
+        providerStatus: 'amount_mismatch_review',
+        providerPaymentId,
+        providerPayload: {
+          nowpayments: payload,
+          reconciliation: {
+            expected_amount: expected,
+            expected_currency: expectedCurrency,
+            reported_amount: outcomeAmount,
+            reported_currency: outcomeCurrency,
+            actually_paid: paidAmount,
+            flagged_at: new Date().toISOString(),
+          },
+        },
+      });
+      return { handled: true, fulfilled: false, reason: 'amount mismatch — held for review' };
+    }
+
+    const result = await this.fulfilPurchaseFromWebhook({
+      orderId,
+      providerStatus,
+      providerPaymentId,
+      providerPayload: { nowpayments: payload },
+    });
+
+    if (!result) return { handled: false, fulfilled: false, reason: 'unknown order' };
+    return {
+      handled: true,
+      fulfilled: result.fulfilled,
+      ...(result.reason ? { reason: result.reason } : {}),
+    };
   }
 
   /** Platform InstaPay collection details shown to providers buying credits. */

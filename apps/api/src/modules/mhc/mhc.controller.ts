@@ -122,6 +122,35 @@ export const mhcController = {
     res.status(201).json({ success: true, data: result });
   }),
 
+  /** Start an automated crypto purchase; returns the hosted checkout URL. */
+  createNowPaymentsPurchase: asyncHandler(async (req: Request, res: Response) => {
+    const user = getUser(req);
+    const body = (req.body ?? {}) as Record<string, unknown>;
+    const result = await mhcService.createNowPaymentsCreditPurchase({
+      userId: user.id,
+      role: user.role,
+      packageId: requireString(body.packageId, 'packageId'),
+      payCurrency: optionalString(body.payCurrency),
+    });
+    res.status(201).json({ success: true, data: result });
+  }),
+
+  /**
+   * NOWPayments IPN. Mounted with a raw body parser so the HMAC can be checked
+   * against the exact bytes received.
+   *
+   * Always answers 200 once the signature is valid, even when nothing is
+   * credited: NOWPayments retries non-2xx, and retrying a callback we have
+   * deliberately parked for review would achieve nothing. An invalid signature
+   * still returns 400.
+   */
+  nowPaymentsIpn: asyncHandler(async (req: Request, res: Response) => {
+    const raw = Buffer.isBuffer(req.body) ? req.body.toString('utf8') : String(req.body ?? '');
+    const signature = String(req.header('x-nowpayments-sig') ?? '');
+    const result = await mhcService.handleNowPaymentsCreditIpn(raw, signature);
+    res.json({ success: true, data: result });
+  }),
+
   getMyCreditPurchases: asyncHandler(async (req: Request, res: Response) => {
     const user = getUser(req);
     const { page, limit } = parsePagination(req);
