@@ -1,4 +1,8 @@
-import { computeCommissionSplit, type EffectivePlanLimits } from '@mohandishub/shared';
+import {
+  computeCommissionSplit,
+  isPaymentMethodEnabledStrict,
+  type EffectivePlanLimits,
+} from '@mohandishub/shared';
 import type { PoolClient } from 'pg';
 
 import { getPool } from '../../db/pool.js';
@@ -8,6 +12,9 @@ import { PlansService } from '../plans/plans.service.js';
 import { UsageQuotaService } from '../plans/usage-quota.service.js';
 import { SettingsService } from '../settings/settings.service.js';
 import { WalletRepository } from '../wallet/wallet.repository.js';
+
+import { ActivationGateService } from '../mhc/activation-gate.service.js';
+import { redactContactDetails } from '../../utils/contact-redaction.js';
 
 import { NeedsRepository } from './needs.repository.js';
 import type { BidRow, NeedRow } from './needs.repository.js';
@@ -28,6 +35,7 @@ export class NeedsService {
     private readonly plansService: PlansService = new PlansService(),
     private readonly usageQuotaService: UsageQuotaService = new UsageQuotaService(),
     private readonly notificationsService: NotificationsService = new NotificationsService(),
+    private readonly activationGate: ActivationGateService = new ActivationGateService(),
   ) {}
 
   private notifyUser(
@@ -429,11 +437,25 @@ export class NeedsService {
       if (need.customer_id !== userId) {
         throw new HttpError({ statusCode: 403, code: 'FORBIDDEN', message: 'Not your need.' });
       }
-      if (need.status !== 'open' && need.status !== 'awarded') {
+      if (
+        need.status !== 'open' &&
+        need.status !== 'awarded' &&
+        need.status !== 'awarded_pending_provider_acceptance'
+      ) {
         throw new HttpError({
           statusCode: 400,
           code: 'NEED_NOT_AWARDABLE',
           message: 'Need cannot be awarded in its current status.',
+        });
+      }
+      // Once the provider has paid to activate, the customer cannot silently
+      // re-award to someone else — the provider has spent real credits.
+      if (need.activated_at != null) {
+        throw new HttpError({
+          statusCode: 409,
+          code: 'NEED_ALREADY_ACTIVATED',
+          message:
+            'This job has already been activated by the awarded provider and can no longer be re-awarded.',
         });
       }
 
@@ -446,7 +468,7 @@ export class NeedsService {
           message: 'Bid not found for this need.',
         });
       }
-      if (!['pending', 'rejected', 'accepted'].includes(targetBid.status)) {
+      if (!['pending', 'awarded_pending', 'rejected', 'accepted'].includes(targetBid.status)) {
         throw new HttpError({
           statusCode: 400,
           code: 'BID_NOT_AWARDABLE',
@@ -466,12 +488,19 @@ export class NeedsService {
       }
 
       const losers = bids.filter(
-        (row) => row.id !== targetBid.id && (row.status === 'pending' || row.status === 'accepted'),
+        (row) =>
+          row.id !== targetBid.id &&
+          ['pending', 'awarded_pending', 'accepted'].includes(row.status),
       );
+
+      // Awarding is now an OFFER, not an activation. The provider must accept and
+      // pay the MHC activation price before the job opens. Nothing is charged
+      // here, so a customer can never spend a provider's credits.
+      const expiryHours = await this.activationGate.getAwardAcceptanceExpiryHours();
 
       await client.query(
         `UPDATE bids
-         SET status = 'accepted', updated_at = now()
+         SET status = 'awarded_pending', award_offered_at = now(), updated_at = now()
          WHERE id = $1`,
         [targetBid.id],
       );
@@ -480,34 +509,52 @@ export class NeedsService {
          SET status = 'rejected', updated_at = now()
          WHERE need_id = $1
            AND id != $2
-           AND status IN ('pending', 'accepted')`,
+           AND status IN ('pending', 'awarded_pending', 'accepted')`,
         [needId, targetBid.id],
       );
+      // expiryHours = 0 means "never expires"; store NULL so the sweep skips it.
+      // The CHECK constraint requires an expiry when status is pending, so a
+      // never-expiring award uses a far-future sentinel instead of NULL.
       await client.query(
         `UPDATE needs
-         SET status = 'awarded', awarded_bid_id = $1, updated_at = now()
+         SET status = 'awarded_pending_provider_acceptance',
+             awarded_bid_id = NULL,
+             pending_award_bid_id = $1,
+             pending_award_at = now(),
+             pending_award_expires_at = CASE
+               WHEN $3::int > 0 THEN now() + ($3::int * INTERVAL '1 hour')
+               ELSE 'infinity'::timestamptz
+             END,
+             updated_at = now()
          WHERE id = $2`,
-        [targetBid.id, needId],
+        [targetBid.id, needId, expiryHours],
       );
 
       await client.query('COMMIT');
       this.notifyUser(
         targetBid.expert_id,
         'need_bid_awarded',
-        'Your bid was awarded',
-        'The customer awarded your bid on a need.',
-        { needId, bidId: targetBid.id },
+        'You were selected — activate to start',
+        expiryHours > 0
+          ? `A customer selected your bid. Accept and activate it with credits within ${expiryHours} hours to unlock the job.`
+          : 'A customer selected your bid. Accept and activate it with credits to unlock the job.',
+        { needId, bidId: targetBid.id, requiresActivation: true },
       );
       for (const lo of losers) {
         this.notifyUser(
           lo.expert_id,
           'need_bid_rejected',
           'Bid not selected',
-          'Another bid was awarded for this need.',
+          'Another bid was selected for this need.',
           { needId, bidId: lo.id },
         );
       }
-      return { needId, bidId: targetBid.id, status: 'awarded' };
+      return {
+        needId,
+        bidId: targetBid.id,
+        status: 'awarded_pending_provider_acceptance',
+        awaitingProviderActivation: true,
+      };
     } catch (err: unknown) {
       await client.query('ROLLBACK');
       const pgErr = err as { code?: string; constraint?: string };
@@ -524,9 +571,32 @@ export class NeedsService {
     }
   }
 
+  /**
+   * LEGACY / RETIRED FOR LAUNCH — internal customer→provider escrow payment.
+   *
+   * The launch model is: the customer pays the provider DIRECTLY using the
+   * provider's own payment methods, and MohandisHub never holds job money. Its
+   * only revenue rail is MHC (see MhcService).
+   *
+   * This method still contains the full escrow implementation so the historical
+   * behaviour and ledger remain auditable, but it is fenced behind the
+   * fail-CLOSED `escrow_bid_payment` flag and therefore unreachable unless an
+   * admin deliberately re-enables it. Do not build new features on it.
+   */
   async payBid(needId: string, bidId: string, userId: string) {
     await this.assertNeedsFeatureEnabled();
     const status = await this.settingsService.getAppStatus();
+
+    // Fail-CLOSED: an absent flag must NOT re-open the retired escrow rail.
+    if (!isPaymentMethodEnabledStrict(status.paymentMethodsEnabled, 'escrow_bid_payment')) {
+      throw new HttpError({
+        statusCode: 410,
+        code: 'ESCROW_PAYMENTS_RETIRED',
+        message:
+          'In-platform escrow payments are no longer available. Pay the provider directly using the payment details shown on the job after the provider activates it.',
+      });
+    }
+
     if (status.moneyMovementsPaused) {
       throw new HttpError({
         statusCode: 503,
@@ -697,7 +767,24 @@ export class NeedsService {
         message: 'Not allowed to view messages',
       });
     }
-    return this.repo.listBidMessages(bidId, userId, isCustomer);
+    const messages = await this.repo.listBidMessages(bidId, userId, isCustomer);
+    const unlocked = need.activated_at != null || !(await this.activationGate.isGateEnabled());
+    if (unlocked) {
+      // Job is paid for: reveal the original text that was stored alongside the
+      // redacted copy.
+      return messages.map((m) => ({
+        ...m,
+        content: m.raw_content ?? m.content,
+        contact_locked: false,
+      }));
+    }
+    // Pre-activation: never return raw_content, and strip attachments so an
+    // image of a business card cannot bypass the text filter.
+    return messages.map(({ raw_content: _raw, ...m }) => ({
+      ...m,
+      attachment_url: null,
+      contact_locked: true,
+    }));
   }
 
   async createBidMessage(
@@ -719,10 +806,42 @@ export class NeedsService {
         message: 'Not allowed to post messages',
       });
     }
+
     const trimmed = input.content.trim();
     const url = input.attachmentUrl?.trim();
-    const contentForDb = trimmed.length > 0 ? trimmed : url ? '[Image]' : '';
-    return this.repo.createBidMessage(bidId, userId, contentForDb, url ?? null);
+
+    const gateEnabled = await this.activationGate.isGateEnabled();
+    const unlocked = need.activated_at != null || !gateEnabled;
+
+    if (unlocked) {
+      const contentForDb = trimmed.length > 0 ? trimmed : url ? '[Image]' : '';
+      return this.repo.createBidMessage(bidId, userId, contentForDb, url ?? null);
+    }
+
+    // Pre-activation. Attachments are blocked outright: a photo of a phone number
+    // or business card would defeat text redaction entirely.
+    if (url) {
+      throw new HttpError({
+        statusCode: 403,
+        code: 'ATTACHMENTS_LOCKED_UNTIL_ACTIVATION',
+        message:
+          'Attachments are only available after the provider activates the job. Please describe the work in text for now.',
+      });
+    }
+
+    const maskingEnabled = await this.activationGate.isContactMaskingEnabled();
+    if (!maskingEnabled) {
+      const contentForDb = trimmed.length > 0 ? trimmed : '';
+      return this.repo.createBidMessage(bidId, userId, contentForDb, null);
+    }
+
+    const { content: safeContent, redacted } = redactContactDetails(trimmed);
+    // Store the original in raw_content for moderation and for reveal after
+    // activation; serve only `content` until then.
+    return this.repo.createBidMessage(bidId, userId, safeContent, null, {
+      contactRedacted: redacted,
+      rawContent: trimmed,
+    });
   }
 
   private async findNeedForUpdate(client: PoolClient, needId: string): Promise<NeedRow | null> {
@@ -754,7 +873,11 @@ export class NeedsService {
   private assertNeedStatusTransition(from: string, to: string): void {
     if (from === to) return;
     const allowed: Record<string, string[]> = {
-      open: ['awarded', 'closed'],
+      open: ['awarded_pending_provider_acceptance', 'closed'],
+      // Provider acceptance/expiry is driven by the activation flow and the
+      // expiry worker, not by a customer status PATCH. The customer may still
+      // close the need to withdraw the offer.
+      awarded_pending_provider_acceptance: ['closed'],
       awarded: ['in_progress', 'completed', 'closed'],
       in_progress: ['completed', 'closed'],
       completed: [],

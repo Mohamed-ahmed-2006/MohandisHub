@@ -19,6 +19,15 @@ export type NeedRow = {
   reference_url?: string | null;
   status: string;
   awarded_bid_id: string | null;
+  /** Bid the customer selected, awaiting provider acceptance + MHC activation. */
+  pending_award_bid_id?: string | null;
+  pending_award_at?: string | null;
+  pending_award_expires_at?: string | null;
+  /**
+   * Set only when the provider has paid the MHC activation price. This is the
+   * single source of truth for "the job workspace is unlocked".
+   */
+  activated_at?: string | null;
   created_at: string;
   updated_at: string;
   customer_name?: string;
@@ -43,8 +52,16 @@ export type BidRow = {
   expert_last_read_at: string | null;
   created_at: string;
   updated_at: string;
+  award_offered_at?: string | null;
+  award_accepted_at?: string | null;
+  award_rejected_at?: string | null;
+  award_expired_at?: string | null;
   expert_name?: string;
-  expert_email?: string;
+  /**
+   * Deliberately NOT selected anywhere. The provider's email is contact data and
+   * must stay hidden until the provider activates the award with MHC. Adding it
+   * back to a SELECT would silently bypass the activation paywall.
+   */
   need_title?: string;
 };
 
@@ -54,6 +71,12 @@ export type BidMessageRow = {
   sender_id: string;
   content: string;
   attachment_url?: string | null;
+  contact_redacted?: boolean;
+  /**
+   * The unredacted text as typed. MUST NOT be serialised to a client before the
+   * job is activated — see NeedsService.listBidMessages, which strips it.
+   */
+  raw_content?: string | null;
   created_at: string;
   sender_name?: string;
 };
@@ -95,7 +118,8 @@ export class NeedsRepository {
   async countActiveNeedsByCustomer(customerId: string): Promise<number> {
     const { rows } = await getPool().query<{ count: string }>(
       `SELECT count(*)::text AS count FROM needs
-       WHERE customer_id = $1 AND status IN ('open', 'awarded', 'in_progress')`,
+       WHERE customer_id = $1
+         AND status IN ('open', 'awarded_pending_provider_acceptance', 'awarded', 'in_progress')`,
       [customerId],
     );
     return rows.length > 0 ? parseInt(rows[0]!.count, 10) : 0;
@@ -131,9 +155,12 @@ export class NeedsRepository {
     const countCatFilter = categoryId ? 'AND n.category_id = $1' : '';
     const queryParams = categoryId ? [limit, offset, categoryId] : [limit, offset];
     const countParams = categoryId ? [categoryId] : [];
+    // Open needs are browsable by every provider, so `customer_name` must never
+    // fall back to the customer's email address — that would publish contact
+    // details to the whole marketplace before any award or activation.
     const { rows } = await pool.query(
       `SELECT n.*,
-        COALESCE(u.display_name, u.email) AS customer_name,
+        COALESCE(u.display_name, 'Customer') AS customer_name,
         sc.name_en AS category_name_en,
         sc.name_ar AS category_name_ar,
         (SELECT count(*) FROM bids b WHERE b.need_id = n.id)::text AS bid_count
@@ -152,9 +179,10 @@ export class NeedsRepository {
   }
 
   async getNeedById(needId: string): Promise<NeedRow | null> {
+    // No email fallback for `customer_name` — see listOpenNeeds.
     const { rows } = await getPool().query(
       `SELECT n.*,
-        COALESCE(u.display_name, u.email) AS customer_name,
+        COALESCE(u.display_name, 'Customer') AS customer_name,
         (SELECT count(*) FROM bids b WHERE b.need_id = n.id)::text AS bid_count
        FROM needs n
        JOIN users u ON u.id = n.customer_id
@@ -195,7 +223,8 @@ export class NeedsRepository {
   /** Bids that still occupy a slot on the need (customer plan maxBidsPerNeed). */
   async countActiveBidsOnNeed(needId: string): Promise<number> {
     const { rows } = await getPool().query<{ count: string }>(
-      `SELECT count(*)::text AS count FROM bids WHERE need_id = $1 AND status IN ('pending', 'accepted')`,
+      `SELECT count(*)::text AS count FROM bids
+       WHERE need_id = $1 AND status IN ('pending', 'awarded_pending', 'accepted')`,
       [needId],
     );
     return rows.length > 0 ? parseInt(rows[0]!.count, 10) : 0;
@@ -211,8 +240,11 @@ export class NeedsRepository {
   }
 
   async listBidsForNeed(needId: string): Promise<BidRow[]> {
+    // `expert_email` is intentionally omitted — see BidRow. Note display_name no
+    // longer falls back to u.email, because that fallback leaked the address for
+    // every provider who had not set a display name.
     const { rows } = await getPool().query(
-      `SELECT b.*, COALESCE(u.display_name, u.email) AS expert_name, u.email AS expert_email,
+      `SELECT b.*, COALESCE(u.display_name, 'Provider') AS expert_name,
         ((SELECT m.created_at FROM bid_messages m WHERE m.bid_id = b.id ORDER BY m.created_at DESC LIMIT 1) > b.customer_last_read_at) AS has_unread
        FROM bids b
        JOIN users u ON u.id = b.expert_id
@@ -227,7 +259,7 @@ export class NeedsRepository {
     needId: string,
   ): Promise<(BidRow & { expert_plan_slug: string | null; bidder_can_priority_bid: boolean })[]> {
     const { rows } = await getPool().query(
-      `SELECT b.*, COALESCE(u.display_name, u.email) AS expert_name, u.email AS expert_email,
+      `SELECT b.*, COALESCE(u.display_name, 'Provider') AS expert_name,
         ((SELECT m.created_at FROM bid_messages m WHERE m.bid_id = b.id ORDER BY m.created_at DESC LIMIT 1) > b.customer_last_read_at) AS has_unread,
         p.slug AS expert_plan_slug,
         CASE WHEN COALESCE(p.plan_limits->>'canPriorityBid', '') IN ('true', '1') THEN true ELSE false END AS bidder_can_priority_bid
@@ -328,15 +360,123 @@ export class NeedsRepository {
     );
   }
 
+  // -------------------------------------------------------------------------
+  // Pending-award lifecycle (MHC activation gate)
+  // -------------------------------------------------------------------------
+
+  /**
+   * Mark the provider's award as accepted and open the job. Called ONLY from
+   * inside the transaction that has already debited MHC, so the workspace can
+   * never open without a paid activation.
+   */
+  async markAwardAcceptedInTransaction(
+    client: PoolClient,
+    needId: string,
+    bidId: string,
+  ): Promise<void> {
+    await client.query(
+      `UPDATE bids
+       SET status = 'accepted', award_accepted_at = now(), updated_at = now()
+       WHERE id = $1`,
+      [bidId],
+    );
+    await client.query(
+      `UPDATE needs
+       SET status = 'awarded',
+           awarded_bid_id = $1,
+           activated_at = now(),
+           pending_award_bid_id = NULL,
+           pending_award_at = NULL,
+           pending_award_expires_at = NULL,
+           updated_at = now()
+       WHERE id = $2`,
+      [bidId, needId],
+    );
+  }
+
+  /**
+   * Provider declined the award, or it expired. The need returns to 'open' so the
+   * customer can award someone else. No MHC is involved: nothing was charged.
+   */
+  async releasePendingAward(
+    needId: string,
+    bidId: string,
+    reason: 'rejected' | 'expired',
+  ): Promise<void> {
+    const pool = getPool();
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      const timestampColumn = reason === 'rejected' ? 'award_rejected_at' : 'award_expired_at';
+      const nextBidStatus = reason === 'rejected' ? 'rejected' : 'expired';
+      await client.query(
+        `UPDATE bids
+         SET status = $2, ${timestampColumn} = now(), updated_at = now()
+         WHERE id = $1 AND status = 'awarded_pending'`,
+        [bidId, nextBidStatus],
+      );
+      await client.query(
+        `UPDATE needs
+         SET status = 'open',
+             pending_award_bid_id = NULL,
+             pending_award_at = NULL,
+             pending_award_expires_at = NULL,
+             updated_at = now()
+         WHERE id = $1 AND status = 'awarded_pending_provider_acceptance'`,
+        [needId],
+      );
+      await client.query('COMMIT');
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
+  }
+
+  /** Pending awards whose acceptance window has passed (worker sweep). */
+  async listExpiredPendingAwards(
+    limit: number,
+  ): Promise<Array<{ need_id: string; bid_id: string; provider_user_id: string }>> {
+    const { rows } = await getPool().query<{
+      need_id: string;
+      bid_id: string;
+      provider_user_id: string;
+    }>(
+      `SELECT n.id AS need_id, n.pending_award_bid_id AS bid_id, b.expert_id AS provider_user_id
+       FROM needs n
+       JOIN bids b ON b.id = n.pending_award_bid_id
+       WHERE n.status = 'awarded_pending_provider_acceptance'
+         AND n.pending_award_expires_at IS NOT NULL
+         AND n.pending_award_expires_at <= now()
+       ORDER BY n.pending_award_expires_at ASC
+       LIMIT $1::int`,
+      [limit],
+    );
+    return rows;
+  }
+
   async createBidMessage(
     bidId: string,
     senderId: string,
     content: string,
     attachmentUrl?: string | null,
+    options?: { contactRedacted?: boolean; rawContent?: string | null },
   ): Promise<BidMessageRow> {
+    // `raw_content` keeps what the sender actually typed so moderation and abuse
+    // review can see the original, while `content` holds the redacted text that
+    // is safe to serve before activation.
     const { rows } = await getPool().query(
-      `INSERT INTO bid_messages (bid_id, sender_id, content, attachment_url) VALUES ($1, $2, $3, $4) RETURNING *`,
-      [bidId, senderId, content, attachmentUrl ?? null],
+      `INSERT INTO bid_messages (bid_id, sender_id, content, attachment_url, contact_redacted, raw_content)
+       VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
+      [
+        bidId,
+        senderId,
+        content,
+        attachmentUrl ?? null,
+        options?.contactRedacted ?? false,
+        options?.rawContent ?? null,
+      ],
     );
     return rows[0] as BidMessageRow;
   }

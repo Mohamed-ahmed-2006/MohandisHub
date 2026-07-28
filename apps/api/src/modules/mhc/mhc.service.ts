@@ -1,0 +1,558 @@
+// ---------------------------------------------------------------------------
+// MHC (Mohandis Credits) service — business rules for the closed-loop credit
+// ---------------------------------------------------------------------------
+// Launch model: customers pay providers DIRECTLY. MohandisHub never holds
+// customer job money. The platform's only revenue rail is MHC, a non-cashable
+// credit that providers buy and spend on platform actions (award/booking
+// activation, promotions, plans, ads).
+//
+// Because MHC can never be withdrawn, converted back to money, or transferred
+// between users, it is a prepaid access product rather than stored value.
+// ---------------------------------------------------------------------------
+
+import { getPool } from '../../db/pool.js';
+import { HttpError } from '../../utils/http-error.js';
+
+import {
+  InsufficientCreditsError,
+  MhcRepository,
+  type CreditPurchaseRow,
+  type MhcActionPriceRow,
+  type MhcCreditPackageRow,
+} from './mhc.repository.js';
+
+/** Roles allowed to hold and spend MHC. Customers never buy credits. */
+const PROVIDER_ROLES = new Set(['expert', 'craftsman', 'business']);
+
+/** Max concurrent unreviewed manual purchases per provider (anti-spam). */
+const MAX_PENDING_PURCHASES_PER_USER = 3;
+
+export type MhcActionKey =
+  | 'award_activation'
+  | 'booking_activation'
+  | 'subscription_upgrade'
+  | 'advertisement'
+  | 'service_promotion'
+  | 'featured_provider'
+  | 'promoted_proposal';
+
+export class MhcService {
+  private repo = new MhcRepository();
+
+  // -------------------------------------------------------------------------
+  // Guards
+  // -------------------------------------------------------------------------
+  private assertProviderRole(role: string): void {
+    if (!PROVIDER_ROLES.has(role)) {
+      throw new HttpError({
+        statusCode: 403,
+        code: 'MHC_PROVIDERS_ONLY',
+        message: 'Only providers (expert, craftsman, business) can hold or buy credits.',
+      });
+    }
+  }
+
+  private async assertFeatureEnabled(flag: string): Promise<void> {
+    const { rows } = await getPool().query<{ enabled: boolean | null }>(
+      `SELECT (payment_methods_enabled ->> $1)::boolean AS enabled
+       FROM app_settings LIMIT 1`,
+      [flag],
+    );
+    if (rows[0]?.enabled !== true) {
+      throw new HttpError({
+        statusCode: 503,
+        code: 'MHC_METHOD_DISABLED',
+        message: 'This credit purchase method is currently unavailable.',
+      });
+    }
+  }
+
+  // -------------------------------------------------------------------------
+  // Reads
+  // -------------------------------------------------------------------------
+  async getMyCredits(params: { userId: string; role: string }): Promise<{
+    balance: number;
+    currencyLabel: 'MHC';
+    withdrawable: false;
+    packages: MhcCreditPackageRow[];
+  }> {
+    this.assertProviderRole(params.role);
+    await this.repo.getOrCreateCreditWallet(params.userId);
+    const [balance, packages] = await Promise.all([
+      this.repo.getBalance(params.userId),
+      this.repo.listCreditPackages(true),
+    ]);
+    return { balance, currencyLabel: 'MHC', withdrawable: false, packages };
+  }
+
+  async listMyCreditTransactions(params: {
+    userId: string;
+    role: string;
+    page: number;
+    limit: number;
+  }): Promise<{ rows: Array<Record<string, unknown>>; total: number }> {
+    this.assertProviderRole(params.role);
+    return this.repo.listTransactions(params.userId, params.page, params.limit);
+  }
+
+  async listPackages(): Promise<MhcCreditPackageRow[]> {
+    return this.repo.listCreditPackages(true);
+  }
+
+  async listActionPrices(): Promise<MhcActionPriceRow[]> {
+    return this.repo.listActionPrices();
+  }
+
+  /** Price a provider will pay for an action, or 0 when the action is free. */
+  async getEffectivePrice(actionKey: MhcActionKey): Promise<number> {
+    const row = await this.repo.getActionPrice(actionKey);
+    if (!row || !row.is_active) return 0;
+    return parseFloat(row.mhc_price);
+  }
+
+  // -------------------------------------------------------------------------
+  // Purchases — manual InstaPay (launch rail)
+  // -------------------------------------------------------------------------
+  /**
+   * Provider declares an InstaPay transfer to the platform's collection account
+   * and uploads proof. Credits are granted only after admin approval, so the
+   * platform never auto-credits on an unverified claim.
+   */
+  async submitInstapayCreditPurchase(params: {
+    userId: string;
+    role: string;
+    packageId: string;
+    proofUploadId: string;
+    transferReference?: string | null;
+  }): Promise<{ id: string; orderId: string; status: string; mhcOnApproval: number }> {
+    this.assertProviderRole(params.role);
+    await this.assertFeatureEnabled('credit_purchase_instapay');
+
+    const pkg = await this.repo.findCreditPackageById(params.packageId);
+    if (!pkg || !pkg.is_active) {
+      throw new HttpError({
+        statusCode: 404,
+        code: 'MHC_PACKAGE_NOT_FOUND',
+        message: 'Credit package not found or inactive.',
+      });
+    }
+
+    const pending = await this.repo.countPendingCreditPurchasesForUser(params.userId);
+    if (pending >= MAX_PENDING_PURCHASES_PER_USER) {
+      throw new HttpError({
+        statusCode: 429,
+        code: 'MHC_TOO_MANY_PENDING_PURCHASES',
+        message: 'You already have credit purchases awaiting review. Please wait for approval.',
+      });
+    }
+
+    // Proof must belong to the requesting user.
+    const { rows: proofRows } = await getPool().query<{ id: string }>(
+      `SELECT id FROM private_uploads WHERE id = $1 AND user_id = $2 LIMIT 1`,
+      [params.proofUploadId, params.userId],
+    );
+    if (proofRows.length === 0) {
+      throw new HttpError({
+        statusCode: 400,
+        code: 'MHC_INVALID_PROOF',
+        message: 'Payment proof upload was not found for this account.',
+      });
+    }
+
+    const destination = await this.getInstapayCollectionAccount();
+    const orderId = `MHC-IP-${Date.now()}-${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
+
+    try {
+      const created = await this.repo.createCreditPurchase({
+        userId: params.userId,
+        orderId,
+        provider: 'instapay_manual',
+        status: 'pending_review',
+        pkg,
+        proofUploadId: params.proofUploadId,
+        transferReference: params.transferReference ?? null,
+        destinationAccountSnapshot: destination,
+      });
+      return {
+        id: created.id,
+        orderId: created.order_id,
+        status: created.status,
+        mhcOnApproval: parseFloat(pkg.mhc_amount),
+      };
+    } catch (e) {
+      // uq_deposit_requests_instapay_reference blocks reusing a transfer reference.
+      if (e instanceof Error && /uq_deposit_requests_instapay_reference/.test(e.message)) {
+        throw new HttpError({
+          statusCode: 409,
+          code: 'MHC_TRANSFER_REFERENCE_ALREADY_USED',
+          message: 'This transfer reference has already been submitted.',
+        });
+      }
+      throw e;
+    }
+  }
+
+  /** Platform InstaPay collection details shown to providers buying credits. */
+  async getInstapayCollectionAccount(): Promise<Record<string, unknown>> {
+    const { rows } = await getPool().query<{ instapay_deposit_account: unknown }>(
+      `SELECT instapay_deposit_account FROM app_settings LIMIT 1`,
+    );
+    const account = rows[0]?.instapay_deposit_account;
+    return account && typeof account === 'object' ? (account as Record<string, unknown>) : {};
+  }
+
+  // -------------------------------------------------------------------------
+  // Purchases — admin review
+  // -------------------------------------------------------------------------
+  async listPurchasesForAdmin(params: { status?: string; page: number; limit: number }) {
+    const offset = (params.page - 1) * params.limit;
+    return this.repo.listCreditPurchasesForAdmin({
+      ...(params.status ? { status: params.status } : {}),
+      limit: params.limit,
+      offset,
+    });
+  }
+
+  async approvePurchase(params: {
+    purchaseId: string;
+    adminId: string;
+    /** Admin may grant a corrected amount when the transfer was short/over. */
+    overrideMhcAmount?: number | null;
+  }): Promise<{ mhcGranted: number; balance: number }> {
+    const result = await this.repo.fulfillCreditPurchase({
+      purchaseId: params.purchaseId,
+      reviewedBy: params.adminId,
+      providerStatus: 'admin_approved',
+      overrideMhcAmount: params.overrideMhcAmount ?? null,
+    });
+    if (!result) {
+      throw new HttpError({
+        statusCode: 404,
+        code: 'MHC_PURCHASE_NOT_ACTIONABLE',
+        message: 'Credit purchase not found or already resolved.',
+      });
+    }
+    return { mhcGranted: result.mhcGranted, balance: result.balance };
+  }
+
+  async rejectPurchase(params: {
+    purchaseId: string;
+    adminId: string;
+    reason: string;
+  }): Promise<CreditPurchaseRow> {
+    const row = await this.repo.rejectCreditPurchase({
+      purchaseId: params.purchaseId,
+      reviewedBy: params.adminId,
+      reason: params.reason,
+    });
+    if (!row) {
+      throw new HttpError({
+        statusCode: 404,
+        code: 'MHC_PURCHASE_NOT_ACTIONABLE',
+        message: 'Credit purchase not found or already resolved.',
+      });
+    }
+    return row;
+  }
+
+  /** Fulfil a purchase from a verified payment-provider webhook (e.g. crypto). */
+  async fulfilPurchaseFromWebhook(params: {
+    orderId: string;
+    providerStatus: string;
+    providerPaymentId?: string | null;
+    providerPayload?: Record<string, unknown>;
+  }): Promise<{ fulfilled: boolean } | null> {
+    const purchase = await this.repo.findCreditPurchaseByOrderId(params.orderId);
+    if (!purchase) return null;
+    const result = await this.repo.fulfillCreditPurchase({
+      purchaseId: purchase.id,
+      providerStatus: params.providerStatus,
+      providerPaymentId: params.providerPaymentId ?? null,
+      ...(params.providerPayload ? { providerPayload: params.providerPayload } : {}),
+    });
+    return result ? { fulfilled: result.fulfilled } : null;
+  }
+
+  // -------------------------------------------------------------------------
+  // Activation spending (the anti-bypass revenue gate)
+  // -------------------------------------------------------------------------
+  /**
+   * Charge the provider for unlocking an awarded job. Called when the provider
+   * ACCEPTS an award — not when the customer awards it — so a provider is never
+   * billed for work they did not agree to take.
+   */
+  async activateAward(params: {
+    providerUserId: string;
+    actingUserId: string;
+    bidId: string;
+    needId?: string | null;
+  }): Promise<{ mhcCharged: number; balance: number; alreadyActivated: boolean }> {
+    return this.chargeOrThrow({
+      activationType: 'award',
+      actionKey: 'award_activation',
+      providerUserId: params.providerUserId,
+      actingUserId: params.actingUserId,
+      bidId: params.bidId,
+      needId: params.needId ?? null,
+      description: 'Award activation (unlock customer contact & job workspace)',
+    });
+  }
+
+  /**
+   * Provider-facing entry point: the provider ACCEPTS a pending award and pays the
+   * MHC activation price. Charging is provider-initiated (never at customer
+   * award) so a provider is never billed for a job they did not accept.
+   *
+   * The MHC debit and the "job is open" state change happen in ONE transaction
+   * (see MhcRepository.chargeActivation + markAwardAcceptedInTransaction), so we
+   * can never end up having taken credits without opening the job, or vice versa.
+   */
+  async activateAwardForProvider(params: { userId: string; role: string; bidId: string }): Promise<{
+    mhcCharged: number;
+    balance: number;
+    alreadyActivated: boolean;
+    needId: string;
+  }> {
+    this.assertProviderRole(params.role);
+
+    const { rows } = await getPool().query<{
+      bid_id: string;
+      need_id: string;
+      expert_id: string;
+      bid_status: string;
+      need_status: string;
+      awarded_bid_id: string | null;
+      pending_award_bid_id: string | null;
+      pending_award_expires_at: string | null;
+      activated_at: string | null;
+    }>(
+      `SELECT b.id AS bid_id, b.need_id, b.expert_id, b.status AS bid_status,
+              n.status AS need_status, n.awarded_bid_id,
+              n.pending_award_bid_id, n.pending_award_expires_at, n.activated_at
+       FROM bids b
+       JOIN needs n ON n.id = b.need_id
+       WHERE b.id = $1`,
+      [params.bidId],
+    );
+    const bid = rows[0];
+    if (!bid) {
+      throw new HttpError({
+        statusCode: 404,
+        code: 'BID_NOT_FOUND',
+        message: 'Bid not found.',
+      });
+    }
+    if (bid.expert_id !== params.userId) {
+      throw new HttpError({
+        statusCode: 403,
+        code: 'NOT_BID_OWNER',
+        message: 'You can only activate your own bid.',
+      });
+    }
+
+    // Already paid for: return the existing state rather than charging again.
+    if (bid.activated_at != null && bid.awarded_bid_id === bid.bid_id) {
+      const balance = await this.repo.getBalance(params.userId);
+      return { mhcCharged: 0, balance, alreadyActivated: true, needId: bid.need_id };
+    }
+
+    // The customer must currently be offering THIS bid.
+    const isPendingForThisBid =
+      bid.need_status === 'awarded_pending_provider_acceptance' &&
+      bid.pending_award_bid_id === bid.bid_id &&
+      bid.bid_status === 'awarded_pending';
+    if (!isPendingForThisBid) {
+      throw new HttpError({
+        statusCode: 409,
+        code: 'BID_NOT_AWARDED',
+        message: 'This bid has not been awarded to you, or the award is no longer available.',
+      });
+    }
+
+    // Expired offers must not be chargeable — otherwise a provider could spend
+    // credits on a job the customer has already moved on from.
+    if (bid.pending_award_expires_at != null) {
+      const expiresAt = new Date(bid.pending_award_expires_at).getTime();
+      if (Number.isFinite(expiresAt) && expiresAt <= Date.now()) {
+        throw new HttpError({
+          statusCode: 409,
+          code: 'AWARD_OFFER_EXPIRED',
+          message: 'This award offer has expired. No credits were charged.',
+        });
+      }
+    }
+
+    const result = await this.activateAward({
+      providerUserId: params.userId,
+      actingUserId: params.userId,
+      bidId: bid.bid_id,
+      needId: bid.need_id,
+    });
+    return { ...result, needId: bid.need_id };
+  }
+
+  /**
+   * Provider declines a pending award. No MHC is charged and the need reopens so
+   * the customer can select someone else.
+   */
+  async rejectAwardForProvider(params: {
+    userId: string;
+    role: string;
+    bidId: string;
+  }): Promise<{ needId: string; rejected: true }> {
+    this.assertProviderRole(params.role);
+
+    const { rows } = await getPool().query<{
+      bid_id: string;
+      need_id: string;
+      expert_id: string;
+      bid_status: string;
+      need_status: string;
+    }>(
+      `SELECT b.id AS bid_id, b.need_id, b.expert_id, b.status AS bid_status, n.status AS need_status
+       FROM bids b
+       JOIN needs n ON n.id = b.need_id
+       WHERE b.id = $1`,
+      [params.bidId],
+    );
+    const bid = rows[0];
+    if (!bid) {
+      throw new HttpError({ statusCode: 404, code: 'BID_NOT_FOUND', message: 'Bid not found.' });
+    }
+    if (bid.expert_id !== params.userId) {
+      throw new HttpError({
+        statusCode: 403,
+        code: 'NOT_BID_OWNER',
+        message: 'You can only decline your own award.',
+      });
+    }
+    if (
+      bid.bid_status !== 'awarded_pending' ||
+      bid.need_status !== 'awarded_pending_provider_acceptance'
+    ) {
+      throw new HttpError({
+        statusCode: 409,
+        code: 'NO_PENDING_AWARD',
+        message: 'There is no pending award to decline on this bid.',
+      });
+    }
+
+    await this.repo.releasePendingAwardForBid(bid.need_id, bid.bid_id, 'rejected');
+    return { needId: bid.need_id, rejected: true };
+  }
+
+  /** Charge the provider for accepting a service booking. */
+
+  async activateBooking(params: {
+    providerUserId: string;
+    actingUserId: string;
+    reservationId: string;
+  }): Promise<{ mhcCharged: number; balance: number; alreadyActivated: boolean }> {
+    return this.chargeOrThrow({
+      activationType: 'booking',
+      actionKey: 'booking_activation',
+      providerUserId: params.providerUserId,
+      actingUserId: params.actingUserId,
+      reservationId: params.reservationId,
+      description: 'Booking activation (unlock customer contact & job workspace)',
+    });
+  }
+
+  private async chargeOrThrow(params: {
+    activationType: 'award' | 'booking';
+    actionKey: MhcActionKey;
+    providerUserId: string;
+    actingUserId: string;
+    bidId?: string | null;
+    reservationId?: string | null;
+    needId?: string | null;
+    description: string;
+  }): Promise<{ mhcCharged: number; balance: number; alreadyActivated: boolean }> {
+    try {
+      const result = await this.repo.chargeActivation({
+        activationType: params.activationType,
+        providerUserId: params.providerUserId,
+        actingUserId: params.actingUserId,
+        actionKey: params.actionKey,
+        bidId: params.bidId ?? null,
+        reservationId: params.reservationId ?? null,
+        needId: params.needId ?? null,
+        description: params.description,
+      });
+      return {
+        mhcCharged: result.mhcCharged,
+        balance: result.balance,
+        alreadyActivated: result.alreadyActivated,
+      };
+    } catch (e) {
+      if (e instanceof InsufficientCreditsError) {
+        throw new HttpError({
+          statusCode: 402,
+          code: 'MHC_INSUFFICIENT_CREDITS',
+          message: `You need ${e.required} MHC to activate this job. Your balance is ${e.available} MHC.`,
+          details: { required: e.required, available: e.available },
+        });
+      }
+      if (e instanceof Error && e.message === 'MHC_WALLET_FROZEN') {
+        throw new HttpError({
+          statusCode: 403,
+          code: 'MHC_WALLET_FROZEN',
+          message: 'Your credit account is frozen. Please contact support.',
+        });
+      }
+      throw e;
+    }
+  }
+
+  /** Has this award/booking already been paid for (gate open)? */
+  async isActivated(params: {
+    activationType: 'award' | 'booking';
+    bidId?: string | null;
+    reservationId?: string | null;
+  }): Promise<boolean> {
+    return this.repo.isActivated(params);
+  }
+
+  // -------------------------------------------------------------------------
+  // Admin pricing configuration
+  // -------------------------------------------------------------------------
+  async upsertActionPrice(params: {
+    actionKey: string;
+    name: string;
+    mhcPrice: number;
+    isActive: boolean;
+  }): Promise<MhcActionPriceRow> {
+    if (!(params.mhcPrice >= 0)) {
+      throw new HttpError({
+        statusCode: 400,
+        code: 'MHC_INVALID_PRICE',
+        message: 'Price must be zero or greater.',
+      });
+    }
+    return this.repo.upsertActionPrice(params);
+  }
+
+  async upsertPackage(params: {
+    code: string;
+    name: string;
+    nameAr?: string | null;
+    mhcAmount: number;
+    externalPriceAmount: number;
+    externalPriceCurrency?: string;
+    isActive: boolean;
+    sortOrder?: number;
+  }): Promise<MhcCreditPackageRow> {
+    if (!(params.mhcAmount > 0) || !(params.externalPriceAmount > 0)) {
+      throw new HttpError({
+        statusCode: 400,
+        code: 'MHC_INVALID_PACKAGE',
+        message: 'Credit amount and price must both be greater than zero.',
+      });
+    }
+    return this.repo.upsertCreditPackage(params);
+  }
+
+  async listAllPackagesForAdmin(): Promise<MhcCreditPackageRow[]> {
+    return this.repo.listCreditPackages(false);
+  }
+}

@@ -29,7 +29,9 @@ import { supportRouter } from '../modules/support/support.routes.js';
 import { uploadRouter } from '../modules/upload/upload.routes.js';
 import { usersRouter } from '../modules/users/users.routes.js';
 import { verificationRouter } from '../modules/verification/verification.routes.js';
+import { mhcRouter } from '../modules/mhc/mhc.routes.js';
 import { walletRouter } from '../modules/wallet/wallet.routes.js';
+
 import { asyncHandler } from '../utils/async-handler.js';
 
 /** Paths under `/api` that use `authRateLimiter` only — avoid counting them against the global API bucket (login was 429 after normal browsing). */
@@ -74,6 +76,8 @@ apiRouter.use('/advertisements', advertisementsRouter);
 apiRouter.use('/support', supportRouter);
 apiRouter.use('/services', servicesRouter);
 apiRouter.use('/wallet', walletRouter);
+apiRouter.use('/credits', mhcRouter);
+
 apiRouter.use('/chat', chatRouter);
 apiRouter.use('/coupons', couponsRouter);
 apiRouter.use('/favorites', favoritesRouter);

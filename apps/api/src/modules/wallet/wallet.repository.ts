@@ -161,9 +161,11 @@ export class WalletRepository {
     created_at, updated_at`;
 
   async findByUserId(userId: string): Promise<WalletRow | null> {
+    // Scope to the EGP money account. MHC (provider_credit) is handled by
+    // MhcRepository and must never be returned by the legacy EGP wallet path.
     const { rows } = await this.db.query<WalletRow>(
       `SELECT id, user_id, balance::text, currency, is_frozen, created_at, updated_at
-       FROM wallets WHERE user_id = $1`,
+       FROM wallets WHERE user_id = $1 AND account_type = 'money'`,
       [userId],
     );
     return rows[0] ?? null;
@@ -181,9 +183,11 @@ export class WalletRepository {
   }
 
   async createForUser(userId: string): Promise<WalletRow> {
+    // EGP money account. Uniqueness is now (user_id, account_type).
     const { rows } = await this.db.query<WalletRow>(
-      `INSERT INTO wallets (user_id, currency) VALUES ($1, 'EGP')
-       ON CONFLICT (user_id) DO UPDATE SET user_id = wallets.user_id
+      `INSERT INTO wallets (user_id, currency, account_type, asset_code)
+       VALUES ($1, 'EGP', 'money', 'EGP')
+       ON CONFLICT (user_id, account_type) DO UPDATE SET user_id = wallets.user_id
        RETURNING id, user_id, balance::text, currency, is_frozen, created_at, updated_at`,
       [userId],
     );
@@ -192,8 +196,9 @@ export class WalletRepository {
 
   async getOrCreateUserWalletInTransaction(client: PoolClient, userId: string): Promise<WalletRow> {
     const { rows } = await client.query<WalletRow>(
-      `INSERT INTO wallets (user_id, currency) VALUES ($1, 'EGP')
-       ON CONFLICT (user_id) DO UPDATE SET user_id = wallets.user_id
+      `INSERT INTO wallets (user_id, currency, account_type, asset_code)
+       VALUES ($1, 'EGP', 'money', 'EGP')
+       ON CONFLICT (user_id, account_type) DO UPDATE SET user_id = wallets.user_id
        RETURNING id, user_id, balance::text, currency, is_frozen, created_at, updated_at`,
       [userId],
     );
@@ -847,7 +852,7 @@ export class WalletRepository {
 
   async findWalletByUserId(userId: string): Promise<{ id: string; balance: string } | null> {
     const { rows } = await this.db.query<{ id: string; balance: string }>(
-      `SELECT id, balance::text FROM wallets WHERE user_id = $1`,
+      `SELECT id, balance::text FROM wallets WHERE user_id = $1 AND account_type = 'money'`,
       [userId],
     );
     return rows[0] ?? null;
@@ -928,12 +933,15 @@ export class WalletRepository {
   /** Get or create wallet for commission receiver. Must be called within transaction. */
   async getOrCreateCommissionWallet(client: PoolClient, receiverId: string): Promise<string> {
     const { rows } = await client.query<{ id: string }>(
-      `SELECT id FROM wallets WHERE user_id = $1`,
+      `SELECT id FROM wallets WHERE user_id = $1 AND account_type = 'money'`,
       [receiverId],
     );
     if (rows.length === 0) {
       const ins = await client.query<{ id: string }>(
-        `INSERT INTO wallets (user_id, currency) VALUES ($1, 'EGP') RETURNING id`,
+        `INSERT INTO wallets (user_id, currency, account_type, asset_code)
+         VALUES ($1, 'EGP', 'money', 'EGP')
+         ON CONFLICT (user_id, account_type) DO UPDATE SET user_id = wallets.user_id
+         RETURNING id`,
         [receiverId],
       );
       return ins.rows[0]!.id;
@@ -1236,12 +1244,13 @@ export class WalletRepository {
     try {
       await client.query('BEGIN');
       const { rows: walletRows } = await client.query<{ id: string; is_frozen: boolean }>(
-        `SELECT id, is_frozen FROM wallets WHERE user_id = $1 LIMIT 1`,
+        `SELECT id, is_frozen FROM wallets WHERE user_id = $1 AND account_type = 'money' LIMIT 1`,
         [params.userId],
       );
       if (walletRows.length === 0) {
         throw new Error('WALLET_NOT_FOUND');
       }
+
       if (walletRows[0]!.is_frozen) {
         throw new Error('WALLET_FROZEN');
       }

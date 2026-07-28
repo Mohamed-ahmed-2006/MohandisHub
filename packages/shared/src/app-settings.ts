@@ -30,10 +30,36 @@ export const KNOWN_PAYMENT_METHOD_KEYS = [
   'withdrawal_crypto',
   'withdrawal_instapay',
   'withdrawal_paymob',
+  /** Legacy internal customer→provider escrow payment. Retired at launch. */
+  'escrow_bid_payment',
+  /** Provider buys MHC via manual InstaPay transfer (launch rail). */
+  'credit_purchase_instapay',
+  /** Provider buys MHC via NOWPayments crypto. */
+  'credit_purchase_nowpayments',
 ] as const;
 
 export type KnownPaymentMethodKey = (typeof KNOWN_PAYMENT_METHOD_KEYS)[number];
-export type PaymentMethodFlow = 'deposit' | 'withdrawal';
+export type PaymentMethodFlow = 'deposit' | 'withdrawal' | 'escrow' | 'credit_purchase';
+
+/**
+ * Rails retired for the launch model (customers pay providers DIRECTLY; the
+ * platform never holds job money and MHC is not cashable).
+ *
+ * These must be checked with {@link isPaymentMethodEnabledStrict}, NOT
+ * {@link isPaymentMethodEnabled} — the latter is fail-OPEN for unknown keys,
+ * which would silently re-enable a retired money rail on any settings row that
+ * predates the key.
+ */
+export const LAUNCH_RETIRED_PAYMENT_METHOD_KEYS = [
+  'deposit_crypto',
+  'deposit_card',
+  'deposit_instapay',
+  'deposit_paymob',
+  'withdrawal_crypto',
+  'withdrawal_instapay',
+  'withdrawal_paymob',
+  'escrow_bid_payment',
+] as const satisfies readonly KnownPaymentMethodKey[];
 export type WithdrawalLimitMethod = 'crypto' | 'instapay' | 'paymob';
 
 export type WithdrawalMethodLimit = {
@@ -80,12 +106,17 @@ export type PaymentMethodDefinition = {
  * their API/client flow under the same `paymentMethodsEnabled` map.
  */
 export const PAYMENT_METHOD_DEFINITIONS: readonly PaymentMethodDefinition[] = [
+  // ---------------------------------------------------------------------------
+  // Retired for launch: customers pay providers DIRECTLY and MHC is not
+  // cashable, so no customer deposit or provider withdrawal rail is open.
+  // These default to false so a fresh settings row can never enable them.
+  // ---------------------------------------------------------------------------
   {
     key: 'deposit_crypto',
     flow: 'deposit',
     provider: 'nowpayments',
-    defaultEnabled: true,
-    launchRecommended: true,
+    defaultEnabled: false,
+    launchRecommended: false,
   },
   {
     key: 'deposit_card',
@@ -98,8 +129,8 @@ export const PAYMENT_METHOD_DEFINITIONS: readonly PaymentMethodDefinition[] = [
     key: 'deposit_instapay',
     flow: 'deposit',
     provider: 'instapay_manual',
-    defaultEnabled: true,
-    launchRecommended: true,
+    defaultEnabled: false,
+    launchRecommended: false,
   },
   {
     key: 'deposit_paymob',
@@ -112,20 +143,41 @@ export const PAYMENT_METHOD_DEFINITIONS: readonly PaymentMethodDefinition[] = [
     key: 'withdrawal_crypto',
     flow: 'withdrawal',
     provider: 'nowpayments',
-    defaultEnabled: true,
-    launchRecommended: true,
+    defaultEnabled: false,
+    launchRecommended: false,
   },
   {
     key: 'withdrawal_instapay',
     flow: 'withdrawal',
     provider: 'instapay_manual',
-    defaultEnabled: true,
-    launchRecommended: true,
+    defaultEnabled: false,
+    launchRecommended: false,
   },
   {
     key: 'withdrawal_paymob',
     flow: 'withdrawal',
     provider: 'paymob',
+    defaultEnabled: false,
+    launchRecommended: false,
+  },
+  {
+    key: 'escrow_bid_payment',
+    flow: 'escrow',
+    provider: 'instapay_manual',
+    defaultEnabled: false,
+    launchRecommended: false,
+  },
+  {
+    key: 'credit_purchase_instapay',
+    flow: 'credit_purchase',
+    provider: 'instapay_manual',
+    defaultEnabled: true,
+    launchRecommended: true,
+  },
+  {
+    key: 'credit_purchase_nowpayments',
+    flow: 'credit_purchase',
+    provider: 'nowpayments',
     defaultEnabled: false,
     launchRecommended: false,
   },
@@ -146,8 +198,11 @@ export function parsePaymentMethodsEnabled(
   legacy: { disableCryptoDeposits: boolean; disableCardDeposits: boolean },
 ): Record<string, boolean> {
   const base: Record<string, boolean> = getDefaultPaymentMethodsEnabled();
-  base.deposit_crypto = !legacy.disableCryptoDeposits;
-  base.deposit_card = !legacy.disableCardDeposits && base.deposit_card === true;
+  // Legacy disable_* columns can only turn a rail OFF, never ON. Before launch
+  // these columns could enable crypto deposits; that would now re-open a
+  // retired customer-funding rail, so they are treated as one-way switches.
+  if (legacy.disableCryptoDeposits) base.deposit_crypto = false;
+  if (legacy.disableCardDeposits) base.deposit_card = false;
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return base;
   const o = raw as Record<string, unknown>;
   const out = { ...base };
@@ -157,8 +212,27 @@ export function parsePaymentMethodsEnabled(
   return out;
 }
 
+/**
+ * Fail-OPEN check: an absent key is treated as enabled.
+ *
+ * Only safe for forward-compatible display toggles. Do NOT use it to guard a
+ * money movement — use {@link isPaymentMethodEnabledStrict}.
+ */
 export function isPaymentMethodEnabled(map: Record<string, boolean>, key: string): boolean {
   return map[key] !== false;
+}
+
+/**
+ * Fail-CLOSED check: only an explicit `true` enables the rail.
+ *
+ * Required for anything that moves money or grants credit, so a missing key on
+ * an older settings row can never silently re-open a retired rail.
+ */
+export function isPaymentMethodEnabledStrict(
+  map: Record<string, boolean> | null | undefined,
+  key: string,
+): boolean {
+  return map?.[key] === true;
 }
 
 export function parseWithdrawalLimits(raw: unknown): WithdrawalLimitsConfig {

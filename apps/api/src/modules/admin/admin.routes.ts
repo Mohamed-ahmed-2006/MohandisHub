@@ -13,6 +13,8 @@ import {
   requireRole,
 } from '../../middleware/require-role.js';
 import { couponsController } from '../coupons/coupons.controller.js';
+import { mhcController } from '../mhc/mhc.controller.js';
+
 import { backupRestoreRouter } from '../operations/backup-restore.routes.js';
 import { profilesController } from '../profiles/profiles.controller.js';
 import * as retentionAdminController from '../retention/retention.admin.controller.js';
@@ -285,12 +287,51 @@ adminRouter.post(
   adminController.rejectManualInstapayWithdrawal,
 );
 
+// MHC (Mohandis Credits) — provider credit purchases & pricing
+adminRouter.get(
+  '/credits/purchases',
+  requireAdminPermission('manage_transactions'),
+  mhcController.adminListPurchases,
+);
+adminRouter.post(
+  '/credits/purchases/:id/approve',
+  requireAdminPermission('manage_transactions'),
+  mhcController.adminApprovePurchase,
+);
+adminRouter.post(
+  '/credits/purchases/:id/reject',
+  requireAdminPermission('manage_transactions'),
+  mhcController.adminRejectPurchase,
+);
+// Pricing config lives with plan management (it is commercial pricing, not money movement).
+adminRouter.get(
+  '/credits/packages',
+  requireAdminPermission('manage_plans'),
+  mhcController.adminListPackages,
+);
+adminRouter.post(
+  '/credits/packages',
+  requireAdminPermission('manage_plans'),
+  mhcController.adminUpsertPackage,
+);
+adminRouter.get(
+  '/credits/action-prices',
+  requireAdminPermission('manage_plans'),
+  mhcController.getActionPrices,
+);
+adminRouter.post(
+  '/credits/action-prices',
+  requireAdminPermission('manage_plans'),
+  mhcController.adminUpsertActionPrice,
+);
+
 // Services
 adminRouter.get(
   '/services',
   requireAdminPermission('manage_services'),
   adminController.listServices,
 );
+
 adminRouter.patch(
   '/services/:id',
   requireAdminPermission('manage_services'),

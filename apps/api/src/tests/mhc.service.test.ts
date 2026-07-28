@@ -1,0 +1,413 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { MhcService } from '../modules/mhc/mhc.service.js';
+import { HttpError } from '../utils/http-error.js';
+
+const poolQueryMock = vi.fn();
+const clientQueryMock = vi.fn();
+const releaseMock = vi.fn();
+const connectMock = vi.fn(() => ({
+  query: clientQueryMock,
+  release: releaseMock,
+}));
+
+vi.mock('../db/pool.js', () => ({
+  getPool: () => ({
+    query: poolQueryMock,
+    connect: connectMock,
+  }),
+}));
+
+/** Route a mocked query by matching a fragment of the SQL text. */
+function routeQuery(
+  handlers: Array<{ match: RegExp; rows: unknown[] }>,
+): (sql: string) => { rows: unknown[] } {
+  return (sql: string) => {
+    for (const handler of handlers) {
+      if (handler.match.test(sql)) return { rows: handler.rows };
+    }
+    return { rows: [] };
+  };
+}
+
+const CREDIT_WALLET = {
+  id: 'wallet-mhc-1',
+  user_id: 'provider-1',
+  balance: '100',
+  is_frozen: false,
+  created_at: new Date().toISOString(),
+  updated_at: new Date().toISOString(),
+};
+
+const PACKAGE = {
+  id: 'pkg-1',
+  code: 'starter',
+  name: 'Starter',
+  name_ar: null,
+  mhc_amount: '100',
+  external_price_amount: '250',
+  external_price_currency: 'EGP',
+  is_active: true,
+  sort_order: 0,
+};
+
+beforeEach(() => {
+  vi.clearAllMocks();
+});
+
+describe('MhcService — role restrictions', () => {
+  it('rejects customers from holding credits', async () => {
+    const service = new MhcService();
+    await expect(
+      service.getMyCredits({ userId: 'cust-1', role: 'customer' }),
+    ).rejects.toMatchObject({ code: 'MHC_PROVIDERS_ONLY', statusCode: 403 });
+  });
+
+  it('allows providers to read their credit balance', async () => {
+    const service = new MhcService();
+    poolQueryMock.mockImplementation(
+      routeQuery([
+        { match: /INSERT INTO wallets/, rows: [CREDIT_WALLET] },
+        { match: /SELECT balance::text FROM wallets/, rows: [{ balance: '75' }] },
+        { match: /FROM mhc_credit_packages/, rows: [PACKAGE] },
+      ]),
+    );
+
+    const result = await service.getMyCredits({ userId: 'provider-1', role: 'expert' });
+    expect(result.balance).toBe(75);
+    // MHC must never be presented as withdrawable money.
+    expect(result.withdrawable).toBe(false);
+    expect(result.currencyLabel).toBe('MHC');
+  });
+});
+
+describe('MhcService — InstaPay credit purchase', () => {
+  it('refuses to create a purchase when the method flag is disabled', async () => {
+    const service = new MhcService();
+    poolQueryMock.mockImplementation(
+      routeQuery([{ match: /payment_methods_enabled/, rows: [{ enabled: false }] }]),
+    );
+
+    await expect(
+      service.submitInstapayCreditPurchase({
+        userId: 'provider-1',
+        role: 'expert',
+        packageId: 'pkg-1',
+        proofUploadId: 'upload-1',
+      }),
+    ).rejects.toMatchObject({ code: 'MHC_METHOD_DISABLED' });
+  });
+
+  it('rejects a purchase whose proof upload belongs to another user', async () => {
+    const service = new MhcService();
+    poolQueryMock.mockImplementation(
+      routeQuery([
+        { match: /payment_methods_enabled/, rows: [{ enabled: true }] },
+        { match: /FROM mhc_credit_packages WHERE id/, rows: [PACKAGE] },
+        { match: /COUNT\(\*\)::text AS c FROM deposit_requests/, rows: [{ c: '0' }] },
+        // Proof lookup returns nothing => not owned by this user.
+        { match: /FROM private_uploads/, rows: [] },
+      ]),
+    );
+
+    await expect(
+      service.submitInstapayCreditPurchase({
+        userId: 'provider-1',
+        role: 'expert',
+        packageId: 'pkg-1',
+        proofUploadId: 'someone-elses-upload',
+      }),
+    ).rejects.toMatchObject({ code: 'MHC_INVALID_PROOF' });
+  });
+
+  it('blocks a provider who already has too many pending purchases', async () => {
+    const service = new MhcService();
+    poolQueryMock.mockImplementation(
+      routeQuery([
+        { match: /payment_methods_enabled/, rows: [{ enabled: true }] },
+        { match: /FROM mhc_credit_packages WHERE id/, rows: [PACKAGE] },
+        { match: /COUNT\(\*\)::text AS c FROM deposit_requests/, rows: [{ c: '3' }] },
+      ]),
+    );
+
+    await expect(
+      service.submitInstapayCreditPurchase({
+        userId: 'provider-1',
+        role: 'expert',
+        packageId: 'pkg-1',
+        proofUploadId: 'upload-1',
+      }),
+    ).rejects.toMatchObject({ code: 'MHC_TOO_MANY_PENDING_PURCHASES' });
+  });
+
+  it('creates a pending_review purchase that grants no credits yet', async () => {
+    const service = new MhcService();
+    poolQueryMock.mockImplementation(
+      routeQuery([
+        { match: /payment_methods_enabled/, rows: [{ enabled: true }] },
+        { match: /FROM mhc_credit_packages WHERE id/, rows: [PACKAGE] },
+        { match: /COUNT\(\*\)::text AS c FROM deposit_requests/, rows: [{ c: '0' }] },
+        { match: /FROM private_uploads/, rows: [{ id: 'upload-1' }] },
+        { match: /instapay_deposit_account/, rows: [{ instapay_deposit_account: { bank: 'X' } }] },
+        { match: /INSERT INTO wallets/, rows: [CREDIT_WALLET] },
+        {
+          match: /INSERT INTO deposit_requests/,
+          rows: [{ id: 'dep-1', order_id: 'MHC-IP-1', status: 'pending_review' }],
+        },
+      ]),
+    );
+
+    const result = await service.submitInstapayCreditPurchase({
+      userId: 'provider-1',
+      role: 'expert',
+      packageId: 'pkg-1',
+      proofUploadId: 'upload-1',
+      transferReference: 'REF-123',
+    });
+
+    expect(result.status).toBe('pending_review');
+    expect(result.mhcOnApproval).toBe(100);
+  });
+});
+
+describe('MhcService — award activation gate', () => {
+  const awardedBid = {
+    bid_id: 'bid-1',
+    need_id: 'need-1',
+    expert_id: 'provider-1',
+    bid_status: 'accepted',
+    need_status: 'awarded',
+    awarded_bid_id: 'bid-1',
+  };
+
+  it('refuses activation by a provider who does not own the bid', async () => {
+    const service = new MhcService();
+    poolQueryMock.mockImplementation(
+      routeQuery([
+        { match: /FROM bids b/, rows: [{ ...awardedBid, expert_id: 'other-provider' }] },
+      ]),
+    );
+
+    await expect(
+      service.activateAwardForProvider({ userId: 'provider-1', role: 'expert', bidId: 'bid-1' }),
+    ).rejects.toMatchObject({ code: 'NOT_BID_OWNER', statusCode: 403 });
+  });
+
+  it('refuses activation when the customer has not awarded the bid', async () => {
+    const service = new MhcService();
+    poolQueryMock.mockImplementation(
+      routeQuery([
+        {
+          match: /FROM bids b/,
+          rows: [{ ...awardedBid, bid_status: 'pending', awarded_bid_id: null }],
+        },
+      ]),
+    );
+
+    await expect(
+      service.activateAwardForProvider({ userId: 'provider-1', role: 'expert', bidId: 'bid-1' }),
+    ).rejects.toMatchObject({ code: 'BID_NOT_AWARDED', statusCode: 409 });
+  });
+
+  it('returns 402 with the shortfall when the provider lacks credits', async () => {
+    const service = new MhcService();
+    poolQueryMock.mockImplementation(routeQuery([{ match: /FROM bids b/, rows: [awardedBid] }]));
+
+    clientQueryMock.mockImplementation(
+      routeQuery([
+        { match: /FROM mhc_job_activations/, rows: [] },
+        { match: /FROM mhc_action_prices/, rows: [{ mhc_price: '50', is_active: true }] },
+        { match: /INSERT INTO wallets/, rows: [CREDIT_WALLET] },
+        // Provider only has 10 MHC but the action costs 50.
+        {
+          match: /SELECT balance::text, is_frozen FROM wallets/,
+          rows: [{ balance: '10', is_frozen: false }],
+        },
+      ]),
+    );
+
+    const error = await service
+      .activateAwardForProvider({ userId: 'provider-1', role: 'expert', bidId: 'bid-1' })
+      .catch((e: unknown) => e);
+
+    expect(error).toBeInstanceOf(HttpError);
+    expect(error).toMatchObject({ code: 'MHC_INSUFFICIENT_CREDITS', statusCode: 402 });
+    expect((error as HttpError).details).toEqual({ required: 50, available: 10 });
+  });
+
+  it('charges the provider once and unlocks the job', async () => {
+    const service = new MhcService();
+    poolQueryMock.mockImplementation(routeQuery([{ match: /FROM bids b/, rows: [awardedBid] }]));
+
+    clientQueryMock.mockImplementation(
+      routeQuery([
+        { match: /FROM mhc_job_activations/, rows: [] },
+        { match: /FROM mhc_action_prices/, rows: [{ mhc_price: '40', is_active: true }] },
+        { match: /INSERT INTO wallets/, rows: [CREDIT_WALLET] },
+        {
+          match: /SELECT balance::text, is_frozen FROM wallets/,
+          rows: [{ balance: '100', is_frozen: false }],
+        },
+        { match: /INSERT INTO transactions/, rows: [{ id: 'tx-1' }] },
+      ]),
+    );
+
+    const result = await service.activateAwardForProvider({
+      userId: 'provider-1',
+      role: 'expert',
+      bidId: 'bid-1',
+    });
+
+    expect(result.mhcCharged).toBe(40);
+    expect(result.balance).toBe(60);
+    expect(result.alreadyActivated).toBe(false);
+    expect(result.needId).toBe('need-1');
+
+    // A ledger row must be written for the spend, and the activation recorded.
+    const sqlCalls = clientQueryMock.mock.calls.map((c) => String(c[0]));
+    expect(sqlCalls.some((sql) => /INSERT INTO transactions/.test(sql))).toBe(true);
+    expect(sqlCalls.some((sql) => /INSERT INTO mhc_job_activations/.test(sql))).toBe(true);
+    expect(sqlCalls.some((sql) => /COMMIT/.test(sql))).toBe(true);
+  });
+
+  it('does not double-charge an already activated award', async () => {
+    const service = new MhcService();
+    poolQueryMock.mockImplementation(routeQuery([{ match: /FROM bids b/, rows: [awardedBid] }]));
+
+    clientQueryMock.mockImplementation(
+      routeQuery([
+        // An activation already exists for this bid.
+        { match: /FROM mhc_job_activations/, rows: [{ id: 'act-1', mhc_charged: '40' }] },
+        { match: /INSERT INTO wallets/, rows: [CREDIT_WALLET] },
+      ]),
+    );
+
+    const result = await service.activateAwardForProvider({
+      userId: 'provider-1',
+      role: 'expert',
+      bidId: 'bid-1',
+    });
+
+    expect(result.alreadyActivated).toBe(true);
+    const sqlCalls = clientQueryMock.mock.calls.map((c) => String(c[0]));
+    // No new spend may be recorded on a repeat activation.
+    expect(sqlCalls.some((sql) => /INSERT INTO transactions/.test(sql))).toBe(false);
+    expect(sqlCalls.some((sql) => /INSERT INTO mhc_job_activations/.test(sql))).toBe(false);
+  });
+
+  it('opens the gate for free when the action price is inactive', async () => {
+    const service = new MhcService();
+    poolQueryMock.mockImplementation(routeQuery([{ match: /FROM bids b/, rows: [awardedBid] }]));
+
+    clientQueryMock.mockImplementation(
+      routeQuery([
+        { match: /FROM mhc_job_activations/, rows: [] },
+        // Price configured but disabled => free activation (beta mode).
+        { match: /FROM mhc_action_prices/, rows: [{ mhc_price: '40', is_active: false }] },
+        { match: /INSERT INTO wallets/, rows: [CREDIT_WALLET] },
+        {
+          match: /SELECT balance::text, is_frozen FROM wallets/,
+          rows: [{ balance: '0', is_frozen: false }],
+        },
+      ]),
+    );
+
+    const result = await service.activateAwardForProvider({
+      userId: 'provider-1',
+      role: 'expert',
+      bidId: 'bid-1',
+    });
+
+    expect(result.mhcCharged).toBe(0);
+    const sqlCalls = clientQueryMock.mock.calls.map((c) => String(c[0]));
+    expect(sqlCalls.some((sql) => /INSERT INTO transactions/.test(sql))).toBe(false);
+    // The activation is still recorded so the job unlocks.
+    expect(sqlCalls.some((sql) => /INSERT INTO mhc_job_activations/.test(sql))).toBe(true);
+  });
+
+  it('blocks activation when the credit wallet is frozen', async () => {
+    const service = new MhcService();
+    poolQueryMock.mockImplementation(routeQuery([{ match: /FROM bids b/, rows: [awardedBid] }]));
+
+    clientQueryMock.mockImplementation(
+      routeQuery([
+        { match: /FROM mhc_job_activations/, rows: [] },
+        { match: /FROM mhc_action_prices/, rows: [{ mhc_price: '40', is_active: true }] },
+        { match: /INSERT INTO wallets/, rows: [CREDIT_WALLET] },
+        {
+          match: /SELECT balance::text, is_frozen FROM wallets/,
+          rows: [{ balance: '100', is_frozen: true }],
+        },
+      ]),
+    );
+
+    await expect(
+      service.activateAwardForProvider({ userId: 'provider-1', role: 'expert', bidId: 'bid-1' }),
+    ).rejects.toMatchObject({ code: 'MHC_WALLET_FROZEN', statusCode: 403 });
+  });
+});
+
+describe('MhcService — admin pricing validation', () => {
+  it('rejects a negative action price', async () => {
+    const service = new MhcService();
+    await expect(
+      service.upsertActionPrice({
+        actionKey: 'award_activation',
+        name: 'Award',
+        mhcPrice: -1,
+        isActive: true,
+      }),
+    ).rejects.toMatchObject({ code: 'MHC_INVALID_PRICE' });
+  });
+
+  it('accepts a zero action price (free action)', async () => {
+    const service = new MhcService();
+    poolQueryMock.mockImplementation(
+      routeQuery([
+        {
+          match: /INSERT INTO mhc_action_prices/,
+          rows: [
+            {
+              id: 'p1',
+              action_key: 'award_activation',
+              name: 'Award',
+              mhc_price: '0',
+              is_active: false,
+            },
+          ],
+        },
+      ]),
+    );
+
+    const row = await service.upsertActionPrice({
+      actionKey: 'award_activation',
+      name: 'Award',
+      mhcPrice: 0,
+      isActive: false,
+    });
+    expect(row.mhc_price).toBe('0');
+  });
+
+  it('rejects a package with a non-positive credit amount or price', async () => {
+    const service = new MhcService();
+    await expect(
+      service.upsertPackage({
+        code: 'bad',
+        name: 'Bad',
+        mhcAmount: 0,
+        externalPriceAmount: 100,
+        isActive: true,
+      }),
+    ).rejects.toMatchObject({ code: 'MHC_INVALID_PACKAGE' });
+
+    await expect(
+      service.upsertPackage({
+        code: 'bad2',
+        name: 'Bad2',
+        mhcAmount: 100,
+        externalPriceAmount: 0,
+        isActive: true,
+      }),
+    ).rejects.toMatchObject({ code: 'MHC_INVALID_PACKAGE' });
+  });
+});
