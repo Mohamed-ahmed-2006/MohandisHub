@@ -171,13 +171,21 @@ describe('MhcService — InstaPay credit purchase', () => {
 });
 
 describe('MhcService — award activation gate', () => {
+  /**
+   * A live award OFFER: the customer selected this bid, the provider has not paid
+   * yet. Charging is only reachable from this shape — `awarded_bid_id` stays NULL
+   * and `activated_at` stays NULL until the provider pays.
+   */
   const awardedBid = {
     bid_id: 'bid-1',
     need_id: 'need-1',
     expert_id: 'provider-1',
-    bid_status: 'accepted',
-    need_status: 'awarded',
-    awarded_bid_id: 'bid-1',
+    bid_status: 'awarded_pending',
+    need_status: 'awarded_pending_provider_acceptance',
+    awarded_bid_id: null,
+    pending_award_bid_id: 'bid-1',
+    pending_award_expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+    activated_at: null,
   };
 
   it('refuses activation by a provider who does not own the bid', async () => {
@@ -199,7 +207,15 @@ describe('MhcService — award activation gate', () => {
       routeQuery([
         {
           match: /FROM bids b/,
-          rows: [{ ...awardedBid, bid_status: 'pending', awarded_bid_id: null }],
+          rows: [
+            {
+              ...awardedBid,
+              bid_status: 'pending',
+              need_status: 'open',
+              pending_award_bid_id: null,
+              pending_award_expires_at: null,
+            },
+          ],
         },
       ]),
     );
@@ -207,6 +223,92 @@ describe('MhcService — award activation gate', () => {
     await expect(
       service.activateAwardForProvider({ userId: 'provider-1', role: 'expert', bidId: 'bid-1' }),
     ).rejects.toMatchObject({ code: 'BID_NOT_AWARDED', statusCode: 409 });
+  });
+
+  it('refuses to charge for an offer that has already expired', async () => {
+    const service = new MhcService();
+    poolQueryMock.mockImplementation(
+      routeQuery([
+        {
+          match: /FROM bids b/,
+          rows: [
+            {
+              ...awardedBid,
+              pending_award_expires_at: new Date(Date.now() - 60_000).toISOString(),
+            },
+          ],
+        },
+      ]),
+    );
+
+    await expect(
+      service.activateAwardForProvider({ userId: 'provider-1', role: 'expert', bidId: 'bid-1' }),
+    ).rejects.toMatchObject({ code: 'AWARD_OFFER_EXPIRED', statusCode: 409 });
+
+    // Nothing may be charged for a lapsed offer.
+    expect(clientQueryMock).not.toHaveBeenCalled();
+  });
+
+  it('treats a never-expiring offer as still open', async () => {
+    const service = new MhcService();
+    poolQueryMock.mockImplementation(
+      routeQuery([
+        // `awardBid` stores 'infinity' when the admin sets 0 expiry hours.
+        { match: /FROM bids b/, rows: [{ ...awardedBid, pending_award_expires_at: 'infinity' }] },
+      ]),
+    );
+
+    clientQueryMock.mockImplementation(
+      routeQuery([
+        { match: /FROM mhc_job_activations/, rows: [] },
+        { match: /FROM mhc_action_prices/, rows: [{ mhc_price: '10', is_active: true }] },
+        { match: /INSERT INTO wallets/, rows: [CREDIT_WALLET] },
+        {
+          match: /SELECT balance::text, is_frozen FROM wallets/,
+          rows: [{ balance: '100', is_frozen: false }],
+        },
+        { match: /INSERT INTO transactions/, rows: [{ id: 'tx-1' }] },
+      ]),
+    );
+
+    const result = await service.activateAwardForProvider({
+      userId: 'provider-1',
+      role: 'expert',
+      bidId: 'bid-1',
+    });
+    expect(result.mhcCharged).toBe(10);
+  });
+
+  it('returns the existing state without charging when the award is already activated', async () => {
+    const service = new MhcService();
+    poolQueryMock.mockImplementation(
+      routeQuery([
+        {
+          match: /FROM bids b/,
+          rows: [
+            {
+              ...awardedBid,
+              bid_status: 'accepted',
+              need_status: 'awarded',
+              awarded_bid_id: 'bid-1',
+              pending_award_bid_id: null,
+              activated_at: new Date().toISOString(),
+            },
+          ],
+        },
+        { match: /SELECT balance::text FROM wallets/, rows: [{ balance: '60' }] },
+      ]),
+    );
+
+    const result = await service.activateAwardForProvider({
+      userId: 'provider-1',
+      role: 'expert',
+      bidId: 'bid-1',
+    });
+
+    expect(result).toMatchObject({ alreadyActivated: true, mhcCharged: 0, balance: 60 });
+    // The charging transaction must never be opened for an activated award.
+    expect(clientQueryMock).not.toHaveBeenCalled();
   });
 
   it('returns 402 with the shortfall when the provider lacks credits', async () => {
@@ -295,6 +397,10 @@ describe('MhcService — award activation gate', () => {
     expect(sqlCalls.some((sql) => /INSERT INTO mhc_job_activations/.test(sql))).toBe(false);
   });
 
+  // PROVISIONAL (MHC-27): decision D6 requires an inactive action to be *disabled*
+  // rather than silently free, unless an explicit zero-price promotional policy is
+  // configured. That semantic change lands with the paid-actions migration; this
+  // test asserts today's behaviour so the suite reflects reality until then.
   it('opens the gate for free when the action price is inactive', async () => {
     const service = new MhcService();
     poolQueryMock.mockImplementation(routeQuery([{ match: /FROM bids b/, rows: [awardedBid] }]));

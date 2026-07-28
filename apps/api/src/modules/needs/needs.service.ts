@@ -6,15 +6,15 @@ import {
 import type { PoolClient } from 'pg';
 
 import { getPool } from '../../db/pool.js';
+import { redactContactDetails } from '../../utils/contact-redaction.js';
 import { HttpError } from '../../utils/http-error.js';
+import { ActivationGateService } from '../mhc/activation-gate.service.js';
 import { NotificationsService } from '../notifications/notifications.service.js';
 import { PlansService } from '../plans/plans.service.js';
 import { UsageQuotaService } from '../plans/usage-quota.service.js';
 import { SettingsService } from '../settings/settings.service.js';
 import { WalletRepository } from '../wallet/wallet.repository.js';
 
-import { ActivationGateService } from '../mhc/activation-gate.service.js';
-import { redactContactDetails } from '../../utils/contact-redaction.js';
 
 import { NeedsRepository } from './needs.repository.js';
 import type { BidRow, NeedRow } from './needs.repository.js';

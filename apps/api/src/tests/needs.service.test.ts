@@ -92,7 +92,44 @@ describe('NeedsService hardening', () => {
     });
   });
 
-  it('returns idempotent alreadyPaid response for duplicate pay call', async () => {
+  // Escrow is retired for launch (decision D6): customers pay providers directly and
+  // the platform never holds job money. The rail is fail-CLOSED, so an absent flag
+  // must keep it shut rather than silently reopening a retired money path.
+  it('refuses escrow bid payment when the retired rail is not explicitly enabled', async () => {
+    const settingsService = {
+      getAppStatus: vi.fn().mockResolvedValue({ ...enabledNeedsStatus }),
+    };
+    const walletRepo = { findByUserId: vi.fn() };
+    const service = new NeedsService({} as never, settingsService as never, walletRepo as never);
+
+    await expect(service.payBid('need-1', 'bid-1', 'customer-1')).rejects.toMatchObject({
+      code: 'ESCROW_PAYMENTS_RETIRED',
+      statusCode: 410,
+    });
+    // Refusal must happen before any wallet or database work is attempted.
+    expect(walletRepo.findByUserId).not.toHaveBeenCalled();
+    expect(connectMock).not.toHaveBeenCalled();
+  });
+
+  it.each([[{}], [{ escrow_bid_payment: false }], [null], [undefined]])(
+    'keeps the escrow rail closed for paymentMethodsEnabled=%j',
+    async (paymentMethodsEnabled) => {
+      const settingsService = {
+        getAppStatus: vi.fn().mockResolvedValue({ ...enabledNeedsStatus, paymentMethodsEnabled }),
+      };
+      const service = new NeedsService({} as never, settingsService as never, {} as never);
+
+      await expect(service.payBid('need-1', 'bid-1', 'customer-1')).rejects.toMatchObject({
+        code: 'ESCROW_PAYMENTS_RETIRED',
+      });
+    },
+  );
+
+  // The escrow implementation is retained (not deleted) so its historical behaviour
+  // stays auditable and re-openable. This keeps that behaviour under test: if an
+  // admin ever deliberately re-enables the rail, a duplicate pay call must still be
+  // idempotent rather than charging the customer twice.
+  it('returns idempotent alreadyPaid response for duplicate pay call when escrow is re-enabled', async () => {
     queryMock
       .mockResolvedValueOnce({}) // BEGIN
       .mockResolvedValueOnce({ rows: [makeNeed()] }) // need FOR UPDATE
@@ -102,9 +139,11 @@ describe('NeedsService hardening', () => {
       .mockResolvedValueOnce({}); // COMMIT
 
     const settingsService = {
-      getAppStatus: vi
-        .fn()
-        .mockResolvedValue({ ...enabledNeedsStatus, moneyMovementsPaused: false }),
+      getAppStatus: vi.fn().mockResolvedValue({
+        ...enabledNeedsStatus,
+        moneyMovementsPaused: false,
+        paymentMethodsEnabled: { escrow_bid_payment: true },
+      }),
     };
     const walletRepo = {
       findByUserId: vi.fn(),

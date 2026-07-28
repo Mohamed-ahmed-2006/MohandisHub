@@ -14,6 +14,7 @@ import { favoritesRouter } from '../modules/favorites/favorites.routes.js';
 import { geoRouter } from '../modules/geo/geo.routes.js';
 import { jobsRouter } from '../modules/jobs/jobs.routes.js';
 import { mediaRouter } from '../modules/media/media.routes.js';
+import { mhcRouter } from '../modules/mhc/mhc.routes.js';
 import { needsRouter, bidsRouter } from '../modules/needs/needs.routes.js';
 import { negotiationsRouter } from '../modules/negotiations/negotiations.routes.js';
 import { notificationsRouter } from '../modules/notifications/notifications.routes.js';
@@ -29,9 +30,7 @@ import { supportRouter } from '../modules/support/support.routes.js';
 import { uploadRouter } from '../modules/upload/upload.routes.js';
 import { usersRouter } from '../modules/users/users.routes.js';
 import { verificationRouter } from '../modules/verification/verification.routes.js';
-import { mhcRouter } from '../modules/mhc/mhc.routes.js';
 import { walletRouter } from '../modules/wallet/wallet.routes.js';
-
 import { asyncHandler } from '../utils/async-handler.js';
 
 /** Paths under `/api` that use `authRateLimiter` only — avoid counting them against the global API bucket (login was 429 after normal browsing). */
