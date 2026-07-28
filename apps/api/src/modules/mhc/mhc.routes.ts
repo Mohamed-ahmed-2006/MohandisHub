@@ -24,6 +24,8 @@ mhcRouter.get('/action-prices', mhcController.getActionPrices);
 // Purchase credits via manual InstaPay transfer (launch rail).
 mhcRouter.get('/purchase/instapay/info', mhcController.getInstapayPurchaseInfo);
 mhcRouter.post('/purchase/instapay', mhcController.submitInstapayPurchase);
+// The provider's own purchase history, including requests awaiting review.
+mhcRouter.get('/purchases', mhcController.getMyCreditPurchases);
 
 // Award activation — the provider spends MHC to unlock an awarded job.
 mhcRouter.get('/activations/award/:bidId', mhcController.getAwardActivationStatus);

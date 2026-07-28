@@ -117,9 +117,21 @@ export const mhcController = {
       role: user.role,
       packageId: requireString(body.packageId, 'packageId'),
       proofUploadId: requireString(body.proofUploadId, 'proofUploadId'),
-      transferReference: optionalString(body.transferReference),
+      transferReference: requireString(body.transferReference, 'transferReference'),
     });
     res.status(201).json({ success: true, data: result });
+  }),
+
+  getMyCreditPurchases: asyncHandler(async (req: Request, res: Response) => {
+    const user = getUser(req);
+    const { page, limit } = parsePagination(req);
+    const result = await mhcService.listMyCreditPurchases({
+      userId: user.id,
+      role: user.role,
+      page,
+      limit,
+    });
+    res.json({ success: true, data: result.rows, meta: { page, limit, total: result.total } });
   }),
 
   /** Provider accepts a pending award and pays MHC to unlock the job. */

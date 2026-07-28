@@ -94,6 +94,7 @@ describe('MhcService — InstaPay credit purchase', () => {
         role: 'expert',
         packageId: 'pkg-1',
         proofUploadId: 'upload-1',
+        transferReference: 'REF-123',
       }),
     ).rejects.toMatchObject({ code: 'MHC_METHOD_DISABLED' });
   });
@@ -116,6 +117,7 @@ describe('MhcService — InstaPay credit purchase', () => {
         role: 'expert',
         packageId: 'pkg-1',
         proofUploadId: 'someone-elses-upload',
+        transferReference: 'REF-123',
       }),
     ).rejects.toMatchObject({ code: 'MHC_INVALID_PROOF' });
   });
@@ -136,6 +138,7 @@ describe('MhcService — InstaPay credit purchase', () => {
         role: 'expert',
         packageId: 'pkg-1',
         proofUploadId: 'upload-1',
+        transferReference: 'REF-123',
       }),
     ).rejects.toMatchObject({ code: 'MHC_TOO_MANY_PENDING_PURCHASES' });
   });
@@ -167,6 +170,126 @@ describe('MhcService — InstaPay credit purchase', () => {
 
     expect(result.status).toBe('pending_review');
     expect(result.mhcOnApproval).toBe(100);
+  });
+
+  // uq_deposit_requests_credit_purchase_reference cannot deduplicate NULLs, so a
+  // missing reference would let the same transfer be claimed repeatedly.
+  it.each(['', '   ', 'ab'])('requires a usable transfer reference (%j)', async (reference) => {
+    const service = new MhcService();
+    poolQueryMock.mockImplementation(
+      routeQuery([{ match: /payment_methods_enabled/, rows: [{ enabled: true }] }]),
+    );
+
+    await expect(
+      service.submitInstapayCreditPurchase({
+        userId: 'provider-1',
+        role: 'expert',
+        packageId: 'pkg-1',
+        proofUploadId: 'upload-1',
+        transferReference: reference,
+      }),
+    ).rejects.toMatchObject({ code: 'MHC_TRANSFER_REFERENCE_REQUIRED', statusCode: 400 });
+  });
+
+  it('snapshots the package so later price edits cannot rewrite history', async () => {
+    const service = new MhcService();
+    poolQueryMock.mockImplementation(
+      routeQuery([
+        { match: /payment_methods_enabled/, rows: [{ enabled: true }] },
+        { match: /FROM mhc_credit_packages WHERE id/, rows: [PACKAGE] },
+        { match: /COUNT\(\*\)::text AS c FROM deposit_requests/, rows: [{ c: '0' }] },
+        { match: /FROM private_uploads/, rows: [{ id: 'upload-1' }] },
+        { match: /instapay_deposit_account/, rows: [{ instapay_deposit_account: { bank: 'X' } }] },
+        { match: /INSERT INTO wallets/, rows: [CREDIT_WALLET] },
+        {
+          match: /INSERT INTO deposit_requests/,
+          rows: [{ id: 'dep-1', order_id: 'MHC-IP-1', status: 'pending_review' }],
+        },
+      ]),
+    );
+
+    await service.submitInstapayCreditPurchase({
+      userId: 'provider-1',
+      role: 'expert',
+      packageId: 'pkg-1',
+      proofUploadId: 'upload-1',
+      transferReference: 'REF-123',
+    });
+
+    const insertCall = poolQueryMock.mock.calls.find((c) =>
+      /INSERT INTO deposit_requests/.test(String(c[0])),
+    );
+    expect(insertCall).toBeDefined();
+    const payload = JSON.stringify(insertCall![1]);
+    expect(payload).toContain('package_snapshot');
+    expect(payload).toContain('starter');
+  });
+
+  it('surfaces a reused transfer reference as a conflict', async () => {
+    const service = new MhcService();
+    poolQueryMock.mockImplementation((sql: string) => {
+      if (/INSERT INTO deposit_requests/.test(sql)) {
+        throw new Error(
+          'duplicate key value violates unique constraint "uq_deposit_requests_credit_purchase_reference"',
+        );
+      }
+      return routeQuery([
+        { match: /payment_methods_enabled/, rows: [{ enabled: true }] },
+        { match: /FROM mhc_credit_packages WHERE id/, rows: [PACKAGE] },
+        { match: /COUNT\(\*\)::text AS c FROM deposit_requests/, rows: [{ c: '0' }] },
+        { match: /FROM private_uploads/, rows: [{ id: 'upload-1' }] },
+        { match: /instapay_deposit_account/, rows: [{ instapay_deposit_account: {} }] },
+        { match: /INSERT INTO wallets/, rows: [CREDIT_WALLET] },
+      ])(sql);
+    });
+
+    await expect(
+      service.submitInstapayCreditPurchase({
+        userId: 'provider-1',
+        role: 'expert',
+        packageId: 'pkg-1',
+        proofUploadId: 'upload-1',
+        transferReference: 'REF-ALREADY-USED',
+      }),
+    ).rejects.toMatchObject({ code: 'MHC_TRANSFER_REFERENCE_ALREADY_USED', statusCode: 409 });
+  });
+});
+
+describe('MhcService — purchase rejection', () => {
+  it('grants nothing when a purchase is rejected', async () => {
+    const service = new MhcService();
+    poolQueryMock.mockImplementation(
+      routeQuery([
+        {
+          match: /UPDATE deposit_requests\s+SET status = 'rejected'/,
+          rows: [{ id: 'dep-1', user_id: 'provider-1', status: 'rejected', order_id: 'MHC-IP-1' }],
+        },
+      ]),
+    );
+
+    const row = await service.rejectPurchase({
+      purchaseId: 'dep-1',
+      adminId: 'admin-1',
+      reason: 'No matching transfer found',
+    });
+
+    expect(row.status).toBe('rejected');
+    // No ledger transaction and no wallet mutation may occur on rejection.
+    const sql = poolQueryMock.mock.calls.map((c) => String(c[0]));
+    expect(sql.some((s) => /INSERT INTO transactions/.test(s))).toBe(false);
+    expect(sql.some((s) => /UPDATE wallets SET balance/.test(s))).toBe(false);
+    expect(connectMock).not.toHaveBeenCalled();
+  });
+
+  it('refuses to reject a purchase that is no longer pending', async () => {
+    const service = new MhcService();
+    // The UPDATE is guarded by status IN ('pending','pending_review'), so an
+    // already-paid purchase matches no row.
+    poolQueryMock.mockImplementation(routeQuery([]));
+
+    await expect(
+      service.rejectPurchase({ purchaseId: 'dep-1', adminId: 'admin-1', reason: 'too late' }),
+    ).rejects.toMatchObject({ code: 'MHC_PURCHASE_NOT_ACTIONABLE', statusCode: 404 });
   });
 });
 

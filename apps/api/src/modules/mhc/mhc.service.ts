@@ -107,6 +107,21 @@ export class MhcService {
     return this.repo.listTransactions(params.userId, params.page, params.limit);
   }
 
+  /** A provider's own purchase history, so in-flight requests are visible. */
+  async listMyCreditPurchases(params: {
+    userId: string;
+    role: string;
+    page: number;
+    limit: number;
+  }): Promise<{ rows: CreditPurchaseRow[]; total: number }> {
+    this.assertProviderRole(params.role);
+    return this.repo.listCreditPurchasesForUser({
+      userId: params.userId,
+      limit: params.limit,
+      offset: (params.page - 1) * params.limit,
+    });
+  }
+
   async listPackages(): Promise<MhcCreditPackageRow[]> {
     return this.repo.listCreditPackages(true);
   }
@@ -135,10 +150,23 @@ export class MhcService {
     role: string;
     packageId: string;
     proofUploadId: string;
-    transferReference?: string | null;
+    transferReference: string;
   }): Promise<{ id: string; orderId: string; status: string; mhcOnApproval: number }> {
     this.assertProviderRole(params.role);
     await this.assertFeatureEnabled('credit_purchase_instapay');
+
+    // The transfer reference is what makes a manual transfer traceable and what
+    // uq_deposit_requests_credit_purchase_reference deduplicates on. Without it
+    // the same transfer can be claimed repeatedly, so it is required rather than
+    // optional — the anti-reuse index does nothing on NULLs.
+    const transferReference = params.transferReference.trim();
+    if (transferReference.length < 3) {
+      throw new HttpError({
+        statusCode: 400,
+        code: 'MHC_TRANSFER_REFERENCE_REQUIRED',
+        message: 'Enter the InstaPay transfer reference shown on your receipt.',
+      });
+    }
 
     const pkg = await this.repo.findCreditPackageById(params.packageId);
     if (!pkg || !pkg.is_active) {
@@ -182,8 +210,22 @@ export class MhcService {
         status: 'pending_review',
         pkg,
         proofUploadId: params.proofUploadId,
-        transferReference: params.transferReference ?? null,
+        transferReference,
         destinationAccountSnapshot: destination,
+        // Snapshot the package as it was sold. `credit_package_id` is only a
+        // pointer: an admin editing the package later would otherwise rewrite
+        // what this purchase appears to have been for.
+        providerPayload: {
+          package_snapshot: {
+            id: pkg.id,
+            code: pkg.code,
+            name: pkg.name,
+            mhc_amount: pkg.mhc_amount,
+            external_price_amount: pkg.external_price_amount,
+            external_price_currency: pkg.external_price_currency,
+            snapshotted_at: new Date().toISOString(),
+          },
+        },
       });
       return {
         id: created.id,
@@ -192,8 +234,14 @@ export class MhcService {
         mhcOnApproval: parseFloat(pkg.mhc_amount),
       };
     } catch (e) {
-      // uq_deposit_requests_instapay_reference blocks reusing a transfer reference.
-      if (e instanceof Error && /uq_deposit_requests_instapay_reference/.test(e.message)) {
+      // uq_deposit_requests_credit_purchase_reference blocks reusing a transfer
+      // reference. The pre-20260729090000 name is matched too, so an environment
+      // that has not yet applied the scope fix still gets a clean 409 rather than
+      // a raw constraint error.
+      if (
+        e instanceof Error &&
+        /uq_deposit_requests_(credit_purchase|instapay)_reference/.test(e.message)
+      ) {
         throw new HttpError({
           statusCode: 409,
           code: 'MHC_TRANSFER_REFERENCE_ALREADY_USED',

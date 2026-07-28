@@ -55,7 +55,23 @@ export type CreditPurchaseRow = {
   credited_transaction_id: string | null;
   proof_upload_id?: string | null;
   transfer_reference?: string | null;
+  rejection_reason?: string | null;
+  paid_at?: string | null;
   created_at?: string;
+  /** Snapshot joined from the package, for display. */
+  package_code?: string | null;
+  package_name?: string | null;
+};
+
+/** Credit purchase enriched with buyer + reviewer identity for the admin queue. */
+export type AdminCreditPurchaseRow = CreditPurchaseRow & {
+  provider_status: string | null;
+  reviewed_by: string | null;
+  reviewed_at: string | null;
+  buyer_name: string | null;
+  buyer_email: string;
+  buyer_role: string;
+  reviewer_name: string | null;
 };
 
 export type MhcActivationRow = {
@@ -322,34 +338,86 @@ export class MhcRepository {
     return rows[0] ?? null;
   }
 
+  /**
+   * Admin review queue. Carries the buyer's identity and the package snapshot,
+   * because an admin approving a transfer needs to know WHO paid and WHAT they
+   * expect to receive — the bare deposit_requests row answers neither.
+   *
+   * This is an admin-permission-gated surface (`manage_transactions`), so
+   * returning the buyer's email here is deliberate, not a contact-gate leak.
+   */
   async listCreditPurchasesForAdmin(params: {
     status?: string;
     limit: number;
     offset: number;
-  }): Promise<{ rows: CreditPurchaseRow[]; total: number }> {
-    const filters = [`purpose = 'credit_purchase'`];
+  }): Promise<{ rows: AdminCreditPurchaseRow[]; total: number }> {
+    const filters = [`d.purpose = 'credit_purchase'`];
     const values: unknown[] = [];
     if (params.status) {
       values.push(params.status);
-      filters.push(`status = $${values.length}`);
+      filters.push(`d.status = $${values.length}`);
     }
     const where = `WHERE ${filters.join(' AND ')}`;
 
     const { rows: countRows } = await this.db.query<{ c: string }>(
-      `SELECT COUNT(*)::text AS c FROM deposit_requests ${where}`,
+      `SELECT COUNT(*)::text AS c FROM deposit_requests d ${where}`,
       values,
     );
     const total = parseInt(countRows[0]?.c ?? '0', 10);
 
-    const { rows } = await this.db.query<CreditPurchaseRow>(
-      `SELECT id, user_id, order_id, status, provider, purpose,
-              mhc_grant_amount::text, external_price_amount::text, external_price_currency,
-              credit_package_id, credited_transaction_id, proof_upload_id, transfer_reference,
-              created_at
-       FROM deposit_requests ${where}
-       ORDER BY created_at DESC
+    const { rows } = await this.db.query<AdminCreditPurchaseRow>(
+      `SELECT d.id, d.user_id, d.order_id, d.status, d.provider, d.purpose,
+              d.mhc_grant_amount::text, d.external_price_amount::text, d.external_price_currency,
+              d.credit_package_id, d.credited_transaction_id, d.proof_upload_id,
+              d.transfer_reference, d.provider_status, d.rejection_reason,
+              d.reviewed_by, d.reviewed_at, d.paid_at, d.created_at,
+              u.display_name AS buyer_name,
+              u.email        AS buyer_email,
+              u.primary_role AS buyer_role,
+              p.code         AS package_code,
+              p.name         AS package_name,
+              r.display_name AS reviewer_name
+       FROM deposit_requests d
+       JOIN users u ON u.id = d.user_id
+       LEFT JOIN mhc_credit_packages p ON p.id = d.credit_package_id
+       LEFT JOIN users r ON r.id = d.reviewed_by
+       ${where}
+       ORDER BY
+         -- Unreviewed purchases first: this is a work queue, not an archive.
+         CASE WHEN d.status IN ('pending', 'pending_review') THEN 0 ELSE 1 END,
+         d.created_at DESC
        LIMIT $${values.length + 1}::int OFFSET $${values.length + 2}::int`,
       [...values, params.limit, params.offset],
+    );
+    return { rows, total };
+  }
+
+  /** A provider's own credit-purchase history, including in-flight requests. */
+  async listCreditPurchasesForUser(params: {
+    userId: string;
+    limit: number;
+    offset: number;
+  }): Promise<{ rows: CreditPurchaseRow[]; total: number }> {
+    const { rows: countRows } = await this.db.query<{ c: string }>(
+      `SELECT COUNT(*)::text AS c FROM deposit_requests
+       WHERE user_id = $1 AND purpose = 'credit_purchase'`,
+      [params.userId],
+    );
+    const total = parseInt(countRows[0]?.c ?? '0', 10);
+
+    const { rows } = await this.db.query<CreditPurchaseRow>(
+      `SELECT d.id, d.user_id, d.order_id, d.status, d.provider, d.purpose,
+              d.mhc_grant_amount::text, d.external_price_amount::text, d.external_price_currency,
+              d.credit_package_id, d.credited_transaction_id, d.proof_upload_id,
+              d.transfer_reference, d.rejection_reason, d.paid_at, d.created_at,
+              p.code AS package_code,
+              p.name AS package_name
+       FROM deposit_requests d
+       LEFT JOIN mhc_credit_packages p ON p.id = d.credit_package_id
+       WHERE d.user_id = $1 AND d.purpose = 'credit_purchase'
+       ORDER BY d.created_at DESC
+       LIMIT $2::int OFFSET $3::int`,
+      [params.userId, params.limit, params.offset],
     );
     return { rows, total };
   }
