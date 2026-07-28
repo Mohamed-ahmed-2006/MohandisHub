@@ -72,6 +72,35 @@ export type MhcActivationRow = {
   created_at: string;
 };
 
+/**
+ * The only `deposit_requests.status` values a credit purchase may be fulfilled
+ * from. Everything else means money did not arrive as expected, or the purchase
+ * is already resolved.
+ *
+ * The effective status domain is the INTERSECTION of two CHECK constraints:
+ * `deposit_requests_status_check` (validated) and
+ * `deposit_requests_provider_status_check_publish_ready` (NOT VALID, but still
+ * enforced for new rows) — i.e.
+ *   pending | paid | expired | failed | cancelled | pending_review | rejected
+ * Note 'completed' is NOT reachable, despite older code testing for it.
+ */
+const FULFILLABLE_PURCHASE_STATUSES = new Set(['pending', 'pending_review']);
+
+/** Statuses that mean the purchase was already granted; re-running is a no-op. */
+const ALREADY_FULFILLED_STATUSES = new Set(['paid']);
+
+/**
+ * Outcome of a fulfilment attempt. Deliberately a discriminated union rather
+ * than a nullable result: an admin approving an already-approved purchase and an
+ * admin approving a rejected one are different situations, and collapsing both
+ * to `null` loses the distinction at exactly the point where money is granted.
+ */
+export type FulfillOutcome =
+  | { outcome: 'fulfilled'; mhcGranted: number; balance: number }
+  | { outcome: 'already_fulfilled'; mhcGranted: 0; balance: number }
+  | { outcome: 'not_found' }
+  | { outcome: 'not_actionable'; status: string };
+
 export class InsufficientCreditsError extends Error {
   constructor(
     public readonly required: number,
@@ -326,8 +355,16 @@ export class MhcRepository {
   }
 
   /**
-   * Mark a credit purchase paid and grant the snapshotted MHC amount. Idempotent:
-   * a purchase already in a terminal paid state is not granted twice.
+   * Mark a credit purchase paid and grant the snapshotted MHC amount.
+   *
+   * Fulfilment proceeds ONLY from a status in FULFILLABLE_PURCHASE_STATUSES. The
+   * previous implementation returned early for paid/completed/rejected/cancelled
+   * and granted for everything else, which meant a purchase sitting in 'expired'
+   * or 'failed' — statuses that specifically mean the money did not arrive —
+   * would be granted in full if an admin clicked approve.
+   *
+   * The row is locked FOR UPDATE before the status is read, so two concurrent
+   * approvals cannot both pass the check.
    */
   async fulfillCreditPurchase(params: {
     purchaseId: string;
@@ -337,7 +374,7 @@ export class MhcRepository {
     providerPayload?: Record<string, unknown>;
     /** Overrides the snapshotted grant (e.g. admin corrects an underpayment). */
     overrideMhcAmount?: number | null;
-  }): Promise<{ fulfilled: boolean; mhcGranted: number; balance: number } | null> {
+  }): Promise<FulfillOutcome> {
     const client = await this.db.connect();
     try {
       await client.query('BEGIN');
@@ -357,9 +394,12 @@ export class MhcRepository {
       const purchase = purchaseRows[0];
       if (!purchase) {
         await client.query('ROLLBACK');
-        return null;
+        return { outcome: 'not_found' };
       }
 
+      // Record what the provider told us regardless of whether we grant. This is
+      // the audit trail for callbacks that arrive out of order or after the
+      // purchase is already resolved.
       await client.query(
         `UPDATE deposit_requests
          SET provider_status = COALESCE($2, provider_status),
@@ -375,21 +415,32 @@ export class MhcRepository {
         ],
       );
 
-      // Already fulfilled — do not grant twice.
-      if (purchase.status === 'paid' || purchase.status === 'completed') {
+      // Already granted — commit the provider metadata but never grant twice.
+      if (ALREADY_FULFILLED_STATUSES.has(purchase.status)) {
         await client.query('COMMIT');
         const balance = await this.getBalance(purchase.user_id);
-        return { fulfilled: false, mhcGranted: 0, balance };
-      }
-      if (purchase.status === 'rejected' || purchase.status === 'cancelled') {
-        await client.query('ROLLBACK');
-        return null;
+        return { outcome: 'already_fulfilled', mhcGranted: 0, balance };
       }
 
+      // Anything not explicitly fulfillable is refused. This covers rejected and
+      // cancelled (deliberately resolved) as well as expired and failed (money
+      // did not arrive), which the previous implementation would have granted.
+      if (!FULFILLABLE_PURCHASE_STATUSES.has(purchase.status)) {
+        await client.query('COMMIT');
+        return { outcome: 'not_actionable', status: purchase.status };
+      }
+
+      // An admin override must still be a real grant. Number.isFinite alone let
+      // 0 through (marking the purchase paid while granting nothing) and let a
+      // negative through (silently DEBITING the provider on an "approval").
       const mhcAmount =
-        params.overrideMhcAmount != null && Number.isFinite(params.overrideMhcAmount)
+        params.overrideMhcAmount != null
           ? params.overrideMhcAmount
           : parseFloat(purchase.mhc_grant_amount);
+      if (!Number.isFinite(mhcAmount) || mhcAmount <= 0) {
+        await client.query('ROLLBACK');
+        throw new Error('MHC_GRANT_AMOUNT_INVALID');
+      }
 
       // Grant inside this same transaction for atomicity.
       const creditWallet = await this.getOrCreateCreditWalletInTx(client, purchase.user_id);
@@ -439,7 +490,7 @@ export class MhcRepository {
       );
 
       await client.query('COMMIT');
-      return { fulfilled: true, mhcGranted: mhcAmount, balance: balanceAfter };
+      return { outcome: 'fulfilled', mhcGranted: mhcAmount, balance: balanceAfter };
     } catch (e) {
       try {
         await client.query('ROLLBACK');
@@ -450,6 +501,33 @@ export class MhcRepository {
     } finally {
       client.release();
     }
+  }
+
+  /**
+   * Record what a payment provider reported, without touching credits or the
+   * purchase status. Used for callbacks that are authentic but not settled, so
+   * the audit trail is complete even when nothing is granted.
+   */
+  async recordPurchaseProviderState(params: {
+    purchaseId: string;
+    providerStatus?: string | null;
+    providerPaymentId?: string | null;
+    providerPayload?: Record<string, unknown>;
+  }): Promise<void> {
+    await this.db.query(
+      `UPDATE deposit_requests
+       SET provider_status = COALESCE($2, provider_status),
+           provider_payment_id = COALESCE($3, provider_payment_id),
+           provider_payload = provider_payload || COALESCE($4::jsonb, '{}'::jsonb),
+           updated_at = now()
+       WHERE id = $1 AND purpose = 'credit_purchase'`,
+      [
+        params.purchaseId,
+        params.providerStatus ?? null,
+        params.providerPaymentId ?? null,
+        params.providerPayload ? JSON.stringify(params.providerPayload) : null,
+      ],
+    );
   }
 
   async rejectCreditPurchase(params: {

@@ -27,6 +27,18 @@ const PROVIDER_ROLES = new Set(['expert', 'craftsman', 'business']);
 /** Max concurrent unreviewed manual purchases per provider (anti-spam). */
 const MAX_PENDING_PURCHASES_PER_USER = 3;
 
+/**
+ * Payment-provider statuses that mean the money is SETTLED and credits may be
+ * granted. Deliberately an allow-list, not a deny-list: an unrecognised status
+ * must never grant.
+ *
+ * 'finished' matches how the existing EGP deposit rail treats NOWPayments
+ * (see WalletService.handleNowPaymentsDepositIpn). Statuses such as `waiting`,
+ * `confirming`, `sending`, `partially_paid`, `failed`, `refunded` and `expired`
+ * are NOT settled.
+ */
+const SETTLED_PROVIDER_STATUSES = new Set(['finished']);
+
 export type MhcActionKey =
   | 'award_activation'
   | 'booking_activation'
@@ -218,21 +230,43 @@ export class MhcService {
     adminId: string;
     /** Admin may grant a corrected amount when the transfer was short/over. */
     overrideMhcAmount?: number | null;
-  }): Promise<{ mhcGranted: number; balance: number }> {
+  }): Promise<{ mhcGranted: number; balance: number; alreadyGranted: boolean }> {
+    if (params.overrideMhcAmount != null && !(params.overrideMhcAmount > 0)) {
+      throw new HttpError({
+        statusCode: 400,
+        code: 'MHC_INVALID_GRANT_AMOUNT',
+        message: 'The corrected credit amount must be greater than zero.',
+      });
+    }
+
     const result = await this.repo.fulfillCreditPurchase({
       purchaseId: params.purchaseId,
       reviewedBy: params.adminId,
       providerStatus: 'admin_approved',
       overrideMhcAmount: params.overrideMhcAmount ?? null,
     });
-    if (!result) {
-      throw new HttpError({
-        statusCode: 404,
-        code: 'MHC_PURCHASE_NOT_ACTIONABLE',
-        message: 'Credit purchase not found or already resolved.',
-      });
+
+    switch (result.outcome) {
+      case 'fulfilled':
+        return { mhcGranted: result.mhcGranted, balance: result.balance, alreadyGranted: false };
+      // Approving twice is safe and reports the existing state rather than
+      // pretending a second grant happened.
+      case 'already_fulfilled':
+        return { mhcGranted: 0, balance: result.balance, alreadyGranted: true };
+      case 'not_found':
+        throw new HttpError({
+          statusCode: 404,
+          code: 'MHC_PURCHASE_NOT_FOUND',
+          message: 'Credit purchase not found.',
+        });
+      case 'not_actionable':
+        throw new HttpError({
+          statusCode: 409,
+          code: 'MHC_PURCHASE_NOT_ACTIONABLE',
+          message: `This purchase cannot be approved because it is '${result.status}'.`,
+          details: { status: result.status },
+        });
     }
-    return { mhcGranted: result.mhcGranted, balance: result.balance };
   }
 
   async rejectPurchase(params: {
@@ -255,22 +289,56 @@ export class MhcService {
     return row;
   }
 
-  /** Fulfil a purchase from a verified payment-provider webhook (e.g. crypto). */
+  /**
+   * Fulfil a purchase from a VERIFIED payment-provider webhook.
+   *
+   * The caller is responsible for authenticating the callback (signature check)
+   * before calling this. This method is responsible for the second half: only a
+   * provider status that explicitly means "settled" may grant credits. The
+   * previous implementation passed any status straight through to fulfilment, so
+   * a `failed` or `expired` callback would have granted in full.
+   *
+   * Non-settled callbacks are still recorded against the purchase for audit —
+   * they simply do not move credits.
+   */
   async fulfilPurchaseFromWebhook(params: {
     orderId: string;
     providerStatus: string;
     providerPaymentId?: string | null;
     providerPayload?: Record<string, unknown>;
-  }): Promise<{ fulfilled: boolean } | null> {
+  }): Promise<{ fulfilled: boolean; reason?: string } | null> {
     const purchase = await this.repo.findCreditPurchaseByOrderId(params.orderId);
     if (!purchase) return null;
+
+    const normalizedStatus = params.providerStatus.toLowerCase().trim();
+    if (!SETTLED_PROVIDER_STATUSES.has(normalizedStatus)) {
+      // Record the callback without granting anything.
+      await this.repo.recordPurchaseProviderState({
+        purchaseId: purchase.id,
+        providerStatus: normalizedStatus,
+        providerPaymentId: params.providerPaymentId ?? null,
+        ...(params.providerPayload ? { providerPayload: params.providerPayload } : {}),
+      });
+      return { fulfilled: false, reason: `provider status '${normalizedStatus}' is not settled` };
+    }
+
     const result = await this.repo.fulfillCreditPurchase({
       purchaseId: purchase.id,
-      providerStatus: params.providerStatus,
+      providerStatus: normalizedStatus,
       providerPaymentId: params.providerPaymentId ?? null,
       ...(params.providerPayload ? { providerPayload: params.providerPayload } : {}),
     });
-    return result ? { fulfilled: result.fulfilled } : null;
+
+    switch (result.outcome) {
+      case 'fulfilled':
+        return { fulfilled: true };
+      case 'already_fulfilled':
+        return { fulfilled: false, reason: 'already fulfilled' };
+      case 'not_found':
+        return null;
+      case 'not_actionable':
+        return { fulfilled: false, reason: `purchase is '${result.status}'` };
+    }
   }
 
   // -------------------------------------------------------------------------

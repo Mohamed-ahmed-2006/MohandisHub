@@ -453,6 +453,165 @@ describe('MhcService — award activation gate', () => {
   });
 });
 
+describe('MhcService — credit purchase fulfilment states', () => {
+  /** Mock the FOR UPDATE read of the purchase row at a given status. */
+  const purchaseAt = (status: string) => [
+    {
+      match: /FROM deposit_requests\s+WHERE id = \$1 AND purpose = 'credit_purchase'\s+FOR UPDATE/,
+      rows: [
+        {
+          id: 'dep-1',
+          user_id: 'provider-1',
+          status,
+          mhc_grant_amount: '100',
+          order_id: 'MHC-IP-1',
+        },
+      ],
+    },
+    { match: /INSERT INTO wallets/, rows: [CREDIT_WALLET] },
+    { match: /SELECT balance::text FROM wallets WHERE id = \$1 FOR UPDATE/, rows: [{ balance: '20' }] },
+    { match: /INSERT INTO transactions/, rows: [{ id: 'tx-1' }] },
+  ];
+
+  const grantWasWritten = (): boolean =>
+    clientQueryMock.mock.calls.map((c) => String(c[0])).some((sql) => /INSERT INTO transactions/.test(sql));
+
+  it.each(['pending', 'pending_review'])('grants credits from %s', async (status) => {
+    const service = new MhcService();
+    clientQueryMock.mockImplementation(routeQuery(purchaseAt(status)));
+    poolQueryMock.mockImplementation(routeQuery([]));
+
+    const result = await service.approvePurchase({ purchaseId: 'dep-1', adminId: 'admin-1' });
+    expect(result).toMatchObject({ mhcGranted: 100, balance: 120, alreadyGranted: false });
+    expect(grantWasWritten()).toBe(true);
+  });
+
+  // These statuses all mean the money did not arrive as expected. The previous
+  // implementation granted for every one of them.
+  it.each(['expired', 'failed', 'underpaid', 'rejected', 'cancelled'])(
+    'refuses to grant from %s',
+    async (status) => {
+      const service = new MhcService();
+      clientQueryMock.mockImplementation(routeQuery(purchaseAt(status)));
+
+      await expect(
+        service.approvePurchase({ purchaseId: 'dep-1', adminId: 'admin-1' }),
+      ).rejects.toMatchObject({ code: 'MHC_PURCHASE_NOT_ACTIONABLE', statusCode: 409 });
+      expect(grantWasWritten()).toBe(false);
+    },
+  );
+
+  it('is idempotent when the purchase is already paid', async () => {
+    const service = new MhcService();
+    clientQueryMock.mockImplementation(routeQuery(purchaseAt('paid')));
+    poolQueryMock.mockImplementation(
+      routeQuery([{ match: /SELECT balance::text FROM wallets/, rows: [{ balance: '120' }] }]),
+    );
+
+    const result = await service.approvePurchase({ purchaseId: 'dep-1', adminId: 'admin-1' });
+    expect(result).toMatchObject({ mhcGranted: 0, balance: 120, alreadyGranted: true });
+    expect(grantWasWritten()).toBe(false);
+  });
+
+  it('reports a missing purchase distinctly from an unactionable one', async () => {
+    const service = new MhcService();
+    clientQueryMock.mockImplementation(routeQuery([]));
+
+    await expect(
+      service.approvePurchase({ purchaseId: 'nope', adminId: 'admin-1' }),
+    ).rejects.toMatchObject({ code: 'MHC_PURCHASE_NOT_FOUND', statusCode: 404 });
+  });
+
+  it.each([0, -50])('rejects an admin override amount of %s', async (amount) => {
+    const service = new MhcService();
+    clientQueryMock.mockImplementation(routeQuery(purchaseAt('pending_review')));
+
+    await expect(
+      service.approvePurchase({
+        purchaseId: 'dep-1',
+        adminId: 'admin-1',
+        overrideMhcAmount: amount,
+      }),
+    ).rejects.toMatchObject({ code: 'MHC_INVALID_GRANT_AMOUNT', statusCode: 400 });
+    expect(grantWasWritten()).toBe(false);
+  });
+});
+
+describe('MhcService — webhook fulfilment', () => {
+  const purchaseRow = {
+    id: 'dep-1',
+    user_id: 'provider-1',
+    order_id: 'MHC-NP-1',
+    status: 'pending',
+    provider: 'nowpayments',
+    purpose: 'credit_purchase',
+    mhc_grant_amount: '100',
+    external_price_amount: '250',
+    external_price_currency: 'EGP',
+    credit_package_id: 'pkg-1',
+    credited_transaction_id: null,
+  };
+
+  // A webhook that is authentic but reports a non-settled state must never move
+  // credits. The previous implementation passed any status through to fulfilment.
+  it.each(['waiting', 'confirming', 'sending', 'partially_paid', 'failed', 'refunded', 'expired'])(
+    'does not grant on provider status %s',
+    async (providerStatus) => {
+      const service = new MhcService();
+      poolQueryMock.mockImplementation(
+        routeQuery([{ match: /FROM deposit_requests\s+WHERE order_id/, rows: [purchaseRow] }]),
+      );
+
+      const result = await service.fulfilPurchaseFromWebhook({
+        orderId: 'MHC-NP-1',
+        providerStatus,
+      });
+
+      expect(result).toMatchObject({ fulfilled: false });
+      expect(result?.reason).toMatch(/not settled/);
+      // No charging transaction may be opened at all.
+      expect(connectMock).not.toHaveBeenCalled();
+      // The callback is still recorded for audit.
+      const sql = poolQueryMock.mock.calls.map((c) => String(c[0]));
+      expect(sql.some((s) => /UPDATE deposit_requests/.test(s))).toBe(true);
+    },
+  );
+
+  it('grants on a settled provider status', async () => {
+    const service = new MhcService();
+    poolQueryMock.mockImplementation(
+      routeQuery([{ match: /FROM deposit_requests\s+WHERE order_id/, rows: [purchaseRow] }]),
+    );
+    clientQueryMock.mockImplementation(
+      routeQuery([
+        {
+          match: /FROM deposit_requests\s+WHERE id = \$1 AND purpose = 'credit_purchase'\s+FOR UPDATE/,
+          rows: [
+            { id: 'dep-1', user_id: 'provider-1', status: 'pending', mhc_grant_amount: '100', order_id: 'MHC-NP-1' },
+          ],
+        },
+        { match: /INSERT INTO wallets/, rows: [CREDIT_WALLET] },
+        { match: /SELECT balance::text FROM wallets WHERE id = \$1 FOR UPDATE/, rows: [{ balance: '0' }] },
+        { match: /INSERT INTO transactions/, rows: [{ id: 'tx-1' }] },
+      ]),
+    );
+
+    const result = await service.fulfilPurchaseFromWebhook({
+      orderId: 'MHC-NP-1',
+      providerStatus: 'FINISHED', // case/whitespace normalised before matching
+    });
+    expect(result).toEqual({ fulfilled: true });
+  });
+
+  it('returns null for an unknown order', async () => {
+    const service = new MhcService();
+    poolQueryMock.mockImplementation(routeQuery([]));
+    await expect(
+      service.fulfilPurchaseFromWebhook({ orderId: 'nope', providerStatus: 'finished' }),
+    ).resolves.toBeNull();
+  });
+});
+
 describe('MhcService — admin pricing validation', () => {
   it('rejects a negative action price', async () => {
     const service = new MhcService();
