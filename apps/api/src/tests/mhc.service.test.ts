@@ -31,15 +31,23 @@ vi.mock('../db/pool.js', () => ({
   }),
 }));
 
-/** Route a mocked query by matching a fragment of the SQL text. */
+/**
+ * Route a mocked query by matching a fragment of the SQL text.
+ *
+ * `rowCount` is reported because the activation transaction uses guarded UPDATEs
+ * and aborts when one matches no row. A handler may override it to simulate
+ * losing that race; otherwise an UPDATE reports one affected row.
+ */
 function routeQuery(
-  handlers: Array<{ match: RegExp; rows: unknown[] }>,
-): (sql: string) => { rows: unknown[] } {
+  handlers: Array<{ match: RegExp; rows: unknown[]; rowCount?: number }>,
+): (sql: string) => { rows: unknown[]; rowCount: number } {
   return (sql: string) => {
     for (const handler of handlers) {
-      if (handler.match.test(sql)) return { rows: handler.rows };
+      if (handler.match.test(sql)) {
+        return { rows: handler.rows, rowCount: handler.rowCount ?? handler.rows.length };
+      }
     }
-    return { rows: [] };
+    return { rows: [], rowCount: /^\s*UPDATE\b/i.test(sql.trim()) ? 1 : 0 };
   };
 }
 
@@ -306,6 +314,30 @@ describe('MhcService — purchase rejection', () => {
   });
 });
 
+/**
+ * Rows the charging transaction locks before it will charge: the need and its
+ * bid, re-read under FOR UPDATE. Without these the transaction correctly refuses
+ * to charge, so every test that expects a charge must supply them.
+ */
+const LOCKED_AWARD_ROWS = [
+  {
+    match: /FROM needs WHERE id = \$1 FOR UPDATE/,
+    rows: [
+      {
+        id: 'need-1',
+        status: 'awarded_pending_provider_acceptance',
+        pending_award_bid_id: 'bid-1',
+        pending_award_expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+        activated_at: null,
+      },
+    ],
+  },
+  {
+    match: /FROM bids WHERE id = \$1 FOR UPDATE/,
+    rows: [{ id: 'bid-1', need_id: 'need-1', expert_id: 'provider-1', status: 'awarded_pending' }],
+  },
+];
+
 describe('MhcService — award activation gate', () => {
   /**
    * A live award OFFER: the customer selected this bid, the provider has not paid
@@ -397,6 +429,7 @@ describe('MhcService — award activation gate', () => {
     clientQueryMock.mockImplementation(
       routeQuery([
         { match: /FROM mhc_job_activations/, rows: [] },
+        ...LOCKED_AWARD_ROWS,
         { match: /FROM mhc_action_prices/, rows: [{ mhc_price: '10', is_active: true }] },
         { match: /INSERT INTO wallets/, rows: [CREDIT_WALLET] },
         {
@@ -454,6 +487,7 @@ describe('MhcService — award activation gate', () => {
     clientQueryMock.mockImplementation(
       routeQuery([
         { match: /FROM mhc_job_activations/, rows: [] },
+        ...LOCKED_AWARD_ROWS,
         { match: /FROM mhc_action_prices/, rows: [{ mhc_price: '50', is_active: true }] },
         { match: /INSERT INTO wallets/, rows: [CREDIT_WALLET] },
         // Provider only has 10 MHC but the action costs 50.
@@ -480,6 +514,7 @@ describe('MhcService — award activation gate', () => {
     clientQueryMock.mockImplementation(
       routeQuery([
         { match: /FROM mhc_job_activations/, rows: [] },
+        ...LOCKED_AWARD_ROWS,
         { match: /FROM mhc_action_prices/, rows: [{ mhc_price: '40', is_active: true }] },
         { match: /INSERT INTO wallets/, rows: [CREDIT_WALLET] },
         {
@@ -544,6 +579,7 @@ describe('MhcService — award activation gate', () => {
     clientQueryMock.mockImplementation(
       routeQuery([
         { match: /FROM mhc_job_activations/, rows: [] },
+        ...LOCKED_AWARD_ROWS,
         // Price configured but disabled => free activation (beta mode).
         { match: /FROM mhc_action_prices/, rows: [{ mhc_price: '40', is_active: false }] },
         { match: /INSERT INTO wallets/, rows: [CREDIT_WALLET] },
@@ -574,6 +610,7 @@ describe('MhcService — award activation gate', () => {
     clientQueryMock.mockImplementation(
       routeQuery([
         { match: /FROM mhc_job_activations/, rows: [] },
+        ...LOCKED_AWARD_ROWS,
         { match: /FROM mhc_action_prices/, rows: [{ mhc_price: '40', is_active: true }] },
         { match: /INSERT INTO wallets/, rows: [CREDIT_WALLET] },
         {

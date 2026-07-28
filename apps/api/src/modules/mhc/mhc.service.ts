@@ -16,6 +16,7 @@ import { createInvoice, verifyNowPaymentsIpnSignature } from '../../lib/nowpayme
 import { HttpError } from '../../utils/http-error.js';
 
 import {
+  ActivationStateError,
   InsufficientCreditsError,
   MhcRepository,
   type CreditPurchaseRow,
@@ -831,6 +832,30 @@ export class MhcService {
           statusCode: 403,
           code: 'MHC_WALLET_FROZEN',
           message: 'Your credit account is frozen. Please contact support.',
+        });
+      }
+      // Raised from inside the charging transaction with the need and bid rows
+      // locked, so it reflects committed state. Nothing was charged.
+      if (e instanceof ActivationStateError) {
+        const messages: Record<ActivationStateError['reason'], string> = {
+          BID_NOT_FOUND: 'Bid not found.',
+          NOT_BID_OWNER: 'You can only activate your own bid.',
+          BID_NOT_AWARDED: 'This bid has not been awarded to you.',
+          AWARD_OFFER_EXPIRED: 'This award offer has expired. No credits were charged.',
+          AWARD_STATE_CHANGED:
+            'This award is no longer available — the customer changed their selection. No credits were charged.',
+        };
+        const statusCodes: Record<ActivationStateError['reason'], number> = {
+          BID_NOT_FOUND: 404,
+          NOT_BID_OWNER: 403,
+          BID_NOT_AWARDED: 409,
+          AWARD_OFFER_EXPIRED: 409,
+          AWARD_STATE_CHANGED: 409,
+        };
+        throw new HttpError({
+          statusCode: statusCodes[e.reason],
+          code: e.reason,
+          message: messages[e.reason],
         });
       }
       throw e;

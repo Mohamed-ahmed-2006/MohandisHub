@@ -117,6 +117,25 @@ export type FulfillOutcome =
   | { outcome: 'not_found' }
   | { outcome: 'not_actionable'; status: string };
 
+/**
+ * The award is no longer in a state that may be charged for. Raised from INSIDE
+ * the charging transaction, after the need and bid rows are locked, so it
+ * reflects committed state rather than a stale read.
+ */
+export class ActivationStateError extends Error {
+  constructor(
+    public readonly reason:
+      | 'BID_NOT_FOUND'
+      | 'NOT_BID_OWNER'
+      | 'BID_NOT_AWARDED'
+      | 'AWARD_OFFER_EXPIRED'
+      | 'AWARD_STATE_CHANGED',
+  ) {
+    super(reason);
+    this.name = 'ActivationStateError';
+  }
+}
+
 export class InsufficientCreditsError extends Error {
   constructor(
     public readonly required: number,
@@ -762,6 +781,72 @@ export class MhcRepository {
    * provider lacks balance. If the action price is 0 or inactive, records a
    * zero-charge activation so the gate opens without spending credits.
    */
+  /**
+   * Lock the need and its bid, then verify the award may still be charged for.
+   * Throws ActivationStateError if not. Must be called inside a transaction.
+   */
+  private async assertAwardChargeable(
+    client: PoolClient,
+    params: { needId: string | null; bidId: string | null; providerUserId: string },
+  ): Promise<void> {
+    if (!params.needId || !params.bidId) {
+      throw new ActivationStateError('BID_NOT_FOUND');
+    }
+
+    // Need first, then bid — see the lock-order note at the call site.
+    const { rows: needRows } = await client.query<{
+      id: string;
+      status: string;
+      pending_award_bid_id: string | null;
+      pending_award_expires_at: string | null;
+      activated_at: string | null;
+    }>(
+      `SELECT id, status, pending_award_bid_id,
+              pending_award_expires_at::text, activated_at::text
+       FROM needs WHERE id = $1 FOR UPDATE`,
+      [params.needId],
+    );
+    const need = needRows[0];
+    if (!need) throw new ActivationStateError('BID_NOT_FOUND');
+
+    const { rows: bidRows } = await client.query<{
+      id: string;
+      need_id: string;
+      expert_id: string;
+      status: string;
+    }>(`SELECT id, need_id, expert_id, status FROM bids WHERE id = $1 FOR UPDATE`, [params.bidId]);
+    const bid = bidRows[0];
+    if (!bid || bid.need_id !== need.id) throw new ActivationStateError('BID_NOT_FOUND');
+
+    if (bid.expert_id !== params.providerUserId) {
+      throw new ActivationStateError('NOT_BID_OWNER');
+    }
+
+    // The customer must still be offering THIS bid.
+    if (
+      need.status !== 'awarded_pending_provider_acceptance' ||
+      need.pending_award_bid_id !== bid.id ||
+      bid.status !== 'awarded_pending'
+    ) {
+      // Distinguish "someone else got it / customer moved on" from "never offered",
+      // because the first is a race and the second is a client bug.
+      throw new ActivationStateError(
+        need.activated_at != null || need.pending_award_bid_id !== bid.id
+          ? 'AWARD_STATE_CHANGED'
+          : 'BID_NOT_AWARDED',
+      );
+    }
+
+    // Expiry is re-checked here for the same reason as everything else: the
+    // window may have closed since the service read it.
+    if (need.pending_award_expires_at != null) {
+      const expiresAt = new Date(need.pending_award_expires_at).getTime();
+      if (Number.isFinite(expiresAt) && expiresAt <= Date.now()) {
+        throw new ActivationStateError('AWARD_OFFER_EXPIRED');
+      }
+    }
+  }
+
   async chargeActivation(params: {
     activationType: 'award' | 'booking';
     providerUserId: string;
@@ -789,6 +874,11 @@ export class MhcRepository {
         throw new Error('MHC_ACTIVATION_REFERENCE_REQUIRED');
       }
 
+      // Idempotency BEFORE state validation, and the order matters. Once an
+      // award is activated the need moves to 'awarded' and pending_award_bid_id
+      // is cleared — so validating first would make a retry of an
+      // already-paid activation fail as AWARD_STATE_CHANGED instead of
+      // returning the existing result. A retry must be a no-op, not an error.
       const { rows: existingRows } = await client.query<MhcActivationRow>(
         `SELECT id, mhc_charged::text FROM mhc_job_activations
          WHERE activation_type = $1 AND ${dedupeColumn} = $2
@@ -805,6 +895,22 @@ export class MhcRepository {
           mhcCharged: parseFloat(existingRows[0]!.mhc_charged),
           balance,
         };
+      }
+
+      // Re-validate the award INSIDE the transaction, with the need and bid rows
+      // locked. The service performs the same checks first for a fast, friendly
+      // error, but those run against an unlocked read: between them and here the
+      // customer may have re-awarded, withdrawn, or let the offer lapse. Only the
+      // locked check can be trusted to authorise a charge.
+      //
+      // Lock order is always need -> bid. Every path that locks both uses this
+      // order so concurrent activations cannot deadlock.
+      if (params.activationType === 'award') {
+        await this.assertAwardChargeable(client, {
+          needId: params.needId ?? null,
+          bidId: params.bidId ?? null,
+          providerUserId: params.providerUserId,
+        });
       }
 
       // Resolve price.
@@ -884,13 +990,20 @@ export class MhcRepository {
       // the debit succeeded, the provider would lose credits for a job that never
       // unlocked; committing them together makes that impossible.
       if (params.activationType === 'award' && params.needId && params.bidId) {
-        await client.query(
+        // Both writes carry guard predicates and their row counts are checked.
+        // A bare `WHERE id = $1` would happily overwrite a newer award that was
+        // created after our validating read — the exact race this guards.
+        const bidUpdate = await client.query(
           `UPDATE bids
            SET status = 'accepted', award_accepted_at = now(), updated_at = now()
-           WHERE id = $1`,
+           WHERE id = $1 AND status = 'awarded_pending'`,
           [params.bidId],
         );
-        await client.query(
+        if (bidUpdate.rowCount !== 1) {
+          throw new ActivationStateError('AWARD_STATE_CHANGED');
+        }
+
+        const needUpdate = await client.query(
           `UPDATE needs
            SET status = 'awarded',
                awarded_bid_id = $1,
@@ -899,8 +1012,29 @@ export class MhcRepository {
                pending_award_at = NULL,
                pending_award_expires_at = NULL,
                updated_at = now()
-           WHERE id = $2`,
+           WHERE id = $2
+             AND status = 'awarded_pending_provider_acceptance'
+             AND pending_award_bid_id = $1`,
           [params.bidId, params.needId],
+        );
+        if (needUpdate.rowCount !== 1) {
+          throw new ActivationStateError('AWARD_STATE_CHANGED');
+        }
+
+        // Reject the losing bids at ACTIVATION — the point the winner actually
+        // paid and the job is real.
+        //
+        // Today this is a no-op: NeedsService.awardBid still rejects them at
+        // offer time. That is wrong per decision D4 (alternatives must stay
+        // available until the selected provider activates, or a lapsed offer
+        // reopens a need whose other bidders have all been told they lost), and
+        // moving it is step 10 of the recovery plan. Putting the correct
+        // transition here now means step 10 only has to delete the premature one.
+        await client.query(
+          `UPDATE bids
+           SET status = 'rejected', updated_at = now()
+           WHERE need_id = $1 AND id <> $2 AND status IN ('pending', 'awarded_pending')`,
+          [params.needId, params.bidId],
         );
       }
 

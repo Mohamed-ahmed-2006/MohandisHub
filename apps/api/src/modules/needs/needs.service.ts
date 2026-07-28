@@ -768,23 +768,43 @@ export class NeedsService {
       });
     }
     const messages = await this.repo.listBidMessages(bidId, userId, isCustomer);
-    const unlocked = need.activated_at != null || !(await this.activationGate.isGateEnabled());
+    const unlocked = await this.isBidUnlocked(bidId);
     if (unlocked) {
-      // Job is paid for: reveal the original text that was stored alongside the
+      // This bid was paid for: reveal the original text stored alongside the
       // redacted copy.
       return messages.map((m) => ({
         ...m,
         content: m.raw_content ?? m.content,
         contact_locked: false,
+        thread_read_only: false,
       }));
     }
-    // Pre-activation: never return raw_content, and strip attachments so an
-    // image of a business card cannot bypass the text filter.
+    // Not unlocked. Never return raw_content, and strip attachments so an image
+    // of a business card cannot bypass the text filter.
+    //
+    // A losing bid on an ACTIVATED need is archived: permanently readable but
+    // permanently redacted and closed to new messages (decision D3). Signalling
+    // that explicitly stops the UI presenting an unreachable input box.
+    const archived = need.activated_at != null;
     return messages.map(({ raw_content: _raw, ...m }) => ({
       ...m,
       attachment_url: null,
       contact_locked: true,
+      thread_read_only: archived,
     }));
+  }
+
+  /**
+   * Is THIS bid's thread unlocked?
+   *
+   * Keyed on an `mhc_job_activations` row for the bid, not on `needs.activated_at`.
+   * The need-scoped test was a paywall bypass: once any bid on a need was
+   * activated, every other bid thread on that need unlocked too, handing the
+   * customer's contact details to every provider who bid and paid nothing.
+   */
+  private async isBidUnlocked(bidId: string): Promise<boolean> {
+    if (!(await this.activationGate.isGateEnabled())) return true;
+    return this.activationGate.isAwardActivated(bidId);
   }
 
   async createBidMessage(
@@ -810,8 +830,18 @@ export class NeedsService {
     const trimmed = input.content.trim();
     const url = input.attachmentUrl?.trim();
 
-    const gateEnabled = await this.activationGate.isGateEnabled();
-    const unlocked = need.activated_at != null || !gateEnabled;
+    const unlocked = await this.isBidUnlocked(bidId);
+
+    // A losing bid on an activated need is closed for good. Without this, the
+    // provider who lost could keep messaging the customer indefinitely on a job
+    // that went to someone else.
+    if (!unlocked && need.activated_at != null) {
+      throw new HttpError({
+        statusCode: 403,
+        code: 'BID_THREAD_ARCHIVED',
+        message: 'This conversation is closed because the job was awarded to another provider.',
+      });
+    }
 
     if (unlocked) {
       const contentForDb = trimmed.length > 0 ? trimmed : url ? '[Image]' : '';
