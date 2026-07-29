@@ -19,6 +19,29 @@ import type {
 
 const PLATFORM_USER_ID = '00000000-0000-0000-0000-000000000001';
 
+// ---------------------------------------------------------------------------
+// LAUNCH CONSTRAINT LC-01 — advertisements must stay priced at 0.
+// ---------------------------------------------------------------------------
+// The MHC charging path below is complete and tested, but two properties of it
+// are not yet product decisions, and both are only harmless while the price is 0:
+//
+//   1. Charging is FLAT PER CAMPAIGN, not per day. `mhc_action_prices` has one
+//      price per action key and no duration dimension, so a 1-day and a 365-day
+//      campaign cost the same. The pre-P0-03 model was pricePerDay × duration.
+//
+//   2. There is NO CANCELLATION OR REFUND POLICY. Cancelling an MHC-charged
+//      campaign refunds nothing today. `refundActionCharge` exists but refunds in
+//      FULL only — it cannot prorate — and no policy has been chosen.
+//
+// At a non-zero price, a provider who cancels on day 1 of 30 silently loses their
+// credits. So: keep `mhc_action_prices.advertisement.mhc_price` at 0 (or leave the
+// action inactive, which fails closed) until both decisions are implemented AND
+// tested. See docs/release/LAUNCH_CONSTRAINTS.md#lc-01.
+//
+// Do not "just set a price" in an admin panel to enable paid ads. That is a
+// change, not a configuration step.
+// ---------------------------------------------------------------------------
+
 /** `mhc_action_prices` key. The only pricing source for a launch campaign. */
 const AD_ACTION_KEY = 'advertisement';
 const AD_REFERENCE_TYPE = 'advertisement';
