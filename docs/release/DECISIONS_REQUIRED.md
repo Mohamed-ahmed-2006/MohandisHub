@@ -464,6 +464,95 @@ other five test repairs regardless.
 
 ---
 
+## D7 — The reservation customer-side escrow hold *(BLOCKING step 11)*
+
+**Raised:** 2026-07-29, during the pre-integration inspection of bookings.
+
+### Current repository behaviour (VERIFIED)
+
+Reservations are built on a **customer-side EGP escrow hold taken at reserve
+time**, not on direct payment:
+
+- `reservations.service.createReservation` builds a policy snapshot with
+  `deductionTiming: 'on_reserve_hold'` and the explanation *"Provider price plus
+  the platform fee is held when you click Reserve."*
+- `ensureFixedPriceHold` (line 3719) looks up the customer's **EGP money wallet**,
+  refuses with 402 `INSUFFICIENT_BALANCE` when `balance < holdAmount`, and creates
+  a `wallet_hold`.
+- The whole lifecycle is built on that hold: **72 hold references** and
+  **92 settlement/refund/penalty references** in the service. Completion captures
+  the hold, cancellation releases or partially captures it per policy, and
+  disputes read `settlement_status`
+  (`held | released_to_provider | refunded_to_customer | cancelled_no_refund | partially_refunded`).
+
+Live data: 16 reservations, **15 priced**, 15 with holds, 11 currently at
+`settlement_status = 'held'`.
+
+### Why this blocks
+
+The D1 reset zeroed and froze every EGP money wallet, and every deposit rail is
+off. So **any priced reservation now fails at reserve time with 402**. Bookings
+are non-functional today, and no customer can fund their way out of it.
+
+Adding provider MHC activation to bookings is straightforward and mirrors awards
+— I can build it in a day. But it does **not** answer the customer-side
+question, and the two interact: if the platform holds no customer money, then
+booking completion, cancellation, refund and dispute all lose the thing they
+operate on. That is a commercial decision with several defensible answers, so I
+am not inferring one.
+
+### Options
+
+| | Option | What it means |
+| --- | --- | --- |
+| **A** | **Bookings follow the award model.** No customer hold. Provider pays MHC to activate; customer pays provider directly. Cancellation/refund become policy guidance, not money movement. | One model across the platform. |
+| **B** | **Keep the hold for bookings only**, re-enabling a customer deposit rail just for reservations. | Preserves the existing lifecycle intact. |
+| **C** | **Option A, with the hold code fenced rather than deleted** behind a fail-closed flag, exactly as `escrow_bid_payment` was handled. | A, but reversible and auditable. |
+| **D** | **Launch with free reservations only** (no price, no hold), provider MHC activation still required. | Smallest change; defers priced bookings. |
+
+### Advantages and disadvantages
+
+- **A** — *Advantage:* consistent with every decision already taken; customers need no balance; one mental model. *Disadvantage:* the largest edit in this recovery so far, and it removes the only leverage the platform had in a booking dispute.
+- **B** — *Advantage:* the reservation lifecycle keeps working exactly as written and tested. *Disadvantage:* directly contradicts D1 and D6, reopens customer funding, and re-creates the liability the reset just cleared.
+- **C** — *Advantage:* same outcome as A but the escrow machinery stays readable and re-enableable, matching the precedent already set for bid escrow. *Disadvantage:* leaves a large dormant code path (which D6 already accepted for escrow).
+- **D** — *Advantage:* smallest, fastest, unblocks bookings for launch immediately. *Disadvantage:* no booking revenue beyond MHC activation, and "free to reserve" may change no-show behaviour.
+
+### Recommendation
+
+**Option C**, with **D as the fallback** if you want bookings live sooner.
+
+C is A with the precedent you already set for bid escrow: fence it behind a
+fail-closed flag rather than deleting a large money path mid-recovery. Booking
+completion then becomes customer-attested exactly like need completion, which is
+already how the awarded-need flow works — so bookings and awards behave the same
+way, which is worth a great deal in a product this size.
+
+Reject **B**: it undoes D1 and D6 together.
+
+### Second question, same area
+
+The D1 reset cancelled all `held` wallet holds — which you authorised — but it
+did **not** update the reservations that point at them. So 11 reservations still
+report `settlement_status = 'held'` while their holds are cancelled. That is a
+residual inconsistency from my own migration and I should have caught it.
+
+It is test data, so the fix is cheap, but the right fix depends on this decision:
+under A/C/D those reservations should move to a terminal settlement state; under
+B they would need their holds re-created. **I have not touched them.**
+
+### Blocked by this decision
+
+Step 11 in full. Provider MHC activation for bookings can be built regardless,
+but shipping it without answering this would put an activation charge on a flow
+that cannot currently be reserved at all.
+
+### Can other work continue?
+
+Yes. Step 12 (advertisements and promotions onto MHC) is unblocked, as is the
+MHC-27 pricing-semantics work and admin pricing configuration.
+
+---
+
 ## Secondary questions (not blocking, answer when convenient)
 
 | # | Question | Why it matters |
