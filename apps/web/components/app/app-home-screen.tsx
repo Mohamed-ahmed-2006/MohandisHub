@@ -228,6 +228,8 @@ export const AppHomeScreen = ({ locale, dictionary }: AppHomeScreenProps) => {
   const [minPrice, setMinPrice] = useState<number | ''>('');
   const [maxPrice, setMaxPrice] = useState<number | ''>('');
   const [verifiedOnly, setVerifiedOnly] = useState(false);
+  const [selectedTags, setSelectedTags] = useState<string[]>([]);
+  const [tagInput, setTagInput] = useState('');
   const [sort, setSort] = useState<string>('newest');
   const [results, setResults] = useState<ServiceSearchResult[]>([]);
   const [savedSearches, setSavedSearches] = useState<
@@ -479,18 +481,7 @@ export const AppHomeScreen = ({ locale, dictionary }: AppHomeScreenProps) => {
       setHasSearched(true);
       try {
         const q = qOverride !== undefined ? qOverride : searchQuery;
-        const params: {
-          categoryId?: string;
-          city?: string;
-          area?: string;
-          providerType?: string;
-          q?: string;
-          minRating?: number;
-          minPrice?: number;
-          maxPrice?: number;
-          verifiedOnly?: boolean;
-          sort?: string;
-        } = {};
+        const params: Parameters<typeof servicesApiClient.searchServices>[0] = {};
         if (categoryId) params.categoryId = categoryId;
         if (city) params.city = city;
         if (area) params.area = area;
@@ -500,6 +491,7 @@ export const AppHomeScreen = ({ locale, dictionary }: AppHomeScreenProps) => {
         if (minPrice !== '' && minPrice >= 0) params.minPrice = minPrice;
         if (maxPrice !== '' && maxPrice >= 0) params.maxPrice = maxPrice;
         if (verifiedOnly) params.verifiedOnly = true;
+        if (selectedTags.length > 0) params.tags = selectedTags;
         if (sort) params.sort = sort;
         const data = await servicesApiClient.searchServices(params);
         const visibleItems = authUser
@@ -536,6 +528,7 @@ export const AppHomeScreen = ({ locale, dictionary }: AppHomeScreenProps) => {
       minPrice,
       maxPrice,
       verifiedOnly,
+      selectedTags,
       sort,
     ],
   );
@@ -1752,6 +1745,80 @@ export const AppHomeScreen = ({ locale, dictionary }: AppHomeScreenProps) => {
                           </option>
                           <option value="completed_count">{d.sortPopular ?? 'Most orders'}</option>
                         </select>
+                      </div>
+                      <div className="home-search-field" style={{ gridColumn: '1 / -1' }}>
+                        <label className="home-search-label">
+                          {locale === 'ar' ? 'الوسوم (مطابقة أي وسم)' : 'Filter by Tags (match any)'}
+                        </label>
+                        <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.5rem' }}>
+                          <input
+                            type="text"
+                            className="home-search-input"
+                            placeholder={locale === 'ar' ? 'أدخل وسمًا ثم اضغط إضافة...' : 'Add tag (e.g. plumbing, design)...'}
+                            value={tagInput}
+                            onChange={(e) => setTagInput(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                e.preventDefault();
+                                const trimmed = tagInput.trim();
+                                if (trimmed && !selectedTags.includes(trimmed)) {
+                                  setSelectedTags([...selectedTags, trimmed]);
+                                  setTagInput('');
+                                }
+                              }
+                            }}
+                          />
+                          <button
+                            type="button"
+                            className="dashboard-secondary-btn"
+                            onClick={() => {
+                              const trimmed = tagInput.trim();
+                              if (trimmed && !selectedTags.includes(trimmed)) {
+                                setSelectedTags([...selectedTags, trimmed]);
+                                setTagInput('');
+                              }
+                            }}
+                          >
+                            {locale === 'ar' ? 'إضافة' : 'Add'}
+                          </button>
+                        </div>
+                        {selectedTags.length > 0 && (
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', alignItems: 'center' }}>
+                            {selectedTags.map((tag) => (
+                              <span
+                                key={tag}
+                                style={{
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '0.25rem',
+                                  background: '#e0f2fe',
+                                  color: '#0369a1',
+                                  padding: '0.25rem 0.6rem',
+                                  borderRadius: '9999px',
+                                  fontSize: '0.875rem',
+                                  fontWeight: 500,
+                                }}
+                              >
+                                #{tag}
+                                <button
+                                  type="button"
+                                  onClick={() => setSelectedTags(selectedTags.filter((t) => t !== tag))}
+                                  style={{ background: 'none', border: 'none', color: '#0369a1', cursor: 'pointer', padding: 0, fontWeight: 'bold' }}
+                                  aria-label={`Remove tag ${tag}`}
+                                >
+                                  ×
+                                </button>
+                              </span>
+                            ))}
+                            <button
+                              type="button"
+                              onClick={() => setSelectedTags([])}
+                              style={{ background: 'none', border: 'none', color: '#dc2626', cursor: 'pointer', fontSize: '0.875rem', textDecoration: 'underline' }}
+                            >
+                              {locale === 'ar' ? 'مسح الكل' : 'Clear tags'}
+                            </button>
+                          </div>
+                        )}
                       </div>
                       <div
                         className="home-search-field home-search-field--full home-search-controls-row"

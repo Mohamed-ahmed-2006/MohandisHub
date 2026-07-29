@@ -87,6 +87,7 @@ export type ServiceSearchParams = {
   minPrice?: number;
   maxPrice?: number;
   verifiedOnly?: boolean;
+  tags?: string[];
   sort?: ServiceSearchSort;
   page?: number;
   limit?: number;
@@ -143,6 +144,7 @@ export type ServiceSearchResult = {
   area: string | null;
   avgRating: number | null;
   isFeatured: boolean;
+  tags?: string[];
   /** Public gallery URLs (same as `Service.images`); may be empty. */
   images: string[];
 };

@@ -37,6 +37,7 @@ export type Bid = {
   expert_name?: string;
   expert_email?: string;
   need_title?: string;
+  expires_at?: string | null;
   has_unread?: boolean;
 };
 

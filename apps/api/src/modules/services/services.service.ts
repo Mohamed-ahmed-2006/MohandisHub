@@ -387,6 +387,7 @@ export class ServicesService {
       area: row.area,
       avgRating: row.avg_rating ? parseFloat(row.avg_rating) : null,
       isFeatured: row.is_featured,
+      tags: safeStringArray(row.tags),
       images: safeStringArray(row.images),
     };
   }

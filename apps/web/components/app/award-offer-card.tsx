@@ -175,7 +175,7 @@ export const AwardOfferCard = ({
           {short && (
             <div className="award-offer-short" role="status">
               <p>{tr('short', loc)}</p>
-              <Link className="mhc-primary" href={buildLocalePath(loc, '/app/profile#wallet-settings')}>
+              <Link className="mhc-primary" href={buildLocalePath(loc, '/app/credits')}>
                 {tr('buy', loc)}
               </Link>
             </div>
@@ -184,7 +184,7 @@ export const AwardOfferCard = ({
           {error?.code === 'NO_ACTIVE_PAYMENT_METHOD' && (
             <div className="award-offer-short" role="alert">
               <p>{tr('noPaymentMethod', loc)}</p>
-              <Link className="mhc-primary" href={buildLocalePath(loc, '/app/profile#wallet-settings')}>
+              <Link className="mhc-primary" href={buildLocalePath(loc, '/app/credits')}>
                 {tr('addPaymentMethod', loc)}
               </Link>
             </div>

@@ -183,9 +183,20 @@ export const ExpertDashboard = ({
   const suggestItems = (suggestions?.items ?? []) as string[];
   const suggestCta = suggestions?.ctaLabel ?? 'Manage Services';
 
-  const pendingAwardBids = myBids.filter(
-    (b) => b.status === 'awarded' || b.status === 'pending_activation',
-  );
+  const pendingAwardBids = myBids
+    .filter((b) => {
+      if (b.status !== 'awarded' && b.status !== 'pending_activation') return false;
+      if (b.expires_at) {
+        const expTime = new Date(b.expires_at).getTime();
+        if (Number.isFinite(expTime) && expTime <= Date.now()) return false;
+      }
+      return true;
+    })
+    .sort((a, b) => {
+      const tA = a.expires_at ? new Date(a.expires_at).getTime() : Number.MAX_SAFE_INTEGER;
+      const tB = b.expires_at ? new Date(b.expires_at).getTime() : Number.MAX_SAFE_INTEGER;
+      return tA - tB;
+    });
 
   return (
     <section className="dashboard-section">

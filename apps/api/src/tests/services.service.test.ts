@@ -217,4 +217,73 @@ describe('ServicesService launch hardening', () => {
     );
     expect(result.status).toBe('active');
   });
+
+  describe('P1-11 tag filtering semantics', () => {
+    it('returns unchanged results when no tags filter is specified', async () => {
+      const repo = {
+        searchServices: vi.fn().mockResolvedValue({
+          rows: [makeServiceRow({ id: 's-1' })],
+          total: 1,
+        }),
+      };
+      const service = new ServicesService(repo as never, {} as never, {} as never);
+      const res = await service.searchServices({}, 1, 20);
+
+      expect(repo.searchServices).toHaveBeenCalledWith({}, 1, 20);
+      expect(res.items).toHaveLength(1);
+    });
+
+    it('passes tag filter parameter correctly to repository with parameterized SQL array overlap', async () => {
+      const repo = {
+        searchServices: vi.fn().mockResolvedValue({
+          rows: [makeServiceRow({ id: 's-1', tags: ['plumbing'] })],
+          total: 1,
+        }),
+      };
+      const service = new ServicesService(repo as never, {} as never, {} as never);
+      const res = await service.searchServices({ tags: ['plumbing'] }, 1, 10);
+
+      expect(repo.searchServices).toHaveBeenCalledWith({ tags: ['plumbing'] }, 1, 10);
+      expect(res.items[0]?.tags).toEqual(['plumbing']);
+    });
+
+    it('supports multiple tags with match-any overlap semantics', async () => {
+      const repo = {
+        searchServices: vi.fn().mockResolvedValue({
+          rows: [
+            makeServiceRow({ id: 's-1', tags: ['plumbing'] }),
+            makeServiceRow({ id: 's-2', tags: ['electrical'] }),
+          ],
+          total: 2,
+        }),
+      };
+      const service = new ServicesService(repo as never, {} as never, {} as never);
+      const res = await service.searchServices({ tags: ['plumbing', 'electrical'] }, 1, 20);
+
+      expect(repo.searchServices).toHaveBeenCalledWith(
+        { tags: ['plumbing', 'electrical'] },
+        1,
+        20,
+      );
+      expect(res.total).toBe(2);
+    });
+
+    it('combines tags filter with category, price, and pagination parameters', async () => {
+      const repo = {
+        searchServices: vi.fn().mockResolvedValue({ rows: [], total: 0 }),
+      };
+      const service = new ServicesService(repo as never, {} as never, {} as never);
+      await service.searchServices(
+        { categoryId: 'cat-1', minPrice: 100, maxPrice: 500, tags: ['hvac'] },
+        2,
+        10,
+      );
+
+      expect(repo.searchServices).toHaveBeenCalledWith(
+        { categoryId: 'cat-1', minPrice: 100, maxPrice: 500, tags: ['hvac'] },
+        2,
+        10,
+      );
+    });
+  });
 });

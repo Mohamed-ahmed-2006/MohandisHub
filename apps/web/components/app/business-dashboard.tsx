@@ -137,9 +137,20 @@ export const BusinessDashboard = ({
         setOverviewOrdersPreview(ordRes.value.items);
       }
       if (bidsRes.status === 'fulfilled') {
-        const pendingAwards = bidsRes.value.rows.filter(
-          (b) => b.status === 'awarded' || b.status === 'pending_activation',
-        );
+        const pendingAwards = bidsRes.value.rows
+          .filter((b) => {
+            if (b.status !== 'awarded' && b.status !== 'pending_activation') return false;
+            if (b.expires_at) {
+              const expTime = new Date(b.expires_at).getTime();
+              if (Number.isFinite(expTime) && expTime <= Date.now()) return false;
+            }
+            return true;
+          })
+          .sort((a, b) => {
+            const tA = a.expires_at ? new Date(a.expires_at).getTime() : Number.MAX_SAFE_INTEGER;
+            const tB = b.expires_at ? new Date(b.expires_at).getTime() : Number.MAX_SAFE_INTEGER;
+            return tA - tB;
+          });
         setMyAwardBids(pendingAwards);
       }
     } catch {
