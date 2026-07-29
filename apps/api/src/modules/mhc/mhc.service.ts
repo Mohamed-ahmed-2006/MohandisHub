@@ -10,6 +10,8 @@
 // between users, it is a prepaid access product rather than stored value.
 // ---------------------------------------------------------------------------
 
+import type { PoolClient } from 'pg';
+
 import { env } from '../../config/env.js';
 import { getPool } from '../../db/pool.js';
 import { createInvoice, verifyNowPaymentsIpnSignature } from '../../lib/nowpayments.client.js';
@@ -20,10 +22,18 @@ import { ProviderPaymentsService } from '../provider-payments/provider-payments.
 import {
   ActivationStateError,
   InsufficientCreditsError,
+  MhcActionDisabledError,
+  MhcActionPriceMissingError,
+  MhcChargeNotFoundError,
+  MhcInvalidChargeReferenceError,
   MhcRepository,
+  MhcTransactionRequiredError,
+  type ChargeMhcActionResult,
   type CreditPurchaseRow,
+  type MhcActionChargeRow,
   type MhcActionPriceRow,
   type MhcCreditPackageRow,
+  type RefundMhcActionResult,
 } from './mhc.repository.js';
 
 /** Roles allowed to hold and spend MHC. Customers never buy credits. */
@@ -1013,6 +1023,169 @@ export class MhcService {
     reservationId?: string | null;
   }): Promise<boolean> {
     return this.repo.isActivated(params);
+  }
+
+  // -------------------------------------------------------------------------
+  // Generic action charging (P0-07)
+  // -------------------------------------------------------------------------
+  // The reusable charge primitive for paid actions that are NOT activations.
+  // Nothing consumes it yet — advertisements, subscriptions, bid fees, spotlight
+  // and paid tools are each migrated onto it as their own change, so a defect in
+  // any one of them cannot be attributed to the primitive.
+  //
+  // A consumer calls this from INSIDE its own transaction:
+  //
+  //   const client = await pool.connect();
+  //   await client.query('BEGIN');
+  //   const ad = await adsRepo.createInTransaction(client, ...);
+  //   await mhcService.chargeAction({
+  //     client, userId, actionKey: 'advertisement',
+  //     referenceType: 'advertisement', referenceId: ad.id,
+  //     idempotencyKey: `ad:${ad.id}`,
+  //   });
+  //   await client.query('COMMIT');
+  //
+  // If the ad insert fails, nothing is charged. If the charge fails, no ad
+  // exists. There is no ordering of those two writes that can diverge.
+  //
+  // The caller remains responsible for its own authorization. This method
+  // enforces only what is true of every MHC spend: the account must exist and
+  // must be a provider account.
+
+  async chargeAction(params: {
+    client: PoolClient;
+    userId: string;
+    /**
+     * A key in `mhc_action_prices`. Typed as a plain string, not MhcActionKey:
+     * the price catalogue is admin-editable data, and a future consumer adding
+     * a key must be able to charge for it without a code change here.
+     */
+    actionKey: string;
+    referenceType: string;
+    referenceId: string;
+    idempotencyKey?: string | null;
+    description?: string;
+    metadata?: Record<string, unknown>;
+    actorUserId?: string | null;
+  }): Promise<ChargeMhcActionResult> {
+    // Read through the caller's client so an account created earlier in the same
+    // transaction is visible.
+    const { rows } = await params.client.query<{ primary_role: string }>(
+      `SELECT primary_role FROM users WHERE id = $1`,
+      [params.userId],
+    );
+    const role = rows[0]?.primary_role;
+    if (!role) {
+      throw new HttpError({
+        statusCode: 404,
+        code: 'MHC_ACCOUNT_NOT_FOUND',
+        message: 'The account being charged does not exist.',
+      });
+    }
+    this.assertProviderRole(role);
+
+    try {
+      return await this.repo.chargeAction(params);
+    } catch (e) {
+      throw this.toChargeHttpError(e);
+    }
+  }
+
+  /**
+   * Reverse a generic action charge. Internal only for now: there is no public
+   * refund endpoint and no consumer wired to it, by design — a refund policy is
+   * per-action (a bid fee on an unawarded need is refundable, a spent ad is not)
+   * and belongs with the consumer that defines it.
+   */
+  async refundActionCharge(params: {
+    client: PoolClient;
+    chargeId: string;
+    reason: string;
+    actorUserId?: string | null;
+    metadata?: Record<string, unknown>;
+  }): Promise<RefundMhcActionResult> {
+    try {
+      return await this.repo.refundActionCharge(params);
+    } catch (e) {
+      throw this.toChargeHttpError(e);
+    }
+  }
+
+  async findActionCharge(chargeId: string): Promise<MhcActionChargeRow | null> {
+    return this.repo.findActionChargeById(chargeId);
+  }
+
+  async listActionChargesForReference(
+    referenceType: string,
+    referenceId: string,
+  ): Promise<MhcActionChargeRow[]> {
+    return this.repo.listActionChargesForReference(referenceType, referenceId);
+  }
+
+  /**
+   * Map the charge primitive's typed failures onto the HTTP conventions already
+   * used by the activation path. Each state stays distinct: a provider who needs
+   * to buy credits, an admin who switched an action off, and an unconfigured
+   * action key are three different problems with three different fixes.
+   */
+  private toChargeHttpError(e: unknown): unknown {
+    if (e instanceof InsufficientCreditsError) {
+      return new HttpError({
+        statusCode: 402,
+        code: 'MHC_INSUFFICIENT_CREDITS',
+        message: `You need ${e.required} MHC for this action. Your balance is ${e.available} MHC.`,
+        details: { required: e.required, available: e.available },
+      });
+    }
+    if (e instanceof MhcActionDisabledError) {
+      return new HttpError({
+        statusCode: 409,
+        code: 'MHC_ACTION_DISABLED',
+        message: 'This paid action is currently switched off.',
+        details: { actionKey: e.actionKey },
+      });
+    }
+    if (e instanceof MhcActionPriceMissingError) {
+      // Fail CLOSED on absent configuration, exactly as isPaymentMethodEnabledStrict
+      // does for retired money rails: an unpriced action is never given away.
+      return new HttpError({
+        statusCode: 503,
+        code: 'MHC_ACTION_PRICE_MISSING',
+        message: 'This action has no credit price configured and cannot be charged.',
+        details: { actionKey: e.actionKey },
+      });
+    }
+    if (e instanceof MhcChargeNotFoundError) {
+      return new HttpError({
+        statusCode: 404,
+        code: 'MHC_CHARGE_NOT_FOUND',
+        message: 'Credit charge not found.',
+      });
+    }
+    if (e instanceof MhcInvalidChargeReferenceError) {
+      return new HttpError({
+        statusCode: 400,
+        code: 'MHC_INVALID_CHARGE_REFERENCE',
+        message: 'The action reference supplied for this credit charge is not valid.',
+        details: { field: e.field },
+      });
+    }
+    if (e instanceof MhcTransactionRequiredError) {
+      // A programming error in a consumer, not anything the user did.
+      return new HttpError({
+        statusCode: 500,
+        code: 'MHC_CHARGE_REQUIRES_TRANSACTION',
+        message: 'Credit charging must run inside a database transaction.',
+      });
+    }
+    if (e instanceof Error && e.message === 'MHC_WALLET_FROZEN') {
+      return new HttpError({
+        statusCode: 403,
+        code: 'MHC_WALLET_FROZEN',
+        message: 'Your credit account is frozen. Please contact support.',
+      });
+    }
+    return e;
   }
 
   // -------------------------------------------------------------------------

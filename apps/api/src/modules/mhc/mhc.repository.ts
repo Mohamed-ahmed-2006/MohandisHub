@@ -8,6 +8,8 @@
 // performed inside a single transaction with row locking for correctness.
 // ---------------------------------------------------------------------------
 
+import { randomUUID } from 'node:crypto';
+
 import type { Pool, PoolClient } from 'pg';
 
 import { getPool } from '../../db/pool.js';
@@ -146,6 +148,168 @@ export class InsufficientCreditsError extends Error {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Generic action charging (P0-07) — errors, shapes and constants
+// ---------------------------------------------------------------------------
+// These belong to `chargeAction` / `refundActionCharge` at the bottom of this
+// file. They are deliberately distinct error classes rather than one error with
+// a reason string, because the four configuration states below have genuinely
+// different operational responses:
+//
+//   price row absent   -> nobody configured this action. Ops problem. Fail closed.
+//   price row inactive -> an admin switched the action off. Product decision.
+//   price = 0          -> the action is deliberately free. Not an error at all.
+//   balance short      -> the provider must buy credits. User-facing 402.
+//
+// The activation path deliberately conflates the first three into "price 0"
+// (see chargeActivation) because an activation must never be blocked by a
+// missing config row — the job is already awarded and paid-for state must be
+// reachable. A generic charge has no such obligation, so it fails closed on
+// configuration instead of silently giving the action away. That divergence is
+// intentional and is why the two paths do not share price resolution.
+// ---------------------------------------------------------------------------
+
+/** No `mhc_action_prices` row exists for this key. Fail closed; never guess a price. */
+export class MhcActionPriceMissingError extends Error {
+  constructor(public readonly actionKey: string) {
+    super('MHC_ACTION_PRICE_MISSING');
+    this.name = 'MhcActionPriceMissingError';
+  }
+}
+
+/** The price row exists but `is_active = false`. The action is switched off. */
+export class MhcActionDisabledError extends Error {
+  constructor(public readonly actionKey: string) {
+    super('MHC_ACTION_DISABLED');
+    this.name = 'MhcActionDisabledError';
+  }
+}
+
+/** A charge id was supplied that does not exist. */
+export class MhcChargeNotFoundError extends Error {
+  constructor(public readonly chargeId: string) {
+    super('MHC_CHARGE_NOT_FOUND');
+    this.name = 'MhcChargeNotFoundError';
+  }
+}
+
+/** A reference id / action key / reference type that cannot be stored as given. */
+export class MhcInvalidChargeReferenceError extends Error {
+  constructor(
+    public readonly field:
+      | 'actionKey'
+      | 'referenceType'
+      | 'referenceId'
+      | 'idempotencyKey'
+      | 'reason',
+  ) {
+    super('MHC_INVALID_CHARGE_REFERENCE');
+    this.name = 'MhcInvalidChargeReferenceError';
+  }
+}
+
+/**
+ * The caller did not pass a client that is inside a transaction. Raised by the
+ * database itself (SQLSTATE 25P01 on the opening SAVEPOINT), not by a comment —
+ * a charge that commits independently of the caller's business write is exactly
+ * the failure mode this primitive exists to prevent.
+ */
+export class MhcTransactionRequiredError extends Error {
+  constructor() {
+    super('MHC_CHARGE_REQUIRES_TRANSACTION');
+    this.name = 'MhcTransactionRequiredError';
+  }
+}
+
+/**
+ * `free`            — the action price is 0. Nothing debited, no rows written.
+ * `charged`         — credits left the wallet; one ledger row, one charge row.
+ * `already_charged` — this (action, reference) was already paid for.
+ */
+export type MhcActionChargeOutcome = 'charged' | 'already_charged' | 'free';
+
+export type ChargeMhcActionInput = {
+  /** MUST already be inside a transaction owned by the caller. */
+  client: PoolClient;
+  userId: string;
+  actionKey: string;
+  referenceType: string;
+  referenceId: string;
+  idempotencyKey?: string | null;
+  description?: string;
+  /** Merged into the ledger row's metadata. Never put contact details here. */
+  metadata?: Record<string, unknown>;
+  /** Team member acting for the charged account, recorded on the ledger row. */
+  actorUserId?: string | null;
+};
+
+export type ChargeMhcActionResult = {
+  outcome: MhcActionChargeOutcome;
+  chargeId: string | null;
+  transactionId: string | null;
+  mhcCharged: number;
+  balanceAfter: number;
+  alreadyCharged: boolean;
+};
+
+/**
+ * `refunded`           — credits returned; one ledger row written.
+ * `already_refunded`   — a previous refund stands. Nothing written.
+ * `nothing_to_refund`  — the charge is for 0 MHC, so there is nothing to return.
+ */
+export type RefundMhcActionOutcome = 'refunded' | 'already_refunded' | 'nothing_to_refund';
+
+export type RefundMhcActionInput = {
+  /** MUST already be inside a transaction owned by the caller. */
+  client: PoolClient;
+  chargeId: string;
+  reason: string;
+  actorUserId?: string | null;
+  metadata?: Record<string, unknown>;
+};
+
+export type RefundMhcActionResult = {
+  outcome: RefundMhcActionOutcome;
+  chargeId: string;
+  refundTransactionId: string | null;
+  mhcRefunded: number;
+  balanceAfter: number;
+  alreadyRefunded: boolean;
+};
+
+export type MhcActionChargeRow = {
+  id: string;
+  user_id: string;
+  action_key: string;
+  reference_type: string;
+  reference_id: string;
+  mhc_charged: string;
+  transaction_id: string | null;
+  idempotency_key: string | null;
+  refunded_at: string | null;
+  refund_transaction_id: string | null;
+  created_at: string;
+};
+
+/** `transactions.reference_type` for the two legs of a generic action charge. */
+const ACTION_CHARGE_REFERENCE_TYPE = 'mhc_action_charge';
+const ACTION_REFUND_REFERENCE_TYPE = 'mhc_action_refund';
+
+const CHARGE_COLUMNS = `id, user_id, action_key, reference_type, reference_id,
+       mhc_charged::text, transaction_id, idempotency_key,
+       refunded_at::text, refund_transaction_id, created_at::text`;
+
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** PostgreSQL SQLSTATE of an error, when it is one. */
+const sqlState = (e: unknown): string | null =>
+  typeof e === 'object' &&
+  e !== null &&
+  'code' in e &&
+  typeof (e as { code: unknown }).code === 'string'
+    ? (e as { code: string }).code
+    : null;
+
 export class MhcRepository {
   private get db(): Pool {
     return getPool();
@@ -177,6 +341,74 @@ export class MhcRepository {
       [userId],
     );
     return rows[0]!;
+  }
+
+  // -------------------------------------------------------------------------
+  // Low-level primitives shared by every MHC spend path
+  // -------------------------------------------------------------------------
+  // Extracted from chargeActivation so the generic charge/refund methods below
+  // reuse the exact locking and ledger-writing behaviour of the reference
+  // implementation instead of growing a second, subtly different copy of it.
+  // The SQL is unchanged from what chargeActivation already ran.
+
+  /**
+   * Take the row lock on a credit wallet and read the balance under it. Every
+   * balance check in this file happens AFTER this returns, never before: an
+   * unlocked read can be stale by the time the debit lands.
+   */
+  private async lockCreditWallet(
+    client: PoolClient,
+    walletId: string,
+  ): Promise<{ balance: number; isFrozen: boolean }> {
+    const { rows } = await client.query<{ balance: string; is_frozen: boolean }>(
+      `SELECT balance::text, is_frozen FROM wallets WHERE id = $1 FOR UPDATE`,
+      [walletId],
+    );
+    return { balance: parseFloat(rows[0]!.balance), isFrozen: rows[0]!.is_frozen };
+  }
+
+  /**
+   * Write one ledger row. `amount` is always positive (the ledger has a
+   * non-negative CHECK on it) and the direction is carried by `balanceDelta`,
+   * matching every other debit and credit in this ledger.
+   */
+  private async writeCreditLedgerRow(
+    client: PoolClient,
+    params: {
+      walletId: string;
+      userId: string;
+      type: 'payment' | 'refund';
+      amount: number;
+      balanceDelta: number;
+      balanceAfter: number;
+      description: string;
+      referenceType: string;
+      referenceId: string;
+      metadata: Record<string, unknown>;
+      createdBy?: string | null;
+    },
+  ): Promise<string> {
+    const { rows } = await client.query<{ id: string }>(
+      `INSERT INTO transactions (
+         wallet_id, user_id, type, amount, balance_delta, balance_after, status,
+         description, reference_type, reference_id, metadata, created_by
+       ) VALUES ($1, $2, $3, $4, $5, $6, 'completed', $7, $8, $9, $10::jsonb, $11)
+       RETURNING id`,
+      [
+        params.walletId,
+        params.userId,
+        params.type,
+        params.amount,
+        params.balanceDelta,
+        params.balanceAfter,
+        params.description,
+        params.referenceType,
+        params.referenceId,
+        JSON.stringify({ ...params.metadata, asset: 'MHC' }),
+        params.createdBy ?? null,
+      ],
+    );
+    return rows[0]!.id;
   }
 
   async getBalance(userId: string): Promise<number> {
@@ -922,12 +1154,9 @@ export class MhcRepository {
       const mhcPrice = price && price.is_active ? parseFloat(price.mhc_price) : 0;
 
       const wallet = await this.getOrCreateCreditWalletInTx(client, params.providerUserId);
-      const { rows: lockRows } = await client.query<{ balance: string; is_frozen: boolean }>(
-        `SELECT balance::text, is_frozen FROM wallets WHERE id = $1 FOR UPDATE`,
-        [wallet.id],
-      );
-      const currentBalance = parseFloat(lockRows[0]!.balance);
-      if (lockRows[0]!.is_frozen) {
+      const locked = await this.lockCreditWallet(client, wallet.id);
+      const currentBalance = locked.balance;
+      if (locked.isFrozen) {
         throw new Error('MHC_WALLET_FROZEN');
       }
 
@@ -944,28 +1173,18 @@ export class MhcRepository {
           balanceAfter,
           wallet.id,
         ]);
-        const { rows: txRows } = await client.query<{ id: string }>(
-          `INSERT INTO transactions (
-             wallet_id, user_id, type, amount, balance_delta, balance_after, status,
-             description, reference_type, reference_id, metadata
-           ) VALUES ($1, $2, 'payment', $3, -$3, $4, 'completed', $5, $6, $7, $8::jsonb)
-           RETURNING id`,
-          [
-            wallet.id,
-            params.providerUserId,
-            mhcPrice,
-            balanceAfter,
-            params.description,
-            `mhc_${params.activationType}_activation`,
-            dedupeValue,
-            JSON.stringify({
-              ...(params.metadata ?? {}),
-              asset: 'MHC',
-              action_key: params.actionKey,
-            }),
-          ],
-        );
-        transactionId = txRows[0]!.id;
+        transactionId = await this.writeCreditLedgerRow(client, {
+          walletId: wallet.id,
+          userId: params.providerUserId,
+          type: 'payment',
+          amount: mhcPrice,
+          balanceDelta: -mhcPrice,
+          balanceAfter,
+          description: params.description,
+          referenceType: `mhc_${params.activationType}_activation`,
+          referenceId: dedupeValue,
+          metadata: { ...(params.metadata ?? {}), action_key: params.actionKey },
+        });
       }
 
       await client.query(
@@ -1088,10 +1307,7 @@ export class MhcRepository {
       const { rows: needRows } = await client.query<{
         status: string;
         pending_award_bid_id: string | null;
-      }>(
-        `SELECT status, pending_award_bid_id FROM needs WHERE id = $1 FOR UPDATE`,
-        [needId],
-      );
+      }>(`SELECT status, pending_award_bid_id FROM needs WHERE id = $1 FOR UPDATE`, [needId]);
       const need = needRows[0];
       if (
         !need ||
@@ -1144,7 +1360,9 @@ export class MhcRepository {
   }
 
   /** Pending awards whose acceptance window has passed (worker sweep). */
-  async listExpiredPendingAwards(limit: number): Promise<
+  async listExpiredPendingAwards(
+    limit: number,
+  ): Promise<
     Array<{ need_id: string; bid_id: string; provider_user_id: string; customer_id: string }>
   > {
     const { rows } = await this.db.query<{
@@ -1181,5 +1399,459 @@ export class MhcRepository {
       [params.activationType, dedupeValue],
     );
     return rows.length > 0;
+  }
+
+  // -------------------------------------------------------------------------
+  // Generic action charging (P0-07)
+  // -------------------------------------------------------------------------
+  // The reusable half of chargeActivation, for actions that are NOT activations:
+  // advertisements, subscriptions, bid submission, spotlight, paid tools. It
+  // records into `mhc_action_charges` rather than `mhc_job_activations`, so the
+  // activation gate keeps exactly one meaning and one table.
+  //
+  // The one structural difference from chargeActivation: this method NEVER opens
+  // or commits a transaction. It runs inside the caller's, so the charge and the
+  // caller's business write commit or roll back together. A caller that forgets
+  // to open one is rejected by PostgreSQL on the opening SAVEPOINT.
+  //
+  // Lock order, everywhere in this section:  charge row -> wallet row.
+  // chargeAction never locks an existing charge row (it inserts a new one) and
+  // refundActionCharge takes the charge row first, so the two cannot deadlock.
+
+  /**
+   * Open a nested scope inside the caller's transaction.
+   *
+   * Two jobs: it is the recovery point for a unique-index collision (so a lost
+   * idempotency race is absorbed without poisoning the caller's transaction),
+   * and it is the proof that a transaction exists at all — SAVEPOINT outside a
+   * transaction block is SQLSTATE 25P01.
+   */
+  private async openChargeScope(client: PoolClient): Promise<string> {
+    const name = `mhc_scope_${randomUUID().replace(/-/g, '').slice(0, 16)}`;
+    try {
+      await client.query(`SAVEPOINT ${name}`);
+    } catch (e) {
+      if (sqlState(e) === '25P01') throw new MhcTransactionRequiredError();
+      throw e;
+    }
+    return name;
+  }
+
+  /**
+   * Resolve what an action costs, refusing to invent a price.
+   *
+   * Unlike the activation path, an absent or switched-off price is an error
+   * here, not a free pass — see the note on MhcActionPriceMissingError. A price
+   * of 0 on an ACTIVE row is the supported way to make an action free.
+   */
+  private async resolveActionPrice(client: PoolClient, actionKey: string): Promise<number> {
+    const { rows } = await client.query<{ mhc_price: string; is_active: boolean }>(
+      `SELECT mhc_price::text, is_active FROM mhc_action_prices WHERE action_key = $1`,
+      [actionKey],
+    );
+    const row = rows[0];
+    if (!row) throw new MhcActionPriceMissingError(actionKey);
+    if (!row.is_active) throw new MhcActionDisabledError(actionKey);
+    const price = parseFloat(row.mhc_price);
+    // A NULL/NaN price is a broken config row, not a free action.
+    if (!Number.isFinite(price) || price < 0) throw new MhcActionPriceMissingError(actionKey);
+    return price;
+  }
+
+  /** The charge that already covers this call, by natural key or retry token. */
+  private async findExistingCharge(
+    client: PoolClient,
+    params: {
+      userId: string;
+      actionKey: string;
+      referenceType: string;
+      referenceId: string;
+      idempotencyKey: string | null;
+    },
+  ): Promise<MhcActionChargeRow | null> {
+    const { rows } = await client.query<MhcActionChargeRow>(
+      `SELECT ${CHARGE_COLUMNS} FROM mhc_action_charges
+       WHERE (action_key = $1 AND reference_type = $2 AND reference_id = $3)
+          OR ($4::text IS NOT NULL AND user_id = $5 AND action_key = $1 AND idempotency_key = $4)
+       ORDER BY created_at
+       LIMIT 1`,
+      [
+        params.actionKey,
+        params.referenceType,
+        params.referenceId,
+        params.idempotencyKey,
+        params.userId,
+      ],
+    );
+    return rows[0] ?? null;
+  }
+
+  async findActionChargeById(chargeId: string): Promise<MhcActionChargeRow | null> {
+    if (!UUID_PATTERN.test(chargeId)) return null;
+    const { rows } = await this.db.query<MhcActionChargeRow>(
+      `SELECT ${CHARGE_COLUMNS} FROM mhc_action_charges WHERE id = $1`,
+      [chargeId],
+    );
+    return rows[0] ?? null;
+  }
+
+  /** Charges recorded against one business entity (admin/audit read). */
+  async listActionChargesForReference(
+    referenceType: string,
+    referenceId: string,
+  ): Promise<MhcActionChargeRow[]> {
+    if (!UUID_PATTERN.test(referenceId)) return [];
+    const { rows } = await this.db.query<MhcActionChargeRow>(
+      `SELECT ${CHARGE_COLUMNS} FROM mhc_action_charges
+       WHERE reference_type = $1 AND reference_id = $2
+       ORDER BY created_at DESC`,
+      [referenceType, referenceId],
+    );
+    return rows;
+  }
+
+  /**
+   * Charge a provider's MHC balance for one paid action, inside the caller's
+   * transaction.
+   *
+   * Idempotency is structural: `uq_mhc_action_charge_reference` makes a second
+   * charge for the same (action, reference) impossible at the database, and
+   * `uq_mhc_action_charge_idempotency` does the same for a repeated retry token
+   * within one provider+action. The pre-check below is only a fast path; the
+   * indexes are the authority, and a collision is recovered by returning the
+   * charge that won rather than by surfacing a constraint error.
+   *
+   * Ordering inside the scope is deliberate:
+   *   1. wallet row lock       — serialises concurrent charges for this provider
+   *   2. existing-charge read  — under READ COMMITTED this sees the winner of a
+   *                              race, because the statement runs after the lock
+   *   3. balance check         — no writes yet, so a 402 leaves nothing behind
+   *   4. charge row insert     — the unique indexes fire here, before any money
+   *                              moves
+   *   5. guarded debit         — `WHERE balance >= amount`, so the balance cannot
+   *                              go negative even if steps 1-3 were wrong
+   *   6. ledger row            — exactly one, pointing back at the charge row
+   */
+  async chargeAction(input: ChargeMhcActionInput): Promise<ChargeMhcActionResult> {
+    const { client } = input;
+    const actionKey = input.actionKey.trim();
+    const referenceType = input.referenceType.trim();
+    const referenceId = input.referenceId.trim();
+    const idempotencyKey = input.idempotencyKey?.trim() || null;
+
+    if (!actionKey || actionKey.length > 80) {
+      throw new MhcInvalidChargeReferenceError('actionKey');
+    }
+    if (!referenceType || referenceType.length > 80) {
+      throw new MhcInvalidChargeReferenceError('referenceType');
+    }
+    // Checked here rather than left to the UUID column, because a malformed id
+    // would abort the CALLER's transaction with a raw 22P02.
+    if (!UUID_PATTERN.test(referenceId)) {
+      throw new MhcInvalidChargeReferenceError('referenceId');
+    }
+    if (idempotencyKey !== null && idempotencyKey.length > 200) {
+      throw new MhcInvalidChargeReferenceError('idempotencyKey');
+    }
+
+    const scope = await this.openChargeScope(client);
+    try {
+      const price = await this.resolveActionPrice(client, actionKey);
+
+      // Zero-price policy: a free action moves no credits, so it writes NO
+      // ledger row and NO charge row. There is nothing to be idempotent about
+      // and nothing to refund; the caller's own business row records that the
+      // action happened. (This is the one place the generic primitive diverges
+      // from chargeActivation, which must write a zero-charge row because that
+      // row IS the contact-unlock gate.)
+      if (price === 0) {
+        const balance = await this.readCreditBalance(client, input.userId);
+        await client.query(`RELEASE SAVEPOINT ${scope}`);
+        return {
+          outcome: 'free',
+          chargeId: null,
+          transactionId: null,
+          mhcCharged: 0,
+          balanceAfter: balance,
+          alreadyCharged: false,
+        };
+      }
+
+      const wallet = await this.getOrCreateCreditWalletInTx(client, input.userId);
+      const locked = await this.lockCreditWallet(client, wallet.id);
+      if (locked.isFrozen) {
+        throw new Error('MHC_WALLET_FROZEN');
+      }
+
+      const existing = await this.findExistingCharge(client, {
+        userId: input.userId,
+        actionKey,
+        referenceType,
+        referenceId,
+        idempotencyKey,
+      });
+      if (existing) {
+        await client.query(`RELEASE SAVEPOINT ${scope}`);
+        return this.existingChargeResult(existing, locked.balance);
+      }
+
+      if (locked.balance < price) {
+        // Roll back to the scope so the caller's transaction stays usable and
+        // no partial row survives a caught 402.
+        await client.query(`ROLLBACK TO SAVEPOINT ${scope}`);
+        await client.query(`RELEASE SAVEPOINT ${scope}`);
+        throw new InsufficientCreditsError(price, locked.balance);
+      }
+
+      const { rows: chargeRows } = await client.query<{ id: string }>(
+        `INSERT INTO mhc_action_charges (
+           user_id, action_key, reference_type, reference_id, mhc_charged, idempotency_key
+         ) VALUES ($1, $2, $3, $4, $5, $6)
+         RETURNING id`,
+        [input.userId, actionKey, referenceType, referenceId, price, idempotencyKey],
+      );
+      const chargeId = chargeRows[0]!.id;
+
+      // Guarded debit. The predicate is the database-level guarantee that the
+      // balance cannot go negative; `chk_wallets_balance_nonnegative` is the
+      // backstop behind it. Arithmetic happens in NUMERIC, not in JS floats.
+      const { rows: walletRows } = await client.query<{ balance: string }>(
+        `UPDATE wallets SET balance = balance - $2::numeric
+         WHERE id = $1 AND balance >= $2::numeric
+         RETURNING balance::text`,
+        [wallet.id, price],
+      );
+      if (walletRows.length === 0) {
+        await client.query(`ROLLBACK TO SAVEPOINT ${scope}`);
+        await client.query(`RELEASE SAVEPOINT ${scope}`);
+        throw new InsufficientCreditsError(price, locked.balance);
+      }
+      const balanceAfter = parseFloat(walletRows[0]!.balance);
+
+      const transactionId = await this.writeCreditLedgerRow(client, {
+        walletId: wallet.id,
+        userId: input.userId,
+        type: 'payment',
+        amount: price,
+        balanceDelta: -price,
+        balanceAfter,
+        description: input.description ?? `MHC action charge (${actionKey})`,
+        referenceType: ACTION_CHARGE_REFERENCE_TYPE,
+        referenceId: chargeId,
+        metadata: {
+          ...(input.metadata ?? {}),
+          action_key: actionKey,
+          charge_id: chargeId,
+          charge_reference_type: referenceType,
+          charge_reference_id: referenceId,
+          ...(idempotencyKey ? { idempotency_key: idempotencyKey } : {}),
+        },
+        createdBy: input.actorUserId ?? null,
+      });
+
+      await client.query(`UPDATE mhc_action_charges SET transaction_id = $2 WHERE id = $1`, [
+        chargeId,
+        transactionId,
+      ]);
+
+      await client.query(`RELEASE SAVEPOINT ${scope}`);
+      return {
+        outcome: 'charged',
+        chargeId,
+        transactionId,
+        mhcCharged: price,
+        balanceAfter,
+        alreadyCharged: false,
+      };
+    } catch (e) {
+      if (sqlState(e) === '23505') {
+        // Lost the insert race against an identical request. Unwind to the
+        // scope — the caller's transaction is untouched — and report the charge
+        // that won, so a double submit is a no-op rather than an error.
+        await client.query(`ROLLBACK TO SAVEPOINT ${scope}`);
+        const winner = await this.findExistingCharge(client, {
+          userId: input.userId,
+          actionKey,
+          referenceType,
+          referenceId,
+          idempotencyKey,
+        });
+        const balance = await this.readCreditBalance(client, input.userId);
+        await client.query(`RELEASE SAVEPOINT ${scope}`);
+        if (winner) return this.existingChargeResult(winner, balance);
+        throw e;
+      }
+      if (e instanceof InsufficientCreditsError || e instanceof MhcTransactionRequiredError) {
+        throw e;
+      }
+      // Everything else (frozen wallet, bad config, an unexpected database
+      // error) unwinds to the scope so the caller decides whether to abandon
+      // its own transaction or carry on without this charge.
+      try {
+        await client.query(`ROLLBACK TO SAVEPOINT ${scope}`);
+        await client.query(`RELEASE SAVEPOINT ${scope}`);
+      } catch {
+        /* the caller's transaction is already unusable; the original error wins */
+      }
+      throw e;
+    }
+  }
+
+  /**
+   * Refund a previously recorded generic action charge, inside the caller's
+   * transaction.
+   *
+   * Never a balance edit on its own: the credit and the `refunded_at` stamp are
+   * written together with a `refund` ledger row, so the wallet can always be
+   * reconciled from the ledger alone.
+   *
+   * Concurrency: the charge row is locked FIRST. A second refund blocks on that
+   * lock, then re-reads the row (READ COMMITTED re-evaluates a locked row) and
+   * finds `refunded_at` already set, so it credits nothing.
+   */
+  async refundActionCharge(input: RefundMhcActionInput): Promise<RefundMhcActionResult> {
+    const { client } = input;
+    const reason = input.reason.trim();
+    if (!reason) throw new MhcInvalidChargeReferenceError('reason');
+    if (!UUID_PATTERN.test(input.chargeId)) {
+      throw new MhcChargeNotFoundError(input.chargeId);
+    }
+
+    const scope = await this.openChargeScope(client);
+    try {
+      const { rows } = await client.query<MhcActionChargeRow>(
+        `SELECT ${CHARGE_COLUMNS} FROM mhc_action_charges WHERE id = $1 FOR UPDATE`,
+        [input.chargeId],
+      );
+      const charge = rows[0];
+      if (!charge) {
+        await client.query(`RELEASE SAVEPOINT ${scope}`);
+        throw new MhcChargeNotFoundError(input.chargeId);
+      }
+
+      const amount = parseFloat(charge.mhc_charged);
+
+      if (charge.refunded_at != null) {
+        const balance = await this.readCreditBalance(client, charge.user_id);
+        await client.query(`RELEASE SAVEPOINT ${scope}`);
+        return {
+          outcome: 'already_refunded',
+          chargeId: charge.id,
+          refundTransactionId: charge.refund_transaction_id,
+          mhcRefunded: 0,
+          balanceAfter: balance,
+          alreadyRefunded: true,
+        };
+      }
+
+      // A zero-value charge cannot produce a positive refund. Nothing is written
+      // at all, so repeating the call keeps returning the same answer rather
+      // than closing a row that was never open.
+      if (!(amount > 0)) {
+        const balance = await this.readCreditBalance(client, charge.user_id);
+        await client.query(`RELEASE SAVEPOINT ${scope}`);
+        return {
+          outcome: 'nothing_to_refund',
+          chargeId: charge.id,
+          refundTransactionId: null,
+          mhcRefunded: 0,
+          balanceAfter: balance,
+          alreadyRefunded: false,
+        };
+      }
+
+      // A frozen wallet does not block a refund: freezing an account must not
+      // destroy credits the platform already owes back. Matches grantCredits,
+      // which likewise credits without a freeze check.
+      const wallet = await this.getOrCreateCreditWalletInTx(client, charge.user_id);
+      await this.lockCreditWallet(client, wallet.id);
+
+      const { rows: walletRows } = await client.query<{ balance: string }>(
+        `UPDATE wallets SET balance = balance + $2::numeric WHERE id = $1
+         RETURNING balance::text`,
+        [wallet.id, amount],
+      );
+      const balanceAfter = parseFloat(walletRows[0]!.balance);
+
+      const refundTransactionId = await this.writeCreditLedgerRow(client, {
+        walletId: wallet.id,
+        userId: charge.user_id,
+        type: 'refund',
+        amount,
+        balanceDelta: amount,
+        balanceAfter,
+        description: `MHC action refund (${charge.action_key})`,
+        referenceType: ACTION_REFUND_REFERENCE_TYPE,
+        referenceId: charge.id,
+        metadata: {
+          ...(input.metadata ?? {}),
+          action_key: charge.action_key,
+          charge_id: charge.id,
+          charge_reference_type: charge.reference_type,
+          charge_reference_id: charge.reference_id,
+          charge_transaction_id: charge.transaction_id,
+          refund_reason: reason,
+          ...(charge.idempotency_key ? { idempotency_key: charge.idempotency_key } : {}),
+        },
+        createdBy: input.actorUserId ?? null,
+      });
+
+      // Guarded: if anything refunded this row between the lock and here, the
+      // update matches nothing and we refuse rather than credit twice.
+      const marked = await client.query(
+        `UPDATE mhc_action_charges
+         SET refunded_at = now(), refund_transaction_id = $2
+         WHERE id = $1 AND refunded_at IS NULL`,
+        [charge.id, refundTransactionId],
+      );
+      if (marked.rowCount !== 1) {
+        throw new Error('MHC_REFUND_STATE_CHANGED');
+      }
+
+      await client.query(`RELEASE SAVEPOINT ${scope}`);
+      return {
+        outcome: 'refunded',
+        chargeId: charge.id,
+        refundTransactionId,
+        mhcRefunded: amount,
+        balanceAfter,
+        alreadyRefunded: false,
+      };
+    } catch (e) {
+      if (e instanceof MhcChargeNotFoundError || e instanceof MhcTransactionRequiredError) {
+        throw e;
+      }
+      try {
+        await client.query(`ROLLBACK TO SAVEPOINT ${scope}`);
+        await client.query(`RELEASE SAVEPOINT ${scope}`);
+      } catch {
+        /* the caller's transaction is already unusable; the original error wins */
+      }
+      throw e;
+    }
+  }
+
+  /**
+   * Balance without creating a wallet. A free action must not have the side
+   * effect of provisioning a credit account for someone who has never had one.
+   */
+  private async readCreditBalance(client: PoolClient, userId: string): Promise<number> {
+    const { rows } = await client.query<{ balance: string }>(
+      `SELECT balance::text FROM wallets
+       WHERE user_id = $1 AND account_type = 'provider_credit'`,
+      [userId],
+    );
+    return parseFloat(rows[0]?.balance ?? '0');
+  }
+
+  private existingChargeResult(charge: MhcActionChargeRow, balance: number): ChargeMhcActionResult {
+    return {
+      outcome: 'already_charged',
+      chargeId: charge.id,
+      transactionId: charge.transaction_id,
+      mhcCharged: parseFloat(charge.mhc_charged),
+      balanceAfter: balance,
+      alreadyCharged: true,
+    };
   }
 }
