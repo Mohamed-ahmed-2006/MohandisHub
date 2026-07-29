@@ -94,6 +94,7 @@ export class ServicesRepository {
       minPrice?: number;
       maxPrice?: number;
       verifiedOnly?: boolean;
+      tags?: string[];
       sort?: string;
     },
     page: number,
@@ -138,6 +139,13 @@ export class ServicesRepository {
     }
     if (filters.verifiedOnly === true) {
       conditions.push('u.platform_verified_at IS NOT NULL');
+    }
+    if (filters.tags && filters.tags.length > 0) {
+      const normalizedTags = filters.tags.map((t) => t.trim()).filter(Boolean);
+      if (normalizedTags.length > 0) {
+        conditions.push(`s.tags && $${idx++}::text[]`);
+        params.push(normalizedTags);
+      }
     }
 
     const where = conditions.join(' AND ');

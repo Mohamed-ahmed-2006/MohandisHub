@@ -4,6 +4,7 @@ import type { ServiceCategory } from '@mohandishub/shared';
 import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
 
+import { AwardOfferCard } from './award-offer-card';
 import { ExpertJobsTab } from './expert-jobs-tab';
 
 import { useToast } from '@/components/app/toast';
@@ -182,8 +183,24 @@ export const ExpertDashboard = ({
   const suggestItems = (suggestions?.items ?? []) as string[];
   const suggestCta = suggestions?.ctaLabel ?? 'Manage Services';
 
+  const pendingAwardBids = myBids.filter(
+    (b) => b.status === 'awarded' || b.status === 'pending_activation',
+  );
+
   return (
     <section className="dashboard-section">
+      {pendingAwardBids.length > 0 && (
+        <div className="dashboard-award-offers" style={{ marginBottom: '1rem', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+          {pendingAwardBids.map((bid) => (
+            <AwardOfferCard
+              key={bid.id}
+              bidId={bid.id}
+              {...(bid.need_title ? { needTitle: bid.need_title } : {})}
+              onResolved={() => void loadData()}
+            />
+          ))}
+        </div>
+      )}
       {suggestItems.length > 0 && (
         <div className="dashboard-suggestions">
           <h3

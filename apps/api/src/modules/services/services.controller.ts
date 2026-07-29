@@ -66,6 +66,7 @@ const searchServices = asyncHandler(async (req, res) => {
     minPrice?: number;
     maxPrice?: number;
     verifiedOnly?: boolean;
+    tags?: string[];
     sort?: string;
   } = {};
   if (req.query.categoryId) filters.categoryId = req.query.categoryId as string;
@@ -80,6 +81,13 @@ const searchServices = asyncHandler(async (req, res) => {
   const maxPriceNum = parseFloat(req.query.maxPrice as string);
   if (!Number.isNaN(maxPriceNum) && maxPriceNum >= 0) filters.maxPrice = maxPriceNum;
   if (req.query.verifiedOnly === 'true') filters.verifiedOnly = true;
+  if (req.query.tags) {
+    if (Array.isArray(req.query.tags)) {
+      filters.tags = req.query.tags.map(String).map((t) => t.trim()).filter(Boolean);
+    } else if (typeof req.query.tags === 'string') {
+      filters.tags = req.query.tags.split(',').map((t) => t.trim()).filter(Boolean);
+    }
+  }
   if (req.query.sort && typeof req.query.sort === 'string') filters.sort = req.query.sort;
 
   const result = await servicesService.searchServices(filters, page, limit);

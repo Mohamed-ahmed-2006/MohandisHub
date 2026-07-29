@@ -4,12 +4,15 @@ import type { ProviderAnalytics, Reservation, Service, ServiceCategory } from '@
 import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
 
+import { AwardOfferCard } from './award-offer-card';
 import { BusinessJobsTab } from './business-jobs-tab';
 import { BusinessTeamPanel } from './business-team-panel';
 
 import { analyticsApiClient } from '@/lib/analytics/client';
 import { buildLocalePath } from '@/lib/i18n/path';
 import type { Dictionary, Locale } from '@/lib/i18n/types';
+import type { Bid } from '@/lib/needs/client';
+import { needsApiClient } from '@/lib/needs/client';
 import { negotiationsApiClient } from '@/lib/negotiations/client';
 import { reservationsApiClient } from '@/lib/reservations/client';
 import { servicesApiClient } from '@/lib/services/client';
@@ -56,6 +59,7 @@ export const BusinessDashboard = ({
   const [overviewNegNeedAction, setOverviewNegNeedAction] = useState(0);
   const [overviewNegPending, setOverviewNegPending] = useState(0);
   const [overviewOrdersPreview, setOverviewOrdersPreview] = useState<Reservation[]>([]);
+  const [myAwardBids, setMyAwardBids] = useState<Bid[]>([]);
 
   const loadOrders = useCallback(async () => {
     setOrdersLoading(true);
@@ -109,40 +113,49 @@ export const BusinessDashboard = ({
     if (tab === 'analytics') void loadAnalytics();
   }, [tab, loadAnalytics]);
 
-  useEffect(() => {
-    if (tab !== 'overview') return;
-    let cancelled = false;
-    void (async () => {
-      setOverviewLoading(true);
-      try {
-        const [negRes, ordRes] = await Promise.all([
-          negotiationsApiClient.list(accessToken, { role: 'provider', limit: 100 }),
-          reservationsApiClient.listMyReservations(accessToken, {
-            role: 'provider',
-            page: 1,
-            limit: 5,
-          }),
-        ]);
-        if (cancelled) return;
-        const pending = negRes.items.filter((n) => n.status === 'pending');
+  const loadOverviewData = useCallback(async () => {
+    if (!accessToken) return;
+    setOverviewLoading(true);
+    try {
+      const [negRes, ordRes, bidsRes] = await Promise.allSettled([
+        negotiationsApiClient.list(accessToken, { role: 'provider', limit: 100 }),
+        reservationsApiClient.listMyReservations(accessToken, {
+          role: 'provider',
+          page: 1,
+          limit: 5,
+        }),
+        needsApiClient.listMyBids(accessToken),
+      ]);
+
+      if (negRes.status === 'fulfilled') {
+        const pending = negRes.value.items.filter((n) => n.status === 'pending');
         const needAction = pending.filter((n) => n.latestOfferedBy === n.customerId).length;
         setOverviewNegNeedAction(needAction);
         setOverviewNegPending(pending.length);
-        setOverviewOrdersPreview(ordRes.items);
-      } catch {
-        if (!cancelled) {
-          setOverviewNegNeedAction(0);
-          setOverviewNegPending(0);
-          setOverviewOrdersPreview([]);
-        }
-      } finally {
-        if (!cancelled) setOverviewLoading(false);
       }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [tab, accessToken]);
+      if (ordRes.status === 'fulfilled') {
+        setOverviewOrdersPreview(ordRes.value.items);
+      }
+      if (bidsRes.status === 'fulfilled') {
+        const pendingAwards = bidsRes.value.rows.filter(
+          (b) => b.status === 'awarded' || b.status === 'pending_activation',
+        );
+        setMyAwardBids(pendingAwards);
+      }
+    } catch {
+      setOverviewNegNeedAction(0);
+      setOverviewNegPending(0);
+      setOverviewOrdersPreview([]);
+      setMyAwardBids([]);
+    } finally {
+      setOverviewLoading(false);
+    }
+  }, [accessToken]);
+
+  useEffect(() => {
+    if (tab !== 'overview') return;
+    void loadOverviewData();
+  }, [tab, loadOverviewData]);
 
   const d = dictionary.appHome?.suggestions?.business ?? {};
   const needsDict = (dictionary.needs ?? {}) as Record<string, string>;
@@ -164,6 +177,18 @@ export const BusinessDashboard = ({
 
   return (
     <section className="dashboard-section">
+      {myAwardBids.length > 0 && (
+        <div className="dashboard-award-offers" style={{ marginBottom: '1rem', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+          {myAwardBids.map((bid) => (
+            <AwardOfferCard
+              key={bid.id}
+              bidId={bid.id}
+              {...(bid.need_title ? { needTitle: bid.need_title } : {})}
+              onResolved={() => void loadOverviewData()}
+            />
+          ))}
+        </div>
+      )}
       {suggestItems.length > 0 && (
         <div className="dashboard-suggestions">
           <h3
@@ -462,17 +487,26 @@ export const BusinessDashboard = ({
           role="tabpanel"
           aria-labelledby="business-analytics-tab"
         >
-          <div className="dashboard-actions-row" style={{ marginBottom: '1rem' }}>
-            {[7, 30, 90, 365].map((days) => (
-              <button
-                key={days}
-                type="button"
-                className={`dashboard-secondary-btn ${analyticsDays === days ? 'dashboard-primary-btn' : ''}`}
-                onClick={() => setAnalyticsDays(days)}
-              >
-                {days === 365 ? 'Year' : `${days} days`}
-              </button>
-            ))}
+          <div className="dashboard-actions-row" style={{ marginBottom: '1rem', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div>
+              {[7, 30, 90, 365].map((days) => (
+                <button
+                  key={days}
+                  type="button"
+                  className={`dashboard-secondary-btn ${analyticsDays === days ? 'dashboard-primary-btn' : ''}`}
+                  onClick={() => setAnalyticsDays(days)}
+                >
+                  {days === 365 ? 'Year' : `${days} days`}
+                </button>
+              ))}
+            </div>
+            <Link
+              href={buildLocalePath(locale, '/app/analytics')}
+              className="dashboard-secondary-btn"
+              style={{ fontSize: '0.85rem' }}
+            >
+              {locale === 'ar' ? 'فتح صفحة التحليلات الكاملة ←' : 'Open full analytics page →'}
+            </Link>
           </div>
           {analyticsLoading ? (
             <p className="dashboard-empty">{common.loading ?? 'Loading...'}</p>

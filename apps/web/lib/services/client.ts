@@ -49,6 +49,7 @@ export const servicesApiClient = {
     minPrice?: number;
     maxPrice?: number;
     verifiedOnly?: boolean;
+    tags?: string[];
     sort?: string;
     page?: number;
     limit?: number;
@@ -69,6 +70,7 @@ export const servicesApiClient = {
     if (params.minPrice != null) query.set('minPrice', String(params.minPrice));
     if (params.maxPrice != null) query.set('maxPrice', String(params.maxPrice));
     if (params.verifiedOnly === true) query.set('verifiedOnly', 'true');
+    if (params.tags?.length) query.set('tags', params.tags.join(','));
     if (params.sort) query.set('sort', params.sort);
     if (params.page) query.set('page', String(params.page));
     if (params.limit) query.set('limit', String(params.limit));

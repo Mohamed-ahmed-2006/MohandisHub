@@ -54,6 +54,7 @@ export class ServicesService {
       minPrice?: number;
       maxPrice?: number;
       verifiedOnly?: boolean;
+      tags?: string[];
       sort?: string;
     },
     page: number = 1,
