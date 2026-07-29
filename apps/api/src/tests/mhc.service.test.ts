@@ -315,6 +315,13 @@ describe('MhcService — purchase rejection', () => {
 });
 
 /**
+ * Decision D5: activation now requires the provider to have somewhere to be
+ * paid, checked BEFORE any debit. Award tests that expect to reach the charging
+ * transaction must satisfy it.
+ */
+const HAS_PAYMENT_METHOD = { match: /FROM provider_payment_methods/, rows: [{ c: '1' }] };
+
+/**
  * Rows the charging transaction locks before it will charge: the need and its
  * bid, re-read under FOR UPDATE. Without these the transaction correctly refuses
  * to charge, so every test that expects a charge must supply them.
@@ -393,6 +400,26 @@ describe('MhcService — award activation gate', () => {
     ).rejects.toMatchObject({ code: 'BID_NOT_AWARDED', statusCode: 409 });
   });
 
+  // Decision D5. The check must happen BEFORE the charging transaction: taking
+  // credits and only then discovering the customer has no way to pay would be
+  // the worst possible ordering.
+  it('refuses activation when the provider has no active payment method', async () => {
+    const service = new MhcService();
+    poolQueryMock.mockImplementation(
+      routeQuery([
+        { match: /FROM bids b/, rows: [awardedBid] },
+        { match: /FROM provider_payment_methods/, rows: [{ c: '0' }] },
+      ]),
+    );
+
+    await expect(
+      service.activateAwardForProvider({ userId: 'provider-1', role: 'expert', bidId: 'bid-1' }),
+    ).rejects.toMatchObject({ code: 'NO_ACTIVE_PAYMENT_METHOD', statusCode: 409 });
+
+    // No charging transaction may even be opened.
+    expect(connectMock).not.toHaveBeenCalled();
+  });
+
   it('refuses to charge for an offer that has already expired', async () => {
     const service = new MhcService();
     poolQueryMock.mockImplementation(
@@ -423,6 +450,7 @@ describe('MhcService — award activation gate', () => {
       routeQuery([
         // `awardBid` stores 'infinity' when the admin sets 0 expiry hours.
         { match: /FROM bids b/, rows: [{ ...awardedBid, pending_award_expires_at: 'infinity' }] },
+        HAS_PAYMENT_METHOD,
       ]),
     );
 
@@ -482,7 +510,7 @@ describe('MhcService — award activation gate', () => {
 
   it('returns 402 with the shortfall when the provider lacks credits', async () => {
     const service = new MhcService();
-    poolQueryMock.mockImplementation(routeQuery([{ match: /FROM bids b/, rows: [awardedBid] }]));
+    poolQueryMock.mockImplementation(routeQuery([{ match: /FROM bids b/, rows: [awardedBid] }, HAS_PAYMENT_METHOD]));
 
     clientQueryMock.mockImplementation(
       routeQuery([
@@ -509,7 +537,7 @@ describe('MhcService — award activation gate', () => {
 
   it('charges the provider once and unlocks the job', async () => {
     const service = new MhcService();
-    poolQueryMock.mockImplementation(routeQuery([{ match: /FROM bids b/, rows: [awardedBid] }]));
+    poolQueryMock.mockImplementation(routeQuery([{ match: /FROM bids b/, rows: [awardedBid] }, HAS_PAYMENT_METHOD]));
 
     clientQueryMock.mockImplementation(
       routeQuery([
@@ -545,7 +573,7 @@ describe('MhcService — award activation gate', () => {
 
   it('does not double-charge an already activated award', async () => {
     const service = new MhcService();
-    poolQueryMock.mockImplementation(routeQuery([{ match: /FROM bids b/, rows: [awardedBid] }]));
+    poolQueryMock.mockImplementation(routeQuery([{ match: /FROM bids b/, rows: [awardedBid] }, HAS_PAYMENT_METHOD]));
 
     clientQueryMock.mockImplementation(
       routeQuery([
@@ -574,7 +602,7 @@ describe('MhcService — award activation gate', () => {
   // test asserts today's behaviour so the suite reflects reality until then.
   it('opens the gate for free when the action price is inactive', async () => {
     const service = new MhcService();
-    poolQueryMock.mockImplementation(routeQuery([{ match: /FROM bids b/, rows: [awardedBid] }]));
+    poolQueryMock.mockImplementation(routeQuery([{ match: /FROM bids b/, rows: [awardedBid] }, HAS_PAYMENT_METHOD]));
 
     clientQueryMock.mockImplementation(
       routeQuery([
@@ -605,7 +633,7 @@ describe('MhcService — award activation gate', () => {
 
   it('blocks activation when the credit wallet is frozen', async () => {
     const service = new MhcService();
-    poolQueryMock.mockImplementation(routeQuery([{ match: /FROM bids b/, rows: [awardedBid] }]));
+    poolQueryMock.mockImplementation(routeQuery([{ match: /FROM bids b/, rows: [awardedBid] }, HAS_PAYMENT_METHOD]));
 
     clientQueryMock.mockImplementation(
       routeQuery([

@@ -21,6 +21,7 @@ import { notificationsRouter } from '../modules/notifications/notifications.rout
 import { otpRouter } from '../modules/otp/otp.routes.js';
 import { plansRouter } from '../modules/plans/plans.routes.js';
 import { profilesRouter } from '../modules/profiles/profiles.routes.js';
+import { providerPaymentsRouter } from '../modules/provider-payments/provider-payments.routes.js';
 import { recommendationsRouter } from '../modules/recommendations/recommendations.routes.js';
 import { reservationsRouter } from '../modules/reservations/reservations.routes.js';
 import { reviewsRouter } from '../modules/reviews/reviews.routes.js';
@@ -76,6 +77,7 @@ apiRouter.use('/support', supportRouter);
 apiRouter.use('/services', servicesRouter);
 apiRouter.use('/wallet', walletRouter);
 apiRouter.use('/credits', mhcRouter);
+apiRouter.use('/provider-payments', providerPaymentsRouter);
 
 apiRouter.use('/chat', chatRouter);
 apiRouter.use('/coupons', couponsRouter);

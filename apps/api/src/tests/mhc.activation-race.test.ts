@@ -393,6 +393,7 @@ describe('award activation — no-charge failure paths', () => {
     });
     // Service pre-check sees a still-live offer; the transaction disagrees.
     poolQueryMock.mockImplementation((sql: string) => {
+      if (/FROM provider_payment_methods/.test(sql)) return { rows: [{ c: '1' }] };
       if (/FROM bids b/.test(sql)) {
         return {
           rows: [

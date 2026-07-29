@@ -14,6 +14,7 @@ import { env } from '../../config/env.js';
 import { getPool } from '../../db/pool.js';
 import { createInvoice, verifyNowPaymentsIpnSignature } from '../../lib/nowpayments.client.js';
 import { HttpError } from '../../utils/http-error.js';
+import { ProviderPaymentsService } from '../provider-payments/provider-payments.service.js';
 
 import {
   ActivationStateError,
@@ -53,6 +54,13 @@ export type MhcActionKey =
 
 export class MhcService {
   private repo = new MhcRepository();
+
+  /** Lazily constructed to avoid a module cycle with the payments service. */
+  private get providerPayments(): ProviderPaymentsService {
+    this.providerPaymentsInstance ??= new ProviderPaymentsService();
+    return this.providerPaymentsInstance;
+  }
+  private providerPaymentsInstance: ProviderPaymentsService | undefined;
 
   // -------------------------------------------------------------------------
   // Guards
@@ -715,6 +723,11 @@ export class MhcService {
         });
       }
     }
+
+    // Decision D5: a provider must have somewhere to be paid BEFORE any credits
+    // are debited. Checking after the charge would take real money for a job the
+    // customer then has no way to pay for.
+    await this.providerPayments.assertHasActivePaymentMethod(params.userId);
 
     const result = await this.activateAward({
       providerUserId: params.userId,
