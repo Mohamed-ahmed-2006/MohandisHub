@@ -230,6 +230,28 @@ export class PlansService {
   /**
    * Subscribes using `users.primary_role` for eligibility. If an admin changes a user's role
    * while they hold a paid plan, limits follow the new role on next action; subscription row is unchanged until expiry.
+   *
+   * ---------------------------------------------------------------------------
+   * LAUNCH CONSTRAINT LC-02 — no plan is purchasable at launch.
+   * ---------------------------------------------------------------------------
+   * Everything below the pause guard is the LEGACY EGP implementation. It reads,
+   * locks and debits the `money` wallet that migration 20260728160000 froze, so
+   * it cannot succeed for a priced plan anyway — and it must not be reached even
+   * for a free one, because reaching it would lock an EGP wallet row.
+   *
+   * It is deliberately NOT deleted. The plan catalogue is multi-tier by design
+   * (each plan carries its own price, currency, billing_cycle and duration_days),
+   * while MHC pricing is one price per action key. Charging `subscription_upgrade`
+   * would either flatten every paid tier onto one identical price or require
+   * per-plan action keys — a new monetisation model, not a migration of this one.
+   * Neither was approved, so neither was built, and this code stays intact so
+   * whichever model is chosen starts from working code and an unbroken history.
+   *
+   * The Free plan needs no subscribe call: it is the default `users.plan_id` and
+   * `getEffectivePlanLimits` / `getEffectivePlanSlug` already fall back to it, so
+   * pausing this endpoint does not take anything away from a free user.
+   *
+   * See docs/release/LAUNCH_CONSTRAINTS.md#lc-02.
    */
   async subscribeToPlan(userId: string, planId: string): Promise<SubscribeToPlanResponse> {
     const status = await this.settingsService.getAppStatus();
@@ -240,7 +262,21 @@ export class PlansService {
         message: 'Plans are currently disabled.',
       });
     }
-    if (status.moneyMovementsPaused || status.pausePlanSubscriptions) {
+
+    // FIRST, and before any database work: no wallet is read, no wallet row is
+    // locked, no `plan_subscriptions` row is written while subscriptions are
+    // paused. A distinct code from MONEY_MOVEMENTS_PAUSED, because "we have not
+    // launched paid plans" and "money movements are temporarily halted" are
+    // different situations with different answers for the caller.
+    if (status.pausePlanSubscriptions) {
+      throw new HttpError({
+        statusCode: 503,
+        code: 'PLAN_SUBSCRIPTIONS_PAUSED',
+        message:
+          'Paid plans are not available yet. Your current plan and its benefits are unchanged.',
+      });
+    }
+    if (status.moneyMovementsPaused) {
       throw new HttpError({
         statusCode: 503,
         code: 'MONEY_MOVEMENTS_PAUSED',
