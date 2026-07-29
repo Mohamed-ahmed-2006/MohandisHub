@@ -56,7 +56,12 @@ export const adminPricingOverrideSchema = z.object({
 
 export const adminAdControlsSchema = z.object({
   acceptAds: z.boolean(),
-  pricePerDay: z.coerce.number().min(0),
+  /**
+   * MHC charged per campaign, written straight to
+   * `mhc_action_prices.advertisement`. Replaces the EGP `pricePerDay` field,
+   * which was multiplied by duration and debited a wallet that is now frozen.
+   */
+  mhcPrice: z.coerce.number().min(0),
 });
 
 export const createPricingRuleSchema = z.object({

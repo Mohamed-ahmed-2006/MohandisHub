@@ -36,7 +36,12 @@ export type Advertisement = {
 
 export type AdminAdControls = {
   acceptAds: boolean;
-  pricePerDay: number;
+  /**
+   * MHC charged per campaign, from `mhc_action_prices.advertisement`. MHC is a
+   * platform credit, not money — render it with formatMhc, never with a
+   * currency symbol.
+   */
+  mhcPrice: number;
 };
 
 type ApiOpts = {
@@ -45,6 +50,7 @@ type ApiOpts = {
   body?: unknown;
   allow404AsEmpty?: boolean;
   allow404As?: unknown;
+  idempotencyKey?: string;
 };
 
 async function apiReq<T>(path: string, opts: ApiOpts): Promise<T> {
@@ -56,6 +62,7 @@ async function apiReq<T>(path: string, opts: ApiOpts): Promise<T> {
       headers: {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${opts.token}`,
+        ...(opts.idempotencyKey ? { 'Idempotency-Key': opts.idempotencyKey } : {}),
       },
       ...(opts.body !== undefined ? { body: JSON.stringify(opts.body) } : {}),
     },
@@ -94,7 +101,7 @@ export const advertisementsApiClient = {
   getAdControls: (token: string) =>
     apiReq<AdminAdControls>('/api/advertisements/controls', {
       token,
-      allow404As: { acceptAds: true, pricePerDay: 0 },
+      allow404As: { acceptAds: true, mhcPrice: 0 },
     }),
   createAd: (
     token: string,
@@ -118,7 +125,19 @@ export const advertisementsApiClient = {
       targetMinBudget?: number;
       targetMaxBudget?: number;
     },
-  ) => apiReq<Advertisement>('/api/advertisements', { method: 'POST', token, body }),
+    /**
+     * Stable per-attempt UUID. Sending it is what stops a double click, a retry
+     * or a flaky connection from creating two campaigns and two MHC charges;
+     * the server enforces it with a unique index, not in memory.
+     */
+    idempotencyKey?: string,
+  ) =>
+    apiReq<Advertisement>('/api/advertisements', {
+      method: 'POST',
+      token,
+      body,
+      ...(idempotencyKey ? { idempotencyKey } : {}),
+    }),
   getMyAds: (token: string, params?: { page?: number; limit?: number; status?: AdStatus }) => {
     const qs = new URLSearchParams();
     if (params?.page) qs.set('page', String(params.page));
@@ -172,7 +191,7 @@ export const advertisementsApiClient = {
   adminGetControls: (token: string) =>
     apiReq<AdminAdControls>('/api/advertisements/admin/controls', {
       token,
-      allow404As: { acceptAds: true, pricePerDay: 0 },
+      allow404As: { acceptAds: true, mhcPrice: 0 },
     }),
   adminUpdateControls: (token: string, body: AdminAdControls) =>
     apiReq<AdminAdControls>('/api/advertisements/admin/controls', { method: 'PUT', token, body }),

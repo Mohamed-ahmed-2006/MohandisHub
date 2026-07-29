@@ -14,6 +14,7 @@ import {
 import { toAbsoluteAssetUrl } from '@/lib/asset-url';
 import { buildLocalePath } from '@/lib/i18n/path';
 import type { Dictionary, Locale } from '@/lib/i18n/types';
+import { formatMhc } from '@/lib/mhc/presentation';
 import { uploadFile } from '@/lib/upload/client';
 
 import '@/app/my-ads.css';
@@ -43,7 +44,7 @@ export const MyAdsScreen = ({ locale, dictionary }: MyAdsScreenProps) => {
   const [showForm, setShowForm] = useState(false);
   const [adControls, setAdControls] = useState<AdminAdControls>({
     acceptAds: true,
-    pricePerDay: 0,
+    mhcPrice: 0,
   });
 
   const [form, setForm] = useState({
@@ -117,10 +118,9 @@ export const MyAdsScreen = ({ locale, dictionary }: MyAdsScreenProps) => {
   const plannedEndAt = useMemo(() => {
     return new Date(plannedStartAt.getTime() + durationDays * 24 * 60 * 60 * 1000);
   }, [plannedStartAt, durationDays]);
-  const totalCost = useMemo(
-    () => Math.max(0, adControls.pricePerDay * durationDays),
-    [adControls.pricePerDay, durationDays],
-  );
+  // A campaign costs one flat MHC price, not a per-day rate: the price comes
+  // from mhc_action_prices.advertisement, which has no duration dimension.
+  const campaignCost = useMemo(() => Math.max(0, adControls.mhcPrice), [adControls.mhcPrice]);
 
   // Do not render app content to unauthenticated/unverified users; the effect
   // above redirects them. Show nothing until auth state is settled.
@@ -178,19 +178,25 @@ export const MyAdsScreen = ({ locale, dictionary }: MyAdsScreenProps) => {
       const ctaTextEn = form.ctaTextEn.trim();
       const ctaTextAr = form.ctaTextAr.trim();
       const linkTarget = form.linkTarget.trim();
-      await advertisementsApiClient.createAd(accessToken, {
-        durationDays,
-        ...(form.startsAt ? { startsAt: new Date(form.startsAt).toISOString() } : {}),
-        titleEn: form.titleEn,
-        ...(titleAr ? { titleAr } : {}),
-        ...(descriptionEn ? { descriptionEn } : {}),
-        ...(descriptionAr ? { descriptionAr } : {}),
-        imageUrl: form.imageUrl,
-        ...(ctaTextEn ? { ctaTextEn } : {}),
-        ...(ctaTextAr ? { ctaTextAr } : {}),
-        linkType: form.linkType,
-        ...(linkTarget ? { linkTarget } : {}),
-      });
+      // One key per submit attempt. A retry of this same submit reaches the same
+      // campaign instead of creating a second one and spending credits twice.
+      await advertisementsApiClient.createAd(
+        accessToken,
+        {
+          durationDays,
+          ...(form.startsAt ? { startsAt: new Date(form.startsAt).toISOString() } : {}),
+          titleEn: form.titleEn,
+          ...(titleAr ? { titleAr } : {}),
+          ...(descriptionEn ? { descriptionEn } : {}),
+          ...(descriptionAr ? { descriptionAr } : {}),
+          imageUrl: form.imageUrl,
+          ...(ctaTextEn ? { ctaTextEn } : {}),
+          ...(ctaTextAr ? { ctaTextAr } : {}),
+          linkType: form.linkType,
+          ...(linkTarget ? { linkTarget } : {}),
+        },
+        crypto.randomUUID(),
+      );
       resetForm();
       setSuccess(tr('Ad created and activated successfully.', 'تم إنشاء الإعلان وتفعيله بنجاح.'));
       await load();
@@ -472,21 +478,24 @@ export const MyAdsScreen = ({ locale, dictionary }: MyAdsScreenProps) => {
                 )}
               </fieldset>
 
-              {/* Price summary */}
+              {/* Price summary — MHC credits, never a currency figure. */}
               <div className="myads-price-summary">
                 <span className="myads-price-summary-label">
-                  {tr('Billing & timeline', 'الفوترة والجدول')}
+                  {tr('Credits & timeline', 'الرصيد والجدول')}
                 </span>
-                <span className="myads-price-summary-value">{totalCost.toFixed(2)} EGP</span>
-                <span className="myads-price-summary-note">
-                  {tr(
-                    `Deducted from wallet immediately on create · runs for ${durationDays} days`,
-                    `تُخصم من المحفظة مباشرة عند الإنشاء · تعمل لمدة ${durationDays} يوم`,
-                  )}
+                <span className="myads-price-summary-value">
+                  {campaignCost > 0 ? formatMhc(campaignCost, locale) : tr('Free', 'مجاني')}
                 </span>
                 <span className="myads-price-summary-note">
-                  {tr('Price/day', 'سعر اليوم')}: {adControls.pricePerDay.toFixed(2)} EGP ×{' '}
-                  {durationDays} {tr('days', 'يوم')}
+                  {campaignCost > 0
+                    ? tr(
+                        `Charged from your credits when the campaign is created · runs for ${durationDays} days`,
+                        `تُخصم من رصيدك عند إنشاء الحملة · تعمل لمدة ${durationDays} يوم`,
+                      )
+                    : tr(
+                        `No credits are charged for this campaign · runs for ${durationDays} days`,
+                        `لا يتم خصم أي رصيد لهذه الحملة · تعمل لمدة ${durationDays} يوم`,
+                      )}
                 </span>
                 <span className="myads-price-summary-note">
                   {tr('Starts', 'يبدأ')}: {plannedStartAt.toLocaleString(isAr ? 'ar-EG' : 'en-US')}
@@ -667,10 +676,15 @@ const AdCard = ({ ad, locale, statusLabel, d, tr }: AdCardProps) => {
             </span>
             <span className="myads-stat-label">CTR</span>
           </div>
-          <div className="myads-stat">
-            <span className="myads-stat-value">{ad.amount_paid ?? '—'}</span>
-            <span className="myads-stat-label">{tr('Paid', 'المدفوع')}</span>
-          </div>
+          {/* `amount_paid` is the legacy EGP figure and is 0 for every campaign
+              created since P0-03, so it is shown only where it is real history.
+              Launch campaigns are charged in MHC; the ledger is the record. */}
+          {Number.parseFloat(ad.amount_paid ?? '0') > 0 ? (
+            <div className="myads-stat">
+              <span className="myads-stat-value">{ad.amount_paid}</span>
+              <span className="myads-stat-label">{tr('Paid (legacy)', 'المدفوع (سابقًا)')}</span>
+            </div>
+          ) : null}
         </div>
         {starts && (
           <p className="myads-ad-card-meta">

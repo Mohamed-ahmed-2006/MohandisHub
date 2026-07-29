@@ -1,5 +1,8 @@
+import { randomUUID } from 'node:crypto';
+
 import { getPool } from '../../db/pool.js';
 import { HttpError } from '../../utils/http-error.js';
+import { MhcService } from '../mhc/mhc.service.js';
 import { WalletRepository } from '../wallet/wallet.repository.js';
 
 import { AdCenterService } from './adcenter.service.js';
@@ -16,20 +19,61 @@ import type {
 
 const PLATFORM_USER_ID = '00000000-0000-0000-0000-000000000001';
 
-const DEFAULT_AD_CONTROLS = { acceptAds: true, pricePerDay: 0 };
+/** `mhc_action_prices` key. The only pricing source for a launch campaign. */
+const AD_ACTION_KEY = 'advertisement';
+const AD_REFERENCE_TYPE = 'advertisement';
+
+export type AdControls = {
+  acceptAds: boolean;
+  /** MHC charged per campaign. Not a currency amount — never render a symbol. */
+  mhcPrice: number;
+};
 
 export class AdvertisementsService {
   constructor(
     private readonly repo: AdvertisementsRepository = new AdvertisementsRepository(),
+    /**
+     * Retained ONLY for the legacy refund path on campaigns that were paid for
+     * in EGP before P0-03. Nothing on the creation path touches it, and no
+     * money wallet is read or written for a launch advertisement.
+     */
     private readonly walletRepo: WalletRepository = new WalletRepository(),
     private readonly adCenter: AdCenterService = new AdCenterService(),
+    private readonly mhc: MhcService = new MhcService(),
   ) {}
 
-  private async getControls() {
-    return (await this.repo.getGlobalAdControls()) ?? DEFAULT_AD_CONTROLS;
+  private async getControls(): Promise<AdControls> {
+    const [acceptAds, price] = await Promise.all([
+      this.repo.getGlobalAdAcceptance(),
+      this.repo.getAdvertisementMhcPrice(),
+    ]);
+    return {
+      acceptAds: acceptAds ?? true,
+      // A missing or switched-off price row reports 0 to the UI rather than
+      // guessing. Charging still fails closed on it — see MhcService.chargeAction.
+      mhcPrice: price?.isActive ? price.mhcPrice : 0,
+    };
   }
 
-  async createAd(userId: string, input: CreateAdInput) {
+  /**
+   * Create a campaign and charge its MHC price in ONE transaction.
+   *
+   * Two database-enforced guards, at two different levels:
+   *
+   *   uq_advertisements_advertiser_idempotency  stops a retried request from
+   *     creating a second campaign at all;
+   *   uq_mhc_action_charge_reference            stops a second charge against
+   *     the campaign that does exist.
+   *
+   * The first is what makes the second sufficient: without domain idempotency a
+   * duplicate request produces a *different* advertisement id, which the charge
+   * table would rightly treat as a new, chargeable business reference.
+   *
+   * The advertisement id is preallocated so it can be the charge's reference
+   * before the row is committed, and the insert happens first so a duplicate
+   * collides before any credits move.
+   */
+  async createAd(userId: string, input: CreateAdInput, idempotencyKey?: string | null) {
     const controls = await this.getControls();
     if (!controls.acceptAds) {
       throw new HttpError({
@@ -38,14 +82,12 @@ export class AdvertisementsService {
         message: 'Ads are currently not accepting new campaigns.',
       });
     }
-    const amount = Math.max(0, controls.pricePerDay * input.durationDays);
-    const wallet = await this.walletRepo.findByUserId(userId);
-    if (!wallet) {
-      throw new HttpError({
-        statusCode: 402,
-        code: 'INSUFFICIENT_BALANCE',
-        message: 'Wallet is required to create advertisement.',
-      });
+
+    const clientIdempotencyKey = idempotencyKey?.trim() || null;
+    if (clientIdempotencyKey) {
+      // Fast path: a completed retry never re-enters the transaction at all.
+      const existing = await this.repo.findAdByIdempotencyKey(userId, clientIdempotencyKey);
+      if (existing) return existing;
     }
 
     const requestedStartAt = input.startsAt ? new Date(input.startsAt) : null;
@@ -53,51 +95,50 @@ export class AdvertisementsService {
     const startsAt =
       requestedStartAt && requestedStartAt.getTime() > now.getTime() ? requestedStartAt : now;
     const expiresAt = new Date(startsAt.getTime() + input.durationDays * 24 * 60 * 60 * 1000);
+    const advertisementId = randomUUID();
 
     const client = await getPool().connect();
     try {
       await client.query('BEGIN');
-      const ad = await this.repo.createAdInTx(client, userId, input, amount, startsAt, expiresAt);
-      if (amount > 0) {
-        const paymentTxId = await this.walletRepo.debitWalletInTransaction(
-          client,
-          wallet.id,
-          userId,
-          amount,
-          `Advertisement payment: ${ad.title_en}`,
-          'advertisement',
-          ad.id,
-        );
-        const platformWalletId = await this.walletRepo.getOrCreateCommissionWallet(
-          client,
-          PLATFORM_USER_ID,
-        );
-        await this.walletRepo.creditWithTypeInTransaction(
-          client,
-          platformWalletId,
-          PLATFORM_USER_ID,
-          amount,
-          'commission',
-          'Advertisement revenue',
-          'advertisement',
-          ad.id,
-        );
-        await client.query(
-          `UPDATE advertisements SET admin_status_reason = COALESCE(admin_status_reason, $2) WHERE id = $1`,
-          [ad.id, `payment_tx:${paymentTxId}`],
-        );
-      }
+      const ad = await this.repo.createAdInTx(
+        client,
+        userId,
+        input,
+        startsAt,
+        expiresAt,
+        advertisementId,
+        clientIdempotencyKey,
+      );
+
+      // Same transaction as the insert: a failed charge leaves no campaign, and
+      // a failed campaign leaves no charge. There is no ordering of these two
+      // writes that can diverge.
+      await this.mhc.chargeAction({
+        client,
+        userId,
+        actionKey: AD_ACTION_KEY,
+        referenceType: AD_REFERENCE_TYPE,
+        referenceId: ad.id,
+        idempotencyKey: `advertisement:${ad.id}`,
+        description: `Advertisement campaign: ${ad.title_en}`,
+        metadata: { duration_days: input.durationDays },
+      });
+
       await client.query('COMMIT');
       return ad;
     } catch (err: unknown) {
-      await client.query('ROLLBACK');
-      const msg = err instanceof Error ? err.message : String(err);
-      if (msg === 'INSUFFICIENT_BALANCE') {
-        throw new HttpError({
-          statusCode: 402,
-          code: 'INSUFFICIENT_BALANCE',
-          message: 'Insufficient wallet balance for this ad.',
-        });
+      await client.query('ROLLBACK').catch(() => {});
+      // Lost the domain idempotency race: a concurrent identical request
+      // committed first. Return its campaign rather than an error, and do not
+      // charge again.
+      if (
+        clientIdempotencyKey &&
+        typeof err === 'object' &&
+        err !== null &&
+        (err as { code?: unknown }).code === '23505'
+      ) {
+        const winner = await this.repo.findAdByIdempotencyKey(userId, clientIdempotencyKey);
+        if (winner) return winner;
       }
       throw err;
     } finally {
@@ -181,6 +222,12 @@ export class AdvertisementsService {
         });
       }
 
+      // LEGACY PATH ONLY. `amount_paid` is the EGP figure historic campaigns
+      // were charged; launch campaigns are charged in MHC and store 0 here, so
+      // this yields 0 for them and no wallet is touched. Retained because a
+      // pre-P0-03 campaign is still entitled to the refund it was promised.
+      // Cancelling an MHC campaign currently refunds nothing — a refund policy
+      // for credits is a product decision and is not invented here.
       refundAmount = this.computeAdCancellationRefund(lockedAd);
       if (refundAmount > 0) {
         const advertiserWallet = await this.walletRepo.findByUserId(userId);
@@ -301,12 +348,26 @@ export class AdvertisementsService {
     return updated;
   }
 
-  async getAdminAdControls() {
+  async getAdminAdControls(): Promise<AdControls> {
     return this.getControls();
   }
 
-  async updateAdminAdControls(adminId: string, input: AdminAdControlsInput) {
-    return this.repo.upsertGlobalAdControls(adminId, input);
+  /**
+   * Admin ad pricing edits `mhc_action_prices.advertisement` — the same row the
+   * charge primitive reads. There is no second place a price can be set, so the
+   * displayed price and the charged price cannot drift.
+   */
+  async updateAdminAdControls(adminId: string, input: AdminAdControlsInput): Promise<AdControls> {
+    if (!(input.mhcPrice >= 0)) {
+      throw new HttpError({
+        statusCode: 400,
+        code: 'AD_INVALID_MHC_PRICE',
+        message: 'Advertisement credit price must be zero or greater.',
+      });
+    }
+    await this.repo.upsertGlobalAdControls(adminId, input.acceptAds);
+    await this.repo.setAdvertisementMhcPrice(input.mhcPrice);
+    return { acceptAds: input.acceptAds, mhcPrice: input.mhcPrice };
   }
 
   private computeAdCancellationRefund(ad: {

@@ -50,10 +50,30 @@ function parseBody<T>(
   return result.data as T;
 }
 
+/**
+ * Optional, unlike the reservations and jobs controllers which require it.
+ * Advertisement creation predates this header, so demanding it would reject
+ * every existing client; supplying it is what buys duplicate protection.
+ */
+function optionalIdempotencyKey(req: {
+  header: (name: string) => string | undefined;
+}): string | null {
+  const key = req.header('Idempotency-Key')?.trim();
+  if (!key) return null;
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(key)) {
+    throw new HttpError({
+      statusCode: 400,
+      code: 'IDEMPOTENCY_KEY_INVALID',
+      message: 'Idempotency-Key must be a UUID.',
+    });
+  }
+  return key;
+}
+
 const createAd = asyncHandler(async (req, res) => {
   const user = requireUser(req);
   const input = parseBody(createAdSchema, req.body);
-  const data = await svc.createAd(user.id, input);
+  const data = await svc.createAd(user.id, input, optionalIdempotencyKey(req));
   res.status(201).json({ ok: true, data });
 });
 
@@ -172,7 +192,7 @@ const updateAdminAdControls = asyncHandler(async (req, res) => {
     action: 'admin.ad.controls_update',
     resourceType: 'advertisement_controls',
     resourceId: null,
-    details: { acceptAds: input.acceptAds, pricePerDay: input.pricePerDay },
+    details: { acceptAds: input.acceptAds, mhcPrice: input.mhcPrice },
     ip: requestIp(req),
   });
   res.json({ ok: true, data });

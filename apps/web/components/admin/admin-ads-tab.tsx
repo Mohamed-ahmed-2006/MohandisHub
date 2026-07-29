@@ -21,7 +21,7 @@ const hasPermission = (permissions: string[], permission: string): boolean =>
 
 export const AdminAdsTab = ({ dictionary, accessToken, adminPermissions }: AdminAdsTabProps) => {
   const [rows, setRows] = useState<Advertisement[]>([]);
-  const [controls, setControls] = useState<AdminAdControls>({ acceptAds: true, pricePerDay: 0 });
+  const [controls, setControls] = useState<AdminAdControls>({ acceptAds: true, mhcPrice: 0 });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<string>('');
@@ -56,7 +56,7 @@ export const AdminAdsTab = ({ dictionary, accessToken, adminPermissions }: Admin
         advertisementsApiClient.adminListAds(accessToken, status ? { status } : undefined),
         canManageAdPricing
           ? advertisementsApiClient.adminGetControls(accessToken)
-          : Promise.resolve({ acceptAds: true, pricePerDay: 0 }),
+          : Promise.resolve({ acceptAds: true, mhcPrice: 0 }),
       ]);
       setRows(data.rows);
       setControls(adControls);
@@ -112,7 +112,7 @@ export const AdminAdsTab = ({ dictionary, accessToken, adminPermissions }: Admin
   };
 
   const saveControls = async () => {
-    if (controls.pricePerDay < 0) return;
+    if (controls.mhcPrice < 0) return;
     setSavingControls(true);
     try {
       await advertisementsApiClient.adminUpdateControls(accessToken, controls);
@@ -160,20 +160,26 @@ export const AdminAdsTab = ({ dictionary, accessToken, adminPermissions }: Admin
             <p className="admin-settings-section-title">Global advertisement settings</p>
             <div className="admin-settings-row">
               <label className="admin-settings-label-wrap">
-                <span className="admin-settings-label">Price per day (EGP)</span>
+                {/* Writes mhc_action_prices.advertisement — the same row the
+                    charge primitive reads, so displayed and charged cannot
+                    drift. MHC is a platform credit, not a currency. */}
+                <span className="admin-settings-label">Price per campaign (MHC credits)</span>
                 <input
                   type="number"
                   min={0}
                   step="0.01"
                   className="admin-settings-input admin-settings-input--number"
-                  value={String(controls.pricePerDay)}
+                  value={String(controls.mhcPrice)}
                   onChange={(e) =>
                     setControls((prev) => ({
                       ...prev,
-                      pricePerDay: Number.parseFloat(e.target.value || '0'),
+                      mhcPrice: Number.parseFloat(e.target.value || '0'),
                     }))
                   }
                 />
+                <span className="admin-settings-label" style={{ opacity: 0.7 }}>
+                  0 keeps advertising free. Charged once per campaign, not per day.
+                </span>
               </label>
               <label
                 className="admin-settings-row"
@@ -262,7 +268,14 @@ export const AdminAdsTab = ({ dictionary, accessToken, adminPermissions }: Admin
                     </span>
                   </td>
                   <td>{ad.status}</td>
-                  <td>{ad.amount_paid ? `${ad.amount_paid} EGP` : '—'}</td>
+                  {/* Legacy EGP history only. Campaigns created since P0-03 are
+                      charged in MHC and store 0 here; their charge lives in
+                      mhc_action_charges and the transactions ledger. */}
+                  <td>
+                    {Number.parseFloat(ad.amount_paid ?? '0') > 0
+                      ? `${ad.amount_paid} EGP (legacy)`
+                      : '—'}
+                  </td>
                   <td>{ad.impressions}</td>
                   <td>{ad.clicks}</td>
                   <td>

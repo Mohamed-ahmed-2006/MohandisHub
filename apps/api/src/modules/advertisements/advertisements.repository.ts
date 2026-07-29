@@ -4,7 +4,6 @@ import { getPool } from '../../db/pool.js';
 
 import type { AdPricingRuleRow, AdvertisementRow } from './advertisements.types.js';
 import type {
-  AdminAdControlsInput,
   AdminPricingOverrideInput,
   AdminScheduleInput,
   CreateAdInput,
@@ -17,27 +16,30 @@ import type {
 const GLOBAL_AD_CONTROLS_RULE_NAME = '__GLOBAL_AD_CONTROLS__';
 
 export class AdvertisementsRepository {
-  async getGlobalAdControls(): Promise<{ acceptAds: boolean; pricePerDay: number } | null> {
-    const { rows } = await getPool().query<{ is_active: boolean; flat_fee: string }>(
-      `SELECT is_active, flat_fee
+  /**
+   * Whether new campaigns are being accepted. `flat_fee` on this row is the
+   * legacy EGP price and is intentionally not read: pricing moved to
+   * `mhc_action_prices.advertisement` in 20260729150000.
+   */
+  async getGlobalAdAcceptance(): Promise<boolean | null> {
+    const { rows } = await getPool().query<{ is_active: boolean }>(
+      `SELECT is_active
        FROM ad_pricing_rules
        WHERE name = $1
        ORDER BY created_at DESC
        LIMIT 1`,
       [GLOBAL_AD_CONTROLS_RULE_NAME],
     );
-    const row = rows[0];
-    if (!row) return null;
-    return {
-      acceptAds: row.is_active,
-      pricePerDay: parseFloat(row.flat_fee ?? '0'),
-    };
+    return rows[0]?.is_active ?? null;
   }
 
-  async upsertGlobalAdControls(
-    adminId: string,
-    input: AdminAdControlsInput,
-  ): Promise<{ acceptAds: boolean; pricePerDay: number }> {
+  /**
+   * Write the "accepting new campaigns" switch. The price is NOT written here
+   * any more — it lives in `mhc_action_prices.advertisement`. `flat_fee` is
+   * preserved at whatever value it already held so the historic EGP figure is
+   * not silently rewritten by an admin editing the MHC price.
+   */
+  async upsertGlobalAdControls(adminId: string, acceptAds: boolean): Promise<void> {
     const existing = await getPool().query<{ id: string }>(
       `SELECT id FROM ad_pricing_rules WHERE name = $1 ORDER BY created_at DESC LIMIT 1`,
       [GLOBAL_AD_CONTROLS_RULE_NAME],
@@ -46,49 +48,97 @@ export class AdvertisementsRepository {
       await getPool().query(
         `UPDATE ad_pricing_rules
          SET is_active = $2,
-             flat_fee = $3,
              price_multiplier = 1,
              priority = 10000,
              updated_at = now()
          WHERE id = $1`,
-        [existing.rows[0].id, input.acceptAds, input.pricePerDay],
+        [existing.rows[0].id, acceptAds],
       );
-    } else {
-      await getPool().query(
-        `INSERT INTO ad_pricing_rules (
-          name, is_active, role_scope, country_scope, city_scope, category_scope,
-          min_duration_days, max_duration_days, price_multiplier, flat_fee, starts_at, ends_at, priority, created_by
-        ) VALUES (
-          $1, $2, '{}'::text[], '{}'::text[], '{}'::text[], '{}'::uuid[],
-          NULL, NULL, 1, $3, NULL, NULL, 10000, $4
-        )`,
-        [GLOBAL_AD_CONTROLS_RULE_NAME, input.acceptAds, input.pricePerDay, adminId],
-      );
+      return;
     }
-    return { acceptAds: input.acceptAds, pricePerDay: input.pricePerDay };
+    await getPool().query(
+      `INSERT INTO ad_pricing_rules (
+        name, is_active, role_scope, country_scope, city_scope, category_scope,
+        min_duration_days, max_duration_days, price_multiplier, flat_fee, starts_at, ends_at, priority, created_by
+      ) VALUES (
+        $1, $2, '{}'::text[], '{}'::text[], '{}'::text[], '{}'::uuid[],
+        NULL, NULL, 1, 0, NULL, NULL, 10000, $3
+      )`,
+      [GLOBAL_AD_CONTROLS_RULE_NAME, acceptAds, adminId],
+    );
   }
 
+  /**
+   * The MHC price an advertisement costs, straight from the admin-configurable
+   * catalogue. `advertisement_plans.price` and `ad_pricing_rules.flat_fee` are
+   * legacy EGP fields and are deliberately NOT consulted (see 20260729150000).
+   */
+  async getAdvertisementMhcPrice(): Promise<{ mhcPrice: number; isActive: boolean } | null> {
+    const { rows } = await getPool().query<{ mhc_price: string; is_active: boolean }>(
+      `SELECT mhc_price::text, is_active FROM mhc_action_prices WHERE action_key = 'advertisement'`,
+    );
+    const row = rows[0];
+    if (!row) return null;
+    return { mhcPrice: parseFloat(row.mhc_price), isActive: row.is_active };
+  }
+
+  async setAdvertisementMhcPrice(mhcPrice: number): Promise<void> {
+    await getPool().query(
+      `INSERT INTO mhc_action_prices (action_key, name, mhc_price, is_active)
+       VALUES ('advertisement', 'Advertisement', $1, true)
+       ON CONFLICT (action_key) DO UPDATE
+         SET mhc_price = EXCLUDED.mhc_price, is_active = true, updated_at = now()`,
+      [mhcPrice],
+    );
+  }
+
+  /**
+   * The advertisement a previous attempt with this idempotency key created.
+   * Read on the retry path after uq_advertisements_advertiser_idempotency has
+   * already refused the duplicate insert.
+   */
+  async findAdByIdempotencyKey(
+    advertiserId: string,
+    idempotencyKey: string,
+  ): Promise<AdvertisementRow | null> {
+    const { rows } = await getPool().query<AdvertisementRow>(
+      `SELECT * FROM advertisements
+       WHERE advertiser_id = $1 AND client_idempotency_key = $2
+       LIMIT 1`,
+      [advertiserId, idempotencyKey],
+    );
+    return rows[0] ?? null;
+  }
+
+  /**
+   * Insert the advertisement with a PREALLOCATED id, so the caller can charge
+   * MHC against it in the same transaction. `amount_paid` is written as 0: it is
+   * a legacy EGP column, and the MHC actually charged is recorded in
+   * `mhc_action_charges` keyed by this id.
+   */
   async createAdInTx(
     client: PoolClient,
     advertiserId: string,
     input: CreateAdInput,
-    amountPaid: number,
     startsAt: Date,
     expiresAt: Date,
+    advertisementId: string,
+    clientIdempotencyKey: string | null,
   ): Promise<AdvertisementRow> {
     const { rows } = await client.query<AdvertisementRow>(
       `INSERT INTO advertisements (
-        advertiser_id, title_en, title_ar, description_en, description_ar, image_url,
+        id, advertiser_id, title_en, title_ar, description_en, description_ar, image_url,
         cta_text_en, cta_text_ar, link_type, link_target, starts_at, expires_at, amount_paid, status, priority,
         target_roles, target_countries, target_cities, target_categories, target_languages,
-        target_min_budget, target_max_budget
+        target_min_budget, target_max_budget, client_idempotency_key
       ) VALUES (
-        $1, $2, $3, $4, $5, $6,
-        $7, $8, $9, $10, $11, $12, $13, 'active', $14,
+        $1, $2, $3, $4, $5, $6, $7,
+        $8, $9, $10, $11, $12, $13, 0, 'active', $14,
         $15::text[], $16::text[], $17::text[], $18::uuid[], $19::text[],
-        $20, $21
+        $20, $21, $22
       ) RETURNING *`,
       [
+        advertisementId,
         advertiserId,
         input.titleEn,
         input.titleAr ?? null,
@@ -101,7 +151,6 @@ export class AdvertisementsRepository {
         input.linkTarget ?? null,
         startsAt.toISOString(),
         expiresAt.toISOString(),
-        amountPaid,
         input.priority ?? 0,
         input.targetRoles ?? [],
         input.targetCountries ?? [],
@@ -110,6 +159,7 @@ export class AdvertisementsRepository {
         input.targetLanguages ?? [],
         input.targetMinBudget ?? null,
         input.targetMaxBudget ?? null,
+        clientIdempotencyKey,
       ],
     );
     return rows[0]!;
