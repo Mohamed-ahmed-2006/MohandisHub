@@ -47,7 +47,8 @@ export function getNotificationTargetHref(
   if (payload?.reservationId) q.set('reservation', String(payload.reservationId));
   // Chat screen reads `c` (see chat-screen.tsx useSearchParams).
   if (payload?.conversationId) q.set('c', String(payload.conversationId));
-  if (payload?.needId) q.set('need', String(payload.needId));
+  if (payload?.needId) q.set('needId', String(payload.needId));
+  if (payload?.bidId) q.set('bidId', String(payload.bidId));
   if (payload?.jobId) q.set('job', String(payload.jobId));
   if (payload?.negotiationId) q.set('negotiation', String(payload.negotiationId));
   if (payload?.serviceId) q.set('service', String(payload.serviceId));
