@@ -1,6 +1,6 @@
 'use client';
 
-import type { Plan, PlanUsageSummary, Wallet } from '@mohandishub/shared';
+import type { Plan, PlanUsageSummary } from '@mohandishub/shared';
 import { ClipboardList } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
@@ -11,7 +11,6 @@ import { Container } from '@/components/ui/container';
 import { buildLocalePath } from '@/lib/i18n/path';
 import type { Dictionary, Locale } from '@/lib/i18n/types';
 import { plansApiClient } from '@/lib/plans/client';
-import { walletApiClient } from '@/lib/wallet/client';
 
 import './my-plan-screen.css';
 
@@ -24,13 +23,20 @@ export const MyPlanScreen = ({ locale, dictionary }: Props) => {
 
   const [plans, setPlans] = useState<Plan[]>([]);
   const [planUsage, setPlanUsage] = useState<PlanUsageSummary | null>(null);
-  const [wallet, setWallet] = useState<Wallet | null>(null);
   const [subscriptionEndsAt, setSubscriptionEndsAt] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [confirmPlan, setConfirmPlan] = useState<Plan | null>(null);
   const [subscribing, setSubscribing] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const plansFeatureEnabled = status?.featurePlansEnabled !== false;
+
+  // LAUNCH CONSTRAINT LC-02: paid plans are not purchasable yet, so they are
+  // shown as "Coming soon" with no price and no subscribe control. The flag is
+  // UX only — PlansService.subscribeToPlan refuses server-side regardless, and
+  // an absent status must not be read as "purchasing is open".
+  const subscriptionsPaused = status?.pausePlanSubscriptions !== false;
+  /** A plan is paid if it carries any price at all. Free stays usable. */
+  const isPaidPlan = (plan: Plan): boolean => Number(plan.price) > 0;
 
   const d = dictionary.plan ?? ({} as Record<string, string>);
 
@@ -49,22 +55,22 @@ export const MyPlanScreen = ({ locale, dictionary }: Props) => {
     if (!plansFeatureEnabled) {
       setPlans([]);
       setPlanUsage(null);
-      setWallet(null);
       setSubscriptionEndsAt(null);
       setLoading(false);
       return;
     }
     setLoading(true);
     try {
-      const [planList, w, subscription, usage] = await Promise.all([
+      // The EGP wallet is deliberately NOT fetched here. Nothing on this screen
+      // is denominated in money any more, and the money wallet is frozen — so
+      // reading it only creates a currency figure with nothing to spend it on.
+      const [planList, subscription, usage] = await Promise.all([
         accessToken ? plansApiClient.listActivePlans(accessToken) : Promise.resolve([] as Plan[]),
-        accessToken ? walletApiClient.getMyWallet(accessToken) : Promise.resolve(null),
         accessToken ? plansApiClient.getCurrentSubscription(accessToken) : Promise.resolve(null),
         accessToken ? plansApiClient.getMyUsage(accessToken) : Promise.resolve(null),
       ]);
       setPlans(planList);
       setPlanUsage(usage);
-      setWallet(w);
       setSubscriptionEndsAt(subscription?.subscriptionEndsAt ?? null);
     } catch {
       // ignore
@@ -83,7 +89,9 @@ export const MyPlanScreen = ({ locale, dictionary }: Props) => {
     setMessage(null);
     try {
       const result = await plansApiClient.subscribe(accessToken, confirmPlan.id);
-      setWallet((prev) => (prev ? { ...prev, balance: result.walletBalance } : prev));
+      // `result.walletBalance` is a legacy EGP figure and is deliberately not
+      // read: no launch surface presents a money balance. The endpoint is
+      // paused anyway (LC-02), so this path is unreachable at launch.
       setSubscriptionEndsAt(result.subscriptionEndsAt);
       await updateAuthUser();
       try {
@@ -222,11 +230,11 @@ export const MyPlanScreen = ({ locale, dictionary }: Props) => {
           <span className="plan-screen-current">
             {d.currentPlan ?? 'Current plan'}: <strong>{currentPlan}</strong>
           </span>
-          {wallet && (
-            <span className="plan-screen-balance">
-              {dictionary.wallet.balance}: {wallet.balance.toFixed(2)} {wallet.currency ?? 'EGP'}
-            </span>
-          )}
+          {/* The EGP wallet balance used to be rendered here. Removed with
+              LC-02: the money wallet is frozen, plans are not bought with it,
+              and showing a currency figure implied a balance the user could
+              spend. An existing subscriber still sees their plan and its end
+              date below. */}
           {subscriptionEndsAt && (
             <span className="plan-screen-ends-at">
               {d.subscriptionEndsAt ?? 'Subscription ends'}:{' '}
@@ -370,10 +378,23 @@ export const MyPlanScreen = ({ locale, dictionary }: Props) => {
           <div className="plan-screen-grid">
             {plans.map((plan) => {
               const isCurrent = currentPlan === plan.slug;
+              const paid = isPaidPlan(plan);
+              // LC-02: a paid plan is presented as not-yet-available. It is NOT
+              // relabelled free, and its price is not shown — quoting an EGP
+              // figure for something that cannot be bought is worse than
+              // quoting nothing.
+              const notYetAvailable = paid && subscriptionsPaused;
+              // No CTA while subscriptions are paused: subscribeToPlan refuses
+              // for EVERY plan, so a button here would always fail. That covers
+              // the one remaining case — a paid subscriber looking at the Free
+              // card. The card still renders, so the catalogue stays honest.
+              const showSubscribeButton = !isCurrent && !subscriptionsPaused;
               return (
                 <article
                   key={plan.id}
-                  className={`plan-card ${isCurrent ? 'plan-card--current' : ''}`}
+                  className={`plan-card ${isCurrent ? 'plan-card--current' : ''} ${
+                    notYetAvailable ? 'plan-card--coming-soon' : ''
+                  }`}
                 >
                   <div className="plan-card-icon" aria-hidden>
                     {getPlanIcon(plan.slug)}
@@ -381,12 +402,25 @@ export const MyPlanScreen = ({ locale, dictionary }: Props) => {
                   <h2 className="plan-card-name">{plan.name}</h2>
                   {plan.description && <p className="plan-card-desc">{plan.description}</p>}
                   <div className="plan-card-price-wrap">
-                    <span className="plan-card-price">
-                      {plan.price} {plan.currency ?? 'EGP'}
-                    </span>
-                    <span className="plan-card-cycle">
-                      /{plan.billingCycle === 'monthly' ? (d.monthly ?? 'mo') : plan.billingCycle}
-                    </span>
+                    {notYetAvailable ? (
+                      <span className="plan-card-price plan-card-price--coming-soon">
+                        {dictionary.common.comingSoon}
+                      </span>
+                    ) : (
+                      <>
+                        <span className="plan-card-price">
+                          {paid ? plan.price : (d.freePrice ?? 'Free')}
+                        </span>
+                        {paid && (
+                          <span className="plan-card-cycle">
+                            /
+                            {plan.billingCycle === 'monthly'
+                              ? (d.monthly ?? 'mo')
+                              : plan.billingCycle}
+                          </span>
+                        )}
+                      </>
+                    )}
                   </div>
                   {plan.features.length > 0 && (
                     <ul className="plan-card-features">
@@ -401,8 +435,16 @@ export const MyPlanScreen = ({ locale, dictionary }: Props) => {
                     </ul>
                   )}
                   {isCurrent ? (
-                    <span className="plan-card-badge">{d.activePlan ?? 'Active'}</span>
-                  ) : (
+                    // An existing subscriber keeps seeing their plan. Labelled by
+                    // PLAN NAME, never as a verification or trust signal.
+                    <span className="plan-card-badge">
+                      {paid ? `${plan.name} ${d.planNoun ?? 'plan'}` : (d.activePlan ?? 'Active')}
+                    </span>
+                  ) : notYetAvailable ? (
+                    <span className="plan-card-badge plan-card-badge--coming-soon">
+                      {dictionary.common.comingSoon}
+                    </span>
+                  ) : showSubscribeButton ? (
                     <button
                       type="button"
                       className="plan-card-cta"
@@ -413,7 +455,7 @@ export const MyPlanScreen = ({ locale, dictionary }: Props) => {
                     >
                       {d.choosePlan ?? 'Choose Plan'}
                     </button>
-                  )}
+                  ) : null}
                 </article>
               );
             })}
@@ -425,12 +467,16 @@ export const MyPlanScreen = ({ locale, dictionary }: Props) => {
             <div className="plan-modal" onClick={(e) => e.stopPropagation()}>
               <h3 className="plan-modal-title">{d.confirmTitle ?? 'Confirm Subscription'}</h3>
               <p className="plan-modal-text">
-                {d.confirmText
-                  ? d.confirmText
-                      .replace('{name}', confirmPlan.name)
-                      .replace('{price}', String(confirmPlan.price))
-                      .replace('{currency}', confirmPlan.currency ?? 'EGP')
-                  : `Subscribe to ${confirmPlan.name} for ${confirmPlan.price} ${confirmPlan.currency ?? 'EGP'}? This will be deducted from your wallet balance.`}
+                {/* Names the plan and quotes NO amount. The legacy copy
+                    (`d.confirmText`) promised "{price} {currency} deducted from
+                    your wallet balance" against the wallet 20260728160000 froze;
+                    it is left in the dictionary as legacy but is not rendered.
+                    When per-plan pricing is decided (LC-02) this is where the
+                    MHC amount belongs — not an EGP one. */}
+                {(d.confirmTextNoPrice ?? 'Subscribe to {name}?').replace(
+                  '{name}',
+                  confirmPlan.name,
+                )}
               </p>
               <div className="plan-modal-actions">
                 <button

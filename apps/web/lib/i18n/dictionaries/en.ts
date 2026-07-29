@@ -1476,12 +1476,24 @@ export const enDictionary: Dictionary = {
     choosePlan: 'Choose Plan',
     activePlan: 'Active',
     monthly: 'mo',
+    /** LC-02: what a free plan costs, written as a word, never as 0.00 EGP. */
+    freePrice: 'Free',
+    /** Suffix so a paid-plan badge names the plan: "pro plan", not just "Pro". */
+    planNoun: 'plan',
     confirmTitle: 'Confirm Subscription',
+    // LEGACY, not rendered: quotes an EGP amount and promises a deduction from
+    // the money wallet that 20260728160000 froze. Retained for reference until
+    // per-plan MHC pricing is decided (LC-02).
     confirmText:
       'Subscribe to {name} for {price} {currency}? This will be deducted from your wallet balance.',
+    /** Currency-free confirmation. Replaces confirmText on every live surface. */
+    confirmTextNoPrice: 'Subscribe to {name}?',
     confirm: 'Confirm',
     subscribeSuccess: 'Subscribed successfully!',
-    badgePro: 'Pro',
+    // "Pro plan", not "Pro". This badge is granted by PLAN PURCHASE and sits
+    // next to badgeTrustedBusiness; a bare "Pro" reads as a platform trust
+    // signal and implies verification that has not happened.
+    badgePro: 'Pro plan',
     badgeTrustedBusiness: 'Trusted',
     usageTitle: 'Your plan usage',
     usageConcurrentNote:

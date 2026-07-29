@@ -1411,11 +1411,20 @@ export const arDictionary: Dictionary = {
     choosePlan: 'اختر الخطة',
     activePlan: 'فعّالة',
     monthly: 'شهرياً',
+    /** LC-02: what a free plan costs, written as a word, never as 0.00 EGP. */
+    freePrice: 'مجاني',
+    /** Suffix so a paid-plan badge names the plan rather than standing alone. */
+    planNoun: 'خطة',
     confirmTitle: 'تأكيد الاشتراك',
+    // LEGACY، غير معروضة: تذكر مبلغاً بالجنيه وخصماً من المحفظة المُجمّدة.
     confirmText: 'الاشتراك في {name} مقابل {price} {currency}؟ سيتم خصم المبلغ من رصيد محفظتك.',
+    /** Currency-free confirmation. Replaces confirmText on every live surface. */
+    confirmTextNoPrice: 'الاشتراك في {name}؟',
     confirm: 'تأكيد',
     subscribeSuccess: 'تم الاشتراك بنجاح!',
-    badgePro: 'Pro',
+    // "خطة Pro" وليس "Pro" فقط: هذه الشارة تُمنح بالشراء وتظهر بجانب شارة
+    // الموثوقية، والاسم المجرّد يوحي بتحقّق لم يحدث.
+    badgePro: 'خطة Pro',
     badgeTrustedBusiness: 'موثوق',
     usageTitle: 'استخدام خطتك',
     usageConcurrentNote: 'هذه خانات حية وليست حدوداً شهرية. إنهاء العمل أو إغلاقه يُفرّغ السعة.',
