@@ -1,7 +1,9 @@
+import { redactContactDetails } from '../../utils/contact-redaction.js';
 import { HttpError } from '../../utils/http-error.js';
 import { NotificationsService } from '../notifications/notifications.service.js';
 import { SettingsService } from '../settings/settings.service.js';
 
+import { ChatAccessService } from './chat-access.service.js';
 import { ChatRepository } from './chat.repository.js';
 import type { SendMessageInput } from './chat.validation.js';
 
@@ -10,6 +12,7 @@ export class ChatService {
     private readonly repo: ChatRepository = new ChatRepository(),
     private readonly settingsService: SettingsService = new SettingsService(),
     private readonly notificationsService: NotificationsService = new NotificationsService(),
+    private readonly chatAccess: ChatAccessService = new ChatAccessService(),
   ) {}
 
   async listConversations(userId: string) {
@@ -41,9 +44,49 @@ export class ChatService {
     if (conv.participant_a !== userId && conv.participant_b !== userId) {
       throw new HttpError({ statusCode: 403, code: 'FORBIDDEN', message: 'Not a participant.' });
     }
+
+    const access = await this.chatAccess.resolveForConversation({
+      conversationId,
+      participantA: conv.participant_a,
+      participantB: conv.participant_b,
+    });
+    const messages = await this.repo.getMessages(conversationId, 50, 0, userId);
+
     return {
-      messages: await this.repo.getMessages(conversationId, 50, 0, userId),
+      messages: messages.map((m) => this.presentMessage(m, access.unlocked)),
       status: conv.status,
+      contactLocked: !access.unlocked,
+      // A conversation that lost its reason to exist stays readable but closed.
+      readOnly: !access.allowed,
+    };
+  }
+
+  /**
+   * Shape a stored message for a reader.
+   *
+   * Unlocked: reveal `raw_content`, the text as typed. Locked: serve the
+   * redacted `body`, drop `raw_content` entirely, and strip every attachment
+   * channel — an image of a business card, a link, or a pinned location all
+   * defeat text redaction.
+   */
+  private presentMessage(message: Record<string, unknown>, unlocked: boolean) {
+    if (unlocked) {
+      const { raw_content: raw, ...rest } = message;
+      return {
+        ...rest,
+        body: (raw as string | null) ?? (message.body as string | null),
+        contact_locked: false,
+      };
+    }
+    const { raw_content: _raw, ...rest } = message;
+    return {
+      ...rest,
+      attachment_url: null,
+      link_url: null,
+      location_lat: null,
+      location_lng: null,
+      location_label: null,
+      contact_locked: true,
     };
   }
 
@@ -76,20 +119,74 @@ export class ChatService {
       });
     }
 
-    const body =
-      input.messageType === 'link' || input.messageType === 'location'
-        ? (input.body ?? '').trim() || null
-        : (input.body ?? '').trim() || null;
+    const access = await this.chatAccess.resolveForConversation({
+      conversationId,
+      participantA: conv.participant_a,
+      participantB: conv.participant_b,
+    });
+
+    // No live reason for this conversation: readable, but closed to new
+    // messages. Deleting history would destroy the moderation trail.
+    if (!access.allowed) {
+      throw new HttpError({
+        statusCode: 403,
+        code: 'CHAT_REQUIRES_ACTIVE_JOB',
+        message:
+          'This conversation is closed because you have no active job together. Use the chat on the relevant request or booking.',
+      });
+    }
+
+    const rawBody = (input.body ?? '').trim() || null;
     const recipientId = conv.participant_a === userId ? conv.participant_b : conv.participant_a;
+
+    let body = rawBody;
+    let contactRedacted = false;
+    let rawContent: string | null = null;
+    let attachmentUrl = input.attachmentUrl ?? null;
+    let linkUrl = input.linkUrl ?? null;
+    let lat = input.lat ?? null;
+    let lng = input.lng ?? null;
+    let label = input.label ?? null;
+    let messageType = input.messageType ?? 'text';
+
+    if (!access.unlocked) {
+      // Attachments, links and pinned locations are blocked outright before
+      // activation: each is a complete bypass of text redaction.
+      if (attachmentUrl || linkUrl || lat != null || lng != null) {
+        throw new HttpError({
+          statusCode: 403,
+          code: 'ATTACHMENTS_LOCKED_UNTIL_ACTIVATION',
+          message:
+            'Attachments, links and locations unlock once the job is activated. Please describe it in text for now.',
+        });
+      }
+      attachmentUrl = null;
+      linkUrl = null;
+      lat = null;
+      lng = null;
+      label = null;
+      messageType = 'text';
+
+      if (await this.chatAccess.isMaskingEnabled()) {
+        const result = redactContactDetails(rawBody ?? '');
+        body = result.content || null;
+        contactRedacted = result.redacted;
+        // Keep the original for moderation and for reveal after activation.
+        rawContent = rawBody;
+      }
+    }
+
     const saved = await this.repo.sendMessage(conversationId, userId, {
       body,
       replyToId: input.replyToId ?? null,
-      messageType: input.messageType ?? 'text',
-      attachmentUrl: input.attachmentUrl ?? null,
-      linkUrl: input.linkUrl ?? null,
-      locationLat: input.lat ?? null,
-      locationLng: input.lng ?? null,
-      locationLabel: input.label ?? null,
+      messageType,
+      attachmentUrl,
+      linkUrl,
+      locationLat: lat,
+      locationLng: lng,
+      locationLabel: label,
+      contactRedacted,
+      rawContent,
     });
     const preview =
       body && body.length > 0
@@ -111,7 +208,12 @@ export class ChatService {
         payload: { conversationId, messageId: saved.id },
       })
       .catch(() => {});
-    return saved;
+
+    // The controller broadcasts this exact object over the socket room. Returning
+    // the raw row would leak `raw_content` to every socket listener — the socket
+    // path must redact identically to the HTTP path, or it simply becomes the
+    // next bypass.
+    return this.presentMessage(saved as unknown as Record<string, unknown>, access.unlocked);
   }
 
   async deleteMessage(
@@ -177,6 +279,19 @@ export class ChatService {
         statusCode: 503,
         code: 'CHAT_PAUSED',
         message: 'Chat is temporarily disabled.',
+      });
+    }
+
+    // Decision D2. Arbitrary direct messaging is what made every bid-chat
+    // protection pointless: a provider could skip the gated thread entirely and
+    // DM the customer. A conversation now needs a reason to exist.
+    const access = await this.chatAccess.resolveForPair(userId, otherUserId);
+    if (!access.allowed) {
+      throw new HttpError({
+        statusCode: 403,
+        code: 'CHAT_REQUIRES_ACTIVE_JOB',
+        message:
+          'You can message this person once you have an active job together. Until then, use the chat on the relevant request or booking.',
       });
     }
 

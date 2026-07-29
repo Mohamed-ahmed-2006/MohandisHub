@@ -81,7 +81,9 @@ export class ChatRepository {
       );
     }
     const { rows } = await getPool().query(
-      `SELECT m.*, COALESCE(u.display_name, u.email) AS sender_name
+      // No email fallback: that leaked the sender's address to the other party
+      // before any activation. Same defect as the needs listings had.
+      `SELECT m.*, COALESCE(u.display_name, 'Member') AS sender_name
        FROM messages m
        JOIN users u ON u.id = m.sender_id
        WHERE m.conversation_id = $1
@@ -96,7 +98,9 @@ export class ChatRepository {
 
   async findMessage(messageId: string, conversationId: string): Promise<MessageRow | null> {
     const { rows } = await getPool().query(
-      `SELECT m.*, COALESCE(u.display_name, u.email) AS sender_name
+      // No email fallback: that leaked the sender's address to the other party
+      // before any activation. Same defect as the needs listings had.
+      `SELECT m.*, COALESCE(u.display_name, 'Member') AS sender_name
        FROM messages m
        JOIN users u ON u.id = m.sender_id
        WHERE m.id = $1 AND m.conversation_id = $2`,
@@ -117,14 +121,19 @@ export class ChatRepository {
       locationLat?: number | null;
       locationLng?: number | null;
       locationLabel?: string | null;
+      /** True when contact details were stripped from `body`. */
+      contactRedacted?: boolean;
+      /** Original text, kept for moderation and post-activation reveal. */
+      rawContent?: string | null;
     },
   ): Promise<MessageRow> {
     const pool = getPool();
     const { rows } = await pool.query(
       `INSERT INTO messages (
         conversation_id, sender_id, body, reply_to_id, message_type,
-        attachment_url, link_url, location_lat, location_lng, location_label
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *`,
+        attachment_url, link_url, location_lat, location_lng, location_label,
+        contact_redacted, raw_content
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) RETURNING *`,
       [
         conversationId,
         senderId,
@@ -136,6 +145,8 @@ export class ChatRepository {
         payload.locationLat ?? null,
         payload.locationLng ?? null,
         payload.locationLabel ?? null,
+        payload.contactRedacted ?? false,
+        payload.rawContent ?? null,
       ],
     );
     await pool.query(
