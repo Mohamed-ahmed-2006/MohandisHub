@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react';
 
 import { AdminAdsTab } from './admin-ads-tab';
 import { AdminCategoriesTab } from './admin-categories-tab';
+import { AdminCommandPalette } from './admin-command-palette';
 import { AdminCouponsTab } from './admin-coupons-tab';
 import { AdminDashboardTab } from './admin-dashboard-tab';
 import { AdminDisputesTab } from './admin-disputes-tab';
@@ -69,6 +70,7 @@ export const AdminPanel = ({ locale, dictionary }: AdminPanelProps) => {
   const router = useRouter();
   const { authUser, accessToken, refreshSession, isAuthenticated, isReady, authGuard } = useAuth();
   const [activeTab, setActiveTab] = useState<TabId>('dashboard');
+  const [cmdPaletteOpen, setCmdPaletteOpen] = useState(false);
 
   useEffect(() => {
     if (!isReady) return;
@@ -120,22 +122,22 @@ export const AdminPanel = ({ locale, dictionary }: AdminPanelProps) => {
     },
     {
       id: 'reviewReports',
-      label: dictionary.admin.tabs.reviewReports ?? '',
+      label: dictionary.admin.tabs.reviewReports || 'Review reports',
       permission: 'manage_verifications',
     },
-    { id: 'support', label: dictionary.admin.tabs.support ?? '', permission: 'manage_support' },
+    { id: 'support', label: dictionary.admin.tabs.support || 'Support', permission: 'manage_support' },
     {
       id: 'notifications',
-      label: dictionary.admin.tabs.notifications ?? '',
+      label: dictionary.admin.tabs.notifications || 'Notifications',
       permission: 'manage_notifications',
     },
-    { id: 'ads', label: dictionary.admin.tabs.ads ?? 'Advertisements', permission: 'manage_ads' },
+    { id: 'ads', label: dictionary.admin.tabs.ads || 'Advertisements', permission: 'manage_ads' },
     { id: 'media', label: 'Media library', permission: 'manage_media' },
-    { id: 'settings', label: dictionary.admin.tabs.settings, permission: 'manage_settings' },
+    { id: 'settings', label: dictionary.admin.tabs.settings || 'Settings', permission: 'manage_settings' },
     { id: 'operations', label: 'Operations', permission: 'super_admin' },
     {
       id: 'retention',
-      label: dictionary.admin.tabs.retention ?? 'Retention',
+      label: dictionary.admin.tabs.retention || 'Retention',
       permission: 'manage_retention',
     },
   ];
@@ -171,8 +173,47 @@ export const AdminPanel = ({ locale, dictionary }: AdminPanelProps) => {
     <main className="admin-panel-main">
       <Container className="admin-panel-container">
         <div className="admin-panel-header">
-          <h1 className="admin-panel-title">{dictionary.admin.title}</h1>
+          <div className="admin-panel-title-group">
+            <h1 className="admin-panel-title">{dictionary.admin.title}</h1>
+            <div className="admin-status-pill">
+              <span className="admin-status-dot admin-status-dot--active" />
+              <span>{locale === 'ar' ? 'نظام الإدارة نشط' : 'Engine active'}</span>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            className="admin-cmd-trigger-btn"
+            onClick={() => setCmdPaletteOpen(true)}
+          >
+            <svg
+              width="15"
+              height="15"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <circle cx="11" cy="11" r="8" />
+              <line x1="21" y1="21" x2="16.65" y2="16.65" />
+            </svg>
+            <span>
+              {locale === 'ar' ? 'بحث سريع وأوامر... (Ctrl + K)' : 'Search or command... (Ctrl + K)'}
+            </span>
+            <span className="admin-cmd-trigger-key">⌘K</span>
+          </button>
         </div>
+
+        <AdminCommandPalette
+          isOpen={cmdPaletteOpen}
+          onClose={() => setCmdPaletteOpen(false)}
+          onSelectTab={(tabId) => setActiveTab(tabId)}
+          tabs={filteredTabs}
+          locale={locale}
+        />
 
         <div className="admin-panel-tabs">
           {filteredTabs.map((tab) => (

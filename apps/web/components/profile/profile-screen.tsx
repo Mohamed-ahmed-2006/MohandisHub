@@ -20,6 +20,8 @@ import { useCallback, useEffect, useState } from 'react';
 
 import { getVisibleProfileSections, type ProfileSectionId } from './profile-screen-sections';
 
+import { MhcCreditsScreen } from '@/components/app/mhc-credits-screen';
+import { WalletSettingsScreen } from '@/components/app/wallet-settings-screen';
 import { useAppStatus } from '@/components/app-status-provider';
 import { useAuth } from '@/components/auth/auth-provider';
 import { LanguageToggle } from '@/components/language-toggle';
@@ -33,6 +35,7 @@ import { SkeletonForm } from '@/components/ui/skeleton';
 import { resolvePublicAssetUrl, toAbsoluteAssetUrl } from '@/lib/asset-url';
 import { COUNTRIES } from '@/lib/data/countries';
 import { getApiBaseUrl } from '@/lib/env';
+import { useI18n } from '@/lib/i18n/context';
 import { buildLocalePath } from '@/lib/i18n/path';
 import type { Dictionary, Locale } from '@/lib/i18n/types';
 import { notificationsApiClient } from '@/lib/notifications/client';
@@ -120,19 +123,19 @@ const AccountPreferences = ({ locale, dictionary, accessToken }: AccountPreferen
     };
   }, [accessToken]);
 
-  const savePreference = async (groupIndex: number, preferenceIndex: number, enabled: boolean) => {
-    const pref = groups[groupIndex]?.preferences[preferenceIndex];
-    if (!pref || pref.required) return;
-    const nextGroups = groups.map((group, gi) =>
-      gi !== groupIndex
-        ? group
-        : {
-            ...group,
-            preferences: group.preferences.map((p, pi) =>
-              pi === preferenceIndex ? { ...p, enabled } : p,
-            ),
-          },
-    );
+  const savePreferenceByRef = async (
+    targetPref: (typeof groups)[0]['preferences'][0],
+    enabled: boolean,
+  ) => {
+    if (targetPref.required) return;
+    const nextGroups = groups.map((group) => ({
+      ...group,
+      preferences: group.preferences.map((p) =>
+        p.notificationType === targetPref.notificationType && p.channel === targetPref.channel
+          ? { ...p, enabled }
+          : p,
+      ),
+    }));
     setGroups(nextGroups);
     setPreferencesSaving(true);
     setPreferencesMessage(null);
@@ -155,6 +158,65 @@ const AccountPreferences = ({ locale, dictionary, accessToken }: AccountPreferen
       setPreferencesSaving(false);
     }
   };
+
+  const isCategoryAllEnabled = (group: (typeof groups)[0]) =>
+    group.preferences.filter((p) => !p.required).every((p) => p.enabled);
+
+  const toggleCategoryAll = async (groupIndex: number, enable: boolean) => {
+    const nextGroups = groups.map((group, gi) =>
+      gi !== groupIndex
+        ? group
+        : {
+            ...group,
+            preferences: group.preferences.map((p) => (p.required ? p : { ...p, enabled: enable })),
+          },
+    );
+    setGroups(nextGroups);
+    setPreferencesSaving(true);
+    setPreferencesMessage(null);
+    try {
+      const flattened = nextGroups.flatMap((group) =>
+        group.preferences.map((p) => ({
+          notificationType: p.notificationType,
+          channel: p.channel,
+          enabled: p.enabled,
+        })),
+      );
+      const saved = await notificationsApiClient.updatePreferences(accessToken, {
+        preferences: flattened,
+      });
+      setGroups(saved.groups);
+      setPreferencesMessage('Preferences updated.');
+    } catch {
+      setPreferencesMessage('Could not save notification preferences.');
+    } finally {
+      setPreferencesSaving(false);
+    }
+  };
+
+  const getGroupEvents = (group: (typeof groups)[0]) => {
+    const map = new Map<
+      string,
+      {
+        type: string;
+        hasRequired: boolean;
+        channels: Record<string, (typeof group.preferences)[0]>;
+      }
+    >();
+    for (const pref of group.preferences) {
+      const existing = map.get(pref.notificationType) ?? {
+        type: pref.notificationType,
+        hasRequired: false,
+        channels: {},
+      };
+      if (pref.required) existing.hasRequired = true;
+      existing.channels[pref.channel] = pref;
+      map.set(pref.notificationType, existing);
+    }
+    return Array.from(map.values());
+  };
+
+
 
   const togglePersonalized = async (enabled: boolean) => {
     setPersonalized(enabled);
@@ -185,10 +247,13 @@ const AccountPreferences = ({ locale, dictionary, accessToken }: AccountPreferen
         return;
       }
       const registration = await navigator.serviceWorker.register('/sw.js');
-      const key = Uint8Array.from(
-        atob(readiness.publicKey.replace(/-/g, '+').replace(/_/g, '/')),
-        (char) => char.charCodeAt(0),
-      );
+      const base64 = readiness.publicKey.replace(/-/g, '+').replace(/_/g, '/');
+      const pad = '='.repeat((4 - (base64.length % 4)) % 4);
+      const rawData = atob(base64 + pad);
+      const key = new Uint8Array(rawData.length);
+      for (let i = 0; i < rawData.length; ++i) {
+        key[i] = rawData.charCodeAt(i);
+      }
       const subscription = await registration.pushManager.subscribe({
         userVisibleOnly: true,
         applicationServerKey: key,
@@ -204,8 +269,9 @@ const AccountPreferences = ({ locale, dictionary, accessToken }: AccountPreferen
         userAgent: navigator.userAgent,
       });
       setPreferencesMessage('Push notifications enabled on this device.');
-    } catch {
-      setPreferencesMessage('Could not enable push notifications.');
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Could not enable push notifications.';
+      setPreferencesMessage(`Could not enable push notifications: ${msg}`);
     }
   };
 
@@ -275,49 +341,131 @@ const AccountPreferences = ({ locale, dictionary, accessToken }: AccountPreferen
             ? 'تنبيهات الأمان والأموال والحجوزات المهمة لا يمكن إيقافها بالكامل.'
             : 'Security, money, dispute, and critical reservation notices cannot be fully disabled.'}
         </p>
-        {pushReady && !pushReady.enabled && (
-          <p className="profile-screen-muted">
-            {locale === 'ar'
-              ? 'تنبيهات الجهاز جاهزة في الواجهة، لكنها تحتاج مفاتيح VAPID في env.'
-              : 'Push controls are ready, but VAPID env keys are required before delivery works.'}
-          </p>
-        )}
-        <button
-          type="button"
-          className="profile-screen-button profile-screen-button--secondary"
-          onClick={() => void enablePush()}
-        >
-          {locale === 'ar' ? 'تفعيل تنبيهات الجهاز' : 'Enable push on this device'}
-        </button>
+
+        {/* Interactive Push Device Status Banner */}
+        <div className="profile-screen-push-banner">
+          <div className="profile-screen-push-banner-info">
+            <div className="profile-screen-push-status-pill">
+              <span className="profile-screen-status-dot profile-screen-status-dot--active" />
+              <span>{locale === 'ar' ? 'تنبيهات الجهاز' : 'Push Notifications'}</span>
+            </div>
+            <p className="profile-screen-push-desc">
+              {locale === 'ar'
+                ? 'تصلك التنبيهات فورًا على هذا الجهاز عند وصول رسائل أو تحديثات الحجز.'
+                : 'Receive instant push alerts on this device for messages, bookings, and payments.'}
+            </p>
+          </div>
+          <button
+            type="button"
+            className="profile-screen-push-cta-btn"
+            onClick={() => void enablePush()}
+          >
+            <svg
+              width="15"
+              height="15"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" />
+              <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" />
+            </svg>
+            <span>{locale === 'ar' ? 'تفعيل تنبيهات الجهاز' : 'Enable push on this device'}</span>
+          </button>
+        </div>
+
         {preferencesMessage && <p className="profile-screen-muted">{preferencesMessage}</p>}
         {preferencesLoading ? (
           <p className="profile-screen-muted">{dictionary.admin?.loading ?? 'Loading...'}</p>
         ) : (
           <div className="profile-screen-notification-grid">
-            {groups.map((group, groupIndex) => (
-              <section key={group.category} className="profile-screen-pref-card">
-                <h5 className="profile-screen-label">{categoryLabel(group.category)}</h5>
-                {group.preferences.map((pref, preferenceIndex) => (
-                  <label
-                    key={`${pref.notificationType}-${pref.channel}`}
-                    className="profile-screen-toggle-row"
-                  >
-                    <span>
-                      {pref.notificationType.replaceAll('_', ' ')} / {channelLabel(pref.channel)}
-                      {pref.required ? (locale === 'ar' ? ' - مطلوب' : ' - required') : ''}
-                    </span>
-                    <input
-                      type="checkbox"
-                      checked={pref.enabled}
-                      disabled={pref.required || preferencesSaving}
-                      onChange={(event) =>
-                        void savePreference(groupIndex, preferenceIndex, event.target.checked)
-                      }
-                    />
-                  </label>
-                ))}
-              </section>
-            ))}
+            {groups.map((group, groupIndex) => {
+              const events = getGroupEvents(group);
+              const allEnabled = isCategoryAllEnabled(group);
+              return (
+                <section key={group.category} className="profile-screen-pref-card">
+                  <div className="profile-screen-category-header">
+                    <h5 className="profile-screen-category-title">{categoryLabel(group.category)}</h5>
+                    <button
+                      type="button"
+                      className="profile-screen-master-toggle-btn"
+                      onClick={() => void toggleCategoryAll(groupIndex, !allEnabled)}
+                    >
+                      {allEnabled
+                        ? locale === 'ar'
+                          ? 'إيقاف الاختياري'
+                          : 'Mute optional'
+                        : locale === 'ar'
+                          ? 'تفعيل الكل'
+                          : 'Enable all'}
+                    </button>
+                  </div>
+                  <div className="profile-screen-matrix-list">
+                    {events.map((evt) => (
+                      <div key={evt.type} className="profile-screen-matrix-row">
+                        <div className="profile-screen-matrix-event">
+                          <span className="profile-screen-matrix-event-name">
+                            {evt.type.replaceAll('_', ' ')}
+                          </span>
+                          {evt.hasRequired && (
+                            <span className="profile-screen-lock-badge" title="Required by system">
+                              <svg
+                                width="11"
+                                height="11"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth="2.2"
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                aria-hidden="true"
+                                style={{ display: 'inline-block', verticalAlign: 'middle', marginInlineEnd: '0.2rem' }}
+                              >
+                                <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                                <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                              </svg>
+                              <span>{locale === 'ar' ? 'مطلوب' : 'Required'}</span>
+                            </span>
+                          )}
+                        </div>
+                        <div className="profile-screen-matrix-channels">
+                          {(['in_app', 'email', 'push'] as const).map((ch) => {
+                            const pref = evt.channels[ch];
+                            if (!pref) return null;
+                            return (
+                              <label key={ch} className="profile-screen-channel-chip">
+                                <span className="profile-screen-channel-tag">{channelLabel(ch)}</span>
+                                <span className="profile-screen-toggle-switch profile-screen-toggle-switch--sm">
+                                  <input
+                                    type="checkbox"
+                                    className="profile-screen-toggle-switch-input"
+                                    checked={pref.enabled}
+                                    disabled={pref.required || preferencesSaving}
+                                    onChange={(event) =>
+                                      void savePreferenceByRef(pref, event.target.checked)
+                                    }
+                                  />
+                                  <span
+                                    className="profile-screen-toggle-switch-track"
+                                    aria-hidden="true"
+                                  >
+                                    <span className="profile-screen-toggle-switch-knob" />
+                                  </span>
+                                </span>
+                              </label>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              );
+            })}
           </div>
         )}
       </div>
@@ -328,11 +476,17 @@ const AccountPreferences = ({ locale, dictionary, accessToken }: AccountPreferen
               ? 'استخدام نشاطي لتحسين الاقتراحات'
               : 'Use my activity for personalized recommendations'}
           </span>
-          <input
-            type="checkbox"
-            checked={personalized}
-            onChange={(event) => void togglePersonalized(event.target.checked)}
-          />
+          <span className="profile-screen-toggle-switch">
+            <input
+              type="checkbox"
+              className="profile-screen-toggle-switch-input"
+              checked={personalized}
+              onChange={(event) => void togglePersonalized(event.target.checked)}
+            />
+            <span className="profile-screen-toggle-switch-track" aria-hidden="true">
+              <span className="profile-screen-toggle-switch-knob" />
+            </span>
+          </span>
         </label>
       </div>
     </div>
@@ -343,8 +497,12 @@ function getSectionLabel(
   sectionId: ProfileSectionId,
   dictionary: Dictionary,
   roleProfileKind: RoleProfileKind | null,
+  locale?: string,
 ): string {
   if (sectionId === 'account') return dictionary.profile.accountTab;
+  if (sectionId === 'preferences')
+    return locale === 'ar' ? 'تفضيلات التنبيهات' : 'Notification Preferences';
+  if (sectionId === 'wallet') return locale === 'ar' ? 'المحفظة والرصيد' : 'Wallet & Balance';
   if (sectionId === 'profile') {
     if (roleProfileKind === 'business') return dictionary.profile.businessTab;
     if (roleProfileKind === 'craftsman') return dictionary.profile.craftsmanTab;
@@ -733,8 +891,45 @@ const AccountForm = ({
           {saving ? dictionary.common.continue : dictionary.common.save}
         </button>
       </form>
-      <AccountPreferences locale={locale} dictionary={dictionary} accessToken={accessToken} />
     </section>
+  );
+};
+
+const WalletTab = () => {
+  const { locale } = useI18n();
+  const loc = locale === 'ar' ? 'ar' : 'en';
+  const { authUser } = useAuth();
+  const isProvider =
+    authUser?.role === 'expert' || authUser?.role === 'craftsman' || authUser?.role === 'business';
+  const [subTab, setSubTab] = useState<'mhc' | 'cash'>(isProvider ? 'mhc' : 'cash');
+
+  return (
+    <div id="wallet-settings" className="unified-wallet-tab">
+      {isProvider && (
+        <div className="unified-wallet-subtabs">
+          <button
+            type="button"
+            className={`unified-wallet-subtab${subTab === 'mhc' ? ' is-active' : ''}`}
+            onClick={() => setSubTab('mhc')}
+          >
+            🪙 {loc === 'ar' ? 'نقاط المنصة (MHC)' : 'Platform Credits (MHC)'}
+          </button>
+          <button
+            type="button"
+            className={`unified-wallet-subtab${subTab === 'cash' ? ' is-active' : ''}`}
+            onClick={() => setSubTab('cash')}
+          >
+            💵 {loc === 'ar' ? 'الرصيد المالي (EGP)' : 'Cash Balance (EGP)'}
+          </button>
+        </div>
+      )}
+
+      {isProvider && subTab === 'mhc' ? (
+        <MhcCreditsScreen />
+      ) : (
+        <WalletSettingsScreen hideHeader />
+      )}
+    </div>
   );
 };
 
@@ -745,6 +940,41 @@ export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
   const { authUser, accessToken, isAuthenticated, isReady, authGuard, updateAuthUser } = useAuth();
   const { status } = useAppStatus();
   const hourlyPricingEnabled = status?.featureHourlyPricingEnabled === true;
+  const [activeTab, setActiveTab] = useState<ProfileSectionId>(() => {
+    if (typeof window !== 'undefined') {
+      const urlParams = new URLSearchParams(window.location.search);
+      const tabParam = urlParams.get('tab');
+      if (tabParam === 'wallet' || tabParam === 'balance') return 'wallet';
+      if (tabParam === 'account') return 'account';
+      if (tabParam === 'preferences') return 'preferences';
+      if (tabParam === 'profile') return 'profile';
+      if (tabParam === 'verification') return 'verification';
+
+      if (window.location.hash) {
+        const hash = window.location.hash.replace('#', '');
+        if (hash === 'notification-preferences' || hash === 'preferences') return 'preferences';
+        if (hash === 'wallet-settings' || hash === 'wallet' || hash === 'balance') return 'wallet';
+        if (hash === 'profile-settings' || hash === 'profile') return 'profile';
+        if (hash === 'verification-settings' || hash === 'verification') return 'verification';
+        if (hash === 'account-settings' || hash === 'account') return 'account';
+      }
+    }
+    return 'account';
+  });
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const urlParams = new URLSearchParams(window.location.search);
+    const tabParam = urlParams.get('tab');
+    if (tabParam === 'wallet' || tabParam === 'balance') {
+      setActiveTab('wallet');
+    } else if (window.location.hash) {
+      const hash = window.location.hash.replace('#', '');
+      if (hash === 'wallet-settings' || hash === 'wallet' || hash === 'balance') {
+        setActiveTab('wallet');
+      }
+    }
+  }, []);
   const [expertProfile, setExpertProfile] = useState<ExpertProfile | null>(null);
   const [craftsmanProfile, setCraftsmanProfile] = useState<CraftsmanProfile | null>(null);
   const [businessProfile, setBusinessProfile] = useState<BusinessProfile | null>(null);
@@ -1381,25 +1611,52 @@ export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
           <h1 className="app-page-title">{dictionary.nav.settings}</h1>
         </div>
 
-        <nav className="profile-screen-jump-nav" aria-label={dictionary.nav.settings}>
-          {visibleSections.map((section) => (
-            <a key={section.id} href={`#${section.anchorId}`} className="profile-screen-jump-link">
-              {getSectionLabel(section.id, dictionary, roleProfileKind)}
-            </a>
-          ))}
+        <nav className="profile-screen-tabs-bar" role="tablist" aria-label={dictionary.nav.settings}>
+          {visibleSections.map((section) => {
+            const isActive = activeTab === section.id;
+            return (
+              <button
+                key={section.id}
+                type="button"
+                role="tab"
+                aria-selected={isActive}
+                className={`profile-screen-tab-btn ${isActive ? 'profile-screen-tab-btn--active' : ''}`}
+                onClick={() => {
+                  setActiveTab(section.id);
+                  if (typeof window !== 'undefined') {
+                    window.location.hash = section.anchorId;
+                  }
+                }}
+              >
+                <span>{getSectionLabel(section.id, dictionary, roleProfileKind, locale)}</span>
+              </button>
+            );
+          })}
         </nav>
 
         {/* Account tab — all roles */}
-        <AccountForm
-          authUser={authUser}
-          accessToken={accessToken}
-          locale={locale}
-          dictionary={dictionary}
-          onUserUpdated={updateAuthUser}
-        />
+        {activeTab === 'account' && (
+          <AccountForm
+            authUser={authUser}
+            accessToken={accessToken}
+            locale={locale}
+            dictionary={dictionary}
+            onUserUpdated={updateAuthUser}
+          />
+        )}
+
+        {/* Preferences tab */}
+        {activeTab === 'preferences' && (
+          <section id="notification-preferences" className="profile-screen-card profile-screen-section-card">
+            <AccountPreferences locale={locale} dictionary={dictionary} accessToken={accessToken} />
+          </section>
+        )}
+
+        {/* Wallet & Balance tab */}
+        {activeTab === 'wallet' && <WalletTab />}
 
         {/* Role-specific profile tab */}
-        {hasRoleProfile && loading && (
+        {activeTab === 'profile' && hasRoleProfile && loading && (
           <section
             id="profile-settings"
             className="profile-screen-card profile-screen-section-card"
@@ -2580,7 +2837,7 @@ export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
           </section>
         )}
 
-        {hasRoleProfile && (
+        {activeTab === 'verification' && hasRoleProfile && (
           <section
             id="verification-settings"
             className="profile-screen-card profile-screen-documents-card profile-screen-section-card"

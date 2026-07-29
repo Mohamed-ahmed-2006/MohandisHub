@@ -8,10 +8,14 @@ import { Container } from '@/components/ui/container';
 import { reservationsApiClient } from '@/lib/reservations/client';
 import { getPrivateFileOpenableUrl, uploadPrivateFile } from '@/lib/upload/client';
 
-import '@/app/dashboard.css';
+import './disputes-screen.css';
 
 function formatMoney(amount: number, currency = 'EGP') {
-  return `${amount.toFixed(2)} ${currency}`;
+  const formatted = new Intl.NumberFormat('en-US', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(amount);
+  return `${formatted} ${currency}`;
 }
 
 export const DisputesScreen = () => {
@@ -99,171 +103,215 @@ export const DisputesScreen = () => {
 
   if (!isReady) {
     return (
-      <Container>
-        <p className="dashboard-loading">Loading...</p>
+      <Container className="disputes-screen-container">
+        <p className="admin-empty">Loading dispute center...</p>
       </Container>
     );
   }
 
   if (!isAuthenticated || !accessToken) {
     return (
-      <Container>
-        <p className="dashboard-empty">Please sign in to view disputes.</p>
+      <Container className="disputes-screen-container">
+        <p className="admin-empty">Please sign in to view your dispute cases.</p>
       </Container>
     );
   }
 
   return (
-    <Container className="dashboard-container">
-      <header className="dashboard-header">
-        <div>
-          <h1 className="dashboard-title">Dispute Center</h1>
-          <p className="dashboard-subtitle">
-            Track reservation disputes, evidence, notes, and settlement activity.
-          </p>
-        </div>
-      </header>
+    <main className="disputes-screen-main">
+      <Container className="disputes-screen-container">
+        <header className="history-header">
+          <div>
+            <h1 className="history-screen-title">Dispute Center</h1>
+            <p className="admin-section-desc" style={{ margin: '0.2rem 0 0' }}>
+              Track reservation disputes, submit evidence, inspect money movements, and communicate.
+            </p>
+          </div>
+        </header>
 
-      {error && <p className="dashboard-alert dashboard-alert--error">{error}</p>}
+        {error && <p className="admin-error-banner">{error}</p>}
 
-      <div className="dashboard-grid dashboard-grid--two">
-        <section className="dashboard-card">
-          <h2>Cases</h2>
-          {items.length === 0 ? (
-            <p className="dashboard-empty">No dispute cases yet.</p>
-          ) : (
-            <div className="dashboard-list">
-              {items.map((item) => (
-                <button
-                  key={item.dispute.id}
-                  type="button"
-                  className={`dashboard-list-item ${selectedId === item.dispute.id ? 'dashboard-list-item--active' : ''}`}
-                  onClick={() => setSelectedId(item.dispute.id)}
-                >
-                  <strong>{item.reservation.serviceTitle ?? 'Reservation dispute'}</strong>
-                  <span>{item.dispute.status}</span>
-                  <small>
-                    {item.evidenceCount} evidence · {item.noteCount} notes ·{' '}
-                    {new Date(item.lastActivityAt).toLocaleString()}
-                  </small>
-                </button>
-              ))}
-            </div>
-          )}
-        </section>
+        <div className="disputes-grid-layout">
+          {/* Cases Column */}
+          <section className="disputes-cases-card">
+            <h3 className="disputes-cases-title">Dispute Cases ({items.length})</h3>
+            {items.length === 0 ? (
+              <p className="admin-empty">No active dispute cases.</p>
+            ) : (
+              items.map((item) => {
+                const isActive = selectedId === item.dispute.id;
+                return (
+                  <button
+                    key={item.dispute.id}
+                    type="button"
+                    className={`disputes-case-btn ${isActive ? 'disputes-case-btn--active' : ''}`}
+                    onClick={() => setSelectedId(item.dispute.id)}
+                  >
+                    <div className="disputes-case-header">
+                      <span className="disputes-case-name">
+                        {item.reservation.serviceTitle ?? 'Reservation dispute'}
+                      </span>
+                      <span className={`dispute-status-badge dispute-status-badge--${item.dispute.status}`}>
+                        {item.dispute.status}
+                      </span>
+                    </div>
+                    <span className="disputes-case-meta">
+                      {item.evidenceCount} evidence · {item.noteCount} notes
+                    </span>
+                    <span className="disputes-case-meta" style={{ fontSize: '0.72rem' }}>
+                      {new Date(item.lastActivityAt).toLocaleString()}
+                    </span>
+                  </button>
+                );
+              })
+            )}
+          </section>
 
-        <section className="dashboard-card">
-          {!caseFile ? (
-            <p className="dashboard-empty">Select a case.</p>
-          ) : (
-            <div className="reservation-detail">
-              <h2>{caseFile.reservation.serviceTitle ?? 'Reservation dispute'}</h2>
-              <p className="dashboard-card-meta">
-                Status: {caseFile.dispute.status} · Reason: {caseFile.dispute.reason}
-              </p>
-              {caseFile.dispute.description && <p>{caseFile.dispute.description}</p>}
+          {/* Case Detail Column */}
+          <section className="disputes-detail-card">
+            {!caseFile ? (
+              <p className="admin-empty">Select a dispute case on the left to inspect.</p>
+            ) : (
+              <>
+                <div className="disputes-detail-header">
+                  <div>
+                    <h2 className="disputes-detail-title">
+                      {caseFile.reservation.serviceTitle ?? 'Reservation Dispute'}
+                    </h2>
+                    <p className="disputes-detail-desc">
+                      Reason: <strong>{caseFile.dispute.reason}</strong> · Amount:{' '}
+                      <strong>
+                        {formatMoney(
+                          caseFile.reservation.expertPriceAmount,
+                          caseFile.reservation.currency,
+                        )}
+                      </strong>
+                    </p>
+                    {caseFile.dispute.description && (
+                      <p className="disputes-detail-desc" style={{ marginTop: '0.4rem' }}>
+                        {caseFile.dispute.description}
+                      </p>
+                    )}
+                  </div>
+                  <span className={`dispute-status-badge dispute-status-badge--${caseFile.dispute.status}`}>
+                    {caseFile.dispute.status}
+                  </span>
+                </div>
 
-              <div className="reservation-section-box">
-                <h3>Evidence</h3>
-                <input
-                  className="dashboard-input"
-                  value={evidenceLabel}
-                  onChange={(event) => setEvidenceLabel(event.target.value)}
-                  placeholder="Evidence label"
-                />
-                <input
-                  className="dashboard-input"
-                  type="file"
-                  disabled={busy}
-                  onChange={(event) => {
-                    void submitEvidence(event.currentTarget.files?.[0]);
-                    event.currentTarget.value = '';
-                  }}
-                />
-                {caseFile.evidence.length === 0 ? (
-                  <p className="dashboard-empty">No evidence attached.</p>
-                ) : (
-                  <ul className="dashboard-list">
-                    {caseFile.evidence.map((item) => (
-                      <li key={item.id} className="dashboard-list-row">
-                        <span>{item.label ?? item.uploadId}</span>
-                        <button
-                          type="button"
-                          className="dashboard-btn dashboard-btn--small"
-                          onClick={() => void openEvidence(item.uploadId)}
-                        >
-                          Open
-                        </button>
-                      </li>
+                {/* Evidence Section */}
+                <div className="disputes-section-box">
+                  <h3 className="disputes-section-title">Evidence Files</h3>
+                  <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                    <input
+                      className="admin-settings-input"
+                      style={{ flex: 1 }}
+                      value={evidenceLabel}
+                      onChange={(event) => setEvidenceLabel(event.target.value)}
+                      placeholder="Evidence label / description"
+                    />
+                    <input
+                      type="file"
+                      className="admin-settings-input"
+                      style={{ width: 'auto' }}
+                      disabled={busy}
+                      onChange={(event) => {
+                        void submitEvidence(event.currentTarget.files?.[0]);
+                        event.currentTarget.value = '';
+                      }}
+                    />
+                  </div>
+                  {caseFile.evidence.length === 0 ? (
+                    <p className="admin-empty" style={{ padding: '0.5rem 0' }}>
+                      No evidence attached yet. Upload a document or photo above.
+                    </p>
+                  ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                      {caseFile.evidence.map((item) => (
+                        <div key={item.id} className="disputes-evidence-item">
+                          <span>📁 {item.label ?? item.uploadId}</span>
+                          <button
+                            type="button"
+                            className="admin-btn admin-btn--small admin-btn--primary"
+                            onClick={() => void openEvidence(item.uploadId)}
+                          >
+                            Open File
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Case Notes & Discussion */}
+                <div className="disputes-section-box">
+                  <h3 className="disputes-section-title">Case Notes &amp; Discussion</h3>
+                  <textarea
+                    className="admin-form-textarea"
+                    value={note}
+                    onChange={(event) => setNote(event.target.value)}
+                    placeholder="Add a case note or message to support..."
+                    rows={3}
+                  />
+                  <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                    <button
+                      type="button"
+                      className="admin-btn admin-btn--primary"
+                      disabled={busy || !note.trim()}
+                      onClick={() => void submitNote()}
+                    >
+                      Post Note
+                    </button>
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', marginTop: '0.5rem' }}>
+                    {caseFile.notes.map((item) => (
+                      <div key={item.id} className="disputes-note-bubble">
+                        <span className="disputes-note-author">{item.authorName ?? 'User'}:</span>
+                        <span>{item.body}</span>
+                      </div>
                     ))}
-                  </ul>
-                )}
-              </div>
+                  </div>
+                </div>
 
-              <div className="reservation-section-box">
-                <h3>Notes</h3>
-                <textarea
-                  className="dashboard-input"
-                  value={note}
-                  onChange={(event) => setNote(event.target.value)}
-                  placeholder="Add a case note"
-                  rows={3}
-                />
-                <button
-                  type="button"
-                  className="dashboard-btn dashboard-btn--primary"
-                  disabled={busy || !note.trim()}
-                  onClick={() => void submitNote()}
-                >
-                  Add note
-                </button>
-                {caseFile.notes.map((item) => (
-                  <p key={item.id} className="dashboard-card-meta">
-                    <strong>{item.authorName ?? 'User'}:</strong> {item.body}
-                  </p>
-                ))}
-              </div>
-
-              <div className="reservation-section-box">
-                <h3>Money Events</h3>
-                {caseFile.moneyEvents.length === 0 ? (
-                  <p className="dashboard-empty">No money events linked.</p>
-                ) : (
-                  caseFile.moneyEvents.map((item) => (
-                    <p key={item.id} className="dashboard-card-meta">
-                      {item.kind} · {item.status} · {formatMoney(item.amount, item.currency)} ·{' '}
-                      {item.label}
+                {/* Money Events */}
+                <div className="disputes-section-box">
+                  <h3 className="disputes-section-title">Escrow &amp; Financial Ledger</h3>
+                  {caseFile.moneyEvents.length === 0 ? (
+                    <p className="admin-empty" style={{ padding: '0.5rem 0' }}>
+                      No money events linked to this dispute.
                     </p>
-                  ))
-                )}
-              </div>
+                  ) : (
+                    caseFile.moneyEvents.map((item) => (
+                      <div key={item.id} className="disputes-timeline-item">
+                        <span>💰</span>
+                        <div>
+                          <strong>
+                            {item.kind} · {item.status} ({formatMoney(item.amount, item.currency)})
+                          </strong>
+                          <div>{item.label}</div>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
 
-              <div className="reservation-section-box">
-                <h3>Timeline</h3>
-                {caseFile.timeline.map((item) => (
-                  <p key={item.id} className="dashboard-card-meta">
-                    {new Date(item.createdAt).toLocaleString()} · {item.eventType}
-                  </p>
-                ))}
-              </div>
-
-              <div className="reservation-section-box">
-                <h3>Messages</h3>
-                {caseFile.messages.length === 0 ? (
-                  <p className="dashboard-empty">No messages linked.</p>
-                ) : (
-                  caseFile.messages.map((item) => (
-                    <p key={item.id} className="dashboard-card-meta">
-                      <strong>{item.senderName ?? 'User'}:</strong>{' '}
-                      {item.body ?? item.attachmentUrl ?? 'Attachment'}
-                    </p>
-                  ))
-                )}
-              </div>
-            </div>
-          )}
-        </section>
-      </div>
-    </Container>
+                {/* Audit Timeline */}
+                <div className="disputes-section-box">
+                  <h3 className="disputes-section-title">Audit Timeline</h3>
+                  {caseFile.timeline.map((item) => (
+                    <div key={item.id} className="disputes-timeline-item">
+                      <span>⏱️</span>
+                      <span>
+                        {new Date(item.createdAt).toLocaleString()} —{' '}
+                        <strong>{item.eventType}</strong>
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+          </section>
+        </div>
+      </Container>
+    </main>
   );
 };

@@ -1,101 +1,251 @@
 .history-screen-main {
-  padding: 2rem 0;
+  padding-block: 1.5rem 3rem;
+  width: 100%;
 }
 
 .history-screen-container {
-  max-width: 750px;
+  max-width: 100%;
+  width: 100%;
+  margin-inline: auto;
+  padding-inline: 1rem;
 }
 
-.history-screen-title {
-  font-size: 1.5rem;
-  font-weight: 700;
+.history-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
   margin-bottom: 1.5rem;
 }
 
-.history-screen-empty {
-  color: hsl(var(--muted-foreground));
+.history-screen-title {
+  margin: 0;
+  font-family: var(--font-sora), sans-serif;
+  font-size: clamp(1.6rem, 2.5vw, 2.2rem);
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  color: hsl(var(--foreground));
 }
 
+/* History Filters Bar */
+.history-filters {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  background: color-mix(in srgb, hsl(var(--surface-elevated)) 85%, transparent);
+  border: 1px solid hsl(var(--border));
+  padding: 0.3rem;
+  border-radius: 999px;
+}
+
+.history-filter-btn {
+  padding: 0.45rem 1rem;
+  border-radius: 999px;
+  border: none;
+  background: transparent;
+  color: hsl(var(--text-soft));
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 140ms ease;
+  white-space: nowrap;
+}
+
+.history-filter-btn:hover {
+  color: hsl(var(--foreground));
+}
+
+.history-filter-btn--active {
+  background: hsl(var(--primary));
+  color: hsl(var(--primary-foreground));
+  box-shadow: 0 4px 12px -3px color-mix(in srgb, hsl(var(--primary)) 40%, transparent);
+}
+
+/* History Activity List */
 .history-list {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: 0.75rem;
+  width: 100%;
 }
 
 .history-item {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  padding: 0.85rem 1rem;
-  border-radius: var(--radius);
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1.1rem 1.35rem;
+  border-radius: 1.1rem;
   border: 1px solid hsl(var(--border));
-  background: hsl(var(--card));
+  background: color-mix(in srgb, hsl(var(--surface-elevated)) 94%, transparent);
+  box-shadow: var(--elevation-1), 0 2px 8px -2px rgba(0, 0, 0, 0.15);
+  transition: transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease;
+}
+
+.history-item:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--elevation-2), 0 8px 20px -6px rgba(0, 0, 0, 0.25);
+  border-color: color-mix(in srgb, hsl(var(--primary)) 35%, hsl(var(--border)));
 }
 
 .history-item-left {
   display: flex;
+  align-items: center;
+  gap: 1rem;
+  min-width: 0;
+}
+
+.history-icon-badge {
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: 0.85rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  background: color-mix(in srgb, hsl(var(--surface-strong)) 85%, transparent);
+  border: 1px solid color-mix(in srgb, hsl(var(--border)) 80%, transparent);
+  color: hsl(var(--foreground));
+}
+
+.history-icon-badge--credit {
+  background: color-mix(in srgb, #10b981 14%, hsl(var(--surface-elevated)));
+  border-color: color-mix(in srgb, #10b981 30%, transparent);
+  color: #10b981;
+}
+
+.history-icon-badge--debit {
+  background: color-mix(in srgb, #ef4444 14%, hsl(var(--surface-elevated)));
+  border-color: color-mix(in srgb, #ef4444 30%, transparent);
+  color: #ef4444;
+}
+
+.history-item-details {
+  display: flex;
   flex-direction: column;
-  gap: 0.15rem;
+  gap: 0.2rem;
+  min-width: 0;
 }
 
 .history-item-type {
-  font-weight: 600;
-  font-size: 0.9rem;
+  font-weight: 700;
+  font-size: 0.95rem;
+  color: hsl(var(--foreground));
 }
 
 .history-item-desc {
-  font-size: 0.8rem;
-  color: hsl(var(--muted-foreground));
+  font-size: 0.82rem;
+  color: hsl(var(--text-soft));
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .history-item-right {
   display: flex;
   flex-direction: column;
   align-items: flex-end;
-  gap: 0.15rem;
+  gap: 0.25rem;
+  flex-shrink: 0;
 }
 
 .history-item-amount {
-  font-weight: 700;
-  font-size: 0.95rem;
+  font-family: var(--font-sora), sans-serif;
+  font-weight: 800;
+  font-size: 1.05rem;
+  letter-spacing: -0.01em;
 }
 
 .history-item-amount--credit {
-  color: hsl(142 70% 40%);
+  color: #10b981;
 }
 
 .history-item-amount--debit {
-  color: hsl(var(--destructive));
+  color: hsl(var(--foreground));
 }
 
 .history-item-date {
-  font-size: 0.75rem;
-  color: hsl(var(--muted-foreground));
+  font-size: 0.78rem;
+  color: hsl(var(--text-soft));
 }
 
+/* Empty State */
+.history-empty-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 4rem 1.5rem;
+  text-align: center;
+  border-radius: 1.25rem;
+  border: 1px dashed hsl(var(--border));
+  background: color-mix(in srgb, hsl(var(--surface-elevated)) 60%, transparent);
+}
+
+.history-empty-icon {
+  width: 4rem;
+  height: 4rem;
+  border-radius: 1rem;
+  background: color-mix(in srgb, hsl(var(--primary) / 0.1) 85%, transparent);
+  color: hsl(var(--primary));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 1rem;
+}
+
+.history-empty-title {
+  margin: 0 0 0.4rem;
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: hsl(var(--foreground));
+}
+
+.history-empty-desc {
+  margin: 0;
+  font-size: 0.88rem;
+  color: hsl(var(--text-soft));
+  max-width: 24rem;
+}
+
+/* Pagination */
 .history-pagination {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 1rem;
-  margin-top: 1.5rem;
+  gap: 0.75rem;
+  margin-top: 2rem;
 }
 
 .history-page-btn {
-  padding: 0.4rem 0.8rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.5rem 1rem;
+  border-radius: 999px;
   border: 1px solid hsl(var(--border));
-  border-radius: var(--radius);
-  background: transparent;
+  background: color-mix(in srgb, hsl(var(--surface-elevated)) 90%, transparent);
+  color: hsl(var(--foreground));
+  font-size: 0.82rem;
+  font-weight: 600;
   cursor: pointer;
-  font-size: 0.85rem;
+  transition: all 140ms ease;
+}
+
+.history-page-btn:hover:not(:disabled) {
+  background: hsl(var(--muted));
+  border-color: color-mix(in srgb, hsl(var(--primary)) 40%, transparent);
 }
 
 .history-page-btn:disabled {
-  opacity: 0.5;
-  cursor: default;
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 
 .history-page-info {
   font-size: 0.85rem;
-  color: hsl(var(--muted-foreground));
+  font-weight: 600;
+  color: hsl(var(--text-soft));
+  padding-inline: 0.5rem;
 }

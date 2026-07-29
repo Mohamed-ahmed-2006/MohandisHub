@@ -7,8 +7,8 @@
 
 .profile-screen-container {
   margin-inline: auto;
-  padding-inline: 1rem;
-  max-width: 52rem;
+  padding-inline: clamp(1rem, 3vw, 2.5rem);
+  max-width: none;
 }
 
 .profile-screen-skeleton {
@@ -65,6 +65,57 @@
   font-weight: 700;
   letter-spacing: -0.03em;
   color: hsl(var(--foreground));
+}
+
+.profile-screen-tabs-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 1.5rem;
+  padding: 0.35rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, hsl(var(--surface-strong)) 85%, transparent);
+  border: 1px solid hsl(var(--border));
+  backdrop-filter: blur(12px);
+  width: fit-content;
+  max-width: 100%;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.profile-screen-tab-btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 2.65rem;
+  padding: 0.6rem 1.35rem;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: hsl(var(--text-soft));
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition:
+    color 180ms ease,
+    background-color 180ms ease,
+    border-color 180ms ease,
+    transform 180ms ease;
+}
+
+.profile-screen-tab-btn:hover {
+  color: hsl(var(--foreground));
+  background-color: color-mix(in srgb, hsl(var(--primary)) 8%, transparent);
+}
+
+.profile-screen-tab-btn--active {
+  color: hsl(var(--primary-foreground));
+  background: linear-gradient(135deg, hsl(var(--primary)), color-mix(in srgb, hsl(var(--primary)) 78%, #000));
+  border-color: color-mix(in srgb, hsl(var(--primary)) 40%, transparent);
+  box-shadow: 0 10px 24px -14px hsl(var(--primary) / 0.8);
+  font-weight: 700;
 }
 
 .profile-screen-jump-nav {
@@ -462,24 +513,272 @@
 }
 
 .profile-screen-pref-panel {
-  margin-top: 1rem;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 1rem;
-  background: var(--surface);
+  margin-top: 1.25rem;
+  border: 1px solid hsl(var(--border));
+  border-radius: var(--radius-lg, 1rem);
+  padding: 1.25rem;
+  background: color-mix(in srgb, hsl(var(--surface-strong)) 88%, transparent);
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
 }
 
-.profile-screen-muted {
-  margin: 0.35rem 0 0.75rem;
-  color: var(--muted-foreground);
+.profile-screen-pref-panel .profile-screen-muted {
+  margin: 0;
+  color: hsl(var(--text-soft));
   font-size: 0.9rem;
+  line-height: 1.5;
+}
+
+.profile-screen-pref-panel .profile-screen-button {
+  margin-block: 0.35rem;
+  align-self: flex-start;
+}
+
+/* Wallet preview tab cards */
+.profile-screen-wallet-preview {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1.15rem;
+  margin-top: 1.25rem;
+  margin-bottom: 0.5rem;
+}
+
+.profile-screen-wallet-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  padding: 1.15rem;
+  border-radius: var(--radius-lg, 1rem);
+  background: color-mix(in srgb, hsl(var(--surface-strong)) 85%, transparent);
+  border: 1px solid hsl(var(--border));
+}
+
+.profile-screen-wallet-label {
+  font-size: 0.85rem;
+  color: hsl(var(--text-soft));
+  font-weight: 500;
+}
+
+.profile-screen-wallet-val {
+  font-size: 1.45rem;
+  font-weight: 800;
+  color: hsl(var(--primary));
+  letter-spacing: -0.02em;
+}
+
+/* Glassmorphism Push Device Status Banner */
+.profile-screen-push-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.25rem;
+  padding: 1.1rem 1.35rem;
+  border-radius: var(--radius-lg, 1rem);
+  border: 1px solid color-mix(in srgb, hsl(var(--primary)) 25%, hsl(var(--border)));
+  background: color-mix(in srgb, hsl(var(--primary) / 0.06) 80%, hsl(var(--surface-strong)));
+  backdrop-filter: blur(12px);
+  margin-bottom: 0.35rem;
+  flex-wrap: wrap;
+}
+
+.profile-screen-push-banner-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  flex: 1;
+  min-width: 240px;
+}
+
+.profile-screen-push-status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-weight: 700;
+  font-size: 0.95rem;
+  color: hsl(var(--foreground));
+}
+
+.profile-screen-status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background-color: hsl(var(--muted-foreground));
+  display: inline-block;
+}
+
+.profile-screen-status-dot--active {
+  background-color: var(--success, #16a34a);
+  box-shadow: 0 0 10px var(--success, #16a34a);
+}
+
+.profile-screen-push-desc {
+  margin: 0;
+  font-size: 0.85rem;
+  color: hsl(var(--text-soft));
   line-height: 1.45;
+}
+
+.profile-screen-push-cta-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 2.65rem;
+  padding: 0.6rem 1.15rem;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, hsl(var(--primary)) 40%, transparent);
+  background: linear-gradient(135deg, hsl(var(--primary)), color-mix(in srgb, hsl(var(--primary)) 75%, #000));
+  color: hsl(var(--primary-foreground));
+  font-size: 0.88rem;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 10px 24px -14px hsl(var(--primary) / 0.8);
+  transition: transform 180ms ease, opacity 180ms ease;
+  white-space: nowrap;
+}
+
+.profile-screen-push-cta-btn:hover {
+  transform: translateY(-1px);
+  opacity: 0.95;
 }
 
 .profile-screen-notification-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-  gap: 0.75rem;
+  grid-template-columns: repeat(auto-fill, minmax(310px, 1fr));
+  gap: 1.15rem;
+  margin-top: 0.5rem;
+}
+
+.profile-screen-notification-grid .profile-screen-pref-card {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-start;
+  gap: 0.65rem;
+  max-height: 22rem;
+  overflow-y: auto;
+  padding-right: 0.4rem;
+  scrollbar-width: thin;
+  scrollbar-color: hsl(var(--border)) transparent;
+}
+
+.profile-screen-notification-grid .profile-screen-pref-card::-webkit-scrollbar {
+  width: 6px;
+}
+
+.profile-screen-notification-grid .profile-screen-pref-card::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.profile-screen-notification-grid .profile-screen-pref-card::-webkit-scrollbar-thumb {
+  background: hsl(var(--border));
+  border-radius: 999px;
+}
+
+.profile-screen-notification-grid .profile-screen-pref-card::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--muted-foreground));
+}
+
+/* Category header with master toggle */
+.profile-screen-category-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.25rem;
+  padding-bottom: 0.45rem;
+  border-bottom: 1px solid color-mix(in srgb, hsl(var(--border)) 60%, transparent);
+}
+
+.profile-screen-category-title {
+  margin: 0;
+  font-size: 0.98rem;
+  font-weight: 700;
+  color: hsl(var(--foreground));
+}
+
+.profile-screen-master-toggle-btn {
+  padding: 0.2rem 0.65rem;
+  border-radius: 999px;
+  border: 1px solid hsl(var(--border));
+  background: color-mix(in srgb, hsl(var(--surface-strong)) 80%, transparent);
+  color: hsl(var(--primary));
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 140ms ease, transform 140ms ease;
+  white-space: nowrap;
+}
+
+.profile-screen-master-toggle-btn:hover {
+  background: hsl(var(--primary) / 0.1);
+  transform: translateY(-1px);
+}
+
+/* Matrix layout for event rows */
+.profile-screen-matrix-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.profile-screen-matrix-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  padding: 0.55rem 0.65rem;
+  border-radius: 0.65rem;
+  background: color-mix(in srgb, hsl(var(--surface-elevated)) 85%, transparent);
+  border: 1px solid color-mix(in srgb, hsl(var(--border)) 50%, transparent);
+}
+
+.profile-screen-matrix-event {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.profile-screen-matrix-event-name {
+  font-size: 0.86rem;
+  font-weight: 600;
+  color: hsl(var(--foreground));
+  text-transform: capitalize;
+}
+
+.profile-screen-lock-badge {
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 0.15rem 0.55rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, hsl(var(--muted-foreground)) 16%, transparent);
+  color: hsl(var(--muted-foreground));
+  border: 1px solid color-mix(in srgb, hsl(var(--border)) 80%, transparent);
+  white-space: nowrap;
+}
+
+.profile-screen-matrix-channels {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.profile-screen-channel-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.2rem 0.45rem;
+  border-radius: 0.45rem;
+  background: color-mix(in srgb, hsl(var(--surface-strong)) 90%, transparent);
+  border: 1px solid color-mix(in srgb, hsl(var(--border)) 70%, transparent);
+  cursor: pointer;
+}
+
+.profile-screen-channel-tag {
+  font-size: 0.74rem;
+  color: hsl(var(--text-soft));
+  font-weight: 500;
 }
 
 .profile-screen-toggle-row {
@@ -494,9 +793,78 @@
   line-height: 1.35;
 }
 
-.profile-screen-toggle-row span {
+.profile-screen-toggle-row > span {
   min-width: 0;
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
+  word-break: break-word;
+}
+
+.profile-screen-toggle-switch {
+  display: inline-flex;
+  align-items: center;
+  position: relative;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.profile-screen-toggle-switch-input {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+}
+
+.profile-screen-toggle-switch-track {
+  position: relative;
+  width: 2.6rem;
+  height: 1.4rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, hsl(var(--muted)) 90%, transparent);
+  border: 1px solid hsl(var(--border));
+  transition: background-color 0.2s ease, border-color 0.2s ease;
+  display: block;
+}
+
+.profile-screen-toggle-switch-knob {
+  position: absolute;
+  top: 0.125rem;
+  left: 0.125rem;
+  width: 1.05rem;
+  height: 1.05rem;
+  border-radius: 999px;
+  background: hsl(var(--muted-foreground));
+  transition: transform 0.2s ease, background-color 0.2s ease;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+[dir="rtl"] .profile-screen-toggle-switch-knob {
+  left: auto;
+  right: 0.125rem;
+}
+
+.profile-screen-toggle-switch-input:checked + .profile-screen-toggle-switch-track {
+  background: hsl(var(--primary) / 0.2);
+  border-color: hsl(var(--primary) / 0.5);
+}
+
+.profile-screen-toggle-switch-input:checked + .profile-screen-toggle-switch-track .profile-screen-toggle-switch-knob {
+  transform: translateX(1.2rem);
+  background: hsl(var(--primary));
+}
+
+[dir="rtl"] .profile-screen-toggle-switch-input:checked + .profile-screen-toggle-switch-track .profile-screen-toggle-switch-knob {
+  transform: translateX(-1.2rem);
+}
+
+.profile-screen-toggle-switch-input:disabled + .profile-screen-toggle-switch-track {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.profile-screen-toggle-switch-input:focus-visible + .profile-screen-toggle-switch-track {
+  outline: 2px solid hsl(var(--primary));
+  outline-offset: 2px;
 }
 
 .profile-screen-toggle-row input {
@@ -804,4 +1172,50 @@
 
 .profile-screen-button--secondary:hover {
   background: hsl(var(--muted));
+}
+
+/* Unified Wallet & Balance Tab */
+.unified-wallet-tab {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.unified-wallet-subtabs {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.35rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, hsl(var(--surface-elevated)) 85%, transparent);
+  border: 1px solid hsl(var(--border));
+  width: fit-content;
+  max-width: 100%;
+  margin-bottom: 0.5rem;
+}
+
+.unified-wallet-subtab {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.5rem 1.2rem;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: hsl(var(--text-soft));
+  font-size: 0.88rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 160ms ease;
+}
+
+.unified-wallet-subtab:hover {
+  color: hsl(var(--foreground));
+}
+
+.unified-wallet-subtab.is-active {
+  background: hsl(var(--primary));
+  color: hsl(var(--primary-foreground));
+  border-color: hsl(var(--primary));
+  box-shadow: 0 4px 14px -4px color-mix(in srgb, hsl(var(--primary)) 40%, transparent);
 }

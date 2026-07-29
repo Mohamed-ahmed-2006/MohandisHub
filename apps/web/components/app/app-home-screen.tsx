@@ -1,8 +1,9 @@
 'use client';
 
 import type { ServiceCategory, ServiceSearchResult } from '@mohandishub/shared';
+import { Bookmark, RotateCcw, Search, SlidersHorizontal, Sparkles } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { AdSlideshow } from './ad-slideshow';
 import { BusinessDashboard } from './business-dashboard';
@@ -271,7 +272,32 @@ export const AppHomeScreen = ({ locale, dictionary }: AppHomeScreenProps) => {
   const [selectedNeedBids, setSelectedNeedBids] = useState<Bid[]>([]);
   const [selectedNeedBidsLoading, setSelectedNeedBidsLoading] = useState(false);
   const [selectedNeedBidsError, setSelectedNeedBidsError] = useState<string | null>(null);
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
   const totalTopSlides = 3;
+
+  const activeAdvancedFilterCount = useMemo(() => {
+    let count = 0;
+    if (area) count++;
+    if (minRating !== '') count++;
+    if (minPrice !== '') count++;
+    if (maxPrice !== '') count++;
+    if (verifiedOnly) count++;
+    if (sort && sort !== 'newest') count++;
+    return count;
+  }, [area, minRating, minPrice, maxPrice, verifiedOnly, sort]);
+
+  const resetAllFilters = useCallback(() => {
+    setSearchQuery('');
+    setCategoryId('');
+    setCity('');
+    setArea('');
+    setProviderType('');
+    setMinRating('');
+    setMinPrice('');
+    setMaxPrice('');
+    setVerifiedOnly(false);
+    setSort('newest');
+  }, []);
 
   const areaOptions = city ? (CITY_AREAS[city] ?? []) : [];
   const handleCityChange = (newCity: string) => {
@@ -799,7 +825,8 @@ export const AppHomeScreen = ({ locale, dictionary }: AppHomeScreenProps) => {
         <section className="home-welcome-section">
           <div className="home-welcome-row">
             <div>
-              <h1 className="home-welcome">
+              <h1 className="home-welcome" style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+                <Sparkles style={{ color: 'hsl(var(--primary))' }} size={26} />
                 {d.welcomeBack}, {authUser.displayName}
               </h1>
             </div>
@@ -1096,20 +1123,44 @@ export const AppHomeScreen = ({ locale, dictionary }: AppHomeScreenProps) => {
 
             {customerTab === 'browse' && (
               <div id="customer-browse-panel" role="tabpanel" aria-labelledby="customer-browse-tab">
-                {/* Search: 4 filter groups — 1) Text search, 2) Service type, 3) Location (city+area), 4) Provider type */}
                 <section className="home-search-card">
-                  <div className="home-search-grid home-search-grid--4-cols">
-                    <div className="home-search-field home-search-field--full">
-                      <label className="home-search-label">{d.search}</label>
+                  {/* Top Hero Search Bar */}
+                  <div className="home-search-top-bar">
+                    <div className="home-search-input-wrap">
+                      <Search className="home-search-input-icon" size={18} />
                       <input
                         type="search"
-                        className="home-search-input"
-                        placeholder={d.searchPlaceholder}
+                        className="home-search-input home-search-input--hero"
+                        placeholder={d.searchPlaceholder ?? 'Search services, skills, or keywords...'}
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
                         aria-label={d.searchPlaceholder}
                       />
                     </div>
+                    <button
+                      type="button"
+                      className="home-search-primary-btn"
+                      onClick={() => void handleSearch(searchQuery)}
+                      disabled={searching}
+                    >
+                      <Search size={16} />
+                      {searching ? (dictionary.common?.loading ?? 'Searching...') : (d.search ?? 'Search')}
+                    </button>
+                    <button
+                      type="button"
+                      className={`home-search-filter-toggle-btn ${showAdvancedFilters || activeAdvancedFilterCount > 0 ? 'home-search-filter-toggle-btn--active' : ''}`}
+                      onClick={() => setShowAdvancedFilters((v) => !v)}
+                    >
+                      <SlidersHorizontal size={16} />
+                      Filters
+                      {activeAdvancedFilterCount > 0 && (
+                        <span className="home-search-filter-badge">{activeAdvancedFilterCount}</span>
+                      )}
+                    </button>
+                  </div>
+
+                  {/* Quick Filters Row */}
+                  <div className="home-search-quick-row">
                     <div className="home-search-field">
                       <label className="home-search-label">{d.serviceType}</label>
                       <select
@@ -1125,6 +1176,7 @@ export const AppHomeScreen = ({ locale, dictionary }: AppHomeScreenProps) => {
                         ))}
                       </select>
                     </div>
+
                     <div className="home-search-field">
                       <label className="home-search-label">{d.city}</label>
                       <select
@@ -1140,138 +1192,148 @@ export const AppHomeScreen = ({ locale, dictionary }: AppHomeScreenProps) => {
                         ))}
                       </select>
                     </div>
-                    <div className="home-search-field">
-                      <label className="home-search-label">{d.area}</label>
-                      <select
-                        className="home-search-select"
-                        value={area}
-                        onChange={(e) => setArea(e.target.value)}
-                        disabled={!city}
-                      >
-                        <option value="">
-                          {areaOptions.length ? d.chooseArea : d.areaPlaceholder}
-                        </option>
-                        {areaOptions.map((a) => (
-                          <option key={a} value={a}>
-                            {a}
+
+                    </div>
+
+                  {/* Collapsible Advanced Filters Tray */}
+                  <div className={`home-search-tray-wrapper ${showAdvancedFilters ? 'home-search-tray-wrapper--open' : ''}`}>
+                    <div className="home-search-advanced-tray">
+                      <div className="home-search-field">
+                        <label className="home-search-label">{d.area}</label>
+                        <select
+                          className="home-search-select"
+                          value={area}
+                          onChange={(e) => setArea(e.target.value)}
+                          disabled={!city}
+                        >
+                          <option value="">
+                            {areaOptions.length ? d.chooseArea : d.areaPlaceholder}
                           </option>
-                        ))}
-                      </select>
-                    </div>
-                    <div className="home-search-field">
-                      <label className="home-search-label">{d.providerType}</label>
-                      <select
-                        className="home-search-select"
-                        value={providerType}
-                        onChange={(e) => setProviderType(e.target.value)}
-                      >
-                        <option value="">{d.anyProvider}</option>
-                        <option value="expert">{d.expert}</option>
-                        <option value="craftsman">{d.craftsman}</option>
-                        <option value="business">{d.businessProvider}</option>
-                      </select>
-                    </div>
-                    <div className="home-search-field">
-                      <label className="home-search-label">{d.minRating ?? 'Min rating'}</label>
-                      <select
-                        className="home-search-select"
-                        value={minRating === '' ? '' : String(minRating)}
-                        onChange={(e) =>
-                          setMinRating(e.target.value === '' ? '' : Number(e.target.value))
-                        }
-                      >
-                        <option value="">{d.any ?? 'Any'}</option>
-                        {[1, 2, 3, 4, 5].map((n) => (
-                          <option key={n} value={n}>
-                            {n}+ ★
+                          {areaOptions.map((a) => (
+                            <option key={a} value={a}>
+                              {a}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div className="home-search-field">
+                        <label className="home-search-label">{d.minRating ?? 'Min rating'}</label>
+                        <select
+                          className="home-search-select"
+                          value={minRating === '' ? '' : String(minRating)}
+                          onChange={(e) =>
+                            setMinRating(e.target.value === '' ? '' : Number(e.target.value))
+                          }
+                        >
+                          <option value="">{d.any ?? 'Any'}</option>
+                          {[1, 2, 3, 4, 5].map((n) => (
+                            <option key={n} value={n}>
+                              {n}+ ★
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div className="home-search-field">
+                        <label className="home-search-label">{d.minPrice ?? 'Min price'}</label>
+                        <input
+                          type="number"
+                          min={0}
+                          step={1}
+                          className="home-search-input"
+                          placeholder="0"
+                          value={minPrice === '' ? '' : minPrice}
+                          onChange={(e) =>
+                            setMinPrice(e.target.value === '' ? '' : parseFloat(e.target.value) || 0)
+                          }
+                        />
+                      </div>
+
+                      <div className="home-search-field">
+                        <label className="home-search-label">{d.maxPrice ?? 'Max price'}</label>
+                        <input
+                          type="number"
+                          min={0}
+                          step={1}
+                          className="home-search-input"
+                          placeholder="—"
+                          value={maxPrice === '' ? '' : maxPrice}
+                          onChange={(e) =>
+                            setMaxPrice(e.target.value === '' ? '' : parseFloat(e.target.value) || 0)
+                          }
+                        />
+                      </div>
+
+                      <div className="home-search-field">
+                        <label className="home-search-label">{d.sort ?? 'Sort by'}</label>
+                        <select
+                          className="home-search-select"
+                          value={sort}
+                          onChange={(e) => setSort(e.target.value)}
+                        >
+                          <option value="newest">{d.sortNewest ?? 'Newest'}</option>
+                          <option value="rating">{d.sortRating ?? 'Rating'}</option>
+                          <option value="price_asc">{d.sortPriceAsc ?? 'Price: low to high'}</option>
+                          <option value="price_desc">
+                            {d.sortPriceDesc ?? 'Price: high to low'}
                           </option>
-                        ))}
-                      </select>
-                    </div>
-                    <div className="home-search-field">
-                      <label className="home-search-label">{d.minPrice ?? 'Min price'}</label>
-                      <input
-                        type="number"
-                        min={0}
-                        step={1}
-                        className="home-search-input"
-                        placeholder="0"
-                        value={minPrice === '' ? '' : minPrice}
-                        onChange={(e) =>
-                          setMinPrice(e.target.value === '' ? '' : parseFloat(e.target.value) || 0)
-                        }
-                      />
-                    </div>
-                    <div className="home-search-field">
-                      <label className="home-search-label">{d.maxPrice ?? 'Max price'}</label>
-                      <input
-                        type="number"
-                        min={0}
-                        step={1}
-                        className="home-search-input"
-                        placeholder="—"
-                        value={maxPrice === '' ? '' : maxPrice}
-                        onChange={(e) =>
-                          setMaxPrice(e.target.value === '' ? '' : parseFloat(e.target.value) || 0)
-                        }
-                      />
-                    </div>
-                    <div className="home-search-field">
-                      <label className="home-search-label">{d.sort ?? 'Sort by'}</label>
-                      <select
-                        className="home-search-select"
-                        value={sort}
-                        onChange={(e) => setSort(e.target.value)}
+                          <option value="completed_count">{d.sortPopular ?? 'Most orders'}</option>
+                        </select>
+                      </div>
+
+                      <div
+                        className="home-search-field"
+                        style={{ justifyContent: 'center' }}
                       >
-                        <option value="newest">{d.sortNewest ?? 'Newest'}</option>
-                        <option value="rating">{d.sortRating ?? 'Rating'}</option>
-                        <option value="price_asc">{d.sortPriceAsc ?? 'Price: low to high'}</option>
-                        <option value="price_desc">
-                          {d.sortPriceDesc ?? 'Price: high to low'}
-                        </option>
-                        <option value="completed_count">{d.sortPopular ?? 'Most orders'}</option>
-                      </select>
-                    </div>
-                    <div
-                      className="home-search-field home-search-field--full"
-                      style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}
-                    >
-                      <input
-                        type="checkbox"
-                        id="verified-only"
-                        checked={verifiedOnly}
-                        onChange={(e) => setVerifiedOnly(e.target.checked)}
-                      />
-                      <label
-                        htmlFor="verified-only"
-                        className="home-search-label"
-                        style={{ margin: 0 }}
-                      >
-                        {d.verifiedOnly ?? 'Verified providers only'}
-                      </label>
+                        <label
+                          htmlFor="verified-only"
+                          className="home-search-label"
+                          style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.65rem', marginTop: '1.4rem', userSelect: 'none' }}
+                        >
+                          <button
+                            type="button"
+                            role="switch"
+                            id="verified-only"
+                            aria-checked={verifiedOnly}
+                            onClick={() => setVerifiedOnly(!verifiedOnly)}
+                            className={`home-toggle-switch ${verifiedOnly ? 'home-toggle-switch--on' : ''}`}
+                          >
+                            <span className="home-toggle-thumb" />
+                          </button>
+                          {d.verifiedOnly ?? 'Verified providers only'}
+                        </label>
+                      </div>
+
+                      <div className="home-search-actions-bar">
+                        <button
+                          type="button"
+                          className="bookings-filter-btn home-action-btn"
+                          onClick={resetAllFilters}
+                        >
+                          <RotateCcw size={14} strokeWidth={2.5} />
+                          <span>Clear Filters</span>
+                        </button>
+
+                        {accessToken && (
+                          <button
+                            type="button"
+                            className="bookings-filter-btn bookings-filter-btn--active home-action-btn"
+                            onClick={() => void saveCurrentSearch()}
+                          >
+                            <Bookmark size={14} strokeWidth={2.5} />
+                            <span>{d.saveSearch ?? 'Save Search'}</span>
+                          </button>
+                        )}
+                      </div>
                     </div>
                   </div>
-
-                  <button
-                    type="button"
-                    className="home-search-btn"
-                    onClick={() => void handleSearch()}
-                    disabled={searching}
-                  >
-                    {searching ? dictionary.admin.loading : d.search}
-                  </button>
-                  <button
-                    type="button"
-                    className="dashboard-secondary-btn"
-                    onClick={() => void saveCurrentSearch()}
-                    disabled={!accessToken}
-                    style={{ marginTop: '0.75rem' }}
-                  >
-                    {dictionary.common?.save ?? 'Save search'}
-                  </button>
-                  {searchNotice && <p className="home-empty">{searchNotice}</p>}
+                  {searchNotice && (
+                    <p className="home-empty" style={{ padding: '0.75rem 1rem', marginTop: '0.75rem' }}>
+                      {searchNotice}
+                    </p>
+                  )}
                 </section>
-
                 {savedSearches.length > 0 && (
                   <section className="home-results-section">
                     <h2 className="home-section-title">Saved searches</h2>

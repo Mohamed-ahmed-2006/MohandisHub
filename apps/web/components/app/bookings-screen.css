@@ -1,0 +1,553 @@
+.bookings-screen-main {
+  padding-block: 1.5rem 3rem;
+  width: 100%;
+}
+
+.bookings-screen-container {
+  max-width: 100%;
+  width: 100%;
+  margin-inline: auto;
+  padding-inline: 1rem;
+}
+
+.bookings-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-bottom: 1.5rem;
+}
+
+.bookings-screen-title {
+  margin: 0;
+  font-family: var(--font-sora), sans-serif;
+  font-size: clamp(1.6rem, 2.5vw, 2.2rem);
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  color: hsl(var(--foreground));
+}
+
+/* Status Filters Ribbon */
+.bookings-filter-ribbon {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  overflow-x: auto;
+  padding: 0.35rem 0.25rem 0.6rem;
+  margin-bottom: 1.5rem;
+  scrollbar-width: thin;
+  -webkit-overflow-scrolling: touch;
+}
+
+.bookings-filter-btn {
+  padding: 0.5rem 1.1rem;
+  border-radius: 999px;
+  border: 1px solid hsl(var(--border));
+  background: color-mix(in srgb, hsl(var(--surface-elevated)) 90%, transparent);
+  color: hsl(var(--text-soft));
+  font-size: 0.83rem;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 140ms ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.bookings-filter-btn:hover {
+  color: hsl(var(--foreground));
+  border-color: color-mix(in srgb, hsl(var(--primary)) 40%, transparent);
+}
+
+.bookings-filter-btn--active {
+  background: hsl(var(--primary));
+  color: hsl(var(--primary-foreground));
+  border: 1px solid hsl(var(--primary));
+  box-shadow: 0 4px 14px -4px color-mix(in srgb, hsl(var(--primary)) 40%, transparent);
+}
+
+/* Reservation Cards Feed */
+.bookings-cards-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1.75rem;
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  width: 100%;
+}
+
+.booking-card {
+  padding: 1.4rem 1.6rem;
+  border-radius: 1.25rem;
+  border: 1px solid hsl(var(--border));
+  background: color-mix(in srgb, hsl(var(--surface-elevated)) 94%, transparent);
+  box-shadow: var(--elevation-1), 0 4px 14px -4px rgba(0, 0, 0, 0.2);
+  display: flex;
+  flex-direction: column;
+  gap: 1.1rem;
+  transition: transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease;
+}
+
+.booking-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--elevation-2), 0 10px 28px -8px rgba(0, 0, 0, 0.3);
+  border-color: color-mix(in srgb, hsl(var(--primary)) 45%, hsl(var(--border)));
+}
+
+/* Booking Card Top Section */
+.booking-card-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1.25rem;
+  flex-wrap: wrap;
+}
+
+.booking-card-header-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  flex: 1;
+  min-width: 240px;
+}
+
+.booking-title-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.booking-card-title {
+  font-family: var(--font-sora), sans-serif;
+  font-size: 1.25rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: hsl(var(--foreground));
+  margin: 0;
+}
+
+.booking-mode-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.22rem 0.7rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, hsl(var(--surface-strong)) 85%, transparent);
+  border: 1px solid color-mix(in srgb, hsl(var(--border)) 80%, transparent);
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: hsl(var(--foreground));
+}
+
+.booking-meta-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  font-size: 0.83rem;
+  color: hsl(var(--text-soft));
+}
+
+.booking-date-pill {
+  font-weight: 600;
+  color: hsl(var(--foreground));
+}
+
+.booking-tag {
+  padding: 0.15rem 0.55rem;
+  border-radius: 0.45rem;
+  background: color-mix(in srgb, hsl(var(--primary) / 0.1) 85%, transparent);
+  border: 1px solid color-mix(in srgb, hsl(var(--primary)) 25%, transparent);
+  color: hsl(var(--primary));
+  font-size: 0.76rem;
+  font-weight: 600;
+}
+
+.booking-card-right {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.4rem;
+  flex-shrink: 0;
+}
+
+.booking-price-display {
+  font-family: var(--font-sora), sans-serif;
+  font-size: 1.25rem;
+  font-weight: 800;
+  color: hsl(var(--primary));
+  letter-spacing: -0.02em;
+}
+
+.booking-status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.25rem 0.75rem;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: capitalize;
+  border: 1px solid transparent;
+}
+
+.booking-status-pill--pending {
+  background: color-mix(in srgb, #f59e0b 15%, transparent);
+  color: #f59e0b;
+  border-color: color-mix(in srgb, #f59e0b 40%, transparent);
+}
+
+.booking-status-pill--accepted,
+.booking-status-pill--awaiting_start {
+  background: color-mix(in srgb, #3b82f6 15%, transparent);
+  color: #3b82f6;
+  border-color: color-mix(in srgb, #3b82f6 40%, transparent);
+}
+
+.booking-status-pill--in_session {
+  background: color-mix(in srgb, #10b981 15%, transparent);
+  color: #10b981;
+  border-color: color-mix(in srgb, #10b981 40%, transparent);
+  box-shadow: 0 0 10px color-mix(in srgb, #10b981 40%, transparent);
+}
+
+.booking-status-pill--completed {
+  background: color-mix(in srgb, #10b981 15%, transparent);
+  color: #10b981;
+  border-color: color-mix(in srgb, #10b981 40%, transparent);
+}
+
+.booking-status-pill--rejected,
+.booking-status-pill--cancelled,
+.booking-status-pill--expired {
+  background: color-mix(in srgb, hsl(var(--muted-foreground)) 15%, transparent);
+  color: hsl(var(--text-soft));
+  border-color: hsl(var(--border));
+}
+
+.booking-status-pill--disputed {
+  background: color-mix(in srgb, #ef4444 15%, transparent);
+  color: #ef4444;
+  border-color: color-mix(in srgb, #ef4444 40%, transparent);
+}
+
+/* Timeline Stepper with Arrows & Solid Borders */
+.reservation-timeline-stepper {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  padding: 0.75rem 1rem;
+  border-radius: 0.95rem;
+  background: color-mix(in srgb, hsl(var(--surface-strong)) 80%, transparent);
+  border: 1px solid color-mix(in srgb, hsl(var(--border)) 85%, transparent);
+}
+
+.reservation-timeline-step-wrap {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.reservation-timeline-step {
+  font-size: 0.8rem;
+  font-weight: 600;
+  transition: all 140ms ease;
+  white-space: nowrap;
+  border: 1px solid transparent;
+}
+
+/* 1. Passed / Completed step: Strikethrough */
+.reservation-timeline-step--passed {
+  text-decoration: line-through;
+  text-decoration-thickness: 1.8px;
+  color: hsl(var(--text-soft));
+  opacity: 0.6;
+}
+
+/* 2. Current active step: Solid Orange Pill */
+.reservation-timeline-step--current {
+  background: #f97316;
+  color: #ffffff;
+  padding: 0.25rem 0.75rem;
+  border-radius: 999px;
+  border: 1px solid #ea580c !important;
+  font-weight: 800;
+  box-shadow: 0 4px 14px -3px color-mix(in srgb, #f97316 55%, transparent);
+}
+
+/* 3. Upcoming step: Dimmed */
+.reservation-timeline-step--upcoming {
+  color: hsl(var(--text-soft));
+  opacity: 0.42;
+}
+
+/* Arrow between steps */
+.reservation-timeline-arrow {
+  font-size: 0.85rem;
+  color: hsl(var(--text-soft));
+  opacity: 0.55;
+  font-weight: 700;
+}
+
+.booking-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  padding-top: 0.5rem;
+  border-top: 1px solid color-mix(in srgb, hsl(var(--border)) 60%, transparent);
+}
+
+/* Formatted Reservation Details Modal */
+.booking-details-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1100;
+  background: color-mix(in srgb, #000 75%, transparent);
+  backdrop-filter: blur(16px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.25rem;
+  animation: adminCmdFadeIn 160ms ease-out forwards;
+}
+
+.booking-details-modal {
+  width: 100%;
+  max-width: 640px;
+  max-height: 88vh;
+  border-radius: 1.35rem;
+  border: 1px solid color-mix(in srgb, hsl(var(--primary)) 30%, hsl(var(--border)));
+  background: color-mix(in srgb, hsl(var(--surface-strong)) 96%, #000);
+  box-shadow: 0 24px 50px -10px rgba(0, 0, 0, 0.6);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: adminCmdSlideDown 200ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.booking-details-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1.25rem 1.6rem;
+  border-bottom: 1px solid color-mix(in srgb, hsl(var(--border)) 70%, transparent);
+  background: color-mix(in srgb, hsl(var(--surface-elevated)) 65%, transparent);
+}
+
+.booking-details-modal-title {
+  margin: 0;
+  font-family: var(--font-sora), sans-serif;
+  font-size: 1.35rem;
+  font-weight: 800;
+  color: hsl(var(--foreground));
+  line-height: 1.2;
+}
+
+/* Premium Close Button */
+.booking-details-modal-close-btn {
+  width: 2.3rem;
+  height: 2.3rem;
+  border-radius: 50%;
+  border: 1px solid color-mix(in srgb, hsl(var(--border)) 80%, transparent);
+  background: color-mix(in srgb, hsl(var(--surface-elevated)) 80%, transparent);
+  color: hsl(var(--text-soft));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 1.2rem;
+  font-weight: 700;
+  transition: all 140ms ease;
+  flex-shrink: 0;
+}
+
+.booking-details-modal-close-btn:hover {
+  background: color-mix(in srgb, #ef4444 20%, transparent);
+  border-color: color-mix(in srgb, #ef4444 50%, transparent);
+  color: #ef4444;
+  transform: scale(1.06);
+}
+
+.booking-details-modal-body {
+  padding: 1.5rem 1.6rem;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 1.35rem;
+  scrollbar-width: thin;
+}
+
+.booking-details-box {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  padding: 1.2rem;
+  border-radius: 1rem;
+  border: 1px solid color-mix(in srgb, hsl(var(--border)) 80%, transparent);
+  background: color-mix(in srgb, hsl(var(--surface-elevated)) 85%, transparent);
+}
+
+.booking-details-box-title {
+  margin: 0;
+  font-size: 0.88rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: hsl(var(--text-soft));
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.booking-details-table {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.booking-details-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  font-size: 0.88rem;
+  padding-block: 0.35rem;
+  border-bottom: 1px dashed color-mix(in srgb, hsl(var(--border)) 60%, transparent);
+}
+
+.booking-details-row:last-child {
+  border-bottom: none;
+}
+
+.booking-details-key {
+  color: hsl(var(--text-soft));
+  font-size: 0.85rem;
+}
+
+.booking-details-value {
+  font-weight: 600;
+  color: hsl(var(--foreground));
+  text-align: end;
+}
+
+.booking-policy-callout {
+  padding: 0.75rem 0.9rem;
+  border-radius: 0.7rem;
+  background: color-mix(in srgb, #f59e0b 12%, transparent);
+  border: 1px solid color-mix(in srgb, #f59e0b 30%, transparent);
+  color: #f59e0b;
+  font-size: 0.83rem;
+  font-weight: 600;
+  line-height: 1.4;
+  margin-top: 0.4rem;
+}
+
+/* Timeline Cards Container */
+.booking-timeline-container {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.booking-timeline-card {
+  padding: 0.85rem 1rem;
+  border-radius: 0.8rem;
+  border: 1px solid color-mix(in srgb, hsl(var(--border)) 75%, transparent);
+  background: color-mix(in srgb, hsl(var(--surface-strong)) 90%, transparent);
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.booking-timeline-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.booking-timeline-event-name {
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: hsl(var(--foreground));
+  text-transform: capitalize;
+}
+
+.booking-timeline-time {
+  font-size: 0.76rem;
+  color: hsl(var(--text-soft));
+}
+
+.booking-timeline-meta-chips {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+
+.booking-details-modal-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding: 1rem 1.6rem;
+  border-top: 1px solid color-mix(in srgb, hsl(var(--border)) 70%, transparent);
+  background: color-mix(in srgb, hsl(var(--surface-elevated)) 65%, transparent);
+}
+
+/* Modals */
+.bookings-cancel-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  background: color-mix(in srgb, #000 65%, transparent);
+  backdrop-filter: blur(10px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+
+.bookings-cancel-modal {
+  width: 100%;
+  max-width: 480px;
+  padding: 1.5rem;
+  border-radius: 1.25rem;
+  border: 1px solid hsl(var(--border));
+  background: color-mix(in srgb, hsl(var(--surface-strong)) 95%, #000);
+  box-shadow: var(--shadow-soft-lg);
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.bookings-cancel-modal-title {
+  margin: 0;
+  font-size: 1.2rem;
+  font-weight: 800;
+  color: hsl(var(--foreground));
+}
+
+.bookings-cancel-modal-preview {
+  margin: 0;
+  font-size: 0.88rem;
+  color: hsl(var(--text-soft));
+  line-height: 1.45;
+  background: color-mix(in srgb, hsl(var(--surface-elevated)) 85%, transparent);
+  padding: 0.85rem 1rem;
+  border-radius: 0.8rem;
+  border: 1px solid hsl(var(--border));
+}
+
+.bookings-cancel-modal-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}

@@ -220,7 +220,7 @@ const AppShellInner = ({ children }: AppShellProps) => {
                     <button
                       type="button"
                       className="app-topbar-balance-link app-topbar-balance-main"
-                      onClick={() => router.push(buildLocalePath(locale, '/app/settings/wallet'))}
+                      onClick={() => router.push(buildLocalePath(locale, '/app/settings?tab=wallet'))}
                       aria-label={dictionary.nav.settings}
                     >
                       <span className="app-topbar-balance-label">{dictionary.wallet.balance}</span>

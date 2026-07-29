@@ -19,7 +19,9 @@ import { walletApiClient } from '@/lib/wallet/client';
 
 import './wallet-settings-screen.css';
 
-type WalletSettingsScreenProps = Record<string, never>;
+type WalletSettingsScreenProps = {
+  hideHeader?: boolean;
+};
 
 const MIN_WITHDRAWAL_AMOUNT = 20;
 
@@ -46,7 +48,7 @@ const formatStatus = (status: WithdrawalRequest['status']): string => {
   }
 };
 
-export const WalletSettingsScreen = (_props: WalletSettingsScreenProps) => {
+export const WalletSettingsScreen = ({ hideHeader = false }: WalletSettingsScreenProps) => {
   const { locale, dictionary } = useI18n();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -291,16 +293,18 @@ export const WalletSettingsScreen = (_props: WalletSettingsScreenProps) => {
   return (
     <main className="wallet-settings-main">
       <Container className="wallet-settings-container">
-        <div className="app-page-header">
-          <div>
-            <h1 className="app-page-title">{dictionary.wallet.balance}</h1>
+        {!hideHeader && (
+          <div className="app-page-header">
+            <div>
+              <h1 className="app-page-title">{dictionary.wallet.balance}</h1>
+            </div>
+            <div className="app-page-header-actions">
+              <Link href={buildLocalePath(locale, '/app/settings')} className="wallet-settings-back">
+                {dictionary.nav.settings}
+              </Link>
+            </div>
           </div>
-          <div className="app-page-header-actions">
-            <Link href={buildLocalePath(locale, '/app/settings')} className="wallet-settings-back">
-              {dictionary.nav.settings}
-            </Link>
-          </div>
-        </div>
+        )}
 
         {depositResult && (
           <p
