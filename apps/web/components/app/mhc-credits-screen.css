@@ -1,0 +1,84 @@
+/* MHC credits surface. Logical properties throughout so RTL mirrors correctly. */
+.mhc-screen { display: flex; flex-direction: column; gap: 1rem; }
+.mhc-header { display: flex; align-items: center; justify-content: space-between; }
+.mhc-title { font-size: 1.25rem; font-weight: 700; margin: 0; }
+.mhc-subtitle { font-size: 1rem; font-weight: 600; margin: 1rem 0 0.5rem; }
+
+.mhc-balance-card {
+  display: flex; flex-direction: column; gap: 0.35rem;
+  padding: 1.25rem; border-radius: 14px;
+  background: linear-gradient(135deg, #0f766e, #115e59); color: #fff;
+}
+.mhc-balance-label { font-size: 0.85rem; opacity: 0.9; }
+.mhc-balance-value { font-size: 2rem; font-weight: 800; line-height: 1.1; }
+.mhc-balance-note { font-size: 0.8rem; opacity: 0.9; margin: 0.25rem 0 0; }
+
+.mhc-tabs, .mhc-rails { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+.mhc-tab {
+  padding: 0.5rem 0.9rem; border-radius: 999px; border: 1px solid #d4d4d8;
+  background: #fff; cursor: pointer; font-size: 0.9rem;
+}
+.mhc-tab.is-active { background: #0f766e; color: #fff; border-color: #0f766e; }
+
+.mhc-panel { display: flex; flex-direction: column; gap: 0.75rem; }
+.mhc-note { font-size: 0.85rem; color: #52525b; margin: 0; }
+.mhc-empty { font-size: 0.9rem; color: #71717a; margin: 0.5rem 0; }
+.mhc-error { font-size: 0.85rem; color: #b91c1c; margin: 0.25rem 0; }
+.mhc-success { font-size: 0.85rem; color: #15803d; margin: 0.25rem 0; }
+
+.mhc-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.5rem; }
+.mhc-list-item {
+  display: flex; align-items: flex-start; justify-content: space-between; gap: 0.75rem;
+  padding: 0.75rem; border: 1px solid #e4e4e7; border-radius: 10px; background: #fff;
+}
+.mhc-list-item > div { display: flex; flex-direction: column; gap: 0.15rem; min-width: 0; }
+.mhc-list-title { font-weight: 600; font-size: 0.9rem; }
+.mhc-list-meta { font-size: 0.8rem; color: #71717a; word-break: break-word; }
+.mhc-purchase-right { display: flex; flex-direction: column; align-items: flex-end; gap: 0.25rem; }
+
+.mhc-delta { font-weight: 700; font-size: 0.9rem; white-space: nowrap; }
+.mhc-delta.is-positive { color: #15803d; }
+.mhc-delta.is-negative { color: #b91c1c; }
+
+.mhc-badge { padding: 0.15rem 0.6rem; border-radius: 999px; font-size: 0.75rem; font-weight: 600; white-space: nowrap; }
+.mhc-badge--pending { background: #fef3c7; color: #92400e; }
+.mhc-badge--success { background: #dcfce7; color: #166534; }
+.mhc-badge--error { background: #fee2e2; color: #991b1b; }
+.mhc-badge--neutral { background: #f4f4f5; color: #52525b; }
+
+.mhc-packages { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.6rem; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); }
+.mhc-package {
+  width: 100%; display: flex; flex-direction: column; gap: 0.2rem; text-align: start;
+  padding: 0.85rem; border-radius: 12px; border: 2px solid #e4e4e7; background: #fff; cursor: pointer;
+}
+.mhc-package.is-selected { border-color: #0f766e; box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.12); }
+.mhc-package-name { font-weight: 600; font-size: 0.9rem; }
+.mhc-package-amount { font-size: 1.1rem; font-weight: 800; color: #0f766e; }
+.mhc-package-price { font-size: 0.85rem; color: #71717a; }
+
+.mhc-form { display: flex; flex-direction: column; gap: 0.6rem; }
+.mhc-form-actions { display: flex; gap: 0.75rem; align-items: center; }
+.mhc-field { display: flex; flex-direction: column; gap: 0.25rem; font-size: 0.85rem; }
+.mhc-field input, .mhc-field select {
+  padding: 0.55rem 0.7rem; border: 1px solid #d4d4d8; border-radius: 8px; font: inherit;
+}
+.mhc-account { display: grid; gap: 0.35rem; margin: 0; padding: 0.75rem; background: #f4f4f5; border-radius: 10px; }
+.mhc-account > div { display: flex; gap: 0.5rem; font-size: 0.85rem; }
+.mhc-account dt { font-weight: 600; margin: 0; }
+.mhc-account dd { margin: 0; }
+
+.mhc-primary {
+  align-self: flex-start; padding: 0.6rem 1.1rem; border-radius: 10px; border: none;
+  background: #0f766e; color: #fff; font-weight: 600; cursor: pointer; text-decoration: none;
+}
+.mhc-primary:disabled { opacity: 0.55; cursor: not-allowed; }
+.mhc-link { background: none; border: none; color: #0f766e; cursor: pointer; font: inherit; padding: 0; text-decoration: underline; }
+
+.mhc-payouts { display: flex; flex-direction: column; gap: 0.5rem; }
+
+@media (max-width: 640px) {
+  .mhc-balance-value { font-size: 1.6rem; }
+  .mhc-list-item { flex-direction: column; align-items: stretch; }
+  .mhc-purchase-right { align-items: flex-start; }
+  .mhc-packages { grid-template-columns: 1fr 1fr; }
+}
