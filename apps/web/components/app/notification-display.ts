@@ -40,15 +40,10 @@ export function getNotificationTargetHref(
   type: string,
   payload: NotificationPayload | null,
   locale: Locale,
-  userRole?: string,
+  _userRole?: string,
 ): string | null {
-  let base = NOTIFICATION_NAVIGATION_MAP[type as NotificationType];
+  const base = NOTIFICATION_NAVIGATION_MAP[type as NotificationType];
   if (!base) return null;
-
-  // Role safety: customer accounts must never be routed to provider-only /app/credits.
-  if (userRole === 'customer' && base === '/app/credits') {
-    base = '/app/history';
-  }
 
   const q = new URLSearchParams();
   if (payload?.reservationId) q.set('reservation', String(payload.reservationId));

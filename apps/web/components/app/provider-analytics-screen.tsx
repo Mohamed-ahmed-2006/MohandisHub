@@ -11,6 +11,9 @@ import { analyticsApiClient } from '@/lib/analytics/client';
 import { useI18n } from '@/lib/i18n/context';
 import { buildLocalePath } from '@/lib/i18n/path';
 
+// NOTE: Client-side route guards present UX redirection; the backend API endpoints
+// (e.g. GET /api/analytics/me) remain the primary, authoritative security boundary.
+
 export const ProviderAnalyticsScreen = () => {
   const { locale, dictionary } = useI18n();
   const { authUser, accessToken, isReady, isAuthenticated } = useAuth();

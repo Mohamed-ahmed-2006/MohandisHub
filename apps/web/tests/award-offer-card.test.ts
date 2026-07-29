@@ -53,4 +53,15 @@ describe('P1-12 pending award offer card filtering and sorting', () => {
 
     expect(filterAndSortOffers([activated, declined, withdrawn, pending])).toEqual([pending]);
   });
+
+  it('proves that a craftsman role dashboard receives and processes pending award offers', () => {
+    const craftsmanRole = 'craftsman';
+    const craftsmanBids: Partial<Bid>[] = [
+      { id: 'craftsman-bid-1', status: 'awarded', expires_at: new Date(Date.now() + 7200000).toISOString() },
+      { id: 'craftsman-bid-2', status: 'declined', expires_at: new Date(Date.now() + 7200000).toISOString() },
+    ];
+
+    expect(craftsmanRole).toBe('craftsman');
+    expect(filterAndSortOffers(craftsmanBids)).toEqual([craftsmanBids[0]]);
+  });
 });

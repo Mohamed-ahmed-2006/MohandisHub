@@ -91,10 +91,13 @@ const t = (key: keyof typeof copy, locale: Locale): string => {
   return locale === 'ar' ? entry.ar : entry.en;
 };
 
+// NOTE: Client-side route guards present UX redirection; the backend API endpoints
+// (e.g. GET /api/mhc/credits) remain the primary, authoritative security boundary.
+
 export const MhcCreditsScreen = () => {
   const { locale } = useI18n();
   const loc: Locale = locale === 'ar' ? 'ar' : 'en';
-  const { authUser, accessToken } = useAuth();
+  const { authUser, accessToken, isReady, isAuthenticated } = useAuth();
 
   const isProvider = PROVIDER_ROLES.has(authUser?.role ?? '');
 
@@ -138,10 +141,20 @@ export const MhcCreditsScreen = () => {
   }, [accessToken, isProvider, loc]);
 
   useEffect(() => {
-    void load();
-  }, [load]);
+    if (isReady) {
+      void load();
+    }
+  }, [isReady, load]);
 
-  if (!isProvider) {
+  if (!isReady) {
+    return (
+      <section className="mhc-screen" dir={loc === 'ar' ? 'rtl' : 'ltr'}>
+        <p className="mhc-empty">{t('loading', loc)}</p>
+      </section>
+    );
+  }
+
+  if (!isAuthenticated || !isProvider) {
     return (
       <section className="mhc-screen" dir={loc === 'ar' ? 'rtl' : 'ltr'}>
         <p className="mhc-empty">{t('providersOnly', loc)}</p>

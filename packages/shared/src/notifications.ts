@@ -38,12 +38,15 @@ export type NotificationType =
   | 'review_received'
   | 'review_report_resolved'
   | 'review_dispute_resolved'
-  // Wallet
+  // Wallet (legacy)
   | 'wallet_deposit_approved'
   | 'wallet_deposit_rejected'
   | 'wallet_withdrawal_completed'
   | 'wallet_withdrawal_rejected'
   | 'wallet_deposit_confirmed'
+  // MHC
+  | 'mhc_purchase_completed'
+  | 'mhc_purchase_failed'
   // Chat
   | 'chat_message'
   // System
@@ -119,11 +122,13 @@ export const NOTIFICATION_NAVIGATION_MAP: Partial<Record<NotificationType, strin
   review_received: '/app/profile',
   review_report_resolved: '/app/profile',
   review_dispute_resolved: '/app/profile',
-  wallet_deposit_approved: '/app/credits',
-  wallet_deposit_rejected: '/app/credits',
-  wallet_withdrawal_completed: '/app/credits',
-  wallet_withdrawal_rejected: '/app/credits',
-  wallet_deposit_confirmed: '/app/credits',
+  wallet_deposit_approved: '/app/history',
+  wallet_deposit_rejected: '/app/history',
+  wallet_withdrawal_completed: '/app/history',
+  wallet_withdrawal_rejected: '/app/history',
+  wallet_deposit_confirmed: '/app/history',
+  mhc_purchase_completed: '/app/credits',
+  mhc_purchase_failed: '/app/credits',
   chat_message: '/app/chat',
   admin: '/app',
   demo: '/app',

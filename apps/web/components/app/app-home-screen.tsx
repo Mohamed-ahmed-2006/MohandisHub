@@ -30,6 +30,7 @@ import { profilesApiClient } from '@/lib/profiles/client';
 import { recommendationsApiClient } from '@/lib/recommendations/client';
 import { savedSearchesApiClient } from '@/lib/saved-searches/client';
 import { servicesApiClient } from '@/lib/services/client';
+import { normalizeServiceTag, SUGGESTED_SERVICE_TAGS } from '@/lib/services/tags';
 
 import '@/app/dashboard.css';
 
@@ -459,6 +460,7 @@ export const AppHomeScreen = ({ locale, dictionary }: AppHomeScreenProps) => {
       minPrice,
       maxPrice,
       verifiedOnly,
+      tags: selectedTags,
       sort,
     }),
     [
@@ -470,6 +472,7 @@ export const AppHomeScreen = ({ locale, dictionary }: AppHomeScreenProps) => {
       minRating,
       providerType,
       searchQuery,
+      selectedTags,
       sort,
       verifiedOnly,
     ],
@@ -582,6 +585,12 @@ export const AppHomeScreen = ({ locale, dictionary }: AppHomeScreenProps) => {
       setMinPrice(typeof filters.minPrice === 'number' ? filters.minPrice : '');
       setMaxPrice(typeof filters.maxPrice === 'number' ? filters.maxPrice : '');
       setVerifiedOnly(Boolean(filters.verifiedOnly));
+      const restoredTags = Array.isArray(filters.tags)
+        ? (filters.tags as unknown[]).filter(
+            (t): t is string => typeof t === 'string' && t.trim().length > 0,
+          )
+        : [];
+      setSelectedTags(restoredTags);
       setSort(typeof filters.sort === 'string' ? filters.sort : 'newest');
       if (accessToken) {
         void savedSearchesApiClient.markViewed(accessToken, saved.id);
@@ -610,6 +619,7 @@ export const AppHomeScreen = ({ locale, dictionary }: AppHomeScreenProps) => {
         if (typeof filters.minPrice === 'number') params.minPrice = filters.minPrice;
         if (typeof filters.maxPrice === 'number') params.maxPrice = filters.maxPrice;
         if (filters.verifiedOnly === true) params.verifiedOnly = true;
+        if (restoredTags.length > 0) params.tags = restoredTags;
         if (typeof filters.sort === 'string' && filters.sort) params.sort = filters.sort;
         const data = await servicesApiClient.searchServices(params);
         setResults(dedupeById(data.items.map((item) => ({ ...item, images: item.images ?? [] }))));
@@ -1750,19 +1760,24 @@ export const AppHomeScreen = ({ locale, dictionary }: AppHomeScreenProps) => {
                         <label className="home-search-label">
                           {locale === 'ar' ? 'الوسوم (مطابقة أي وسم)' : 'Filter by Tags (match any)'}
                         </label>
-                        <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.5rem' }}>
+                        <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.25rem' }}>
                           <input
                             type="text"
                             className="home-search-input"
-                            placeholder={locale === 'ar' ? 'أدخل وسمًا ثم اضغط إضافة...' : 'Add tag (e.g. plumbing, design)...'}
+                            placeholder={
+                              locale === 'ar'
+                                ? 'اختر من الاقتراحات أو اكتب وسمًا...'
+                                : 'Select suggestion or type tag...'
+                            }
                             value={tagInput}
+                            maxLength={30}
                             onChange={(e) => setTagInput(e.target.value)}
                             onKeyDown={(e) => {
                               if (e.key === 'Enter') {
                                 e.preventDefault();
-                                const trimmed = tagInput.trim();
-                                if (trimmed && !selectedTags.includes(trimmed)) {
-                                  setSelectedTags([...selectedTags, trimmed]);
+                                const norm = normalizeServiceTag(tagInput);
+                                if (norm && !selectedTags.includes(norm) && selectedTags.length < 10) {
+                                  setSelectedTags([...selectedTags, norm]);
                                   setTagInput('');
                                 }
                               }
@@ -1771,16 +1786,58 @@ export const AppHomeScreen = ({ locale, dictionary }: AppHomeScreenProps) => {
                           <button
                             type="button"
                             className="dashboard-secondary-btn"
+                            disabled={selectedTags.length >= 10 || !normalizeServiceTag(tagInput)}
                             onClick={() => {
-                              const trimmed = tagInput.trim();
-                              if (trimmed && !selectedTags.includes(trimmed)) {
-                                setSelectedTags([...selectedTags, trimmed]);
+                              const norm = normalizeServiceTag(tagInput);
+                              if (norm && !selectedTags.includes(norm) && selectedTags.length < 10) {
+                                setSelectedTags([...selectedTags, norm]);
                                 setTagInput('');
                               }
                             }}
                           >
                             {locale === 'ar' ? 'إضافة' : 'Add'}
                           </button>
+                        </div>
+                        <div
+                          style={{
+                            display: 'flex',
+                            flexWrap: 'wrap',
+                            gap: '0.35rem',
+                            marginBottom: '0.5rem',
+                            alignItems: 'center',
+                          }}
+                        >
+                          <span style={{ fontSize: '0.75rem', color: '#64748b' }}>
+                            {locale === 'ar' ? 'مقترحات:' : 'Suggestions:'}
+                          </span>
+                          {SUGGESTED_SERVICE_TAGS.filter(
+                            (st) =>
+                              !selectedTags.includes(st) &&
+                              (!tagInput.trim() || st.includes(tagInput.trim().toLowerCase())),
+                          )
+                            .slice(0, 6)
+                            .map((st) => (
+                              <button
+                                key={st}
+                                type="button"
+                                onClick={() => {
+                                  if (selectedTags.length < 10) {
+                                    setSelectedTags([...selectedTags, st]);
+                                  }
+                                }}
+                                style={{
+                                  background: '#f1f5f9',
+                                  border: '1px solid #cbd5e1',
+                                  borderRadius: '9999px',
+                                  padding: '0.15rem 0.5rem',
+                                  fontSize: '0.75rem',
+                                  color: '#334155',
+                                  cursor: 'pointer',
+                                }}
+                              >
+                                + #{st}
+                              </button>
+                            ))}
                         </div>
                         {selectedTags.length > 0 && (
                           <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', alignItems: 'center' }}>

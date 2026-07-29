@@ -1,6 +1,5 @@
-import { describe, expect, it } from 'vitest';
-
 import { isProviderRole } from '@mohandishub/shared';
+import { describe, expect, it } from 'vitest';
 
 describe('P0-09 and P0-14 route authorization guards', () => {
   it('rejects customer role from accessing /app/credits', () => {

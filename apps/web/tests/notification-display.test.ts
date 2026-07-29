@@ -34,23 +34,38 @@ describe('notification target links', () => {
     expect(getNotificationTargetHref('need_bid_awarded', {}, 'ar')).toBe('/ar/app');
   });
 
-  it('prevents customer role from being routed to provider-only /app/credits', () => {
+  it('routes customer and provider legacy wallet notifications to /app/history', () => {
     expect(
       getNotificationTargetHref('wallet_deposit_approved', null, 'en', 'customer'),
     ).toBe('/en/app/history');
 
     expect(
-      getNotificationTargetHref('wallet_withdrawal_completed', null, 'ar', 'customer'),
+      getNotificationTargetHref('wallet_withdrawal_completed', null, 'ar', 'expert'),
     ).toBe('/ar/app/history');
   });
 
-  it('routes provider roles to /app/credits for wallet notifications', () => {
+  it('routes MHC purchase notifications to /app/credits', () => {
     expect(
-      getNotificationTargetHref('wallet_deposit_approved', null, 'en', 'expert'),
+      getNotificationTargetHref('mhc_purchase_completed', null, 'en', 'expert'),
     ).toBe('/en/app/credits');
 
     expect(
-      getNotificationTargetHref('wallet_withdrawal_completed', null, 'ar', 'business'),
+      getNotificationTargetHref('mhc_purchase_failed', null, 'ar', 'business'),
     ).toBe('/ar/app/credits');
+  });
+
+  it('routes rejected-bid notification with IDs to need and bid context', () => {
+    expect(
+      getNotificationTargetHref(
+        'need_bid_rejected',
+        { needId: 'need-100', bidId: 'bid-200' },
+        'en',
+      ),
+    ).toBe('/en/app?needId=need-100&bidId=bid-200');
+  });
+
+  it('routes rejected-bid notification without IDs safely to /app', () => {
+    expect(getNotificationTargetHref('need_bid_rejected', null, 'en')).toBe('/en/app');
+    expect(getNotificationTargetHref('need_bid_rejected', {}, 'ar')).toBe('/ar/app');
   });
 });
