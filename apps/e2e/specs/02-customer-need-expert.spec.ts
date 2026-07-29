@@ -15,7 +15,7 @@ test.describe('Customer need to expert engagement', () => {
   });
 
   test('browse or services page structure', async ({ page }) => {
-    await page.goto('/en/app/browse');
+    await page.goto('/en/app');
     await expect(page).toHaveURL(/\/(auth|app|browse)/);
     const body = page.locator('body');
     await expect(body).toBeVisible({ timeout: 10_000 });

@@ -95,7 +95,7 @@ test.describe('Phase 2 sandbox money journeys', () => {
     const customerToken = await login(request, customerEmail!, customerPassword!);
     const providerToken = await login(request, providerEmail!, providerPassword!);
 
-    await openAuthed(page, customerToken, '/en/app/browse');
+    await openAuthed(page, customerToken, '/en/app');
     await expect(page.locator('body')).toBeVisible();
 
     const walletBefore = await request.get(`${apiBaseUrl}/api/wallet/me`, {

@@ -103,7 +103,22 @@ export const AppSidebar = ({
     { href: '/app/disputes', label: dictionary.nav.disputes ?? 'Disputes' },
     {
       href: '/app/services',
-      label: dictionary.nav.myServices ?? dictionary.nav.browse,
+      label: dictionary.nav.myCatalogue ?? dictionary.nav.myServices ?? 'My Catalogue',
+      roles: ['expert', 'craftsman', 'business'],
+    },
+    {
+      href: '/app/projects',
+      label: dictionary.nav.hiring ?? dictionary.nav.projects ?? 'Hiring',
+      roles: ['expert', 'craftsman', 'business'],
+    },
+    {
+      href: '/app/credits',
+      label: dictionary.nav.credits ?? 'MHC Credits',
+      roles: ['expert', 'craftsman', 'business'],
+    },
+    {
+      href: '/app/analytics',
+      label: dictionary.nav.analytics ?? 'Analytics',
       roles: ['expert', 'craftsman', 'business'],
     },
     {

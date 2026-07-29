@@ -1560,7 +1560,7 @@ export const BookingsScreen = (_props: Props) => {
                             cursor: isFreeCancellationPassed(selectedReservation) ? 'not-allowed' : 'pointer',
                           }}
                           disabled={isFreeCancellationPassed(selectedReservation) || updatingId === selectedReservation.id}
-                          onClick={() => void showCancelModal(selectedReservation)}
+                          onClick={() => setShowCancelModal(true)}
                         >
                           {updatingId === selectedReservation.id ? 'Cancelling...' : (bp.cancelReservation ?? 'Cancel Reservation')}
                         </button>

@@ -1,5 +1,6 @@
 'use client';
 
+import { isProviderRole } from '@mohandishub/shared';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
 
@@ -10,15 +11,14 @@ import { ProfileModalProvider, useProfileModal } from './profile-modal-context';
 import { SupportFab } from './support-fab';
 import { ToastProvider, useToast } from './toast';
 import { UserProfileModal } from './user-profile-modal';
-import { WalletDepositModal } from './wallet-deposit-modal';
 
-import { useAppStatus } from '@/components/app-status-provider';
 import { useAuth } from '@/components/auth/auth-provider';
 import { SkeletonAvatar } from '@/components/ui/skeleton';
 import { getChatSocket } from '@/lib/chat/socket';
-import { useWallet } from '@/lib/hooks/use-api-swr';
+import { useMhcCredits } from '@/lib/hooks/use-api-swr';
 import { useI18n } from '@/lib/i18n/context';
 import { buildLocalePath } from '@/lib/i18n/path';
+import { formatMhc } from '@/lib/mhc/presentation';
 import { profilesApiClient } from '@/lib/profiles/client';
 
 import './app-shell.css';
@@ -49,14 +49,13 @@ const AppShellInner = ({ children }: AppShellProps) => {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { profileModalUserId, profileModalInitialData, closeProfileModal } = useProfileModal();
-  const { status } = useAppStatus();
 
   const { authUser, accessToken, logout, isReady, refreshSession, isAuthenticated } = useAuth();
-  const { wallet, mutate: mutateWallet } = useWallet(
-    isReady && isAuthenticated && accessToken ? accessToken : null,
+  const isProvider = authUser?.role ? isProviderRole(authUser.role) : false;
+  const { mhcSummary, isLoading: isMhcLoading, mutate: mutateMhc } = useMhcCredits(
+    isReady && isAuthenticated && accessToken && isProvider ? accessToken : null,
   );
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [showDepositModal, setShowDepositModal] = useState(false);
   const [depositMessage, setDepositMessage] = useState<'success' | 'cancelled' | null>(null);
   const { addToast } = useToast();
 
@@ -98,41 +97,43 @@ const AppShellInner = ({ children }: AppShellProps) => {
         }
       }
     })();
-  }, [isReady, authUser, accessToken, locale, router]);
+  }, [isReady, authUser, accessToken, router, locale]);
 
   useEffect(() => {
-    if (!isReady || !authUser || !accessToken) return;
-    let cancelled = false;
     let activeSocket: Awaited<ReturnType<typeof getChatSocket>> | null = null;
+    if (!isReady || !accessToken) return;
+
     const onNotification = (data: AppNotification) => {
-      addToast(data.title, data.message);
+      const title = data.title || dictionary.common.appName;
+      const message = data.message || '';
+      addToast(title, message);
     };
+
     void getChatSocket(accessToken).then((sock) => {
-      if (cancelled || !sock) return;
+      if (!sock) return;
       activeSocket = sock;
-      sock.emit('join_user', { userId: authUser.id });
       sock.on('notification', onNotification);
     });
+
     return () => {
-      cancelled = true;
-      if (activeSocket) activeSocket.off('notification', onNotification);
+      if (activeSocket) {
+        activeSocket.off('notification', onNotification);
+      }
     };
-  }, [isReady, authUser, accessToken, addToast]);
+  }, [isReady, accessToken, addToast, dictionary.common.appName]);
 
   useEffect(() => {
-    if (!isReady || !accessToken) return;
     const onVisibilityChange = () => {
-      if (document.visibilityState === 'visible') {
+      if (document.visibilityState === 'visible' && isReady && accessToken) {
         void (async () => {
-          const refreshedToken = await refreshSession();
-          if (!refreshedToken) return;
-          // Let SWR revalidate with the new token key after auth state updates.
+          await refreshSession();
+          void mutateMhc();
         })();
       }
     };
     document.addEventListener('visibilitychange', onVisibilityChange);
     return () => document.removeEventListener('visibilitychange', onVisibilityChange);
-  }, [isReady, accessToken, mutateWallet, refreshSession]);
+  }, [isReady, accessToken, mutateMhc, refreshSession]);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -165,10 +166,10 @@ const AppShellInner = ({ children }: AppShellProps) => {
 
   useEffect(() => {
     if (!isReady || !accessToken) return;
-    const handler = () => void mutateWallet();
+    const handler = () => void mutateMhc();
     window.addEventListener('wallet-updated', handler);
     return () => window.removeEventListener('wallet-updated', handler);
-  }, [isReady, accessToken, mutateWallet]);
+  }, [isReady, accessToken, mutateMhc]);
 
   const handleLogout = async () => {
     await logout();
@@ -177,7 +178,6 @@ const AppShellInner = ({ children }: AppShellProps) => {
 
   const role: string = authUser?.role ?? 'customer';
   const isAdmin: boolean = authUser?.isAdmin === true;
-  const walletFeatureEnabled = status?.featureWalletEnabled !== false;
 
   return (
     <div className="app-shell">
@@ -215,40 +215,22 @@ const AppShellInner = ({ children }: AppShellProps) => {
                   refreshSession={refreshSession}
                   {...(authUser?.role ? { userRole: authUser.role } : {})}
                 />
-                {(wallet != null || accessToken) && walletFeatureEnabled && (
+                {isProvider && (
                   <div className="app-topbar-balance">
                     <button
                       type="button"
                       className="app-topbar-balance-link app-topbar-balance-main"
-                      onClick={() => router.push(buildLocalePath(locale, '/app/settings?tab=wallet'))}
-                      aria-label={dictionary.nav.settings}
+                      onClick={() => router.push(buildLocalePath(locale, '/app/credits'))}
+                      aria-label={dictionary.nav?.credits ?? 'MHC Credits'}
                     >
-                      <span className="app-topbar-balance-label">{dictionary.wallet.balance}</span>
+                      <span className="app-topbar-balance-label">MHC</span>
                       <span className="app-topbar-balance-amount">
-                        {wallet != null ? `${wallet.balance.toFixed(2)} ${wallet.currency}` : '-'}
+                        {isMhcLoading
+                          ? '-'
+                          : mhcSummary != null
+                            ? formatMhc(mhcSummary.balance, locale)
+                            : '-'}
                       </span>
-                    </button>
-                    <button
-                      type="button"
-                      className="app-topbar-balance-plus"
-                      aria-label={dictionary.wallet.deposit}
-                      onClick={() => {
-                        if (accessToken) setShowDepositModal(true);
-                      }}
-                    >
-                      +
-                    </button>
-                  </div>
-                )}
-                {(wallet != null || accessToken) && !walletFeatureEnabled && (
-                  <div className="app-topbar-balance" title="Wallet feature disabled by admin">
-                    <button
-                      type="button"
-                      className="app-topbar-balance-link app-topbar-balance-main"
-                      disabled
-                    >
-                      <span className="app-topbar-balance-label">{dictionary.wallet.balance}</span>
-                      <span className="app-topbar-balance-amount">Feature disabled</span>
                     </button>
                   </div>
                 )}
@@ -309,17 +291,6 @@ const AppShellInner = ({ children }: AppShellProps) => {
               x
             </button>
           </div>
-        )}
-
-        {showDepositModal && accessToken && (
-          <WalletDepositModal
-            dictionary={dictionary}
-            accessToken={accessToken}
-            onClose={() => setShowDepositModal(false)}
-            onDepositCreated={() => {
-              window.dispatchEvent(new CustomEvent('wallet-updated'));
-            }}
-          />
         )}
 
         {profileModalUserId && (
