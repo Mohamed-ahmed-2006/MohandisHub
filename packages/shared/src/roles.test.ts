@@ -18,15 +18,16 @@ describe('role policy helpers', () => {
     expect(canManageNeeds('business')).toBe(false);
   });
 
-  it('allows provider roles to bid; experts, craftsmen, and businesses can withdraw', () => {
+  it('allows provider roles to bid; returns false for withdrawal for all launch roles', () => {
     expect(canBidOnNeeds('expert')).toBe(true);
     expect(canBidOnNeeds('craftsman')).toBe(true);
     expect(canBidOnNeeds('business')).toBe(true);
     expect(canBidOnNeeds('customer')).toBe(false);
 
-    expect(canRequestWithdrawal('expert')).toBe(true);
-    expect(canRequestWithdrawal('craftsman')).toBe(true);
-    expect(canRequestWithdrawal('business')).toBe(true);
+    expect(canRequestWithdrawal('expert')).toBe(false);
+    expect(canRequestWithdrawal('craftsman')).toBe(false);
+    expect(canRequestWithdrawal('business')).toBe(false);
+    expect(canRequestWithdrawal('customer')).toBe(false);
   });
 
   it('allows all provider roles to access provider surfaces', () => {

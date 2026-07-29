@@ -32,8 +32,7 @@ export const canAccessProviderAnalytics = (role: string): role is ProviderRole =
 export const canManageReservationAvailability = (role: string): role is ProviderRole =>
   isProviderRole(role);
 
-export const canRequestWithdrawal = (role: string): role is WithdrawalEligibleRole =>
-  role === 'customer' || role === 'expert' || role === 'craftsman' || role === 'business';
+export const canRequestWithdrawal = (_role: string): boolean => false;
 
 export const ROLE_META: Record<UserRole, RoleMeta> = {
   customer: {
@@ -64,7 +63,7 @@ export const ROLE_PERMISSION_MATRIX = {
     bidOnNeeds: false,
     manageProviderServices: false,
     manageReservationAvailability: false,
-    requestWithdrawal: true,
+    requestWithdrawal: false,
     accessAdminPanel: false,
   },
   expert: {
@@ -72,7 +71,7 @@ export const ROLE_PERMISSION_MATRIX = {
     bidOnNeeds: true,
     manageProviderServices: true,
     manageReservationAvailability: true,
-    requestWithdrawal: true,
+    requestWithdrawal: false,
     accessAdminPanel: false,
   },
   craftsman: {
@@ -80,7 +79,7 @@ export const ROLE_PERMISSION_MATRIX = {
     bidOnNeeds: true,
     manageProviderServices: true,
     manageReservationAvailability: true,
-    requestWithdrawal: true,
+    requestWithdrawal: false,
     accessAdminPanel: false,
   },
   business: {
@@ -88,7 +87,7 @@ export const ROLE_PERMISSION_MATRIX = {
     bidOnNeeds: true,
     manageProviderServices: true,
     manageReservationAvailability: true,
-    requestWithdrawal: true,
+    requestWithdrawal: false,
     accessAdminPanel: false,
   },
   admin: {
