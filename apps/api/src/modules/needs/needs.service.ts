@@ -9,6 +9,7 @@ import { getPool } from '../../db/pool.js';
 import { redactContactDetails } from '../../utils/contact-redaction.js';
 import { HttpError } from '../../utils/http-error.js';
 import { ActivationGateService } from '../mhc/activation-gate.service.js';
+import { MhcRepository } from '../mhc/mhc.repository.js';
 import { NotificationsService } from '../notifications/notifications.service.js';
 import { PlansService } from '../plans/plans.service.js';
 import { UsageQuotaService } from '../plans/usage-quota.service.js';
@@ -36,6 +37,7 @@ export class NeedsService {
     private readonly usageQuotaService: UsageQuotaService = new UsageQuotaService(),
     private readonly notificationsService: NotificationsService = new NotificationsService(),
     private readonly activationGate: ActivationGateService = new ActivationGateService(),
+    private readonly mhcRepo: MhcRepository = new MhcRepository(),
   ) {}
 
   private notifyUser(
@@ -205,6 +207,19 @@ export class NeedsService {
     if (input.status) {
       this.assertNeedStatusTransition(need.status, input.status);
     }
+    // Closing a need that still carries a pending award used to leave
+    // pending_award_* populated and the bid stranded in 'awarded_pending',
+    // permanently consuming a bid slot with no way to clear it (MHC-17). The
+    // CHECK constraint only applies while the status IS pending, so the write
+    // succeeded and the orphan persisted.
+    if (
+      input.status === 'closed' &&
+      need.status === 'awarded_pending_provider_acceptance' &&
+      need.pending_award_bid_id
+    ) {
+      await this.mhcRepo.releasePendingAwardForBid(needId, need.pending_award_bid_id, 'withdrawn');
+    }
+
     const fields: Record<string, unknown> = {};
     if (input.status) fields.status = input.status;
     if (input.title) fields.title = input.title;
@@ -487,12 +502,6 @@ export class NeedsService {
         });
       }
 
-      const losers = bids.filter(
-        (row) =>
-          row.id !== targetBid.id &&
-          ['pending', 'awarded_pending', 'accepted'].includes(row.status),
-      );
-
       // Awarding is now an OFFER, not an activation. The provider must accept and
       // pay the MHC activation price before the job opens. Nothing is charged
       // here, so a customer can never spend a provider's credits.
@@ -504,12 +513,20 @@ export class NeedsService {
          WHERE id = $1`,
         [targetBid.id],
       );
+
+      // Alternative bids are deliberately LEFT ALONE (decision D4). Rejecting
+      // them here told every other provider they had lost before the chosen one
+      // had even accepted — and if the offer then lapsed, the need reopened with
+      // no live bids and a set of providers who had been told they were out.
+      // They stay 'pending' and are rejected only once someone actually pays,
+      // inside the activation transaction.
+      //
+      // A previously offered bid being re-awarded elsewhere must still be
+      // released, or two bids would sit in 'awarded_pending' at once.
       await client.query(
         `UPDATE bids
-         SET status = 'rejected', updated_at = now()
-         WHERE need_id = $1
-           AND id != $2
-           AND status IN ('pending', 'awarded_pending', 'accepted')`,
+         SET status = 'pending', award_offered_at = NULL, updated_at = now()
+         WHERE need_id = $1 AND id <> $2 AND status = 'awarded_pending'`,
         [needId, targetBid.id],
       );
       // expiryHours = 0 means "never expires"; store NULL so the sweep skips it.
@@ -540,15 +557,8 @@ export class NeedsService {
           : 'A customer selected your bid. Accept and activate it with credits to unlock the job.',
         { needId, bidId: targetBid.id, requiresActivation: true },
       );
-      for (const lo of losers) {
-        this.notifyUser(
-          lo.expert_id,
-          'need_bid_rejected',
-          'Bid not selected',
-          'Another bid was selected for this need.',
-          { needId, bidId: lo.id },
-        );
-      }
+      // Losing bidders are NOT notified here. Nobody has lost yet — the offer
+      // may lapse and come back to them. They are told when the winner pays.
       return {
         needId,
         bidId: targetBid.id,

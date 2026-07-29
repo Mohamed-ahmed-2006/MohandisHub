@@ -1,6 +1,7 @@
 import { logger } from './config/logger.js';
 import { captureException, initSentry } from './config/sentry.js';
 import { closePool } from './db/pool.js';
+import { startAwardExpiryWorker } from './modules/mhc/award-expiry.worker.js';
 import { startReservationLifecycleWorker } from './modules/reservations/reservations.lifecycle-worker.js';
 import { startRetentionWorker } from './modules/retention/retention.worker.js';
 
@@ -8,9 +9,11 @@ initSentry();
 
 const reservationWorker = startReservationLifecycleWorker();
 const retentionWorker = startRetentionWorker();
+const awardExpiryWorker = startAwardExpiryWorker();
 
 logger.info('Reservation lifecycle worker started');
 logger.info('Retention worker started');
+logger.info('Award expiry worker started');
 logger.info('Worker ready', { pid: process.pid });
 
 const heartbeat = setInterval(() => {
@@ -27,6 +30,7 @@ const shutdown = async (signal: string): Promise<void> => {
   clearInterval(heartbeat);
   await reservationWorker.stop();
   await retentionWorker.stop();
+  await awardExpiryWorker.stop();
   await closePool();
   logger.info('Worker shutdown finished');
   process.exit(0);

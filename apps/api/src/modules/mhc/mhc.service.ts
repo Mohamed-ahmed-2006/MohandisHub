@@ -14,6 +14,7 @@ import { env } from '../../config/env.js';
 import { getPool } from '../../db/pool.js';
 import { createInvoice, verifyNowPaymentsIpnSignature } from '../../lib/nowpayments.client.js';
 import { HttpError } from '../../utils/http-error.js';
+import { NotificationsService } from '../notifications/notifications.service.js';
 import { ProviderPaymentsService } from '../provider-payments/provider-payments.service.js';
 
 import {
@@ -54,6 +55,7 @@ export type MhcActionKey =
 
 export class MhcService {
   private repo = new MhcRepository();
+  private notifications = new NotificationsService();
 
   /** Lazily constructed to avoid a module cycle with the payments service. */
   private get providerPayments(): ProviderPaymentsService {
@@ -755,8 +757,10 @@ export class MhcService {
       expert_id: string;
       bid_status: string;
       need_status: string;
+      customer_id: string;
     }>(
-      `SELECT b.id AS bid_id, b.need_id, b.expert_id, b.status AS bid_status, n.status AS need_status
+      `SELECT b.id AS bid_id, b.need_id, b.expert_id, b.status AS bid_status,
+              n.status AS need_status, n.customer_id
        FROM bids b
        JOIN needs n ON n.id = b.need_id
        WHERE b.id = $1`,
@@ -784,8 +788,135 @@ export class MhcService {
       });
     }
 
-    await this.repo.releasePendingAwardForBid(bid.need_id, bid.bid_id, 'rejected');
+    const { released } = await this.repo.releasePendingAwardForBid(
+      bid.need_id,
+      bid.bid_id,
+      'rejected',
+    );
+    if (!released) {
+      // The offer moved on between the check above and the locked release —
+      // most likely the customer withdrew it or it expired.
+      throw new HttpError({
+        statusCode: 409,
+        code: 'NO_PENDING_AWARD',
+        message: 'This award is no longer pending.',
+      });
+    }
+
+    void this.notifications
+      .createForUser(bid.customer_id, {
+        type: 'need_bid_rejected',
+        title: 'Provider declined',
+        message: 'The provider declined your award. You can select another provider.',
+        payload: { needId: bid.need_id, bidId: bid.bid_id, reason: 'declined' },
+      })
+      .catch(() => {});
+
     return { needId: bid.need_id, rejected: true };
+  }
+
+  /**
+   * The customer withdraws an award they made, before the provider accepts.
+   *
+   * Decision D4 pairs this with expiry: without it a customer is stuck behind a
+   * silent provider for the whole acceptance window with no way out but closing
+   * the need. Nothing is charged, and the bid returns to the pool so the same
+   * provider can be chosen again later.
+   */
+  async withdrawAwardForCustomer(params: {
+    userId: string;
+    needId: string;
+  }): Promise<{ needId: string; withdrawn: true; bidId: string }> {
+    const { rows } = await getPool().query<{
+      customer_id: string;
+      status: string;
+      pending_award_bid_id: string | null;
+      expert_id: string | null;
+    }>(
+      `SELECT n.customer_id, n.status, n.pending_award_bid_id, b.expert_id
+       FROM needs n
+       LEFT JOIN bids b ON b.id = n.pending_award_bid_id
+       WHERE n.id = $1`,
+      [params.needId],
+    );
+    const need = rows[0];
+    if (!need) {
+      throw new HttpError({ statusCode: 404, code: 'NEED_NOT_FOUND', message: 'Need not found.' });
+    }
+    if (need.customer_id !== params.userId) {
+      throw new HttpError({ statusCode: 403, code: 'FORBIDDEN', message: 'Not your need.' });
+    }
+    if (need.status !== 'awarded_pending_provider_acceptance' || !need.pending_award_bid_id) {
+      throw new HttpError({
+        statusCode: 409,
+        code: 'NO_PENDING_AWARD',
+        message: 'There is no pending award to withdraw on this need.',
+      });
+    }
+
+    const bidId = need.pending_award_bid_id;
+    const { released } = await this.repo.releasePendingAwardForBid(
+      params.needId,
+      bidId,
+      'withdrawn',
+    );
+    if (!released) {
+      // The provider paid first. Their credits are spent, so the job stands.
+      throw new HttpError({
+        statusCode: 409,
+        code: 'AWARD_ALREADY_ACTIVATED',
+        message:
+          'The provider already accepted and paid for this job, so the award can no longer be withdrawn.',
+      });
+    }
+
+    if (need.expert_id) {
+      void this.notifications
+        .createForUser(need.expert_id, {
+          type: 'need_bid_rejected',
+          title: 'Award withdrawn',
+          message:
+            'The customer withdrew this award before it was activated. No credits were charged.',
+          payload: { needId: params.needId, bidId, reason: 'withdrawn' },
+        })
+        .catch(() => {});
+    }
+
+    return { needId: params.needId, withdrawn: true, bidId };
+  }
+
+  /**
+   * Release pending awards whose acceptance window has closed. Driven by the
+   * expiry worker.
+   */
+  async expirePendingAwards(limit = 50): Promise<{ examined: number; released: number }> {
+    const due = await this.repo.listExpiredPendingAwards(limit);
+    let released = 0;
+
+    for (const row of due) {
+      const result = await this.repo.releasePendingAwardForBid(row.need_id, row.bid_id, 'expired');
+      if (!result.released) continue;
+      released += 1;
+
+      void this.notifications
+        .createForUser(row.provider_user_id, {
+          type: 'need_bid_rejected',
+          title: 'Award offer expired',
+          message: 'You did not activate this job in time. No credits were charged.',
+          payload: { needId: row.need_id, bidId: row.bid_id, reason: 'expired' },
+        })
+        .catch(() => {});
+      void this.notifications
+        .createForUser(row.customer_id, {
+          type: 'need_bid_rejected',
+          title: 'Award offer expired',
+          message: 'The provider did not activate in time. You can select another provider.',
+          payload: { needId: row.need_id, bidId: row.bid_id, reason: 'expired' },
+        })
+        .catch(() => {});
+    }
+
+    return { examined: due.length, released };
   }
 
   /** Charge the provider for accepting a service booking. */

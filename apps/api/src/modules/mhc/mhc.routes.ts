@@ -34,5 +34,7 @@ mhcRouter.get('/activations/award/:bidId', mhcController.getAwardActivationStatu
 mhcRouter.post('/activations/award/:bidId', mhcController.activateAward);
 // Declining is free: the need reopens and no credits are charged.
 mhcRouter.post('/activations/award/:bidId/decline', mhcController.rejectAward);
+// The customer withdraws an award the provider has not accepted yet (D4).
+mhcRouter.post('/activations/award/need/:needId/withdraw', mhcController.withdrawAward);
 
 export { mhcRouter };

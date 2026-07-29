@@ -1062,19 +1062,60 @@ export class MhcRepository {
    * Release a pending award (provider declined, or it expired). No MHC is
    * involved: nothing was ever charged for a pending award.
    */
+  /**
+   * Release a pending award: the provider declined, the customer withdrew it, or
+   * it expired. No MHC is involved — nothing is ever charged for a pending
+   * award, which is the whole point of awarding being an offer.
+   *
+   * The single release path for all three reasons. Two divergent copies of a
+   * money-adjacent state transition is how they drift.
+   *
+   * Race-safe: locks the need, verifies it still carries THIS pending award, and
+   * guards both writes. If the provider activated a moment earlier, the release
+   * finds nothing to release and reports it rather than tearing down a paid job.
+   */
   async releasePendingAwardForBid(
     needId: string,
     bidId: string,
-    reason: 'rejected' | 'expired',
-  ): Promise<void> {
+    reason: 'rejected' | 'withdrawn' | 'expired',
+  ): Promise<{ released: boolean }> {
     const client = await this.db.connect();
     try {
       await client.query('BEGIN');
-      const timestampColumn = reason === 'rejected' ? 'award_rejected_at' : 'award_expired_at';
-      const nextBidStatus = reason === 'rejected' ? 'rejected' : 'expired';
+
+      // Same lock order as chargeActivation (need -> bid) so the two cannot
+      // deadlock against each other.
+      const { rows: needRows } = await client.query<{
+        status: string;
+        pending_award_bid_id: string | null;
+      }>(
+        `SELECT status, pending_award_bid_id FROM needs WHERE id = $1 FOR UPDATE`,
+        [needId],
+      );
+      const need = needRows[0];
+      if (
+        !need ||
+        need.status !== 'awarded_pending_provider_acceptance' ||
+        need.pending_award_bid_id !== bidId
+      ) {
+        await client.query('COMMIT');
+        return { released: false };
+      }
+
+      const timestampColumn =
+        reason === 'expired'
+          ? 'award_expired_at'
+          : reason === 'withdrawn'
+            ? 'award_rejected_at'
+            : 'award_rejected_at';
+      // A declined bid is out. A withdrawn or expired offer returns the bid to
+      // the pool so the customer can award it again later.
+      const nextBidStatus = reason === 'rejected' ? 'rejected' : 'pending';
+
       await client.query(
         `UPDATE bids
-         SET status = $2, ${timestampColumn} = now(), updated_at = now()
+         SET status = $2, ${timestampColumn} = now(),
+             award_offered_at = NULL, updated_at = now()
          WHERE id = $1 AND status = 'awarded_pending'`,
         [bidId, nextBidStatus],
       );
@@ -1089,6 +1130,7 @@ export class MhcRepository {
         [needId],
       );
       await client.query('COMMIT');
+      return { released: true };
     } catch (e) {
       try {
         await client.query('ROLLBACK');
@@ -1099,6 +1141,30 @@ export class MhcRepository {
     } finally {
       client.release();
     }
+  }
+
+  /** Pending awards whose acceptance window has passed (worker sweep). */
+  async listExpiredPendingAwards(limit: number): Promise<
+    Array<{ need_id: string; bid_id: string; provider_user_id: string; customer_id: string }>
+  > {
+    const { rows } = await this.db.query<{
+      need_id: string;
+      bid_id: string;
+      provider_user_id: string;
+      customer_id: string;
+    }>(
+      `SELECT n.id AS need_id, n.pending_award_bid_id AS bid_id,
+              b.expert_id AS provider_user_id, n.customer_id
+       FROM needs n
+       JOIN bids b ON b.id = n.pending_award_bid_id
+       WHERE n.status = 'awarded_pending_provider_acceptance'
+         AND n.pending_award_expires_at IS NOT NULL
+         AND n.pending_award_expires_at <= now()
+       ORDER BY n.pending_award_expires_at ASC
+       LIMIT $1::int`,
+      [limit],
+    );
+    return rows;
   }
 
   async isActivated(params: {

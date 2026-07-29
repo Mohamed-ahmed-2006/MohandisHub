@@ -185,6 +185,16 @@ export const mhcController = {
     res.json({ success: true, data });
   }),
 
+  /** Customer withdraws an award the provider has not accepted yet. */
+  withdrawAward: asyncHandler(async (req: Request, res: Response) => {
+    const user = getUser(req);
+    const data = await mhcService.withdrawAwardForCustomer({
+      userId: user.id,
+      needId: requireString(req.params.needId, 'needId'),
+    });
+    res.json({ success: true, data });
+  }),
+
   /** Check whether an award is already unlocked (drives UI gating). */
   getAwardActivationStatus: asyncHandler(async (req: Request, res: Response) => {
     getUser(req);
