@@ -17,7 +17,8 @@ export function getVisibleProfileSections(role?: string | null): ProfileSection[
   const hasRoleProfile = role === 'expert' || role === 'craftsman' || role === 'business';
 
   return SECTION_CONFIG.filter((section) => {
-    if (section.id === 'account' || section.id === 'preferences' || section.id === 'wallet') return true;
+    if (section.id === 'account' || section.id === 'preferences') return true;
+    if (section.id === 'wallet') return hasRoleProfile;
     return hasRoleProfile;
   });
 }

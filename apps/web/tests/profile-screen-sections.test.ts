@@ -5,11 +5,10 @@ import { getVisibleProfileSections } from '@/components/profile/profile-screen-s
 // `preferences` and `wallet` are intentional additions. `wallet` is the MHC
 // credits surface, not the retired EGP wallet — see components/app/mhc-credits-screen.
 describe('getVisibleProfileSections', () => {
-  it('shows account, preferences, and wallet for customers', () => {
+  it('shows only account and preferences for customers', () => {
     expect(getVisibleProfileSections('customer').map((section) => section.id)).toEqual([
       'account',
       'preferences',
-      'wallet',
     ]);
   });
 
@@ -47,7 +46,6 @@ describe('getVisibleProfileSections', () => {
     expect(getVisibleProfileSections(null).map((section) => section.id)).toEqual([
       'account',
       'preferences',
-      'wallet',
     ]);
   });
 
