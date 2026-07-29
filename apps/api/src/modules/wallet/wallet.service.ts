@@ -33,6 +33,13 @@ import {
   PaymobNotConfiguredError,
   verifyPaymobHmac,
 } from '../../lib/paymob.client.js';
+import {
+  DEPOSIT_RAIL_KEYS,
+  WITHDRAWAL_RAIL_KEYS,
+  isRailFlowActive,
+  retirementError,
+  type RetiredRailFlow,
+} from '../../middleware/retired-money-route.js';
 import { HttpError } from '../../utils/http-error.js';
 import { NotificationsService } from '../notifications/notifications.service.js';
 import { SettingsService } from '../settings/settings.service.js';
@@ -102,6 +109,27 @@ export class WalletService {
         code: 'FEATURE_DISABLED',
         message: 'Wallet is currently disabled.',
       });
+    }
+  }
+
+  /**
+   * Refuse a retired cash-wallet operation (P0-08).
+   *
+   * The routes carry the same guard as middleware, so this is not the only
+   * fence — it is the one that survives someone calling the service directly
+   * from a script, a worker or a future module. Both use the fail-CLOSED
+   * `isPaymentMethodEnabledStrict`; the fail-open sibling would treat a
+   * settings row written before a key existed as permission to move money.
+   *
+   * Nothing below this guard is deleted or changed. The full deposit and
+   * withdrawal implementations stay intact and auditable, and re-enabling a
+   * rail is a deliberate admin action rather than a default.
+   */
+  private async assertRailNotRetired(flow: RetiredRailFlow): Promise<void> {
+    const status = await this.settingsService.getAppStatus();
+    const keys = flow === 'deposit' ? DEPOSIT_RAIL_KEYS : WITHDRAWAL_RAIL_KEYS;
+    if (!isRailFlowActive(status.paymentMethodsEnabled, keys)) {
+      throw retirementError(flow);
     }
   }
 
@@ -237,6 +265,7 @@ export class WalletService {
     userId: string,
     input: CreateDepositCheckoutInput,
   ): Promise<DepositCheckoutResponse> {
+    await this.assertRailNotRetired('deposit');
     await this.assertWalletFeatureEnabled();
     const status = await this.settingsService.getAppStatus();
     if (status.depositsPaused) {
@@ -771,6 +800,7 @@ export class WalletService {
     amountEgp: number,
     payoutCurrency: string,
   ): Promise<WithdrawalQuoteResponse> {
+    await this.assertRailNotRetired('withdrawal');
     await this.assertWalletFeatureEnabled();
     if (!Number.isFinite(amountEgp) || amountEgp <= 0) {
       throw new HttpError({
@@ -801,6 +831,7 @@ export class WalletService {
     role: 'customer' | 'expert' | 'craftsman' | 'business',
     input: CreateWithdrawalInput,
   ): Promise<WithdrawalRequest> {
+    await this.assertRailNotRetired('withdrawal');
     await this.assertWalletFeatureEnabled();
     const status = await this.settingsService.getAppStatus();
     if (status.moneyMovementsPaused) {
@@ -1169,6 +1200,7 @@ export class WalletService {
     senderAccount: string;
     transferReference?: string | null;
   }): Promise<ManualDepositRequest> {
+    await this.assertRailNotRetired('deposit');
     await this.assertWalletFeatureEnabled();
     const status = await this.settingsService.getAppStatus();
     if (status.depositsPaused) {
@@ -1261,6 +1293,7 @@ export class WalletService {
   }
 
   async cancelInstapayWithdrawal(userId: string, withdrawalId: string): Promise<WithdrawalRequest> {
+    await this.assertRailNotRetired('withdrawal');
     await this.assertWalletFeatureEnabled();
     const row = await this.repo.cancelInstapayWithdrawalByUser(withdrawalId, userId);
     if (!row) {
@@ -1473,6 +1506,7 @@ export class WalletService {
     withdrawalId: string,
     verificationCode: string,
   ): Promise<WithdrawalRequest> {
+    await this.assertRailNotRetired('withdrawal');
     await this.assertWalletFeatureEnabled();
     const row = await this.repo.findWithdrawalRequestByIdForUser(withdrawalId, userId);
     if (!row) {
