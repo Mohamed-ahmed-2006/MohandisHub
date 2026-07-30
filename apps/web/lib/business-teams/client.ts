@@ -74,4 +74,10 @@ export const businessTeamsApiClient = {
         method: 'POST',
       },
     ),
+
+  acceptInvite: (accessToken: string, token: string) =>
+    request<{ accepted: boolean }>(accessToken, '/api/business-teams/invites/accept', {
+      method: 'POST',
+      body: JSON.stringify({ token }),
+    }),
 };
