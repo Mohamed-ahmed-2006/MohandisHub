@@ -47,8 +47,13 @@ const baseInput = {
 };
 
 /** A connection whose statements are recorded rather than executed. */
+type FakeQueryResult = { rows: Record<string, unknown>[]; rowCount: number };
+type FakeQuery = (sql: string) => Promise<FakeQueryResult>;
+
 type FakeClient = {
-  query: ReturnType<typeof vi.fn>;
+  // Typed as Promise-returning so a replacement implementation is one too, and
+  // an accidentally synchronous stub is a compile error rather than a hang.
+  query: ReturnType<typeof vi.fn<FakeQuery>>;
   release: ReturnType<typeof vi.fn>;
   statements: string[];
 };
@@ -56,7 +61,7 @@ type FakeClient = {
 const makeClient = (): FakeClient => {
   const statements: string[] = [];
   const client: FakeClient = {
-    query: vi.fn((sql: string) => {
+    query: vi.fn<FakeQuery>((sql: string) => {
       statements.push(typeof sql === 'string' ? sql.trim() : String(sql));
       return Promise.resolve({ rows: [], rowCount: 0 });
     }),
