@@ -20,19 +20,19 @@ const HelpResolutionScreen = dynamic(
   },
 );
 
-type SupportPageProps = {
+type HelpResolutionPageProps = {
   params: Promise<{ locale: string }>;
 };
 
-const SupportPage = async ({ params }: SupportPageProps) => {
+const HelpResolutionPage = async ({ params }: HelpResolutionPageProps) => {
   const { locale } = await params;
   if (!isSupportedLocale(locale)) notFound();
 
   return (
     <Suspense fallback={<Container><SkeletonCard /></Container>}>
-      <HelpResolutionScreen defaultTab="support" />
+      <HelpResolutionScreen defaultTab="all" />
     </Suspense>
   );
 };
 
-export default SupportPage;
+export default HelpResolutionPage;
