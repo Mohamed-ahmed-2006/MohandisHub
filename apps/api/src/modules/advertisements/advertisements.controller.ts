@@ -6,8 +6,11 @@ import { AdvertisementsService } from './advertisements.service.js';
 import {
   adCenterResolveSchema,
   adminAdControlsSchema,
+  adminApproveSchema,
   adminPricingOverrideSchema,
+  adminRejectSchema,
   adminScheduleSchema,
+  autoRenewalSchema,
   createAdSchema,
   listAdsQuerySchema,
   updateAdSchema,
@@ -15,7 +18,7 @@ import {
 
 const svc = new AdvertisementsService();
 
-function requireUser(req: { user?: { id: string } }) {
+function requireUser(req: { user?: { id: string; isAdmin?: boolean } }) {
   if (!req.user)
     throw new HttpError({ statusCode: 401, code: 'UNAUTHORIZED', message: 'Auth required.' });
   return req.user;
@@ -70,6 +73,7 @@ function optionalIdempotencyKey(req: {
   return key;
 }
 
+/** Submit a campaign for review. Charges nothing. */
 const createAd = asyncHandler(async (req, res) => {
   const user = requireUser(req);
   const input = parseBody(createAdSchema, req.body);
@@ -108,6 +112,49 @@ const deleteAd = asyncHandler(async (req, res) => {
   res.json({ ok: true, data });
 });
 
+/**
+ * Weekly billing state for one campaign: what a week costs, which week is
+ * running, whether a renewal is owed, and the immutable price snapshot of every
+ * week already bought.
+ */
+const getBillingState = asyncHandler(async (req, res) => {
+  const user = requireUser(req);
+  const data = await svc.getBillingState(req.params.id!, {
+    id: user.id,
+    isAdmin: user.isAdmin === true,
+  });
+  res.json({ ok: true, data });
+});
+
+/** Buy one more seven-day week. */
+const renewAd = asyncHandler(async (req, res) => {
+  const user = requireUser(req);
+  const data = await svc.renewAd(req.params.id!, user.id, optionalIdempotencyKey(req));
+  res.json({ ok: true, data });
+});
+
+/**
+ * Activate an approved campaign whose start is due — the advertiser's retry
+ * after topping up credits. Ownership-checked in the service; it can only ever
+ * act on a campaign an admin already approved.
+ */
+const activateAd = asyncHandler(async (req, res) => {
+  const user = requireUser(req);
+  const data = await svc.activateDueAdvertisement(req.params.id!, {
+    requireAdvertiserId: user.id,
+    actorUserId: user.id,
+  });
+  res.json({ ok: true, data });
+});
+
+/** Always refuses to enable. Automatic renewal has no implementation yet. */
+const setAutoRenewal = asyncHandler(async (req, res) => {
+  const user = requireUser(req);
+  const input = parseBody(autoRenewalSchema, req.body);
+  const data = await svc.setAutoRenewal(req.params.id!, user.id, input);
+  res.json({ ok: true, data });
+});
+
 const listActiveResolved = asyncHandler(async (req, res) => {
   const input = parseBody(adCenterResolveSchema, req.query);
   const data = await svc.resolveActiveAds(input);
@@ -116,6 +163,70 @@ const listActiveResolved = asyncHandler(async (req, res) => {
 
 const trackClick = asyncHandler(async (req, res) => {
   const data = await svc.trackClick(req.params.id!);
+  res.json({ ok: true, data });
+});
+
+// ---------------------------------------------------------------------------
+// Moderation (admin)
+// ---------------------------------------------------------------------------
+
+/**
+ * Approve a campaign. An immediate campaign is charged for its first week in the
+ * same transaction; a future-dated one is charged when its start becomes due.
+ */
+const adminApprove = asyncHandler(async (req, res) => {
+  const user = requireUser(req);
+  const input = parseBody(adminApproveSchema, req.body ?? {});
+  const data = await svc.approveAd(req.params.id!, user.id, input.reason ?? null);
+  await logAudit({
+    actorId: user.id,
+    action: 'admin.ad.approve',
+    resourceType: 'advertisement',
+    resourceId: req.params.id!,
+    details: {
+      activated: data.period !== null,
+      mhcCharged: data.mhcCharged,
+      periodId: data.period?.id ?? null,
+    },
+    ip: requestIp(req),
+  });
+  res.json({ ok: true, data });
+});
+
+/** Reject a campaign. Creates no period and no charge. */
+const adminReject = asyncHandler(async (req, res) => {
+  const user = requireUser(req);
+  const input = parseBody(adminRejectSchema, req.body);
+  const data = await svc.rejectAd(req.params.id!, user.id, input.reason);
+  await logAudit({
+    actorId: user.id,
+    action: 'admin.ad.reject',
+    resourceType: 'advertisement',
+    resourceId: req.params.id!,
+    details: { reason: input.reason },
+    ip: requestIp(req),
+  });
+  res.json({ ok: true, data });
+});
+
+/**
+ * Activate an approved campaign whose scheduled start has arrived.
+ *
+ * The deliberate, authorized way to invoke the due-start service while no
+ * scheduler exists. It cannot activate an unapproved campaign, and it cannot
+ * start one early — both are re-checked inside the transaction.
+ */
+const adminActivateDue = asyncHandler(async (req, res) => {
+  const user = requireUser(req);
+  const data = await svc.activateDueAdvertisement(req.params.id!, { actorUserId: user.id });
+  await logAudit({
+    actorId: user.id,
+    action: 'admin.ad.activate_due',
+    resourceType: 'advertisement',
+    resourceId: req.params.id!,
+    details: { created: data.created, mhcCharged: data.mhcCharged },
+    ip: requestIp(req),
+  });
   res.json({ ok: true, data });
 });
 
@@ -192,7 +303,7 @@ const updateAdminAdControls = asyncHandler(async (req, res) => {
     action: 'admin.ad.controls_update',
     resourceType: 'advertisement_controls',
     resourceId: null,
-    details: { acceptAds: input.acceptAds, mhcPrice: input.mhcPrice },
+    details: { acceptAds: input.acceptAds, mhcPricePerWeek: input.mhcPrice },
     ip: requestIp(req),
   });
   res.json({ ok: true, data });
@@ -205,8 +316,15 @@ export const advertisementsController = {
   listAllAds,
   updateAd,
   deleteAd,
+  getBillingState,
+  renewAd,
+  activateAd,
+  setAutoRenewal,
   listActiveResolved,
   trackClick,
+  adminApprove,
+  adminReject,
+  adminActivateDue,
   adminSetStatus,
   adminSchedule,
   adminPricingOverride,

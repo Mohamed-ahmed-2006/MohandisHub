@@ -6,12 +6,15 @@ import { MhcService } from '../mhc/mhc.service.js';
 import { WalletRepository } from '../wallet/wallet.repository.js';
 
 import { AdCenterService } from './adcenter.service.js';
+import { AdvertisementBillingService } from './advertisement-billing.service.js';
 import { AdvertisementsRepository } from './advertisements.repository.js';
+import type { AdvertisementPeriodResult, AdvertisementRow } from './advertisements.types.js';
 import type {
   AdCenterResolveInput,
   AdminAdControlsInput,
   AdminPricingOverrideInput,
   AdminScheduleInput,
+  AutoRenewalInput,
   CreateAdInput,
   ListAdsQueryInput,
   UpdateAdInput,
@@ -20,36 +23,59 @@ import type {
 const PLATFORM_USER_ID = '00000000-0000-0000-0000-000000000001';
 
 // ---------------------------------------------------------------------------
-// LAUNCH CONSTRAINT LC-01 — advertisements must stay priced at 0.
+// Advertisements are moderated, then sold one seven-day week at a time.
 // ---------------------------------------------------------------------------
-// The MHC charging path below is complete and tested, but two properties of it
-// are not yet product decisions, and both are only harmless while the price is 0:
+// Submission is FREE and creates nothing financial: no wallet is read, no wallet
+// row is locked, no period exists. An admin then approves or rejects. Charging
+// happens when a week actually starts — at approval for an immediate campaign,
+// or when a future start becomes due — and again only when the advertiser
+// deliberately renews.
 //
-//   1. Charging is FLAT PER CAMPAIGN, not per day. `mhc_action_prices` has one
-//      price per action key and no duration dimension, so a 1-day and a 365-day
-//      campaign cost the same. The pre-P0-03 model was pricePerDay × duration.
-//
-//   2. There is NO CANCELLATION OR REFUND POLICY. Cancelling an MHC-charged
-//      campaign refunds nothing today. `refundActionCharge` exists but refunds in
-//      FULL only — it cannot prorate — and no policy has been chosen.
-//
-// At a non-zero price, a provider who cancels on day 1 of 30 silently loses their
-// credits. So: keep `mhc_action_prices.advertisement.mhc_price` at 0 (or leave the
-// action inactive, which fails closed) until both decisions are implemented AND
-// tested. See docs/release/LAUNCH_CONSTRAINTS.md#lc-01.
-//
-// Do not "just set a price" in an admin panel to enable paid ads. That is a
-// change, not a configuration step.
+// The successor to launch constraint LC-01 lives in
+// docs/release/ADVERTISEMENT_BILLING.md. Both of LC-01's blockers are resolved
+// by this shape: pricing is per week rather than flat per campaign, and the
+// refund question is answered ("a started week is non-refundable") rather than
+// left open. The weekly price nonetheless stays 0 until Wave 2F-B ships
+// automatic renewal, renewal notifications and the full renewal UI.
 // ---------------------------------------------------------------------------
-
-/** `mhc_action_prices` key. The only pricing source for a launch campaign. */
-const AD_ACTION_KEY = 'advertisement';
-const AD_REFERENCE_TYPE = 'advertisement';
 
 export type AdControls = {
   acceptAds: boolean;
-  /** MHC charged per campaign. Not a currency amount — never render a symbol. */
+  /**
+   * MHC charged per advertisement WEEK. Not a currency amount — never render it
+   * with a currency symbol.
+   */
   mhcPrice: number;
+};
+
+export type AdBillingStateView = {
+  advertisementId: string;
+  billingModel: string;
+  billingStatus: string;
+  moderationStatus: string;
+  /** MHC per advertisement week, for display only. */
+  weeklyMhcPrice: number;
+  currentPeriodStartsAt: string | null;
+  currentPeriodEndsAt: string | null;
+  manualRenewalRequired: boolean;
+  renewalCount: number;
+  rejectionReason: string | null;
+  reviewedAt: string | null;
+  canRenew: boolean;
+  canActivate: boolean;
+  /** Automatic renewal is not implemented in this wave. Always false. */
+  autoRenewalAvailable: boolean;
+  autoRenewEnabled: boolean;
+  periods: {
+    id: string;
+    periodNumber: number;
+    startsAt: string;
+    endsAt: string;
+    mhcPriceSnapshot: number;
+    status: string;
+    renewalSource: string;
+    hasCharge: boolean;
+  }[];
 };
 
 export class AdvertisementsService {
@@ -57,12 +83,16 @@ export class AdvertisementsService {
     private readonly repo: AdvertisementsRepository = new AdvertisementsRepository(),
     /**
      * Retained ONLY for the legacy refund path on campaigns that were paid for
-     * in EGP before P0-03. Nothing on the creation path touches it, and no
-     * money wallet is read or written for a launch advertisement.
+     * in EGP before advertisements moved onto credits. No weekly code path
+     * touches it, and no money wallet is read or written for a weekly campaign.
      */
     private readonly walletRepo: WalletRepository = new WalletRepository(),
     private readonly adCenter: AdCenterService = new AdCenterService(),
     private readonly mhc: MhcService = new MhcService(),
+    private readonly billing: AdvertisementBillingService = new AdvertisementBillingService(
+      repo,
+      mhc,
+    ),
   ) {}
 
   private async getControls(): Promise<AdControls> {
@@ -78,23 +108,22 @@ export class AdvertisementsService {
     };
   }
 
+  // -------------------------------------------------------------------------
+  // Submission
+  // -------------------------------------------------------------------------
+
   /**
-   * Create a campaign and charge its MHC price in ONE transaction.
+   * Submit a campaign for review.
    *
-   * Two database-enforced guards, at two different levels:
+   * Creates ONE `advertisements` row in state `pending_review` and nothing else.
+   * There is no charge, no period, and no wallet access on this path at all —
+   * which is the property that makes "submitting is free" true by construction
+   * rather than by configuration.
    *
-   *   uq_advertisements_advertiser_idempotency  stops a retried request from
-   *     creating a second campaign at all;
-   *   uq_mhc_action_charge_reference            stops a second charge against
-   *     the campaign that does exist.
-   *
-   * The first is what makes the second sufficient: without domain idempotency a
-   * duplicate request produces a *different* advertisement id, which the charge
-   * table would rightly treat as a new, chargeable business reference.
-   *
-   * The advertisement id is preallocated so it can be the charge's reference
-   * before the row is committed, and the insert happens first so a duplicate
-   * collides before any credits move.
+   * `uq_advertisements_advertiser_idempotency` still stops a retried submit from
+   * creating a second campaign; it matters more now, not less, because a second
+   * campaign would become a second thing an admin has to review and a second
+   * thing that could be charged.
    */
   async createAd(userId: string, input: CreateAdInput, idempotencyKey?: string | null) {
     const controls = await this.getControls();
@@ -113,47 +142,37 @@ export class AdvertisementsService {
       if (existing) return existing;
     }
 
+    // Resolved and ownership-checked BEFORE the insert, because
+    // `advertisements_destination_check` requires a real destination on every
+    // non-cancelled row. Nothing populated these columns before this change,
+    // which is why every create request failed on a raw constraint violation.
+    const destination = await this.resolveDestination(userId, input.linkType, input.linkTarget);
+
+    // A start in the past is a start now. Stored as requested otherwise; the
+    // campaign will not serve, and will not be charged, until it is approved.
     const requestedStartAt = input.startsAt ? new Date(input.startsAt) : null;
-    const now = new Date();
     const startsAt =
-      requestedStartAt && requestedStartAt.getTime() > now.getTime() ? requestedStartAt : now;
-    const expiresAt = new Date(startsAt.getTime() + input.durationDays * 24 * 60 * 60 * 1000);
+      requestedStartAt && requestedStartAt.getTime() > Date.now() ? requestedStartAt : null;
     const advertisementId = randomUUID();
 
     const client = await getPool().connect();
     try {
       await client.query('BEGIN');
-      const ad = await this.repo.createAdInTx(
+      const ad = await this.repo.createPendingAdInTx(
         client,
         userId,
         input,
         startsAt,
-        expiresAt,
         advertisementId,
         clientIdempotencyKey,
+        destination,
       );
-
-      // Same transaction as the insert: a failed charge leaves no campaign, and
-      // a failed campaign leaves no charge. There is no ordering of these two
-      // writes that can diverge.
-      await this.mhc.chargeAction({
-        client,
-        userId,
-        actionKey: AD_ACTION_KEY,
-        referenceType: AD_REFERENCE_TYPE,
-        referenceId: ad.id,
-        idempotencyKey: `advertisement:${ad.id}`,
-        description: `Advertisement campaign: ${ad.title_en}`,
-        metadata: { duration_days: input.durationDays },
-      });
-
       await client.query('COMMIT');
       return ad;
     } catch (err: unknown) {
       await client.query('ROLLBACK').catch(() => {});
       // Lost the domain idempotency race: a concurrent identical request
-      // committed first. Return its campaign rather than an error, and do not
-      // charge again.
+      // committed first. Return its campaign rather than an error.
       if (
         clientIdempotencyKey &&
         typeof err === 'object' &&
@@ -167,6 +186,46 @@ export class AdvertisementsService {
     } finally {
       client.release();
     }
+  }
+
+  /**
+   * Turn a requested link type into the destination columns the database
+   * requires, checking that the advertiser owns what they are pointing at.
+   */
+  private async resolveDestination(
+    advertiserId: string,
+    linkType: 'profile' | 'service',
+    linkTarget: string | undefined,
+  ): Promise<{ providerId: string | null; serviceId: string | null }> {
+    if (linkType === 'profile') {
+      if (!(await this.repo.isAdvertisableProvider(advertiserId))) {
+        throw new HttpError({
+          statusCode: 403,
+          code: 'AD_PROFILE_NOT_ADVERTISABLE',
+          message: 'Only an active provider profile can be advertised.',
+        });
+      }
+      // `advertisements_destination_check` requires the service id to be NULL
+      // for a profile campaign.
+      return { providerId: advertiserId, serviceId: null };
+    }
+
+    if (!linkTarget) {
+      throw new HttpError({
+        statusCode: 400,
+        code: 'AD_DESTINATION_REQUIRED',
+        message: 'Choose which of your services this ad should link to.',
+      });
+    }
+    const serviceId = await this.repo.findOwnedActiveServiceId(advertiserId, linkTarget);
+    if (!serviceId) {
+      throw new HttpError({
+        statusCode: 404,
+        code: 'AD_SERVICE_NOT_FOUND',
+        message: 'That service does not exist, is not active, or is not yours.',
+      });
+    }
+    return { providerId: advertiserId, serviceId };
   }
 
   async getAd(adId: string) {
@@ -189,6 +248,12 @@ export class AdvertisementsService {
     return this.repo.listAllAds(query);
   }
 
+  /**
+   * Provider edits. Allowed only while a campaign is unreviewed: once an admin
+   * has approved specific creative, silently swapping it would make the approval
+   * meaningless. `status` is not editable here at all — it was, which let an
+   * advertiser approve their own campaign.
+   */
   async updateAd(adId: string, userId: string, input: UpdateAdInput) {
     const ad = await this.getAd(adId);
     if (ad.advertiser_id !== userId) {
@@ -198,6 +263,14 @@ export class AdvertisementsService {
         message: 'This ad does not belong to you.',
       });
     }
+    if (ad.billing_model === 'weekly' && ad.status !== 'pending_review') {
+      throw new HttpError({
+        statusCode: 409,
+        code: 'AD_NOT_EDITABLE',
+        message: 'A reviewed advertisement cannot be edited. Create a new campaign instead.',
+        details: { status: ad.status },
+      });
+    }
     if (ad.status === 'cancelled' || ad.status === 'expired') {
       throw new HttpError({
         statusCode: 400,
@@ -205,9 +278,316 @@ export class AdvertisementsService {
         message: 'Cancelled or expired ads cannot be edited.',
       });
     }
+
+    // A changed destination has to be re-resolved and re-checked, or the row
+    // would keep pointing at the old target while claiming the new type.
+    if (input.linkType !== undefined || input.linkTarget !== undefined) {
+      const linkType = input.linkType ?? ad.link_type;
+      const linkTarget = input.linkTarget ?? ad.link_target ?? undefined;
+      const destination = await this.resolveDestination(userId, linkType, linkTarget);
+      const updated = await this.repo.updateAd(adId, input);
+      await this.repo.setDestination(adId, destination);
+      return updated ? this.repo.getAdById(adId) : updated;
+    }
     return this.repo.updateAd(adId, input);
   }
 
+  // -------------------------------------------------------------------------
+  // Moderation
+  // -------------------------------------------------------------------------
+
+  /**
+   * Reject a campaign.
+   *
+   * Writes to `advertisements` only. No period is created and no credits move —
+   * not because a check prevents it, but because this transaction contains no
+   * call that could. Repeating a rejection is a no-op that reports the existing
+   * rejection.
+   */
+  async rejectAd(adId: string, adminId: string, reason: string): Promise<AdvertisementRow> {
+    const client = await getPool().connect();
+    try {
+      await client.query('BEGIN');
+      const ad = await this.repo.findAdForUpdate(client, adId);
+      if (!ad) {
+        throw new HttpError({
+          statusCode: 404,
+          code: 'AD_NOT_FOUND',
+          message: 'Advertisement not found.',
+        });
+      }
+      this.assertModeratable(ad);
+
+      if (ad.status === 'rejected') {
+        await client.query('COMMIT');
+        return ad;
+      }
+      if (ad.status !== 'pending_review') {
+        throw new HttpError({
+          statusCode: 409,
+          code: 'AD_NOT_PENDING_REVIEW',
+          message: 'Only an advertisement awaiting review can be rejected.',
+          details: { status: ad.status },
+        });
+      }
+
+      const rejected = await this.repo.rejectAdInTx(client, adId, adminId, reason);
+      await client.query('COMMIT');
+      return rejected;
+    } catch (error) {
+      await client.query('ROLLBACK').catch(() => {});
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  /**
+   * Approve a campaign, and — if it starts now — buy its first week in the same
+   * transaction.
+   *
+   * The approval is recorded BEFORE the charge is attempted, so the three
+   * outcomes stay distinguishable in the committed row:
+   *
+   *   approved + charged  -> status active,    billing_status active
+   *   approved + no funds -> status scheduled, billing_status awaiting_credits
+   *   approved + future   -> status scheduled, billing_status awaiting_start
+   *
+   * An approved campaign that cannot pay is therefore never confused with one
+   * nobody has reviewed, and never confused with a rejection.
+   *
+   * Concurrent approvals cannot double-charge: the row lock serialises them and
+   * the second caller re-reads a row that is already approved.
+   */
+  async approveAd(
+    adId: string,
+    adminId: string,
+    reason?: string | null,
+  ): Promise<AdvertisementPeriodResult> {
+    const client = await getPool().connect();
+    try {
+      await client.query('BEGIN');
+      const ad = await this.repo.findAdForUpdate(client, adId);
+      if (!ad) {
+        throw new HttpError({
+          statusCode: 404,
+          code: 'AD_NOT_FOUND',
+          message: 'Advertisement not found.',
+        });
+      }
+      this.assertModeratable(ad);
+
+      // Idempotent: an already-approved campaign reports its state and charges
+      // nothing. This is the branch every loser of a concurrent race lands on.
+      if (ad.status === 'active' || ad.status === 'scheduled') {
+        const period = await this.repo.findActivePeriodInTx(client, ad.id);
+        await client.query('COMMIT');
+        return { advertisement: ad, period, mhcCharged: 0, created: false };
+      }
+      if (ad.status !== 'pending_review') {
+        throw new HttpError({
+          statusCode: 409,
+          code: 'AD_NOT_PENDING_REVIEW',
+          message: 'Only an advertisement awaiting review can be approved.',
+          details: { status: ad.status },
+        });
+      }
+
+      const { rows: nowRows } = await client.query<{ now: string }>(`SELECT now()::text AS now`);
+      const now = new Date(nowRows[0]!.now);
+      const scheduledStart = ad.starts_at ? new Date(ad.starts_at) : null;
+      const startsInFuture = scheduledStart !== null && scheduledStart.getTime() > now.getTime();
+
+      if (startsInFuture) {
+        // Approved, but nothing is bought yet: the week is charged when the
+        // start becomes due, so an advertiser is never billed for a week that
+        // has not begun.
+        const approved = await this.repo.recordApprovalInTx(
+          client,
+          adId,
+          adminId,
+          'awaiting_start',
+          reason ?? null,
+        );
+        await client.query('COMMIT');
+        return { advertisement: approved, period: null, mhcCharged: 0, created: false };
+      }
+
+      const approved = await this.repo.recordApprovalInTx(
+        client,
+        adId,
+        adminId,
+        'awaiting_credits',
+        reason ?? null,
+      );
+
+      let result: AdvertisementPeriodResult;
+      try {
+        result = await this.billing.openFirstPeriodInTx(client, approved, {
+          startsAt: now,
+          actorUserId: adminId,
+        });
+      } catch (error) {
+        if (error instanceof HttpError && error.code === 'MHC_INSUFFICIENT_CREDITS') {
+          // Keep the approval. The charge primitive unwound only to its own
+          // savepoint, so the approval write above is intact and committable.
+          await client.query('COMMIT');
+        }
+        throw error;
+      }
+
+      await client.query('COMMIT');
+      return result;
+    } catch (error) {
+      await client.query('ROLLBACK').catch(() => {});
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  /**
+   * Activate an approved campaign whose start is due — the reusable service, in
+   * its own transaction. Invoked by an admin, by the advertiser retrying after
+   * topping up credits, and (from Wave 2F-B) by a scheduler.
+   */
+  async activateDueAdvertisement(
+    adId: string,
+    options: { requireAdvertiserId?: string | null; actorUserId?: string | null } = {},
+  ): Promise<AdvertisementPeriodResult> {
+    return this.billing.activateDuePeriod(adId, options);
+  }
+
+  /** Approved campaigns whose scheduled start has arrived. */
+  async listDueScheduledAdIds(limit = 100): Promise<string[]> {
+    return this.billing.listDueScheduledAdIds(limit);
+  }
+
+  /** Close every week that has run its seven days. */
+  async expireDuePeriods(limit = 200): Promise<{ periods: number; campaigns: number }> {
+    return this.billing.expireDuePeriods(limit);
+  }
+
+  /** Buy one more seven-day week at the advertiser's request. */
+  async renewAd(
+    adId: string,
+    userId: string,
+    idempotencyKey?: string | null,
+  ): Promise<AdvertisementPeriodResult> {
+    return this.billing.renewManually({
+      advertisementId: adId,
+      providerId: userId,
+      idempotencyKey: idempotencyKey ?? null,
+    });
+  }
+
+  /**
+   * Automatic renewal is not implemented.
+   *
+   * The endpoint exists so a client receives a stable refusal instead of
+   * persisting a campaign that depends on a scheduler nobody has built. Turning
+   * automatic renewal OFF is accepted, because that is already the only state.
+   */
+  async setAutoRenewal(
+    adId: string,
+    userId: string,
+    input: AutoRenewalInput,
+  ): Promise<{ autoRenewEnabled: false; autoRenewalAvailable: false }> {
+    const ad = await this.getAd(adId);
+    if (ad.advertiser_id !== userId) {
+      throw new HttpError({
+        statusCode: 403,
+        code: 'FORBIDDEN',
+        message: 'This ad does not belong to you.',
+      });
+    }
+    if (input.enabled) {
+      throw new HttpError({
+        statusCode: 409,
+        code: 'AUTO_RENEWAL_NOT_AVAILABLE',
+        message:
+          'Automatic weekly renewal is not available yet. Renew manually when the week ends.',
+      });
+    }
+    return { autoRenewEnabled: false, autoRenewalAvailable: false };
+  }
+
+  /**
+   * Everything a screen needs to describe what this campaign costs and what
+   * happens next — including the immutable price snapshot of every week it has
+   * ever bought, which is what proves an admin price change did not rewrite
+   * history.
+   */
+  async getBillingState(
+    adId: string,
+    requester: { id: string; isAdmin: boolean },
+  ): Promise<AdBillingStateView> {
+    const ad = await this.getAd(adId);
+    if (!requester.isAdmin && ad.advertiser_id !== requester.id) {
+      throw new HttpError({
+        statusCode: 403,
+        code: 'FORBIDDEN',
+        message: 'This ad does not belong to you.',
+      });
+    }
+    const [periods, controls] = await Promise.all([
+      this.repo.listPeriods(adId),
+      this.getControls(),
+    ]);
+
+    const isWeekly = ad.billing_model === 'weekly';
+    const startDue = !ad.starts_at || new Date(ad.starts_at).getTime() <= Date.now();
+
+    return {
+      advertisementId: ad.id,
+      billingModel: ad.billing_model,
+      billingStatus: ad.billing_status,
+      moderationStatus: ad.status,
+      weeklyMhcPrice: controls.mhcPrice,
+      currentPeriodStartsAt: ad.current_period_starts_at,
+      currentPeriodEndsAt: ad.current_period_ends_at,
+      manualRenewalRequired: ad.manual_renewal_required,
+      renewalCount: ad.renewal_count,
+      rejectionReason: ad.rejection_reason,
+      reviewedAt: ad.reviewed_at,
+      canRenew: isWeekly && ad.billing_status === 'renewal_required',
+      canActivate:
+        isWeekly &&
+        ad.status === 'scheduled' &&
+        (ad.billing_status === 'awaiting_credits' || ad.billing_status === 'awaiting_start') &&
+        startDue,
+      // Not a preference and not a toggle: no scheduler exists in this wave.
+      autoRenewalAvailable: false,
+      autoRenewEnabled: false,
+      periods: periods.map((period) => ({
+        id: period.id,
+        periodNumber: period.period_number,
+        startsAt: period.starts_at,
+        endsAt: period.ends_at,
+        mhcPriceSnapshot: parseFloat(period.mhc_price_snapshot),
+        status: period.status,
+        renewalSource: period.renewal_source,
+        hasCharge: period.action_charge_id !== null,
+      })),
+    };
+  }
+
+  // -------------------------------------------------------------------------
+  // Cancellation
+  // -------------------------------------------------------------------------
+
+  /**
+   * Cancel a campaign.
+   *
+   * For a weekly campaign this hides the advertisement immediately, closes any
+   * running week, and prevents any further renewal. It refunds NOTHING and
+   * touches no wallet: a started week is non-refundable, and the campaign's
+   * period rows and charge history are all preserved.
+   *
+   * For a `legacy` campaign the pre-existing prorated EGP refund is retained
+   * unchanged — those campaigns really were paid for in EGP and are still owed
+   * what they were promised.
+   */
   async cancelAd(adId: string, userId: string) {
     const ad = await this.getAd(adId);
     if (ad.advertiser_id !== userId) {
@@ -217,6 +597,52 @@ export class AdvertisementsService {
         message: 'This ad does not belong to you.',
       });
     }
+
+    if (ad.billing_model === 'weekly') {
+      return this.cancelWeeklyAd(adId, userId);
+    }
+    return this.cancelLegacyAd(adId, userId);
+  }
+
+  private async cancelWeeklyAd(adId: string, userId: string) {
+    const client = await getPool().connect();
+    try {
+      await client.query('BEGIN');
+      const ad = await this.repo.findAdForUpdate(client, adId);
+      if (!ad || ad.advertiser_id !== userId) {
+        throw new HttpError({
+          statusCode: 404,
+          code: 'AD_NOT_FOUND',
+          message: 'Advertisement not found.',
+        });
+      }
+      if (ad.status === 'cancelled') {
+        await client.query('COMMIT');
+        return { cancelled: true, refundAmount: 0 };
+      }
+      if (ad.status === 'rejected') {
+        throw new HttpError({
+          statusCode: 409,
+          code: 'AD_NOT_CANCELLABLE',
+          message: 'A rejected advertisement cannot be cancelled.',
+        });
+      }
+
+      // No refund calculation of any kind on this path, and no wallet call.
+      await this.repo.cancelWeeklyAdInTx(client, adId, 'cancelled_by_user;weekly_no_refund');
+      await client.query('COMMIT');
+      return { cancelled: true, refundAmount: 0 };
+    } catch (error) {
+      await client.query('ROLLBACK').catch(() => {});
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  /** LEGACY (EGP era). Unchanged behaviour for pre-weekly campaigns. */
+  private async cancelLegacyAd(adId: string, userId: string) {
+    const ad = await this.getAd(adId);
     if (ad.status === 'cancelled' || ad.status === 'expired') {
       throw new HttpError({
         statusCode: 409,
@@ -245,12 +671,8 @@ export class AdvertisementsService {
         });
       }
 
-      // LEGACY PATH ONLY. `amount_paid` is the EGP figure historic campaigns
-      // were charged; launch campaigns are charged in MHC and store 0 here, so
-      // this yields 0 for them and no wallet is touched. Retained because a
-      // pre-P0-03 campaign is still entitled to the refund it was promised.
-      // Cancelling an MHC campaign currently refunds nothing — a refund policy
-      // for credits is a product decision and is not invented here.
+      // `amount_paid` is the EGP figure historic campaigns were charged. It is 0
+      // for every weekly campaign, and weekly campaigns never reach this method.
       refundAmount = this.computeAdCancellationRefund(lockedAd);
       if (refundAmount > 0) {
         const advertiserWallet = await this.walletRepo.findByUserId(userId);
@@ -305,7 +727,7 @@ export class AdvertisementsService {
       );
       await client.query('COMMIT');
     } catch (error) {
-      await client.query('ROLLBACK');
+      await client.query('ROLLBACK').catch(() => {});
       throw error;
     } finally {
       client.release();
@@ -313,8 +735,22 @@ export class AdvertisementsService {
     return { cancelled: true, refundAmount };
   }
 
+  // -------------------------------------------------------------------------
+  // Serving
+  // -------------------------------------------------------------------------
+
+  /**
+   * Resolve the campaigns to show.
+   *
+   * The two expiry sweeps are the lazy half of the lifecycle: a weekly period
+   * whose seven days have elapsed is closed here — atomically with its campaign
+   * — before anything is ranked, so an unpaid week can never be served. A
+   * scheduler that does the same on a timer belongs to Wave 2F-B; this keeps the
+   * product coherent without one.
+   */
   async resolveActiveAds(input: AdCenterResolveInput) {
     await this.repo.expireStaleAds();
+    await this.billing.expireDuePeriods();
     const limit = input.limit ?? 5;
     const candidates = await this.repo.listActiveAdsForAdCenter(100);
     const ranked = this.adCenter.rank(candidates, input).slice(0, limit);
@@ -328,12 +764,27 @@ export class AdvertisementsService {
     return { ok: true };
   }
 
+  // -------------------------------------------------------------------------
+  // Admin controls
+  // -------------------------------------------------------------------------
+
   async applyAdminStatus(
     adId: string,
     status: 'active' | 'paused_by_admin' | 'cancelled',
     reason?: string,
   ) {
-    const updated = await this.repo.updateAd(adId, { status });
+    const ad = await this.getAd(adId);
+    // A weekly campaign may not be forced live by a status write: serving is a
+    // consequence of holding a paid week, and this route cannot buy one.
+    if (ad.billing_model === 'weekly' && status === 'active') {
+      throw new HttpError({
+        statusCode: 409,
+        code: 'AD_ACTIVATION_REQUIRES_PERIOD',
+        message:
+          'A weekly campaign becomes active by approving it or activating its due start, not by setting a status.',
+      });
+    }
+    const updated = await this.repo.applyAdminStatus(adId, status);
     if (!updated) {
       throw new HttpError({
         statusCode: 404,
@@ -378,7 +829,10 @@ export class AdvertisementsService {
   /**
    * Admin ad pricing edits `mhc_action_prices.advertisement` — the same row the
    * charge primitive reads. There is no second place a price can be set, so the
-   * displayed price and the charged price cannot drift.
+   * displayed weekly price and the charged weekly price cannot drift.
+   *
+   * A change applies to FUTURE weeks only. Existing periods carry their own
+   * `mhc_price_snapshot` and are never rewritten.
    */
   async updateAdminAdControls(adminId: string, input: AdminAdControlsInput): Promise<AdControls> {
     if (!(input.mhcPrice >= 0)) {
@@ -391,6 +845,17 @@ export class AdvertisementsService {
     await this.repo.upsertGlobalAdControls(adminId, input.acceptAds);
     await this.repo.setAdvertisementMhcPrice(input.mhcPrice);
     return { acceptAds: input.acceptAds, mhcPrice: input.mhcPrice };
+  }
+
+  private assertModeratable(ad: AdvertisementRow): void {
+    if (ad.billing_model !== 'weekly') {
+      throw new HttpError({
+        statusCode: 409,
+        code: 'AD_NOT_WEEKLY',
+        message: 'This campaign predates the moderation flow and is not reviewed here.',
+        details: { billingModel: ad.billing_model },
+      });
+    }
   }
 
   private computeAdCancellationRefund(ad: {
