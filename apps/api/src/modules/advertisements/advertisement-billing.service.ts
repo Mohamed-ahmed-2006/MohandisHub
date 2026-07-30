@@ -6,7 +6,7 @@ import { getPool } from '../../db/pool.js';
 import { HttpError } from '../../utils/http-error.js';
 import { MhcService } from '../mhc/mhc.service.js';
 
-import { AdvertisementsRepository } from './advertisements.repository.js';
+import { AD_PERIOD_MS, AdvertisementsRepository } from './advertisements.repository.js';
 import type {
   AdRenewalSource,
   AdvertisementPeriodResult,
@@ -280,6 +280,12 @@ export class AdvertisementBillingService {
     idempotencyKey?: string | null;
   }): Promise<AdvertisementPeriodResult> {
     const idempotencyKey = params.idempotencyKey?.trim() || null;
+    /**
+     * Set when this call lost an idempotency race. The recovery read needs a
+     * connection of its own, so it happens AFTER this one is released — holding
+     * two per caller would let ten concurrent renewals starve the pool.
+     */
+    let lostRaceOnKey: string | null = null;
     const client = await getPool().connect();
     try {
       await client.query('BEGIN');
@@ -356,7 +362,7 @@ export class AdvertisementBillingService {
       const now = new Date(nowRows[0]!.now);
       if (ad.renewal_end_date !== null) {
         const boundary = new Date(ad.renewal_end_date);
-        const wouldEndAt = new Date(now.getTime() + 168 * 60 * 60 * 1000);
+        const wouldEndAt = new Date(now.getTime() + AD_PERIOD_MS);
         if (wouldEndAt.getTime() > boundary.getTime()) {
           throw new HttpError({
             statusCode: 409,
@@ -381,23 +387,34 @@ export class AdvertisementBillingService {
     } catch (error) {
       await client.query('ROLLBACK').catch(() => {});
       // Lost the idempotency race: a concurrent identical request committed
-      // first. Report its week rather than an error, and charge nothing.
+      // first. Recovered below, once this connection is back in the pool.
       if (
         idempotencyKey &&
         typeof error === 'object' &&
         error !== null &&
         (error as { code?: unknown }).code === '23505'
       ) {
-        const winner = await this.findCommittedPeriodByKey(params.advertisementId, idempotencyKey);
-        if (winner) {
-          const ad = await this.repo.getAdById(params.advertisementId);
-          if (ad) return { advertisement: ad, period: winner, mhcCharged: 0, created: false };
-        }
+        lostRaceOnKey = idempotencyKey;
+      } else {
+        throw error;
       }
-      throw error;
     } finally {
       client.release();
     }
+
+    // Report the week the winner bought rather than an error, and charge nothing.
+    const winner = await this.findCommittedPeriodByKey(params.advertisementId, lostRaceOnKey);
+    const ad = await this.repo.getAdById(params.advertisementId);
+    if (winner && ad) {
+      return { advertisement: ad, period: winner, mhcCharged: 0, created: false };
+    }
+    // The duplicate was not ours to absorb: surface it rather than inventing a
+    // success for a week nobody bought.
+    throw new HttpError({
+      statusCode: 409,
+      code: 'AD_RENEWAL_CONFLICT',
+      message: 'This renewal conflicted with another request. Check the campaign and try again.',
+    });
   }
 
   /** Read a committed period by idempotency key, outside any transaction. */
