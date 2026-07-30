@@ -31,21 +31,36 @@ import {
 // database is read from or written to.
 // ---------------------------------------------------------------------------
 
+// Each test here is several sequential round trips to a PostgreSQL server that
+// may be remote. The default 5s budget makes two of them flaky on latency alone
+// — they pass in isolation and time out under load — which reports network
+// distance as a defect. No assertion is relaxed by giving them room to finish.
+vi.setConfig({ testTimeout: 180_000, hookTimeout: 1_800_000 });
+
 const CHARGE_MIGRATION = '20260729140000_mhc_action_charges.sql';
 /**
  * The documented rollback for 20260729140000, in REVERSE DEPENDENCY ORDER.
  *
- * Step 1 removes the dependant that 20260730100000 (per-plan MHC pricing) added:
- *   plan_subscriptions.action_charge_id -> mhc_action_charges(id)
+ * Step 1 removes every dependant a later migration hung off this table:
+ *   20260730100000 (per-plan MHC pricing)
+ *     plan_subscriptions.action_charge_id             -> mhc_action_charges(id)
+ *   20260730120000 (weekly advertisement billing)
+ *     advertisement_campaign_periods.action_charge_id -> mhc_action_charges(id)
  * Step 2 drops this migration's own table.
  *
- * A bare DROP TABLE fails while that foreign key exists — proven by
- * 'refuses a bare DROP TABLE while the plan-pricing dependant exists' below, so
- * the order is a tested guarantee rather than a comment. Both steps are
- * idempotent, which is what lets the suite run the whole sequence twice.
+ * A bare DROP TABLE fails while either foreign key exists — proven by
+ * 'refuses a bare DROP TABLE while a dependant exists' below, so the order is a
+ * tested guarantee rather than a comment. Every step is idempotent, which is
+ * what lets the suite run the whole sequence twice.
+ *
+ * This list must grow with each new dependant. That is the point of the exact
+ * assertions further down: a migration that references this table without
+ * updating the documented rollback fails here rather than in an incident.
  */
-const ROLLBACK_STEP_1_DEPENDANTS =
-  'ALTER TABLE public.plan_subscriptions DROP COLUMN IF EXISTS action_charge_id;';
+const ROLLBACK_STEP_1_DEPENDANTS = [
+  'DROP TABLE IF EXISTS public.advertisement_campaign_periods;',
+  'ALTER TABLE public.plan_subscriptions DROP COLUMN IF EXISTS action_charge_id;',
+].join('\n');
 const ROLLBACK_STEP_2_OWN_OBJECTS = 'DROP TABLE IF EXISTS public.mhc_action_charges;';
 const ROLLBACK_SQL = `${ROLLBACK_STEP_1_DEPENDANTS}\n${ROLLBACK_STEP_2_OWN_OBJECTS}`;
 
@@ -550,36 +565,52 @@ describe.skipIf(!pgIntegrationEnabled())('P0-07 migration against real PostgreSQ
   // invalidated the rollback documented here. These three tests pin the
   // dependency, prove the OLD order genuinely fails, and prove the corrected
   // order succeeds — so the same class of regression cannot return unnoticed.
-  it('has the plan-pricing dependant that forces the rollback order', async () => {
+  it('has every dependant that forces the rollback order', async () => {
     const copy = await createScratchDatabase('rollbackdep');
     try {
       // 1. The whole migration chain applied in forward order (createScratchDatabase
-      //    replays every file), and both ends of the dependency exist.
-      const objects = await copy.pool.query<{ charges: string | null; subs: string | null }>(
+      //    replays every file), and every end of the dependency exists.
+      const objects = await copy.pool.query<{
+        charges: string | null;
+        subs: string | null;
+        periods: string | null;
+      }>(
         `SELECT to_regclass('public.mhc_action_charges')::text AS charges,
-                to_regclass('public.plan_subscriptions')::text AS subs`,
+                to_regclass('public.plan_subscriptions')::text AS subs,
+                to_regclass('public.advertisement_campaign_periods')::text AS periods`,
       );
       expect(objects.rows[0]!.charges).toBe('mhc_action_charges');
       expect(objects.rows[0]!.subs).toBe('plan_subscriptions');
+      expect(objects.rows[0]!.periods).toBe('advertisement_campaign_periods');
 
-      // 2. The dependency itself: a real FK from the newer migration, named and
-      //    shaped as 20260730100000 declares it.
-      const { rows: fks } = await copy.pool.query<{ conname: string; def: string }>(
-        `SELECT conname, pg_get_constraintdef(oid) AS def
+      // 2. The dependencies themselves: real foreign keys from the newer
+      //    migrations, named and shaped as each declares it. Asserted as an
+      //    EXACT set — a new dependant that does not update the documented
+      //    rollback in 20260729140000 fails right here.
+      const { rows: fks } = await copy.pool.query<{ table: string; def: string }>(
+        `SELECT conrelid::regclass::text AS table, pg_get_constraintdef(oid) AS def
            FROM pg_constraint
           WHERE confrelid = 'public.mhc_action_charges'::regclass
-            AND contype = 'f'`,
+            AND contype = 'f'
+          ORDER BY 1`,
       );
-      expect(fks).toHaveLength(1);
-      expect(fks[0]!.def).toContain('FOREIGN KEY (action_charge_id)');
-      expect(fks[0]!.def).toContain('REFERENCES mhc_action_charges(id)');
-      expect(fks[0]!.def).toContain('ON DELETE RESTRICT');
+      expect(fks.map((row) => row.table)).toEqual([
+        'advertisement_campaign_periods',
+        'plan_subscriptions',
+      ]);
+      for (const fk of fks) {
+        expect(fk.def).toContain('FOREIGN KEY (action_charge_id)');
+        expect(fk.def).toContain('REFERENCES mhc_action_charges(id)');
+        // RESTRICT everywhere: a charge is a financial record and must not be
+        // cascade-deleted by removing the thing it paid for.
+        expect(fk.def).toContain('ON DELETE RESTRICT');
+      }
     } finally {
       await copy.drop();
     }
   }, 900_000);
 
-  it('refuses a bare DROP TABLE while the plan-pricing dependant exists', async () => {
+  it('refuses a bare DROP TABLE while a dependant exists', async () => {
     const copy = await createScratchDatabase('rollbackorder');
     try {
       // The ORIGINAL documented rollback, run on its own. It must fail — that is
@@ -622,6 +653,7 @@ describe.skipIf(!pgIntegrationEnabled())('P0-07 migration against real PostgreSQ
       const before = await fingerprint();
       expect(before.has('table:mhc_action_charges')).toBe(true);
       expect(before.has('column:plan_subscriptions.action_charge_id')).toBe(true);
+      expect(before.has('table:advertisement_campaign_periods')).toBe(true);
 
       // Idempotent: the documented sequence runs twice with the same result.
       await copy.exec(ROLLBACK_SQL);
@@ -630,23 +662,36 @@ describe.skipIf(!pgIntegrationEnabled())('P0-07 migration against real PostgreSQ
       const after = await fingerprint();
       expect(after.has('table:mhc_action_charges')).toBe(false);
       expect(after.has('column:plan_subscriptions.action_charge_id')).toBe(false);
+      expect(after.has('table:advertisement_campaign_periods')).toBe(false);
 
       // The schema matches the expected pre-migration state: the ONLY objects
-      // that disappeared are this table's own, plus the dependent column the
-      // rollback deliberately removes. Nothing was collateral damage.
+      // that disappeared are this table's own, plus the dependants the rollback
+      // deliberately removes. Nothing was collateral damage.
       const removed = [...before].filter((k) => !after.has(k)).sort();
       const added = [...after].filter((k) => !before.has(k));
       expect(added).toEqual([]);
 
       // This migration's own objects may all go; everything else that went must
-      // be exactly the three dependants 20260730100000 hung off this table.
-      // Asserted as an exact set, so an unnoticed extra casualty fails here.
-      const removedElsewhere = removed.filter((k) => !k.includes('mhc_action_charges'));
+      // be exactly the dependants later migrations hung off this table — three
+      // from 20260730100000 (per-plan pricing) and the whole period table from
+      // 20260730120000 (weekly advertisement billing). Asserted as an exact set,
+      // so an unnoticed extra casualty fails here.
+      const removedElsewhere = removed.filter(
+        (k) => !k.includes('mhc_action_charges') && !k.includes('advertisement_campaign_periods'),
+      );
       expect(removedElsewhere).toEqual([
         'column:plan_subscriptions.action_charge_id',
         'constraint:plan_subscriptions::plan_subscriptions_action_charge_id_fkey',
         'index:plan_subscriptions.idx_plan_subscriptions_charge',
       ]);
+      // Dropping the period table takes its own objects and nothing else. The
+      // advertisement rows and their billing columns are untouched: only the
+      // record of WHICH week each charge paid for goes.
+      expect(removed).toContain('table:advertisement_campaign_periods');
+      expect(removed).toContain('constraint:advertisement_campaign_periods::ad_period_no_overlap');
+      expect(after.has('table:advertisements')).toBe(true);
+      expect(after.has('column:advertisements.billing_model')).toBe(true);
+      expect(after.has('column:advertisements.renewal_count')).toBe(true);
       // The table itself really went, not merely its constraints.
       expect(removed).toContain('table:mhc_action_charges');
 
