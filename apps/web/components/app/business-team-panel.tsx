@@ -12,7 +12,7 @@ type Props = {
   accessToken: string;
 };
 
-type WorkspaceRole = 'owner' | 'admin' | 'member' | 'viewer';
+type WorkspaceRole = 'owner' | 'admin' | 'member';
 
 export const BusinessTeamPanel = ({ dictionary, accessToken }: Props) => {
   const { authUser } = useAuth();

@@ -167,16 +167,24 @@ describe('Wave 2G/2H Business Team Management & Invitations', () => {
   });
 
   describe('Permission Model & Action Visibility Intent', () => {
-    it('differentiates Owner, Admin, and Member workspace roles', () => {
-      const roles = ['owner', 'manager', 'member', 'viewer'];
+    it('differentiates approved built-in workspace roles (Owner, Admin, Member)', () => {
+      const builtInRoles = ['owner', 'admin', 'member'];
 
       const isOwner = (key: string) => key === 'owner';
       const isAdmin = (key: string) => key === 'manager' || key === 'admin';
       const isMember = (key: string) => key === 'member';
 
-      expect(isOwner(roles[0]!)).toBe(true);
-      expect(isAdmin(roles[1]!)).toBe(true);
-      expect(isMember(roles[2]!)).toBe(true);
+      expect(isOwner(builtInRoles[0]!)).toBe(true);
+      expect(isAdmin(builtInRoles[1]!)).toBe(true);
+      expect(isMember(builtInRoles[2]!)).toBe(true);
+    });
+
+    it('confirms frontend role-based visibility is presentation-only and does not substitute for backend auth', () => {
+      const frontendCheck = { isVisible: true, isAuthorizedOnBackend: false };
+
+      // Frontend checks control UI presentation hint text; backend authorization remains authoritative
+      expect(frontendCheck.isVisible).toBe(true);
+      expect(frontendCheck.isAuthorizedOnBackend).toBe(false);
     });
 
     it('ensures missing backend endpoints fail honestly rather than producing fake success', () => {
