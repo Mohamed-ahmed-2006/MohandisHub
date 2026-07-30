@@ -24,6 +24,7 @@ import {
   InsufficientCreditsError,
   MhcActionDisabledError,
   MhcActionPriceMissingError,
+  MhcActionScopePriceMissingError,
   MhcChargeNotFoundError,
   MhcInvalidChargeReferenceError,
   MhcRepository,
@@ -32,6 +33,7 @@ import {
   type CreditPurchaseRow,
   type MhcActionChargeRow,
   type MhcActionPriceRow,
+  type MhcPriceScope,
   type MhcCreditPackageRow,
   type RefundMhcActionResult,
 } from './mhc.repository.js';
@@ -1067,6 +1069,11 @@ export class MhcService {
     description?: string;
     metadata?: Record<string, unknown>;
     actorUserId?: string | null;
+    /**
+     * Price this action from a per-entity scope instead of the global catalogue.
+     * Names the entity only; there is no way to pass an amount.
+     */
+    priceScope?: MhcPriceScope | null;
   }): Promise<ChargeMhcActionResult> {
     // Read through the caller's client so an account created earlier in the same
     // transaction is visible.
@@ -1115,6 +1122,57 @@ export class MhcService {
     return this.repo.findActionChargeById(chargeId);
   }
 
+  // -------------------------------------------------------------------------
+  // Scoped (per-entity) action pricing
+  // -------------------------------------------------------------------------
+  // Reads are public so a screen can DISPLAY a price. Charging never uses these:
+  // it re-resolves the price inside the transaction from the same table, so what
+  // a user was shown can never become what they are charged.
+
+  async getScopedPrice(
+    actionKey: string,
+    scopeType: 'plan',
+    scopeId: string,
+  ): Promise<number | null> {
+    return this.repo.getScopedActionPrice(actionKey, scopeType, scopeId);
+  }
+
+  /**
+   * Provider credit balance, without the role guard that `getMyCredits` applies.
+   * For internal consumers that have already authorised the caller and only need
+   * a figure to report back.
+   */
+  async getBalanceFor(userId: string): Promise<number> {
+    return this.repo.getBalance(userId);
+  }
+
+  async listScopedPrices(actionKey: string, scopeType: 'plan'): Promise<Map<string, number>> {
+    return this.repo.listScopedActionPrices(actionKey, scopeType);
+  }
+
+  async setScopedPrice(params: {
+    actionKey: string;
+    scopeType: 'plan';
+    scopeId: string;
+    mhcPrice: number;
+    updatedBy?: string | null;
+  }): Promise<void> {
+    // Rejects NaN and Infinity as well as negatives: a malformed decimal from an
+    // admin form must not become a price.
+    if (!Number.isFinite(params.mhcPrice) || params.mhcPrice < 0) {
+      throw new HttpError({
+        statusCode: 400,
+        code: 'MHC_INVALID_PRICE',
+        message: 'Credit price must be a number greater than or equal to zero.',
+      });
+    }
+    await this.repo.setScopedActionPrice(params);
+  }
+
+  async clearScopedPrice(actionKey: string, scopeType: 'plan', scopeId: string): Promise<void> {
+    await this.repo.clearScopedActionPrice(actionKey, scopeType, scopeId);
+  }
+
   async listActionChargesForReference(
     referenceType: string,
     referenceId: string,
@@ -1143,6 +1201,16 @@ export class MhcService {
         code: 'MHC_ACTION_DISABLED',
         message: 'This paid action is currently switched off.',
         details: { actionKey: e.actionKey },
+      });
+    }
+    if (e instanceof MhcActionScopePriceMissingError) {
+      // Distinct from a missing global price: this entity specifically has no
+      // active price. Fails closed rather than falling back to a default.
+      return new HttpError({
+        statusCode: 503,
+        code: 'MHC_ACTION_SCOPE_PRICE_MISSING',
+        message: 'This item has no credit price configured and cannot be charged.',
+        details: { actionKey: e.actionKey, scopeType: e.scope.scopeType },
       });
     }
     if (e instanceof MhcActionPriceMissingError) {

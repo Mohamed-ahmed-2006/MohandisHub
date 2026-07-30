@@ -185,6 +185,33 @@ export class MhcActionDisabledError extends Error {
   }
 }
 
+/**
+ * Identifies ONE entity whose price overrides the global action price, e.g.
+ * `{ scopeType: 'plan', scopeId: <plan uuid> }`. A consumer names the entity; it
+ * never names an amount.
+ */
+export type MhcPriceScope = {
+  scopeType: 'plan';
+  scopeId: string;
+};
+
+/**
+ * A scope was supplied but no ACTIVE scoped price row exists for it.
+ *
+ * Deliberately distinct from MhcActionPriceMissingError: "this plan has no price
+ * configured" is an admin task, and it must never degrade into "charge the global
+ * default". Fails closed.
+ */
+export class MhcActionScopePriceMissingError extends Error {
+  constructor(
+    public readonly actionKey: string,
+    public readonly scope: MhcPriceScope,
+  ) {
+    super('MHC_ACTION_SCOPE_PRICE_MISSING');
+    this.name = 'MhcActionScopePriceMissingError';
+  }
+}
+
 /** A charge id was supplied that does not exist. */
 export class MhcChargeNotFoundError extends Error {
   constructor(public readonly chargeId: string) {
@@ -241,6 +268,15 @@ export type ChargeMhcActionInput = {
   metadata?: Record<string, unknown>;
   /** Team member acting for the charged account, recorded on the ledger row. */
   actorUserId?: string | null;
+  /**
+   * Price this action per ENTITY rather than from the global catalogue. Names
+   * the entity only — there is deliberately no way to pass an amount, so no
+   * controller, client or consumer can choose what something costs.
+   *
+   * When set, the active scoped row is the sole authority and its absence is an
+   * error, never a fallback to the global price.
+   */
+  priceScope?: MhcPriceScope | null;
 };
 
 export type ChargeMhcActionResult = {
@@ -907,6 +943,102 @@ export class MhcRepository {
     return rows;
   }
 
+  // -------------------------------------------------------------------------
+  // Scoped action prices (per-entity overrides)
+  // -------------------------------------------------------------------------
+
+  /** The active scoped price for one entity, or null when none is configured. */
+  async getScopedActionPrice(
+    actionKey: string,
+    scopeType: 'plan',
+    scopeId: string,
+  ): Promise<number | null> {
+    if (!UUID_PATTERN.test(scopeId)) return null;
+    const { rows } = await this.db.query<{ mhc_price: string }>(
+      `SELECT mhc_price::text FROM mhc_action_price_scopes
+       WHERE action_key = $1 AND scope_type = $2 AND scope_id = $3 AND is_active = true`,
+      [actionKey, scopeType, scopeId],
+    );
+    if (!rows[0]) return null;
+    const price = parseFloat(rows[0].mhc_price);
+    return Number.isFinite(price) && price >= 0 ? price : null;
+  }
+
+  /** Active scoped prices for many entities at once, for list screens. */
+  async listScopedActionPrices(actionKey: string, scopeType: 'plan'): Promise<Map<string, number>> {
+    const { rows } = await this.db.query<{ scope_id: string; mhc_price: string }>(
+      `SELECT scope_id, mhc_price::text FROM mhc_action_price_scopes
+       WHERE action_key = $1 AND scope_type = $2 AND is_active = true`,
+      [actionKey, scopeType],
+    );
+    const out = new Map<string, number>();
+    for (const row of rows) {
+      const price = parseFloat(row.mhc_price);
+      if (Number.isFinite(price) && price >= 0) out.set(row.scope_id, price);
+    }
+    return out;
+  }
+
+  /**
+   * Set the scoped price for one entity.
+   *
+   * Supersedes rather than overwrites: the previous row is deactivated and a new
+   * active row is written, so the price history of a plan survives an edit. The
+   * partial unique index guarantees only one active row exists at a time, and
+   * both statements run in one transaction so a failure cannot leave an entity
+   * with no active price at all.
+   */
+  async setScopedActionPrice(params: {
+    actionKey: string;
+    scopeType: 'plan';
+    scopeId: string;
+    mhcPrice: number;
+    updatedBy?: string | null;
+  }): Promise<void> {
+    if (!(params.mhcPrice >= 0) || !Number.isFinite(params.mhcPrice)) {
+      throw new MhcInvalidChargeReferenceError('reason');
+    }
+    const client = await this.db.connect();
+    try {
+      await client.query('BEGIN');
+      await client.query(
+        `UPDATE mhc_action_price_scopes SET is_active = false, updated_at = now()
+         WHERE action_key = $1 AND scope_type = $2 AND scope_id = $3 AND is_active = true`,
+        [params.actionKey, params.scopeType, params.scopeId],
+      );
+      await client.query(
+        `INSERT INTO mhc_action_price_scopes (action_key, scope_type, scope_id, mhc_price, is_active, updated_by)
+         VALUES ($1, $2, $3, $4, true, $5)`,
+        [
+          params.actionKey,
+          params.scopeType,
+          params.scopeId,
+          params.mhcPrice,
+          params.updatedBy ?? null,
+        ],
+      );
+      await client.query('COMMIT');
+    } catch (e) {
+      await client.query('ROLLBACK').catch(() => {});
+      throw e;
+    } finally {
+      client.release();
+    }
+  }
+
+  /** Remove the price configuration for an entity, which fails its charging closed. */
+  async clearScopedActionPrice(
+    actionKey: string,
+    scopeType: 'plan',
+    scopeId: string,
+  ): Promise<void> {
+    await this.db.query(
+      `UPDATE mhc_action_price_scopes SET is_active = false, updated_at = now()
+       WHERE action_key = $1 AND scope_type = $2 AND scope_id = $3 AND is_active = true`,
+      [actionKey, scopeType, scopeId],
+    );
+  }
+
   async upsertActionPrice(params: {
     actionKey: string;
     name: string;
@@ -1443,8 +1575,37 @@ export class MhcRepository {
    * Unlike the activation path, an absent or switched-off price is an error
    * here, not a free pass — see the note on MhcActionPriceMissingError. A price
    * of 0 on an ACTIVE row is the supported way to make an action free.
+   *
+   * When the caller supplies a SCOPE (e.g. one specific plan), the scoped row is
+   * the sole authority: it does NOT fall back to the global catalogue price. A
+   * silent fallback is the whole danger of per-entity pricing — a plan whose
+   * price row was never created or was switched off would otherwise be sold at
+   * whatever the global default happened to be. Absent or inactive means refuse.
+   *
+   * The price is read from the database here, inside the charging transaction.
+   * No caller can pass an amount in; a consumer names an entity and this decides
+   * what that entity costs.
    */
-  private async resolveActionPrice(client: PoolClient, actionKey: string): Promise<number> {
+  private async resolveActionPrice(
+    client: PoolClient,
+    actionKey: string,
+    scope: MhcPriceScope | null,
+  ): Promise<number> {
+    if (scope) {
+      const { rows } = await client.query<{ mhc_price: string }>(
+        `SELECT mhc_price::text FROM mhc_action_price_scopes
+         WHERE action_key = $1 AND scope_type = $2 AND scope_id = $3 AND is_active = true`,
+        [actionKey, scope.scopeType, scope.scopeId],
+      );
+      const row = rows[0];
+      if (!row) throw new MhcActionScopePriceMissingError(actionKey, scope);
+      const scopedPrice = parseFloat(row.mhc_price);
+      if (!Number.isFinite(scopedPrice) || scopedPrice < 0) {
+        throw new MhcActionScopePriceMissingError(actionKey, scope);
+      }
+      return scopedPrice;
+    }
+
     const { rows } = await client.query<{ mhc_price: string; is_active: boolean }>(
       `SELECT mhc_price::text, is_active FROM mhc_action_prices WHERE action_key = $1`,
       [actionKey],
@@ -1556,7 +1717,7 @@ export class MhcRepository {
 
     const scope = await this.openChargeScope(client);
     try {
-      const price = await this.resolveActionPrice(client, actionKey);
+      const price = await this.resolveActionPrice(client, actionKey, input.priceScope ?? null);
 
       // Zero-price policy: a free action moves no credits, so it writes NO
       // ledger row and NO charge row. There is nothing to be idempotent about

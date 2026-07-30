@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto';
+
 import type {
   EffectivePlanLimits,
   Plan,
@@ -15,6 +17,7 @@ import {
 
 import { getPool } from '../../db/pool.js';
 import { HttpError } from '../../utils/http-error.js';
+import { MhcService } from '../mhc/mhc.service.js';
 import { SettingsService } from '../settings/settings.service.js';
 import { WalletRepository } from '../wallet/wallet.repository.js';
 
@@ -27,14 +30,48 @@ const BILLING_CYCLE_DAYS: Record<string, number> = {
   one_time: 365,
 };
 
+/**
+ * Plans are priced per plan, through the generic scoped-price table:
+ *   action_key = 'subscription_upgrade', scope_type = 'plan', scope_id = plan.id
+ *
+ * One shared price for every plan was rejected, and so was one action key per
+ * plan. This keeps a single action key and moves the variation into the scope.
+ */
+const PLAN_ACTION_KEY = 'subscription_upgrade';
+const PLAN_REFERENCE_TYPE = 'plan_subscription';
+
 const SUBSCRIBER_ROLE_SET = new Set<string>(PLAN_SUBSCRIBER_ROLES);
 
 export class PlansService {
   constructor(
     private readonly settingsService: SettingsService = new SettingsService(),
+    /**
+     * Retained for the legacy EGP code paths only. The purchase path no longer
+     * reads, locks or debits a money wallet — plans are bought with MHC.
+     */
     private readonly walletRepo: WalletRepository = new WalletRepository(),
     private readonly usageQuotaService: UsageQuotaService = new UsageQuotaService(),
+    private readonly mhc: MhcService = new MhcService(),
   ) {}
+
+  /** The subscription a previous attempt with this idempotency key created. */
+  private async findSubscriptionByIdempotencyKey(
+    userId: string,
+    idempotencyKey: string,
+  ): Promise<{ id: string; ends_at: string; mhc_price_paid: string | null } | null> {
+    const { rows } = await getPool().query<{
+      id: string;
+      ends_at: string;
+      mhc_price_paid: string | null;
+    }>(
+      `SELECT id, ends_at::text, mhc_price_paid::text
+       FROM plan_subscriptions
+       WHERE user_id = $1 AND client_idempotency_key = $2
+       LIMIT 1`,
+      [userId, idempotencyKey],
+    );
+    return rows[0] ?? null;
+  }
   /**
    * Lists active plans visible to the given primary role. Admins see the full catalog (for support/testing).
    */
@@ -48,9 +85,16 @@ export class PlansService {
       });
     }
     const { rows } = await getPool().query(
-      `SELECT * FROM plans WHERE COALESCE(is_active, true) = true ORDER BY COALESCE(sort_order, 0) ASC, COALESCE(price, 0) ASC`,
+      `SELECT * FROM plans
+       WHERE COALESCE(is_active, true) = true AND COALESCE(is_visible, true) = true
+       ORDER BY COALESCE(sort_order, 0) ASC, COALESCE(price, 0) ASC`,
     );
-    const plans = rows.map((r: Record<string, unknown>) => this.toPlan(r));
+    // One query for every plan's MHC price, so a catalogue of N plans does not
+    // become N+1 round trips.
+    const scopedPrices = await this.mhc.listScopedPrices(PLAN_ACTION_KEY, 'plan');
+    const plans = rows.map((r: Record<string, unknown>) =>
+      this.toPlan(r, scopedPrices.get(String(r.id)) ?? null),
+    );
     if (primaryRole === 'admin') return plans;
     if (!SUBSCRIBER_ROLE_SET.has(primaryRole)) return [];
     const role = primaryRole as PlanSubscriberRole;
@@ -253,7 +297,11 @@ export class PlansService {
    *
    * See docs/release/LAUNCH_CONSTRAINTS.md#lc-02.
    */
-  async subscribeToPlan(userId: string, planId: string): Promise<SubscribeToPlanResponse> {
+  async subscribeToPlan(
+    userId: string,
+    planId: string,
+    idempotencyKey?: string | null,
+  ): Promise<SubscribeToPlanResponse> {
     const status = await this.settingsService.getAppStatus();
     if (!status.featurePlansEnabled) {
       throw new HttpError({
@@ -319,7 +367,33 @@ export class PlansService {
       });
     }
 
-    const price = parseFloat(planRow.price as string);
+    // The plan must be deliberately on sale. Both checks happen BEFORE any
+    // wallet or transaction work, so a plan that is not for sale never touches
+    // the money layer at all.
+    if (planRow.is_purchasable !== true) {
+      throw new HttpError({
+        statusCode: 409,
+        code: 'PLAN_NOT_PURCHASABLE',
+        message: 'This plan is not available for purchase yet.',
+      });
+    }
+
+    const isFreePlan = planRow.slug === 'free';
+    // Price resolution for DISPLAY and for the free-plan decision only. The
+    // charge itself re-resolves the price inside the transaction from the same
+    // scope, so what is read here can never become what is charged.
+    const scopedPrice = isFreePlan
+      ? 0
+      : await this.mhc.getScopedPrice(PLAN_ACTION_KEY, 'plan', planId);
+    if (scopedPrice === null) {
+      // Fail CLOSED: a paid plan with no active scoped price is a configuration
+      // gap, never a reason to charge a global default or to give it away.
+      throw new HttpError({
+        statusCode: 503,
+        code: 'PLAN_MHC_PRICE_MISSING',
+        message: 'This plan has no credit price configured yet.',
+      });
+    }
 
     const billingCycle = (planRow.billing_cycle as string) ?? 'monthly';
     const durationDays =
@@ -329,18 +403,36 @@ export class PlansService {
     const startsAt = new Date();
     const endsAt = new Date(startsAt);
     endsAt.setDate(endsAt.getDate() + durationDays);
+    // Preallocated so the charge can reference the subscription before it commits.
+    const subscriptionId = randomUUID();
+
+    if (idempotencyKey) {
+      // Fast path: a completed retry never re-enters the transaction.
+      const existing = await this.findSubscriptionByIdempotencyKey(userId, idempotencyKey);
+      if (existing) {
+        return {
+          plan: this.toPlan(planRow),
+          mhcCharged: parseFloat(existing.mhc_price_paid ?? '0'),
+          mhcBalance: await this.mhc.getBalanceFor(userId),
+          subscriptionEndsAt: existing.ends_at,
+        };
+      }
+    }
 
     const client = await pool.connect();
     try {
       await client.query('BEGIN');
+      // Serialises this user's purchases. Two concurrent buys queue here, so the
+      // active-subscription check below cannot be made against a stale read.
       await client.query(`SELECT id FROM users WHERE id = $1 FOR UPDATE`, [userId]);
 
       const { rows: activeSubscriptionRows } = await client.query<{
         id: string;
         plan_id: string;
         ends_at: string;
+        mhc_price_paid: string | null;
       }>(
-        `SELECT id, plan_id, ends_at
+        `SELECT id, plan_id, ends_at::text, mhc_price_paid::text
          FROM plan_subscriptions
          WHERE user_id = $1 AND ends_at > now()
          ORDER BY ends_at DESC
@@ -348,63 +440,85 @@ export class PlansService {
         [userId],
       );
       const activeSubscription = activeSubscriptionRows[0] ?? null;
+
+      // Already on this exact plan: report it, charge nothing.
       if (activeSubscription?.plan_id === planId) {
-        const { rows: walletRows } = await client.query<{ balance: string }>(
-          `SELECT balance::text FROM wallets WHERE user_id = $1 LIMIT 1`,
-          [userId],
-        );
         await client.query('COMMIT');
         return {
           plan: this.toPlan(planRow),
-          walletBalance: parseFloat(walletRows[0]?.balance ?? '0'),
+          mhcCharged: 0,
+          mhcBalance: await this.mhc.getBalanceFor(userId),
           subscriptionEndsAt: activeSubscription.ends_at,
         };
       }
 
-      const { rows: walletRows } = await client.query<{ id: string; balance: string }>(
-        `SELECT id, balance::text FROM wallets WHERE user_id = $1 FOR UPDATE`,
-        [userId],
-      );
-      const wallet = walletRows[0];
-      if (!wallet) {
+      // A different paid plan is still running. No prorating, no refunds and no
+      // mid-cycle switching in this task, so the honest answer is to refuse and
+      // say when they may switch — NOT to silently truncate a subscription the
+      // provider already paid for.
+      if (activeSubscription && !isFreePlan) {
         throw new HttpError({
-          statusCode: 400,
-          code: 'NO_WALLET',
-          message: 'No wallet found. Please deposit first.',
-        });
-      }
-      const balance = parseFloat(wallet.balance);
-      if (balance < price) {
-        throw new HttpError({
-          statusCode: 400,
-          code: 'INSUFFICIENT_BALANCE',
-          message: `Insufficient balance. Required: ${price} EGP, Available: ${balance}.`,
+          statusCode: 409,
+          code: 'PLAN_ALREADY_ACTIVE',
+          message:
+            'You already have an active plan. You can choose a different plan once it expires.',
+          details: { activeUntil: activeSubscription.ends_at },
         });
       }
 
-      if (activeSubscriptionRows.length > 0) {
-        await client.query(
-          `UPDATE plan_subscriptions
-           SET ends_at = $2
-           WHERE user_id = $1 AND ends_at > $2`,
-          [userId, startsAt.toISOString()],
-        );
+      // The free plan is the fallback entitlement and needs no purchase. It must
+      // never be able to cancel a paid subscription that is still running.
+      if (isFreePlan) {
+        if (activeSubscription) {
+          throw new HttpError({
+            statusCode: 409,
+            code: 'PLAN_ALREADY_ACTIVE',
+            message: 'Your paid plan is still active. Free applies automatically once it expires.',
+            details: { activeUntil: activeSubscription.ends_at },
+          });
+        }
+        await client.query('COMMIT');
+        return {
+          plan: this.toPlan(planRow),
+          mhcCharged: 0,
+          mhcBalance: await this.mhc.getBalanceFor(userId),
+          subscriptionEndsAt: null,
+        };
       }
 
-      await this.walletRepo.debitWalletInTransaction(
+      // Charge and subscription in ONE transaction: a failed charge leaves no
+      // subscription, a failed subscription leaves no charge. The price comes
+      // from the plan's scope, resolved inside the primitive — never passed in.
+      const charge = await this.mhc.chargeAction({
         client,
-        wallet.id,
         userId,
-        price,
-        `Plan subscription: ${typeof planRow.name === 'string' ? planRow.name : 'Plan'}`,
-        'plan_subscription',
-        planId,
-      );
+        actionKey: PLAN_ACTION_KEY,
+        referenceType: PLAN_REFERENCE_TYPE,
+        referenceId: subscriptionId,
+        priceScope: { scopeType: 'plan', scopeId: planId },
+        idempotencyKey: `plan_subscription:${subscriptionId}`,
+        description: `Plan subscription: ${typeof planRow.name === 'string' ? planRow.name : 'Plan'}`,
+        metadata: { plan_id: planId, duration_days: durationDays },
+      });
 
+      // Snapshot what was charged, so a later admin price change cannot rewrite
+      // the history of this purchase.
       await client.query(
-        `INSERT INTO plan_subscriptions (user_id, plan_id, starts_at, ends_at)
-         VALUES ($1, $2, $3, $4)`,
-        [userId, planId, startsAt.toISOString(), endsAt.toISOString()],
+        `INSERT INTO plan_subscriptions (
+           id, user_id, plan_id, starts_at, ends_at,
+           mhc_price_paid, duration_days_used, action_charge_id, client_idempotency_key
+         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+        [
+          subscriptionId,
+          userId,
+          planId,
+          startsAt.toISOString(),
+          endsAt.toISOString(),
+          charge.mhcCharged,
+          durationDays,
+          charge.chargeId,
+          idempotencyKey ?? null,
+        ],
       );
 
       await client.query(`UPDATE users SET plan_id = $1 WHERE id = $2`, [planId, userId]);
@@ -413,11 +527,30 @@ export class PlansService {
 
       return {
         plan: this.toPlan(planRow),
-        walletBalance: balance - price,
+        mhcCharged: charge.mhcCharged,
+        mhcBalance: charge.balanceAfter,
         subscriptionEndsAt: endsAt.toISOString(),
       };
     } catch (err) {
-      await client.query('ROLLBACK');
+      await client.query('ROLLBACK').catch(() => {});
+      // Lost the domain idempotency race: a concurrent identical request
+      // committed first. Report its subscription rather than an error.
+      if (
+        idempotencyKey &&
+        typeof err === 'object' &&
+        err !== null &&
+        (err as { code?: unknown }).code === '23505'
+      ) {
+        const winner = await this.findSubscriptionByIdempotencyKey(userId, idempotencyKey);
+        if (winner) {
+          return {
+            plan: this.toPlan(planRow),
+            mhcCharged: parseFloat(winner.mhc_price_paid ?? '0'),
+            mhcBalance: await this.mhc.getBalanceFor(userId),
+            subscriptionEndsAt: winner.ends_at,
+          };
+        }
+      }
       throw err;
     } finally {
       client.release();
@@ -530,7 +663,7 @@ export class PlansService {
     return { ...empty, usageQuotas: quotaLines };
   }
 
-  private toPlan(row: Record<string, unknown>): Plan {
+  private toPlan(row: Record<string, unknown>, mhcPrice: number | null = null): Plan {
     const price = Number(row.price);
     const createdAt = row.created_at;
     const updatedAt = row.updated_at;
@@ -553,6 +686,10 @@ export class PlansService {
       billingCycle: (row.billing_cycle as Plan['billingCycle']) ?? 'monthly',
       durationDays: (row.duration_days as number) ?? null,
       trialDays: (row.trial_days as number) ?? 0,
+      // Both default to fail-closed shapes when a row predates the columns.
+      isPurchasable: row.is_purchasable === true,
+      isVisible: row.is_visible !== false,
+      mhcPrice,
       maxServices: (row.max_services as number) ?? null,
       maxProjects: (row.max_projects as number) ?? null,
       features: Array.isArray(row.features) ? (row.features as string[]) : [],

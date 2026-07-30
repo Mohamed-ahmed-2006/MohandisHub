@@ -107,6 +107,16 @@ export type Plan = {
   allowedRoles: PlanSubscriberRole[];
   planLimits?: PlanLimits | null;
   isActive: boolean;
+  /** Admin switch: may this plan be bought? Requires an mhcPrice as well. */
+  isPurchasable: boolean;
+  /** Admin switch: is this plan listed to users at all? */
+  isVisible: boolean;
+  /**
+   * Admin-configured MHC price for THIS plan, from mhc_action_price_scopes.
+   * `null` means no active price is configured, which fails purchasing closed.
+   * MHC is a platform credit — never render it with a currency symbol.
+   */
+  mhcPrice: number | null;
   sortOrder: number;
   createdAt: string;
   updatedAt: string;
@@ -116,6 +126,7 @@ export type CreatePlanBody = {
   slug: string;
   name: string;
   description?: string;
+  /** LEGACY (EGP). Retired from every purchase path; retained for history. */
   price: number;
   currency?: string;
   billingCycle?: BillingCycle;
@@ -127,6 +138,10 @@ export type CreatePlanBody = {
   allowedRoles?: PlanSubscriberRole[];
   planLimits?: PlanLimits | null;
   sortOrder?: number;
+  isPurchasable?: boolean;
+  isVisible?: boolean;
+  /** MHC charged for this plan. Omit to leave it unpriced (not purchasable). */
+  mhcPrice?: number | null;
 };
 
 export type UpdatePlanBody = Partial<CreatePlanBody> & {
@@ -165,8 +180,15 @@ export type PlanSubscription = {
 
 export type SubscribeToPlanResponse = {
   plan: Plan;
-  walletBalance: number;
-  subscriptionEndsAt: string;
+  /**
+   * MHC actually debited. 0 for the free plan and for an idempotent repeat of a
+   * purchase that already happened.
+   */
+  mhcCharged: number;
+  /** Provider credit balance after the purchase. MHC, never a currency amount. */
+  mhcBalance: number;
+  /** Null for the free plan, which is the fallback and has no end date. */
+  subscriptionEndsAt: string | null;
 };
 
 /** How inventory-style limits reset (concurrent slots). Metered quotas use `usageQuotas[].period`. */
