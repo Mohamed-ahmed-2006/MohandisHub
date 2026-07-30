@@ -18,6 +18,12 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import {
+  assertDroppableScratchName,
+  dropScratchDatabase,
+  findLeftoverScratchDatabases,
+} from './lib/scratch-db.mjs';
+
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const MIGRATIONS_DIR = path.join(ROOT, 'supabase', 'migrations');
 const require = createRequire(path.join(ROOT, 'apps', 'api', 'package.json'));
@@ -108,10 +114,16 @@ const admin = new Client({ connectionString: databaseUrl });
 await admin.connect();
 
 let scratch = null;
+/** True once CREATE DATABASE succeeded, so cleanup runs even if connecting fails. */
+let created = false;
 let ok = true;
 try {
+  // Guarded before it exists, so a malformed name can never reach the DROP in
+  // `finally` — and so this script can never be pointed at a real database.
+  assertDroppableScratchName(SCRATCH_DB);
   console.log(`Creating scratch database ${SCRATCH_DB} ...`);
   await admin.query(`CREATE DATABASE ${SCRATCH_DB}`);
+  created = true;
 
   scratch = new Client({ connectionString: urlFor(SCRATCH_DB) });
   await scratch.connect();
@@ -182,34 +194,52 @@ try {
   ok = false;
   console.error(`\nERROR: ${e.message}`);
 } finally {
+  // Cleanup runs from `finally`, so it happens identically after a pass, a diff,
+  // a failed replay and an unexpected throw.
+  //
+  // Order is load-bearing: every client that could hold a session on the scratch
+  // database is closed BEFORE the drop, and the drop itself uses WITH (FORCE)
+  // rather than terminate-then-drop, which raced a reconnecting pooler and
+  // leaked the database on every retry.
   if (scratch) await scratch.end().catch(() => {});
-  if (scratch && !keep) {
-    console.log(`\nDropping scratch database ${SCRATCH_DB} ...`);
-    // Pooled connections can linger briefly after end(); evict them so the drop
-    // does not fail with "database is being accessed by other users".
-    // Pooled connections can linger after end(), so evict and retry rather than
-    // leaving scratch databases behind on the server.
-    let dropped = false;
-    for (let attempt = 1; attempt <= 5 && !dropped; attempt += 1) {
-      await admin
-        .query(
-          `SELECT pg_terminate_backend(pid) FROM pg_stat_activity
-           WHERE datname = $1 AND pid <> pg_backend_pid()`,
-          [SCRATCH_DB],
-        )
-        .catch(() => {});
-      try {
-        await admin.query(`DROP DATABASE IF EXISTS ${SCRATCH_DB}`);
-        dropped = true;
-      } catch (e) {
-        if (attempt === 5) console.error(`  could not drop: ${e.message}`);
-        else await new Promise((r) => setTimeout(r, 1000 * attempt));
-      }
-    }
-    if (dropped) console.log('  dropped.');
-  } else if (keep) {
+
+  if (keep) {
     console.log(`\nScratch database ${SCRATCH_DB} retained (--keep).`);
+  } else if (scratch || created) {
+    console.log(`\nDropping scratch database ${SCRATCH_DB} ...`);
+    const dropped = await dropScratchDatabase(admin, SCRATCH_DB, {
+      log: (line) => console.error(line),
+    });
+    if (dropped) {
+      console.log('  dropped.');
+    } else {
+      // A leaked scratch database is a failure of this script, not a warning.
+      // It previously left `ok` untouched, so a run whose comparison matched
+      // could exit 0 having abandoned a database on the server.
+      ok = false;
+      console.error(`  FAILED to drop ${SCRATCH_DB} — it is still on the server.`);
+    }
   }
+
+  // The proof, not the intention: ask the server what is actually left.
+  if (!keep) {
+    try {
+      const leftovers = await findLeftoverScratchDatabases(admin);
+      if (leftovers.length === 0) {
+        console.log('  verified: no mhc_replay_* or mhc_it_* database remains.');
+      } else {
+        ok = false;
+        console.error(`  LEAKED scratch databases still present: ${leftovers.join(', ')}`);
+        // Not auto-dropped: one of these may belong to a run still using it, and
+        // destroying another process's working state is worse than reporting it.
+        console.error('  Drop them manually once you have confirmed nothing is using them.');
+      }
+    } catch (e) {
+      ok = false;
+      console.error(`  could not verify scratch cleanup: ${e.message}`);
+    }
+  }
+
   await admin.end().catch(() => {});
 }
 
