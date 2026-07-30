@@ -171,12 +171,11 @@ describe('subscribing while the launch freeze is on', () => {
     );
   });
 
-  it('leaves the legacy implementation reachable once the pause is lifted', async () => {
-    // Proof that this change FENCES rather than deletes: with the pause off, the
-    // original path runs exactly as before. Whichever pricing model is chosen
-    // starts from working code and an unbroken subscription history.
+  it('reaches the MHC purchase path once the pause is lifted', async () => {
+    // Proof that the pause FENCES rather than breaks: with it off, a purchase
+    // proceeds — now through the MHC primitive, using the plan's own scoped
+    // price, and without touching an EGP wallet.
     const walletRepo = makeWalletRepo();
-    walletRepo.debitWalletInTransaction.mockResolvedValue('tx-1');
     poolQueryMock
       .mockResolvedValueOnce({ rows: [{ primary_role: 'business' }] })
       .mockResolvedValueOnce({
@@ -185,12 +184,14 @@ describe('subscribing while the launch freeze is on', () => {
             id: PAID_PLAN,
             slug: 'pro',
             name: 'Pro',
-            price: '100',
+            price: '1000',
             currency: 'EGP',
             billing_cycle: 'monthly',
             allowed_roles: ['business'],
             plan_limits: {},
             is_active: true,
+            is_purchasable: true,
+            is_visible: true,
           },
         ],
       });
@@ -198,16 +199,40 @@ describe('subscribing while the launch freeze is on', () => {
       .mockResolvedValueOnce({}) // BEGIN
       .mockResolvedValueOnce({ rows: [{ id: 'user-1' }] }) // user lock
       .mockResolvedValueOnce({ rows: [] }) // no active subscription
-      .mockResolvedValueOnce({ rows: [{ id: 'wallet-1', balance: '500' }] }) // wallet lock
-      .mockResolvedValueOnce({}) // insert subscription
-      .mockResolvedValueOnce({}) // update users.plan_id
-      .mockResolvedValueOnce({}); // COMMIT
+      .mockResolvedValue({ rows: [] }); // insert, users update, COMMIT
 
-    const service = makeService({ pausePlanSubscriptions: false }, walletRepo);
+    const mhc = {
+      getScopedPrice: vi.fn().mockResolvedValue(40),
+      listScopedPrices: vi.fn().mockResolvedValue(new Map()),
+      getBalanceFor: vi.fn().mockResolvedValue(60),
+      chargeAction: vi.fn().mockResolvedValue({
+        outcome: 'charged',
+        chargeId: 'cccccccc-0000-4000-8000-00000000000c',
+        transactionId: 'tx-1',
+        mhcCharged: 40,
+        balanceAfter: 60,
+        alreadyCharged: false,
+      }),
+    };
+
+    const service = new PlansService(
+      {
+        getAppStatus: vi.fn().mockResolvedValue({
+          featurePlansEnabled: true,
+          moneyMovementsPaused: false,
+          pausePlanSubscriptions: false,
+        }),
+      } as never,
+      walletRepo as never,
+      undefined,
+      mhc as never,
+    );
     const result = await service.subscribeToPlan('user-1', PAID_PLAN);
 
     expect(result.plan.id).toBe(PAID_PLAN);
-    expect(walletRepo.debitWalletInTransaction).toHaveBeenCalledTimes(1);
+    expect(result.mhcCharged).toBe(40);
+    expect(mhc.chargeAction).toHaveBeenCalledTimes(1);
+    expect(walletRepo.debitWalletInTransaction).not.toHaveBeenCalled();
   });
 });
 

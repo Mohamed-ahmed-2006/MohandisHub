@@ -77,8 +77,43 @@ export type ScratchDatabase = {
  * build this schema from nothing, and it guarantees the test database contains
  * no row that came from anywhere else.
  */
+/**
+ * Database names this suite must never write to.
+ *
+ * The admin connection is only ever used to CREATE and DROP a scratch database,
+ * but `assertNotProduction` below re-checks the ACTUAL connected database of the
+ * scratch pool before a single test runs — so even a mis-set PG_INTEGRATION_URL
+ * that points a "scratch" name at a real database is caught before any write.
+ */
+const FORBIDDEN_DATABASE_NAMES = new Set(['postgres', 'production', 'prod', 'main']);
+
+/** Scratch databases this helper creates all carry this prefix. */
+const SCRATCH_PREFIX = 'mhc_it_';
+
+/**
+ * Refuse to proceed unless the connection really is on a scratch database.
+ *
+ * Verified with `SELECT current_database()` against the connection that is about
+ * to be written to, not inferred from the connection string.
+ */
+const assertNotProduction = async (pool: Pool, expected: string): Promise<void> => {
+  const { rows } = await pool.query<{ db: string }>(`SELECT current_database() AS db`);
+  const actual = rows[0]?.db ?? '';
+  if (actual !== expected) {
+    throw new Error(
+      `Refusing to run: connected to "${actual}" but expected scratch database "${expected}".`,
+    );
+  }
+  if (!actual.startsWith(SCRATCH_PREFIX) || FORBIDDEN_DATABASE_NAMES.has(actual)) {
+    throw new Error(`Refusing to run integration tests against database "${actual}".`);
+  }
+};
+
 export const createScratchDatabase = async (label: string): Promise<ScratchDatabase> => {
-  const name = `mhc_it_${label}_${Date.now().toString(36)}`;
+  const name = `${SCRATCH_PREFIX}${label}_${Date.now().toString(36)}`;
+  if (FORBIDDEN_DATABASE_NAMES.has(name)) {
+    throw new Error(`Refusing to use "${name}" as a scratch database name.`);
+  }
   const admin = new Client({ connectionString: adminUrl() });
   await admin.connect();
   try {
@@ -116,6 +151,8 @@ export const createScratchDatabase = async (label: string): Promise<ScratchDatab
   }
 
   const pool = new Pool({ connectionString: urlFor(name), max: 16 });
+  // Last line of defence, on the connection that will actually be written to.
+  await assertNotProduction(pool, name);
 
   return {
     name,
