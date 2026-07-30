@@ -31,13 +31,35 @@
 -- ----------------------------------------------------------------------------
 -- ROLLBACK (tested on a scratch replay database, see the P0-07 report):
 --
+--   -- 1. LATER migrations that depend on this table must be reversed FIRST.
+--   --    20260730100000_plan_mhc_pricing added this foreign key:
+--   --      plan_subscriptions.action_charge_id -> mhc_action_charges(id)
+--   --    A bare DROP TABLE fails while it exists:
+--   --      "cannot drop table mhc_action_charges because other objects depend on it"
+--   ALTER TABLE public.plan_subscriptions DROP COLUMN IF EXISTS action_charge_id;
+--
+--   -- 2. Only then may this migration drop its own objects.
 --   DROP TABLE IF EXISTS public.mhc_action_charges;
 --
--- The table is new, nothing references it, and no existing object is altered by
--- this migration — so the DROP is the complete and only reversal. It destroys
--- charge records, so before running it in an environment that has charged
--- anything, export the table: the `transactions` rows survive the DROP and stay
--- the authoritative financial history either way.
+-- Rollback runs in REVERSE dependency order: newest dependants first, then this
+-- table. Rolling back 20260730100000 in full (see its own ROLLBACK block, which
+-- drops `action_charge_id` among other columns) also satisfies step 1 — step 1
+-- is the minimum needed to reverse THIS migration alone.
+--
+-- Do NOT drop the constraint alone and keep the column: an orphaned
+-- `action_charge_id` would point at charge ids that no longer exist.
+--
+-- This was originally documented as "nothing references it, so the DROP is the
+-- complete and only reversal". That stopped being true when per-plan MHC pricing
+-- shipped; the statement is corrected here rather than left to fail in an
+-- incident. Both steps are idempotent and safe to run twice.
+--
+-- It destroys charge records, so before running it in an environment that has
+-- charged anything, export the table: the `transactions` rows survive the DROP
+-- and stay the authoritative financial history either way. Dropping
+-- `action_charge_id` loses the link from a subscription to the charge that paid
+-- for it; `plan_subscriptions.mhc_price_paid` and the `transactions` ledger both
+-- survive, so no financial history is destroyed by step 1.
 -- ============================================================================
 
 -- ---------------------------------------------------------------------------

@@ -32,7 +32,22 @@ import {
 // ---------------------------------------------------------------------------
 
 const CHARGE_MIGRATION = '20260729140000_mhc_action_charges.sql';
-const ROLLBACK_SQL = 'DROP TABLE IF EXISTS public.mhc_action_charges;';
+/**
+ * The documented rollback for 20260729140000, in REVERSE DEPENDENCY ORDER.
+ *
+ * Step 1 removes the dependant that 20260730100000 (per-plan MHC pricing) added:
+ *   plan_subscriptions.action_charge_id -> mhc_action_charges(id)
+ * Step 2 drops this migration's own table.
+ *
+ * A bare DROP TABLE fails while that foreign key exists — proven by
+ * 'refuses a bare DROP TABLE while the plan-pricing dependant exists' below, so
+ * the order is a tested guarantee rather than a comment. Both steps are
+ * idempotent, which is what lets the suite run the whole sequence twice.
+ */
+const ROLLBACK_STEP_1_DEPENDANTS =
+  'ALTER TABLE public.plan_subscriptions DROP COLUMN IF EXISTS action_charge_id;';
+const ROLLBACK_STEP_2_OWN_OBJECTS = 'DROP TABLE IF EXISTS public.mhc_action_charges;';
+const ROLLBACK_SQL = `${ROLLBACK_STEP_1_DEPENDANTS}\n${ROLLBACK_STEP_2_OWN_OBJECTS}`;
 
 let scratch: ScratchDatabase;
 let pool: Pool;
@@ -531,32 +546,131 @@ describe.skipIf(!pgIntegrationEnabled())('P0-07 migration against real PostgreSQ
   });
 
   // -- 10 --------------------------------------------------------------------
+  // A later migration made this table un-droppable on its own, which silently
+  // invalidated the rollback documented here. These three tests pin the
+  // dependency, prove the OLD order genuinely fails, and prove the corrected
+  // order succeeds — so the same class of regression cannot return unnoticed.
+  it('has the plan-pricing dependant that forces the rollback order', async () => {
+    const copy = await createScratchDatabase('rollbackdep');
+    try {
+      // 1. The whole migration chain applied in forward order (createScratchDatabase
+      //    replays every file), and both ends of the dependency exist.
+      const objects = await copy.pool.query<{ charges: string | null; subs: string | null }>(
+        `SELECT to_regclass('public.mhc_action_charges')::text AS charges,
+                to_regclass('public.plan_subscriptions')::text AS subs`,
+      );
+      expect(objects.rows[0]!.charges).toBe('mhc_action_charges');
+      expect(objects.rows[0]!.subs).toBe('plan_subscriptions');
+
+      // 2. The dependency itself: a real FK from the newer migration, named and
+      //    shaped as 20260730100000 declares it.
+      const { rows: fks } = await copy.pool.query<{ conname: string; def: string }>(
+        `SELECT conname, pg_get_constraintdef(oid) AS def
+           FROM pg_constraint
+          WHERE confrelid = 'public.mhc_action_charges'::regclass
+            AND contype = 'f'`,
+      );
+      expect(fks).toHaveLength(1);
+      expect(fks[0]!.def).toContain('FOREIGN KEY (action_charge_id)');
+      expect(fks[0]!.def).toContain('REFERENCES mhc_action_charges(id)');
+      expect(fks[0]!.def).toContain('ON DELETE RESTRICT');
+    } finally {
+      await copy.drop();
+    }
+  }, 900_000);
+
+  it('refuses a bare DROP TABLE while the plan-pricing dependant exists', async () => {
+    const copy = await createScratchDatabase('rollbackorder');
+    try {
+      // The ORIGINAL documented rollback, run on its own. It must fail — that is
+      // precisely the defect this fix corrects, and asserting the failure is what
+      // stops the obsolete one-liner being restored.
+      await expect(copy.exec(ROLLBACK_STEP_2_OWN_OBJECTS)).rejects.toThrow(
+        /cannot drop table mhc_action_charges because other objects depend on it/i,
+      );
+
+      // The failed DROP changed nothing.
+      const still = await copy.pool.query<{ t: string | null }>(
+        `SELECT to_regclass('public.mhc_action_charges')::text AS t`,
+      );
+      expect(still.rows[0]!.t).toBe('mhc_action_charges');
+    } finally {
+      await copy.drop();
+    }
+  }, 900_000);
+
   it('runs the documented rollback twice on a scratch copy', async () => {
     const copy = await createScratchDatabase('rollback');
+    const fingerprint = async () => {
+      const { rows } = await copy.pool.query<{ kind: string; sig: string }>(
+        `SELECT 'table' AS kind, table_name AS sig
+           FROM information_schema.tables WHERE table_schema = 'public'
+         UNION ALL
+         SELECT 'column', table_name || '.' || column_name
+           FROM information_schema.columns WHERE table_schema = 'public'
+         UNION ALL
+         SELECT 'constraint', conrelid::regclass::text || '::' || conname
+           FROM pg_constraint WHERE connamespace = 'public'::regnamespace
+         UNION ALL
+         SELECT 'index', tablename || '.' || indexname FROM pg_indexes WHERE schemaname = 'public'
+         ORDER BY 1, 2`,
+      );
+      return new Set(rows.map((r) => `${r.kind}:${r.sig}`));
+    };
+
     try {
-      const before = await copy.pool.query<{ t: string | null }>(
-        `SELECT to_regclass('public.mhc_action_charges')::text AS t`,
-      );
-      expect(before.rows[0]!.t).toBe('mhc_action_charges');
+      const before = await fingerprint();
+      expect(before.has('table:mhc_action_charges')).toBe(true);
+      expect(before.has('column:plan_subscriptions.action_charge_id')).toBe(true);
 
+      // Idempotent: the documented sequence runs twice with the same result.
       await copy.exec(ROLLBACK_SQL);
       await copy.exec(ROLLBACK_SQL);
 
-      const after = await copy.pool.query<{ t: string | null }>(
-        `SELECT to_regclass('public.mhc_action_charges')::text AS t`,
-      );
-      expect(after.rows[0]!.t).toBeNull();
+      const after = await fingerprint();
+      expect(after.has('table:mhc_action_charges')).toBe(false);
+      expect(after.has('column:plan_subscriptions.action_charge_id')).toBe(false);
 
-      // Nothing else went with it: the ledger the table referenced survives.
-      const survivors = await copy.pool.query<{ t: string | null }>(
-        `SELECT to_regclass('public.transactions')::text AS t`,
-      );
-      expect(survivors.rows[0]!.t).toBe('transactions');
+      // The schema matches the expected pre-migration state: the ONLY objects
+      // that disappeared are this table's own, plus the dependent column the
+      // rollback deliberately removes. Nothing was collateral damage.
+      const removed = [...before].filter((k) => !after.has(k)).sort();
+      const added = [...after].filter((k) => !before.has(k));
+      expect(added).toEqual([]);
 
-      const activations = await copy.pool.query<{ t: string | null }>(
-        `SELECT to_regclass('public.mhc_job_activations')::text AS t`,
+      // This migration's own objects may all go; everything else that went must
+      // be exactly the three dependants 20260730100000 hung off this table.
+      // Asserted as an exact set, so an unnoticed extra casualty fails here.
+      const removedElsewhere = removed.filter((k) => !k.includes('mhc_action_charges'));
+      expect(removedElsewhere).toEqual([
+        'column:plan_subscriptions.action_charge_id',
+        'constraint:plan_subscriptions::plan_subscriptions_action_charge_id_fkey',
+        'index:plan_subscriptions.idx_plan_subscriptions_charge',
+      ]);
+      // The table itself really went, not merely its constraints.
+      expect(removed).toContain('table:mhc_action_charges');
+
+      // Unrelated tables, financial history and the payment/webhook-backed
+      // records all survive. (There is no webhook events table in this schema —
+      // `deposit_requests` is the row a payment webhook reconciles against.)
+      const { rows: survivors } = await copy.pool.query<{ t: string | null; name: string }>(
+        `SELECT name, to_regclass('public.' || name)::text AS t
+           FROM unnest(ARRAY[
+             'transactions','mhc_job_activations','wallets','plan_subscriptions',
+             'deposit_requests','provider_payment_methods',
+             'provider_payment_disclosures','advertisements','plans'
+           ]) AS name`,
       );
-      expect(activations.rows[0]!.t).toBe('mhc_job_activations');
+      for (const row of survivors) expect(row.t).toBe(row.name);
+
+      // The subscription keeps its own price record, so no financial history is
+      // lost by dropping the link column.
+      const { rows: kept } = await copy.pool.query<{ n: string }>(
+        `SELECT count(*)::text AS n FROM information_schema.columns
+          WHERE table_schema='public' AND table_name='plan_subscriptions'
+            AND column_name IN ('mhc_price_paid','duration_days_used')`,
+      );
+      expect(kept[0]!.n).toBe('2');
     } finally {
       await copy.drop();
     }
