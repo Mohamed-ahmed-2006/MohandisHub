@@ -1,18 +1,53 @@
+import { existsSync, readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+
+import { parse as parseEnv } from 'dotenv';
 import { Client } from 'pg';
 import { describe, expect, it, vi } from 'vitest';
 
-// The replay checker is a plain .mjs script outside the TypeScript program; it
-// is imported here by relative path so its cleanup contract is covered by the
-// same suite as everything else.
-import {
+import { pgIntegrationEnabled } from './support/pg-scratch.js';
+
+const HERE = dirname(fileURLToPath(import.meta.url));
+const SCRIPTS_DIR = join(HERE, '../../../../scripts');
+
+/** The shape `scripts/lib/scratch-db.mjs` exports. */
+type ScratchDbModule = {
+  SCRATCH_DB_PATTERN: RegExp;
+  PROTECTED_DATABASE_NAMES: Set<string>;
+  assertDroppableScratchName: (name: string) => string;
+  dropScratchDatabase: (
+    admin: unknown,
+    name: string,
+    options?: { attempts?: number; log?: (line: string) => void },
+  ) => Promise<boolean>;
+  findLeftoverScratchDatabases: (admin: unknown) => Promise<string[]>;
+};
+
+/**
+ * Loaded at RUNTIME rather than imported.
+ *
+ * `scripts/` sits outside the API's `rootDir`, so a static import would pull a
+ * file into the compiler's program that its emit build cannot place in `dist`.
+ * A runtime specifier keeps the script exactly where it belongs — plain ESM run
+ * by node — while still testing the real module rather than a copy of it.
+ */
+const {
   PROTECTED_DATABASE_NAMES,
   SCRATCH_DB_PATTERN,
   assertDroppableScratchName,
   dropScratchDatabase,
   findLeftoverScratchDatabases,
-} from '../../../../scripts/lib/scratch-db.mjs';
+} = (await import(pathToFileURL(join(SCRIPTS_DIR, 'lib/scratch-db.mjs')).href)) as ScratchDbModule;
 
-import { pgIntegrationEnabled } from './support/pg-scratch.js';
+const readReplayScript = (): string =>
+  readFileSync(join(SCRIPTS_DIR, 'migration-replay-check.mjs'), 'utf8');
+
+const readApiEnvDatabaseUrl = (): string => {
+  const envPath = join(HERE, '../../.env');
+  if (!existsSync(envPath)) return '';
+  return parseEnv(readFileSync(envPath, 'utf8')).DATABASE_URL ?? '';
+};
 
 // ---------------------------------------------------------------------------
 // Scratch database cleanup.
@@ -238,45 +273,32 @@ describe.skipIf(!pgIntegrationEnabled())('cleanup against a real PostgreSQL serv
     }
   });
 
-  it('leaves no scratch database behind, and can prove it', async () => {
+  it('detects a leaked scratch database and stops reporting it once dropped', async () => {
+    // Deliberately NOT "no scratch database exists anywhere": this suite runs
+    // alongside others that legitimately create mhc_it_* databases, so a global
+    // emptiness assertion measures the other suites rather than the detector.
+    // The end-to-end "zero temporary databases remain" check belongs to the
+    // validation run, once everything has finished.
+    const name = `mhc_it_leakprobe_${Date.now().toString(36)}`;
     const admin = new Client({ connectionString: adminUrl() });
     await admin.connect();
+
     try {
-      const leftovers = await findLeftoverScratchDatabases(admin as never);
-      // Any name returned is one this module would be willing to drop, which is
-      // what makes the report actionable rather than advisory.
-      for (const name of leftovers) {
-        expect(() => assertDroppableScratchName(name)).not.toThrow();
+      await admin.query(`CREATE DATABASE ${name}`);
+
+      const withLeak = await findLeftoverScratchDatabases(admin as never);
+      expect(withLeak).toContain(name);
+      // Every name reported is one this module would be willing to drop, which
+      // is what makes the report actionable rather than merely advisory.
+      for (const reported of withLeak) {
+        expect(() => assertDroppableScratchName(reported)).not.toThrow();
       }
-      expect(leftovers).toEqual([]);
+
+      expect(await dropScratchDatabase(admin as never, name)).toBe(true);
+      expect(await findLeftoverScratchDatabases(admin as never)).not.toContain(name);
     } finally {
+      await dropScratchDatabase(admin as never, name).catch(() => {});
       await admin.end().catch(() => {});
     }
   });
 });
-
-function readReplayScript(): string {
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const { readFileSync } = require('node:fs') as typeof import('node:fs');
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const { join, dirname } = require('node:path') as typeof import('node:path');
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const { fileURLToPath } = require('node:url') as typeof import('node:url');
-  const here = dirname(fileURLToPath(import.meta.url));
-  return readFileSync(join(here, '../../../../scripts/migration-replay-check.mjs'), 'utf8');
-}
-
-function readApiEnvDatabaseUrl(): string {
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const { readFileSync, existsSync } = require('node:fs') as typeof import('node:fs');
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const { join, dirname } = require('node:path') as typeof import('node:path');
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const { fileURLToPath } = require('node:url') as typeof import('node:url');
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const { parse } = require('dotenv') as typeof import('dotenv');
-  const here = dirname(fileURLToPath(import.meta.url));
-  const envPath = join(here, '../../.env');
-  if (!existsSync(envPath)) return '';
-  return parse(readFileSync(envPath, 'utf8')).DATABASE_URL ?? '';
-}
