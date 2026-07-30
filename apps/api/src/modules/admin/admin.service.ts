@@ -37,6 +37,7 @@ import { isPaymobDepositConfigured, isPaymobPayoutConfigured } from '../../lib/p
 import { invalidateUserStatusCache } from '../../middleware/user-status-cache.js';
 import { HttpError } from '../../utils/http-error.js';
 import { AuthRepository } from '../auth/auth.repository.js';
+import { MhcService } from '../mhc/mhc.service.js';
 import { NotificationsService } from '../notifications/notifications.service.js';
 import { OtpService } from '../otp/otp.service.js';
 import { ProfilesService } from '../profiles/profiles.service.js';
@@ -80,6 +81,13 @@ import type {
   UserActivityTypeInput,
 } from './admin.validation.js';
 
+/**
+ * Plans are priced per plan through the generic scoped-price table, keyed by this
+ * single action. One action key per plan was rejected; the variation lives in the
+ * scope (`scope_type = 'plan'`, `scope_id = plan.id`), not in the key.
+ */
+const PLAN_ACTION_KEY = 'subscription_upgrade';
+
 export class AdminService {
   constructor(
     private readonly repo: AdminRepository = new AdminRepository(),
@@ -89,6 +97,8 @@ export class AdminService {
     private readonly profilesService: ProfilesService = new ProfilesService(),
     private readonly walletService: WalletService = new WalletService(),
     private readonly notificationsService: NotificationsService = new NotificationsService(),
+    /** Owns the MHC price catalogue, including per-plan scoped prices. */
+    private readonly mhc: MhcService = new MhcService(),
   ) {}
 
   // ── Dashboard ───────────────────────────────────────────────────────────
@@ -601,13 +611,46 @@ export class AdminService {
   async listPlans(): Promise<Plan[]> {
     try {
       const rows = await this.repo.listPlans();
-      return rows.map((r) => this.toPlan(r));
+      // Each plan's own MHC price, in one query rather than one per plan.
+      const scopedPrices = await this.mhc.listScopedPrices(PLAN_ACTION_KEY, 'plan');
+      return rows.map((r) => this.toPlan(r, scopedPrices.get(r.id) ?? null));
     } catch (err: unknown) {
       this.throwPlanDbError(err);
     }
   }
 
-  async createPlan(input: CreatePlanInput): Promise<Plan> {
+  /**
+   * Write a plan's MHC price, and its purchasable/visible switches.
+   *
+   * Separated from the plan row write on purpose: the price lives in
+   * `mhc_action_price_scopes`, which is the same table the charging primitive
+   * reads, so an admin cannot set a displayed price that differs from the
+   * charged one. Passing `null` clears the price, which fails the plan's
+   * purchasing closed rather than making it free.
+   */
+  private async applyPlanMhcPrice(
+    planId: string,
+    mhcPrice: number | null | undefined,
+    adminId?: string | null,
+  ): Promise<number | null> {
+    if (mhcPrice === undefined) {
+      return this.mhc.getScopedPrice(PLAN_ACTION_KEY, 'plan', planId);
+    }
+    if (mhcPrice === null) {
+      await this.mhc.clearScopedPrice(PLAN_ACTION_KEY, 'plan', planId);
+      return null;
+    }
+    await this.mhc.setScopedPrice({
+      actionKey: PLAN_ACTION_KEY,
+      scopeType: 'plan',
+      scopeId: planId,
+      mhcPrice,
+      updatedBy: adminId ?? null,
+    });
+    return mhcPrice;
+  }
+
+  async createPlan(input: CreatePlanInput, adminId?: string | null): Promise<Plan> {
     const dbFields: Record<string, unknown> = {
       slug: input.slug,
       name: input.name,
@@ -625,16 +668,19 @@ export class AdminService {
       dbFields.features = Array.isArray(input.features) ? input.features : [];
     if (input.planLimits !== undefined) dbFields.plan_limits = input.planLimits;
     if (input.sortOrder !== undefined) dbFields.sort_order = input.sortOrder;
+    if (input.isPurchasable !== undefined) dbFields.is_purchasable = input.isPurchasable;
+    if (input.isVisible !== undefined) dbFields.is_visible = input.isVisible;
 
     try {
       const row = await this.repo.createPlan(dbFields);
-      return this.toPlan(row);
+      const mhcPrice = await this.applyPlanMhcPrice(row.id, input.mhcPrice, adminId);
+      return this.toPlan(row, mhcPrice);
     } catch (err: unknown) {
       this.throwPlanDbError(err, input.slug);
     }
   }
 
-  async updatePlan(planId: string, input: UpdatePlanInput): Promise<Plan> {
+  async updatePlan(planId: string, input: UpdatePlanInput, adminId?: string | null): Promise<Plan> {
     const dbFields: Record<string, unknown> = {};
     if (input.slug !== undefined) dbFields.slug = input.slug;
     if (input.name !== undefined) dbFields.name = input.name;
@@ -652,8 +698,13 @@ export class AdminService {
     if (input.sortOrder !== undefined) dbFields.sort_order = input.sortOrder;
     if (input.allowedRoles !== undefined) dbFields.allowed_roles = input.allowedRoles;
     if (input.isActive !== undefined) dbFields.is_active = input.isActive;
+    if (input.isPurchasable !== undefined) dbFields.is_purchasable = input.isPurchasable;
+    if (input.isVisible !== undefined) dbFields.is_visible = input.isVisible;
 
     try {
+      // A plan row can be updated with nothing but a price change, so the row
+      // write must tolerate an empty field set — updatePlan already returns the
+      // existing row in that case.
       const row = await this.repo.updatePlan(planId, dbFields);
       if (!row) {
         throw new HttpError({
@@ -662,7 +713,10 @@ export class AdminService {
           message: 'Plan not found.',
         });
       }
-      return this.toPlan(row);
+      // Price changes apply to FUTURE purchases only. Existing subscriptions
+      // carry their own mhc_price_paid snapshot and are untouched by this.
+      const mhcPrice = await this.applyPlanMhcPrice(row.id, input.mhcPrice, adminId);
+      return this.toPlan(row, mhcPrice);
     } catch (err: unknown) {
       this.throwPlanDbError(err, input.slug);
     }
@@ -1072,7 +1126,7 @@ export class AdminService {
     };
   }
 
-  private toPlan(row: PlanRow): Plan {
+  private toPlan(row: PlanRow, mhcPrice: number | null = null): Plan {
     const rawLimits = row.plan_limits as Record<string, unknown> | null | undefined;
     const planLimits =
       rawLimits && typeof rawLimits === 'object' && !Array.isArray(rawLimits)
@@ -1083,6 +1137,8 @@ export class AdminService {
       slug: row.slug,
       name: row.name,
       description: row.description,
+      // LEGACY (EGP). Reported so an admin can still see historic pricing; it is
+      // never charged. `mhcPrice` is what a purchase costs.
       price: parseFloat(row.price),
       currency: row.currency,
       billingCycle: row.billing_cycle as Plan['billingCycle'],
@@ -1094,6 +1150,9 @@ export class AdminService {
       allowedRoles: normalizePlanAllowedRoles(row.allowed_roles),
       planLimits: planLimits ?? null,
       isActive: row.is_active,
+      isPurchasable: row.is_purchasable === true,
+      isVisible: row.is_visible !== false,
+      mhcPrice,
       sortOrder: row.sort_order,
       createdAt: row.created_at,
       updatedAt: row.updated_at,

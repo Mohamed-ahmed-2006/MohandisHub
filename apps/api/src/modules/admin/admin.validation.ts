@@ -108,6 +108,17 @@ export const createPlanSchema = z.object({
     .default(['customer', 'expert', 'business', 'craftsman']),
   planLimits: planLimitsSchema,
   sortOrder: z.number().int().min(0).default(0),
+  /**
+   * MHC charged for THIS plan. `null` clears the price, which fails the plan's
+   * purchasing closed rather than making it free — 0 is how a plan is made free.
+   *
+   * `z.number()` rejects NaN, Infinity and non-numeric strings, so a malformed
+   * decimal from an admin form can never reach the price table.
+   */
+  mhcPrice: z.number().finite().min(0).nullable().optional(),
+  /** Defaults to false at the database, so a new plan is never auto-on-sale. */
+  isPurchasable: z.boolean().optional(),
+  isVisible: z.boolean().optional(),
 });
 
 export const updatePlanSchema = createPlanSchema.partial().extend({

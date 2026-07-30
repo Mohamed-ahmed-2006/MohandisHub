@@ -433,11 +433,15 @@ const listPlans = asyncHandler(async (_req, res) => {
 
 const createPlan = asyncHandler(async (req, res) => {
   const input = parseValidation<CreatePlanInput>(createPlanSchema, req.body);
-  const plan = await adminService.createPlan(input);
+  const plan = await adminService.createPlan(input, req.user?.id ?? null);
   await logAdminAction(req, 'admin.plan.create', 'plan', plan.id, {
     slug: plan.slug,
-    price: plan.price,
-    currency: plan.currency,
+    // MHC is what the plan actually costs. The EGP price is legacy and is logged
+    // alongside only so historic audit entries stay comparable.
+    mhcPrice: plan.mhcPrice,
+    isPurchasable: plan.isPurchasable,
+    isVisible: plan.isVisible,
+    legacyEgpPrice: plan.price,
     allowedRoles: plan.allowedRoles,
   });
   const response: ApiSuccessBody<Plan> = { ok: true, data: plan };
@@ -446,12 +450,14 @@ const createPlan = asyncHandler(async (req, res) => {
 
 const updatePlan = asyncHandler(async (req, res) => {
   const input = parseValidation<UpdatePlanInput>(updatePlanSchema, req.body);
-  const plan = await adminService.updatePlan(req.params.id!, input);
+  const plan = await adminService.updatePlan(req.params.id!, input, req.user?.id ?? null);
   await logAdminAction(req, 'admin.plan.update', 'plan', req.params.id!, {
     changedFields: definedKeys(input as Record<string, unknown>),
     slug: plan.slug,
-    price: plan.price,
-    currency: plan.currency,
+    mhcPrice: plan.mhcPrice,
+    isPurchasable: plan.isPurchasable,
+    isVisible: plan.isVisible,
+    legacyEgpPrice: plan.price,
     allowedRoles: plan.allowedRoles,
   });
   const response: ApiSuccessBody<Plan> = { ok: true, data: plan };

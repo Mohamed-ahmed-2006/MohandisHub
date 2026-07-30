@@ -74,6 +74,11 @@ export const AdminPlansTab = ({ dictionary, accessToken, refreshSession }: Props
     features: string;
     allowedRoles: PlanSubscriberRole[];
     planLimits: PlanLimits;
+    /** MHC per plan. Kept as a string so an empty field stays distinct from 0. */
+    mhcPrice: string;
+    isPurchasable: boolean;
+    isVisible: boolean;
+    durationDays: string;
   }>({
     slug: '',
     name: '',
@@ -81,6 +86,12 @@ export const AdminPlansTab = ({ dictionary, accessToken, refreshSession }: Props
     description: '',
     billingCycle: 'monthly',
     features: '',
+    mhcPrice: '',
+    // A new plan is never on sale by default; the admin must price it and switch
+    // it on deliberately.
+    isPurchasable: false,
+    isVisible: true,
+    durationDays: '',
     allowedRoles: [...DEFAULT_PLAN_ALLOWED_ROLES],
     planLimits: defaultPlanLimits(),
   });
@@ -120,6 +131,10 @@ export const AdminPlansTab = ({ dictionary, accessToken, refreshSession }: Props
       description: '',
       billingCycle: 'monthly',
       features: '',
+      mhcPrice: '',
+      isPurchasable: false,
+      isVisible: true,
+      durationDays: '',
       allowedRoles: [...DEFAULT_PLAN_ALLOWED_ROLES],
       planLimits: defaultPlanLimits(),
     });
@@ -137,6 +152,11 @@ export const AdminPlansTab = ({ dictionary, accessToken, refreshSession }: Props
       description: plan.description ?? '',
       billingCycle: plan.billingCycle,
       features: plan.features.join(', '),
+      // null price renders as empty, which is how "unpriced" round-trips.
+      mhcPrice: plan.mhcPrice === null ? '' : String(plan.mhcPrice),
+      isPurchasable: plan.isPurchasable,
+      isVisible: plan.isVisible,
+      durationDays: plan.durationDays === null ? '' : String(plan.durationDays),
       allowedRoles: plan.allowedRoles?.length
         ? [...plan.allowedRoles]
         : [...DEFAULT_PLAN_ALLOWED_ROLES],
@@ -203,11 +223,21 @@ export const AdminPlansTab = ({ dictionary, accessToken, refreshSession }: Props
     const baseBody = {
       slug: formData.slug,
       name: formData.name,
+      // LEGACY (EGP). Sent unchanged so historic values are not silently reset;
+      // it is never charged. `mhcPrice` is what a purchase actually costs.
       price: formData.price,
       billingCycle: formData.billingCycle,
       features: featuresArr,
       allowedRoles: formData.allowedRoles,
       planLimits,
+      // Empty means "no price configured", which fails purchasing closed rather
+      // than making the plan free — 0 is how a plan is made free.
+      mhcPrice: formData.mhcPrice === '' ? null : Number(formData.mhcPrice),
+      isPurchasable: formData.isPurchasable,
+      isVisible: formData.isVisible,
+      // Omitted rather than sent as undefined: `exactOptionalPropertyTypes` is on,
+      // and an empty field means "derive it from the billing cycle".
+      ...(formData.durationDays === '' ? {} : { durationDays: Number(formData.durationDays) }),
     };
     const bodyWithDesc = formData.description
       ? { ...baseBody, description: formData.description }
@@ -272,8 +302,16 @@ export const AdminPlansTab = ({ dictionary, accessToken, refreshSession }: Props
                 <tr key={plan.id}>
                   <td>{plan.name}</td>
                   <td>{plan.slug}</td>
+                  {/* MHC is the real price. An unpriced plan shows a dash, not
+                      a 0, so "free" and "not configured" stay distinguishable. */}
                   <td>
-                    {plan.price} {plan.currency}
+                    {plan.mhcPrice === null ? '—' : `${plan.mhcPrice} ${d.mhcUnit ?? 'MHC'}`}
+                    {!plan.isPurchasable && (
+                      <span className="admin-plan-flag">
+                        {' '}
+                        · {d.notPurchasable ?? 'not on sale'}
+                      </span>
+                    )}
                   </td>
                   <td>{plan.billingCycle}</td>
                   <td>
@@ -371,9 +409,71 @@ export const AdminPlansTab = ({ dictionary, accessToken, refreshSession }: Props
                       onChange={(e) => setFormData({ ...formData, slug: e.target.value })}
                     />
                   </div>
+                  {/* The price a purchase actually costs. Writes
+                      mhc_action_price_scopes — the same table the charging
+                      primitive reads — so displayed and charged cannot drift.
+                      MHC is a platform credit: no currency symbol, ever. */}
                   <div className="admin-form-group">
                     <label className="admin-form-label admin-form-label--inline-hint">
-                      <span>{d.price}</span>
+                      <span>{d.mhcPriceLabel ?? 'Price (MHC credits)'}</span>
+                    </label>
+                    <input
+                      className="admin-form-input"
+                      type="number"
+                      min={0}
+                      step="0.01"
+                      value={formData.mhcPrice}
+                      placeholder={d.mhcPriceUnset ?? 'Not priced'}
+                      onChange={(e) => setFormData({ ...formData, mhcPrice: e.target.value })}
+                    />
+                    <span className="admin-form-hint-text">
+                      {d.mhcPriceHint ??
+                        'Leave empty to keep the plan unpriced (not purchasable). 0 makes it free.'}
+                    </span>
+                  </div>
+                  <div className="admin-form-group">
+                    <label className="admin-form-label admin-form-label--inline-hint">
+                      <span>{d.durationDaysLabel ?? 'Duration (days)'}</span>
+                    </label>
+                    <input
+                      className="admin-form-input"
+                      type="number"
+                      min={1}
+                      value={formData.durationDays}
+                      placeholder={d.durationFromCycle ?? 'From billing cycle'}
+                      onChange={(e) => setFormData({ ...formData, durationDays: e.target.value })}
+                    />
+                  </div>
+                  <div className="admin-form-group">
+                    <label className="admin-form-label admin-form-label--inline-hint">
+                      <span>{d.purchasableLabel ?? 'Purchasable'}</span>
+                    </label>
+                    <label className="admin-form-checkbox-row">
+                      <input
+                        type="checkbox"
+                        checked={formData.isPurchasable}
+                        onChange={(e) =>
+                          setFormData({ ...formData, isPurchasable: e.target.checked })
+                        }
+                      />
+                      <span>
+                        {d.purchasableHint ?? 'Requires a price. Off means "Coming soon".'}
+                      </span>
+                    </label>
+                    <label className="admin-form-checkbox-row">
+                      <input
+                        type="checkbox"
+                        checked={formData.isVisible}
+                        onChange={(e) => setFormData({ ...formData, isVisible: e.target.checked })}
+                      />
+                      <span>{d.visibleHint ?? 'Listed to users'}</span>
+                    </label>
+                  </div>
+                  {/* LEGACY (EGP). Retained so historic pricing stays visible and
+                      editable for reference; it is never charged. */}
+                  <div className="admin-form-group">
+                    <label className="admin-form-label admin-form-label--inline-hint">
+                      <span>{d.legacyEgpPrice ?? 'Legacy EGP price (not charged)'}</span>
                       <AdminPlanFieldHint hints={hints} hintKey="hintPrice" />
                     </label>
                     <input

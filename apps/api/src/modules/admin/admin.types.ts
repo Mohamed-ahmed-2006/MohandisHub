@@ -122,6 +122,9 @@ export type PlanRow = {
   allowed_roles?: string[] | null;
   plan_limits?: PlanLimitsRow | null;
   is_active: boolean;
+  /** Optional so a row read before 20260730100000 still types. */
+  is_purchasable?: boolean;
+  is_visible?: boolean;
   sort_order: number;
   created_at: string;
   updated_at: string;
