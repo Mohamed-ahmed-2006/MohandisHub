@@ -278,6 +278,31 @@
   color: hsl(var(--muted-foreground));
 }
 
+/* Deep link to /app/credits, shown wherever a weekly charge could not be paid. */
+.myads-credits-link {
+  font-weight: 600;
+  color: hsl(var(--primary));
+  text-decoration: underline;
+}
+
+/*
+ * Automatic renewal is not implemented (Wave 2F-B). The row is rendered as a
+ * disabled "Coming soon" control, dimmed so it never reads as an available
+ * setting the advertiser has simply left switched off.
+ */
+.myads-autorenew {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-top: 0.35rem;
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.myads-autorenew input {
+  cursor: not-allowed;
+}
+
 /* --- Form Actions --- */
 .myads-form-actions {
   display: flex;

@@ -81,10 +81,9 @@ export const AdSlideshow = ({ locale, dictionary, accessToken, role }: AdSlidesh
       router.push(buildLocalePath(locale, `/app/services/${active.link_target}`));
       return;
     }
-    if (active.link_type === 'need' && active.link_target) {
-      router.push(buildLocalePath(locale, `/app/needs/${active.link_target}`));
-      return;
-    }
+    // There is deliberately no `need` branch. Migration 20260727100000
+    // cancelled every campaign whose destination was not a profile or a
+    // service, so no `need` campaign can reach a serving state to be clicked.
   };
 
   return (

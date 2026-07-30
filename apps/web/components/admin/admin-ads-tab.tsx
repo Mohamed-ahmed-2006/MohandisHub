@@ -5,6 +5,7 @@ import { useCallback, useEffect, useState } from 'react';
 
 import {
   advertisementsApiClient,
+  type AdStatus,
   type Advertisement,
   type AdminAdControls,
 } from '@/lib/advertisements/client';
@@ -19,39 +20,49 @@ type AdminAdsTabProps = {
 const hasPermission = (permissions: string[], permission: string): boolean =>
   permissions.includes('super_admin') || permissions.includes(permission);
 
+/** Billing state, spelled out. Never a currency figure. */
+const BILLING_LABEL: Record<string, string> = {
+  legacy: 'Legacy (pre-weekly, never charged in credits)',
+  pending_review: 'Awaiting review — not charged',
+  rejected: 'Rejected — not charged',
+  awaiting_start: 'Approved — charges when its start is due',
+  awaiting_credits: 'Approved — advertiser has insufficient credits',
+  active: 'Paid week running',
+  renewal_required: 'Week ended — advertiser must renew',
+  cancelled: 'Cancelled — current week not refunded',
+};
+
 export const AdminAdsTab = ({ dictionary, accessToken, adminPermissions }: AdminAdsTabProps) => {
   const [rows, setRows] = useState<Advertisement[]>([]);
   const [controls, setControls] = useState<AdminAdControls>({ acceptAds: true, mhcPrice: 0 });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [statusFilter, setStatusFilter] = useState<string>('');
+  const [statusFilter, setStatusFilter] = useState<string>('pending_review');
   const [scheduleAdId, setScheduleAdId] = useState<string | null>(null);
   const [scheduleForm, setScheduleForm] = useState({ startsAt: '', expiresAt: '', reason: '' });
   const [pricingAdId, setPricingAdId] = useState<string | null>(null);
   const [overrideAmount, setOverrideAmount] = useState('');
+  const [rejectAdId, setRejectAdId] = useState<string | null>(null);
+  const [rejectReason, setRejectReason] = useState('');
   const [savingControls, setSavingControls] = useState(false);
+  const [busyAdId, setBusyAdId] = useState<string | null>(null);
   const canManageAds = hasPermission(adminPermissions, 'manage_ads');
   const canManageAdPricing = hasPermission(adminPermissions, 'manage_ad_pricing');
   const canManageAdScheduling = hasPermission(adminPermissions, 'manage_ad_scheduling');
 
   const stats = {
     total: rows.length,
+    pendingReview: rows.filter((row) => row.status === 'pending_review').length,
     active: rows.filter((row) => row.status === 'active').length,
-    paused: rows.filter((row) => row.status === 'paused_by_admin').length,
-    expired: rows.filter((row) => row.status === 'expired').length,
+    awaitingCredits: rows.filter((row) => row.billing_status === 'awaiting_credits').length,
+    renewalRequired: rows.filter((row) => row.billing_status === 'renewal_required').length,
   };
 
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const status = statusFilter as
-        | 'pending_payment'
-        | 'active'
-        | 'expired'
-        | 'cancelled'
-        | 'paused_by_admin'
-        | '';
+      const status = statusFilter as AdStatus | '';
       const [data, adControls] = await Promise.all([
         advertisementsApiClient.adminListAds(accessToken, status ? { status } : undefined),
         canManageAdPricing
@@ -71,7 +82,57 @@ export const AdminAdsTab = ({ dictionary, accessToken, adminPermissions }: Admin
     void load();
   }, [load]);
 
-  const setStatus = async (adId: string, status: 'active' | 'paused_by_admin' | 'cancelled') => {
+  /**
+   * Approve. For an immediate campaign this also buys its first week in one
+   * server-side transaction; for a future-dated one it only records the
+   * approval, and the week is charged when the start becomes due.
+   */
+  const approve = async (adId: string) => {
+    setBusyAdId(adId);
+    setError(null);
+    try {
+      await advertisementsApiClient.adminApprove(accessToken, adId);
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to approve ad');
+    } finally {
+      setBusyAdId(null);
+    }
+  };
+
+  const reject = async () => {
+    if (!rejectAdId) return;
+    const reason = rejectReason.trim();
+    if (reason.length < 3) return;
+    setBusyAdId(rejectAdId);
+    setError(null);
+    try {
+      await advertisementsApiClient.adminReject(accessToken, rejectAdId, reason);
+      setRejectAdId(null);
+      setRejectReason('');
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to reject ad');
+    } finally {
+      setBusyAdId(null);
+    }
+  };
+
+  /** Start an approved campaign whose scheduled start has arrived. */
+  const activateDue = async (adId: string) => {
+    setBusyAdId(adId);
+    setError(null);
+    try {
+      await advertisementsApiClient.adminActivateDue(accessToken, adId);
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to activate ad');
+    } finally {
+      setBusyAdId(null);
+    }
+  };
+
+  const setStatus = async (adId: string, status: 'paused_by_admin' | 'cancelled') => {
     try {
       await advertisementsApiClient.adminSetStatus(accessToken, adId, { status });
       await load();
@@ -124,6 +185,9 @@ export const AdminAdsTab = ({ dictionary, accessToken, adminPermissions }: Admin
     }
   };
 
+  const formatDate = (value: string | null): string =>
+    value ? new Date(value).toLocaleString('en-US') : '—';
+
   return (
     <section className="admin-tab-content">
       <h2 className="admin-tab-title">{dictionary.admin?.tabs?.ads ?? 'Advertisements'}</h2>
@@ -133,7 +197,8 @@ export const AdminAdsTab = ({ dictionary, accessToken, adminPermissions }: Admin
           <div>
             <h3 className="admin-section-title">Overview & Ad Controls</h3>
             <p className="admin-section-desc">
-              Global controls: enable/disable accepting ads and set one price per day.
+              Ads are reviewed before they run. Submitting is free; a campaign is charged when a
+              seven-day week starts, and again each time the advertiser renews.
             </p>
           </div>
         </div>
@@ -143,16 +208,20 @@ export const AdminAdsTab = ({ dictionary, accessToken, adminPermissions }: Admin
             <p className="admin-stat-value">{stats.total}</p>
           </article>
           <article className="admin-stat-card">
-            <p className="admin-stat-label">Active</p>
+            <p className="admin-stat-label">Awaiting review</p>
+            <p className="admin-stat-value">{stats.pendingReview}</p>
+          </article>
+          <article className="admin-stat-card">
+            <p className="admin-stat-label">Paid week running</p>
             <p className="admin-stat-value">{stats.active}</p>
           </article>
           <article className="admin-stat-card">
-            <p className="admin-stat-label">Paused by admin</p>
-            <p className="admin-stat-value">{stats.paused}</p>
+            <p className="admin-stat-label">Approved, no credits</p>
+            <p className="admin-stat-value">{stats.awaitingCredits}</p>
           </article>
           <article className="admin-stat-card">
-            <p className="admin-stat-label">Expired</p>
-            <p className="admin-stat-value">{stats.expired}</p>
+            <p className="admin-stat-label">Awaiting renewal</p>
+            <p className="admin-stat-value">{stats.renewalRequired}</p>
           </article>
         </div>
         {canManageAdPricing && (
@@ -163,7 +232,7 @@ export const AdminAdsTab = ({ dictionary, accessToken, adminPermissions }: Admin
                 {/* Writes mhc_action_prices.advertisement — the same row the
                     charge primitive reads, so displayed and charged cannot
                     drift. MHC is a platform credit, not a currency. */}
-                <span className="admin-settings-label">Price per campaign (MHC credits)</span>
+                <span className="admin-settings-label">MHC per advertisement week</span>
                 <input
                   type="number"
                   min={0}
@@ -178,7 +247,8 @@ export const AdminAdsTab = ({ dictionary, accessToken, adminPermissions }: Admin
                   }
                 />
                 <span className="admin-settings-label" style={{ opacity: 0.7 }}>
-                  0 keeps advertising free. Charged once per campaign, not per day.
+                  0 keeps advertising free. A change applies to future weeks only — weeks already
+                  bought keep the price they were charged.
                 </span>
               </label>
               <label
@@ -212,10 +282,10 @@ export const AdminAdsTab = ({ dictionary, accessToken, adminPermissions }: Admin
       </div>
 
       <div className="admin-section">
-        <h3 className="admin-section-title">Campaign Controls</h3>
+        <h3 className="admin-section-title">Review queue</h3>
         <p className="admin-section-desc">
-          Per-campaign controls (Activate, Pause, Cancel, Schedule, Price Override) appear on each
-          campaign row below.
+          Approve or reject each campaign. Rejection needs a reason, which the advertiser is shown.
+          Neither action can charge a rejected campaign.
         </p>
       </div>
 
@@ -225,25 +295,26 @@ export const AdminAdsTab = ({ dictionary, accessToken, adminPermissions }: Admin
           value={statusFilter}
           onChange={(e) => setStatusFilter(e.target.value)}
         >
+          <option value="pending_review">Awaiting review</option>
           <option value="">{dictionary.admin?.txns?.allStatuses ?? 'All statuses'}</option>
+          <option value="scheduled">Approved</option>
           <option value="active">Active</option>
+          <option value="expired">Ended</option>
+          <option value="rejected">Rejected</option>
           <option value="paused_by_admin">Paused</option>
-          <option value="expired">Expired</option>
           <option value="cancelled">Cancelled</option>
         </select>
       </div>
 
       {error ? <p className="admin-empty">{error}</p> : null}
-      {!loading && rows.length === 0 ? (
-        <p className="admin-empty" style={{ marginBottom: '0.75rem' }}>
-          No ad campaigns yet. Once first campaign is created, you will immediately get row
-          controls: Activate / Pause / Cancel / Schedule / Pricing Override.
-        </p>
-      ) : null}
       {loading ? (
         <p className="admin-empty">{dictionary.admin.loading}</p>
       ) : rows.length === 0 ? (
-        <p className="admin-empty">{dictionary.advertisements?.noAds ?? 'No ads found.'}</p>
+        <p className="admin-empty">
+          {statusFilter === 'pending_review'
+            ? 'No advertisements are awaiting review.'
+            : (dictionary.advertisements?.noAds ?? 'No ads found.')}
+        </p>
       ) : (
         <div className="admin-table-wrapper">
           <table className="admin-table">
@@ -251,91 +322,164 @@ export const AdminAdsTab = ({ dictionary, accessToken, adminPermissions }: Admin
               <tr>
                 <th>{dictionary.common.description}</th>
                 <th>{dictionary.common.status}</th>
-                <th>{dictionary.advertisements?.amountPaid ?? 'Amount paid'}</th>
+                <th>Billing</th>
+                <th>Current week</th>
+                <th>Scheduled start</th>
                 <th>{dictionary.advertisements?.impressions ?? 'Impressions'}</th>
                 <th>{dictionary.advertisements?.clicks ?? 'Clicks'}</th>
                 <th>{dictionary.admin?.users?.actions ?? 'Actions'}</th>
               </tr>
             </thead>
             <tbody>
-              {rows.map((ad) => (
-                <tr key={ad.id}>
-                  <td>
-                    <strong>{ad.title_en}</strong>
-                    <br />
-                    <span style={{ fontSize: '0.8rem', color: 'hsl(var(--text-soft))' }}>
-                      {ad.advertiser_name ?? ad.advertiser_id}
-                    </span>
-                  </td>
-                  <td>{ad.status}</td>
-                  {/* Legacy EGP history only. Campaigns created since P0-03 are
-                      charged in MHC and store 0 here; their charge lives in
-                      mhc_action_charges and the transactions ledger. */}
-                  <td>
-                    {Number.parseFloat(ad.amount_paid ?? '0') > 0
-                      ? `${ad.amount_paid} EGP (legacy)`
-                      : '—'}
-                  </td>
-                  <td>{ad.impressions}</td>
-                  <td>{ad.clicks}</td>
-                  <td>
-                    <div className="admin-actions-row">
-                      {canManageAds &&
-                        ad.status !== 'active' &&
-                        ad.status !== 'cancelled' &&
-                        ad.status !== 'expired' && (
+              {rows.map((ad) => {
+                const busy = busyAdId === ad.id;
+                const isWeekly = ad.billing_model === 'weekly';
+                const isPending = ad.status === 'pending_review';
+                const isDueForStart =
+                  isWeekly &&
+                  ad.status === 'scheduled' &&
+                  (!ad.starts_at || new Date(ad.starts_at).getTime() <= Date.now());
+                return (
+                  <tr key={ad.id}>
+                    <td>
+                      <strong>{ad.title_en}</strong>
+                      <br />
+                      <span style={{ fontSize: '0.8rem', color: 'hsl(var(--text-soft))' }}>
+                        {ad.advertiser_name ?? ad.advertiser_id}
+                      </span>
+                      {ad.status === 'rejected' && ad.rejection_reason ? (
+                        <>
+                          <br />
+                          <span style={{ fontSize: '0.8rem' }}>
+                            Reason: {ad.rejection_reason}
+                          </span>
+                        </>
+                      ) : null}
+                    </td>
+                    <td>{ad.status}</td>
+                    <td>{BILLING_LABEL[ad.billing_status] ?? ad.billing_status}</td>
+                    <td>
+                      {ad.current_period_starts_at
+                        ? `${formatDate(ad.current_period_starts_at)} → ${formatDate(ad.current_period_ends_at)}`
+                        : '—'}
+                    </td>
+                    <td>{formatDate(ad.starts_at)}</td>
+                    <td>{ad.impressions}</td>
+                    <td>{ad.clicks}</td>
+                    <td>
+                      <div className="admin-actions-row">
+                        {canManageAds && isPending && (
+                          <>
+                            <button
+                              type="button"
+                              className="admin-btn admin-btn--small"
+                              disabled={busy}
+                              onClick={() => void approve(ad.id)}
+                            >
+                              Approve
+                            </button>
+                            <button
+                              type="button"
+                              className="admin-btn admin-btn--small admin-btn--danger"
+                              disabled={busy}
+                              onClick={() => {
+                                setRejectAdId(ad.id);
+                                setRejectReason('');
+                              }}
+                            >
+                              Reject
+                            </button>
+                          </>
+                        )}
+                        {canManageAds && isDueForStart && (
                           <button
                             type="button"
                             className="admin-btn admin-btn--small"
-                            onClick={() => void setStatus(ad.id, 'active')}
+                            disabled={busy}
+                            onClick={() => void activateDue(ad.id)}
                           >
-                            Activate
+                            Start due week
                           </button>
                         )}
-                      {canManageAds && ad.status === 'active' && (
-                        <button
-                          type="button"
-                          className="admin-btn admin-btn--small admin-btn--danger"
-                          onClick={() => void setStatus(ad.id, 'paused_by_admin')}
-                        >
-                          Pause
-                        </button>
-                      )}
-                      {canManageAds && ad.status !== 'cancelled' && ad.status !== 'expired' && (
-                        <button
-                          type="button"
-                          className="admin-btn admin-btn--small admin-btn--danger"
-                          onClick={() => void setStatus(ad.id, 'cancelled')}
-                        >
-                          Cancel
-                        </button>
-                      )}
-                      {canManageAdScheduling &&
-                        ad.status !== 'cancelled' &&
-                        ad.status !== 'expired' && (
+                        {canManageAds && ad.status === 'active' && (
+                          <button
+                            type="button"
+                            className="admin-btn admin-btn--small admin-btn--danger"
+                            onClick={() => void setStatus(ad.id, 'paused_by_admin')}
+                          >
+                            Pause
+                          </button>
+                        )}
+                        {canManageAds &&
+                          ad.status !== 'cancelled' &&
+                          ad.status !== 'rejected' &&
+                          ad.status !== 'expired' && (
+                            <button
+                              type="button"
+                              className="admin-btn admin-btn--small admin-btn--danger"
+                              onClick={() => void setStatus(ad.id, 'cancelled')}
+                            >
+                              Cancel
+                            </button>
+                          )}
+                        {canManageAdScheduling &&
+                          ad.status !== 'cancelled' &&
+                          ad.status !== 'rejected' && (
+                            <button
+                              type="button"
+                              className="admin-btn admin-btn--small"
+                              onClick={() => setScheduleAdId(ad.id)}
+                            >
+                              Schedule
+                            </button>
+                          )}
+                        {canManageAdPricing && (
                           <button
                             type="button"
                             className="admin-btn admin-btn--small"
-                            onClick={() => setScheduleAdId(ad.id)}
+                            onClick={() => setPricingAdId(ad.id)}
                           >
-                            Schedule
+                            Pricing
                           </button>
                         )}
-                      {canManageAdPricing && (
-                        <button
-                          type="button"
-                          className="admin-btn admin-btn--small"
-                          onClick={() => setPricingAdId(ad.id)}
-                        >
-                          Pricing
-                        </button>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              ))}
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {rejectAdId && (
+        <div className="admin-modal-overlay" onClick={() => setRejectAdId(null)}>
+          <div className="admin-modal" onClick={(e) => e.stopPropagation()}>
+            <h2 className="admin-modal-title">Reject advertisement</h2>
+            <p className="admin-section-desc">
+              The advertiser sees this reason. Rejecting creates no billing period and charges
+              nothing.
+            </p>
+            <textarea
+              className="admin-form-textarea"
+              placeholder="Why is this ad being rejected?"
+              value={rejectReason}
+              onChange={(e) => setRejectReason(e.target.value)}
+            />
+            <div className="admin-modal-actions">
+              <button type="button" className="admin-btn" onClick={() => setRejectAdId(null)}>
+                {dictionary.common.cancel}
+              </button>
+              <button
+                type="button"
+                className="admin-btn admin-btn--primary"
+                disabled={rejectReason.trim().length < 3}
+                onClick={() => void reject()}
+              >
+                Reject
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
