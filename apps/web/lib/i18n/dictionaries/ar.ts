@@ -1164,6 +1164,18 @@ export const arDictionary: Dictionary = {
       name: 'الاسم',
       slug: 'المعرف',
       price: 'السعر',
+      // Per-plan MHC pricing. MHC is a platform credit, never a currency.
+      mhcPriceLabel: 'السعر (نقاط MHC)',
+      mhcPriceHint: 'اتركه فارغاً لترك الخطة بدون سعر (غير قابلة للشراء). القيمة 0 تجعلها مجانية.',
+      mhcPriceUnset: 'بدون سعر',
+      mhcUnit: 'نقطة',
+      durationDaysLabel: 'المدة (أيام)',
+      durationFromCycle: 'حسب دورة الفوترة',
+      purchasableLabel: 'قابلة للشراء',
+      purchasableHint: 'تتطلب تحديد سعر. إيقافها يعني «قريبًا».',
+      visibleHint: 'معروضة للمستخدمين',
+      notPurchasable: 'غير متاحة للشراء',
+      legacyEgpPrice: 'سعر قديم بالجنيه (غير مستخدم للخصم)',
       billingCycle: 'دورة الفوترة',
       features: 'المميزات',
       active: 'نشط',
@@ -1418,8 +1430,15 @@ export const arDictionary: Dictionary = {
     confirmTitle: 'تأكيد الاشتراك',
     // LEGACY، غير معروضة: تذكر مبلغاً بالجنيه وخصماً من المحفظة المُجمّدة.
     confirmText: 'الاشتراك في {name} مقابل {price} {currency}؟ سيتم خصم المبلغ من رصيد محفظتك.',
-    /** Currency-free confirmation. Replaces confirmText on every live surface. */
+    /** Currency-free confirmation, kept for a plan with no configured price. */
     confirmTextNoPrice: 'الاشتراك في {name}؟',
+    /** States the exact MHC deduction. {credits} is rendered by formatMhc. */
+    confirmTextMhc: 'الاشتراك في {name} مقابل {credits}؟',
+    confirmBalanceAfter: 'الرصيد بعد الخصم: {credits}',
+    creditsBalance: 'الرصيد',
+    durationDays: '{days} يوم',
+    insufficientCredits: 'رصيدك من النقاط لا يكفي لهذه الخطة.',
+    buyCredits: 'شراء نقاط',
     confirm: 'تأكيد',
     subscribeSuccess: 'تم الاشتراك بنجاح!',
     // "خطة Pro" وليس "Pro" فقط: هذه الشارة تُمنح بالشراء وتظهر بجانب شارة

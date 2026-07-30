@@ -10,7 +10,9 @@ import { useAuth } from '@/components/auth/auth-provider';
 import { Container } from '@/components/ui/container';
 import { buildLocalePath } from '@/lib/i18n/path';
 import type { Dictionary, Locale } from '@/lib/i18n/types';
-import { plansApiClient } from '@/lib/plans/client';
+import { mhcApiClient } from '@/lib/mhc/client';
+import { formatMhc } from '@/lib/mhc/presentation';
+import { PlanApiError, plansApiClient } from '@/lib/plans/client';
 
 import './my-plan-screen.css';
 
@@ -28,15 +30,31 @@ export const MyPlanScreen = ({ locale, dictionary }: Props) => {
   const [confirmPlan, setConfirmPlan] = useState<Plan | null>(null);
   const [subscribing, setSubscribing] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  /** MHC credit balance. Never a currency figure — the EGP wallet is not read. */
+  const [mhcBalance, setMhcBalance] = useState<number | null>(null);
+  const [insufficientCredits, setInsufficientCredits] = useState(false);
   const plansFeatureEnabled = status?.featurePlansEnabled !== false;
 
-  // LAUNCH CONSTRAINT LC-02: paid plans are not purchasable yet, so they are
-  // shown as "Coming soon" with no price and no subscribe control. The flag is
-  // UX only — PlansService.subscribeToPlan refuses server-side regardless, and
-  // an absent status must not be read as "purchasing is open".
+  // Global kill switch. UX only — the server refuses regardless — and an absent
+  // app status must not be read as "purchasing is open".
   const subscriptionsPaused = status?.pausePlanSubscriptions !== false;
-  /** A plan is paid if it carries any price at all. Free stays usable. */
-  const isPaidPlan = (plan: Plan): boolean => Number(plan.price) > 0;
+
+  /**
+   * Paid means "costs MHC". Driven by the plan's own MHC price, never by the
+   * legacy EGP `price` column, which is retired from every purchase path.
+   */
+  const isPaidPlan = (plan: Plan): boolean => (plan.mhcPrice ?? 0) > 0;
+
+  /**
+   * A plan can be bought only when the admin switched it on, gave it a price,
+   * and the global pause is off. All three, or no Subscribe button.
+   */
+  const isBuyable = (plan: Plan): boolean =>
+    plan.isPurchasable && plan.mhcPrice !== null && !subscriptionsPaused;
+
+  /** Only providers hold MHC; customers never do. */
+  const canHoldCredits =
+    authUser?.role === 'expert' || authUser?.role === 'craftsman' || authUser?.role === 'business';
 
   const d = dictionary.plan ?? ({} as Record<string, string>);
 
@@ -61,23 +79,28 @@ export const MyPlanScreen = ({ locale, dictionary }: Props) => {
     }
     setLoading(true);
     try {
-      // The EGP wallet is deliberately NOT fetched here. Nothing on this screen
-      // is denominated in money any more, and the money wallet is frozen — so
-      // reading it only creates a currency figure with nothing to spend it on.
-      const [planList, subscription, usage] = await Promise.all([
+      // The EGP wallet is deliberately NOT fetched. Plans cost MHC; the money
+      // wallet is frozen, so reading it would only produce a currency figure
+      // with nothing to spend it on.
+      const [planList, subscription, usage, credits] = await Promise.all([
         accessToken ? plansApiClient.listActivePlans(accessToken) : Promise.resolve([] as Plan[]),
         accessToken ? plansApiClient.getCurrentSubscription(accessToken) : Promise.resolve(null),
         accessToken ? plansApiClient.getMyUsage(accessToken) : Promise.resolve(null),
+        // Providers only: customers hold no MHC, and asking would 403.
+        accessToken && canHoldCredits
+          ? mhcApiClient.getCredits(accessToken).catch(() => null)
+          : Promise.resolve(null),
       ]);
       setPlans(planList);
       setPlanUsage(usage);
       setSubscriptionEndsAt(subscription?.subscriptionEndsAt ?? null);
+      setMhcBalance(credits?.balance ?? null);
     } catch {
       // ignore
     } finally {
       setLoading(false);
     }
-  }, [accessToken, plansFeatureEnabled]);
+  }, [accessToken, plansFeatureEnabled, canHoldCredits]);
 
   useEffect(() => {
     void load();
@@ -88,11 +111,16 @@ export const MyPlanScreen = ({ locale, dictionary }: Props) => {
     setSubscribing(true);
     setMessage(null);
     try {
-      const result = await plansApiClient.subscribe(accessToken, confirmPlan.id);
-      // `result.walletBalance` is a legacy EGP figure and is deliberately not
-      // read: no launch surface presents a money balance. The endpoint is
-      // paused anyway (LC-02), so this path is unreachable at launch.
+      // One key per submit attempt: a retry of this same submit reaches the same
+      // subscription instead of buying the plan twice.
+      const result = await plansApiClient.subscribe(
+        accessToken,
+        confirmPlan.id,
+        crypto.randomUUID(),
+      );
       setSubscriptionEndsAt(result.subscriptionEndsAt);
+      setMhcBalance(result.mhcBalance);
+      setInsufficientCredits(false);
       await updateAuthUser();
       try {
         const nextUsage = await plansApiClient.getMyUsage(accessToken);
@@ -114,8 +142,19 @@ export const MyPlanScreen = ({ locale, dictionary }: Props) => {
       setMessage({ type: 'success', text: successText });
       setConfirmPlan(null);
     } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Subscription failed';
-      setMessage({ type: 'error', text: msg });
+      // Matched on the API's error CODE, not its message: the copy is localised
+      // and would break this the moment it changed.
+      const code = err instanceof PlanApiError ? err.code : null;
+      if (code === 'MHC_INSUFFICIENT_CREDITS') {
+        setInsufficientCredits(true);
+        setMessage({
+          type: 'error',
+          text: d.insufficientCredits ?? 'You do not have enough credits for this plan.',
+        });
+      } else {
+        const msg = err instanceof Error ? err.message : 'Subscription failed';
+        setMessage({ type: 'error', text: msg });
+      }
       setConfirmPlan(null);
     } finally {
       setSubscribing(false);
@@ -230,11 +269,14 @@ export const MyPlanScreen = ({ locale, dictionary }: Props) => {
           <span className="plan-screen-current">
             {d.currentPlan ?? 'Current plan'}: <strong>{currentPlan}</strong>
           </span>
-          {/* The EGP wallet balance used to be rendered here. Removed with
-              LC-02: the money wallet is frozen, plans are not bought with it,
-              and showing a currency figure implied a balance the user could
-              spend. An existing subscriber still sees their plan and its end
-              date below. */}
+          {/* MHC, not EGP. The money wallet is frozen and is never read here;
+              this is the credit balance a plan is actually bought with, and it
+              is shown only to accounts that can hold credits. */}
+          {mhcBalance !== null && (
+            <span className="plan-screen-balance">
+              {d.creditsBalance ?? 'Credits'}: {formatMhc(mhcBalance, locale)}
+            </span>
+          )}
           {subscriptionEndsAt && (
             <span className="plan-screen-ends-at">
               {d.subscriptionEndsAt ?? 'Subscription ends'}:{' '}
@@ -350,6 +392,13 @@ export const MyPlanScreen = ({ locale, dictionary }: Props) => {
             {message.text}
           </div>
         )}
+        {/* Short of credits is a fixable state, not a dead end: send the
+            provider to the one screen that fixes it. */}
+        {insufficientCredits && (
+          <a className="plan-screen-credits-link" href={buildLocalePath(locale, '/app/credits')}>
+            {d.buyCredits ?? 'Buy credits'}
+          </a>
+        )}
         {!plansFeatureEnabled && (
           <div className="plan-screen-msg plan-screen-msg--error" role="status">
             Plans are currently disabled by admin.
@@ -383,12 +432,11 @@ export const MyPlanScreen = ({ locale, dictionary }: Props) => {
               // relabelled free, and its price is not shown — quoting an EGP
               // figure for something that cannot be bought is worse than
               // quoting nothing.
-              const notYetAvailable = paid && subscriptionsPaused;
-              // No CTA while subscriptions are paused: subscribeToPlan refuses
-              // for EVERY plan, so a button here would always fail. That covers
-              // the one remaining case — a paid subscriber looking at the Free
-              // card. The card still renders, so the catalogue stays honest.
-              const showSubscribeButton = !isCurrent && !subscriptionsPaused;
+              // A paid plan the admin has not switched on, or has not priced,
+              // reads as "not yet". It is never relabelled free and never shows
+              // a price it cannot be bought at.
+              const notYetAvailable = paid && !isBuyable(plan);
+              const showSubscribeButton = !isCurrent && isBuyable(plan);
               return (
                 <article
                   key={plan.id}
@@ -408,8 +456,11 @@ export const MyPlanScreen = ({ locale, dictionary }: Props) => {
                       </span>
                     ) : (
                       <>
+                        {/* MHC, rendered by the shared credit formatter so no
+                            currency symbol can appear. The legacy EGP
+                            `plan.price` is never shown. */}
                         <span className="plan-card-price">
-                          {paid ? plan.price : (d.freePrice ?? 'Free')}
+                          {paid ? formatMhc(plan.mhcPrice ?? 0, locale) : (d.freePrice ?? 'Free')}
                         </span>
                         {paid && (
                           <span className="plan-card-cycle">
@@ -422,6 +473,14 @@ export const MyPlanScreen = ({ locale, dictionary }: Props) => {
                       </>
                     )}
                   </div>
+                  {paid && plan.durationDays !== null && (
+                    <span className="plan-card-duration">
+                      {(d.durationDays ?? '{days} days').replace(
+                        '{days}',
+                        String(plan.durationDays),
+                      )}
+                    </span>
+                  )}
                   {plan.features.length > 0 && (
                     <ul className="plan-card-features">
                       {plan.features.map((f, i) => (
@@ -467,17 +526,21 @@ export const MyPlanScreen = ({ locale, dictionary }: Props) => {
             <div className="plan-modal" onClick={(e) => e.stopPropagation()}>
               <h3 className="plan-modal-title">{d.confirmTitle ?? 'Confirm Subscription'}</h3>
               <p className="plan-modal-text">
-                {/* Names the plan and quotes NO amount. The legacy copy
-                    (`d.confirmText`) promised "{price} {currency} deducted from
-                    your wallet balance" against the wallet 20260728160000 froze;
-                    it is left in the dictionary as legacy but is not rendered.
-                    When per-plan pricing is decided (LC-02) this is where the
-                    MHC amount belongs — not an EGP one. */}
-                {(d.confirmTextNoPrice ?? 'Subscribe to {name}?').replace(
-                  '{name}',
-                  confirmPlan.name,
-                )}
+                {/* States the EXACT credit deduction, in MHC. The legacy
+                    `d.confirmText` quoted an EGP amount and a wallet deduction
+                    and is no longer rendered anywhere. */}
+                {(d.confirmTextMhc ?? 'Subscribe to {name} for {credits}?')
+                  .replace('{name}', confirmPlan.name)
+                  .replace('{credits}', formatMhc(confirmPlan.mhcPrice ?? 0, locale))}
               </p>
+              {mhcBalance !== null && (
+                <p className="plan-modal-text plan-modal-text--muted">
+                  {(d.confirmBalanceAfter ?? 'Balance after: {credits}').replace(
+                    '{credits}',
+                    formatMhc(Math.max(0, mhcBalance - (confirmPlan.mhcPrice ?? 0)), locale),
+                  )}
+                </p>
+              )}
               <div className="plan-modal-actions">
                 <button
                   type="button"

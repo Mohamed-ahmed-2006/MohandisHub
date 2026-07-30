@@ -212,6 +212,35 @@
   color: hsl(var(--muted-foreground));
 }
 
+/* Duration sits under the credit price so a provider can see what a plan costs
+   and how long it lasts without opening the confirmation. */
+.plan-card-duration {
+  font-size: 0.8rem;
+  color: hsl(var(--muted-foreground));
+}
+
+.plan-modal-text--muted {
+  font-size: 0.85rem;
+  color: hsl(var(--muted-foreground));
+}
+
+/* Short of credits is fixable, so the way out is a link and not just an error. */
+.plan-screen-credits-link {
+  display: inline-block;
+  margin-top: 0.5rem;
+  padding: 0.55rem 1rem;
+  border-radius: 999px;
+  background-color: hsl(var(--primary));
+  color: hsl(var(--primary-foreground));
+  font-weight: 600;
+  font-size: 0.9rem;
+  text-decoration: none;
+}
+
+.plan-screen-credits-link:hover {
+  opacity: 0.9;
+}
+
 .plan-modal-overlay {
   position: fixed;
   inset: 0;

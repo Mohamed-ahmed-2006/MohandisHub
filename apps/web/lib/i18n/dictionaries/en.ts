@@ -1216,6 +1216,18 @@ export const enDictionary: Dictionary = {
       name: 'Name',
       slug: 'Slug',
       price: 'Price',
+      // Per-plan MHC pricing. MHC is a platform credit, never a currency.
+      mhcPriceLabel: 'Price (MHC credits)',
+      mhcPriceHint: 'Leave empty to keep the plan unpriced (not purchasable). 0 makes it free.',
+      mhcPriceUnset: 'Not priced',
+      mhcUnit: 'MHC',
+      durationDaysLabel: 'Duration (days)',
+      durationFromCycle: 'From billing cycle',
+      purchasableLabel: 'Purchasable',
+      purchasableHint: 'Requires a price. Off means "Coming soon".',
+      visibleHint: 'Listed to users',
+      notPurchasable: 'not on sale',
+      legacyEgpPrice: 'Legacy EGP price (not charged)',
       billingCycle: 'Billing Cycle',
       features: 'Features',
       active: 'Active',
@@ -1486,8 +1498,15 @@ export const enDictionary: Dictionary = {
     // per-plan MHC pricing is decided (LC-02).
     confirmText:
       'Subscribe to {name} for {price} {currency}? This will be deducted from your wallet balance.',
-    /** Currency-free confirmation. Replaces confirmText on every live surface. */
+    /** Currency-free confirmation, kept for a plan with no configured price. */
     confirmTextNoPrice: 'Subscribe to {name}?',
+    /** States the exact MHC deduction. {credits} is rendered by formatMhc. */
+    confirmTextMhc: 'Subscribe to {name} for {credits}?',
+    confirmBalanceAfter: 'Balance after: {credits}',
+    creditsBalance: 'Credits',
+    durationDays: '{days} days',
+    insufficientCredits: 'You do not have enough credits for this plan.',
+    buyCredits: 'Buy credits',
     confirm: 'Confirm',
     subscribeSuccess: 'Subscribed successfully!',
     // "Pro plan", not "Pro". This badge is granted by PLAN PURCHASE and sits

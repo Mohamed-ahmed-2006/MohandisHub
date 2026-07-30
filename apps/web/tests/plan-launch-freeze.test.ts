@@ -44,28 +44,38 @@ describe('paid plans are presented as coming soon', () => {
     // `!== false` and not `=== true`: an unknown status must not be read as
     // "purchasing is open".
     expect(source).toContain('status?.pausePlanSubscriptions !== false');
-    expect(source).toMatch(/const notYetAvailable = paid && subscriptionsPaused/);
+    // The global pause is now one of three conditions — per-plan MHC pricing
+    // added `isPurchasable` and "has an active price" — so unavailability is
+    // expressed through isBuyable rather than the pause alone.
+    expect(source).toMatch(/const notYetAvailable = paid && !isBuyable\(plan\)/);
+    expect(source).toMatch(/!subscriptionsPaused/);
   });
 
-  it('classifies a plan as paid by its price, so the free plan stays usable', () => {
+  it('classifies a plan as paid by its MHC price, so the free plan stays usable', () => {
+    // Paid-ness moved off the legacy EGP column onto the plan's MHC price when
+    // per-plan pricing shipped.
     expect(planScreen()).toMatch(
-      /isPaidPlan = \(plan: Plan\): boolean => Number\(plan\.price\) > 0/,
+      /isPaidPlan = \(plan: Plan\): boolean => \(plan\.mhcPrice \?\? 0\) > 0/,
     );
   });
 
   it('never labels a paid plan as free', () => {
     const source = planScreen();
     // The free label is reachable only on the `!paid` branch.
-    expect(source).toMatch(/paid \? plan\.price : \(d\.freePrice \?\? 'Free'\)/);
+    expect(source).toMatch(/paid\s*\?\s*formatMhc/);
+    expect(source).toContain("d.freePrice ?? 'Free'");
   });
 });
 
 describe('no EGP figure survives on the plans screen', () => {
-  it('no longer renders a wallet balance', () => {
+  it('no longer renders an EGP wallet balance', () => {
     const source = planScreen();
-    expect(source).not.toContain('plan-screen-balance');
+    // The balance element came back with per-plan MHC pricing, but it now shows
+    // the CREDIT balance a plan is actually bought with — rendered by formatMhc,
+    // which cannot emit a currency symbol. The money wallet is still never read.
     expect(source).not.toMatch(/wallet\.balance/);
     expect(source).not.toMatch(/wallet\.currency/);
+    expect(source).toContain('formatMhc(mhcBalance, locale)');
   });
 
   it('does not fetch the EGP wallet at all', () => {
@@ -86,11 +96,13 @@ describe('no EGP figure survives on the plans screen', () => {
 });
 
 describe('no subscribe control is offered while subscriptions are paused', () => {
-  it('gates the only subscribe button on the not-paused condition', () => {
+  it('gates the only subscribe button on the plan being buyable', () => {
     const source = planScreen();
-    // Exactly one CTA exists, and it renders only when subscriptions are open.
+    // Exactly one CTA exists, and it renders only when the plan is genuinely
+    // buyable — which per-plan pricing widened from "not paused" to "switched
+    // on AND priced AND not paused".
     expect(source.match(/plan-card-cta/g) ?? []).toHaveLength(1);
-    expect(source).toMatch(/const showSubscribeButton = !isCurrent && !subscriptionsPaused/);
+    expect(source).toMatch(/const showSubscribeButton = !isCurrent && isBuyable\(plan\)/);
     const chain = source.slice(source.indexOf('{isCurrent ? ('));
     const gateIndex = chain.indexOf('showSubscribeButton ? (');
     const ctaIndex = chain.indexOf('plan-card-cta');
