@@ -12,55 +12,57 @@ and covered by tests. Turning a price on is not a deployment step; it is a chang
 
 ---
 
-## LC-01 — Paid advertisements stay at price 0
+## LC-01 — Advertisements stay at price 0 until automatic renewal ships
 
-**Status:** enforced · **Backlog:** P0-03 · **Owner decision pending:** refund policy
+**Status:** enforced · **Superseded in substance by Wave 2F-A** ·
+**Full detail:** [`ADVERTISEMENT_BILLING.md`](./ADVERTISEMENT_BILLING.md)
 
-### What ships
+### What changed
 
-Advertisement creation charges MHC through the generic charge primitive (P0-07), inside the
-same transaction as the campaign insert. The price comes only from
-`mhc_action_prices.advertisement`. Migration `20260729150000_advertisement_mhc_pricing.sql`
-**activates** that action row while leaving its value at the seeded `0`, so advertising is
-exactly as free as it was before the change, and the wiring is proven end to end.
+Both original blockers below are **resolved**. Advertisements are no longer sold as a
+campaign at all: they are sold one **seven-day week** at a time, and the refund question is
+answered rather than left open.
 
-### Why the price must stay 0
+1. **Flat per-campaign pricing — resolved.** The billing unit is a period of exactly 168
+   hours, pinned by `chk_ad_period_exact_week`. Because the duration is fixed, one price per
+   action key *is* a weekly price; no duration dimension is needed and no consumer multiplies
+   anything. A 1-day and a 365-day campaign can no longer cost the same, because neither
+   exists — there are only weeks.
+2. **No refund policy — resolved.** The policy is: **a started week is non-refundable.**
+   Cancelling hides the advertisement immediately, closes the running week, prevents renewal
+   and refunds nothing. No advertisement refund endpoint was added, and
+   `refundActionCharge` is not called on this path. Charging is per week, so the exposure a
+   provider carries at any moment is one week rather than a whole campaign — which is what
+   makes "no refund" a defensible answer instead of a gap.
 
-Two things about the current implementation are not yet product decisions:
+Submission is also now free and moderated: a submitted campaign is `pending_review`, reaches
+no wallet at all, and is charged only when an administrator approves it and a week actually
+starts.
 
-1. **Charging is flat per campaign, not per day.** The pre-P0-03 model was
-   `pricePerDay × durationDays` in EGP against a wallet that is now frozen.
-   `mhc_action_prices` has one price per action key and no duration dimension, so a
-   campaign now costs a single flat MHC price regardless of how long it runs. This matches
-   `docs/audit/2026-07-29-marketplace-coherence/03-financial-mhc-audit.md` §5.3 and keeps
-   the charged amount derivable from the price catalogue alone — but it means a 1-day and a
-   365-day campaign cost the same. Nobody has agreed that is the intended commercial shape.
+### Why the price still stays 0
 
-2. **There is no cancellation or refund policy.** Cancelling an MHC-charged campaign
-   currently refunds **nothing**. `advertisements.amount_paid` is written as `0` for launch
-   campaigns precisely so the legacy prorated _EGP_ refund maths yields 0 and no wallet is
-   touched. The refund primitive (`MhcRepository.refundActionCharge`) exists and is tested,
-   but it performs a **full** refund only — it cannot prorate — and no policy has been
-   chosen between "full refund before the campaign starts serving", "prorated", and "no
-   refund once live".
+A narrower reason than before, and the only one left: **automatic weekly renewal is not
+implemented.** A provider charged for week 1 will reasonably expect week 2 to be handled.
+Until Wave 2F-B ships automatic renewal, renewal reminder notifications and the complete
+renewal interface, the honest state of the product is free.
 
-At a price of 0 both gaps are harmless: nothing is charged, so nothing can be
-mispriced by duration and nothing can be owed back. At any non-zero price, a provider who
-cancels a campaign on day 1 of 30 silently loses their credits.
+Migration `20260730120000_advertisement_weekly_billing.sql` asserts on the way out that
+`mhc_action_prices.advertisement.mhc_price` is still 0, so a replay cannot quietly put
+advertising on sale.
 
 ### Before this constraint may be lifted
 
-- [ ] Decide whether advertisement pricing is flat per campaign or duration-scaled. If
-      duration-scaled, `mhc_action_prices` alone cannot express it and the primitive's
-      single-price contract needs revisiting — do not multiply the action price in a
-      consumer, because then the charged amount stops matching the configured price.
-- [ ] Decide the cancellation refund policy, implement it on
-      `refundActionCharge`, and test it — including the concurrent-cancel case.
+- [x] Decide whether advertisement pricing is flat per campaign or duration-scaled →
+      **weekly periods**, enforced by a CHECK constraint.
+- [x] Decide the cancellation refund policy → **started weeks are non-refundable**, with no
+      refund endpoint and no wallet call on the cancellation path.
+- [ ] Ship Wave 2F-B: automatic renewal with explicit consent and a bound, scheduler
+      concurrency, renewal reminders, and the complete renewal UI.
 - [ ] Only then set `mhc_action_prices.advertisement.mhc_price` to a non-zero value.
 
-Until all three are done, advertising stays free **or** the `advertisement` action stays
-inactive. Note that leaving the row _inactive_ is also safe: the charge primitive fails
-closed on an inactive price (`409 MHC_ACTION_DISABLED`) rather than giving the action away.
+Setting a price remains a change, not a deployment step. Leaving the row _inactive_ is also
+safe: the charge primitive fails closed on an inactive price (`409 MHC_ACTION_DISABLED`)
+rather than giving the action away.
 
 ---
 
