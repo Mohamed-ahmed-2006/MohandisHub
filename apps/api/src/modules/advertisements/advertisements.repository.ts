@@ -755,20 +755,69 @@ export class AdvertisementsRepository {
   /**
    * Campaigns eligible to be shown right now.
    *
-   * The `billing_status` clause is belt and braces: a weekly campaign's
-   * `status`/`expires_at` are only ever set to a serving state by the activation
-   * transaction, but this makes it impossible for a weekly campaign to serve
-   * without a paid week even if some other path wrote `status = 'active'`.
+   * Expiration is LAZY in this wave — the scheduler belongs to Wave 2F-B — so
+   * this read cannot assume the expiry transition has run. It must fail closed
+   * on its own, and it does: a weekly campaign is served only while a paid week
+   * genuinely covers `now()`, established independently of any status column.
+   *
+   * The weekly branch requires ALL of:
+   *
+   *   billing_model = 'weekly'                      it is billed by the week;
+   *   status = 'active' AND billing_status='active' neither moderation nor
+   *                                                 billing has stopped it;
+   *   current_period_starts_at <= now()             the mirrored window covers
+   *   current_period_ends_at   >  now()             this instant; and
+   *   an `active` period row whose own starts_at/ends_at cover now().
+   *
+   * The last clause is the one that makes this independent rather than
+   * duplicative: the period table is authoritative, so a campaign whose mirror
+   * columns are stale, whose expiry write was lost, or which some other path
+   * marked `active`, still cannot be served without a real paid week behind it.
+   *
+   * `admin_forced_*` may only RESTRICT a weekly campaign, never extend it. It
+   * previously sat inside a COALESCE over `expires_at`, which meant an admin
+   * schedule override REPLACED the paid-period boundary and could keep an
+   * expired campaign serving indefinitely with nothing paid for it.
+   *
+   * The legacy branch is unchanged, deliberately: those campaigns have no
+   * periods, were paid for in EGP, and their historical windowing — including
+   * `admin_forced_*` as an override — is the behaviour they shipped with.
    */
   async listActiveAdsForAdCenter(limit: number): Promise<AdvertisementRow[]> {
     const { rows } = await getPool().query<AdvertisementRow>(
-      `SELECT *
-       FROM advertisements
-       WHERE status = 'active'
-         AND (billing_model <> 'weekly' OR billing_status = 'active')
-         AND COALESCE(admin_forced_starts_at, starts_at, now()) <= now()
-         AND COALESCE(admin_forced_expires_at, expires_at, now() + interval '100 years') > now()
-       ORDER BY priority DESC, created_at DESC
+      `SELECT a.*
+       FROM advertisements a
+       WHERE a.status = 'active'
+         AND (
+           (
+             a.billing_model = 'weekly'
+             AND a.billing_status = 'active'
+             AND a.current_period_starts_at IS NOT NULL
+             AND a.current_period_ends_at IS NOT NULL
+             AND a.current_period_starts_at <= now()
+             AND a.current_period_ends_at > now()
+             AND EXISTS (
+               SELECT 1
+               FROM advertisement_campaign_periods p
+               WHERE p.advertisement_id = a.id
+                 AND p.status = 'active'
+                 AND p.starts_at <= now()
+                 AND p.ends_at > now()
+             )
+             -- Restriction only: an admin may pull a campaign early, never
+             -- extend it past the week it paid for.
+             AND (a.admin_forced_starts_at IS NULL OR a.admin_forced_starts_at <= now())
+             AND (a.admin_forced_expires_at IS NULL OR a.admin_forced_expires_at > now())
+           )
+           OR (
+             a.billing_model <> 'weekly'
+             AND COALESCE(a.admin_forced_starts_at, a.starts_at, now()) <= now()
+             AND COALESCE(
+               a.admin_forced_expires_at, a.expires_at, now() + interval '100 years'
+             ) > now()
+           )
+         )
+       ORDER BY a.priority DESC, a.created_at DESC
        LIMIT $1::int`,
       [limit],
     );

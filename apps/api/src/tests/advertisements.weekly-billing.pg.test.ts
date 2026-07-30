@@ -866,6 +866,204 @@ describe.skipIf(!pgIntegrationEnabled())('expiration', () => {
   });
 });
 
+// ---------------------------------------------------------------------------
+// Serving fails closed on an elapsed week, without help from expiration.
+// ---------------------------------------------------------------------------
+// Expiration is lazy in this wave, so the read path cannot assume the transition
+// has run. Every test here drives `listActiveAdsForAdCenter` DIRECTLY — the
+// repository query, not the service — so the lazy sweep inside `resolveActiveAds`
+// cannot be what produces the result.
+
+describe.skipIf(!pgIntegrationEnabled())('serving fails closed after a week elapses', () => {
+  const servedIds = async (): Promise<string[]> =>
+    (await repository().listActiveAdsForAdCenter(100)).map((row) => row.id);
+
+  it('hides an elapsed week before any expiration has run', async () => {
+    const { userId } = await seedProvider(pool, { mhc: 100 });
+    const ad = await submit(userId);
+    await service().approveAd(ad.id, adminId);
+    expect(await servedIds()).toContain(ad.id);
+
+    // The week elapses. Nothing expires it: no sweep, no scheduler.
+    await timeTravelPastWeek(ad.id);
+
+    // Every status column still says the campaign is live and paid.
+    const stale = await adRow(ad.id);
+    expect(stale.status).toBe('active');
+    expect(stale.billing_status).toBe('active');
+    expect((await periods(ad.id))[0]!.status).toBe('active');
+
+    expect(await servedIds()).not.toContain(ad.id);
+  });
+
+  it('hides it when the expiration write is lost entirely', async () => {
+    const { userId } = await seedProvider(pool, { mhc: 100 });
+    const ad = await submit(userId);
+    await service().approveAd(ad.id, adminId);
+    await timeTravelPastWeek(ad.id);
+
+    // Simulate the sweep beginning and its transaction never committing: the
+    // period is read, then the write is rolled back.
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      await client.query(
+        `UPDATE advertisement_campaign_periods SET status = 'expired'
+          WHERE advertisement_id = $1 AND status = 'active'`,
+        [ad.id],
+      );
+      await client.query(
+        `UPDATE advertisements SET status = 'expired', billing_status = 'renewal_required'
+          WHERE id = $1`,
+        [ad.id],
+      );
+      await client.query('ROLLBACK');
+    } finally {
+      client.release();
+    }
+
+    // The rollback restored the "still active" state — and it is still hidden.
+    expect((await adRow(ad.id)).billing_status).toBe('active');
+    expect(await servedIds()).not.toContain(ad.id);
+  });
+
+  it('hides it even when the mirrored campaign window is stale', async () => {
+    const { userId } = await seedProvider(pool, { mhc: 100 });
+    const ad = await submit(userId);
+    await service().approveAd(ad.id, adminId);
+
+    // Only the PERIOD moves into the past. The campaign's mirror columns still
+    // claim a current week, so the period table is what has to refuse this.
+    await pool.query(
+      `UPDATE advertisement_campaign_periods
+       SET starts_at = starts_at - interval '8 days', ends_at = ends_at - interval '8 days'
+       WHERE advertisement_id = $1 AND status = 'active'`,
+      [ad.id],
+    );
+
+    const row = await adRow(ad.id);
+    expect(row.current_period_ends_at).not.toBeNull();
+    expect(new Date(row.current_period_ends_at as string).getTime()).toBeGreaterThan(Date.now());
+    expect(await servedIds()).not.toContain(ad.id);
+  });
+
+  it('hides a campaign whose period row was never created', async () => {
+    const { userId } = await seedProvider(pool, { mhc: 100 });
+    const ad = await submit(userId);
+    await service().approveAd(ad.id, adminId);
+
+    // The period disappears while every campaign column still says "active".
+    await pool.query(`DELETE FROM advertisement_campaign_periods WHERE advertisement_id = $1`, [
+      ad.id,
+    ]);
+
+    expect((await adRow(ad.id)).status).toBe('active');
+    expect(await servedIds()).not.toContain(ad.id);
+  });
+
+  it('does not let an admin schedule override extend a paid week', async () => {
+    const { userId } = await seedProvider(pool, { mhc: 100 });
+    const ad = await submit(userId);
+    await service().approveAd(ad.id, adminId);
+    await timeTravelPastWeek(ad.id);
+
+    // The override that used to win: it sat inside a COALESCE over expires_at,
+    // so it REPLACED the paid-period boundary and served an unpaid campaign.
+    await service().applyAdminSchedule(ad.id, {
+      startsAt: new Date(Date.now() - 60_000).toISOString(),
+      expiresAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
+    });
+
+    expect(await servedIds()).not.toContain(ad.id);
+  });
+
+  it('lets an admin schedule override still pull a live campaign early', async () => {
+    const { userId } = await seedProvider(pool, { mhc: 100 });
+    const ad = await submit(userId);
+    await service().approveAd(ad.id, adminId);
+    expect(await servedIds()).toContain(ad.id);
+
+    // Restriction still works — the override may shorten, just not extend.
+    await service().applyAdminSchedule(ad.id, {
+      expiresAt: new Date(Date.now() - 60_000).toISOString(),
+    });
+
+    expect(await servedIds()).not.toContain(ad.id);
+  });
+
+  it('never exposes it while serving and expiration run concurrently', async () => {
+    const { userId } = await seedProvider(pool, { mhc: 100 });
+    const ad = await submit(userId);
+    await service().approveAd(ad.id, adminId);
+    await timeTravelPastWeek(ad.id);
+
+    // Ten interleaved reads and sweeps. The read must be safe at every point in
+    // the sweep's transaction — before it, during it, and after it.
+    //
+    // Ten, not more: each sweep holds a dedicated connection for its
+    // transaction, and the pooler caps this project at 15 sessions. A higher
+    // number measures the pooler rather than the query.
+    const results = await Promise.all(
+      Array.from({ length: 10 }, (_, i) =>
+        i % 2 === 0 ? servedIds() : service().expireDuePeriods().then(() => servedIds()),
+      ),
+    );
+
+    for (const ids of results) expect(ids).not.toContain(ad.id);
+
+    // A second pass after everything has settled, so the post-sweep state is
+    // asserted on its own rather than only under contention.
+    expect(await servedIds()).not.toContain(ad.id);
+    // And the sweep did land exactly once.
+    expect((await adRow(ad.id)).billing_status).toBe('renewal_required');
+    expect(await periodCount(ad.id)).toBe(1);
+  });
+
+  it('serves it again only once a new week is bought', async () => {
+    const { userId } = await seedProvider(pool, { mhc: 500 });
+    const ad = await submit(userId);
+    await approveThenExpire(ad.id);
+    expect(await servedIds()).not.toContain(ad.id);
+
+    await service().renewAd(ad.id, userId);
+
+    expect(await servedIds()).toContain(ad.id);
+  });
+
+  it('preserves legacy listing behaviour, including admin overrides', async () => {
+    const { userId } = await seedProvider(pool, { mhc: 100 });
+    const { rows } = await pool.query<{ id: string }>(
+      `INSERT INTO advertisements (
+         advertiser_id, title_en, image_url, link_type, status,
+         amount_paid, starts_at, expires_at, duration_days, destination_provider_id
+       ) VALUES ($1, 'Legacy EGP campaign', 'https://cdn.example/legacy.png', 'profile', 'active',
+         150, now() - interval '1 day', now() + interval '6 days', 7, $1)
+       RETURNING id`,
+      [userId],
+    );
+    const legacyId = rows[0]!.id;
+
+    // A legacy campaign has no period and must still serve on its own window.
+    expect(await periodCount(legacyId)).toBe(0);
+    expect(await servedIds()).toContain(legacyId);
+
+    // Its window elapses: hidden.
+    await pool.query(
+      `UPDATE advertisements SET expires_at = now() - interval '1 hour' WHERE id = $1`,
+      [legacyId],
+    );
+    expect(await servedIds()).not.toContain(legacyId);
+
+    // And the historical admin override still extends a LEGACY campaign, which
+    // is the behaviour those campaigns shipped with and were paid for.
+    await pool.query(
+      `UPDATE advertisements SET admin_forced_expires_at = now() + interval '30 days' WHERE id = $1`,
+      [legacyId],
+    );
+    expect(await servedIds()).toContain(legacyId);
+  });
+});
+
 describe.skipIf(!pgIntegrationEnabled())('cancellation', () => {
   it('hides an active campaign immediately and refunds nothing', async () => {
     const { userId } = await seedProvider(pool, { mhc: 100 });
