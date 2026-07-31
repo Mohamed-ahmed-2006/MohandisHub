@@ -198,11 +198,46 @@ export type BusinessTeamPermission =
   | 'manage_support_disputes'
   | 'view_analytics';
 
+/**
+ * The product-facing built-in security tiers of a business workspace.
+ *
+ * Exactly three, and the backend is the only place they are decided. The
+ * database stores the tier in `business_members.role`, where the historical
+ * value `manager` carries the Admin tier — the internal value is kept so no
+ * existing membership has to be rewritten, and it is mapped here rather than
+ * exposed. Custom roles always resolve to `member`; they widen PERMISSIONS,
+ * never tier, which is what stops one from conferring ownership.
+ */
+export type BusinessWorkspaceTier = 'owner' | 'admin' | 'member';
+
+/**
+ * Actions the signed-in caller may actually perform, resolved server-side from
+ * ownership, tier and the assigned role's permission array.
+ *
+ * The frontend uses these to decide what to show. It is not a security boundary:
+ * every one of them is re-checked by the endpoint that performs the action.
+ */
+export type BusinessTeamAllowedActions = {
+  inviteMembers: boolean;
+  revokeInvites: boolean;
+  viewInvites: boolean;
+  updateMemberRoles: boolean;
+  removeMembers: boolean;
+  manageRoles: boolean;
+  transferOwnership: boolean;
+};
+
 export type BusinessTeamRole = {
   id: string;
   name: string;
   key: string;
   builtIn: boolean;
+  /** A built-in role retained for historical compatibility (currently `viewer`). */
+  legacy: boolean;
+  /** The tier a member holding this role receives. Custom roles are always `member`. */
+  tier: BusinessWorkspaceTier;
+  /** Whether this role may be handed out through invitations and role updates. */
+  assignable: boolean;
   permissions: BusinessTeamPermission[];
   memberCount: number;
   createdAt: string;
@@ -214,21 +249,46 @@ export type BusinessTeamMember = {
   userId: string;
   email: string | null;
   displayName: string | null;
-  roleId: string;
-  roleName: string;
-  roleKey: string;
+  roleId: string | null;
+  roleName: string | null;
+  roleKey: string | null;
+  tier: BusinessWorkspaceTier;
+  isOwner: boolean;
+  /** True for the member row belonging to the signed-in caller. */
+  isSelf: boolean;
   createdAt: string;
 };
+
+/**
+ * Invitation status as the API reports it.
+ *
+ * `expired` is derived from `expires_at` on read, so a still-`pending` row past
+ * its expiry is reported as expired without a GET ever writing to it.
+ */
+export type BusinessTeamInviteStatus = 'pending' | 'accepted' | 'revoked' | 'expired';
 
 export type BusinessTeamInvite = {
   id: string;
   email: string;
   roleId: string;
   roleName: string;
-  status: 'pending' | 'accepted' | 'revoked' | 'expired';
+  status: BusinessTeamInviteStatus;
   expiresAt: string;
   createdAt: string;
   acceptedAt: string | null;
+};
+
+export type BusinessTeamViewer = {
+  userId: string;
+  /** Null when the caller owns the workspace account but holds no membership row. */
+  memberId: string | null;
+  tier: BusinessWorkspaceTier;
+  isOwner: boolean;
+  roleId: string | null;
+  roleName: string | null;
+  roleKey: string | null;
+  permissions: BusinessTeamPermission[];
+  allowedActions: BusinessTeamAllowedActions;
 };
 
 export type BusinessTeamOverview = {
@@ -237,9 +297,66 @@ export type BusinessTeamOverview = {
     businessId: string;
     name: string | null;
   };
+  /** The signed-in caller's own standing in this workspace. */
+  viewer: BusinessTeamViewer;
   roles: BusinessTeamRole[];
   members: BusinessTeamMember[];
   invites: BusinessTeamInvite[];
+};
+
+/**
+ * What an invitation link is allowed to reveal before it is accepted.
+ *
+ * Deliberately thin. It names the workspace and the offered role because the
+ * recipient cannot make a decision without them, masks the invited address so a
+ * leaked link does not disclose it in full, and never reveals whether any
+ * address has an account.
+ */
+export type BusinessInvitePreviewState =
+  | 'valid'
+  | 'expired'
+  | 'revoked'
+  | 'already_used'
+  | 'malformed'
+  | 'wrong_account';
+
+export type BusinessInvitePreview = {
+  state: BusinessInvitePreviewState;
+  /** Present for every state except `malformed`, where no invitation was found. */
+  teamName: string | null;
+  inviterDisplayName: string | null;
+  /** Masked, e.g. `b••@example.com`. Never the full address. */
+  maskedEmail: string | null;
+  roleName: string | null;
+  expiresAt: string | null;
+  /** True when the caller must sign in before the invitation can be accepted. */
+  requiresAuthentication: boolean;
+  /**
+   * Whether the signed-in account is the invited one. `null` when nobody is
+   * signed in, because the answer would otherwise disclose the invited address.
+   */
+  signedInAccountMatches: boolean | null;
+};
+
+export type BusinessInviteAcceptResult = {
+  accepted: boolean;
+  /** True when this call created the membership, false when it was already there. */
+  created: boolean;
+  teamId: string;
+  teamName: string | null;
+  roleName: string | null;
+  tier: BusinessWorkspaceTier;
+};
+
+export type UpdateBusinessMemberRoleBody = {
+  roleId: string;
+};
+
+export type TransferBusinessOwnershipBody = {
+  /** The member row that becomes owner. */
+  memberId: string;
+  /** Must equal the workspace name exactly; a deliberate confirmation step. */
+  confirmation: string;
 };
 
 export type CreateBusinessRoleBody = {
