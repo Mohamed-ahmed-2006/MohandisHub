@@ -121,7 +121,7 @@ const getPostAuthPath = (locale: Locale, emailVerified: boolean): string =>
  */
 const SAFE_NEXT_PREFIXES = ['/app', '/invitations/accept'] as const;
 
-const getSafeNextPath = (locale: Locale, rawNext: string | null): string | null => {
+export const getSafeNextPath = (locale: Locale, rawNext: string | null): string | null => {
   if (!rawNext) return null;
   // Protocol-relative and absolute URLs are rejected before anything else: both
   // can leave the origin, which is the whole risk being guarded against.

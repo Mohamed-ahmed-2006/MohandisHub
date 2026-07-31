@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
+import { getSafeNextPath } from '@/components/auth/auth-form';
 import { isApiClientError, useAuth } from '@/components/auth/auth-provider';
 import { AuthStatusBanner } from '@/components/auth/auth-status-banner';
 import { LanguageToggle } from '@/components/language-toggle';
@@ -63,25 +64,6 @@ export const VerifyEmailScreen = ({ locale, dictionary }: VerifyEmailScreenProps
     };
   }, []);
 
-  /**
-   * Where to send someone once their email is verified.
-   *
-   * Registration is a step in the middle of something, not the end of it. A
-   * recipient following a business team invitation arrives here with `next`
-   * still on the URL, and the previous version sent them to onboarding and
-   * dropped it — leaving the invitation unused and the user with no way back to
-   * it. The same allowlist the auth form uses applies: a relative in-app path
-   * under `/app` or `/invitations/accept`, and nothing that could leave the
-   * origin.
-   */
-  const continuationPath = (): string | null => {
-    const raw = searchParams.get('next');
-    if (!raw) return null;
-    if (raw.startsWith('//') || raw.includes('://')) return null;
-    const allowed = ['/app', '/invitations/accept'];
-    return allowed.some((prefix) => raw.startsWith(`/${locale}${prefix}`)) ? raw : null;
-  };
-
   useEffect(() => {
     if (!isReady) return;
 
@@ -91,17 +73,15 @@ export const VerifyEmailScreen = ({ locale, dictionary }: VerifyEmailScreenProps
     }
 
     if (authGuard.emailVerified) {
-      const resume = continuationPath();
-      if (resume) {
-        router.replace(resume);
+      const safeNext = getSafeNextPath(locale, searchParams.get('next'));
+      if (safeNext) {
+        router.replace(safeNext);
         return;
       }
       const role = authUser.role;
       const onboardingPath = authUser.isAdmin ? '/app' : `/onboarding/${role}`;
       router.replace(buildLocalePath(locale, onboardingPath));
     }
-    // `continuationPath` reads only `searchParams` and `locale`, both already
-    // dependencies below.
   }, [isReady, isAuthenticated, authUser, authGuard.emailVerified, locale, router, searchParams]);
 
   const sendOtp = useCallback(async () => {
@@ -174,9 +154,9 @@ export const VerifyEmailScreen = ({ locale, dictionary }: VerifyEmailScreenProps
   };
 
   const handleContinue = (): void => {
-    const resume = continuationPath();
-    if (resume) {
-      router.replace(resume);
+    const safeNext = getSafeNextPath(locale, searchParams.get('next'));
+    if (safeNext) {
+      router.replace(safeNext);
       return;
     }
     const role = authUser?.role ?? 'customer';

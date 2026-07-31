@@ -177,7 +177,7 @@ export const BusinessTeamPanel = ({ dictionary, accessToken, teamId }: Props) =>
 
   const tierLabel = (tier: 'owner' | 'admin' | 'member') =>
     tier === 'owner'
-      ? tr('Owner', 'مالك')
+      ? tr('Team Owner', 'مالك الفريق')
       : tier === 'admin'
         ? tr('Admin', 'مسؤول')
         : tr('Member', 'عضو');
@@ -200,14 +200,14 @@ export const BusinessTeamPanel = ({ dictionary, accessToken, teamId }: Props) =>
         }}
       >
         <div>
-          <h3 className="dashboard-section-title" style={{ margin: 0 }}>
+          <h3 className="dashboard-section-title" style={{ margin: 0, wordBreak: 'break-word' }}>
             {overview.team.name ?? tr('Business Team', 'فريق العمل')}
           </h3>
           <p className="dashboard-card-meta" style={{ margin: '0.25rem 0 0' }}>
             {tr('Workspace Team ID', 'معرف فريق مساحة العمل')}: {overview.team.id.slice(0, 8)}...
           </p>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
           <span className="dashboard-card-meta">
             {tr('Your Workspace Role', 'دورك في مساحة العمل')}:
           </span>
@@ -304,7 +304,7 @@ export const BusinessTeamPanel = ({ dictionary, accessToken, teamId }: Props) =>
         </div>
       )}
 
-      {/* Team Administration Forms: Visible for Owner & Admin */}
+      {/* Team Administration Forms: visible for Team Owner and Admin. */}
       {canAdministerTeam ? (
         <div className="dashboard-cards" style={{ marginBottom: '2rem' }}>
           <div className="dashboard-card">
@@ -334,7 +334,7 @@ export const BusinessTeamPanel = ({ dictionary, accessToken, teamId }: Props) =>
                 <option value="" disabled>
                   {tr('Select role', 'اختر الدور')}
                 </option>
-                {/* Owner and retired roles are absent because the backend
+                {/* Team Owner and retired roles are absent because the backend
                     refuses them; offering one would only produce an error. */}
                 {assignableRoles.map((role) => (
                   <option key={role.id} value={role.id}>
@@ -360,17 +360,40 @@ export const BusinessTeamPanel = ({ dictionary, accessToken, teamId }: Props) =>
                   required
                 />
                 <div className="dashboard-actions-row" style={{ flexWrap: 'wrap', gap: '0.5rem' }}>
-                  {BUSINESS_TEAM_PERMISSIONS.map((permission) => (
-                    <label
-                      key={permission}
-                      className="dashboard-chip"
-                      style={{ fontSize: '0.8rem' }}
-                    >
-                      <input name={permission} type="checkbox" />
-                      {permission.replace('_', ' ')}
-                    </label>
-                  ))}
+                  {BUSINESS_TEAM_PERMISSIONS.map((permission) => {
+                    const isEnforced = permission === 'manage_team';
+                    return (
+                      <label
+                        key={permission}
+                        className="dashboard-chip"
+                        style={{
+                          fontSize: '0.8rem',
+                          opacity: isEnforced ? 1 : 0.6,
+                          cursor: isEnforced ? 'pointer' : 'not-allowed',
+                        }}
+                      >
+                        <input
+                          name={permission}
+                          type="checkbox"
+                          disabled={!isEnforced}
+                          defaultChecked={isEnforced}
+                        />
+                        {permission.replace('_', ' ')}
+                        {!isEnforced && (
+                          <span style={{ fontSize: '0.75rem', opacity: 0.75 }}>
+                            {tr(' (Deferred)', ' (مؤجل)')}
+                          </span>
+                        )}
+                      </label>
+                    );
+                  })}
                 </div>
+                <p className="dashboard-card-meta" style={{ margin: '0.25rem 0 0', fontSize: '0.8rem' }}>
+                  {tr(
+                    'Only team administration (manage_team) is enforced for launch. Service, job, financial and analytics permissions are deferred.',
+                    'إدارة الفريق (manage_team) هي الصلاحية المطبقة حالياً. صلاحيات الخدمات والوظائف والمالية والتحليلات مؤجلة.',
+                  )}
+                </p>
                 <button className="dashboard-primary-btn" type="submit" disabled={busy}>
                   {busy ? tr('Creating...', 'جاري الإنشاء...') : tr('Create Role', 'إنشاء الدور')}
                 </button>
@@ -390,8 +413,8 @@ export const BusinessTeamPanel = ({ dictionary, accessToken, teamId }: Props) =>
           <p className="dashboard-card-meta">
             ℹ{' '}
             {tr(
-              'Team administration (inviting members and role configuration) requires Owner or Admin workspace permissions.',
-              'إدارة الفريق (دعوة الأعضاء وتكوين الأدوار) تتطلب صلاحيات مالك أو مسؤول في مساحة العمل.',
+              'Team administration (inviting members and role configuration) requires Team Owner or Admin workspace permissions.',
+              'إدارة الفريق (دعوة الأعضاء وتكوين الأدوار) تتطلب صلاحيات مالك الفريق أو مسؤول في مساحة العمل.',
             )}
           </p>
         </div>
@@ -415,7 +438,7 @@ export const BusinessTeamPanel = ({ dictionary, accessToken, teamId }: Props) =>
             <tbody>
               {overview.members.map((member) => (
                 <tr key={member.id}>
-                  <td>
+                  <td style={{ wordBreak: 'break-word' }}>
                     <div style={{ fontWeight: 500 }}>
                       {member.displayName ?? member.userId.slice(0, 8)}
                       {member.isSelf && (
@@ -423,10 +446,9 @@ export const BusinessTeamPanel = ({ dictionary, accessToken, teamId }: Props) =>
                       )}
                     </div>
                   </td>
-                  <td>{member.email ?? '-'}</td>
+                  <td style={{ wordBreak: 'break-word' }}>{member.email ?? '-'}</td>
                   <td>
-                    {/* The owner's role is shown, never edited here: it moves
-                        only through an ownership transfer. */}
+                    {/* The owner's role is shown, never edited here. */}
                     {canAdministerTeam && !member.isOwner ? (
                       <select
                         className="dashboard-select"
@@ -506,7 +528,7 @@ export const BusinessTeamPanel = ({ dictionary, accessToken, teamId }: Props) =>
               <tbody>
                 {overview.invites.map((inviteItem) => (
                   <tr key={inviteItem.id}>
-                    <td>{inviteItem.email}</td>
+                    <td style={{ wordBreak: 'break-word' }}>{inviteItem.email}</td>
                     <td>{inviteItem.roleName}</td>
                     <td>
                       <span
@@ -548,22 +570,27 @@ export const BusinessTeamPanel = ({ dictionary, accessToken, teamId }: Props) =>
         </div>
       )}
 
-      {/* Ownership. Stated, not offered. */}
+      {/* Team ownership is stated for clarity, but no transfer action is offered. */}
       {viewer.isOwner && (
         <div
           style={{
             marginTop: '2rem',
             padding: '1rem',
             borderTop: '1px solid rgba(255, 255, 255, 0.1)',
+            background: 'rgba(255, 255, 255, 0.02)',
+            borderRadius: '8px',
           }}
         >
           <h4 style={{ margin: 0, fontSize: '0.95rem' }}>
-            {tr('Business Ownership', 'ملكية مساحة العمل')}
+            {tr('Team Ownership', 'ملكية الفريق')}
           </h4>
-          <p className="dashboard-card-meta" style={{ margin: '0.35rem 0 0', fontSize: '0.85rem' }}>
+          <p
+            className="dashboard-card-meta"
+            style={{ margin: '0.4rem 0 0', fontSize: '0.85rem', lineHeight: '1.4' }}
+          >
             {tr(
-              'This workspace, and the services, jobs, advertisements and billing history that belong to it, are owned by this business account. Ownership cannot be transferred to another member.',
-              'مساحة العمل هذه — وما يتبعها من خدمات ووظائف وإعلانات وسجل فوترة — مملوكة لحساب الشركة هذا. لا يمكن نقل الملكية إلى عضو آخر.',
+              'Team ownership transfer is unavailable for launch. Workspace-wide asset control and ownership transfer actions are deferred.',
+              'نقل ملكية الفريق غير متاح حالياً للإطلاق. إجراءات نقل الملكية والتحكم التام بالأصول مؤجلة.',
             )}
           </p>
         </div>
