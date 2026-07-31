@@ -41,8 +41,10 @@ const isInsufficientCredits = (error: unknown): boolean =>
  * only if it holds an `active` period that was paid for, and no period is ever
  * created without its charge succeeding first in the same transaction.
  *
- * Nothing in this file schedules anything. Automatic renewal has no
- * implementation in this wave — see `docs/release/ADVERTISEMENT_BILLING.md`.
+ * Nothing in this file schedules anything. `chargeAndOpenPeriodInTx` is the one
+ * implementation of "charge, then open a week"; the initial, manual and
+ * automatic paths all go through it, and the scheduler that drives the automatic
+ * one lives in `advertisement-renewal.service.ts`.
  */
 export class AdvertisementBillingService {
   constructor(
@@ -192,6 +194,49 @@ export class AdvertisementBillingService {
   }
 
   /**
+   * Record, once, that a campaign's FIRST week could not be paid for.
+   *
+   * Boundary 1 is the first week, and both routes to it make at most one
+   * unattended attempt — the scheduler reads only `awaiting_start`, and an
+   * approval happens once. Without this event a future-dated campaign whose
+   * start came round while nobody was watching would simply never begin, and
+   * never say why.
+   *
+   * Read-before-insert rather than relying on `uq_ad_renewal_event_boundary`: a
+   * duplicate INSERT would abort the caller's transaction and take the
+   * `awaiting_credits` write with it, turning an honest committed state into a
+   * lost one.
+   */
+  async recordFirstWeekUnfunded(
+    client: PoolClient,
+    ad: AdvertisementRow,
+    error: unknown,
+  ): Promise<string | null> {
+    const existing = await this.renewalRepo.findEventInTx(client, {
+      advertisementId: ad.id,
+      boundaryPeriodNumber: 1,
+      eventType: 'renewal_failed_insufficient_credits',
+    });
+    if (existing) return null;
+
+    const required =
+      error instanceof HttpError && error.details && typeof error.details === 'object'
+        ? Number((error.details as { required?: unknown }).required)
+        : Number.NaN;
+
+    const event = await this.renewalRepo.insertEventInTx(client, {
+      advertisementId: ad.id,
+      advertiserId: ad.advertiser_id,
+      boundaryPeriodNumber: 1,
+      eventType: 'renewal_failed_insufficient_credits',
+      // Omitted rather than stored as null when the primitive did not report a
+      // figure: an absent number is honest, `null` invites a screen to render it.
+      detail: Number.isFinite(required) ? { requiredMhc: required } : {},
+    });
+    return event.id;
+  }
+
+  /**
    * Hand a committed event to the notifier, after the caller's COMMIT.
    *
    * Fire and forget by design: an event that is not delivered here survives
@@ -300,7 +345,10 @@ export class AdvertisementBillingService {
           // clean. Commit the honest state — approved, not serving, no credits —
           // and let the 402 reach the provider with its Credits deep link.
           await this.repo.markAwaitingCreditsInTx(client, ad.id);
+
+          const failureEventId = await this.recordFirstWeekUnfunded(client, ad, error);
           await client.query('COMMIT');
+          this.notifyAfterCommit(failureEventId);
         }
         throw error;
       }
@@ -489,7 +537,16 @@ export class AdvertisementBillingService {
     return this.repo.expireDuePeriods(limit);
   }
 
-  /** Approved campaigns whose scheduled start has arrived. */
+  /**
+   * Approved campaigns whose scheduled start has arrived — including those that
+   * previously ran out of credits.
+   *
+   * For a deliberate, authorised caller: an admin invoking activation, or the
+   * advertiser's own retry. The SCHEDULER uses the narrower
+   * `AdvertisementRenewalRepository.listDueInitialStartAdIds`, which excludes
+   * `awaiting_credits`, so a timer cannot re-attempt an unfunded campaign every
+   * minute forever.
+   */
   async listDueScheduledAdIds(limit = 100): Promise<string[]> {
     return this.repo.listDueScheduledAdIds(limit);
   }

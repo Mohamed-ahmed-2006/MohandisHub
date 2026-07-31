@@ -6,6 +6,7 @@ import { AdvertisementRenewalRepository } from '../modules/advertisements/advert
 import { AdvertisementRenewalService } from '../modules/advertisements/advertisement-renewal.service.js';
 import { AdvertisementsService } from '../modules/advertisements/advertisements.service.js';
 import { NotificationsRepository } from '../modules/notifications/notifications.repository.js';
+import { HttpError } from '../utils/http-error.js';
 
 import {
   balanceOf,
@@ -941,9 +942,9 @@ describe.skipIf(!pgIntegrationEnabled())('races have defined financial behaviour
     // The loser reports a stable state rather than inventing a second week.
     const rejected = results.filter((r) => r.status === 'rejected');
     for (const failure of rejected) {
-      expect(String((failure as PromiseRejectedResult).reason?.code)).toMatch(
-        /AD_PERIOD_STILL_ACTIVE|AD_RENEWAL_NOT_ELIGIBLE|AD_RENEWAL_CONFLICT/,
-      );
+      const reason: unknown = failure.reason;
+      const code = reason instanceof HttpError ? reason.code : String(reason);
+      expect(code).toMatch(/AD_PERIOD_STILL_ACTIVE|AD_RENEWAL_NOT_ELIGIBLE|AD_RENEWAL_CONFLICT/);
     }
   });
 

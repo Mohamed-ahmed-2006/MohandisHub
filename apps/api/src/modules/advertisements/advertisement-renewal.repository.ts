@@ -89,6 +89,38 @@ export class AdvertisementRenewalRepository {
   }
 
   /**
+   * Approved campaigns whose scheduled start has arrived and which have never
+   * been attempted.
+   *
+   * Deliberately narrower than `AdvertisementsRepository.listDueScheduledAdIds`,
+   * which also returns `awaiting_credits`. That is right for an admin invoking
+   * activation deliberately and for the advertiser's own "start now" button, and
+   * wrong for a timer: a campaign whose advertiser has no credits would be
+   * re-attempted every sweep forever. It would never charge anything — the
+   * balance check fails first — but it would write an UPDATE per campaign per
+   * minute for as long as the campaign sat there.
+   *
+   * So the scheduler makes exactly ONE attempt per campaign. A campaign that
+   * could not pay drops to `awaiting_credits`, out of this read, and waits for
+   * its advertiser — the same shape as a failed renewal boundary.
+   */
+  async listDueInitialStartAdIds(limit: number): Promise<string[]> {
+    const { rows } = await getPool().query<{ id: string }>(
+      `SELECT id
+       FROM advertisements
+       WHERE billing_model = 'weekly'
+         AND status = 'scheduled'
+         AND billing_status = 'awaiting_start'
+         AND reviewed_at IS NOT NULL
+         AND COALESCE(starts_at, now()) <= now()
+       ORDER BY COALESCE(starts_at, created_at)
+       LIMIT $1::int`,
+      [limit],
+    );
+    return rows.map((row) => row.id);
+  }
+
+  /**
    * Automatic campaigns whose running week ends within the reminder window and
    * which have not been reminded about that boundary yet.
    *

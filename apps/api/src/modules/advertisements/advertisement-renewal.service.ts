@@ -728,8 +728,10 @@ export class AdvertisementRenewalService {
     };
 
     // -- 1. Approved campaigns whose start has arrived ------------------------
+    // One attempt each, ever. A campaign that could not pay drops to
+    // `awaiting_credits` and out of this read — see listDueInitialStartAdIds.
     try {
-      const dueStarts = await this.billing.listDueScheduledAdIds(batchSize);
+      const dueStarts = await this.renewalRepo.listDueInitialStartAdIds(batchSize);
       for (const id of dueStarts) {
         if (shouldStop()) return summary;
         try {

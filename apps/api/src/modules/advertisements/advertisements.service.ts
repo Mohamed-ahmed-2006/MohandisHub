@@ -478,7 +478,18 @@ export class AdvertisementsService {
         if (error instanceof HttpError && error.code === 'MHC_INSUFFICIENT_CREDITS') {
           // Keep the approval. The charge primitive unwound only to its own
           // savepoint, so the approval write above is intact and committable.
+          //
+          // The advertiser is told, once: an admin approving a campaign the
+          // advertiser cannot pay for gets the 402 themselves, but the
+          // advertiser is not watching and would otherwise see an approved
+          // campaign that silently never starts.
+          const failureEventId = await this.billing.recordFirstWeekUnfunded(
+            client,
+            approved,
+            error,
+          );
           await client.query('COMMIT');
+          this.billing.notifyAfterCommit(failureEventId);
         }
         throw error;
       }

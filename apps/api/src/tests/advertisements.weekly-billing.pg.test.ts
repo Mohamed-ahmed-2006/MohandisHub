@@ -1351,10 +1351,17 @@ describe.skipIf(!pgIntegrationEnabled())('database-enforced period invariants', 
     ).rejects.toThrow(/uq_ad_period_action_charge/);
   });
 
+  // The consent columns are supplied in both statements below so that
+  // `chk_advertisements_auto_renew_consent` (Wave 2F-B) is satisfied and only
+  // the constraint each test is actually about can fail. PostgreSQL does not
+  // promise an evaluation order between CHECKs.
   it('rejects automatic renewal without a bound', async () => {
     await expect(
       pool.query(
-        `UPDATE advertisements SET renewal_mode = 'automatic', auto_renew_enabled = true WHERE id = $1`,
+        `UPDATE advertisements
+         SET renewal_mode = 'automatic', auto_renew_enabled = true,
+             auto_renew_enabled_at = now(), auto_renew_enabled_by = advertiser_id
+         WHERE id = $1`,
         [adId],
       ),
     ).rejects.toThrow(/chk_advertisements_auto_renew_bounded/);
@@ -1363,7 +1370,10 @@ describe.skipIf(!pgIntegrationEnabled())('database-enforced period invariants', 
   it('rejects automatic renewal left in manual mode', async () => {
     await expect(
       pool.query(
-        `UPDATE advertisements SET auto_renew_enabled = true, maximum_weeks = 4 WHERE id = $1`,
+        `UPDATE advertisements
+         SET auto_renew_enabled = true, maximum_weeks = 4,
+             auto_renew_enabled_at = now(), auto_renew_enabled_by = advertiser_id
+         WHERE id = $1`,
         [adId],
       ),
     ).rejects.toThrow(/chk_advertisements_auto_renew_mode/);
@@ -1391,28 +1401,40 @@ describe.skipIf(!pgIntegrationEnabled())('database-enforced period invariants', 
   });
 });
 
-describe.skipIf(!pgIntegrationEnabled())('automatic renewal is not available', () => {
-  it('refuses to enable it with a stable error, and persists nothing', async () => {
+// ---------------------------------------------------------------------------
+// A campaign nobody opted in stays manual.
+// ---------------------------------------------------------------------------
+// This block replaces "automatic renewal is not available", which pinned the
+// `AUTO_RENEWAL_NOT_AVAILABLE` placeholder Wave 2F-A shipped. That refusal is
+// now false — Wave 2F-B implements automatic renewal — so those assertions are
+// replaced rather than relaxed. What is asserted here is the half that must
+// remain true regardless: a campaign whose advertiser has consented to nothing
+// renews only when they ask.
+//
+// The automatic path itself is covered by advertisements.automatic-renewal.pg.test.ts.
+// ---------------------------------------------------------------------------
+describe.skipIf(!pgIntegrationEnabled())('a campaign nobody opted in stays manual', () => {
+  it('starts manual, unconsented and unbounded', async () => {
     const { userId } = await seedProvider(pool, { mhc: 100 });
     const ad = await submit(userId);
-
-    await expect(
-      service().setAutoRenewal(ad.id, userId, { enabled: true, maximumWeeks: 4 }),
-    ).rejects.toMatchObject({ statusCode: 409, code: 'AUTO_RENEWAL_NOT_AVAILABLE' });
 
     const row = await adRow(ad.id);
     expect(row.auto_renew_enabled).toBe(false);
     expect(row.renewal_mode).toBe('manual');
     expect(row.maximum_weeks).toBeNull();
+    expect(row.renewal_end_date).toBeNull();
+    expect(row.auto_renew_enabled_at).toBeNull();
+    expect(row.auto_renew_enabled_by).toBeNull();
   });
 
-  it('accepts switching it off, because off is the only state', async () => {
+  it('accepts switching it off on a campaign that was never on', async () => {
     const { userId } = await seedProvider(pool, { mhc: 100 });
     const ad = await submit(userId);
 
     await expect(
       service().setAutoRenewal(ad.id, userId, { enabled: false }),
-    ).resolves.toMatchObject({ autoRenewEnabled: false, autoRenewalAvailable: false });
+    ).resolves.toMatchObject({ autoRenewEnabled: false, renewalMode: 'manual' });
+    expect((await adRow(ad.id)).auto_renew_enabled).toBe(false);
   });
 
   it('never writes an automatic period', async () => {
@@ -1442,9 +1464,16 @@ describe.skipIf(!pgIntegrationEnabled())('billing state API', () => {
       weeklyMhcPrice: 25,
       manualRenewalRequired: true,
       canRenew: true,
-      autoRenewalAvailable: false,
+      // Wave 2F-B: a weekly campaign that has not been cancelled or rejected
+      // MAY be switched to automatic renewal. It has not been, and the
+      // advertiser has consented to nothing.
+      autoRenewalAvailable: true,
       autoRenewEnabled: false,
+      renewalMode: 'manual',
+      canRetryAutomaticRenewal: false,
     });
+    expect(state.autoRenewEnabledAt).toBeNull();
+    expect(state.autoRenewPausedReason).toBeNull();
     expect(state.periods).toHaveLength(1);
     expect(state.periods[0]).toMatchObject({
       periodNumber: 1,
@@ -1654,6 +1683,8 @@ describe.skipIf(!pgIntegrationEnabled())('migration forward and rollback', () =>
             k,
           ) &&
           !/idx_advertisements_auto_renew_due/.test(k) &&
+          // Dropping `auto_renew_enabled_by` takes its foreign key with it.
+          !/advertisements_auto_renew_enabled_by_fkey/.test(k) &&
           !/advertisements\.(billing_model|billing_status|renewal_mode|auto_renew_enabled|maximum_weeks|renewal_end_date|current_period_starts_at|current_period_ends_at|next_renewal_at|renewal_count|manual_renewal_required)/.test(
             k,
           ) &&
