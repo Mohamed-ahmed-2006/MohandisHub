@@ -109,10 +109,24 @@ const extractFieldErrors = (details: unknown): Partial<Record<FieldName, string>
 const getPostAuthPath = (locale: Locale, emailVerified: boolean): string =>
   buildLocalePath(locale, emailVerified ? '/app' : '/verify-email');
 
+/**
+ * In-app destinations a `?next=` parameter is allowed to name.
+ *
+ * An allowlist of path prefixes rather than a validity check, because the only
+ * safe answer to "where may an attacker-supplied URL send a freshly signed-in
+ * user" is a list somebody wrote down. `/invitations/accept` is here so a
+ * business team invitation survives sign-in or account creation with its token
+ * intact — the recipient of an invitation frequently has no account yet, and
+ * sending them to the dashboard would strand the link.
+ */
+const SAFE_NEXT_PREFIXES = ['/app', '/invitations/accept'] as const;
+
 const getSafeNextPath = (locale: Locale, rawNext: string | null): string | null => {
   if (!rawNext) return null;
-  if (!rawNext.startsWith(`/${locale}/app`)) return null;
+  // Protocol-relative and absolute URLs are rejected before anything else: both
+  // can leave the origin, which is the whole risk being guarded against.
   if (rawNext.startsWith('//') || rawNext.includes('://')) return null;
+  if (!SAFE_NEXT_PREFIXES.some((prefix) => rawNext.startsWith(`/${locale}${prefix}`))) return null;
   return rawNext;
 };
 

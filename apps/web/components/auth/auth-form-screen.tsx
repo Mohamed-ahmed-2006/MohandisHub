@@ -84,6 +84,15 @@ export const AuthFormScreen = ({
       query.set('role', nextRole);
     }
 
+    // Carried across the login/register toggle. Someone who follows an
+    // invitation link and then decides to create an account instead of signing
+    // in must still land back on the invitation, and the query is rebuilt from
+    // scratch here rather than edited.
+    const next = searchParams.get('next');
+    if (next) {
+      query.set('next', next);
+    }
+
     const targetPath = `${pathname}?${query.toString()}`;
     router.replace(targetPath, { scroll: false });
   };
