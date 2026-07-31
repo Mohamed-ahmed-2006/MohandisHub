@@ -42,3 +42,54 @@ CONFIRM_PRODUCTION_MIGRATION=I_UNDERSTAND_RUN_PRODUCTION_MIGRATIONS
 - Paymob deposits and withdrawals are implemented for mocked callbacks and admin completion.
 - Live Paymob checkout/payout verification remains blocked until the merchant account is active and live env keys are set.
 - Money reviews should monitor deposit requests, withdrawal requests, wallet holds, dispute settlements, reversals, and failed lifecycle workers.
+
+## Background Workers
+
+`mohandishub-worker` (`node apps/api/dist/worker.js`) runs four independent sweeps.
+Each is failure-isolated: one throwing does not stop the others, and none of them
+holds a lock across a network call.
+
+| Sweep | Default cadence | Configured by |
+| --- | --- | --- |
+| Reservation lifecycle | 60s | (fixed) |
+| Retention | 15 min | `RETENTION_SWEEP_INTERVAL_MS` |
+| Award-offer expiry | 5 min | (fixed) |
+| Advertisement billing | 60s | `AD_BILLING_SWEEP_INTERVAL_MS` |
+
+### Advertisement billing sweep
+
+The process that ends a paid advertisement week and buys the next one. Full
+design in [`docs/release/ADVERTISEMENT_BILLING.md`](./release/ADVERTISEMENT_BILLING.md) §5C.
+
+| Variable | Default | Accepted range | Meaning |
+| --- | --- | --- | --- |
+| `AD_BILLING_SWEEP_INTERVAL_MS` | `60000` | ≥ 5000 | Time between ticks |
+| `AD_BILLING_SWEEP_BATCH_SIZE` | `25` | 1–500 | Campaigns per stage per tick |
+| `AD_RENEWAL_REMINDER_HOURS` | `24` | 1–168 | Lead time for the renewal reminder |
+
+None needs to be set — the defaults are the intended production values, which is
+why they are absent from `render.yaml`. A value outside the accepted range makes
+the process **fail to start** rather than silently substituting a number nobody
+chose; check the worker log for `Invalid environment configuration`.
+
+Operational notes:
+
+- **Running more than one worker instance is safe.** Claims use
+  `FOR UPDATE SKIP LOCKED`, so a second instance does nothing rather than doing
+  it twice. Exactly-once charging comes from row locks and unique indexes, never
+  from this process being the only one.
+- **A late or skipped tick costs nothing.** A renewal buys a full 168 hours from
+  the instant it charges, not from the boundary it missed. There is no backlog of
+  lost weeks to reconcile after downtime — restart the worker and it drains.
+- **SIGTERM is safe at any moment.** The sweep checks for shutdown *between*
+  campaigns and then waits for the one in flight, so a campaign has either
+  committed its charge and its week or neither. A hard kill is also safe: an
+  uncommitted charge is no charge.
+- **Watch for** `Advertisement billing sweep failed` (structural — the sweep
+  itself could not run) and `Advertisement billing sweep stage failed` (one
+  campaign or one stage; the rest of the tick continued). A healthy busy worker
+  logs `Advertisement billing sweep processed due items` with counts; a healthy
+  idle worker logs nothing.
+- **Nothing charges while the advertisement price is 0.** A zero-price week
+  writes no charge row and no ledger row by design, so an idle sweep on a
+  zero-price deployment is the expected steady state.

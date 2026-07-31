@@ -12,9 +12,9 @@ and covered by tests. Turning a price on is not a deployment step; it is a chang
 
 ---
 
-## LC-01 — Advertisements stay at price 0 until automatic renewal ships
+## LC-01 — Advertisements stay at price 0
 
-**Status:** enforced · **Superseded in substance by Wave 2F-A** ·
+**Status:** enforced · **Every original blocker resolved (Waves 2F-A and 2F-B)** ·
 **Full detail:** [`ADVERTISEMENT_BILLING.md`](./ADVERTISEMENT_BILLING.md)
 
 ### What changed
@@ -39,14 +39,32 @@ Submission is also now free and moderated: a submitted campaign is `pending_revi
 no wallet at all, and is charged only when an administrator approves it and a week actually
 starts.
 
+3. **No automatic renewal — resolved (Wave 2F-B).** A provider charged for week 1
+   reasonably expects week 2 to be handled, and now it is. Automatic weekly renewal exists
+   with **explicit consent** (`chk_advertisements_auto_renew_consent` makes the flag
+   impossible without a recorded agreement), a **mandatory bound** (`maximum_weeks`, a
+   renewal end date, or both, with the earliest winning), a **bounded multi-instance
+   scheduler**, ten localized notification events including a 24-hour reminder, and the
+   complete provider renewal interface. Exactly-once charging is a property of row locks and
+   unique indexes rather than of application logic, and a failed boundary pauses the campaign
+   instead of retrying on a timer — there is no path by which an advertiser is debited twice
+   or repeatedly.
+
+Submission is also now free and moderated: a submitted campaign is `pending_review`, reaches
+no wallet at all, and is charged only when an administrator approves it and a week actually
+starts.
+
 ### Why the price still stays 0
 
-A narrower reason than before, and the only one left: **automatic weekly renewal is not
-implemented.** A provider charged for week 1 will reasonably expect week 2 to be handled.
-Until Wave 2F-B ships automatic renewal, renewal reminder notifications and the complete
-renewal interface, the honest state of the product is free.
+Not because anything is unfinished. Every blocker above is closed and covered by real
+PostgreSQL concurrency tests.
 
-Migration `20260730120000_advertisement_weekly_billing.sql` asserts on the way out that
+The price stays 0 because **choosing a number is a commercial decision, separate from
+building the machinery that would collect it.** Shipping 2F-B is what *unblocks* a price; it
+is not the act of setting one, and this wave deliberately does not set one.
+
+Both `20260730120000_advertisement_weekly_billing.sql` and
+`20260731090000_advertisement_automatic_renewal.sql` assert on the way out that
 `mhc_action_prices.advertisement.mhc_price` is still 0, so a replay cannot quietly put
 advertising on sale.
 
@@ -56,13 +74,17 @@ advertising on sale.
       **weekly periods**, enforced by a CHECK constraint.
 - [x] Decide the cancellation refund policy → **started weeks are non-refundable**, with no
       refund endpoint and no wallet call on the cancellation path.
-- [ ] Ship Wave 2F-B: automatic renewal with explicit consent and a bound, scheduler
+- [x] Ship Wave 2F-B: automatic renewal with explicit consent and a bound, scheduler
       concurrency, renewal reminders, and the complete renewal UI.
-- [ ] Only then set `mhc_action_prices.advertisement.mhc_price` to a non-zero value.
+- [ ] Set `mhc_action_prices.advertisement.mhc_price` to a non-zero value —
+      the only remaining step, and a deliberate one. The procedure, including what happens
+      to weeks already bought and what a migration replay will do afterwards, is
+      [`ADVERTISEMENT_BILLING.md` §12](./ADVERTISEMENT_BILLING.md).
 
 Setting a price remains a change, not a deployment step. Leaving the row _inactive_ is also
 safe: the charge primitive fails closed on an inactive price (`409 MHC_ACTION_DISABLED`)
-rather than giving the action away.
+rather than giving the action away, and an automatic renewal that meets an inactive price
+pauses the campaign and notifies the advertiser without charging.
 
 ---
 

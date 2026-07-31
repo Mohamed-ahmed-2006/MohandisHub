@@ -1,19 +1,25 @@
 # Advertisement billing
 
-How advertisements are moderated, priced and charged, and what is deliberately
-**not** built yet.
+How advertisements are moderated, priced, charged and renewed.
 
 This document supersedes `LAUNCH_CONSTRAINTS.md#lc-01` for advertisements. LC-01
 froze the advertisement price at 0 for two reasons — flat per-campaign pricing
-and no refund policy — and Wave 2F-A resolves both. The price nonetheless stays
-at 0, for a different and narrower reason recorded below.
+and no refund policy — and Wave 2F-A resolved both. Wave 2F-B resolves the last
+one: automatic weekly renewal, with explicit consent, a mandatory bound, a
+scheduler, notifications and the complete renewal interface, all now exist.
+
+**The production price is still 0.** Shipping automatic renewal is what
+*unblocks* a non-zero price; it is not the act of setting one. See §12.
 
 Implemented by:
 
 - `supabase/migrations/20260730120000_advertisement_weekly_billing.sql`
+- `supabase/migrations/20260731090000_advertisement_automatic_renewal.sql`
 - `apps/api/src/modules/advertisements/`
 - `apps/api/src/tests/advertisements.weekly-billing.pg.test.ts` (real PostgreSQL)
+- `apps/api/src/tests/advertisements.automatic-renewal.pg.test.ts` (real PostgreSQL)
 - `apps/api/src/tests/advertisements.moderation.test.ts`
+- `apps/api/src/tests/advertisement-renewal.worker.test.ts`
 - `apps/web/tests/advertisement-weekly-billing-presentation.test.ts`
 
 ---
@@ -36,7 +42,8 @@ Implemented by:
    `timestamptz + interval '7 days'` is 167 or 169 hours across a DST boundary.
 6. **Manual renewal is implemented.** The advertiser buys one more week, once the
    previous one has ended.
-7. **Automatic renewal is NOT implemented.** No scheduler exists. See §5.
+7. **Automatic renewal is implemented, with explicit consent and a mandatory
+   bound.** See §5.
 8. **Started weeks are non-refundable.** Cancelling refunds nothing, and there is
    no advertisement refund endpoint.
 9. **Cancellation hides the advertisement immediately** and closes the running
@@ -67,16 +74,17 @@ objection rather than working around it.
 The screens read the same row for display only, so what a provider is shown and
 what they are charged cannot drift.
 
-### The weekly price stays 0 until Wave 2F-B
+### The weekly price is still 0
 
-Not because anything here is unfinished, but because a provider who is charged
-for week 1 will expect week 2 to be handled. Until automatic renewal, renewal
-reminder notifications and the complete renewal interface are reviewed and
-merged, the honest state of the product is "free". Setting a non-zero price is a
-change, not a deployment step.
+Wave 2F-A held it at 0 because a provider charged for week 1 would expect week 2
+to be handled, and nothing handled it. That reason is now gone: automatic
+renewal, reminders and the full interface exist and are covered.
 
-The migration asserts the price is still 0 on the way out, so a replay cannot
-quietly put advertising on sale.
+The price nonetheless stays at 0 in this wave, because **setting a price is a
+separate decision from building the machinery that would collect it.** Both
+migrations assert on the way out that the price is still 0, so a replay cannot
+quietly put advertising on sale. §12 records exactly how an administrator turns
+it on when they decide to.
 
 ## 3. State model
 
@@ -118,38 +126,297 @@ behaviour of the generic primitive, and `chk_ad_period_charge_shape` encodes the
 same rule on the period: snapshot 0 means no charge link, and a priced week
 always has one.
 
-## 5. Automatic renewal is not available
+## 5. Automatic renewal
 
-The schema carries `renewal_mode`, `auto_renew_enabled`, `maximum_weeks` and
-`renewal_end_date` so Wave 2F-B does not need another migration. None of it is
-active:
+### 5.1 Consent, and a bound, are both mandatory
 
-- no worker, no scheduler, and nothing in `apps/api/src/worker.ts`;
-- `auto_renew_enabled` defaults to `false`, and
-  `chk_advertisements_auto_renew_bounded` makes it impossible to enable without a
-  maximum week count or an end date;
-- `PUT /api/advertisements/:id/auto-renewal` refuses to enable it with
-  `409 AUTO_RENEWAL_NOT_AVAILABLE`. Disabling is accepted, because off is the
-  only state;
-- the provider UI shows a **disabled** "Coming soon" checkbox that submits
-  nothing;
-- `renewal_source = 'automatic'` is a permitted value that this wave never
-  writes.
+An advertiser may switch a campaign to automatic renewal through
+`PUT /api/advertisements/:id/auto-renewal`. Enabling requires **both**:
 
-No campaign is left depending on a scheduler that does not exist.
+- `consentAccepted: true`. Refused with `400 AD_AUTO_RENEWAL_CONSENT_REQUIRED`
+  otherwise. The accepted terms version is stored on the campaign
+  (`auto_renew_consent_version`), so a later change to the wording shown next to
+  the toggle is distinguishable from what they actually agreed to;
+- at least one of `maximumWeeks` or `renewalEndDate`. Refused with
+  `400 AD_AUTO_RENEWAL_BOUND_REQUIRED` otherwise. **Automatic renewal is never
+  open-ended.**
 
-Wave 2F-B will add explicit consent, a maximum week count or end date,
-scheduler concurrency, renewal reminders and automatic charging.
+Consent is enforced by the database, not only by the service:
+`chk_advertisements_auto_renew_consent` makes `auto_renew_enabled = true`
+impossible without `auto_renew_enabled_at` and `auto_renew_enabled_by`, and
+`chk_advertisements_auto_renew_bounded` (Wave 2F-A) makes it impossible without a
+bound. Neither can be bypassed by a code path that forgets.
 
-## 6. Expiration and renewal today
+Deliberately **not** stored: IP address and user agent. Nothing about this
+decision needs to identify a device, and the existing audit standard does not
+collect them for provider self-service actions. The audit row written by the
+controller records the actor, the bounds and the terms version.
+
+### 5.2 What the bounds mean
+
+- **`maximum_weeks` is the TOTAL number of weekly periods the campaign may ever
+  buy, including the first.** A campaign that has run one week and is capped at
+  4 has three renewals left.
+- **`renewal_end_date` is a wall-clock boundary a full period must fit before.**
+  A new week is bought only if all 168 hours end on or before it. There is no
+  shortened final week and no prorated charge, ever.
+- Both may be set. Each is checked independently at every boundary, so the
+  **earliest applicable one wins** without any code choosing between them.
+
+Enabling is refused if the requested bound could never be reached:
+`409 AD_AUTO_RENEWAL_MAX_WEEKS_TOO_LOW` when the campaign has already used that
+many weeks, `409 AD_AUTO_RENEWAL_END_DATE_TOO_SOON` when a full week would not
+fit after the running one ends. Both are measured against the **database clock**.
+
+### 5.3 What configuration does not do
+
+- It never charges. No branch of `configureAutoRenewal` reaches the charging
+  primitive, so this is a property of the call graph rather than of a guard.
+- It never alters or refunds the running period. The week already paid for keeps
+  running to its end whatever the advertiser chooses.
+- Repeating an identical request is a no-op: nothing is written and nothing is
+  acknowledged a second time. A genuine off-then-on sequence *is* acknowledged
+  twice, because it is two real decisions.
+- Turning it off sets `renewal_mode = 'manual'` and leaves the stored bounds
+  alone unless the request explicitly clears them (send `null`). The bounds are
+  campaign-level and continue to constrain manual renewal, which is what they did
+  before this wave.
+
+### 5.4 The boundary event log
+
+`advertisement_renewal_events` holds one row per (campaign, boundary, outcome),
+where the boundary is the **period number the campaign was trying to buy** —
+never a timestamp, so a worker running three hours late is still acting on the
+same boundary.
+
+`uq_ad_renewal_event_boundary`, a partial unique index over the eight
+boundary-scoped event types, is simultaneously:
+
+- **the notification deduplication identity.** Ten workers that all decide
+  boundary 4 failed produce one row; nine get a `23505`, unwind, and notify
+  nobody;
+- **the no-repeat-debit gate**, together with `auto_renew_paused_reason`;
+- **the notification outbox** (`notified_at`);
+- **the provider's renewal history.**
+
+The two configuration acknowledgements (`auto_renew_enabled`,
+`auto_renew_disabled`) are deliberately outside that index: turning automatic
+renewal off and on again within one week is a real sequence of two decisions, and
+suppressing the second would be wrong. They are made idempotent instead by only
+being written when the stored configuration actually changes.
+
+## 5A. Exactly-once, and why
+
+### The transaction
+
+For a due automatic campaign, in one transaction:
+
+1. claim and lock the advertisement (`FOR UPDATE SKIP LOCKED` for the scheduler,
+   blocking `FOR UPDATE` for the advertiser's explicit retry);
+2. re-read **everything** under the lock: billing model, moderation status,
+   consent, mode, pause, bounds, and the period table;
+3. close the previous week if its 168 hours have elapsed — in this same
+   transaction, so the campaign never has a gap;
+4. compute the next period number from the period table;
+5. check `maximum_weeks`, then `renewal_end_date`, **before** charging;
+6. preallocate the period UUID;
+7. charge through the generic primitive: `actionKey = advertisement`,
+   `referenceType = advertisement_period`, `referenceId` = that UUID. The price
+   is resolved by the primitive from `mhc_action_prices` inside this
+   transaction — there is no parameter by which any caller could pass an amount;
+8. insert the period (`status = 'active'`, `ends_at = starts_at + 168 hours`);
+9. update the campaign mirrors and `renewal_count`;
+10. insert the boundary event;
+11. **commit once.**
+
+Web push and email happen only after that commit, and only after the connection
+is back in the pool. No advertisement row and no wallet row is ever held while a
+network call is made.
+
+### Where the guarantees actually live
+
+| Guarantee | Enforced by |
+|---|---|
+| Two workers cannot both act on one campaign | the advertisement row lock |
+| Only one period N per campaign | `uq_ad_period_number` |
+| Only one running week per campaign | `uq_ad_period_active` |
+| Weeks never overlap | `ad_period_no_overlap` (gist EXCLUDE, `'[)'`) |
+| One charge per week, from both directions | `uq_mhc_action_charge_reference` + `uq_ad_period_action_charge` |
+| Every week is exactly 168 hours | `chk_ad_period_exact_week` |
+| One notification per boundary outcome | `uq_ad_renewal_event_boundary` |
+| Balance can never go negative | guarded debit + `chk_wallets_balance_nonnegative` |
+
+None of these is application logic. The renewal service opens period N+1 through
+the **same** `chargeAndOpenPeriodInTx` the initial and manual paths use — a
+second implementation of "charge, then open a week" is exactly how a double
+charge would be introduced.
+
+### Crash recovery
+
+- **Before commit:** no charge, no ledger row, no period, no event. The whole
+  transaction unwinds together.
+- **After commit, before acknowledgement:** the next sweep re-reads the campaign,
+  finds a running unexpired week, and skips. Retrying is free.
+- **After the event, before the push:** the event survives with
+  `notified_at IS NULL` and the outbox sweep delivers it — once, because delivery
+  claims the row with `FOR UPDATE SKIP LOCKED` and stamps it in the same
+  transaction that writes the notification. The financial transaction is never
+  reopened.
+
+### Races, and what happens
+
+| Race | Outcome |
+|---|---|
+| Disable commits before the scheduler's lock | no charge; `skipped: not_automatic` |
+| Renewal commits before the disable | the new week stands and is not refunded; nothing renews after it |
+| Cancellation commits before the lock | no charge; `skipped: cancelled_or_rejected` |
+| Renewal commits before the cancellation | the campaign hides immediately, the week is closed, **nothing is refunded** |
+| Manual and automatic renewal at once | exactly one period, one charge, one ledger debit; the loser reports `AD_PERIOD_STILL_ACTIVE` |
+| Two, or ten, schedulers at once | one period, one charge, one debit, one notification |
+
+## 5B. Failure and boundary handling
+
+### Insufficient credits
+
+- no period, no charge row, no ledger row, no negative balance, **no debt**;
+- the previous week is closed if it had elapsed, so the advertisement stops
+  serving;
+- `auto_renew_paused_reason = 'insufficient_credits'`, `auto_renew_paused_at` set;
+- `billing_status` stays `renewal_required` — the campaign is in the state it is
+  genuinely in. The reason is recorded separately, because a reason is not a
+  lifecycle state and conflating them would have made the advertiser's remedy
+  unreachable;
+- the **preference is preserved** (`auto_renew_enabled` stays true), so clearing
+  the pause resumes automatic renewal rather than requiring re-consent;
+- one durable notification, deep-linked to `/app/credits`, carrying the
+  advertisement id and the required amount — never a balance.
+
+**There is no timer that retries.** `auto_renew_paused_reason IS NOT NULL` takes
+the campaign out of `idx_advertisements_auto_renew_due`, which is the only way
+the scheduler finds work. The advertiser clears it by either:
+
+- `POST /api/advertisements/:id/auto-renewal/retry` — runs the *same* locked,
+  exactly-once operation the scheduler runs, so pressing it twice, or pressing it
+  while the scheduler acts, still buys one week; or
+- renewing manually, or re-submitting their configuration.
+
+A retry that fails the same way re-pauses and does **not** notify again: the
+boundary event already exists.
+
+### Pricing unavailable or the action switched off
+
+Identical shape, with `auto_renew_paused_reason = 'pricing_unavailable'` and its
+own notification. `MHC_ACTION_PRICE_MISSING` (503) and `MHC_ACTION_DISABLED`
+(409) both fail closed — an unpriced action is never given away.
+
+### Maximum weeks reached
+
+No period, no charge. `auto_renew_enabled` goes false, `renewal_mode` returns to
+`manual`, `auto_renew_paused_reason = 'max_weeks_reached'`, one notification.
+The campaign is complete, not broken; manual renewal is still refused by the
+same cap (`AD_RENEWAL_LIMIT_REACHED`).
+
+### Renewal end date reached
+
+Same, with `end_date_reached`. **No partial final week and no prorated charge.**
+
+## 5C. The scheduler
+
+`apps/api/src/modules/advertisements/advertisement-billing.worker.ts`, started by
+`apps/api/src/worker.ts` alongside the reservation, retention and award-expiry
+workers.
+
+| Setting | Env var | Default | Bounds |
+|---|---|---|---|
+| Sweep interval | `AD_BILLING_SWEEP_INTERVAL_MS` | 60 000 | ≥ 5 000 |
+| Campaigns per stage per tick | `AD_BILLING_SWEEP_BATCH_SIZE` | 25 | 1–500 |
+| Reminder lead time | `AD_RENEWAL_REMINDER_HOURS` | 24 | 1–168 |
+
+An out-of-range value **fails startup** rather than being silently replaced.
+
+One tick, in this order:
+
+1. approved campaigns whose scheduled start has arrived;
+2. automatic campaigns whose week has ended — **before** stage 3, so an automatic
+   campaign closes its old week and opens the new one in one transaction and
+   never spends a tick not serving;
+3. the generic expiry sweep, which closes every remaining elapsed week and
+   records `manual_renewal_required` for manual advertisers (`ON CONFLICT DO
+   NOTHING`, so a lost race is a no-op rather than an aborted expiry);
+4. upcoming-renewal reminders inside the lead-time window;
+5. the notification outbox, **last**, so events this tick created go out in this
+   tick.
+
+Properties:
+
+- one transaction per advertisement, so one campaign that fails cannot roll back,
+  block or skip another. A whole stage that throws is logged and the remaining
+  stages still run;
+- `SET LOCAL lock_timeout = '5s'` on every claim, so a contended row fails this
+  attempt and is retried next tick instead of pinning a connection;
+- candidate reads are **unlocked and bounded**; every predicate is re-evaluated
+  under the lock, so a candidate that stopped being due is skipped;
+- safe with two or more worker instances. The in-process `running` flag is an
+  efficiency guard, never the source of correctness;
+- `stop()` sets a flag the sweep re-reads **between** campaigns, then waits for
+  the one in flight. A campaign is never cut in half — it has committed its
+  charge and its week, or neither. The worker stops before the pool closes.
+
+A late sweep costs nothing: the new week starts at the database time of the
+successful charge, so the advertiser always receives a full 168 hours.
+
+## 5D. Notifications
+
+Ten durable event types, all delivered from the outbox:
+
+| Event | Notification type | Deep link |
+|---|---|---|
+| First week activated | `advertisement_activated` | `/app/advertisements` |
+| Automatic renewal succeeded | `advertisement_renewed` | `/app/advertisements` |
+| Failed: insufficient credits | `advertisement_renewal_failed_credits` | **`/app/credits`** |
+| Failed: pricing unavailable | `advertisement_renewal_failed_pricing` | `/app/advertisements` |
+| Manual week ended | `advertisement_renewal_required` | `/app/advertisements` |
+| Renewal reminder (≈24h) | `advertisement_renewal_reminder` | `/app/advertisements` |
+| Stopped: maximum weeks | `advertisement_auto_renew_stopped_max_weeks` | `/app/advertisements` |
+| Stopped: end date | `advertisement_auto_renew_stopped_end_date` | `/app/advertisements` |
+| Automatic renewal enabled | `advertisement_auto_renew_enabled` | `/app/advertisements` |
+| Automatic renewal disabled | `advertisement_auto_renew_disabled` | `/app/advertisements` |
+
+- The advertisement id travels in every payload, and the advertisements screen
+  reads `?ad=<id>` to open that campaign's renewal panel — so the campaign is one
+  click away even from the credits screen.
+- Payloads carry only the campaign's own identifiers and figures the provider was
+  already shown. **No balance, no wallet id, no charge id, no transaction id**,
+  enforced by an allow-list in `buildRenewalNotification`.
+- Recipient ownership comes from `advertisement_renewal_events.advertiser_id`,
+  written inside the financial transaction — never from anything a caller
+  supplied.
+- Titles and messages are stored in English and rendered through
+  `dictionary.notificationTemplates`, which interpolates `{adTitle}` and
+  `{periodNumber}`. Arabic and English are both real translations.
+- Categorised under `services`, and none is marked required, so existing
+  notification preferences continue to decide delivery. A provider who has turned
+  the in-app channel off for this group gets no row, and the outbox treats that
+  as delivered rather than reconsidering it forever.
+- The reminder is deduplicated per boundary by the same unique index, so it
+  cannot fire twice for one week.
+
+## 6. Expiration
 
 `expireDuePeriods()` closes every week whose 168 hours have elapsed and moves its
 campaign to `renewal_required`, atomically. It uses `SKIP LOCKED`, so two callers
 never block or double-process.
 
-It is invoked **lazily**, from the serving path, before any campaign is ranked.
-That keeps the product coherent without a scheduler: an unpaid week cannot be
-served because the sweep runs first. Wave 2F-B will also call it on a timer.
+It is invoked from **two** places, and both matter:
+
+- **lazily, from the serving path**, before any campaign is ranked. An unpaid
+  week cannot be served even if the worker is down, because the sweep runs first
+  and the serving query independently requires a live `active` period regardless;
+- **on a timer**, as stage 3 of the worker's tick.
+
+Automatic campaigns are renewed in stage 2, *before* this runs, and close their
+own elapsed week inside the renewal transaction — so an automatic campaign never
+passes through a non-serving state on the way to its next week.
 
 An admin pause is preserved — `paused_by_admin` stays paused while its billing
 state still records that the week ended.
@@ -194,10 +461,13 @@ this wave does it.
 | Endpoint | Who | Notes |
 |---|---|---|
 | `POST /api/advertisements` | provider | Submit for review. Charges nothing. |
-| `GET /api/advertisements/:id/billing` | owner or admin | Weekly price, current week, every snapshot |
+| `GET /api/advertisements/:id/billing` | owner or admin | Weekly price, current week, every snapshot, renewal state, history |
 | `POST /api/advertisements/:id/renew` | owner | Buy one more week |
 | `POST /api/advertisements/:id/activate` | owner | Retry the first week after topping up |
-| `PUT /api/advertisements/:id/auto-renewal` | owner | Always refuses to enable |
+| `PUT /api/advertisements/:id/auto-renewal` | owner | Enable, disable, or change bounds. Charges nothing. |
+| `GET /api/advertisements/:id/auto-renewal` | owner or admin | Stored configuration and the consent record |
+| `POST /api/advertisements/:id/auto-renewal/retry` | owner | Explicit retry of a paused automatic renewal |
+| `GET /api/advertisements/:id/periods` | owner or admin | Paginated week history with price snapshots |
 | `DELETE /api/advertisements/:id` | owner | Cancel. No refund. |
 | `POST /api/advertisements/admin/:id/approve` | `manage_ads` | Charges the first week if immediate |
 | `POST /api/advertisements/admin/:id/reject` | `manage_ads` | Reason required, shown to the advertiser |
@@ -208,7 +478,13 @@ Stable error codes:
 | Code | Status | Meaning |
 |---|---|---|
 | `MHC_INSUFFICIENT_CREDITS` | 402 | Not enough credits. Nothing was charged. Deep-links to `/app/credits`. |
-| `AUTO_RENEWAL_NOT_AVAILABLE` | 409 | Automatic renewal is not implemented |
+| `MHC_ACTION_PRICE_MISSING` | 503 | No weekly price is configured. Fails closed; nothing charged. |
+| `MHC_ACTION_DISABLED` | 409 | The advertisement action is switched off. Fails closed. |
+| `AD_AUTO_RENEWAL_CONSENT_REQUIRED` | 400 | Enabling needs explicit agreement to the weekly charge |
+| `AD_AUTO_RENEWAL_BOUND_REQUIRED` | 400 | Enabling needs a maximum week count, an end date, or both |
+| `AD_AUTO_RENEWAL_MAX_WEEKS_TOO_LOW` | 409 | The campaign has already used that many weeks |
+| `AD_AUTO_RENEWAL_END_DATE_TOO_SOON` | 409 | A full 168-hour week would not fit before that date |
+| `AD_AUTO_RENEWAL_NOT_CONFIGURABLE` | 409 | Cancelled or rejected campaigns do not renew |
 | `AD_NOT_PENDING_REVIEW` | 409 | Only an unreviewed campaign can be approved or rejected |
 | `AD_NOT_APPROVED` | 409 | Activation needs a recorded approval |
 | `AD_START_NOT_DUE` | 409 | Scheduled start has not arrived |
@@ -245,15 +521,70 @@ unreviewed campaign and bypass moderation entirely. It is gone.
 
 ## 11. Rollback
 
-The documented rollback is in the migration header and is exercised by
-`advertisements.weekly-billing.pg.test.ts`, which runs it **twice** on a scratch
-replay copy and asserts the schema fingerprint returns to the expected
-pre-migration state with no collateral damage.
+Each migration's rollback is in its own header, and each is exercised **twice**
+on a scratch replay copy with an exact schema-fingerprint assertion:
 
-Dropping the period table destroys the record of which week each charge paid for.
-The `mhc_action_charges` and `transactions` rows survive and remain the
-authoritative financial history, so no financial record is lost — but export the
-table first in any environment that has charged for a week.
+- `20260730120000` by `advertisements.weekly-billing.pg.test.ts`;
+- `20260731090000` by `advertisements.automatic-renewal.pg.test.ts`.
 
-`reviewed_by`, `reviewed_at` and `rejection_reason` are **not** dropped by the
-rollback: they predate this migration, which only starts writing them.
+### Reverse dependency order
+
+`advertisement_renewal_events.period_id` references
+`advertisement_campaign_periods(id)`, so **the event log must be dropped first**.
+A bare `DROP TABLE advertisement_campaign_periods` fails while it exists, and
+that failure is asserted rather than assumed. The chain, newest first:
+
+```
+DROP TABLE advertisement_renewal_events;   -- 20260731090000
+DROP TABLE advertisement_campaign_periods; -- 20260730120000
+ALTER TABLE plan_subscriptions DROP COLUMN action_charge_id; -- 20260730100000
+DROP TABLE mhc_action_charges;             -- 20260729140000
+```
+
+The headers of `20260730120000` and `20260729140000` were both extended to say
+so, and `mhc.action-charge.pg.test.ts` asserts the extended ordering.
+
+### What each drop costs
+
+- Dropping the **event log** destroys the record of which boundary produced which
+  outcome, and the outbox stamp that proves a notification was delivered once. No
+  financial record is lost: charges, ledger rows and periods all survive. The
+  campaign's own consent record survives too — only the log goes.
+- Dropping the **period table** destroys the record of which week each charge
+  paid for. `mhc_action_charges` and `transactions` survive and remain the
+  authoritative financial history.
+
+Export either table first in any environment that has charged for a week.
+
+`reviewed_by`, `reviewed_at` and `rejection_reason` are **not** dropped by any of
+these: they predate weekly billing, which only started writing them.
+
+## 12. How an administrator turns advertising on
+
+The machinery is complete and the price is 0. Turning it on is one deliberate
+change, not a deployment step. In order:
+
+1. **Decide the number.** `mhc_action_prices.advertisement.mhc_price` is the MHC
+   cost of one 168-hour week. There is no second place a price can be set, so
+   the displayed and charged prices cannot drift.
+2. **Set it** through `PUT /api/advertisements/admin/controls`
+   (`manage_ad_pricing`), which writes that row and records an audit entry. Do
+   not edit the row by hand: the endpoint is what leaves the audit trail.
+3. **It applies forward only.** Every week already bought carries its own
+   `mhc_price_snapshot` and is never rewritten — asserted directly in the
+   PostgreSQL suite.
+4. **Confirm the worker is running.** The scheduler is what makes a week end and
+   the next one begin. Check the `Advertisement billing worker started` line and
+   the periodic `Advertisement billing sweep processed due items` entries on
+   `mohandishub-worker`.
+5. **Do not change the migrations.** Both assert the price is 0 on the way out,
+   which is correct: a *replay* must never put advertising on sale. Applying them
+   to an environment where an admin has already set a price will fail that
+   assertion — which is the intended signal, not a bug. Re-running migrations on
+   a priced environment is not a supported operation.
+
+To take it off sale again, set the price back to 0, or set
+`mhc_action_prices.advertisement.is_active = false`. The charge primitive fails
+**closed** on an inactive price (`409 MHC_ACTION_DISABLED`) rather than giving
+the action away — automatic renewals pause with `pricing_unavailable`, notify
+their advertisers, and charge nothing.
