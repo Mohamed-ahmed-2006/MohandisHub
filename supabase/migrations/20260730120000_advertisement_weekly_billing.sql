@@ -45,8 +45,14 @@
 -- ----------------------------------------------------------------------------
 -- ROLLBACK (tested on scratch replay copies — see advertisements.weekly-billing.pg.test.ts):
 --
---   -- Newest dependants first. Nothing added AFTER this migration references
---   -- these objects today; if something does later, reverse it before this.
+--   -- Newest dependants FIRST. 20260731090000_advertisement_automatic_renewal
+--   -- hangs a foreign key off the period table:
+--   --   advertisement_renewal_events.period_id -> advertisement_campaign_periods(id)
+--   -- A bare DROP TABLE below fails while it exists:
+--   --   "cannot drop table advertisement_campaign_periods because other objects
+--   --    depend on it"
+--   DROP TABLE IF EXISTS public.advertisement_renewal_events;
+--
 --   DROP TABLE IF EXISTS public.advertisement_campaign_periods;
 --
 --   ALTER TABLE public.advertisements

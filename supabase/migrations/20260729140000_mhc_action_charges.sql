@@ -39,6 +39,13 @@
 --   --        advertisement_campaign_periods.action_charge_id -> mhc_action_charges(id)
 --   --    A bare DROP TABLE fails while EITHER exists:
 --   --      "cannot drop table mhc_action_charges because other objects depend on it"
+--   --
+--   --    And one migration hangs a key off the PERIOD table in turn, so it has
+--   --    to be reversed before the period table can be dropped:
+--   --      20260731090000_advertisement_automatic_renewal:
+--   --        advertisement_renewal_events.period_id
+--   --          -> advertisement_campaign_periods(id)
+--   DROP TABLE IF EXISTS public.advertisement_renewal_events;
 --   DROP TABLE IF EXISTS public.advertisement_campaign_periods;
 --   ALTER TABLE public.plan_subscriptions DROP COLUMN IF EXISTS action_charge_id;
 --
