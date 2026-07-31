@@ -543,6 +543,46 @@ describe.skipIf(!pgIntegrationEnabled())('the scheduler buys exactly one week', 
     expect(await eventCount(adId, 'renewal_succeeded')).toBe(1);
   });
 
+  it('refuses to open the FIRST week through the renewal path', async () => {
+    // An approved campaign that never found the credits for week 1. Starting it
+    // is a different operation, with its own approval and scheduled-start
+    // checks — and week 1 must be `initial`, not `automatic`.
+    const { userId } = await seedProvider(pool, { mhc: 0 });
+    const ad = await submit(userId);
+    await expect(service().approveAd(ad.id, adminId)).rejects.toMatchObject({
+      code: 'MHC_INSUFFICIENT_CREDITS',
+    });
+    await pool.query(
+      `UPDATE advertisements
+       SET auto_renew_enabled = true, renewal_mode = 'automatic', maximum_weeks = 10,
+           auto_renew_enabled_at = now(), auto_renew_enabled_by = advertiser_id
+       WHERE id = $1`,
+      [ad.id],
+    );
+    await pool.query(
+      `UPDATE wallets SET balance = 500 WHERE user_id = $1 AND account_type = 'provider_credit'`,
+      [userId],
+    );
+
+    const result = await renewal().renewAutomatically(ad.id, {
+      blocking: true,
+      clearPause: true,
+    });
+
+    expect(result).toMatchObject({ outcome: 'skipped', reason: 'never_started' });
+    expect(await periodCount(ad.id)).toBe(0);
+    expect(await chargeCount(userId)).toBe(0);
+    expect(await balanceOf(pool, userId)).toBe(500);
+
+    // The supported route does start it, and labels it correctly.
+    await service().activateDueAdvertisement(ad.id, { requireAdvertiserId: userId });
+    expect((await periods(ad.id))[0]).toMatchObject({
+      period_number: 1,
+      renewal_source: 'initial',
+    });
+    expect(Number((await adRow(ad.id)).renewal_count)).toBe(0);
+  });
+
   it('is idempotent when the scheduler retries after a committed success', async () => {
     const { userId, adId } = await dueForAutoRenewal({ mhc: 100 });
 

@@ -81,6 +81,7 @@ export type RenewalSkipReason =
   | 'paused'
   | 'cancelled_or_rejected'
   | 'period_still_active'
+  | 'never_started'
   | 'already_renewed';
 
 export type AutomaticRenewalResult =
@@ -417,6 +418,16 @@ export class AdvertisementRenewalService {
       }
 
       const nextPeriodNumber = (await this.repo.getMaxPeriodNumberInTx(client, ad.id)) + 1;
+
+      // A campaign that has never bought a week is not renewing — it is
+      // STARTING, which is a different operation with its own approval checks,
+      // its own scheduled-start check and its own `renewal_source = 'initial'`.
+      // Without this, the explicit retry could open period 1 through the renewal
+      // path, label the first week 'automatic' and count it as a renewal.
+      if (nextPeriodNumber === 1) {
+        await client.query('COMMIT');
+        return { outcome: 'skipped', reason: 'never_started' };
+      }
 
       // ---- Bounds. Checked BEFORE the charge, so a campaign that has finished
       // ---- is never debited for the week that finished it.
