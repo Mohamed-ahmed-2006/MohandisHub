@@ -3,7 +3,6 @@
 import type { BusinessTeamOverview } from '@mohandishub/shared';
 import { useCallback, useEffect, useState } from 'react';
 
-import { useAuth } from '@/components/auth/auth-provider';
 import { BUSINESS_TEAM_PERMISSIONS, businessTeamsApiClient } from '@/lib/business-teams/client';
 import type { Dictionary } from '@/lib/i18n/types';
 
@@ -12,18 +11,17 @@ type Props = {
   accessToken: string;
 };
 
-type WorkspaceRole = 'owner' | 'admin' | 'member';
-
 export const BusinessTeamPanel = ({ dictionary, accessToken }: Props) => {
-  const { authUser } = useAuth();
   const [overview, setOverview] = useState<BusinessTeamOverview | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [noticeModal, setNoticeModal] = useState<{ title: string; message: string } | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [formValidationError, setFormValidationError] = useState<string | null>(null);
+  const [pendingRemoval, setPendingRemoval] = useState<{ id: string; label: string } | null>(null);
+  const [transferOpen, setTransferOpen] = useState(false);
 
-  const isArabic = /[\u0600-\u06FF]/.test(dictionary.nav?.home ?? '');
+  const isArabic = /[؀-ۿ]/.test(dictionary.nav?.home ?? '');
   const tr = (en: string, ar: string) => (isArabic ? ar : en);
 
   const load = useCallback(async () => {
@@ -44,20 +42,42 @@ export const BusinessTeamPanel = ({ dictionary, accessToken }: Props) => {
     void load();
   }, [load]);
 
-  // Determine current user's workspace role
-  const currentUserMember = overview?.members.find((m) => m.userId === authUser?.id);
-  const userWorkspaceRole: WorkspaceRole = currentUserMember
-    ? currentUserMember.roleKey === 'owner'
-      ? 'owner'
-      : currentUserMember.roleKey === 'manager' || currentUserMember.roleKey === 'admin'
-        ? 'admin'
-        : 'member'
-    : authUser?.role === 'business'
-      ? 'owner'
-      : 'member';
+  /**
+   * Run a mutation and take the fresh overview from its response.
+   *
+   * Every mutating endpoint returns the same authoritative overview, so the
+   * caller's own permissions are re-read from the server after each change —
+   * an admin who has just been demoted sees the correct screen on the next
+   * render rather than the one they had before.
+   */
+  const mutate = async (action: () => Promise<BusinessTeamOverview>, failure: string) => {
+    setBusy(true);
+    setError(null);
+    setFormValidationError(null);
+    try {
+      setOverview(await action());
+      return true;
+    } catch (err) {
+      setError(err instanceof Error ? err.message : failure);
+      return false;
+    } finally {
+      setBusy(false);
+    }
+  };
 
-  const canAdministerTeam = userWorkspaceRole === 'owner' || userWorkspaceRole === 'admin';
-  const isOwner = userWorkspaceRole === 'owner';
+  // Standing in the workspace, decided by the backend and only presented here.
+  // Every action below is re-authorized server-side, so hiding a control is a
+  // convenience rather than a control.
+  const viewer = overview?.viewer ?? null;
+  const actions = viewer?.allowedActions ?? null;
+  const workspaceTier = viewer?.tier ?? 'member';
+  const canAdministerTeam = actions?.inviteMembers === true;
+  const canManageRoles = actions?.manageRoles === true;
+  const canTransferOwnership = actions?.transferOwnership === true;
+  const assignableRoles = (overview?.roles ?? []).filter((role) => role.assignable);
+  const transferCandidates = (overview?.members ?? []).filter(
+    (member) => !member.isOwner && !member.isSelf,
+  );
 
   const createRole = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -73,24 +93,15 @@ export const BusinessTeamPanel = ({ dictionary, accessToken }: Props) => {
       return;
     }
     if (permissions.length === 0) {
-      setFormValidationError(
-        tr('Select at least one permission.', 'اختر إذنًا واحدًا على الأقل.'),
-      );
+      setFormValidationError(tr('Select at least one permission.', 'اختر إذنًا واحدًا على الأقل.'));
       return;
     }
 
-    setBusy(true);
-    setError(null);
-    try {
-      setOverview(await businessTeamsApiClient.createRole(accessToken, { name, permissions }));
-      form.reset();
-    } catch (err) {
-      setError(
-        err instanceof Error ? err.message : tr('Could not create role.', 'تعذر إنشاء الدور.'),
-      );
-    } finally {
-      setBusy(false);
-    }
+    const ok = await mutate(
+      () => businessTeamsApiClient.createRole(accessToken, { name, permissions }),
+      tr('Could not create role.', 'تعذر إنشاء الدور.'),
+    );
+    if (ok) form.reset();
   };
 
   const invite = async (event: React.FormEvent<HTMLFormElement>) => {
@@ -103,7 +114,9 @@ export const BusinessTeamPanel = ({ dictionary, accessToken }: Props) => {
 
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!email || !emailRegex.test(email)) {
-      setFormValidationError(tr('Please enter a valid email address.', 'يرجى إدخال بريد إلكتروني صحيح.'));
+      setFormValidationError(
+        tr('Please enter a valid email address.', 'يرجى إدخال بريد إلكتروني صحيح.'),
+      );
       return;
     }
     if (!roleId) {
@@ -111,56 +124,99 @@ export const BusinessTeamPanel = ({ dictionary, accessToken }: Props) => {
       return;
     }
 
-    setBusy(true);
-    setError(null);
-    try {
-      setOverview(await businessTeamsApiClient.createInvite(accessToken, { email, roleId }));
+    const ok = await mutate(
+      () => businessTeamsApiClient.createInvite(accessToken, { email, roleId }),
+      tr('Could not send invite.', 'تعذر إرسال الدعوة.'),
+    );
+    if (ok) {
       form.reset();
-    } catch (err) {
-      setError(
-        err instanceof Error ? err.message : tr('Could not send invite.', 'تعذر إرسال الدعوة.'),
+      setNotice(
+        tr(
+          'Invitation sent. The recipient has a link that expires in 7 days.',
+          'تم إرسال الدعوة. سيصل رابط ينتهي خلال 7 أيام.',
+        ),
       );
-    } finally {
-      setBusy(false);
     }
   };
 
-  const revokeInvite = async (inviteId: string) => {
-    setBusy(true);
-    setError(null);
-    try {
-      setOverview(await businessTeamsApiClient.revokeInvite(accessToken, inviteId));
-    } catch (err) {
-      setError(
-        err instanceof Error ? err.message : tr('Could not revoke invite.', 'تعذر إلغاء الدعوة.'),
+  const revokeInvite = (inviteId: string) =>
+    mutate(
+      () => businessTeamsApiClient.revokeInvite(accessToken, inviteId),
+      tr('Could not revoke invite.', 'تعذر إلغاء الدعوة.'),
+    );
+
+  const changeMemberRole = (memberId: string, roleId: string) =>
+    mutate(
+      () => businessTeamsApiClient.updateMemberRole(accessToken, memberId, { roleId }),
+      tr('Could not update the member role.', 'تعذر تحديث دور العضو.'),
+    );
+
+  const confirmRemoval = async () => {
+    if (!pendingRemoval) return;
+    const ok = await mutate(
+      () => businessTeamsApiClient.removeMember(accessToken, pendingRemoval.id),
+      tr('Could not remove the member.', 'تعذر إزالة العضو.'),
+    );
+    setPendingRemoval(null);
+    if (ok) {
+      setNotice(
+        tr(
+          'Member removed. Their workspace access ended immediately.',
+          'تمت إزالة العضو. انتهى وصوله إلى مساحة العمل فورًا.',
+        ),
       );
-    } finally {
-      setBusy(false);
     }
   };
 
-  const handleRemoveMemberClick = (memberDisplayName: string, memberId: string) => {
-    setNoticeModal({
-      title: tr('Member Removal Unavailable', 'إزالة العضو غير متاحة حالياً'),
-      message: tr(
-        `Member removal for "${memberDisplayName}" is currently pending backend API deployment (Required Contract: DELETE /api/v1/business-teams/members/${memberId}). Frontend action is safely disabled until backend implementation completes.`,
-        `إزالة العضو "${memberDisplayName}" معطلة حالياً بنظرة انتظر نشر API الخلفي المطلوب (العقد: DELETE /api/v1/business-teams/members/${memberId}). الإجراء غير مفعل حتى اكتمال الدعم البرمجي.`,
-      ),
-    });
-  };
+  const transferOwnership = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!overview) return;
+    setFormValidationError(null);
+    const form = event.currentTarget;
+    const memberId = (form.elements.namedItem('targetMemberId') as HTMLSelectElement).value;
+    const confirmation = (form.elements.namedItem('confirmation') as HTMLInputElement).value;
 
-  const handleTransferOwnershipClick = () => {
-    setNoticeModal({
-      title: tr('Ownership Transfer Unavailable', 'نقل الملكية غير متاح حالياً'),
-      message: tr(
-        'Workspace ownership transfer is pending backend API deployment (Required Contract: POST /api/v1/business-teams/transfer-ownership). Ownership transfer remains safely unavailable.',
-        'نقل ملكية مساحة العمل معطل حالياً بانتظار نشر API الخلفي المطلوب (العقد: POST /api/v1/business-teams/transfer-ownership). نقل الملكية غير متاح مؤقتاً.',
-      ),
-    });
+    if (!memberId) {
+      setFormValidationError(
+        tr('Choose the member who will become owner.', 'اختر العضو الذي سيصبح المالك.'),
+      );
+      return;
+    }
+    // Checked here for a quick answer and again by the backend, which is the one
+    // that decides. The typed name is what makes an irreversible action
+    // deliberate.
+    if (confirmation.trim().toLowerCase() !== (overview.team.name ?? '').trim().toLowerCase()) {
+      setFormValidationError(
+        tr('Type the workspace name exactly to confirm.', 'اكتب اسم مساحة العمل تمامًا للتأكيد.'),
+      );
+      return;
+    }
+
+    const ok = await mutate(
+      () => businessTeamsApiClient.transferOwnership(accessToken, { memberId, confirmation }),
+      tr('Could not transfer ownership.', 'تعذر نقل الملكية.'),
+    );
+    if (ok) {
+      form.reset();
+      setTransferOpen(false);
+      setNotice(
+        tr(
+          'Ownership transferred. You are now an admin of this workspace.',
+          'تم نقل الملكية. أنت الآن مسؤول في مساحة العمل.',
+        ),
+      );
+    }
   };
 
   if (loading) return <p className="dashboard-empty">{dictionary.admin.loading}</p>;
-  if (!overview) return <p className="dashboard-error">{error}</p>;
+  if (!overview || !viewer) return <p className="dashboard-error">{error}</p>;
+
+  const tierLabel = (tier: 'owner' | 'admin' | 'member') =>
+    tier === 'owner'
+      ? tr('Owner', 'مالك')
+      : tier === 'admin'
+        ? tr('Admin', 'مسؤول')
+        : tr('Member', 'عضو');
 
   return (
     <section className="dashboard-section" style={{ maxWidth: '100%' }}>
@@ -188,9 +244,11 @@ export const BusinessTeamPanel = ({ dictionary, accessToken }: Props) => {
           </p>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-          <span className="dashboard-card-meta">{tr('Your Workspace Role', 'دورك في مساحة العمل')}:</span>
+          <span className="dashboard-card-meta">
+            {tr('Your Workspace Role', 'دورك في مساحة العمل')}:
+          </span>
           <span
-            className={`dashboard-badge dashboard-badge--${userWorkspaceRole}`}
+            className={`dashboard-badge dashboard-badge--${workspaceTier}`}
             style={{
               padding: '0.35rem 0.85rem',
               borderRadius: '20px',
@@ -199,44 +257,86 @@ export const BusinessTeamPanel = ({ dictionary, accessToken }: Props) => {
               textTransform: 'capitalize',
             }}
           >
-            {userWorkspaceRole === 'owner'
-              ? tr('Owner', 'مالك')
-              : userWorkspaceRole === 'admin'
-                ? tr('Admin', 'مسؤول')
-                : tr('Member', 'عضو')}
+            {tierLabel(workspaceTier)}
           </span>
         </div>
       </div>
 
-      {error && <p className="dashboard-error" style={{ marginBottom: '1rem' }}>{error}</p>}
+      {error && (
+        <p className="dashboard-error" style={{ marginBottom: '1rem' }} role="alert">
+          {error}
+        </p>
+      )}
       {formValidationError && (
-        <p className="dashboard-error" style={{ marginBottom: '1rem' }}>{formValidationError}</p>
+        <p className="dashboard-error" style={{ marginBottom: '1rem' }} role="alert">
+          {formValidationError}
+        </p>
       )}
 
-      {/* Notice Modal / Banner for Pending Endpoints */}
-      {noticeModal && (
+      {notice && (
         <div
+          role="status"
+          style={{
+            background: 'rgba(16, 185, 129, 0.1)',
+            border: '1px solid rgba(16, 185, 129, 0.3)',
+            borderRadius: '8px',
+            padding: '1rem',
+            marginBottom: '1.5rem',
+          }}
+        >
+          <p style={{ margin: 0, fontSize: '0.9rem', lineHeight: '1.4' }}>{notice}</p>
+          <button
+            type="button"
+            className="dashboard-secondary-btn"
+            style={{ marginTop: '0.75rem', padding: '0.25rem 0.75rem', fontSize: '0.8rem' }}
+            onClick={() => setNotice(null)}
+          >
+            {tr('Dismiss', 'إغلاق')}
+          </button>
+        </div>
+      )}
+
+      {/* Removal confirmation — an irreversible action asks once. */}
+      {pendingRemoval && (
+        <div
+          role="alertdialog"
+          aria-label={tr('Confirm member removal', 'تأكيد إزالة العضو')}
           style={{
             background: 'rgba(239, 68, 68, 0.1)',
             border: '1px solid rgba(239, 68, 68, 0.3)',
             borderRadius: '8px',
             padding: '1rem',
             marginBottom: '1.5rem',
-            position: 'relative',
           }}
         >
           <h4 style={{ color: '#ef4444', margin: '0 0 0.5rem 0', fontSize: '1rem' }}>
-            ⚠️ {noticeModal.title}
+            {tr('Remove member?', 'إزالة العضو؟')}
           </h4>
-          <p style={{ margin: 0, fontSize: '0.9rem', lineHeight: '1.4' }}>{noticeModal.message}</p>
-          <button
-            type="button"
-            className="dashboard-secondary-btn"
-            style={{ marginTop: '0.75rem', padding: '0.25rem 0.75rem', fontSize: '0.8rem' }}
-            onClick={() => setNoticeModal(null)}
-          >
-            {tr('Dismiss', 'إغلاق')}
-          </button>
+          <p style={{ margin: 0, fontSize: '0.9rem', lineHeight: '1.4' }}>
+            {tr(
+              `${pendingRemoval.label} will lose access to this workspace immediately. Their past activity is kept.`,
+              `سيفقد ${pendingRemoval.label} الوصول إلى مساحة العمل فورًا. يتم الاحتفاظ بسجل نشاطه السابق.`,
+            )}
+          </p>
+          <div className="dashboard-actions-row" style={{ marginTop: '0.75rem', gap: '0.5rem' }}>
+            <button
+              type="button"
+              className="dashboard-primary-btn"
+              style={{ padding: '0.25rem 0.75rem', fontSize: '0.8rem' }}
+              disabled={busy}
+              onClick={() => void confirmRemoval()}
+            >
+              {busy ? tr('Removing...', 'جاري الإزالة...') : tr('Remove', 'إزالة')}
+            </button>
+            <button
+              type="button"
+              className="dashboard-secondary-btn"
+              style={{ padding: '0.25rem 0.75rem', fontSize: '0.8rem' }}
+              onClick={() => setPendingRemoval(null)}
+            >
+              {tr('Cancel', 'إلغاء')}
+            </button>
+          </div>
         </div>
       )}
 
@@ -257,15 +357,24 @@ export const BusinessTeamPanel = ({ dictionary, accessToken }: Props) => {
                 type="email"
                 className="dashboard-input"
                 placeholder="name@example.com"
+                aria-label={tr('Recipient email', 'بريد المستلم')}
                 required
               />
-              <select name="roleId" className="dashboard-select" required defaultValue="">
+              <select
+                name="roleId"
+                className="dashboard-select"
+                aria-label={tr('Workspace role', 'دور مساحة العمل')}
+                required
+                defaultValue=""
+              >
                 <option value="" disabled>
                   {tr('Select role', 'اختر الدور')}
                 </option>
-                {overview.roles.map((role) => (
+                {/* Owner and retired roles are absent because the backend
+                    refuses them; offering one would only produce an error. */}
+                {assignableRoles.map((role) => (
                   <option key={role.id} value={role.id}>
-                    {role.name} ({role.key})
+                    {role.name} ({tierLabel(role.tier)})
                   </option>
                 ))}
               </select>
@@ -275,7 +384,7 @@ export const BusinessTeamPanel = ({ dictionary, accessToken }: Props) => {
             </form>
           </div>
 
-          {isOwner && (
+          {canManageRoles && (
             <div className="dashboard-card">
               <h4 className="dashboard-card-title">{tr('Create Custom Role', 'إنشاء دور مخصص')}</h4>
               <form className="dashboard-form" onSubmit={(e) => void createRole(e)}>
@@ -283,11 +392,16 @@ export const BusinessTeamPanel = ({ dictionary, accessToken }: Props) => {
                   name="roleName"
                   className="dashboard-input"
                   placeholder={tr('Role name (e.g. Operations)', 'اسم الدور (مثال: العمليات)')}
+                  aria-label={tr('Role name', 'اسم الدور')}
                   required
                 />
                 <div className="dashboard-actions-row" style={{ flexWrap: 'wrap', gap: '0.5rem' }}>
                   {BUSINESS_TEAM_PERMISSIONS.map((permission) => (
-                    <label key={permission} className="dashboard-chip" style={{ fontSize: '0.8rem' }}>
+                    <label
+                      key={permission}
+                      className="dashboard-chip"
+                      style={{ fontSize: '0.8rem' }}
+                    >
                       <input name={permission} type="checkbox" />
                       {permission.replace('_', ' ')}
                     </label>
@@ -310,7 +424,8 @@ export const BusinessTeamPanel = ({ dictionary, accessToken }: Props) => {
           }}
         >
           <p className="dashboard-card-meta">
-            ℹ {tr(
+            ℹ{' '}
+            {tr(
               'Team administration (inviting members and role configuration) requires Owner or Admin workspace permissions.',
               'إدارة الفريق (دعوة الأعضاء وتكوين الأدوار) تتطلب صلاحيات مالك أو مسؤول في مساحة العمل.',
             )}
@@ -334,36 +449,74 @@ export const BusinessTeamPanel = ({ dictionary, accessToken }: Props) => {
               </tr>
             </thead>
             <tbody>
-              {overview.members.map((member) => {
-                const isMemberOwner = member.roleKey === 'owner';
-                return (
-                  <tr key={member.id}>
-                    <td>
-                      <div style={{ fontWeight: 500 }}>
-                        {member.displayName ?? member.userId.slice(0, 8)}
-                      </div>
-                    </td>
-                    <td>{member.email ?? '-'}</td>
-                    <td>
-                      <span className={`dashboard-badge dashboard-badge--${member.roleKey}`}>
-                        {member.roleName}
-                      </span>
-                    </td>
-                    <td>
-                      {canAdministerTeam && !isMemberOwner && (
-                        <button
-                          type="button"
-                          className="dashboard-secondary-btn"
-                          style={{ fontSize: '0.8rem', padding: '0.2rem 0.5rem', color: '#ef4444' }}
-                          onClick={() => handleRemoveMemberClick(member.displayName ?? member.email ?? 'Member', member.id)}
-                        >
-                          {tr('Remove', 'إزالة')}
-                        </button>
+              {overview.members.map((member) => (
+                <tr key={member.id}>
+                  <td>
+                    <div style={{ fontWeight: 500 }}>
+                      {member.displayName ?? member.userId.slice(0, 8)}
+                      {member.isSelf && (
+                        <span className="dashboard-card-meta"> ({tr('you', 'أنت')})</span>
                       )}
-                    </td>
-                  </tr>
-                );
-              })}
+                    </div>
+                  </td>
+                  <td>{member.email ?? '-'}</td>
+                  <td>
+                    {/* The owner's role is shown, never edited here: it moves
+                        only through an ownership transfer. */}
+                    {canAdministerTeam && !member.isOwner ? (
+                      <select
+                        className="dashboard-select"
+                        style={{ fontSize: '0.8rem', padding: '0.2rem 0.4rem' }}
+                        aria-label={tr('Change role', 'تغيير الدور')}
+                        value={
+                          assignableRoles.some((role) => role.id === member.roleId)
+                            ? (member.roleId ?? '')
+                            : ''
+                        }
+                        disabled={busy}
+                        onChange={(event) => {
+                          const next = event.target.value;
+                          if (next && next !== member.roleId)
+                            void changeMemberRole(member.id, next);
+                        }}
+                      >
+                        {/* A member sitting on a retired role keeps showing it
+                            until somebody deliberately moves them. */}
+                        {!assignableRoles.some((role) => role.id === member.roleId) && (
+                          <option value="">{member.roleName ?? tierLabel(member.tier)}</option>
+                        )}
+                        {assignableRoles.map((role) => (
+                          <option key={role.id} value={role.id}>
+                            {role.name}
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      <span className={`dashboard-badge dashboard-badge--${member.tier}`}>
+                        {member.roleName ?? tierLabel(member.tier)}
+                      </span>
+                    )}
+                  </td>
+                  <td>
+                    {actions?.removeMembers === true && !member.isOwner && (
+                      <button
+                        type="button"
+                        className="dashboard-secondary-btn"
+                        style={{ fontSize: '0.8rem', padding: '0.2rem 0.5rem', color: '#ef4444' }}
+                        disabled={busy}
+                        onClick={() =>
+                          setPendingRemoval({
+                            id: member.id,
+                            label: member.displayName ?? member.email ?? 'Member',
+                          })
+                        }
+                      >
+                        {tr('Remove', 'إزالة')}
+                      </button>
+                    )}
+                  </td>
+                </tr>
+              ))}
             </tbody>
           </table>
         </div>
@@ -411,7 +564,7 @@ export const BusinessTeamPanel = ({ dictionary, accessToken }: Props) => {
                       })}
                     </td>
                     <td>
-                      {inviteItem.status === 'pending' && canAdministerTeam && (
+                      {inviteItem.status === 'pending' && actions?.revokeInvites === true && (
                         <button
                           className="dashboard-secondary-btn"
                           type="button"
@@ -432,7 +585,7 @@ export const BusinessTeamPanel = ({ dictionary, accessToken }: Props) => {
       )}
 
       {/* Business Workspace Operations & Ownership Transfer */}
-      {isOwner && (
+      {canTransferOwnership && (
         <div
           style={{
             marginTop: '2rem',
@@ -449,10 +602,13 @@ export const BusinessTeamPanel = ({ dictionary, accessToken }: Props) => {
             <h4 style={{ margin: 0, fontSize: '0.95rem' }}>
               {tr('Business Ownership', 'ملكية مساحة العمل')}
             </h4>
-            <p className="dashboard-card-meta" style={{ margin: '0.2rem 0 0', fontSize: '0.85rem' }}>
+            <p
+              className="dashboard-card-meta"
+              style={{ margin: '0.2rem 0 0', fontSize: '0.85rem' }}
+            >
               {tr(
-                'Transfer primary ownership of this business workspace to another member.',
-                'نقل الملكية الرئيسية لمساحة العمل هذه إلى عضو آخر.',
+                'Transfer primary ownership of this business workspace to another member. You become an admin.',
+                'نقل الملكية الرئيسية لمساحة العمل هذه إلى عضو آخر. ستصبح أنت مسؤولاً.',
               )}
             </p>
           </div>
@@ -460,10 +616,58 @@ export const BusinessTeamPanel = ({ dictionary, accessToken }: Props) => {
             type="button"
             className="dashboard-secondary-btn"
             style={{ fontSize: '0.85rem' }}
-            onClick={handleTransferOwnershipClick}
+            aria-expanded={transferOpen}
+            onClick={() => setTransferOpen((open) => !open)}
           >
-            {tr('Transfer Ownership', 'نقل الملكية')}
+            {transferOpen ? tr('Cancel', 'إلغاء') : tr('Transfer Ownership', 'نقل الملكية')}
           </button>
+        </div>
+      )}
+
+      {canTransferOwnership && transferOpen && (
+        <div className="dashboard-card" style={{ marginTop: '1rem' }}>
+          {transferCandidates.length === 0 ? (
+            <p className="dashboard-card-meta">
+              {tr(
+                'Ownership can only be transferred to another member of this workspace. Invite someone first.',
+                'يمكن نقل الملكية إلى عضو آخر في مساحة العمل فقط. قم بدعوة عضو أولاً.',
+              )}
+            </p>
+          ) : (
+            <form className="dashboard-form" onSubmit={(e) => void transferOwnership(e)}>
+              <select
+                name="targetMemberId"
+                className="dashboard-select"
+                aria-label={tr('New owner', 'المالك الجديد')}
+                required
+                defaultValue=""
+              >
+                <option value="" disabled>
+                  {tr('Select the new owner', 'اختر المالك الجديد')}
+                </option>
+                {transferCandidates.map((member) => (
+                  <option key={member.id} value={member.id}>
+                    {member.displayName ?? member.email ?? member.userId.slice(0, 8)}
+                  </option>
+                ))}
+              </select>
+              <input
+                name="confirmation"
+                className="dashboard-input"
+                aria-label={tr('Confirm workspace name', 'تأكيد اسم مساحة العمل')}
+                placeholder={tr(
+                  `Type "${overview.team.name ?? ''}" to confirm`,
+                  `اكتب "${overview.team.name ?? ''}" للتأكيد`,
+                )}
+                required
+              />
+              <button className="dashboard-primary-btn" type="submit" disabled={busy}>
+                {busy
+                  ? tr('Transferring...', 'جاري النقل...')
+                  : tr('Confirm Transfer', 'تأكيد النقل')}
+              </button>
+            </form>
+          )}
         </div>
       )}
     </section>
