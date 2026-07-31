@@ -7,7 +7,7 @@ import type {
   NotificationType,
   PushSubscriptionBody,
 } from '@mohandishub/shared';
-import type { Pool } from 'pg';
+import type { Pool, PoolClient } from 'pg';
 
 import { getPool } from '../../db/pool.js';
 
@@ -50,6 +50,53 @@ export class NotificationsRepository {
     );
     if (!row) throw new Error('Insert notification failed');
     return row;
+  }
+
+  /**
+   * Persist one notification inside the CALLER's transaction.
+   *
+   * For events that must not exist without the state change that caused them —
+   * an advertisement week that was paid for, a renewal that was refused. The
+   * caller is responsible for delivery (socket, email, push) AFTER its commit:
+   * none of those are transactional, and doing them while a wallet or campaign
+   * row is locked would hold the lock across a network call.
+   */
+  async createInTx(
+    client: PoolClient,
+    userId: string,
+    type: string,
+    title: string,
+    message: string,
+    payload: Record<string, unknown> | null = null,
+  ): Promise<NotificationRow> {
+    const {
+      rows: [row],
+    } = await client.query<NotificationRow>(
+      `INSERT INTO notifications (user_id, type, title, message, payload)
+       VALUES ($1, $2, $3, $4, $5)
+       RETURNING id, user_id, type, title, message, payload, read_at, created_at`,
+      [userId, type, title, message, payload != null ? JSON.stringify(payload) : null],
+    );
+    if (!row) throw new Error('Insert notification failed');
+    return row;
+  }
+
+  /** Stored preferences, read through the caller's transaction. */
+  async listPreferencesInTx(
+    client: PoolClient,
+    userId: string,
+  ): Promise<Array<{ notification_type: string; channel: NotificationChannel; enabled: boolean }>> {
+    const { rows } = await client.query<{
+      notification_type: string;
+      channel: NotificationChannel;
+      enabled: boolean;
+    }>(
+      `SELECT notification_type, channel, enabled
+       FROM notification_preferences
+       WHERE user_id = $1`,
+      [userId],
+    );
+    return rows;
   }
 
   async createMany(

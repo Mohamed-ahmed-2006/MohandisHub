@@ -11,6 +11,7 @@ import type {
   PushSubscriptionBody,
   UpdateNotificationPreferencesBody,
 } from '@mohandishub/shared';
+import type { PoolClient } from 'pg';
 import webpush from 'web-push';
 
 import { env } from '../../config/env.js';
@@ -58,6 +59,21 @@ const CATEGORY_BY_TYPE: Record<string, NotificationCategory> = {
   review_report_resolved: 'reviews',
   review_dispute_resolved: 'reviews',
   price_negotiation: 'services',
+  // Advertisement weekly billing. Categorised under `services` alongside the
+  // other provider-listing events, rather than `wallet`: what the provider is
+  // being told about is their campaign, and the credit movement is a
+  // consequence. There is no advertisement category today and inventing one
+  // would silently reset every provider's stored preferences for this group.
+  advertisement_activated: 'services',
+  advertisement_renewed: 'services',
+  advertisement_renewal_failed_credits: 'services',
+  advertisement_renewal_failed_pricing: 'services',
+  advertisement_renewal_required: 'services',
+  advertisement_renewal_reminder: 'services',
+  advertisement_auto_renew_stopped_max_weeks: 'services',
+  advertisement_auto_renew_stopped_end_date: 'services',
+  advertisement_auto_renew_enabled: 'services',
+  advertisement_auto_renew_disabled: 'services',
   admin: 'admin',
   demo: 'marketing',
 };
@@ -198,6 +214,89 @@ export class NotificationsService {
         };
       }
       throw err;
+    }
+  }
+
+  /**
+   * Persist one notification inside the CALLER's transaction, and deliver
+   * nothing.
+   *
+   * For events that must not exist unless the state change that caused them
+   * committed — a renewal that was charged, a renewal that was refused. Delivery
+   * (socket, email, push) is the caller's job AFTER its commit, via
+   * `deliverOutOfBand`, because none of it is transactional and all of it is a
+   * network call that must not happen while a campaign or wallet row is locked.
+   *
+   * Returns `persisted: false` when the recipient has switched the in-app
+   * channel off for this type. That is a delivered decision, not a failure: the
+   * caller should still treat the event as handled, or it will be reconsidered
+   * on every sweep forever.
+   */
+  async createDurableInTx(
+    client: PoolClient,
+    userId: string,
+    input: CreateNotificationInput,
+  ): Promise<{ persisted: boolean; id: string | null; createdAt: string | null }> {
+    const stored = await this.repo.listPreferencesInTx(client, userId).catch(() => []);
+    const prefs = new Map(stored.map((p) => [`${p.notification_type}:${p.channel}`, p.enabled]));
+    const shouldPersistInApp =
+      isNotificationChannelRequired(input.type, 'in_app') ||
+      (prefs.get(`${input.type}:in_app`) ?? true);
+    if (!shouldPersistInApp) return { persisted: false, id: null, createdAt: null };
+
+    const row = await this.repo.createInTx(
+      client,
+      userId,
+      input.type,
+      input.title,
+      input.message,
+      input.payload ?? null,
+    );
+    return { persisted: true, id: row.id, createdAt: row.created_at.toISOString() };
+  }
+
+  /**
+   * Deliver an already-persisted notification: socket, then email and push.
+   *
+   * Never call this inside a transaction. It is deliberately failure-tolerant —
+   * a push endpoint that has gone away must not turn into an exception on a
+   * caller that has already committed a financial change.
+   */
+  async deliverOutOfBand(
+    userId: string,
+    input: CreateNotificationInput,
+    persisted: { id: string; createdAt: string } | null,
+  ): Promise<void> {
+    try {
+      const prefs = await this.getEffectivePreferenceMap(userId);
+      const shouldEmail =
+        input.recipientEmail != null &&
+        (isNotificationChannelRequired(input.type, 'email') ||
+          (prefs.get(`${input.type}:email`) ?? true));
+      const shouldPush = prefs.get(`${input.type}:push`) ?? true;
+
+      if (persisted) {
+        const io = getSocketServer();
+        if (io) {
+          io.to(`user:${userId}`).emit('notification', {
+            id: persisted.id,
+            type: input.type,
+            title: input.title,
+            message: input.message,
+            payload: input.payload ?? null,
+            readAt: null,
+            createdAt: persisted.createdAt,
+          });
+        }
+      }
+      if (shouldEmail) this.sendNotificationEmail(userId, input);
+      if (shouldPush) await this.sendPushNotifications(userId, input);
+    } catch (err) {
+      logger.warn('Out-of-band notification delivery failed', {
+        userId,
+        type: input.type,
+        err,
+      });
     }
   }
 

@@ -47,6 +47,17 @@ export type NotificationType =
   // MHC
   | 'mhc_purchase_completed'
   | 'mhc_purchase_failed'
+  // Advertisements — weekly billing and automatic renewal
+  | 'advertisement_activated'
+  | 'advertisement_renewed'
+  | 'advertisement_renewal_failed_credits'
+  | 'advertisement_renewal_failed_pricing'
+  | 'advertisement_renewal_required'
+  | 'advertisement_renewal_reminder'
+  | 'advertisement_auto_renew_stopped_max_weeks'
+  | 'advertisement_auto_renew_stopped_end_date'
+  | 'advertisement_auto_renew_enabled'
+  | 'advertisement_auto_renew_disabled'
   // Chat
   | 'chat_message'
   // System
@@ -65,6 +76,7 @@ export interface NotificationPayload {
   conversationId?: string;
   depositId?: string;
   withdrawalId?: string;
+  advertisementId?: string;
   /** i18n template params for notification bodies (optional) */
   [key: string]: unknown;
 }
@@ -129,6 +141,21 @@ export const NOTIFICATION_NAVIGATION_MAP: Partial<Record<NotificationType, strin
   wallet_deposit_confirmed: '/app/history',
   mhc_purchase_completed: '/app/credits',
   mhc_purchase_failed: '/app/credits',
+  // Every advertisement event lands on the campaign it is about — the screen
+  // that can renew it, reconfigure it or cancel it — except the one whose only
+  // remedy is buying credits, which lands on the credits screen instead. The
+  // advertisement id travels in the payload either way, so the campaign is one
+  // click from both.
+  advertisement_activated: '/app/advertisements',
+  advertisement_renewed: '/app/advertisements',
+  advertisement_renewal_failed_credits: '/app/credits',
+  advertisement_renewal_failed_pricing: '/app/advertisements',
+  advertisement_renewal_required: '/app/advertisements',
+  advertisement_renewal_reminder: '/app/advertisements',
+  advertisement_auto_renew_stopped_max_weeks: '/app/advertisements',
+  advertisement_auto_renew_stopped_end_date: '/app/advertisements',
+  advertisement_auto_renew_enabled: '/app/advertisements',
+  advertisement_auto_renew_disabled: '/app/advertisements',
   chat_message: '/app/chat',
   admin: '/app',
   demo: '/app',

@@ -678,6 +678,53 @@ export const arDictionary: Dictionary = {
     wallet_withdrawal_rejected: { title: 'فشل السحب', message: 'تعذر إكمال طلب السحب.' },
     wallet_deposit_confirmed: { title: 'تأكيد الإيداع', message: 'تمت إضافة الرصيد لمحفظتك.' },
     chat_message: { title: 'رسالة جديدة', message: 'لديك رسالة محادثة جديدة.' },
+    // الفوترة الأسبوعية للإعلانات. {adTitle} و{periodNumber} من حمولة الإشعار.
+    // بدون أي عملة أو رصيد، وبدون وصف باليوم أو بالحملة — الإعلان يُباع بأسابيع
+    // مدة كل منها 168 ساعة.
+    advertisement_activated: {
+      title: 'إعلانك يعمل الآن',
+      message: 'بدأ «{adTitle}» أسبوعه الأول ويعمل لمدة 168 ساعة.',
+    },
+    advertisement_renewed: {
+      title: 'تم تجديد الإعلان',
+      message: 'تم تجديد «{adTitle}» تلقائيا. الأسبوع {periodNumber} يعمل لمدة 168 ساعة.',
+    },
+    advertisement_renewal_failed_credits: {
+      title: 'تم إيقاف الإعلان مؤقتا — الرصيد غير كافٍ',
+      message:
+        'تعذر تجديد «{adTitle}» لأن رصيدك غير كافٍ. لم يتم خصم أي رصيد. أضف رصيدا ثم أعد المحاولة.',
+    },
+    advertisement_renewal_failed_pricing: {
+      title: 'تم إيقاف الإعلان مؤقتا',
+      message: 'تعذر تجديد «{adTitle}» لأن سعر الإعلان غير متاح. لم يتم خصم أي رصيد.',
+    },
+    advertisement_renewal_required: {
+      title: 'انتهى الأسبوع الإعلاني',
+      message: 'انتهى الأسبوع المدفوع لـ«{adTitle}». جدّد ليعمل 168 ساعة أخرى.',
+    },
+    advertisement_renewal_reminder: {
+      title: 'سيتم تجديد الإعلان قريبا',
+      message:
+        'يقترب انتهاء الأسبوع الحالي لـ«{adTitle}» وسيتم تجديده تلقائيا. تأكد من كفاية رصيدك.',
+    },
+    advertisement_auto_renew_stopped_max_weeks: {
+      title: 'انتهى التجديد التلقائي',
+      message:
+        'بلغ «{adTitle}» الحد الأقصى لعدد الأسابيع الذي حددته، لذا توقف التجديد التلقائي. لم يتم خصم أي رصيد.',
+    },
+    advertisement_auto_renew_stopped_end_date: {
+      title: 'انتهى التجديد التلقائي',
+      message:
+        'لا يتسع أسبوع كامل قبل تاريخ الانتهاء الذي حددته لـ«{adTitle}»، لذا توقف التجديد التلقائي. لم يتم خصم أي رصيد.',
+    },
+    advertisement_auto_renew_enabled: {
+      title: 'التجديد التلقائي مفعل',
+      message: 'سيتم تجديد «{adTitle}» تلقائيا كل أسبوع ضمن الحدود التي حددتها.',
+    },
+    advertisement_auto_renew_disabled: {
+      title: 'التجديد التلقائي متوقف',
+      message: 'لن يتم تجديد «{adTitle}» تلقائيا. يستمر الأسبوع المدفوع حتى نهايته.',
+    },
   },
   chatPage: {
     shareLink: 'مشاركة الرابط',

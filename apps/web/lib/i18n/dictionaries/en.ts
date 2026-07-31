@@ -729,6 +729,55 @@ export const enDictionary: Dictionary = {
       message: 'Your wallet deposit was credited.',
     },
     chat_message: { title: 'New message', message: 'You have a new chat message.' },
+    // Advertisement weekly billing. `{adTitle}` and `{periodNumber}` come from
+    // the notification payload; no currency, no balance, and never "per day" or
+    // "per campaign" — an advertisement is sold in 168-hour weeks.
+    advertisement_activated: {
+      title: 'Your advertisement is live',
+      message: '“{adTitle}” started its first week and runs for 168 hours.',
+    },
+    advertisement_renewed: {
+      title: 'Advertisement renewed',
+      message: '“{adTitle}” renewed automatically. Week {periodNumber} runs for 168 hours.',
+    },
+    advertisement_renewal_failed_credits: {
+      title: 'Advertisement paused — not enough credits',
+      message:
+        '“{adTitle}” could not renew because your credit balance was too low. Nothing was charged. Add credits, then retry.',
+    },
+    advertisement_renewal_failed_pricing: {
+      title: 'Advertisement paused',
+      message:
+        '“{adTitle}” could not renew because advertisement pricing is unavailable. Nothing was charged.',
+    },
+    advertisement_renewal_required: {
+      title: 'Advertisement week ended',
+      message: 'The paid week for “{adTitle}” has ended. Renew to run for another 168 hours.',
+    },
+    advertisement_renewal_reminder: {
+      title: 'Advertisement renews soon',
+      message:
+        '“{adTitle}” ends its current week soon and will renew automatically. Make sure you have enough credits.',
+    },
+    advertisement_auto_renew_stopped_max_weeks: {
+      title: 'Automatic renewal finished',
+      message:
+        '“{adTitle}” reached the maximum number of weeks you set, so automatic renewal stopped. Nothing was charged.',
+    },
+    advertisement_auto_renew_stopped_end_date: {
+      title: 'Automatic renewal finished',
+      message:
+        'A full week would not fit before the end date you set for “{adTitle}”, so automatic renewal stopped. Nothing was charged.',
+    },
+    advertisement_auto_renew_enabled: {
+      title: 'Automatic renewal is on',
+      message: '“{adTitle}” will renew itself each week within the limits you set.',
+    },
+    advertisement_auto_renew_disabled: {
+      title: 'Automatic renewal is off',
+      message:
+        '“{adTitle}” will not renew itself. The week you already paid for keeps running to the end.',
+    },
   },
   chatPage: {
     shareLink: 'Share link',
