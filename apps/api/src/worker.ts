@@ -1,6 +1,8 @@
+import { env } from './config/env.js';
 import { logger } from './config/logger.js';
 import { captureException, initSentry } from './config/sentry.js';
 import { closePool } from './db/pool.js';
+import { startAdvertisementBillingWorker } from './modules/advertisements/advertisement-billing.worker.js';
 import { startAwardExpiryWorker } from './modules/mhc/award-expiry.worker.js';
 import { startReservationLifecycleWorker } from './modules/reservations/reservations.lifecycle-worker.js';
 import { startRetentionWorker } from './modules/retention/retention.worker.js';
@@ -10,10 +12,16 @@ initSentry();
 const reservationWorker = startReservationLifecycleWorker();
 const retentionWorker = startRetentionWorker();
 const awardExpiryWorker = startAwardExpiryWorker();
+const advertisementBillingWorker = startAdvertisementBillingWorker();
 
 logger.info('Reservation lifecycle worker started');
 logger.info('Retention worker started');
 logger.info('Award expiry worker started');
+logger.info('Advertisement billing worker started', {
+  intervalMs: env.AD_BILLING_SWEEP_INTERVAL_MS,
+  batchSize: env.AD_BILLING_SWEEP_BATCH_SIZE,
+  reminderWindowHours: env.AD_RENEWAL_REMINDER_HOURS,
+});
 logger.info('Worker ready', { pid: process.pid });
 
 const heartbeat = setInterval(() => {
@@ -31,6 +39,9 @@ const shutdown = async (signal: string): Promise<void> => {
   await reservationWorker.stop();
   await retentionWorker.stop();
   await awardExpiryWorker.stop();
+  // Before closePool: the advertisement sweep waits for the campaign in flight,
+  // and that campaign is holding a connection with an open transaction.
+  await advertisementBillingWorker.stop();
   await closePool();
   logger.info('Worker shutdown finished');
   process.exit(0);

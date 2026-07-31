@@ -164,6 +164,24 @@ const envSchema = z.object({
   // Sentry (optional; when set, 5xx and unhandled errors are reported)
   SENTRY_DSN: z.string().url().optional(),
 
+  // Advertisement billing lifecycle sweep (Wave 2F-B).
+  //
+  // The sweep is what makes an advertisement week actually end and the next one
+  // actually start, so its cadence is the resolution at which those happen. One
+  // minute is chosen against a 168-HOUR period: it is fine enough that no
+  // advertiser notices the delay, and coarse enough that the query cost is
+  // irrelevant. It is never a correctness parameter — a late sweep buys a full
+  // week from the moment it charges, and a sweep that runs twice buys nothing
+  // twice.
+  //
+  // Bounded below at 5 seconds so a misconfiguration cannot turn the worker
+  // into a hot loop against the database.
+  AD_BILLING_SWEEP_INTERVAL_MS: z.coerce.number().int().min(5_000).default(60_000),
+  /** Campaigns examined per stage per tick. Bounded so one tick cannot run long. */
+  AD_BILLING_SWEEP_BATCH_SIZE: z.coerce.number().int().min(1).max(500).default(25),
+  /** How far ahead of a boundary the upcoming-renewal reminder is sent. */
+  AD_RENEWAL_REMINDER_HOURS: z.coerce.number().int().min(1).max(168).default(24),
+
   // Data retention — sweep interval and per-entity retention (0 = never delete / skip)
   RETENTION_SWEEP_INTERVAL_MS: z.coerce.number().int().positive().default(900_000), // 15 min
   RETENTION_VERIFICATION_CODES_AFTER_EXPIRY_HOURS: z.coerce.number().int().min(0).default(24),
