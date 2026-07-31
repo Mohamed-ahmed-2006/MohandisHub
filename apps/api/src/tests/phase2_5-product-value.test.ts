@@ -35,13 +35,20 @@ describe('phase 2-5 product value foundations', () => {
   it('mounts saved searches, recommendations, and business teams as real APIs', () => {
     const routes = readSource('../routes/index.ts');
     const businessTeams = readSource('../modules/business-teams/business-teams.routes.ts');
+    // Wave 2G split the single route file into routes, a service and an
+    // authorization layer. The built-in roles moved with the model that owns
+    // them; the claim being made here — business teams have built-in roles, and
+    // deleting a custom one requires a replacement — is unchanged.
+    const businessTeamRoles = readSource('../modules/business-teams/business-teams.constants.ts');
+    const businessTeamService = readSource('../modules/business-teams/business-teams.service.ts');
     const recommendations = readSource('../modules/recommendations/recommendations.repository.ts');
 
     expect(routes).toContain("apiRouter.use('/saved-searches'");
     expect(routes).toContain("apiRouter.use('/recommendations'");
     expect(routes).toContain("apiRouter.use('/business-teams'");
-    expect(businessTeams).toContain('BUILT_IN_ROLES');
+    expect(businessTeamRoles).toContain('BUILT_IN_ROLE_SEEDS');
     expect(businessTeams).toContain('replacementRoleId');
+    expect(businessTeamService).toContain('replacementRoleId');
     expect(recommendations).toContain('personalized_enabled');
     expect(recommendations).toContain('if (!consent.personalizedRecommendationsEnabled) return;');
   });
