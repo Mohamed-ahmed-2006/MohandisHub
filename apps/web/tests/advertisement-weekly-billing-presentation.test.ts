@@ -26,6 +26,7 @@ const WEB_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const read = (relative: string): string => readFileSync(join(WEB_ROOT, relative), 'utf8');
 
 const MY_ADS = 'components/app/advertisements/my-ads-screen.tsx';
+const RENEWAL_MANAGER = 'components/app/advertisements/ad-renewal-manager.tsx';
 const ADMIN_ADS = 'components/admin/admin-ads-tab.tsx';
 const ADS_CLIENT = 'lib/advertisements/client.ts';
 const MY_ADS_CSS = 'app/my-ads.css';
@@ -174,24 +175,171 @@ describe('the provider screen reflects moderation and billing state', () => {
   });
 });
 
-describe('automatic renewal is visibly unavailable', () => {
+// ---------------------------------------------------------------------------
+// Automatic renewal is real now, and the screen has to say what it costs.
+// ---------------------------------------------------------------------------
+// This block replaces "automatic renewal is visibly unavailable", which pinned
+// the disabled "Coming soon" checkbox Wave 2F-A shipped. That control is gone
+// because the backend behind it exists; the assertions that described it are
+// replaced with stricter ones about what the working control must promise.
+// ---------------------------------------------------------------------------
+describe('the retired "Coming soon" placeholder is gone', () => {
   const source = stripComments(read(MY_ADS));
 
-  it('renders the control disabled and labelled Coming soon', () => {
-    expect(source).toMatch(/type="checkbox" disabled checked=\{false\} readOnly/);
-    expect(source).toMatch(/tr\('Coming soon', 'قريبا'\)/);
-    expect(source).toMatch(/Renew automatically every week/);
+  it('no longer renders a disabled placeholder toggle', () => {
+    expect(source).not.toMatch(/type="checkbox" disabled checked=\{false\} readOnly/);
+    expect(source).not.toMatch(/Coming soon/);
+    expect(source).not.toMatch(/قريبا/);
   });
 
-  it('never sends an auto-renewal request', () => {
-    expect(source).not.toContain('setAutoRenewal');
-    expect(source).not.toContain('auto-renewal');
+  it('offers renewal management on the campaign instead of on the draft form', () => {
+    // A standing weekly charge attaches to an approved campaign, not to a form
+    // for a campaign that does not exist yet.
+    expect(source).toContain('AdRenewalManager');
+    expect(source).toMatch(/Manage renewal/);
   });
 
-  it('dims the control in CSS so it does not read as an available setting', () => {
-    const css = read(MY_ADS_CSS);
-    expect(css).toContain('.myads-autorenew');
-    expect(css).toMatch(/\.myads-autorenew\s*\{[^}]*cursor:\s*not-allowed/s);
+  it('drops the dead placeholder CSS with the placeholder', () => {
+    expect(read(MY_ADS_CSS)).not.toContain('.myads-autorenew');
+  });
+});
+
+describe('the renewal manager tells the truth about what a week costs', () => {
+  const source = stripComments(read(RENEWAL_MANAGER));
+
+  it('prices a week through formatMhc, never as a currency figure', () => {
+    expect(source).toContain('formatMhc(state.weeklyMhcPrice, locale)');
+    expect(source).toContain('formatMhc(period.mhcPriceSnapshot, locale)');
+    // A bare `$` would match every template literal in the file, so the dollar
+    // case is checked as a dollar AMOUNT rather than as a character.
+    expect(source).not.toMatch(/\bEGP\b|£|ج\.م|\$\s?\d/);
+  });
+
+  it('never describes advertising per day or per campaign', () => {
+    expect(source).not.toMatch(/per day/i);
+    expect(source).not.toMatch(/per campaign/i);
+    expect(source).not.toMatch(/يوميا/);
+  });
+
+  it('states the five things a provider must not be surprised by', () => {
+    // Charged once per renewed week...
+    expect(source).toMatch(/Credits are charged once per renewed week/);
+    // ...each week is exactly 168 hours...
+    expect(source).toMatch(/PERIOD_HOURS = 168/);
+    expect(source).toMatch(/Each week is exactly \$\{PERIOD_HOURS\} hours/);
+    // ...a price change applies forward only...
+    expect(source).toMatch(/applies to future weeks only/);
+    // ...the running week is not refundable...
+    expect(source).toMatch(/is not refundable/);
+    // ...and turning it off does not cancel that week.
+    expect(source).toMatch(/does not cancel the current week/);
+    expect(source).toMatch(/stops every future renewal, with no refund/);
+  });
+
+  it('says all of it in Arabic too', () => {
+    expect(source).toMatch(/يُخصم الرصيد مرة واحدة عن كل أسبوع مُجدَّد/);
+    expect(source).toMatch(/غير قابل للاسترداد/);
+    expect(source).toMatch(/لا يلغي الأسبوع الحالي/);
+    expect(source).toMatch(/دون أي استرداد/);
+  });
+
+  it('requires the consent checkbox before it will submit an enable', () => {
+    // Not decoration: the button is disabled without it, and the server refuses
+    // without it as well.
+    expect(source).toMatch(/const canSubmitEnable = consent &&/);
+    expect(source).toMatch(/consentAccepted: consent/);
+  });
+
+  it('will not submit an enable with no bound at all', () => {
+    expect(source).toMatch(/maxWeeks\.trim\(\) !== '' \|\| endDate\.trim\(\) !== ''/);
+  });
+
+  it('never shows an automatic state the server has not confirmed', () => {
+    // Every write re-reads the billing state, including on failure, so a
+    // refusal cannot leave the toggle looking switched on.
+    expect(source).toMatch(/report\(err[\s\S]{0,120}await load\(\)/);
+    expect(source).toContain('setWantsAutomatic(next.autoRenewEnabled)');
+  });
+
+  it('deep-links to credits exactly where credits are the remedy', () => {
+    expect(source).toMatch(/needsCredits \?/);
+    expect(source).toMatch(/autoRenewPausedReason === 'insufficient_credits'/);
+    expect(source).toMatch(/creditsHref/);
+    expect(source).toMatch(/tr\('Add credits', 'أضف رصيدا'\)/);
+  });
+
+  it('shows every fact the provider needs to reconcile a charge', () => {
+    for (const fact of [
+      'Renewal mode',
+      'Price per advertisement week',
+      'Your credit balance',
+      'This week started',
+      'This week ends',
+      'Weeks used',
+      'Renewal end date',
+      'Next renewal',
+      'Your agreement',
+      'Last renewal outcome',
+    ]) {
+      expect(source).toContain(fact);
+    }
+  });
+
+  it('renders a per-week price snapshot in the history, not one live price', () => {
+    expect(source).toContain('period.mhcPriceSnapshot');
+    expect(source).toMatch(/what each one cost at the time/);
+  });
+
+  it('hides the controls entirely when the server would refuse them', () => {
+    expect(source).toMatch(/if \(!state\.autoRenewalAvailable\)/);
+    expect(source).toMatch(/predates weekly billing/);
+  });
+
+  it('keeps the paused state honest about what was charged', () => {
+    expect(source).toMatch(/Nothing was charged and no week was created/);
+    expect(source).toMatch(/Weeks are never shortened/);
+  });
+});
+
+describe('the renewal manager is accessible and fits a phone', () => {
+  const source = stripComments(read(RENEWAL_MANAGER));
+  const css = read(MY_ADS_CSS);
+
+  it('labels every input and announces its state changes', () => {
+    expect(source).toMatch(/htmlFor=\{`max-weeks-\$\{advertisementId\}`\}/);
+    expect(source).toMatch(/htmlFor=\{`end-date-\$\{advertisementId\}`\}/);
+    expect(source).toMatch(/aria-expanded=\{showHistory\}/);
+    expect(source).toMatch(/role="alert"/);
+    expect(source).toMatch(/role="status"/);
+    expect(source).toMatch(/aria-label=\{tr\('Renewal management'/);
+  });
+
+  it('gives the history table a caption and real column headers', () => {
+    expect(source).toMatch(/<caption/);
+    expect(source).toMatch(/scope="col"/);
+  });
+
+  it('scrolls the wide table inside itself rather than the page', () => {
+    expect(css).toMatch(/\.myads-renewal-history-scroll\s*\{[^}]*overflow-x:\s*auto/s);
+    expect(css).toMatch(/\.myads-renewal-table\s*\{[^}]*min-width/s);
+  });
+
+  it('lays the facts out fluidly and collapses them near 375px', () => {
+    expect(css).toMatch(/\.myads-renewal-facts\s*\{[^}]*minmax\(9rem, 1fr\)/s);
+    expect(css).toMatch(/@media \(max-width: 30rem\)/);
+    // No fixed pixel widths anywhere in the renewal styles.
+    const renewalCss = css.slice(css.indexOf('.myads-renewal {'));
+    expect(renewalCss).not.toMatch(/width:\s*\d{3,}px/);
+  });
+
+  it('mirrors rather than re-specifies for Arabic RTL', () => {
+    const renewalCss = css.slice(css.indexOf('.myads-renewal {'));
+    expect(renewalCss).toContain('padding-inline-start');
+    expect(renewalCss).toContain('border-inline-start');
+    expect(renewalCss).toContain('text-align: start');
+    // Physical left/right properties would not flip with the document.
+    expect(renewalCss).not.toMatch(/\bpadding-left:/);
+    expect(renewalCss).not.toMatch(/\btext-align:\s*(left|right)\b/);
   });
 });
 

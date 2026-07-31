@@ -1,9 +1,10 @@
 'use client';
 
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
+import { AdRenewalManager } from '@/components/app/advertisements/ad-renewal-manager';
 import { useAuth } from '@/components/auth/auth-provider';
 import { SiteLogo } from '@/components/site-logo';
 import {
@@ -37,6 +38,7 @@ const STATUS_COLORS: Record<AdStatus, string> = {
 
 export const MyAdsScreen = ({ locale, dictionary }: MyAdsScreenProps) => {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { accessToken, authUser, isAuthenticated, isReady, authGuard } = useAuth();
   const [rows, setRows] = useState<Advertisement[]>([]);
   const [loading, setLoading] = useState(true);
@@ -47,6 +49,14 @@ export const MyAdsScreen = ({ locale, dictionary }: MyAdsScreenProps) => {
   const [uploading, setUploading] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [busyAdId, setBusyAdId] = useState<string | null>(null);
+  /**
+   * Which campaign's renewal panel is open. Seeded from `?ad=` so a renewal
+   * notification deep-links straight to the campaign it is about, rather than
+   * to a list the advertiser then has to search.
+   */
+  const [openRenewalAdId, setOpenRenewalAdId] = useState<string | null>(
+    () => searchParams.get('ad'),
+  );
   const [adControls, setAdControls] = useState<AdminAdControls>({
     acceptAds: true,
     mhcPrice: 0,
@@ -323,6 +333,11 @@ export const MyAdsScreen = ({ locale, dictionary }: MyAdsScreenProps) => {
     onRenew,
     onActivate,
     onCancel,
+    accessToken,
+    openRenewalAdId,
+    onToggleRenewal: (adId: string) =>
+      setOpenRenewalAdId((current) => (current === adId ? null : adId)),
+    onRenewalChanged: load,
   };
 
   return (
@@ -600,16 +615,17 @@ export const MyAdsScreen = ({ locale, dictionary }: MyAdsScreenProps) => {
                     {plannedStartAt.toLocaleString(isAr ? 'ar-EG' : 'en-US')}
                   </span>
                 ) : null}
-                {/* Automatic renewal has no implementation yet. The control is
-                    present but disabled so the roadmap is visible without
-                    promising behaviour that does not exist. */}
-                <label className="myads-price-summary-note myads-autorenew">
-                  <input type="checkbox" disabled checked={false} readOnly />
-                  <span>
-                    {tr('Renew automatically every week', 'التجديد التلقائي كل أسبوع')} —{' '}
-                    {tr('Coming soon', 'قريبا')}
-                  </span>
-                </label>
+                {/* Automatic renewal is configured on the CAMPAIGN, once it
+                    exists and an admin has approved it — not on this form. A
+                    standing instruction to charge credits every week needs a
+                    campaign to attach to and explicit agreement recorded
+                    against it, neither of which a draft has. */}
+                <span className="myads-price-summary-note">
+                  {tr(
+                    'You can turn on automatic weekly renewal from the campaign once it is approved.',
+                    'يمكنك تفعيل التجديد التلقائي الأسبوعي من الحملة بعد الموافقة عليها.',
+                  )}
+                </span>
               </div>
 
               {/* Actions */}
@@ -751,6 +767,10 @@ type AdCardProps = {
   onRenew: (adId: string) => Promise<void>;
   onActivate: (adId: string) => Promise<void>;
   onCancel: (adId: string) => Promise<void>;
+  accessToken: string | null;
+  openRenewalAdId: string | null;
+  onToggleRenewal: (adId: string) => void;
+  onRenewalChanged: () => Promise<void>;
 };
 
 const AdCard = ({
@@ -765,6 +785,10 @@ const AdCard = ({
   onRenew,
   onActivate,
   onCancel,
+  accessToken,
+  openRenewalAdId,
+  onToggleRenewal,
+  onRenewalChanged,
 }: AdCardProps) => {
   const isAr = locale === 'ar';
   const title = isAr ? ad.title_ar || ad.title_en : ad.title_en;
@@ -780,6 +804,7 @@ const AdCard = ({
   const awaitingCredits = isWeekly && ad.billing_status === 'awaiting_credits';
   const awaitingStart = isWeekly && ad.billing_status === 'awaiting_start';
   const canCancel = isWeekly && ad.status !== 'cancelled' && ad.status !== 'rejected';
+  const renewalOpen = openRenewalAdId === ad.id;
 
   /** One line that says exactly where the money and the campaign stand. */
   const billingLine = (): string | null => {
@@ -936,6 +961,36 @@ const AdCard = ({
             ) : null}
           </div>
         )}
+
+        {/* Renewal management. Offered only for a weekly campaign that can
+            still buy another week — the server refuses anything else, and a
+            control the server would refuse is worse than no control. */}
+        {isWeekly && canCancel ? (
+          <>
+            <button
+              type="button"
+              className="myads-renewal-history-toggle"
+              aria-expanded={renewalOpen}
+              aria-controls={`renewal-${ad.id}`}
+              onClick={() => onToggleRenewal(ad.id)}
+            >
+              {renewalOpen
+                ? tr('Hide renewal settings', 'إخفاء إعدادات التجديد')
+                : tr('Manage renewal', 'إدارة التجديد')}
+            </button>
+            {renewalOpen && accessToken ? (
+              <div id={`renewal-${ad.id}`}>
+                <AdRenewalManager
+                  advertisementId={ad.id}
+                  locale={locale}
+                  accessToken={accessToken}
+                  creditsHref={creditsHref}
+                  onChanged={onRenewalChanged}
+                />
+              </div>
+            ) : null}
+          </>
+        ) : null}
       </div>
     </article>
   );

@@ -80,6 +80,27 @@ export type AdPeriod = {
   hasCharge: boolean;
 };
 
+/**
+ * Why the scheduler stopped renewing. A reason, not a lifecycle state — the
+ * campaign is still `renewal_required` (or `awaiting_credits` before its first
+ * week), and this says what stood in the way.
+ */
+export type AdAutoRenewPausedReason =
+  | 'insufficient_credits'
+  | 'pricing_unavailable'
+  | 'max_weeks_reached'
+  | 'end_date_reached';
+
+export type AdRenewalHistoryEntry = {
+  id: string;
+  eventType: string;
+  /** The week this event concerns. */
+  periodNumber: number;
+  createdAt: string;
+  mhcCharged: number | null;
+  requiredMhc: number | null;
+};
+
 export type AdBillingState = {
   advertisementId: string;
   billingModel: 'legacy' | 'weekly';
@@ -95,10 +116,46 @@ export type AdBillingState = {
   reviewedAt: string | null;
   canRenew: boolean;
   canActivate: boolean;
-  /** Automatic renewal is not implemented yet. Always false. */
+  /** Whether this campaign may be switched to automatic renewal at all. */
   autoRenewalAvailable: boolean;
   autoRenewEnabled: boolean;
+  renewalMode: 'manual' | 'automatic';
+  maximumWeeks: number | null;
+  renewalEndDate: string | null;
+  autoRenewEnabledAt: string | null;
+  autoRenewConsentVersion: string | null;
+  /** The terms version this client must accept to enable automatic renewal. */
+  consentVersion: string;
+  autoRenewPausedReason: AdAutoRenewPausedReason | null;
+  autoRenewPausedAt: string | null;
+  lastRenewalOutcome: string | null;
+  lastRenewalAttemptAt: string | null;
+  /** Weeks bought so far, including the first. Counts against maximumWeeks. */
+  periodsUsed: number;
+  nextRenewalAt: string | null;
+  canRetryAutomaticRenewal: boolean;
+  /** The viewer's own credit balance. Null when an admin views someone else's. */
+  creditBalance: number | null;
+  renewalHistory: AdRenewalHistoryEntry[];
   periods: AdPeriod[];
+};
+
+export type AdAutoRenewalState = {
+  advertisementId: string;
+  renewalMode: 'manual' | 'automatic';
+  autoRenewEnabled: boolean;
+  maximumWeeks: number | null;
+  renewalEndDate: string | null;
+  autoRenewEnabledAt: string | null;
+  autoRenewConsentVersion: string | null;
+  autoRenewPausedReason: AdAutoRenewPausedReason | null;
+  autoRenewPausedAt: string | null;
+  lastRenewalOutcome: string | null;
+  lastRenewalAttemptAt: string | null;
+  periodsUsed: number;
+  nextRenewalAt: string | null;
+  autoRenewalAvailable: boolean;
+  consentVersion: string;
 };
 
 export type AdminAdControls = {
@@ -240,6 +297,53 @@ export const advertisementsApiClient = {
       body: {},
       ...(idempotencyKey ? { idempotencyKey } : {}),
     }),
+  /**
+   * Turn automatic weekly renewal on or off, or change its bounds.
+   *
+   * Charges nothing. `consentAccepted` is mandatory when enabling — the server
+   * refuses without it, so the checkbox is not decoration.
+   *
+   * `undefined` leaves a bound as stored; `null` clears it. Sending neither
+   * bound while enabling is refused server-side: automatic renewal is never
+   * open-ended.
+   */
+  setAutoRenewal: (
+    token: string,
+    adId: string,
+    body: {
+      enabled: boolean;
+      consentAccepted?: boolean;
+      maximumWeeks?: number | null;
+      renewalEndDate?: string | null;
+    },
+  ) =>
+    apiReq<AdAutoRenewalState>(`/api/advertisements/${adId}/auto-renewal`, {
+      method: 'PUT',
+      token,
+      body,
+    }),
+  getAutoRenewalState: (token: string, adId: string) =>
+    apiReq<AdAutoRenewalState>(`/api/advertisements/${adId}/auto-renewal`, { token }),
+  /** Retry a paused automatic renewal after adding credits. */
+  retryAutoRenewal: (token: string, adId: string) =>
+    apiReq<{ renewed: boolean; mhcCharged: number; periodNumber: number; periodEndsAt: string }>(
+      `/api/advertisements/${adId}/auto-renewal/retry`,
+      { method: 'POST', token, body: {} },
+    ),
+  /** Every week this campaign has bought, with each week's own price snapshot. */
+  getPeriodHistory: (token: string, adId: string, params?: { page?: number; limit?: number }) => {
+    const qs = new URLSearchParams();
+    if (params?.page) qs.set('page', String(params.page));
+    if (params?.limit) qs.set('limit', String(params.limit));
+    const query = qs.toString();
+    return apiReq<{
+      rows: (AdPeriod & { createdAt: string })[];
+      total: number;
+      page: number;
+      limit: number;
+      totalPages: number;
+    }>(`/api/advertisements/${adId}/periods${query ? `?${query}` : ''}`, { token });
+  },
   cancelAd: (token: string, adId: string) =>
     apiReq<{ cancelled: boolean }>(`/api/advertisements/${adId}`, { method: 'DELETE', token }),
   trackAdClick: (token: string, adId: string) =>
