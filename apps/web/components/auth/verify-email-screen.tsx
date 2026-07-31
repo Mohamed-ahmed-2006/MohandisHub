@@ -1,9 +1,10 @@
 'use client';
 
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
+import { getSafeNextPath } from '@/components/auth/auth-form';
 import { isApiClientError, useAuth } from '@/components/auth/auth-provider';
 import { AuthStatusBanner } from '@/components/auth/auth-status-banner';
 import { LanguageToggle } from '@/components/language-toggle';
@@ -25,6 +26,7 @@ const RESEND_COOLDOWN_SECONDS = 60;
 
 export const VerifyEmailScreen = ({ locale, dictionary }: VerifyEmailScreenProps) => {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { authUser, accessToken, isAuthenticated, isReady, authGuard, refreshSession } = useAuth();
   const dict = dictionary.emailVerification;
 
@@ -71,11 +73,16 @@ export const VerifyEmailScreen = ({ locale, dictionary }: VerifyEmailScreenProps
     }
 
     if (authGuard.emailVerified) {
+      const safeNext = getSafeNextPath(locale, searchParams.get('next'));
+      if (safeNext) {
+        router.replace(safeNext);
+        return;
+      }
       const role = authUser.role;
       const onboardingPath = authUser.isAdmin ? '/app' : `/onboarding/${role}`;
       router.replace(buildLocalePath(locale, onboardingPath));
     }
-  }, [isReady, isAuthenticated, authUser, authGuard.emailVerified, locale, router]);
+  }, [isReady, isAuthenticated, authUser, authGuard.emailVerified, locale, router, searchParams]);
 
   const sendOtp = useCallback(async () => {
     if (!accessToken || isSending) return;
@@ -147,6 +154,11 @@ export const VerifyEmailScreen = ({ locale, dictionary }: VerifyEmailScreenProps
   };
 
   const handleContinue = (): void => {
+    const safeNext = getSafeNextPath(locale, searchParams.get('next'));
+    if (safeNext) {
+      router.replace(safeNext);
+      return;
+    }
     const role = authUser?.role ?? 'customer';
     const onboardingPath = role === 'admin' ? '/app' : `/onboarding/${role}`;
     router.replace(buildLocalePath(locale, onboardingPath));

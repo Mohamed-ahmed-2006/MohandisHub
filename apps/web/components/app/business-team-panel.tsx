@@ -19,7 +19,6 @@ export const BusinessTeamPanel = ({ dictionary, accessToken }: Props) => {
   const [notice, setNotice] = useState<string | null>(null);
   const [formValidationError, setFormValidationError] = useState<string | null>(null);
   const [pendingRemoval, setPendingRemoval] = useState<{ id: string; label: string } | null>(null);
-  const [transferOpen, setTransferOpen] = useState(false);
 
   const isArabic = /[؀-ۿ]/.test(dictionary.nav?.home ?? '');
   const tr = (en: string, ar: string) => (isArabic ? ar : en);
@@ -75,9 +74,6 @@ export const BusinessTeamPanel = ({ dictionary, accessToken }: Props) => {
   const canManageRoles = actions?.manageRoles === true;
   const canTransferOwnership = actions?.transferOwnership === true;
   const assignableRoles = (overview?.roles ?? []).filter((role) => role.assignable);
-  const transferCandidates = (overview?.members ?? []).filter(
-    (member) => !member.isOwner && !member.isSelf,
-  );
 
   const createRole = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -168,52 +164,12 @@ export const BusinessTeamPanel = ({ dictionary, accessToken }: Props) => {
     }
   };
 
-  const transferOwnership = async (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    if (!overview) return;
-    setFormValidationError(null);
-    const form = event.currentTarget;
-    const memberId = (form.elements.namedItem('targetMemberId') as HTMLSelectElement).value;
-    const confirmation = (form.elements.namedItem('confirmation') as HTMLInputElement).value;
-
-    if (!memberId) {
-      setFormValidationError(
-        tr('Choose the member who will become owner.', 'اختر العضو الذي سيصبح المالك.'),
-      );
-      return;
-    }
-    // Checked here for a quick answer and again by the backend, which is the one
-    // that decides. The typed name is what makes an irreversible action
-    // deliberate.
-    if (confirmation.trim().toLowerCase() !== (overview.team.name ?? '').trim().toLowerCase()) {
-      setFormValidationError(
-        tr('Type the workspace name exactly to confirm.', 'اكتب اسم مساحة العمل تمامًا للتأكيد.'),
-      );
-      return;
-    }
-
-    const ok = await mutate(
-      () => businessTeamsApiClient.transferOwnership(accessToken, { memberId, confirmation }),
-      tr('Could not transfer ownership.', 'تعذر نقل الملكية.'),
-    );
-    if (ok) {
-      form.reset();
-      setTransferOpen(false);
-      setNotice(
-        tr(
-          'Ownership transferred. You are now an admin of this workspace.',
-          'تم نقل الملكية. أنت الآن مسؤول في مساحة العمل.',
-        ),
-      );
-    }
-  };
-
   if (loading) return <p className="dashboard-empty">{dictionary.admin.loading}</p>;
   if (!overview || !viewer) return <p className="dashboard-error">{error}</p>;
 
   const tierLabel = (tier: 'owner' | 'admin' | 'member') =>
     tier === 'owner'
-      ? tr('Owner', 'مالك')
+      ? tr('Team Owner', 'مالك الفريق')
       : tier === 'admin'
         ? tr('Admin', 'مسؤول')
         : tr('Member', 'عضو');
@@ -236,14 +192,14 @@ export const BusinessTeamPanel = ({ dictionary, accessToken }: Props) => {
         }}
       >
         <div>
-          <h3 className="dashboard-section-title" style={{ margin: 0 }}>
+          <h3 className="dashboard-section-title" style={{ margin: 0, wordBreak: 'break-word' }}>
             {overview.team.name ?? tr('Business Team', 'فريق العمل')}
           </h3>
           <p className="dashboard-card-meta" style={{ margin: '0.25rem 0 0' }}>
             {tr('Workspace Team ID', 'معرف فريق مساحة العمل')}: {overview.team.id.slice(0, 8)}...
           </p>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
           <span className="dashboard-card-meta">
             {tr('Your Workspace Role', 'دورك في مساحة العمل')}:
           </span>
@@ -396,17 +352,40 @@ export const BusinessTeamPanel = ({ dictionary, accessToken }: Props) => {
                   required
                 />
                 <div className="dashboard-actions-row" style={{ flexWrap: 'wrap', gap: '0.5rem' }}>
-                  {BUSINESS_TEAM_PERMISSIONS.map((permission) => (
-                    <label
-                      key={permission}
-                      className="dashboard-chip"
-                      style={{ fontSize: '0.8rem' }}
-                    >
-                      <input name={permission} type="checkbox" />
-                      {permission.replace('_', ' ')}
-                    </label>
-                  ))}
+                  {BUSINESS_TEAM_PERMISSIONS.map((permission) => {
+                    const isEnforced = permission === 'manage_team';
+                    return (
+                      <label
+                        key={permission}
+                        className="dashboard-chip"
+                        style={{
+                          fontSize: '0.8rem',
+                          opacity: isEnforced ? 1 : 0.6,
+                          cursor: isEnforced ? 'pointer' : 'not-allowed',
+                        }}
+                      >
+                        <input
+                          name={permission}
+                          type="checkbox"
+                          disabled={!isEnforced}
+                          defaultChecked={isEnforced}
+                        />
+                        {permission.replace('_', ' ')}
+                        {!isEnforced && (
+                          <span style={{ fontSize: '0.75rem', opacity: 0.75 }}>
+                            {tr(' (Deferred)', ' (مؤجل)')}
+                          </span>
+                        )}
+                      </label>
+                    );
+                  })}
                 </div>
+                <p className="dashboard-card-meta" style={{ margin: '0.25rem 0 0', fontSize: '0.8rem' }}>
+                  {tr(
+                    'Only team administration (manage_team) is enforced for launch. Service, job, financial and analytics permissions are deferred.',
+                    'إدارة الفريق (manage_team) هي الصلاحية المطبقة حالياً. صلاحيات الخدمات والوظائف والمالية والتحليلات مؤجلة.',
+                  )}
+                </p>
                 <button className="dashboard-primary-btn" type="submit" disabled={busy}>
                   {busy ? tr('Creating...', 'جاري الإنشاء...') : tr('Create Role', 'إنشاء الدور')}
                 </button>
@@ -451,7 +430,7 @@ export const BusinessTeamPanel = ({ dictionary, accessToken }: Props) => {
             <tbody>
               {overview.members.map((member) => (
                 <tr key={member.id}>
-                  <td>
+                  <td style={{ wordBreak: 'break-word' }}>
                     <div style={{ fontWeight: 500 }}>
                       {member.displayName ?? member.userId.slice(0, 8)}
                       {member.isSelf && (
@@ -459,10 +438,9 @@ export const BusinessTeamPanel = ({ dictionary, accessToken }: Props) => {
                       )}
                     </div>
                   </td>
-                  <td>{member.email ?? '-'}</td>
+                  <td style={{ wordBreak: 'break-word' }}>{member.email ?? '-'}</td>
                   <td>
-                    {/* The owner's role is shown, never edited here: it moves
-                        only through an ownership transfer. */}
+                    {/* The owner's role is shown, never edited here. */}
                     {canAdministerTeam && !member.isOwner ? (
                       <select
                         className="dashboard-select"
@@ -542,7 +520,7 @@ export const BusinessTeamPanel = ({ dictionary, accessToken }: Props) => {
               <tbody>
                 {overview.invites.map((inviteItem) => (
                   <tr key={inviteItem.id}>
-                    <td>{inviteItem.email}</td>
+                    <td style={{ wordBreak: 'break-word' }}>{inviteItem.email}</td>
                     <td>{inviteItem.roleName}</td>
                     <td>
                       <span
@@ -584,92 +562,32 @@ export const BusinessTeamPanel = ({ dictionary, accessToken }: Props) => {
         </div>
       )}
 
-      {/* Business Workspace Operations & Ownership Transfer */}
+      {/* Team Ownership Presentation — Unavailable for Launch */}
       {canTransferOwnership && (
         <div
           style={{
             marginTop: '2rem',
             padding: '1rem',
             borderTop: '1px solid rgba(255, 255, 255, 0.1)',
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            flexWrap: 'wrap',
-            gap: '1rem',
+            background: 'rgba(255, 255, 255, 0.02)',
+            borderRadius: '8px',
           }}
         >
-          <div>
-            <h4 style={{ margin: 0, fontSize: '0.95rem' }}>
-              {tr('Business Ownership', 'ملكية مساحة العمل')}
-            </h4>
-            <p
-              className="dashboard-card-meta"
-              style={{ margin: '0.2rem 0 0', fontSize: '0.85rem' }}
-            >
-              {tr(
-                'Transfer primary ownership of this business workspace to another member. You become an admin.',
-                'نقل الملكية الرئيسية لمساحة العمل هذه إلى عضو آخر. ستصبح أنت مسؤولاً.',
-              )}
-            </p>
-          </div>
-          <button
-            type="button"
-            className="dashboard-secondary-btn"
-            style={{ fontSize: '0.85rem' }}
-            aria-expanded={transferOpen}
-            onClick={() => setTransferOpen((open) => !open)}
+          <h4 style={{ margin: 0, fontSize: '0.95rem' }}>
+            {tr('Team Ownership', 'ملكية الفريق')}
+          </h4>
+          <p
+            className="dashboard-card-meta"
+            style={{ margin: '0.4rem 0 0', fontSize: '0.85rem', lineHeight: '1.4' }}
           >
-            {transferOpen ? tr('Cancel', 'إلغاء') : tr('Transfer Ownership', 'نقل الملكية')}
-          </button>
-        </div>
-      )}
-
-      {canTransferOwnership && transferOpen && (
-        <div className="dashboard-card" style={{ marginTop: '1rem' }}>
-          {transferCandidates.length === 0 ? (
-            <p className="dashboard-card-meta">
-              {tr(
-                'Ownership can only be transferred to another member of this workspace. Invite someone first.',
-                'يمكن نقل الملكية إلى عضو آخر في مساحة العمل فقط. قم بدعوة عضو أولاً.',
-              )}
-            </p>
-          ) : (
-            <form className="dashboard-form" onSubmit={(e) => void transferOwnership(e)}>
-              <select
-                name="targetMemberId"
-                className="dashboard-select"
-                aria-label={tr('New owner', 'المالك الجديد')}
-                required
-                defaultValue=""
-              >
-                <option value="" disabled>
-                  {tr('Select the new owner', 'اختر المالك الجديد')}
-                </option>
-                {transferCandidates.map((member) => (
-                  <option key={member.id} value={member.id}>
-                    {member.displayName ?? member.email ?? member.userId.slice(0, 8)}
-                  </option>
-                ))}
-              </select>
-              <input
-                name="confirmation"
-                className="dashboard-input"
-                aria-label={tr('Confirm workspace name', 'تأكيد اسم مساحة العمل')}
-                placeholder={tr(
-                  `Type "${overview.team.name ?? ''}" to confirm`,
-                  `اكتب "${overview.team.name ?? ''}" للتأكيد`,
-                )}
-                required
-              />
-              <button className="dashboard-primary-btn" type="submit" disabled={busy}>
-                {busy
-                  ? tr('Transferring...', 'جاري النقل...')
-                  : tr('Confirm Transfer', 'تأكيد النقل')}
-              </button>
-            </form>
-          )}
+            {tr(
+              'Team ownership transfer is unavailable for launch. Workspace-wide asset control and ownership transfer actions are deferred.',
+              'نقل ملكية الفريق غير متاح حالياً للإطلاق. إجراءات نقل الملكية والتحكم التام بالأصول مؤجلة.',
+            )}
+          </p>
         </div>
       )}
     </section>
   );
 };
+

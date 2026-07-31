@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
 
 import { AwardOfferCard } from './award-offer-card';
+import { BusinessTeamPanel } from './business-team-panel';
 import { ExpertJobsTab } from './expert-jobs-tab';
 
 import { useToast } from '@/components/app/toast';
@@ -42,7 +43,7 @@ export const ExpertDashboard = ({
   const [editingBid, setEditingBid] = useState<Bid | null>(null);
   const [bidError, setBidError] = useState<string | null>(null);
   const [bidding, setBidding] = useState(false);
-  const [tab, setTab] = useState<'needs' | 'bids' | 'jobs'>('needs');
+  const [tab, setTab] = useState<'needs' | 'bids' | 'jobs' | 'team'>('needs');
   const [bidAmountInput, setBidAmountInput] = useState<string>('');
 
   const [chatBid, setChatBid] = useState<Bid | null>(null);
@@ -256,6 +257,13 @@ export const ExpertDashboard = ({
         >
           Jobs
         </button>
+        <button
+          type="button"
+          className={`dashboard-tab ${tab === 'team' ? 'dashboard-tab--active' : ''}`}
+          onClick={() => setTab('team')}
+        >
+          Team
+        </button>
       </div>
 
       {loading ? (
@@ -403,8 +411,10 @@ export const ExpertDashboard = ({
             ))}
           </div>
         )
-      ) : (
+      ) : tab === 'jobs' ? (
         <ExpertJobsTab accessToken={accessToken} dictionary={dictionary} />
+      ) : (
+        <BusinessTeamPanel dictionary={dictionary} accessToken={accessToken} />
       )}
 
       {bidNeed && (
