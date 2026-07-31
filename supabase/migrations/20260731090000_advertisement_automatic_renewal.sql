@@ -115,7 +115,10 @@ END $$;
 ALTER TABLE public.advertisements
   ADD COLUMN IF NOT EXISTS auto_renew_enabled_at      TIMESTAMPTZ,
   ADD COLUMN IF NOT EXISTS auto_renew_enabled_by      UUID REFERENCES public.users(id) ON DELETE SET NULL,
-  ADD COLUMN IF NOT EXISTS auto_renew_consent_version VARCHAR(20),
+  -- Wide enough for a dated, descriptive version such as
+  -- '2026-07-31.weekly-168h.v1'. VARCHAR(20) would have truncated it, and a
+  -- silently truncated consent version records the wrong agreement.
+  ADD COLUMN IF NOT EXISTS auto_renew_consent_version VARCHAR(40),
   ADD COLUMN IF NOT EXISTS auto_renew_paused_reason   VARCHAR(32),
   ADD COLUMN IF NOT EXISTS auto_renew_paused_at       TIMESTAMPTZ,
   ADD COLUMN IF NOT EXISTS last_renewal_outcome       VARCHAR(40),
