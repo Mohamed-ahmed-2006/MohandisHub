@@ -635,6 +635,38 @@ export class AdvertisementsRepository {
           [ids],
         );
         campaigns = rowCount ?? 0;
+
+        // Tell the advertiser their week ended, exactly once, in the same
+        // transaction that ended it. Scoped to MANUAL campaigns: an automatic
+        // one gets a renewal-succeeded or renewal-failed event at the same
+        // boundary instead, and two notifications for one boundary would be
+        // noise rather than information.
+        //
+        // `ON CONFLICT DO NOTHING` rather than a prior read: the partial unique
+        // index is the authority, and a lost race here must be a no-op instead
+        // of aborting an expiry that has already closed real periods.
+        await client.query(
+          `INSERT INTO advertisement_renewal_events (
+             advertisement_id, advertiser_id, boundary_period_number, event_type, detail
+           )
+           SELECT a.id,
+                  a.advertiser_id,
+                  COALESCE(
+                    (SELECT MAX(p.period_number)
+                       FROM advertisement_campaign_periods p
+                      WHERE p.advertisement_id = a.id),
+                    0
+                  ) + 1,
+                  'manual_renewal_required',
+                  '{}'::jsonb
+           FROM advertisements a
+           WHERE a.id = ANY($1::uuid[])
+             AND a.billing_model = 'weekly'
+             AND a.renewal_mode = 'manual'
+             AND a.status NOT IN ('cancelled', 'rejected')
+           ON CONFLICT DO NOTHING`,
+          [ids],
+        );
       }
       await client.query('COMMIT');
       return { periods: closed.length, campaigns };

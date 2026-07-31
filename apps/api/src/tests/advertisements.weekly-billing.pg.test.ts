@@ -1514,6 +1514,28 @@ describe.skipIf(!pgIntegrationEnabled())('moderation cannot be bypassed', () => 
 // header; if the two drift, this fails.
 
 const ROLLBACK_SQL = `
+-- Newest dependant first, exactly as the 20260730120000 header now instructs:
+-- 20260731090000 hangs advertisement_renewal_events.period_id off the period
+-- table, so the DROP below cannot run while that table exists.
+DROP TABLE IF EXISTS public.advertisement_renewal_events;
+
+ALTER TABLE public.advertisements
+  DROP CONSTRAINT IF EXISTS chk_advertisements_auto_renew_consent,
+  DROP CONSTRAINT IF EXISTS chk_advertisements_auto_renew_paused_reason,
+  DROP CONSTRAINT IF EXISTS chk_advertisements_auto_renew_paused_shape,
+  DROP CONSTRAINT IF EXISTS chk_advertisements_last_renewal_outcome;
+
+DROP INDEX IF EXISTS public.idx_advertisements_auto_renew_due;
+
+ALTER TABLE public.advertisements
+  DROP COLUMN IF EXISTS auto_renew_enabled_at,
+  DROP COLUMN IF EXISTS auto_renew_enabled_by,
+  DROP COLUMN IF EXISTS auto_renew_consent_version,
+  DROP COLUMN IF EXISTS auto_renew_paused_reason,
+  DROP COLUMN IF EXISTS auto_renew_paused_at,
+  DROP COLUMN IF EXISTS last_renewal_outcome,
+  DROP COLUMN IF EXISTS last_renewal_attempt_at;
+
 DROP TABLE IF EXISTS public.advertisement_campaign_periods;
 
 ALTER TABLE public.advertisements
@@ -1620,6 +1642,18 @@ describe.skipIf(!pgIntegrationEnabled())('migration forward and rollback', () =>
         (k) =>
           !k.includes('advertisement_campaign_periods') &&
           !k.includes('ad_period') &&
+          // Wave 2F-B objects, reversed first because they depend on the period
+          // table. Listed here rather than excluded from the rollback, so the
+          // combined reversal is still asserted to be exact.
+          !k.includes('advertisement_renewal_events') &&
+          !k.includes('ad_renewal_event') &&
+          !/advertisements\.(auto_renew_enabled_at|auto_renew_enabled_by|auto_renew_consent_version|auto_renew_paused_reason|auto_renew_paused_at|last_renewal_outcome|last_renewal_attempt_at)/.test(
+            k,
+          ) &&
+          !/chk_advertisements_(auto_renew_consent|auto_renew_paused_reason|auto_renew_paused_shape|last_renewal_outcome)/.test(
+            k,
+          ) &&
+          !/idx_advertisements_auto_renew_due/.test(k) &&
           !/advertisements\.(billing_model|billing_status|renewal_mode|auto_renew_enabled|maximum_weeks|renewal_end_date|current_period_starts_at|current_period_ends_at|next_renewal_at|renewal_count|manual_renewal_required)/.test(
             k,
           ) &&

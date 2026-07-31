@@ -40,6 +40,59 @@ export type AdBillingStatus =
 
 export type AdRenewalMode = 'manual' | 'automatic';
 
+/**
+ * Why the scheduler stopped renewing a campaign automatically.
+ *
+ * A reason, not a lifecycle state. `billing_status` still says what the campaign
+ * IS (`renewal_required` — the paid week ended and another must be bought); this
+ * says why nothing bought it. Keeping them separate is what leaves the
+ * advertiser's remedy — renew manually — reachable.
+ *
+ * A non-NULL value is also the gate that stops a failed boundary from being
+ * retried on a timer. Only an explicit advertiser action clears it.
+ */
+export type AdAutoRenewPausedReason =
+  | 'insufficient_credits'
+  | 'pricing_unavailable'
+  | 'max_weeks_reached'
+  | 'end_date_reached';
+
+/** What the most recent renewal attempt did. For display; the log is authoritative. */
+export type AdLastRenewalOutcome = 'succeeded' | AdAutoRenewPausedReason;
+
+/**
+ * One boundary outcome. The first eight are deduplicated by
+ * `uq_ad_renewal_event_boundary`; the two configuration acknowledgements are
+ * not, because turning automatic renewal off and on again is a real sequence of
+ * two decisions.
+ */
+export type AdRenewalEventType =
+  | 'initial_activated'
+  | 'renewal_succeeded'
+  | 'renewal_failed_insufficient_credits'
+  | 'renewal_failed_pricing_unavailable'
+  | 'manual_renewal_required'
+  | 'auto_renew_stopped_max_weeks'
+  | 'auto_renew_stopped_end_date'
+  | 'renewal_reminder'
+  | 'auto_renew_enabled'
+  | 'auto_renew_disabled';
+
+/** One row of the boundary event log / notification outbox. */
+export type AdvertisementRenewalEventRow = {
+  id: string;
+  advertisement_id: string;
+  advertiser_id: string;
+  /** The period number the campaign was trying to buy. */
+  boundary_period_number: number;
+  event_type: AdRenewalEventType;
+  period_id: string | null;
+  detail: Record<string, unknown>;
+  /** Stamped when the durable in-app notification for this event exists. */
+  notified_at: string | null;
+  created_at: string;
+};
+
 export type AdPeriodStatus = 'scheduled' | 'active' | 'expired' | 'cancelled' | 'failed';
 
 export type AdRenewalSource = 'initial' | 'manual' | 'automatic' | 'legacy';
@@ -118,6 +171,16 @@ export type AdvertisementRow = {
   next_renewal_at: string | null;
   renewal_count: number;
   manual_renewal_required: boolean;
+
+  // Automatic renewal consent and scheduler state (20260731090000).
+  /** NOT NULL whenever auto_renew_enabled is true — enforced by a CHECK. */
+  auto_renew_enabled_at: string | null;
+  auto_renew_enabled_by: string | null;
+  auto_renew_consent_version: string | null;
+  auto_renew_paused_reason: AdAutoRenewPausedReason | null;
+  auto_renew_paused_at: string | null;
+  last_renewal_outcome: AdLastRenewalOutcome | null;
+  last_renewal_attempt_at: string | null;
 };
 
 /** One paid seven-day advertisement week. */
@@ -145,4 +208,10 @@ export type AdvertisementPeriodResult = {
   mhcCharged: number;
   /** False when the call resolved to a week that already existed. */
   created: boolean;
+  /**
+   * The boundary event this call committed, if any. The caller hands it to the
+   * notifier AFTER its own COMMIT; an id that is never handed over is delivered
+   * by the sweep instead, never lost.
+   */
+  renewalEventId?: string | null;
 };

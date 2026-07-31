@@ -46,6 +46,12 @@ const CHARGE_MIGRATION = '20260729140000_mhc_action_charges.sql';
  *     plan_subscriptions.action_charge_id             -> mhc_action_charges(id)
  *   20260730120000 (weekly advertisement billing)
  *     advertisement_campaign_periods.action_charge_id -> mhc_action_charges(id)
+ *
+ * ...and one of those dependants has a dependant of its own, which therefore
+ * has to go first inside step 1:
+ *   20260731090000 (automatic advertisement renewal)
+ *     advertisement_renewal_events.period_id -> advertisement_campaign_periods(id)
+ *
  * Step 2 drops this migration's own table.
  *
  * A bare DROP TABLE fails while either foreign key exists — proven by
@@ -58,6 +64,7 @@ const CHARGE_MIGRATION = '20260729140000_mhc_action_charges.sql';
  * updating the documented rollback fails here rather than in an incident.
  */
 const ROLLBACK_STEP_1_DEPENDANTS = [
+  'DROP TABLE IF EXISTS public.advertisement_renewal_events;',
   'DROP TABLE IF EXISTS public.advertisement_campaign_periods;',
   'ALTER TABLE public.plan_subscriptions DROP COLUMN IF EXISTS action_charge_id;',
 ].join('\n');
@@ -677,13 +684,25 @@ describe.skipIf(!pgIntegrationEnabled())('P0-07 migration against real PostgreSQ
       // 20260730120000 (weekly advertisement billing). Asserted as an exact set,
       // so an unnoticed extra casualty fails here.
       const removedElsewhere = removed.filter(
-        (k) => !k.includes('mhc_action_charges') && !k.includes('advertisement_campaign_periods'),
+        (k) =>
+          !k.includes('mhc_action_charges') &&
+          !k.includes('advertisement_campaign_periods') &&
+          // The period table's own dependant, dropped first inside step 1.
+          !k.includes('advertisement_renewal_events') &&
+          !k.includes('ad_renewal_event'),
       );
       expect(removedElsewhere).toEqual([
         'column:plan_subscriptions.action_charge_id',
         'constraint:plan_subscriptions::plan_subscriptions_action_charge_id_fkey',
         'index:plan_subscriptions.idx_plan_subscriptions_charge',
       ]);
+      // Step 1's first line really ran: the period table could not have been
+      // dropped while this one referenced it.
+      expect(removed).toContain('table:advertisement_renewal_events');
+      // The campaign's own automatic-renewal configuration survives — only the
+      // boundary LOG goes, not the consent record.
+      expect(after.has('column:advertisements.auto_renew_enabled')).toBe(true);
+      expect(after.has('column:advertisements.auto_renew_enabled_at')).toBe(true);
       // Dropping the period table takes its own objects and nothing else. The
       // advertisement rows and their billing columns are untouched: only the
       // record of WHICH week each charge paid for goes.

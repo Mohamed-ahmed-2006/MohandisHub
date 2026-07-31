@@ -77,13 +77,43 @@ advertisementsRouter.post(
   requireVerified,
   advertisementsController.activateAd,
 );
-/** Refuses to enable while no renewal scheduler exists. */
+/**
+ * Turn automatic weekly renewal on or off, or change its bounds.
+ *
+ * `requireVerified` alongside the role check, matching renew and activate:
+ * enabling automatic renewal is a standing instruction to spend credits, and it
+ * should not be reachable by an account that may not spend them today.
+ */
 advertisementsRouter.put(
   '/:id/auto-renewal',
   authenticate,
   requireEmailVerified,
   requireRole('expert', 'business', 'craftsman'),
+  requireVerified,
   advertisementsController.setAutoRenewal,
+);
+/** The stored configuration and the consent record behind it. Owner or admin. */
+advertisementsRouter.get(
+  '/:id/auto-renewal',
+  authenticate,
+  requireEmailVerified,
+  advertisementsController.getAutoRenewalState,
+);
+/** Explicit retry of a paused automatic renewal — the way out of "no credits". */
+advertisementsRouter.post(
+  '/:id/auto-renewal/retry',
+  authenticate,
+  requireEmailVerified,
+  requireRole('expert', 'business', 'craftsman'),
+  requireVerified,
+  advertisementsController.retryAutoRenewal,
+);
+/** Every week this campaign has bought, paginated. Owner or admin. */
+advertisementsRouter.get(
+  '/:id/periods',
+  authenticate,
+  requireEmailVerified,
+  advertisementsController.listPeriodHistory,
 );
 
 // ---------------------------------------------------------------------------

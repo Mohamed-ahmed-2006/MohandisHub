@@ -6,6 +6,8 @@ import { getPool } from '../../db/pool.js';
 import { HttpError } from '../../utils/http-error.js';
 import { MhcService } from '../mhc/mhc.service.js';
 
+import { AdvertisementRenewalNotifier } from './advertisement-renewal.notifier.js';
+import { AdvertisementRenewalRepository } from './advertisement-renewal.repository.js';
 import { AD_PERIOD_MS, AdvertisementsRepository } from './advertisements.repository.js';
 import type {
   AdRenewalSource,
@@ -46,6 +48,8 @@ export class AdvertisementBillingService {
   constructor(
     private readonly repo: AdvertisementsRepository = new AdvertisementsRepository(),
     private readonly mhc: MhcService = new MhcService(),
+    private readonly renewalRepo: AdvertisementRenewalRepository = new AdvertisementRenewalRepository(),
+    private readonly notifier: AdvertisementRenewalNotifier = new AdvertisementRenewalNotifier(),
   ) {}
 
   /**
@@ -68,9 +72,16 @@ export class AdvertisementBillingService {
    *
    * `startsAt` is the activation instant, never a backdated schedule: an
    * advertiser who pays for a week gets a full week of serving from the moment
-   * the credits leave their balance.
+   * the credits leave their balance. That is also what makes a LATE worker
+   * harmless — a renewal that runs three hours after the boundary still buys a
+   * complete 168 hours, rather than three hours of it having already elapsed.
+   *
+   * Public because the automatic-renewal service opens period N+1 through the
+   * same code path the manual and initial ones use. There is deliberately no
+   * second implementation of "charge, then open a week": a divergence between
+   * them is exactly how a double charge would be introduced.
    */
-  private async chargeAndOpenPeriodInTx(
+  async chargeAndOpenPeriodInTx(
     client: PoolClient,
     ad: AdvertisementRow,
     options: {
@@ -146,13 +157,50 @@ export class AdvertisementBillingService {
         message: 'This advertisement has already been activated.',
       });
     }
-    return this.chargeAndOpenPeriodInTx(client, ad, {
+    const result = await this.chargeAndOpenPeriodInTx(client, ad, {
       periodNumber: 1,
       startsAt: options.startsAt,
       renewalSource: 'initial',
       countsAsRenewal: false,
       ...(options.actorUserId !== undefined ? { actorUserId: options.actorUserId } : {}),
     });
+
+    // Record the boundary outcome in the SAME transaction as the charge and the
+    // period, so "the first week started" cannot be claimed for a week that was
+    // never bought, and cannot be claimed twice: `uq_ad_renewal_event_boundary`
+    // makes boundary 1 record `initial_activated` exactly once, whether the
+    // week was opened by an admin approving an immediate campaign or by the
+    // scheduler finding a future start due.
+    //
+    // Delivery is deliberately NOT here. See advertisement-renewal.notifier.ts.
+    const event = await this.renewalRepo.insertEventInTx(client, {
+      advertisementId: ad.id,
+      advertiserId: ad.advertiser_id,
+      boundaryPeriodNumber: 1,
+      eventType: 'initial_activated',
+      periodId: result.period?.id ?? null,
+      detail: {
+        mhcCharged: result.mhcCharged,
+        ...(result.period ? { periodEndsAt: result.period.ends_at } : {}),
+      },
+    });
+    // Returned rather than remembered on this service. The period is opened
+    // inside a transaction the CALLER owns, so only the caller knows when the
+    // commit happened and it is safe to send anything — and per-instance state
+    // would let one request dispatch another request's uncommitted event.
+    return { ...result, renewalEventId: event.id };
+  }
+
+  /**
+   * Hand a committed event to the notifier, after the caller's COMMIT.
+   *
+   * Fire and forget by design: an event that is not delivered here survives
+   * with `notified_at IS NULL` and the sweep delivers it. A push must never be
+   * the reason a request whose financial half already committed reports a
+   * failure.
+   */
+  notifyAfterCommit(eventId: string | null | undefined): void {
+    this.notifier.deliverSoon(eventId);
   }
 
   /**
@@ -258,6 +306,9 @@ export class AdvertisementBillingService {
       }
 
       await client.query('COMMIT');
+      // Only now: the week is committed, and no lock this transaction took is
+      // still held.
+      this.notifyAfterCommit(result.renewalEventId);
       return result;
     } catch (error) {
       await client.query('ROLLBACK').catch(() => {});

@@ -7,8 +7,19 @@ import { WalletRepository } from '../wallet/wallet.repository.js';
 
 import { AdCenterService } from './adcenter.service.js';
 import { AdvertisementBillingService } from './advertisement-billing.service.js';
+import { AdvertisementRenewalRepository } from './advertisement-renewal.repository.js';
+import {
+  AUTO_RENEW_CONSENT_VERSION,
+  AdvertisementRenewalService,
+  type AutoRenewalStateView,
+  type AutomaticRenewalResult,
+} from './advertisement-renewal.service.js';
 import { AdvertisementsRepository } from './advertisements.repository.js';
-import type { AdvertisementPeriodResult, AdvertisementRow } from './advertisements.types.js';
+import type {
+  AdAutoRenewPausedReason,
+  AdvertisementPeriodResult,
+  AdvertisementRow,
+} from './advertisements.types.js';
 import type {
   AdCenterResolveInput,
   AdminAdControlsInput,
@@ -17,6 +28,7 @@ import type {
   AutoRenewalInput,
   CreateAdInput,
   ListAdsQueryInput,
+  PeriodHistoryQueryInput,
   UpdateAdInput,
 } from './advertisements.validation.js';
 
@@ -63,9 +75,38 @@ export type AdBillingStateView = {
   reviewedAt: string | null;
   canRenew: boolean;
   canActivate: boolean;
-  /** Automatic renewal is not implemented in this wave. Always false. */
+  /** Whether this campaign may be switched to automatic renewal at all. */
   autoRenewalAvailable: boolean;
   autoRenewEnabled: boolean;
+  renewalMode: 'manual' | 'automatic';
+  maximumWeeks: number | null;
+  renewalEndDate: string | null;
+  /** When consent to the standing weekly charge was recorded. */
+  autoRenewEnabledAt: string | null;
+  autoRenewConsentVersion: string | null;
+  /** The terms version a client must accept to enable automatic renewal now. */
+  consentVersion: string;
+  /** Why the scheduler stopped. Not a lifecycle state — see billingStatus. */
+  autoRenewPausedReason: AdAutoRenewPausedReason | null;
+  autoRenewPausedAt: string | null;
+  lastRenewalOutcome: string | null;
+  lastRenewalAttemptAt: string | null;
+  /** Total weeks this campaign has ever bought, including the first. */
+  periodsUsed: number;
+  /** When the running week ends, and therefore when a renewal becomes possible. */
+  nextRenewalAt: string | null;
+  /** Whether an explicit retry of a paused automatic renewal is offered. */
+  canRetryAutomaticRenewal: boolean;
+  /** The provider's own credit balance. Null for an admin viewing someone else's. */
+  creditBalance: number | null;
+  renewalHistory: {
+    id: string;
+    eventType: string;
+    periodNumber: number;
+    createdAt: string;
+    mhcCharged: number | null;
+    requiredMhc: number | null;
+  }[];
   periods: {
     id: string;
     periodNumber: number;
@@ -92,6 +133,12 @@ export class AdvertisementsService {
     private readonly billing: AdvertisementBillingService = new AdvertisementBillingService(
       repo,
       mhc,
+    ),
+    private readonly renewalRepo: AdvertisementRenewalRepository = new AdvertisementRenewalRepository(),
+    private readonly renewal: AdvertisementRenewalService = new AdvertisementRenewalService(
+      repo,
+      renewalRepo,
+      billing,
     ),
   ) {}
 
@@ -437,6 +484,9 @@ export class AdvertisementsService {
       }
 
       await client.query('COMMIT');
+      // The first week is committed; tell the advertiser their campaign is
+      // live. Nothing is locked any more, and a failed push cannot undo it.
+      this.billing.notifyAfterCommit(result.renewalEventId);
       return result;
     } catch (error) {
       await client.query('ROLLBACK').catch(() => {});
@@ -482,34 +532,92 @@ export class AdvertisementsService {
   }
 
   /**
-   * Automatic renewal is not implemented.
+   * Switch this campaign between manual and automatic renewal, or change its
+   * bounds.
    *
-   * The endpoint exists so a client receives a stable refusal instead of
-   * persisting a campaign that depends on a scheduler nobody has built. Turning
-   * automatic renewal OFF is accepted, because that is already the only state.
+   * Charges nothing, and never touches the running week. Ownership, consent and
+   * every bound are re-checked inside the transaction that locks the campaign —
+   * see AdvertisementRenewalService.configureAutoRenewal.
    */
   async setAutoRenewal(
     adId: string,
     userId: string,
     input: AutoRenewalInput,
-  ): Promise<{ autoRenewEnabled: false; autoRenewalAvailable: false }> {
+  ): Promise<AutoRenewalStateView> {
+    return this.renewal.configureAutoRenewal({
+      advertisementId: adId,
+      providerId: userId,
+      input,
+    });
+  }
+
+  /** The campaign's automatic-renewal configuration. Ownership-checked. */
+  async getAutoRenewalState(
+    adId: string,
+    requester: { id: string; isAdmin: boolean },
+  ): Promise<AutoRenewalStateView> {
+    return this.renewal.getAutoRenewalState(adId, requester);
+  }
+
+  /**
+   * Try the automatic renewal again, at the advertiser's explicit request —
+   * the supported way out of `awaiting credits`.
+   *
+   * Deliberately the SAME operation the scheduler runs, with the same locks and
+   * the same exactly-once guarantees; the only differences are that it waits for
+   * the lock instead of skipping, and that it clears the pause the previous
+   * failure set. There is no second charging path for a human to reach.
+   */
+  async retryAutomaticRenewal(adId: string, userId: string): Promise<AutomaticRenewalResult> {
+    return this.renewal.renewAutomatically(adId, {
+      blocking: true,
+      clearPause: true,
+      requireAdvertiserId: userId,
+      actorUserId: userId,
+    });
+  }
+
+  /**
+   * One page of this campaign's weeks.
+   *
+   * Ownership is enforced HERE, on the server, against the stored
+   * `advertiser_id` — never from a client-supplied filter. The response carries
+   * what a provider needs to reconcile what they were charged (period number,
+   * window, status, how it was bought, the immutable price snapshot) and
+   * deliberately not the ledger identifiers behind it.
+   */
+  async listPeriodHistory(
+    adId: string,
+    requester: { id: string; isAdmin: boolean },
+    query: PeriodHistoryQueryInput,
+  ) {
     const ad = await this.getAd(adId);
-    if (ad.advertiser_id !== userId) {
+    if (!requester.isAdmin && ad.advertiser_id !== requester.id) {
       throw new HttpError({
         statusCode: 403,
         code: 'FORBIDDEN',
         message: 'This ad does not belong to you.',
       });
     }
-    if (input.enabled) {
-      throw new HttpError({
-        statusCode: 409,
-        code: 'AUTO_RENEWAL_NOT_AVAILABLE',
-        message:
-          'Automatic weekly renewal is not available yet. Renew manually when the week ends.',
-      });
-    }
-    return { autoRenewEnabled: false, autoRenewalAvailable: false };
+    const { rows, total } = await this.renewalRepo.listPeriodsPaged(adId, query.page, query.limit);
+    return {
+      rows: rows.map((row) => ({
+        id: row.id,
+        periodNumber: row.period_number,
+        startsAt: row.starts_at,
+        endsAt: row.ends_at,
+        mhcPriceSnapshot: parseFloat(row.mhc_price_snapshot),
+        status: row.status,
+        renewalSource: row.renewal_source,
+        /** Whether credits actually moved. A free week moves none and writes no charge. */
+        hasCharge: row.action_charge_id !== null,
+        createdAt: row.created_at,
+      })),
+      total,
+      page: query.page,
+      limit: query.limit,
+      totalPages: Math.max(1, Math.ceil(total / query.limit)),
+    };
   }
 
   /**
@@ -530,9 +638,14 @@ export class AdvertisementsService {
         message: 'This ad does not belong to you.',
       });
     }
-    const [periods, controls] = await Promise.all([
+    const isOwner = ad.advertiser_id === requester.id;
+    const [periods, controls, renewalHistory, creditBalance] = await Promise.all([
       this.repo.listPeriods(adId),
       this.getControls(),
+      this.renewal.listRenewalHistory(adId, 10),
+      // Only ever the requester's OWN balance. An admin looking at somebody
+      // else's campaign is shown no balance at all rather than theirs.
+      isOwner ? this.renewal.getBalanceFor(requester.id).catch(() => null) : Promise.resolve(null),
     ]);
 
     const isWeekly = ad.billing_model === 'weekly';
@@ -556,9 +669,39 @@ export class AdvertisementsService {
         ad.status === 'scheduled' &&
         (ad.billing_status === 'awaiting_credits' || ad.billing_status === 'awaiting_start') &&
         startDue,
-      // Not a preference and not a toggle: no scheduler exists in this wave.
-      autoRenewalAvailable: false,
-      autoRenewEnabled: false,
+      // A campaign that can never be renewed is never offered a toggle. A
+      // legacy campaign has no periods and is never charged in credits; a
+      // cancelled or rejected one may not buy another week.
+      autoRenewalAvailable:
+        isWeekly &&
+        ad.status !== 'cancelled' &&
+        ad.status !== 'rejected' &&
+        ad.billing_status !== 'cancelled',
+      autoRenewEnabled: ad.auto_renew_enabled,
+      renewalMode: ad.renewal_mode,
+      maximumWeeks: ad.maximum_weeks,
+      renewalEndDate: ad.renewal_end_date,
+      autoRenewEnabledAt: ad.auto_renew_enabled_at,
+      autoRenewConsentVersion: ad.auto_renew_consent_version,
+      consentVersion: AUTO_RENEW_CONSENT_VERSION,
+      autoRenewPausedReason: ad.auto_renew_paused_reason,
+      autoRenewPausedAt: ad.auto_renew_paused_at,
+      lastRenewalOutcome: ad.last_renewal_outcome,
+      lastRenewalAttemptAt: ad.last_renewal_attempt_at,
+      periodsUsed: periods.length > 0 ? Math.max(...periods.map((p) => p.period_number)) : 0,
+      nextRenewalAt: ad.next_renewal_at,
+      // Offered only where it can actually do something: an automatic campaign
+      // the scheduler has stopped, whose advertiser can fix the cause. A
+      // boundary that was REACHED (max weeks, end date) is not retryable —
+      // there is no further week to buy.
+      canRetryAutomaticRenewal:
+        isWeekly &&
+        ad.auto_renew_enabled &&
+        ad.renewal_mode === 'automatic' &&
+        (ad.auto_renew_paused_reason === 'insufficient_credits' ||
+          ad.auto_renew_paused_reason === 'pricing_unavailable'),
+      creditBalance,
+      renewalHistory,
       periods: periods.map((period) => ({
         id: period.id,
         periodNumber: period.period_number,

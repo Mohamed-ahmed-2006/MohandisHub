@@ -138,15 +138,43 @@ export const adminAdControlsSchema = z.object({
 });
 
 /**
- * Automatic renewal is not implemented. The endpoint exists so a client gets a
- * stable `AUTO_RENEWAL_NOT_AVAILABLE` refusal rather than silently persisting a
- * campaign that depends on a scheduler nobody has built.
+ * Automatic weekly renewal configuration.
+ *
+ * Three shapes matter and are all expressible:
+ *
+ *   omitted   — leave whatever is stored;
+ *   null      — clear this bound;
+ *   a value   — set this bound.
+ *
+ * That distinction is why the bounds are `.nullable().optional()` rather than
+ * merely optional: "stop capping the number of weeks" and "do not change the
+ * cap" are different instructions, and collapsing them would silently drop a
+ * limit an advertiser set.
+ *
+ * There is deliberately NO price, amount, period length, period number or
+ * balance field. The weekly price is resolved server-side inside the charging
+ * transaction, and the period length is a CHECK constraint — neither is
+ * something a client is permitted to have an opinion about.
  */
-export const autoRenewalSchema = z.object({
-  enabled: z.boolean(),
-  maximumWeeks: z.coerce.number().int().min(1).max(520).nullable().optional(),
-  renewalEndDate: z.string().datetime().nullable().optional(),
-});
+export const autoRenewalSchema = z
+  .object({
+    enabled: z.boolean(),
+    /**
+     * Explicit agreement to a standing weekly charge. Required to ENABLE, and
+     * meaningless when disabling — turning something off has never needed
+     * consent. Enforced again in the service against the locked row, because
+     * validation is a convenience and authorisation is not.
+     */
+    consentAccepted: z.boolean().optional(),
+    /** Total weekly periods this campaign may ever buy, INCLUDING the first. */
+    maximumWeeks: z.coerce.number().int().min(1).max(520).nullable().optional(),
+    /** No period may END after this instant. A partial final week is never sold. */
+    renewalEndDate: z.string().datetime().nullable().optional(),
+  })
+  .refine((input) => !input.enabled || input.consentAccepted === true, {
+    message: 'Automatic renewal requires explicit consent.',
+    path: ['consentAccepted'],
+  });
 
 export const createPricingRuleSchema = z.object({
   name: z.string().trim().min(2).max(200),
@@ -165,6 +193,12 @@ export const createPricingRuleSchema = z.object({
 });
 
 export const updatePricingRuleSchema = createPricingRuleSchema.partial();
+
+/** One page of a campaign's weeks. Bounded so a caller cannot ask for all of them. */
+export const periodHistoryQuerySchema = z.object({
+  page: z.coerce.number().int().min(1).default(1),
+  limit: z.coerce.number().int().min(1).max(50).default(20),
+});
 
 export const adCenterResolveSchema = z.object({
   locale: z.string().trim().optional(),
@@ -185,6 +219,7 @@ export type AdminScheduleInput = z.infer<typeof adminScheduleSchema>;
 export type AdminPricingOverrideInput = z.infer<typeof adminPricingOverrideSchema>;
 export type AdminAdControlsInput = z.infer<typeof adminAdControlsSchema>;
 export type AutoRenewalInput = z.infer<typeof autoRenewalSchema>;
+export type PeriodHistoryQueryInput = z.infer<typeof periodHistoryQuerySchema>;
 export type CreatePricingRuleInput = z.infer<typeof createPricingRuleSchema>;
 export type UpdatePricingRuleInput = z.infer<typeof updatePricingRuleSchema>;
 export type AdCenterResolveInput = z.infer<typeof adCenterResolveSchema>;

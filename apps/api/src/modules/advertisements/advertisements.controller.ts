@@ -13,6 +13,7 @@ import {
   autoRenewalSchema,
   createAdSchema,
   listAdsQuerySchema,
+  periodHistoryQuerySchema,
   updateAdSchema,
 } from './advertisements.validation.js';
 
@@ -147,11 +148,131 @@ const activateAd = asyncHandler(async (req, res) => {
   res.json({ ok: true, data });
 });
 
-/** Always refuses to enable. Automatic renewal has no implementation yet. */
+/**
+ * Turn automatic weekly renewal on or off, or change its bounds.
+ *
+ * Charges nothing and never touches the running week. Ownership and consent are
+ * re-checked in the service, inside the transaction that locks the campaign —
+ * not here, where a check would race the write.
+ */
 const setAutoRenewal = asyncHandler(async (req, res) => {
   const user = requireUser(req);
   const input = parseBody(autoRenewalSchema, req.body);
+  const before = await svc.getAutoRenewalState(req.params.id!, { id: user.id, isAdmin: false });
   const data = await svc.setAutoRenewal(req.params.id!, user.id, input);
+  // Consent to a standing weekly charge is worth an audit row. Only a real
+  // transition is recorded, so re-submitting the same settings does not fill
+  // the log with non-events.
+  if (before.autoRenewEnabled !== data.autoRenewEnabled) {
+    await logAudit({
+      actorId: user.id,
+      action: data.autoRenewEnabled ? 'ad.auto_renewal.enable' : 'ad.auto_renewal.disable',
+      resourceType: 'advertisement',
+      resourceId: req.params.id!,
+      details: {
+        maximumWeeks: data.maximumWeeks,
+        renewalEndDate: data.renewalEndDate,
+        consentVersion: data.autoRenewEnabled ? data.autoRenewConsentVersion : null,
+      },
+      ip: requestIp(req),
+    });
+  }
+  res.json({ ok: true, data });
+});
+
+/**
+ * Try a paused automatic renewal again, at the advertiser's explicit request.
+ *
+ * The supported way out of "not enough credits": top up, then press this. It
+ * runs the SAME locked, exactly-once operation the scheduler runs, so pressing
+ * it twice, or pressing it while the scheduler acts, cannot buy two weeks.
+ *
+ * The outcome is mapped to HTTP rather than thrown from the service, because
+ * "paused again for the same reason" is a real answer with a real remedy, not
+ * an exception.
+ */
+const retryAutoRenewal = asyncHandler(async (req, res) => {
+  const user = requireUser(req);
+  const result = await svc.retryAutomaticRenewal(req.params.id!, user.id);
+
+  if (result.outcome === 'renewed') {
+    res.json({
+      ok: true,
+      data: {
+        renewed: true,
+        mhcCharged: result.mhcCharged,
+        periodNumber: result.period.period_number,
+        periodEndsAt: result.period.ends_at,
+      },
+    });
+    return;
+  }
+
+  if (result.outcome === 'paused') {
+    const paused = {
+      insufficient_credits: {
+        statusCode: 402,
+        code: 'MHC_INSUFFICIENT_CREDITS',
+        message: 'You do not have enough credits for another advertisement week.',
+      },
+      pricing_unavailable: {
+        statusCode: 503,
+        code: 'MHC_ACTION_PRICE_MISSING',
+        message: 'Advertisement pricing is unavailable, so no week could be bought.',
+      },
+      max_weeks_reached: {
+        statusCode: 409,
+        code: 'AD_RENEWAL_LIMIT_REACHED',
+        message: 'This campaign has reached its configured maximum number of weeks.',
+      },
+      end_date_reached: {
+        statusCode: 409,
+        code: 'AD_RENEWAL_WINDOW_CLOSED',
+        message: 'A full week would run past this campaign’s configured end date.',
+      },
+    }[result.reason];
+    throw new HttpError({
+      statusCode: paused.statusCode,
+      code: paused.code,
+      message: paused.message,
+      details: { reason: result.reason, requiredMhc: result.requiredMhc },
+    });
+  }
+
+  // Skipped: the campaign is not in a state a retry can act on. Reported as one
+  // stable code with the specific reason attached, so a client can explain it
+  // without guessing from a message string.
+  throw new HttpError({
+    statusCode: 409,
+    code: 'AD_RENEWAL_NOT_ELIGIBLE',
+    message: 'This advertisement is not waiting for an automatic renewal.',
+    details: { reason: result.reason },
+  });
+});
+
+/** The campaign's automatic-renewal configuration and consent record. */
+const getAutoRenewalState = asyncHandler(async (req, res) => {
+  const user = requireUser(req);
+  const data = await svc.getAutoRenewalState(req.params.id!, {
+    id: user.id,
+    isAdmin: user.isAdmin === true,
+  });
+  res.json({ ok: true, data });
+});
+
+/**
+ * One page of this campaign's weeks, with the immutable price snapshot of each.
+ *
+ * Ownership is enforced in the service against the stored advertiser id.
+ */
+const listPeriodHistory = asyncHandler(async (req, res) => {
+  const user = requireUser(req);
+  const query = parseBody(periodHistoryQuerySchema, req.query);
+  const data = await svc.listPeriodHistory(
+    req.params.id!,
+    { id: user.id, isAdmin: user.isAdmin === true },
+    query,
+  );
   res.json({ ok: true, data });
 });
 
@@ -320,6 +441,9 @@ export const advertisementsController = {
   renewAd,
   activateAd,
   setAutoRenewal,
+  retryAutoRenewal,
+  getAutoRenewalState,
+  listPeriodHistory,
   listActiveResolved,
   trackClick,
   adminApprove,
