@@ -2,6 +2,7 @@ import type { Pool } from 'pg';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AdvertisementBillingService } from '../modules/advertisements/advertisement-billing.service.js';
+import { AdvertisementRenewalNotifier } from '../modules/advertisements/advertisement-renewal.notifier.js';
 import { AdvertisementsRepository } from '../modules/advertisements/advertisements.repository.js';
 import { AdvertisementsService } from '../modules/advertisements/advertisements.service.js';
 
@@ -163,6 +164,15 @@ afterAll(async () => {
 
 beforeEach(async () => {
   if (!pgIntegrationEnabled()) return;
+  vi.restoreAllMocks();
+  // Approving a campaign now queues a boundary notification, dispatched fire
+  // and forget. That transaction locks the event row and touches
+  // `notifications`, while the cleanup below cascades from `advertisements`
+  // INTO the event table — the opposite lock order, which deadlocked this
+  // suite's `beforeEach`. Delivery is not what this file is about and has its
+  // own coverage in advertisements.automatic-renewal.pg.test.ts, so it is
+  // switched off here rather than raced against.
+  vi.spyOn(AdvertisementRenewalNotifier.prototype, 'deliverSoon').mockImplementation(() => {});
   // A clean slate per test, inside the scratch database only. Periods go before
   // charges: `advertisement_campaign_periods.action_charge_id` is ON DELETE
   // RESTRICT, so a charge cannot be removed while a week still points at it.

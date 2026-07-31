@@ -186,8 +186,14 @@ const makeService = (
       event_type: input.eventType,
       period_id: input.periodId ?? null,
       detail: input.detail ?? {},
-      notified_at: null,
       created_at: new Date().toISOString(),
+      delivery_status: 'pending',
+      claim_expires_at: null,
+      claimed_at: null,
+      attempt_count: 0,
+      last_delivery_error: null,
+      delivered_at: null,
+      in_app_notification_id: null,
     }),
   );
   vi.spyOn(renewalRepo, 'writeAutoRenewalConfigInTx').mockImplementation((_c, params) =>

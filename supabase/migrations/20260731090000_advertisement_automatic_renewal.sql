@@ -23,9 +23,10 @@
 --          than by application logic. Ten workers racing produce one row;
 --        * the no-repeat-debit gate — a boundary that already failed carries a
 --          row, so a sweep cannot re-attempt the same charge on a timer;
---        * a notification OUTBOX — `notified_at` is stamped when the in-app row
---          is written. A crash between the financial commit and the push cannot
---          lose the notification, and cannot send it twice;
+--        * a notification OUTBOX with a delivery LEASE. A crash between the
+--          financial commit and the push cannot lose the notification, and a
+--          worker that dies mid-delivery cannot strand it. External delivery is
+--          at-least-once, not exactly-once — see the delivery columns below;
 --        * renewal history for the provider's screen, without exposing ledger
 --          internals.
 --
@@ -231,11 +232,37 @@ CREATE TABLE IF NOT EXISTS public.advertisement_renewal_events (
   -- boundary that was reached. Never a balance, never an identifier belonging
   -- to anybody but the advertiser, never a ledger internal.
   detail                 JSONB         NOT NULL DEFAULT '{}'::jsonb,
-  -- The OUTBOX stamp. Set when the durable in-app notification row exists.
-  -- NULL means "committed but not yet delivered", which is exactly the state a
-  -- crash between the financial commit and the push leaves behind, and exactly
-  -- what the redelivery sweep claims.
-  notified_at            TIMESTAMPTZ,
+
+  -- ---- Delivery lease -----------------------------------------------------
+  -- Push and email are external calls sent with no idempotency key: the Web
+  -- Push protocol has none, and the transactional email sender passes none to
+  -- Resend (the configured provider, which does support one) or to the legacy
+  -- Brevo branch. End-to-end exactly-once delivery is therefore NOT achievable
+  -- and is not claimed. What is achievable, and what these columns implement:
+  --
+  --   * the EVENT is exactly once (uq_ad_renewal_event_boundary);
+  --   * the in-app notification row is exactly once (in_app_notification_id);
+  --   * push and email are AT-LEAST-ONCE, with bounded, observable retry.
+  --
+  -- Deliberately NOT stamped delivered before the external send: doing that
+  -- suppresses duplicates by losing messages, which is the worse failure.
+  delivery_status        VARCHAR(16)   NOT NULL DEFAULT 'pending',
+  -- When this row may be (re-)claimed. One meaning in both states: while
+  -- `claimed` it is the lease expiry, so a worker that died mid-delivery
+  -- cannot strand the event; while `pending` it is the backoff floor after a
+  -- failed attempt, so a failing channel cannot be hammered every sweep.
+  claim_expires_at       TIMESTAMPTZ,
+  claimed_at             TIMESTAMPTZ,
+  attempt_count          INTEGER       NOT NULL DEFAULT 0 CHECK (attempt_count >= 0),
+  last_delivery_error    TEXT,
+  delivered_at           TIMESTAMPTZ,
+  -- The in-app notification this event produced. A plain UUID with NO foreign
+  -- key ON PURPOSE: retention deletes old notifications, and an ON DELETE SET
+  -- NULL would resurrect this pointer as NULL and let a much later retry write
+  -- the advertiser a SECOND copy of a year-old message. Only `IS NOT NULL` is
+  -- ever tested, so a dangling id is harmless and a nulled one would not be.
+  in_app_notification_id UUID,
+
   created_at             TIMESTAMPTZ   NOT NULL DEFAULT now(),
 
   CONSTRAINT chk_ad_renewal_event_type
@@ -250,7 +277,20 @@ CREATE TABLE IF NOT EXISTS public.advertisement_renewal_events (
       'renewal_reminder',
       'auto_renew_enabled',
       'auto_renew_disabled'
-    ))
+    )),
+
+  CONSTRAINT chk_ad_renewal_event_delivery_status
+    CHECK (delivery_status IN ('pending', 'claimed', 'delivered', 'failed')),
+
+  -- A delivered row has a delivery time; nothing else does. Rules out both
+  -- "delivered but no record of when" and "not delivered but stamped anyway".
+  CONSTRAINT chk_ad_renewal_event_delivered_shape
+    CHECK ((delivery_status = 'delivered') = (delivered_at IS NOT NULL)),
+
+  -- A claim is always leased. A `claimed` row with no expiry would be exactly
+  -- the permanently-stuck event this model exists to make impossible.
+  CONSTRAINT chk_ad_renewal_event_claim_shape
+    CHECK (delivery_status <> 'claimed' OR (claimed_at IS NOT NULL AND claim_expires_at IS NOT NULL))
 );
 
 COMMENT ON TABLE public.advertisement_renewal_events IS
@@ -262,10 +302,22 @@ COMMENT ON TABLE public.advertisement_renewal_events IS
 COMMENT ON COLUMN public.advertisement_renewal_events.boundary_period_number IS
   'The period number this event concerns — the week the campaign was trying to '
   'buy. Stable under a late or retried worker, unlike a timestamp.';
-COMMENT ON COLUMN public.advertisement_renewal_events.notified_at IS
-  'When the durable in-app notification for this event was written. Claimed '
-  'with UPDATE ... WHERE notified_at IS NULL RETURNING, so exactly one worker '
-  'delivers even when several sweep the same row.';
+COMMENT ON COLUMN public.advertisement_renewal_events.delivery_status IS
+  'pending = waiting to be delivered or backing off after a failed attempt. '
+  'claimed = a worker holds a lease and is sending. delivered = every enabled '
+  'channel reported success. failed = the bounded retry budget is exhausted; '
+  'this is the state an operator should alert on.';
+COMMENT ON COLUMN public.advertisement_renewal_events.claim_expires_at IS
+  'The instant this row becomes claimable again — the lease expiry while '
+  'claimed, the backoff floor while pending. A worker that dies mid-delivery '
+  'therefore releases its event by the clock rather than stranding it.';
+COMMENT ON COLUMN public.advertisement_renewal_events.attempt_count IS
+  'Delivery attempts so far. Bounds the retry: past the budget the row becomes '
+  'failed rather than being retried forever.';
+COMMENT ON COLUMN public.advertisement_renewal_events.in_app_notification_id IS
+  'The notifications row this event produced, so a retry of the external '
+  'channels never writes the advertiser a second copy. Intentionally not a '
+  'foreign key — see the column definition.';
 COMMENT ON COLUMN public.advertisement_renewal_events.advertiser_id IS
   'Denormalised owner, so the redelivery sweep can address a notification '
   'without joining advertisements, and so an event can never be delivered to '
@@ -302,11 +354,14 @@ CREATE UNIQUE INDEX IF NOT EXISTS uq_ad_renewal_event_boundary
 CREATE INDEX IF NOT EXISTS idx_ad_renewal_events_advertisement
   ON public.advertisement_renewal_events (advertisement_id, created_at DESC);
 
--- "Which events have been committed but not yet delivered?" — the outbox sweep.
--- Partial, so a delivered event costs nothing to keep forever.
-CREATE INDEX IF NOT EXISTS idx_ad_renewal_events_undelivered
-  ON public.advertisement_renewal_events (created_at)
-  WHERE notified_at IS NULL;
+-- "Which events are deliverable right now?" — the outbox sweep. Covers both a
+-- pending row past its backoff and a claimed row whose lease has expired,
+-- because the sweep treats them identically: both are events nobody is
+-- currently delivering. Partial, so `delivered` and `failed` rows cost nothing
+-- to keep forever.
+CREATE INDEX IF NOT EXISTS idx_ad_renewal_events_deliverable
+  ON public.advertisement_renewal_events (claim_expires_at, created_at)
+  WHERE delivery_status IN ('pending', 'claimed');
 
 -- ---------------------------------------------------------------------------
 -- 4. Backend-only access posture

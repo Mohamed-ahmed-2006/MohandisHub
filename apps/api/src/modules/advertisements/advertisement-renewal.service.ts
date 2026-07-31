@@ -723,6 +723,10 @@ export class AdvertisementRenewalService {
     expiredCampaigns: number;
     reminded: number;
     notified: number;
+    /** Deliveries that failed and will be retried after a backoff. */
+    notifyRetrying: number;
+    /** Deliveries that exhausted their retry budget. Alert on this. */
+    notifyExhausted: number;
     failures: number;
   }> {
     const batchSize = options.batchSize ?? 25;
@@ -735,6 +739,8 @@ export class AdvertisementRenewalService {
       expiredCampaigns: 0,
       reminded: 0,
       notified: 0,
+      notifyRetrying: 0,
+      notifyExhausted: 0,
       failures: 0,
     };
 
@@ -817,6 +823,8 @@ export class AdvertisementRenewalService {
     try {
       const delivered = await this.notifier.deliverPending(batchSize * 4);
       summary.notified = delivered.delivered;
+      summary.notifyRetrying = delivered.retrying;
+      summary.notifyExhausted = delivered.exhausted;
     } catch (error) {
       summary.failures += 1;
       this.logStageError('deliver pending notifications', null, error);

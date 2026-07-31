@@ -33,6 +33,14 @@ vi.mock('../db/pool.js', () => ({
   hasDatabaseConfig: () => true,
 }));
 
+// Most tests here carry an explicit `}, 120_000)`, but several do not and fall
+// back to vitest's 5-second default. That is enough against a local server and
+// not enough against a remote one: a single test is a dozen sequential round
+// trips, and this file runs alongside four other PostgreSQL suites competing
+// for the same connection. Set the floor once, for every test in the file, so a
+// pass or a fail reflects the code rather than the network.
+vi.setConfig({ testTimeout: 120_000, hookTimeout: 1_800_000 });
+
 const PLAN_ACTION_KEY = 'subscription_upgrade';
 
 const service = (): PlansService =>

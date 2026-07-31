@@ -267,37 +267,105 @@ export class NotificationsService {
     input: CreateNotificationInput,
     persisted: { id: string; createdAt: string } | null,
   ): Promise<void> {
-    try {
-      const prefs = await this.getEffectivePreferenceMap(userId);
-      const shouldEmail =
-        input.recipientEmail != null &&
-        (isNotificationChannelRequired(input.type, 'email') ||
-          (prefs.get(`${input.type}:email`) ?? true));
-      const shouldPush = prefs.get(`${input.type}:push`) ?? true;
+    await this.deliverChannels(userId, input, persisted);
+  }
 
-      if (persisted) {
-        const io = getSocketServer();
-        if (io) {
-          io.to(`user:${userId}`).emit('notification', {
-            id: persisted.id,
-            type: input.type,
-            title: input.title,
-            message: input.message,
-            payload: input.payload ?? null,
-            readAt: null,
-            createdAt: persisted.createdAt,
-          });
-        }
-      }
-      if (shouldEmail) this.sendNotificationEmail(userId, input);
-      if (shouldPush) await this.sendPushNotifications(userId, input);
+  /**
+   * Deliver, and REPORT what happened per channel.
+   *
+   * The reporting variant exists because "we tried and something broke" is not
+   * a usable answer for an outbox: it has to know whether to retry, and
+   * retrying a channel that already succeeded is how an advertiser gets the
+   * same push twice. Never throws — a caller whose financial half has already
+   * committed must not be handed an exception — so every failure comes back as
+   * data instead.
+   *
+   * `skipped` means the recipient's own preference switched the channel off, or
+   * it is not configured. That is a completed decision, not a failure, and it
+   * must never keep an event pending forever.
+   */
+  async deliverChannels(
+    userId: string,
+    input: CreateNotificationInput,
+    persisted: { id: string; createdAt: string } | null,
+    only?: { email?: boolean; push?: boolean },
+  ): Promise<{
+    email: 'sent' | 'skipped' | 'failed';
+    push: 'sent' | 'skipped' | 'failed';
+    error: string | null;
+  }> {
+    const result = {
+      email: 'skipped' as 'sent' | 'skipped' | 'failed',
+      push: 'skipped' as 'sent' | 'skipped' | 'failed',
+      error: null as string | null,
+    };
+    const fail = (channel: 'email' | 'push', err: unknown): void => {
+      result[channel] = 'failed';
+      const message = err instanceof Error ? err.message : String(err);
+      result.error = result.error ? `${result.error}; ${channel}: ${message}` : `${channel}: ${message}`;
+    };
+
+    let prefs: Map<string, boolean>;
+    try {
+      prefs = await this.getEffectivePreferenceMap(userId);
     } catch (err) {
-      logger.warn('Out-of-band notification delivery failed', {
-        userId,
-        type: input.type,
-        err,
-      });
+      // Preferences are unreadable, so neither channel can be decided. Report
+      // both as failed rather than guessing and sending something the
+      // recipient may have switched off.
+      fail('email', err);
+      fail('push', err);
+      return result;
     }
+
+    if (persisted) {
+      // Best effort and not part of the outcome: a socket emit reaches only a
+      // browser that happens to be connected, so its failure says nothing
+      // about whether the notification was delivered.
+      try {
+        const io = getSocketServer();
+        io?.to(`user:${userId}`).emit('notification', {
+          id: persisted.id,
+          type: input.type,
+          title: input.title,
+          message: input.message,
+          payload: input.payload ?? null,
+          readAt: null,
+          createdAt: persisted.createdAt,
+        });
+      } catch (err) {
+        logger.warn('Notification socket emit failed', { userId, type: input.type, err });
+      }
+    }
+
+    const wantEmail =
+      only?.email !== false &&
+      input.recipientEmail != null &&
+      (isNotificationChannelRequired(input.type, 'email') ||
+        (prefs.get(`${input.type}:email`) ?? true));
+    if (wantEmail) {
+      try {
+        await this.sendNotificationEmailAwaited(input);
+        result.email = 'sent';
+      } catch (err) {
+        fail('email', err);
+      }
+    }
+
+    const wantPush = only?.push !== false && (prefs.get(`${input.type}:push`) ?? true);
+    if (wantPush) {
+      try {
+        const push = await this.sendPushNotifications(userId, input);
+        // No subscription and no configuration are both "nothing to send",
+        // which is a completed outcome. Only a real send that failed is a
+        // failure worth retrying.
+        result.push = push.failed > 0 && push.sent === 0 ? 'failed' : push.sent > 0 ? 'sent' : 'skipped';
+        if (push.failed > 0 && push.sent === 0) fail('push', new Error(push.error ?? 'push failed'));
+      } catch (err) {
+        fail('push', err);
+      }
+    }
+
+    return result;
   }
 
   /** Create notifications for multiple users (e.g. admin broadcast); emit to each. */
@@ -440,6 +508,26 @@ export class NotificationsService {
     return new Map(stored.map((p) => [`${p.notification_type}:${p.channel}`, p.enabled]));
   }
 
+  /**
+   * The same email, awaited and allowed to throw.
+   *
+   * `sendNotificationEmail` below stays fire-and-forget for every existing
+   * caller; the outbox needs to know whether the send actually happened, and a
+   * swallowed rejection cannot tell it.
+   */
+  private async sendNotificationEmailAwaited(input: CreateNotificationInput): Promise<void> {
+    if (!input.recipientEmail) return;
+    const emailParams: Parameters<typeof sendTransactionalEmail>[0] = {
+      to: input.recipientEmail,
+      subject: input.title,
+      preheader: input.message.slice(0, 120),
+      title: input.title,
+      introLines: [input.message],
+    };
+    if (input.recipientDisplayName != null) emailParams.displayName = input.recipientDisplayName;
+    await sendTransactionalEmail(emailParams);
+  }
+
   private sendNotificationEmail(userId: string, input: CreateNotificationInput) {
     if (!input.recipientEmail) return;
     const emailParams: Parameters<typeof sendTransactionalEmail>[0] = {
@@ -455,8 +543,21 @@ export class NotificationsService {
     );
   }
 
-  private async sendPushNotifications(userId: string, input: CreateNotificationInput) {
+  /**
+   * Send to every active subscription for this user, and report the tally.
+   *
+   * Returns rather than throws so a caller can distinguish "nothing to send"
+   * from "the send failed". A subscription that is gone (404/410) is disabled
+   * and counted as a failure of that endpoint, not of the notification.
+   */
+  private async sendPushNotifications(
+    userId: string,
+    input: CreateNotificationInput,
+  ): Promise<{ sent: number; failed: number; error: string | null }> {
+    // Same rule as the transactional email sender: a test process never reaches
+    // a real push service, whatever apps/api/.env happens to configure.
     if (
+      env.NODE_ENV === 'test' ||
       !env.WEB_PUSH_ENABLED ||
       !env.WEB_PUSH_VAPID_PUBLIC_KEY ||
       !env.WEB_PUSH_VAPID_PRIVATE_KEY ||
@@ -470,7 +571,7 @@ export class NotificationsService {
           error: 'WEB_PUSH_NOT_CONFIGURED',
         })
         .catch(() => undefined);
-      return;
+      return { sent: 0, failed: 0, error: null };
     }
 
     webpush.setVapidDetails(
@@ -493,7 +594,7 @@ export class NotificationsService {
           error: 'NO_ACTIVE_SUBSCRIPTIONS',
         })
         .catch(() => undefined);
-      return;
+      return { sent: 0, failed: 0, error: null };
     }
 
     const payload = JSON.stringify({
@@ -504,6 +605,10 @@ export class NotificationsService {
         payload: input.payload ?? null,
       },
     });
+
+    let sent = 0;
+    let failed = 0;
+    let firstError: string | null = null;
 
     await Promise.all(
       subscriptions.map(async (sub) => {
@@ -518,6 +623,7 @@ export class NotificationsService {
             },
             payload,
           );
+          sent += 1;
           await this.repo.markPushDeliverySuccess(sub.id);
           await this.repo.recordPushDeliveryAttempt({
             userId,
@@ -532,6 +638,8 @@ export class NotificationsService {
               : null;
           const disable = statusCode === 404 || statusCode === 410;
           const message = err instanceof Error ? err.message : 'Push send failed';
+          failed += 1;
+          firstError ??= message;
           await this.repo.markPushDeliveryFailure(sub.id, message, disable).catch(() => undefined);
           await this.repo
             .recordPushDeliveryAttempt({
@@ -552,5 +660,7 @@ export class NotificationsService {
         }
       }),
     );
+
+    return { sent, failed, error: firstError };
   }
 }

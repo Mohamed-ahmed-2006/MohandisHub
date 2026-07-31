@@ -31,7 +31,31 @@ import type {
 const PERIOD_INTERVAL = `interval '168 hours'`;
 
 const EVENT_COLUMNS = `id, advertisement_id, advertiser_id, boundary_period_number,
-  event_type, period_id, detail, notified_at, created_at`;
+  event_type, period_id, detail, delivery_status, claim_expires_at, claimed_at,
+  attempt_count, last_delivery_error, delivered_at, in_app_notification_id, created_at`;
+
+/**
+ * How long a delivery lease lasts.
+ *
+ * Long enough that a slow push service and a slow email API cannot both finish
+ * after it expires and have a second worker duplicate the send; short enough
+ * that a worker killed mid-delivery has its event picked up within a few sweep
+ * ticks rather than at the next deploy.
+ */
+export const DELIVERY_LEASE_SECONDS = 300;
+
+/**
+ * Delivery attempts before an event is parked as `failed`.
+ *
+ * The retry is bounded on purpose. An event nobody can deliver — a push
+ * endpoint that is gone, an email provider that is misconfigured — must become
+ * an operator's problem rather than a permanent background load.
+ */
+export const MAX_DELIVERY_ATTEMPTS = 5;
+
+/** Backoff before a failed attempt may be retried. Bounded, and coarse. */
+const retryBackoffSeconds = (attemptCount: number): number =>
+  Math.min(3600, 60 * 2 ** Math.max(0, attemptCount - 1));
 
 export type RenewalEventInsert = {
   advertisementId: string;
@@ -396,48 +420,140 @@ export class AdvertisementRenewalRepository {
     return rows[0] ?? null;
   }
 
-  /** Stamp the outbox: the durable in-app notification for this event exists. */
-  async markEventNotifiedInTx(client: PoolClient, eventId: string): Promise<void> {
-    await client.query(
-      `UPDATE advertisement_renewal_events SET notified_at = now() WHERE id = $1`,
-      [eventId],
-    );
-  }
+  // -------------------------------------------------------------------------
+  // Delivery lease
+  // -------------------------------------------------------------------------
+  // The claim, the in-app notification and the lease commit together, BEFORE
+  // any external call. The acknowledgement is a second, separate transaction
+  // AFTER it. That ordering is the whole point: an event is never marked
+  // delivered on the strength of a send that has not happened yet, and a worker
+  // that dies between the two releases its lease by the clock.
 
   /**
-   * Claim ONE undelivered event, inside the caller's transaction.
+   * Take a deliverable event, inside the caller's transaction.
    *
-   * `SKIP LOCKED` plus `notified_at IS NULL` is the whole concurrency story: of
-   * ten workers sweeping the same event, one takes the row and the other nine
-   * get nothing back. Because the claim, the notification insert and the stamp
-   * all commit together, a crash mid-delivery leaves the event undelivered
-   * rather than half-delivered, and the next sweep picks it up.
+   * Deliverable means pending past its backoff, or claimed past its lease — a
+   * worker that died mid-delivery is indistinguishable from one that never
+   * started, and both want the same treatment. `SKIP LOCKED` means that of ten
+   * workers sweeping the same event, exactly one gets a row and the other nine
+   * get null.
    */
-  async lockUndeliveredEventInTx(
+  async lockDeliverableEventInTx(
     client: PoolClient,
     eventId: string,
   ): Promise<AdvertisementRenewalEventRow | null> {
     const { rows } = await client.query<AdvertisementRenewalEventRow>(
       `SELECT ${EVENT_COLUMNS}
        FROM advertisement_renewal_events
-       WHERE id = $1 AND notified_at IS NULL
+       WHERE id = $1
+         AND delivery_status IN ('pending', 'claimed')
+         AND (claim_expires_at IS NULL OR claim_expires_at <= now())
        FOR UPDATE SKIP LOCKED`,
       [eventId],
     );
     return rows[0] ?? null;
   }
 
-  /** Committed but undelivered events, oldest first. */
-  async listUndeliveredEventIds(limit: number): Promise<string[]> {
+  /** Lease the event to this worker and count the attempt. */
+  async markEventClaimedInTx(
+    client: PoolClient,
+    eventId: string,
+    leaseSeconds = DELIVERY_LEASE_SECONDS,
+  ): Promise<number> {
+    const { rows } = await client.query<{ attempt_count: number }>(
+      `UPDATE advertisement_renewal_events
+       SET delivery_status = 'claimed',
+           claimed_at = now(),
+           claim_expires_at = now() + make_interval(secs => $2::int),
+           attempt_count = attempt_count + 1
+       WHERE id = $1
+       RETURNING attempt_count`,
+      [eventId, leaseSeconds],
+    );
+    return rows[0]?.attempt_count ?? 0;
+  }
+
+  /** Remember the in-app row, so a retry never writes the advertiser a second. */
+  async attachInAppNotificationInTx(
+    client: PoolClient,
+    eventId: string,
+    notificationId: string | null,
+  ): Promise<void> {
+    await client.query(
+      `UPDATE advertisement_renewal_events
+       SET in_app_notification_id = COALESCE(in_app_notification_id, $2::uuid)
+       WHERE id = $1`,
+      [eventId, notificationId],
+    );
+  }
+
+  /**
+   * Every enabled channel reported success. Terminal, and the only state that
+   * may carry `delivered_at`.
+   */
+  async markEventDeliveredInTx(client: PoolClient, eventId: string): Promise<void> {
+    await client.query(
+      `UPDATE advertisement_renewal_events
+       SET delivery_status = 'delivered',
+           delivered_at = now(),
+           claim_expires_at = NULL,
+           claimed_at = NULL,
+           last_delivery_error = NULL
+       WHERE id = $1`,
+      [eventId],
+    );
+  }
+
+  /**
+   * A channel failed. Release the lease with a backoff, or park the event when
+   * the retry budget is gone.
+   *
+   * Returns the state it settled on, so the caller can log and count it — a
+   * bounded retry nobody can observe is only half a design.
+   */
+  async recordDeliveryFailureInTx(
+    client: PoolClient,
+    params: { eventId: string; attemptCount: number; error: string },
+  ): Promise<'pending' | 'failed'> {
+    const exhausted = params.attemptCount >= MAX_DELIVERY_ATTEMPTS;
+    const backoff = retryBackoffSeconds(params.attemptCount);
+    await client.query(
+      `UPDATE advertisement_renewal_events
+       SET delivery_status = $2::varchar,
+           claimed_at = NULL,
+           claim_expires_at = CASE
+             WHEN $2::varchar = 'pending' THEN now() + make_interval(secs => $3::int)
+             ELSE NULL
+           END,
+           last_delivery_error = $4
+       WHERE id = $1`,
+      [params.eventId, exhausted ? 'failed' : 'pending', backoff, params.error.slice(0, 1000)],
+    );
+    return exhausted ? 'failed' : 'pending';
+  }
+
+  /** Events nobody is delivering right now, oldest first. */
+  async listDeliverableEventIds(limit: number): Promise<string[]> {
     const { rows } = await getPool().query<{ id: string }>(
       `SELECT id
        FROM advertisement_renewal_events
-       WHERE notified_at IS NULL
+       WHERE delivery_status IN ('pending', 'claimed')
+         AND (claim_expires_at IS NULL OR claim_expires_at <= now())
        ORDER BY created_at
        LIMIT $1::int`,
       [limit],
     );
     return rows.map((row) => row.id);
+  }
+
+  /** Delivery health, for the sweep log and for an operator. */
+  async countEventsByDeliveryStatus(): Promise<Record<string, number>> {
+    const { rows } = await getPool().query<{ delivery_status: string; c: string }>(
+      `SELECT delivery_status, count(*)::text AS c
+       FROM advertisement_renewal_events
+       GROUP BY delivery_status`,
+    );
+    return Object.fromEntries(rows.map((row) => [row.delivery_status, parseInt(row.c, 10)]));
   }
 
   /** Provider-facing renewal history, newest first. */

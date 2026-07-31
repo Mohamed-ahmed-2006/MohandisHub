@@ -240,7 +240,7 @@ export class AdvertisementBillingService {
    * Hand a committed event to the notifier, after the caller's COMMIT.
    *
    * Fire and forget by design: an event that is not delivered here survives
-   * with `notified_at IS NULL` and the sweep delivers it. A push must never be
+   * as `pending` and the sweep delivers it. A push must never be
    * the reason a request whose financial half already committed reports a
    * failure.
    */

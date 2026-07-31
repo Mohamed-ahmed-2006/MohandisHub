@@ -141,14 +141,15 @@ export const NOTIFICATION_NAVIGATION_MAP: Partial<Record<NotificationType, strin
   wallet_deposit_confirmed: '/app/history',
   mhc_purchase_completed: '/app/credits',
   mhc_purchase_failed: '/app/credits',
-  // Every advertisement event lands on the campaign it is about — the screen
-  // that can renew it, reconfigure it or cancel it — except the one whose only
-  // remedy is buying credits, which lands on the credits screen instead. The
-  // advertisement id travels in the payload either way, so the campaign is one
-  // click from both.
+  // Every advertisement event lands on the campaign it is about, including the
+  // one caused by an empty balance. Sending that one straight to /app/credits
+  // was tempting and wrong: the credits screen knows nothing about the campaign,
+  // so a provider who topped up there had no way back and no way to retry. The
+  // campaign panel carries all three things they need together — Add credits,
+  // the campaign itself, and Retry renewal — so that is where the link goes.
   advertisement_activated: '/app/advertisements',
   advertisement_renewed: '/app/advertisements',
-  advertisement_renewal_failed_credits: '/app/credits',
+  advertisement_renewal_failed_credits: '/app/advertisements',
   advertisement_renewal_failed_pricing: '/app/advertisements',
   advertisement_renewal_required: '/app/advertisements',
   advertisement_renewal_reminder: '/app/advertisements',

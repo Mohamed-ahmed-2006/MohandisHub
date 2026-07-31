@@ -196,7 +196,8 @@ boundary-scoped event types, is simultaneously:
   boundary 4 failed produce one row; nine get a `23505`, unwind, and notify
   nobody;
 - **the no-repeat-debit gate**, together with `auto_renew_paused_reason`;
-- **the notification outbox** (`notified_at`);
+- **the notification outbox** (`delivery_status`, `claim_expires_at`,
+  `attempt_count`, `delivered_at` — see §5E);
 - **the provider's renewal history.**
 
 The two configuration acknowledgements (`auto_renew_enabled`,
@@ -257,11 +258,9 @@ charge would be introduced.
   transaction unwinds together.
 - **After commit, before acknowledgement:** the next sweep re-reads the campaign,
   finds a running unexpired week, and skips. Retrying is free.
-- **After the event, before the push:** the event survives with
-  `notified_at IS NULL` and the outbox sweep delivers it — once, because delivery
-  claims the row with `FOR UPDATE SKIP LOCKED` and stamps it in the same
-  transaction that writes the notification. The financial transaction is never
-  reopened.
+- **After the event, before the push:** the event survives as `pending` and the
+  outbox sweep delivers it. The financial transaction is never reopened. See
+  §5E for exactly what "delivers it" guarantees — and what it does not.
 
 ### Races, and what happens
 
@@ -373,7 +372,7 @@ Ten durable event types, all delivered from the outbox:
 |---|---|---|
 | First week activated | `advertisement_activated` | `/app/advertisements` |
 | Automatic renewal succeeded | `advertisement_renewed` | `/app/advertisements` |
-| Failed: insufficient credits | `advertisement_renewal_failed_credits` | **`/app/credits`** |
+| Failed: insufficient credits | `advertisement_renewal_failed_credits` | `/app/advertisements` |
 | Failed: pricing unavailable | `advertisement_renewal_failed_pricing` | `/app/advertisements` |
 | Manual week ended | `advertisement_renewal_required` | `/app/advertisements` |
 | Renewal reminder (≈24h) | `advertisement_renewal_reminder` | `/app/advertisements` |
@@ -383,8 +382,11 @@ Ten durable event types, all delivered from the outbox:
 | Automatic renewal disabled | `advertisement_auto_renew_disabled` | `/app/advertisements` |
 
 - The advertisement id travels in every payload, and the advertisements screen
-  reads `?ad=<id>` to open that campaign's renewal panel — so the campaign is one
-  click away even from the credits screen.
+  reads `?ad=<id>` to open that campaign's renewal panel. The paused panel is
+  where the three things an advertiser needs sit together: **Add credits**
+  (linking to `/app/credits`), the campaign itself, and **Retry renewal now**.
+  That is why even the empty-balance notification lands here rather than on the
+  credits screen, which knows nothing about the campaign and offers no way back.
 - Payloads carry only the campaign's own identifiers and figures the provider was
   already shown. **No balance, no wallet id, no charge id, no transaction id**,
   enforced by an allow-list in `buildRenewalNotification`.
@@ -400,6 +402,77 @@ Ten durable event types, all delivered from the outbox:
   as delivered rather than reconsidering it forever.
 - The reminder is deduplicated per boundary by the same unique index, so it
   cannot fire twice for one week.
+
+## 5E. Delivery semantics — stated exactly
+
+**External delivery is at-least-once, not exactly-once.** The Web Push protocol
+has no idempotency key, and `sendTransactionalEmail` passes none to Resend — the
+configured provider, which *does* support `Idempotency-Key`. Nothing downstream
+can deduplicate a resend today, so nothing here claims it can.
+
+What each layer actually guarantees:
+
+| Layer | Guarantee | Enforced by |
+|---|---|---|
+| Boundary event | **exactly once** | `uq_ad_renewal_event_boundary` |
+| In-app notification row | **exactly once** | written under the claim lock, guarded by `in_app_notification_id` |
+| Web push | **at-least-once** | lease + bounded retry |
+| Email | **at-least-once** | lease + bounded retry |
+| Socket emit | best effort, not part of the outcome | — |
+
+### The three ordered steps
+
+1. **Claim** — one transaction: lock a deliverable row `FOR UPDATE SKIP LOCKED`,
+   write the in-app notification *if `in_app_notification_id` is still null*,
+   set `delivery_status = 'claimed'` with `claim_expires_at = now() + 5 min`,
+   increment `attempt_count`, **commit**.
+2. **Send** — push and email, outside every lock and transaction.
+3. **Acknowledge** — a second transaction: `delivered` on success, or release
+   the lease to `pending` with an exponential backoff, or park as `failed` once
+   `attempt_count` reaches `MAX_DELIVERY_ATTEMPTS` (5).
+
+Nothing is stamped delivered before the send. Marking early would suppress
+duplicates by *losing* messages, which is the worse failure — and was the defect
+this replaced.
+
+### Crash behaviour
+
+| Crash point | Result |
+|---|---|
+| After claim, before send | Row stays `claimed`. Lease expires; the sweep re-claims and sends. Nothing lost. |
+| After send, before acknowledgement | Row stays `claimed`. Lease expires; the sweep **resends**. This is the at-least-once window: a duplicate push or email is possible. The in-app row is *not* duplicated. |
+| Partial (push sent, email failed) | The attempt is a failure as a whole; the lease is released with a backoff and both channels are retried, so the successful channel may deliver twice. |
+| Preferences unreadable | Both channels report failed; retried. Nothing is sent on a guess. |
+| In-app channel switched off | Recorded once with a sentinel id, so no retry reconsiders the preference and no row is ever written. |
+
+### Recovery and bounds
+
+- **A stuck claim is impossible.** `chk_ad_renewal_event_claim_shape` makes a
+  `claimed` row without a lease unstorable, and
+  `idx_ad_renewal_events_deliverable` covers both `pending` past its backoff and
+  `claimed` past its lease — the sweep treats a dead worker and an unstarted one
+  identically.
+- **Retry is bounded**: 5 attempts, backoff 1→2→4→8→16 minutes, capped at 60.
+- **Retry is observable**: `attempt_count`, `last_delivery_error`,
+  `delivery_status = 'failed'`, the sweep's `notifyRetrying` / `notifyExhausted`
+  counters, and an `error`-level worker log line on exhaustion. An exhausted
+  delivery is the one outcome nothing else surfaces — the renewal succeeded, so
+  no financial alarm fires — which is why it is logged loudly.
+- **Two workers never deliberately deliver the same event**: `SKIP LOCKED` on
+  the claim means one wins and the rest get nothing. Ten concurrent
+  `deliverEvent` calls produce one delivery and nine `not_claimable`.
+- **Payload and recipient stay server-controlled**: the recipient is
+  `advertisement_renewal_events.advertiser_id`, written inside the financial
+  transaction; the payload is rebuilt from the event row by
+  `buildRenewalNotification` on every attempt.
+- **No delivery path touches money.** The financial transaction contains no
+  notification write, and no acknowledgement path writes a period, a charge or a
+  ledger row — asserted directly.
+
+If effectively-once external delivery is wanted later, the change is small and
+localised: pass the event id as `Idempotency-Key` on the Resend request, and
+leave push at at-least-once because the protocol offers nothing better. That is
+a deliberate follow-up, not something claimed today.
 
 ## 6. Expiration
 

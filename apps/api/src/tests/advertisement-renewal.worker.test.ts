@@ -198,13 +198,18 @@ describe('what the advertiser is told', () => {
     expect(built.payload.periodEndsAt).toBe('2026-08-07T00:00:00.000Z');
   });
 
-  it('routes the credits failure to the credits screen and everything else to the campaign', async () => {
+  it('lands every advertisement event on the campaign it is about', async () => {
     const { NOTIFICATION_NAVIGATION_MAP } = await import('@mohandishub/shared');
 
-    expect(NOTIFICATION_NAVIGATION_MAP.advertisement_renewal_failed_credits).toBe('/app/credits');
     for (const type of [
       'advertisement_activated',
       'advertisement_renewed',
+      // Including the empty-balance one. The credits screen knows nothing about
+      // the campaign, so a provider sent there had no way back and no way to
+      // retry; the campaign panel carries Add credits, the campaign and Retry
+      // renewal together.
+      'advertisement_renewal_failed_credits',
+      'advertisement_renewal_failed_pricing',
       'advertisement_renewal_required',
       'advertisement_renewal_reminder',
       'advertisement_auto_renew_stopped_max_weeks',

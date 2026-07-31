@@ -2,10 +2,14 @@ import type { Pool } from 'pg';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AdvertisementRenewalNotifier } from '../modules/advertisements/advertisement-renewal.notifier.js';
-import { AdvertisementRenewalRepository } from '../modules/advertisements/advertisement-renewal.repository.js';
+import {
+  AdvertisementRenewalRepository,
+  MAX_DELIVERY_ATTEMPTS,
+} from '../modules/advertisements/advertisement-renewal.repository.js';
 import { AdvertisementRenewalService } from '../modules/advertisements/advertisement-renewal.service.js';
 import { AdvertisementsService } from '../modules/advertisements/advertisements.service.js';
 import { NotificationsRepository } from '../modules/notifications/notifications.repository.js';
+import { NotificationsService } from '../modules/notifications/notifications.service.js';
 import { HttpError } from '../utils/http-error.js';
 
 import {
@@ -41,6 +45,33 @@ let pool: Pool;
 vi.mock('../db/pool.js', () => ({
   getPool: () => pool,
   hasDatabaseConfig: () => true,
+}));
+
+// ---------------------------------------------------------------------------
+// No real message leaves this suite.
+// ---------------------------------------------------------------------------
+// `config/env.ts` loads apps/api/.env, so whichever provider that file names —
+// and on at least one developer machine it still names the retired Brevo one —
+// these tests would otherwise post live email to `@test.local` addresses the
+// moment delivery started working. Both external senders are replaced with
+// resolved stubs: the delivery LEASE is what this suite is about, and the
+// channel outcomes it needs are injected per test by spying on
+// `deliverChannels`.
+// `vi.hoisted` because `vi.mock` factories are hoisted above every other
+// statement in the module — a plain const referenced inside one is not yet
+// initialised when the factory runs.
+const external = vi.hoisted(() => ({ emails: [] as { to: string }[] }));
+vi.mock('../utils/send-transactional-email.js', () => ({
+  sendTransactionalEmail: (params: { to: string }) => {
+    external.emails.push({ to: params.to });
+    return Promise.resolve();
+  },
+}));
+vi.mock('web-push', () => ({
+  default: {
+    setVapidDetails: () => {},
+    sendNotification: () => Promise.resolve(),
+  },
 }));
 
 // Ten concurrent transactions against a remote server do not fit in 5 seconds,
@@ -115,7 +146,9 @@ const moneyWalletCount = (userId: string): Promise<number> =>
 
 const events = async (adId: string) => {
   const { rows } = await pool.query(
-    `SELECT event_type, boundary_period_number, notified_at, detail
+    `SELECT event_type, boundary_period_number, detail, delivery_status, delivered_at,
+            claimed_at, claim_expires_at, attempt_count, last_delivery_error,
+            in_app_notification_id
      FROM advertisement_renewal_events
      WHERE advertisement_id = $1
      ORDER BY boundary_period_number, event_type`,
@@ -124,9 +157,56 @@ const events = async (adId: string) => {
   return rows as {
     event_type: string;
     boundary_period_number: number;
-    notified_at: string | null;
     detail: Record<string, unknown>;
+    delivery_status: string;
+    delivered_at: string | null;
+    claimed_at: string | null;
+    claim_expires_at: string | null;
+    attempt_count: number;
+    last_delivery_error: string | null;
+    in_app_notification_id: string | null;
   }[];
+};
+
+/** The single boundary event of a campaign that has exactly one. */
+const onlyEvent = async (adId: string, eventType: string) => {
+  const all = await events(adId);
+  const match = all.filter((e) => e.event_type === eventType);
+  expect(match).toHaveLength(1);
+  return match[0]!;
+};
+
+/**
+ * Reduce a campaign to ONE deliverable event.
+ *
+ * A live campaign legitimately carries several — `initial_activated` when its
+ * first week was bought, `auto_renew_enabled` when its advertiser consented,
+ * then `renewal_succeeded`. The delivery-lease tests below are about the
+ * lifecycle of a single event, and a sweep that correctly delivers the other
+ * two would otherwise show up as the assertion failing. Deleting them isolates
+ * the fixture, not the behaviour: the sweep path itself is still exercised.
+ */
+const isolateEvent = async (adId: string, eventType: string): Promise<string> => {
+  await pool.query(
+    `DELETE FROM advertisement_renewal_events WHERE advertisement_id = $1 AND event_type <> $2`,
+    [adId, eventType],
+  );
+  const { rows } = await pool.query<{ id: string }>(
+    `SELECT id FROM advertisement_renewal_events WHERE advertisement_id = $1 AND event_type = $2`,
+    [adId, eventType],
+  );
+  expect(rows).toHaveLength(1);
+  return rows[0]!.id;
+};
+
+/** Force a claimed event's lease into the past, as an expired lease would be. */
+const expireLease = async (adId: string): Promise<void> => {
+  await pool.query(
+    `UPDATE advertisement_renewal_events
+     SET claim_expires_at = now() - interval '1 minute'
+     WHERE advertisement_id = $1 AND delivery_status IN ('pending', 'claimed')`,
+    [adId],
+  );
 };
 
 const eventCount = (adId: string, eventType: string): Promise<number> =>
@@ -238,6 +318,7 @@ beforeEach(async () => {
   await pool.query(`DELETE FROM advertisement_campaign_periods`);
   await pool.query(`DELETE FROM advertisements`);
   await pool.query(`DELETE FROM notifications`);
+  await pool.query(`DELETE FROM notification_preferences`);
   await pool.query(`DELETE FROM mhc_action_charges`);
   await pool.query(`DELETE FROM transactions`);
   await setActionPrice(pool, 'advertisement', 25, true);
@@ -1009,7 +1090,9 @@ describe.skipIf(!pgIntegrationEnabled())('notifications are durable, deduplicate
     const { userId, adId } = await dueForAutoRenewal({ mhc: 500 });
     await renewal().renewAutomatically(adId, { blocking: true });
 
-    // The financial half already committed. Break delivery entirely.
+    // The financial half already committed. Break the claim transaction
+    // entirely, which is the only part of delivery that touches the database
+    // before anything is sent.
     vi.spyOn(NotificationsRepository.prototype, 'createInTx').mockRejectedValue(
       new Error('notifications unavailable'),
     );
@@ -1021,15 +1104,292 @@ describe.skipIf(!pgIntegrationEnabled())('notifications are durable, deduplicate
     expect(await periodCount(adId)).toBe(2);
     expect(await chargeCount(userId)).toBe(2);
     expect(await balanceOf(pool, userId)).toBe(450);
-    // ...and the event is still in the outbox, undelivered.
-    const [successEvent] = (await events(adId)).filter(
-      (e) => e.event_type === 'renewal_succeeded',
-    );
-    expect(successEvent!.notified_at).toBeNull();
+    // ...and the event is still pending, never claimed, never delivered.
+    const event = await onlyEvent(adId, 'renewal_succeeded');
+    expect(event.delivery_status).toBe('pending');
+    expect(event.delivered_at).toBeNull();
+    expect(event.attempt_count).toBe(0);
 
     // A later sweep delivers it, exactly once.
     await notifier().deliverPending();
     expect(await notificationCount(userId, 'advertisement_renewed')).toBe(1);
+    expect((await onlyEvent(adId, 'renewal_succeeded')).delivery_status).toBe('delivered');
+  });
+
+  // -- Delivery lease -------------------------------------------------------
+  // Push and email have no downstream idempotency key, so external delivery is
+  // AT-LEAST-ONCE and these tests assert exactly that, not something stronger.
+  // What must hold absolutely: the event is never lost, the in-app row is never
+  // duplicated, the retry is bounded, and none of it touches the money.
+
+  it('does not mark an event delivered before the external send happens', async () => {
+    const { userId, adId } = await dueForAutoRenewal({ mhc: 500 });
+    await renewal().renewAutomatically(adId, { blocking: true });
+
+    // Observe the row as it looks at the moment of the send. This is the whole
+    // point of the redesign: a crash right here must not have lost the message.
+    let statusDuringSend: string | null = null;
+    vi.spyOn(NotificationsService.prototype, 'deliverChannels').mockImplementation(async () => {
+      statusDuringSend = (await onlyEvent(adId, 'renewal_succeeded')).delivery_status;
+      return { email: 'skipped', push: 'skipped', error: null };
+    });
+
+    await notifier().deliverEvent(
+      (await pool.query<{ id: string }>(
+        `SELECT id FROM advertisement_renewal_events WHERE advertisement_id = $1 AND event_type = 'renewal_succeeded'`,
+        [adId],
+      )).rows[0]!.id,
+    );
+
+    expect(statusDuringSend).toBe('claimed');
+    vi.restoreAllMocks();
+    vi.spyOn(AdvertisementRenewalNotifier.prototype, 'deliverSoon').mockImplementation(() => {});
+    // The in-app notification exists from the claim, so the advertiser is told
+    // even if every external channel is broken.
+    expect(await notificationCount(userId, 'advertisement_renewed')).toBe(1);
+  });
+
+  it('recovers an event whose worker died after claiming and before sending', async () => {
+    const { userId, adId } = await dueForAutoRenewal({ mhc: 500 });
+    await renewal().renewAutomatically(adId, { blocking: true });
+    await isolateEvent(adId, 'renewal_succeeded');
+
+    // Crash during the send: the claim committed, the acknowledgement never ran.
+    vi.spyOn(NotificationsService.prototype, 'deliverChannels').mockRejectedValue(
+      new Error('worker killed mid-send'),
+    );
+    await notifier().deliverPending();
+    vi.restoreAllMocks();
+    vi.spyOn(AdvertisementRenewalNotifier.prototype, 'deliverSoon').mockImplementation(() => {});
+
+    const stranded = await onlyEvent(adId, 'renewal_succeeded');
+    expect(stranded.delivery_status).toBe('claimed');
+    expect(stranded.claim_expires_at).not.toBeNull();
+    // Still leased, so the next sweep leaves it alone rather than double-sending.
+    expect(await notifier().deliverPending()).toMatchObject({ examined: 0 });
+
+    // Once the lease expires it is picked up and delivered. Nothing was lost.
+    await expireLease(adId);
+    const swept = await notifier().deliverPending();
+
+    expect(swept.delivered).toBe(1);
+    const recovered = await onlyEvent(adId, 'renewal_succeeded');
+    expect(recovered.delivery_status).toBe('delivered');
+    // The in-app row was written by the FIRST claim and never written again.
+    expect(await notificationCount(userId, 'advertisement_renewed')).toBe(1);
+    expect(recovered.attempt_count).toBe(2);
+  });
+
+  it('resends externally but never duplicates the in-app row after a lost acknowledgement', async () => {
+    const { userId, adId } = await dueForAutoRenewal({ mhc: 500 });
+    await renewal().renewAutomatically(adId, { blocking: true });
+
+    await isolateEvent(adId, 'renewal_succeeded');
+
+    // The send succeeded; the process died before writing `delivered`. This is
+    // the window that makes external delivery at-least-once rather than
+    // exactly-once, and it is asserted rather than papered over.
+    let sends = 0;
+    const sendSpy = vi
+      .spyOn(NotificationsService.prototype, 'deliverChannels')
+      .mockImplementation(() => {
+        sends += 1;
+        if (sends === 1) {
+          return Promise.reject(new Error('acknowledgement lost after a successful send'));
+        }
+        return Promise.resolve({ email: 'sent' as const, push: 'sent' as const, error: null });
+      });
+
+    await notifier().deliverPending();
+    await expireLease(adId);
+    await notifier().deliverPending();
+
+    expect(sendSpy).toHaveBeenCalledTimes(2); // at-least-once, honestly
+    vi.restoreAllMocks();
+    vi.spyOn(AdvertisementRenewalNotifier.prototype, 'deliverSoon').mockImplementation(() => {});
+
+    // ...but the durable, user-visible record is written exactly once.
+    expect(await notificationCount(userId, 'advertisement_renewed')).toBe(1);
+    expect((await onlyEvent(adId, 'renewal_succeeded')).delivery_status).toBe('delivered');
+    // And the money is untouched by any of it.
+    expect(await periodCount(adId)).toBe(2);
+    expect(await chargeCount(userId)).toBe(2);
+    expect(await balanceOf(pool, userId)).toBe(450);
+  });
+
+  it('lets exactly one of ten concurrent workers claim an event', async () => {
+    const { userId, adId } = await dueForAutoRenewal({ mhc: 500 });
+    await renewal().renewAutomatically(adId, { blocking: true });
+    const eventId = (
+      await pool.query<{ id: string }>(
+        `SELECT id FROM advertisement_renewal_events WHERE advertisement_id = $1 AND event_type = 'renewal_succeeded'`,
+        [adId],
+      )
+    ).rows[0]!.id;
+
+    const results = await Promise.all(
+      Array.from({ length: 10 }, () => notifier().deliverEvent(eventId)),
+    );
+
+    expect(results.filter((r) => r === 'delivered')).toHaveLength(1);
+    expect(results.filter((r) => r === 'not_claimable')).toHaveLength(9);
+    expect(await notificationCount(userId, 'advertisement_renewed')).toBe(1);
+    expect((await onlyEvent(adId, 'renewal_succeeded')).attempt_count).toBe(1);
+  });
+
+  it('retries a partial channel failure and settles once every channel succeeds', async () => {
+    const { userId, adId } = await dueForAutoRenewal({ mhc: 500 });
+    await renewal().renewAutomatically(adId, { blocking: true });
+
+    await isolateEvent(adId, 'renewal_succeeded');
+
+    // Push lands, email does not. The attempt is a failure as a whole, so it is
+    // retried — which is why a duplicate push is possible and documented.
+    let attempts = 0;
+    vi.spyOn(NotificationsService.prototype, 'deliverChannels').mockImplementation(() => {
+      attempts += 1;
+      return Promise.resolve(
+        attempts === 1
+          ? { email: 'failed' as const, push: 'sent' as const, error: 'email: provider 500' }
+          : { email: 'sent' as const, push: 'sent' as const, error: null },
+      );
+    });
+
+    const first = await notifier().deliverPending();
+    expect(first).toMatchObject({ delivered: 0, retrying: 1, exhausted: 0 });
+    const afterFailure = await onlyEvent(adId, 'renewal_succeeded');
+    expect(afterFailure.delivery_status).toBe('pending');
+    expect(afterFailure.last_delivery_error).toContain('email');
+    expect(afterFailure.attempt_count).toBe(1);
+    // Backed off, so the very next sweep does not hammer the provider.
+    expect(await notifier().deliverPending()).toMatchObject({ examined: 0 });
+
+    await expireLease(adId);
+    expect(await notifier().deliverPending()).toMatchObject({ delivered: 1 });
+
+    vi.restoreAllMocks();
+    vi.spyOn(AdvertisementRenewalNotifier.prototype, 'deliverSoon').mockImplementation(() => {});
+    const settled = await onlyEvent(adId, 'renewal_succeeded');
+    expect(settled.delivery_status).toBe('delivered');
+    expect(settled.last_delivery_error).toBeNull();
+    expect(await notificationCount(userId, 'advertisement_renewed')).toBe(1);
+  });
+
+  it('gives up after a bounded number of attempts, and says so', async () => {
+    const { userId, adId } = await dueForAutoRenewal({ mhc: 500 });
+    await renewal().renewAutomatically(adId, { blocking: true });
+
+    await isolateEvent(adId, 'renewal_succeeded');
+    vi.spyOn(NotificationsService.prototype, 'deliverChannels').mockResolvedValue({
+      email: 'failed',
+      push: 'failed',
+      error: 'both channels are down',
+    });
+
+    let exhausted = 0;
+    // One more sweep than the budget, to prove it stops rather than continues.
+    for (let i = 0; i < MAX_DELIVERY_ATTEMPTS + 2; i += 1) {
+      await expireLease(adId);
+      exhausted += (await notifier().deliverPending()).exhausted;
+    }
+
+    expect(exhausted).toBe(1);
+    const dead = await onlyEvent(adId, 'renewal_succeeded');
+    expect(dead.delivery_status).toBe('failed');
+    expect(dead.attempt_count).toBe(MAX_DELIVERY_ATTEMPTS);
+    expect(dead.last_delivery_error).toContain('both channels are down');
+    expect(dead.delivered_at).toBeNull();
+    // Parked, not retried forever: the sweep no longer even looks at it.
+    await expireLease(adId);
+    expect(await notifier().deliverPending()).toMatchObject({ examined: 0 });
+
+    vi.restoreAllMocks();
+    vi.spyOn(AdvertisementRenewalNotifier.prototype, 'deliverSoon').mockImplementation(() => {});
+    // The advertiser still has the in-app notification, and the money is intact.
+    expect(await notificationCount(userId, 'advertisement_renewed')).toBe(1);
+    expect(await chargeCount(userId)).toBe(2);
+    expect(await balanceOf(pool, userId)).toBe(450);
+  });
+
+  it('never lets a delivery retry touch the financial transaction', async () => {
+    const { userId, adId } = await dueForAutoRenewal({ mhc: 500 });
+    await renewal().renewAutomatically(adId, { blocking: true });
+    const before = {
+      periods: await periodCount(adId),
+      charges: await chargeCount(userId),
+      ledger: await ledgerCount(userId),
+      balance: await balanceOf(pool, userId),
+    };
+
+    await isolateEvent(adId, 'renewal_succeeded');
+    vi.spyOn(NotificationsService.prototype, 'deliverChannels').mockResolvedValue({
+      email: 'failed',
+      push: 'failed',
+      error: 'still down',
+    });
+    for (let i = 0; i < MAX_DELIVERY_ATTEMPTS + 1; i += 1) {
+      await expireLease(adId);
+      await notifier().deliverPending();
+    }
+    vi.restoreAllMocks();
+    vi.spyOn(AdvertisementRenewalNotifier.prototype, 'deliverSoon').mockImplementation(() => {});
+
+    expect(await periodCount(adId)).toBe(before.periods);
+    expect(await chargeCount(userId)).toBe(before.charges);
+    expect(await ledgerCount(userId)).toBe(before.ledger);
+    expect(await balanceOf(pool, userId)).toBe(before.balance);
+  });
+
+  it('sends its email through the stub, not to a real provider', async () => {
+    // Guards the guard. `config/env.ts` loads apps/api/.env, so without the
+    // module mock at the top of this file a developer with a live
+    // OTP_EMAIL_PROVIDER would have this suite posting to a real email API with
+    // `@test.local` recipients. If the mock ever stops being applied, this
+    // fails here rather than in somebody's sending reputation.
+    const before = external.emails.length;
+    const { userId, adId } = await dueForAutoRenewal({ mhc: 500 });
+    await renewal().renewAutomatically(adId, { blocking: true });
+
+    await notifier().deliverPending();
+
+    expect(external.emails.length).toBeGreaterThan(before);
+    for (const email of external.emails) expect(email.to).toMatch(/@test\.local$/);
+    expect(await notificationCount(userId, 'advertisement_renewed')).toBe(1);
+  });
+
+  it('does not write a second in-app row when the recipient suppressed the first', async () => {
+    const { userId, adId } = await dueForAutoRenewal({ mhc: 500 });
+    await pool.query(
+      `INSERT INTO notification_preferences (user_id, notification_type, channel, enabled)
+       VALUES ($1, 'advertisement_renewed', 'in_app', false)
+       ON CONFLICT (user_id, notification_type, channel) DO UPDATE SET enabled = false`,
+      [userId],
+    );
+    await renewal().renewAutomatically(adId, { blocking: true });
+    await isolateEvent(adId, 'renewal_succeeded');
+
+    // Fail the send twice so the event is claimed three times in total.
+    let attempts = 0;
+    vi.spyOn(NotificationsService.prototype, 'deliverChannels').mockImplementation(() => {
+      attempts += 1;
+      return Promise.resolve(
+        attempts <= 2
+          ? { email: 'failed' as const, push: 'failed' as const, error: 'down' }
+          : { email: 'sent' as const, push: 'sent' as const, error: null },
+      );
+    });
+    for (let i = 0; i < 3; i += 1) {
+      await expireLease(adId);
+      await notifier().deliverPending();
+    }
+    vi.restoreAllMocks();
+    vi.spyOn(AdvertisementRenewalNotifier.prototype, 'deliverSoon').mockImplementation(() => {});
+
+    // The preference was honoured once and never reconsidered on a retry.
+    expect(await notificationCount(userId, 'advertisement_renewed')).toBe(0);
+    const settled = await onlyEvent(adId, 'renewal_succeeded');
+    expect(settled.delivery_status).toBe('delivered');
+    expect(settled.in_app_notification_id).toBe('00000000-0000-0000-0000-000000000000');
   });
 
   it('delivers each event once however many times the outbox is swept', async () => {

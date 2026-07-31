@@ -93,3 +93,32 @@ Operational notes:
 - **Nothing charges while the advertisement price is 0.** A zero-price week
   writes no charge row and no ledger row by design, so an idle sweep on a
   zero-price deployment is the expected steady state.
+
+#### Notification delivery health
+
+Advertisement renewal notifications are delivered from an outbox with a
+delivery lease. External delivery (web push, email) is **at-least-once**: neither
+provider is given an idempotency key, so a crash between a send and its
+acknowledgement resends when the lease expires. The boundary event and the
+in-app notification row are exactly once.
+
+What to watch:
+
+- `Advertisement notifications exhausted their retry budget` — logged at **error**
+  level when an event has failed `MAX_DELIVERY_ATTEMPTS` (5) times. This is the
+  one failure nothing else surfaces: the renewal itself succeeded, so no
+  financial alarm fires, but an advertiser was never told.
+- The sweep's `notifyRetrying` and `notifyExhausted` counters in
+  `Advertisement billing sweep processed due items`.
+
+To inspect, read-only:
+
+```sql
+SELECT delivery_status, count(*), max(attempt_count) FROM advertisement_renewal_events GROUP BY 1;
+```
+
+A row stuck in `claimed` is not stuck: `claim_expires_at` releases it, and the
+sweep re-claims anything past its lease. To retry a parked event after fixing the
+cause, set it back to `pending` with a cleared `claim_expires_at`; it will be
+picked up on the next tick and will not duplicate the in-app notification,
+because `in_app_notification_id` is already set.

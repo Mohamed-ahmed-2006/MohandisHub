@@ -88,10 +88,23 @@ export type AdvertisementRenewalEventRow = {
   event_type: AdRenewalEventType;
   period_id: string | null;
   detail: Record<string, unknown>;
-  /** Stamped when the durable in-app notification for this event exists. */
-  notified_at: string | null;
   created_at: string;
+
+  // Delivery lease. Push and email have no downstream idempotency key, so these
+  // buy AT-LEAST-ONCE external delivery with a bounded, observable retry — not
+  // exactly-once, which is not achievable against those providers.
+  delivery_status: AdRenewalDeliveryStatus;
+  /** When this row becomes claimable again: lease expiry, or backoff floor. */
+  claim_expires_at: string | null;
+  claimed_at: string | null;
+  attempt_count: number;
+  last_delivery_error: string | null;
+  delivered_at: string | null;
+  /** The in-app row this event produced, so a retry never writes a second. */
+  in_app_notification_id: string | null;
 };
+
+export type AdRenewalDeliveryStatus = 'pending' | 'claimed' | 'delivered' | 'failed';
 
 export type AdPeriodStatus = 'scheduled' | 'active' | 'expired' | 'cancelled' | 'failed';
 

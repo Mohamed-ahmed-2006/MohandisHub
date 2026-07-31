@@ -2,29 +2,52 @@ import { logger } from '../../config/logger.js';
 import { getPool } from '../../db/pool.js';
 import { NotificationsService } from '../notifications/notifications.service.js';
 
-import { AdvertisementRenewalRepository } from './advertisement-renewal.repository.js';
+import {
+  AdvertisementRenewalRepository,
+  MAX_DELIVERY_ATTEMPTS,
+} from './advertisement-renewal.repository.js';
 import type { AdRenewalEventType, AdvertisementRenewalEventRow } from './advertisements.types.js';
 
 // ---------------------------------------------------------------------------
 // Advertisement renewal notifications, delivered from an OUTBOX.
 // ---------------------------------------------------------------------------
 // The durable record of "this happened at this boundary" is the
-// `advertisement_renewal_events` row, and it is written inside the same
-// transaction as the charge and the period. The in-app notification is that
-// row's DELIVERY, and it deliberately happens in a separate, tiny transaction
-// afterwards. Three properties follow, and all three were requirements:
+// `advertisement_renewal_events` row, written inside the same transaction as
+// the charge and the period. Delivery is separate, and happens in three ordered
+// steps with the external calls strictly between two transactions:
 //
+//   1. CLAIM    — lock a deliverable row, write the in-app notification if it
+//                 does not exist yet, take a time-limited lease, COMMIT;
+//   2. SEND     — push and email, outside every lock and transaction;
+//   3. ACKNOWLEDGE — a second transaction marks `delivered`, or releases the
+//                 lease with a backoff, or parks the event as `failed` once the
+//                 attempt budget is gone.
+//
+// What that does and does not guarantee — stated exactly, because the previous
+// version of this comment overstated it:
+//
+//   * the EVENT is exactly once. `uq_ad_renewal_event_boundary` enforces it;
+//   * the IN-APP notification is exactly once. It is written under the same
+//     lock that sets `in_app_notification_id`, and a retry that finds the
+//     column populated does not write another;
+//   * PUSH and EMAIL are AT-LEAST-ONCE. The Web Push protocol has no
+//     idempotency key, and `sendTransactionalEmail` passes none to Resend
+//     (which does support one), so a crash after a send but before its
+//     acknowledgement will resend when the lease expires. A rare duplicate
+//     push or email is the accepted cost of never silently losing one;
 //   * a notification failure can never roll back a committed renewal. The
-//     financial transaction does not contain a notification insert at all;
-//   * a crash between the financial commit and the notification cannot lose the
-//     notification. The event row survives with `notified_at IS NULL`, and the
-//     next sweep delivers it;
-//   * a notification cannot be delivered twice. `FOR UPDATE SKIP LOCKED` on an
-//     undelivered row means exactly one worker claims it, and the stamp commits
-//     with the notification.
+//     financial transaction contains no notification write at all;
+//   * a worker that dies mid-delivery cannot strand an event. The lease expires
+//     and the sweep re-claims it;
+//   * the retry is BOUNDED (`MAX_DELIVERY_ATTEMPTS`) and OBSERVABLE
+//     (`attempt_count`, `last_delivery_error`, `delivery_status = 'failed'`).
 //
-// Web push and email happen only AFTER that commit, so no advertisement row and
-// no wallet row is ever locked across a network call.
+// Nothing is stamped delivered before the external send. Doing that would
+// suppress duplicates by losing messages instead, which is the worse failure —
+// and was the defect this design replaced.
+//
+// Web push and email happen only after the claim commits, so no advertisement
+// row and no wallet row is ever locked across a network call.
 //
 // The stored title and message are English. Every client renders these types
 // through `dictionary.notificationTemplates`, which interpolates `{adTitle}`
@@ -147,6 +170,47 @@ export function buildRenewalNotification(
   };
 }
 
+/**
+ * Sentinel written into `in_app_notification_id` when the recipient has
+ * switched the in-app channel off.
+ *
+ * A completed decision needs to be distinguishable from "not written yet", or
+ * every retry would reconsider the preference and the column would stay null
+ * forever. The all-zero UUID points at no notification, which is exactly true.
+ */
+const SUPPRESSED_IN_APP = '00000000-0000-0000-0000-000000000000';
+
+/** What one delivery attempt did. Every value is a normal outcome. */
+export type DeliveryOutcome =
+  /** Another worker holds the lease, or it is already delivered or failed. */
+  | 'not_claimable'
+  /** The campaign is gone; there is nobody to tell. */
+  | 'orphaned'
+  | 'delivered'
+  /** A channel failed and the lease was released with a backoff. */
+  | 'retry_scheduled'
+  /** The retry budget is gone. An operator's problem now. */
+  | 'exhausted'
+  /** The send happened but the acknowledgement did not. The lease expires. */
+  | 'ack_failed';
+
+type ClaimedDelivery =
+  | { kind: 'orphaned' }
+  | {
+      kind: 'claimed';
+      userId: string;
+      attemptCount: number;
+      persisted: { id: string; createdAt: string } | null;
+      input: {
+        type: string;
+        title: string;
+        message: string;
+        payload: Record<string, unknown>;
+        recipientEmail?: string;
+        recipientDisplayName?: string;
+      };
+    };
+
 export class AdvertisementRenewalNotifier {
   constructor(
     private readonly repo: AdvertisementRenewalRepository = new AdvertisementRenewalRepository(),
@@ -154,36 +218,107 @@ export class AdvertisementRenewalNotifier {
   ) {}
 
   /**
-   * Deliver one event, if it is still undelivered and nobody else has it.
+   * Deliver one event: claim, send, acknowledge — three ordered steps, two
+   * transactions, with the external calls strictly between them.
    *
-   * Returns false — not an error — when another worker owns the row or it was
-   * already delivered. "Somebody else is doing it" is the expected outcome of a
-   * race, not a failure to report.
+   * Returns false — not an error — when another worker holds the lease or the
+   * event is already delivered. "Somebody else is doing it" is the expected
+   * outcome of a race, not a failure to report.
    */
-  async deliverEvent(eventId: string): Promise<boolean> {
+  async deliverEvent(eventId: string): Promise<DeliveryOutcome> {
+    // ---- 1. CLAIM ---------------------------------------------------------
+    // Writes the in-app notification (once, ever) and takes a lease. Commits
+    // BEFORE any external call, so nothing is marked delivered on the strength
+    // of a send that has not happened.
+    const claim = await this.claim(eventId);
+    if (!claim) return 'not_claimable';
+    if (claim.kind === 'orphaned') return 'orphaned';
+
+    // ---- 2. SEND ----------------------------------------------------------
+    // Outside every lock and every transaction. Only the channels that have not
+    // already succeeded on an earlier attempt are attempted again.
+    const result = await this.notifications.deliverChannels(
+      claim.userId,
+      claim.input,
+      claim.persisted,
+    );
+
+    // ---- 3. ACKNOWLEDGE ---------------------------------------------------
+    const failed = result.email === 'failed' || result.push === 'failed';
     const client = await getPool().connect();
-    let delivered: {
-      userId: string;
-      content: AdvertisementNotificationContent;
-      persisted: { id: string; createdAt: string } | null;
-      email: string | null;
-      displayName: string | null;
-    } | null = null;
     try {
       await client.query('BEGIN');
-      const event = await this.repo.lockUndeliveredEventInTx(client, eventId);
+      await client.query(`SET LOCAL lock_timeout = '3s'`);
+      if (failed) {
+        const settled = await this.repo.recordDeliveryFailureInTx(client, {
+          eventId,
+          attemptCount: claim.attemptCount,
+          error: result.error ?? 'unknown delivery failure',
+        });
+        await client.query('COMMIT');
+        logger[settled === 'failed' ? 'error' : 'warn'](
+          settled === 'failed'
+            ? 'Advertisement notification delivery gave up'
+            : 'Advertisement notification delivery will retry',
+          {
+            eventId,
+            attempt: claim.attemptCount,
+            maxAttempts: MAX_DELIVERY_ATTEMPTS,
+            channels: { email: result.email, push: result.push },
+            error: result.error,
+          },
+        );
+        return settled === 'failed' ? 'exhausted' : 'retry_scheduled';
+      }
+      await this.repo.markEventDeliveredInTx(client, eventId);
+      await client.query('COMMIT');
+      return 'delivered';
+    } catch (error) {
+      await client.query('ROLLBACK').catch(() => {});
+      // The lease is still held and will expire on its own, so the event is
+      // retried rather than stranded. Nothing financial is involved here.
+      logger.warn('Advertisement notification acknowledgement failed', {
+        eventId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return 'ack_failed';
+    } finally {
+      client.release();
+    }
+  }
+
+  /**
+   * Take the lease and make sure the in-app notification exists — in one
+   * transaction, committed before anything leaves the process.
+   *
+   * The in-app row is written only when `in_app_notification_id` is still null,
+   * so a retry of the external channels never writes the advertiser a second
+   * copy of the same message.
+   */
+  private async claim(eventId: string): Promise<ClaimedDelivery | null> {
+    const client = await getPool().connect();
+    try {
+      await client.query('BEGIN');
+      // A delivery must never sit behind an unrelated write. This transaction
+      // takes a row lock on the event and then touches `notifications`, while
+      // anything that deletes an advertisement cascades INTO the event table —
+      // opposite lock order, so the two can genuinely deadlock. Bounding the
+      // wait turns that from a stuck delivery into a failed attempt, and a
+      // failed attempt is already a retry: the claim rolls back, the event
+      // stays `pending`, and the next sweep picks it up.
+      await client.query(`SET LOCAL lock_timeout = '3s'`);
+      const event = await this.repo.lockDeliverableEventInTx(client, eventId);
       if (!event) {
         await client.query('COMMIT');
-        return false;
+        return null;
       }
 
       const { rows } = await client.query<{
         title_en: string;
-        advertiser_id: string;
         email: string | null;
         display_name: string | null;
       }>(
-        `SELECT a.title_en, a.advertiser_id, u.email, u.display_name
+        `SELECT a.title_en, u.email, u.display_name
          FROM advertisements a
          JOIN users u ON u.id = a.advertiser_id
          WHERE a.id = $1`,
@@ -191,36 +326,54 @@ export class AdvertisementRenewalNotifier {
       );
       const ad = rows[0];
       if (!ad) {
-        // The campaign was deleted between the event and its delivery. Stamp it
-        // so the sweep stops reconsidering an event with no recipient.
-        await this.repo.markEventNotifiedInTx(client, event.id);
+        // The campaign was deleted between the event and its delivery. There is
+        // nobody to tell, so settle it as delivered rather than retrying an
+        // event with no recipient five times.
+        await this.repo.markEventDeliveredInTx(client, event.id);
         await client.query('COMMIT');
-        return false;
+        return { kind: 'orphaned' } as ClaimedDelivery;
       }
 
       const content = buildRenewalNotification(event, ad.title_en);
-      // Ownership is taken from the EVENT row, which was written with the
-      // advertiser's id inside the financial transaction — never from anything
-      // a caller supplied.
+      // Ownership comes from the EVENT row, written with the advertiser's id
+      // inside the financial transaction — never from anything a caller
+      // supplied, and never from this lookup.
       const recipient = event.advertiser_id;
-      const persisted = await this.notifications.createDurableInTx(client, recipient, {
-        type: content.type,
-        title: content.title,
-        message: content.message,
-        payload: content.payload,
-      });
-      await this.repo.markEventNotifiedInTx(client, event.id);
+
+      let persisted: { id: string; createdAt: string } | null = null;
+      if (event.in_app_notification_id === null) {
+        const created = await this.notifications.createDurableInTx(client, recipient, {
+          type: content.type,
+          title: content.title,
+          message: content.message,
+          payload: content.payload,
+        });
+        if (created.persisted && created.id && created.createdAt) {
+          persisted = { id: created.id, createdAt: created.createdAt };
+          await this.repo.attachInAppNotificationInTx(client, event.id, created.id);
+        } else {
+          // The recipient switched the in-app channel off. That is a completed
+          // decision, and marking it so stops a later retry reconsidering it.
+          await this.repo.attachInAppNotificationInTx(client, event.id, SUPPRESSED_IN_APP);
+        }
+      }
+
+      const attemptCount = await this.repo.markEventClaimedInTx(client, event.id);
       await client.query('COMMIT');
 
-      delivered = {
+      return {
+        kind: 'claimed',
         userId: recipient,
-        content,
-        persisted:
-          persisted.persisted && persisted.id && persisted.createdAt
-            ? { id: persisted.id, createdAt: persisted.createdAt }
-            : null,
-        email: ad.email,
-        displayName: ad.display_name,
+        attemptCount,
+        persisted,
+        input: {
+          type: content.type,
+          title: content.title,
+          message: content.message,
+          payload: content.payload,
+          ...(ad.email ? { recipientEmail: ad.email } : {}),
+          ...(ad.display_name ? { recipientDisplayName: ad.display_name } : {}),
+        },
       };
     } catch (error) {
       await client.query('ROLLBACK').catch(() => {});
@@ -228,53 +381,48 @@ export class AdvertisementRenewalNotifier {
     } finally {
       client.release();
     }
-
-    // AFTER the commit, and outside every lock this method took.
-    await this.notifications.deliverOutOfBand(
-      delivered.userId,
-      {
-        type: delivered.content.type,
-        title: delivered.content.title,
-        message: delivered.content.message,
-        payload: delivered.content.payload,
-        ...(delivered.email ? { recipientEmail: delivered.email } : {}),
-        ...(delivered.displayName ? { recipientDisplayName: delivered.displayName } : {}),
-      },
-      delivered.persisted,
-    );
-    return true;
   }
 
   /**
-   * Deliver up to `limit` events that were committed but never delivered.
+   * Deliver up to `limit` events that nobody is currently delivering.
    *
-   * The recovery half of the outbox. One failure does not stop the batch: each
-   * event is independent, and an event that throws is left undelivered for the
-   * next sweep rather than blocking the ones behind it.
+   * The recovery half of the outbox, and the only thing that retries a lease
+   * whose worker died. One failure does not stop the batch: each event is
+   * independent, and an event that throws keeps its lease until it expires
+   * rather than blocking the ones behind it.
    */
-  async deliverPending(limit = 50): Promise<{ examined: number; delivered: number }> {
-    const ids = await this.repo.listUndeliveredEventIds(limit);
-    let delivered = 0;
+  async deliverPending(limit = 50): Promise<{
+    examined: number;
+    delivered: number;
+    retrying: number;
+    exhausted: number;
+  }> {
+    const ids = await this.repo.listDeliverableEventIds(limit);
+    const tally = { examined: ids.length, delivered: 0, retrying: 0, exhausted: 0 };
     for (const id of ids) {
       try {
-        if (await this.deliverEvent(id)) delivered += 1;
+        const outcome = await this.deliverEvent(id);
+        if (outcome === 'delivered') tally.delivered += 1;
+        if (outcome === 'retry_scheduled' || outcome === 'ack_failed') tally.retrying += 1;
+        if (outcome === 'exhausted') tally.exhausted += 1;
       } catch (error) {
+        tally.retrying += 1;
         logger.warn('Advertisement renewal notification delivery failed', {
           eventId: id,
           error: error instanceof Error ? error.message : String(error),
         });
       }
     }
-    return { examined: ids.length, delivered };
+    return tally;
   }
 
   /** Fire-and-forget delivery for an event this process just committed. */
   deliverSoon(eventId: string | null | undefined): void {
     if (!eventId) return;
     void this.deliverEvent(eventId).catch((error: unknown) => {
-      // Deliberately swallowed: the event row survives with notified_at NULL,
-      // so the sweep will deliver it. Losing a push is never a reason to fail a
-      // request whose financial half already committed.
+      // Deliberately swallowed: the event row survives as pending (or leased,
+      // and the lease expires), so the sweep will deliver it. Losing a push is
+      // never a reason to fail a request whose financial half already committed.
       logger.warn('Immediate advertisement notification delivery failed', {
         eventId,
         error: error instanceof Error ? error.message : String(error),

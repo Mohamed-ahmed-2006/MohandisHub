@@ -73,9 +73,19 @@ export const startAdvertisementBillingWorker = (
         result.expiredPeriods > 0 ||
         result.reminded > 0 ||
         result.notified > 0 ||
+        result.notifyRetrying > 0 ||
+        result.notifyExhausted > 0 ||
         result.failures > 0;
       if (didSomething) {
         logger.info('Advertisement billing sweep processed due items', result);
+      }
+      // Exhausted deliveries are the one outcome nothing else will surface: the
+      // renewal itself succeeded, so no financial alarm fires, but an advertiser
+      // was never told. Logged at error level so it reaches an operator.
+      if (result.notifyExhausted > 0) {
+        logger.error('Advertisement notifications exhausted their retry budget', {
+          exhausted: result.notifyExhausted,
+        });
       }
     } catch (error) {
       // The sweep already isolates per-campaign failures; reaching here means

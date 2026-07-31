@@ -25,6 +25,21 @@ export type SendTransactionalEmailParams = {
 };
 
 export async function sendTransactionalEmail(params: SendTransactionalEmailParams): Promise<void> {
+  // A test process must never post to a real email provider. `config/env.ts`
+  // loads apps/api/.env, so any suite that reaches a notification path would
+  // otherwise send live mail to fixture addresses — which is how a sending
+  // reputation gets burned by a green test run. Checked here, ahead of the
+  // provider branches, so it holds for Resend, for the legacy Brevo branch and
+  // for anything added later, rather than being trusted to every suite
+  // remembering to mock this module.
+  if (env.NODE_ENV === 'test') {
+    logger.info('Transactional email suppressed (test environment)', {
+      to: params.to,
+      subject: params.subject,
+    });
+    return;
+  }
+
   if (env.OTP_EMAIL_PROVIDER === 'console') {
     logger.info('Transactional email (console)', {
       to: params.to,
