@@ -77,3 +77,17 @@ export const otpRateLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
 });
+
+/**
+ * Limiter for the unauthenticated business-team invitation preview.
+ *
+ * The token itself is 256 bits, so this is not what makes guessing infeasible —
+ * it is what stops the endpoint being used as a free oracle at volume. Sized for
+ * a real recipient, who loads the page a handful of times at most.
+ */
+export const invitePreviewRateLimiter = rateLimit({
+  windowMs: FIFTEEN_MIN_MS,
+  max: 60,
+  standardHeaders: true,
+  legacyHeaders: false,
+});
