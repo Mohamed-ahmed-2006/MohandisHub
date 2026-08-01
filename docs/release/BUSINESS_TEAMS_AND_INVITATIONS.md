@@ -8,6 +8,14 @@ Business workspace membership, permissions, and the secure invitation lifecycle.
 - Production migrations applied by this work: **none**. The migration is dry-run
   verified against the live schema and is pending deployment.
 
+> **Superseded in part.** Ownership transfer is **not available**, and six of the
+> seven workspace permissions are **reserved rather than enforced**. Wave 2G is
+> split into 2G-A (shipped: team administration, roles, invitations, membership,
+> workspace access) and 2G-B (deferred: delegated services, jobs, analytics,
+> advertisements, bookings, plans, wallet, MHC). See
+> [`docs/release/WAVE_2GH_BACKEND_BLOCKERS.md`](./WAVE_2GH_BACKEND_BLOCKERS.md)
+> for what changed and why.
+
 ---
 
 ## 1. What existed before
@@ -60,7 +68,7 @@ Three, and only three, are exposed:
 
 | Tier       | Stored in `business_members.role` | Capability                                                                                                                                                                |
 | ---------- | --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Owner**  | `owner`                           | Everything, including billing/ownership control and ownership transfer. Exactly one per workspace.                                                                        |
+| **Owner**  | `owner`                           | Team administration, role management, member removal. Exactly one per workspace. Ownership belongs to the business account and cannot be transferred.                     |
 | **Admin**  | `manager`                         | Operational team administration: invite, revoke, update non-owner roles, remove non-owner members. Cannot transfer ownership, grant Owner, or remove or demote the Owner. |
 | **Member** | `member`                          | Permitted operations only. No team administration unless an explicit custom permission grants a narrower slice (see below).                                               |
 
@@ -161,8 +169,7 @@ non-owner rather than loosely guarded.
 ## 4. Endpoints
 
 Mounted at `/api/business-teams` (the router is mounted at `/api`; this project
-has no `/v1` segment — the earlier contract draft's `/api/v1/...` paths refer to
-these routes).
+has no version segment).
 
 Every response is `{ ok: true, data }` or `{ ok: false, error: { code, message } }`.
 
@@ -182,7 +189,7 @@ Authenticated + email-verified. Returns `BusinessTeamOverview`:
     "allowedActions": {
       "inviteMembers": true, "revokeInvites": true, "viewInvites": true,
       "updateMemberRoles": true, "removeMembers": true,
-      "manageRoles": true, "transferOwnership": true
+      "manageRoles": true, "transferOwnership": false
     }
   },
   "roles": [{ "id": "uuid", "name": "Admin", "key": "manager", "builtIn": true,
