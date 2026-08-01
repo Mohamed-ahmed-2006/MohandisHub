@@ -7,6 +7,7 @@ import { useCallback, useEffect, useState } from 'react';
 
 import { useAuth } from '@/components/auth/auth-provider';
 import { BusinessTeamApiError, businessTeamsApiClient } from '@/lib/business-teams/client';
+import { captureInvitation, forgetInvitation } from '@/lib/business-teams/invitation-continuation';
 import { buildLocalePath } from '@/lib/i18n/path';
 import type { Dictionary, Locale } from '@/lib/i18n/types';
 
@@ -42,13 +43,31 @@ const STATE_FOR_CODE: Record<string, AcceptanceState> = {
 
 export const InvitationAcceptanceScreen = ({ locale, dictionary }: Props) => {
   const searchParams = useSearchParams();
-  const token = searchParams.get('token');
   const { authUser, accessToken, isAuthenticated, isReady } = useAuth();
 
   const [state, setState] = useState<AcceptanceState>('idle');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [preview, setPreview] = useState<BusinessInvitePreview | null>(null);
   const [previewLoading, setPreviewLoading] = useState(true);
+  const [token, setToken] = useState<string | null>(null);
+  const [tokenReady, setTokenReady] = useState(false);
+  const [acceptedTeamId, setAcceptedTeamId] = useState<string | null>(null);
+
+  /**
+   * Take the token out of the URL on arrival, and keep it for the round trip
+   * through sign-in or sign-up.
+   *
+   * Runs once, before anything is fetched. After it, the address bar no longer
+   * carries the token — so it is not in this history entry, not in the `Referer`
+   * of the next navigation, and not in a screenshot — while the value itself
+   * lives in `sessionStorage` for the rest of the tab's session.
+   */
+  useEffect(() => {
+    setToken(captureInvitation(searchParams.get('token')));
+    setTokenReady(true);
+    // Intentionally arrival-only: re-running on every searchParams change would
+    // re-capture a token this effect has just removed from the URL.
+  }, []);
 
   const loc = (locale as Locale) || 'en';
   const isArabic = locale === 'ar';
@@ -87,9 +106,33 @@ export const InvitationAcceptanceScreen = ({ locale, dictionary }: Props) => {
   }, [token, accessToken]);
 
   useEffect(() => {
-    if (!isReady) return;
+    if (!isReady || !tokenReady) return;
     void loadPreview();
-  }, [isReady, loadPreview]);
+  }, [isReady, tokenReady, loadPreview]);
+
+  /**
+   * Stop carrying an invitation nothing can be done with.
+   *
+   * Every one of these is terminal: no retry, no different account and no later
+   * visit changes the answer, so the token is dropped rather than left in the
+   * tab to be replayed by the next navigation. `wrong_account` is deliberately
+   * NOT here — signing in as the invited person is exactly the retry that works.
+   */
+  useEffect(() => {
+    if (
+      state === 'success' ||
+      state === 'already_used' ||
+      state === 'expired' ||
+      state === 'revoked'
+    ) {
+      forgetInvitation();
+    }
+  }, [state]);
+
+  useEffect(() => {
+    if (tokenReady && !token) forgetInvitation();
+    if (preview?.state === 'malformed') forgetInvitation();
+  }, [tokenReady, token, preview]);
 
   const handleAccept = async () => {
     if (!accessToken || !token) return;
@@ -97,7 +140,11 @@ export const InvitationAcceptanceScreen = ({ locale, dictionary }: Props) => {
     setErrorMessage(null);
 
     try {
-      await businessTeamsApiClient.acceptInvite(accessToken, token);
+      const result = await businessTeamsApiClient.acceptInvite(accessToken, token);
+      // The workspace the caller may now open — which is what makes the link
+      // below land somewhere real for an account whose primary role is not
+      // `business`, and for one that already belonged to another workspace.
+      setAcceptedTeamId(result.teamId);
       setState('success');
     } catch (err) {
       if (err instanceof BusinessTeamApiError) {
@@ -205,10 +252,11 @@ export const InvitationAcceptanceScreen = ({ locale, dictionary }: Props) => {
   );
 
   if (!isAuthenticated) {
-    // The token is carried through sign-in and through account creation by the
-    // auth flow's own `next` parameter, whose allowlist covers this route. It is
-    // a relative in-app path, so the token never leaves the origin.
-    const returnTo = `${buildLocalePath(loc, '/invitations/accept')}?token=${encodeURIComponent(token)}`;
+    // The return path carries NO token. The token is already in this tab's
+    // sessionStorage, and this screen reads it back on the way in — so the auth
+    // flow's `next` parameter, the URL it produces and the history entries in
+    // between never contain the bearer at all.
+    const returnTo = buildLocalePath(loc, '/invitations/accept');
     const authPath = buildLocalePath(loc, '/auth');
     const loginRedirect = `${authPath}?mode=login&next=${encodeURIComponent(returnTo)}`;
     const registerRedirect = `${authPath}?mode=register&next=${encodeURIComponent(returnTo)}`;
@@ -309,7 +357,12 @@ export const InvitationAcceptanceScreen = ({ locale, dictionary }: Props) => {
                   )}
             </p>
           </div>
-          <Link href={buildLocalePath(loc, '/app')} className="dashboard-primary-btn">
+          <Link
+            href={`${buildLocalePath(loc, '/workspaces')}${
+              acceptedTeamId ? `?teamId=${encodeURIComponent(acceptedTeamId)}` : ''
+            }`}
+            className="dashboard-primary-btn"
+          >
             {tr('Open Business Workspace', 'فتح مساحة عمل الشركات')}
           </Link>
         </div>
@@ -337,7 +390,7 @@ export const InvitationAcceptanceScreen = ({ locale, dictionary }: Props) => {
               )}
             </p>
           </div>
-          <Link href={buildLocalePath(loc, '/app')} className="dashboard-primary-btn">
+          <Link href={buildLocalePath(loc, '/workspaces')} className="dashboard-primary-btn">
             {tr('Open Business Workspace', 'فتح مساحة عمل الشركات')}
           </Link>
         </div>

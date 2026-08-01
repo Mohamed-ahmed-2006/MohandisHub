@@ -337,10 +337,21 @@ export const AuthForm = ({
       setStatusVariant('success');
       setStatusMessage(null);
 
-      const safeNext = authenticatedUser.emailVerified
-        ? getSafeNextPath(locale, searchParams.get('next'))
-        : null;
-      const postAuthPath = safeNext ?? getPostAuthPath(locale, authenticatedUser.emailVerified);
+      const safeNext = getSafeNextPath(locale, searchParams.get('next'));
+
+      // A verified account goes straight where it was headed. An unverified one
+      // still has to verify first — but the destination travels WITH it, so the
+      // verification screen can resume instead of dropping the journey at
+      // onboarding. Previously `next` was discarded here, which stranded every
+      // invitation recipient who created an account to accept one.
+      if (!authenticatedUser.emailVerified && safeNext) {
+        router.push(`${getPostAuthPath(locale, false)}?next=${encodeURIComponent(safeNext)}`);
+        return;
+      }
+
+      const postAuthPath =
+        (authenticatedUser.emailVerified ? safeNext : null) ??
+        getPostAuthPath(locale, authenticatedUser.emailVerified);
       router.push(postAuthPath);
       return;
     } catch (error: unknown) {

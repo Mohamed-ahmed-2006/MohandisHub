@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { isApiClientError, useAuth } from '@/components/auth/auth-provider';
@@ -25,6 +25,7 @@ const RESEND_COOLDOWN_SECONDS = 60;
 
 export const VerifyEmailScreen = ({ locale, dictionary }: VerifyEmailScreenProps) => {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { authUser, accessToken, isAuthenticated, isReady, authGuard, refreshSession } = useAuth();
   const dict = dictionary.emailVerification;
 
@@ -62,6 +63,25 @@ export const VerifyEmailScreen = ({ locale, dictionary }: VerifyEmailScreenProps
     };
   }, []);
 
+  /**
+   * Where to send someone once their email is verified.
+   *
+   * Registration is a step in the middle of something, not the end of it. A
+   * recipient following a business team invitation arrives here with `next`
+   * still on the URL, and the previous version sent them to onboarding and
+   * dropped it — leaving the invitation unused and the user with no way back to
+   * it. The same allowlist the auth form uses applies: a relative in-app path
+   * under `/app` or `/invitations/accept`, and nothing that could leave the
+   * origin.
+   */
+  const continuationPath = (): string | null => {
+    const raw = searchParams.get('next');
+    if (!raw) return null;
+    if (raw.startsWith('//') || raw.includes('://')) return null;
+    const allowed = ['/app', '/invitations/accept'];
+    return allowed.some((prefix) => raw.startsWith(`/${locale}${prefix}`)) ? raw : null;
+  };
+
   useEffect(() => {
     if (!isReady) return;
 
@@ -71,11 +91,18 @@ export const VerifyEmailScreen = ({ locale, dictionary }: VerifyEmailScreenProps
     }
 
     if (authGuard.emailVerified) {
+      const resume = continuationPath();
+      if (resume) {
+        router.replace(resume);
+        return;
+      }
       const role = authUser.role;
       const onboardingPath = authUser.isAdmin ? '/app' : `/onboarding/${role}`;
       router.replace(buildLocalePath(locale, onboardingPath));
     }
-  }, [isReady, isAuthenticated, authUser, authGuard.emailVerified, locale, router]);
+    // `continuationPath` reads only `searchParams` and `locale`, both already
+    // dependencies below.
+  }, [isReady, isAuthenticated, authUser, authGuard.emailVerified, locale, router, searchParams]);
 
   const sendOtp = useCallback(async () => {
     if (!accessToken || isSending) return;
@@ -147,6 +174,11 @@ export const VerifyEmailScreen = ({ locale, dictionary }: VerifyEmailScreenProps
   };
 
   const handleContinue = (): void => {
+    const resume = continuationPath();
+    if (resume) {
+      router.replace(resume);
+      return;
+    }
     const role = authUser?.role ?? 'customer';
     const onboardingPath = role === 'admin' ? '/app' : `/onboarding/${role}`;
     router.replace(buildLocalePath(locale, onboardingPath));
