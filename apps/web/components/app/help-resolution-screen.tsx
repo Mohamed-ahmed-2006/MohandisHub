@@ -22,6 +22,11 @@ import { toStoredAttachmentUrl } from '@/lib/support/attachment-url';
 import { getPrivateFileOpenableUrl, uploadFile, uploadPrivateFile } from '@/lib/upload/client';
 
 import '@/app/dashboard.css';
+// Every `support-*` class below lives here, including the 768px rules that make
+// the list and the thread a single-column master/detail on a phone. The screen
+// used all of them while only importing dashboard.css, so on mobile the list
+// and the thread rendered stacked and unstyled.
+import './support-screen.css';
 
 type Props = {
   defaultTab?: 'all' | 'support' | 'disputes' | 'safety';
@@ -484,10 +489,7 @@ export const HelpResolutionScreen = ({ defaultTab = 'all' }: Props) => {
       if (isApiClientError(err) && err.code === 'DUPLICATE_CASE') {
         setUnavailableNotice(
           hr.duplicateCase ??
-            tr(
-              'You already have an open case about this.',
-              'لديك بالفعل قضية مفتوحة بخصوص هذا.',
-            ),
+            tr('You already have an open case about this.', 'لديك بالفعل قضية مفتوحة بخصوص هذا.'),
         );
       } else {
         setUnavailableNotice(
@@ -659,8 +661,8 @@ export const HelpResolutionScreen = ({ defaultTab = 'all' }: Props) => {
                       {eligibleSubjects.length === 0 ? (
                         <p className="dashboard-card-meta" role="status">
                           {unavailableMessage(selectedAvailability) ??
-                            (hr.checkingAvailability ??
-                              tr('Checking what you can open...', 'جارٍ التحقق...'))}
+                            hr.checkingAvailability ??
+                            tr('Checking what you can open...', 'جارٍ التحقق...')}
                         </p>
                       ) : (
                         <select
@@ -708,16 +710,13 @@ export const HelpResolutionScreen = ({ defaultTab = 'all' }: Props) => {
                         {(createKind === 'need_job_dispute'
                           ? [
                               ['not_delivered', tr('Work not delivered', 'لم يُسلَّم العمل')],
-                              [
-                                'partially_delivered',
-                                tr('Partially delivered', 'تسليم جزئي'),
-                              ],
+                              ['partially_delivered', tr('Partially delivered', 'تسليم جزئي')],
                               ['quality', tr('Quality of work', 'جودة العمل')],
-                              ['unresponsive', tr('Other party unresponsive', 'الطرف الآخر لا يرد')],
                               [
-                                'scope_disagreement',
-                                tr('Scope disagreement', 'خلاف على النطاق'),
+                                'unresponsive',
+                                tr('Other party unresponsive', 'الطرف الآخر لا يرد'),
                               ],
+                              ['scope_disagreement', tr('Scope disagreement', 'خلاف على النطاق')],
                               ['other', tr('Other', 'أخرى')],
                             ]
                           : createKind === 'direct_payment'
@@ -976,9 +975,7 @@ export const HelpResolutionScreen = ({ defaultTab = 'all' }: Props) => {
                             tr('No evidence attached yet.', 'لا توجد أدلة مرفقة حتى الآن.')}
                         </p>
                       ) : (
-                        <div
-                          style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}
-                        >
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
                           {caseFile.evidence.map((ev) => (
                             <div
                               key={ev.id}
