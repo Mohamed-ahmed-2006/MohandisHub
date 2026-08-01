@@ -1,21 +1,18 @@
 'use client';
 
 import type { BusinessTeamOverview } from '@mohandishub/shared';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { BUSINESS_TEAM_PERMISSIONS, businessTeamsApiClient } from '@/lib/business-teams/client';
 import type { Dictionary } from '@/lib/i18n/types';
+import '@/components/team/team-management.css';
 
 type Props = {
   dictionary: Dictionary;
   accessToken: string;
   /**
-   * Which workspace to operate in.
-   *
-   * Omitted by the business dashboard, which has always shown the account's own
-   * workspace. Supplied by the workspaces route, where a person who belongs to
-   * more than one picks. Either way the server verifies it against the caller's
-   * own memberships, so it selects and never grants.
+   * Selects one of the caller's server-authorized workspace memberships. It is
+   * never an authorization grant and is verified on every API call.
    */
   teamId?: string | null;
 };
@@ -28,6 +25,8 @@ export const BusinessTeamPanel = ({ dictionary, accessToken, teamId }: Props) =>
   const [notice, setNotice] = useState<string | null>(null);
   const [formValidationError, setFormValidationError] = useState<string | null>(null);
   const [pendingRemoval, setPendingRemoval] = useState<{ id: string; label: string } | null>(null);
+  const removalDialogRef = useRef<HTMLDivElement>(null);
+  const removalTriggerRef = useRef<HTMLElement | null>(null);
 
   const isArabic = /[؀-ۿ]/.test(dictionary.nav?.home ?? '');
   const tr = (en: string, ar: string) => (isArabic ? ar : en);
@@ -50,13 +49,49 @@ export const BusinessTeamPanel = ({ dictionary, accessToken, teamId }: Props) =>
     void load();
   }, [load]);
 
+  // The confirmation is a modal keyboard scope: focus enters it, Tab and
+  // Shift+Tab wrap within it, Escape closes it, and closing restores the
+  // triggering control.
+  useEffect(() => {
+    if (!pendingRemoval) return;
+
+    const dialog = removalDialogRef.current;
+    const focusable = Array.from(
+      dialog?.querySelectorAll<HTMLElement>(
+        'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+      ) ?? [],
+    );
+    const first = focusable[0] ?? dialog;
+    const last = focusable.at(-1) ?? dialog;
+    first?.focus();
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        setPendingRemoval(null);
+        return;
+      }
+      if (event.key !== 'Tab') return;
+
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last?.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first?.focus();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      removalTriggerRef.current?.focus();
+      removalTriggerRef.current = null;
+    };
+  }, [pendingRemoval]);
+
   /**
    * Run a mutation and take the fresh overview from its response.
-   *
-   * Every mutating endpoint returns the same authoritative overview, so the
-   * caller's own permissions are re-read from the server after each change —
-   * an admin who has just been demoted sees the correct screen on the next
-   * render rather than the one they had before.
    */
   const mutate = async (action: () => Promise<BusinessTeamOverview>, failure: string) => {
     setBusy(true);
@@ -73,9 +108,6 @@ export const BusinessTeamPanel = ({ dictionary, accessToken, teamId }: Props) =>
     }
   };
 
-  // Standing in the workspace, decided by the backend and only presented here.
-  // Every action below is re-authorized server-side, so hiding a control is a
-  // convenience rather than a control.
   const viewer = overview?.viewer ?? null;
   const actions = viewer?.allowedActions ?? null;
   const workspaceTier = viewer?.tier ?? 'member';
@@ -105,7 +137,10 @@ export const BusinessTeamPanel = ({ dictionary, accessToken, teamId }: Props) =>
       () => businessTeamsApiClient.createRole(accessToken, { name, permissions }, teamId),
       tr('Could not create role.', 'تعذر إنشاء الدور.'),
     );
-    if (ok) form.reset();
+    if (ok) {
+      form.reset();
+      setNotice(tr('Custom role created successfully.', 'تم إنشاء الدور المخصص بنجاح.'));
+    }
   };
 
   const invite = async (event: React.FormEvent<HTMLFormElement>) => {
@@ -172,9 +207,6 @@ export const BusinessTeamPanel = ({ dictionary, accessToken, teamId }: Props) =>
     }
   };
 
-  if (loading) return <p className="dashboard-empty">{dictionary.admin.loading}</p>;
-  if (!overview || !viewer) return <p className="dashboard-error">{error}</p>;
-
   const tierLabel = (tier: 'owner' | 'admin' | 'member') =>
     tier === 'owner'
       ? tr('Team Owner', 'مالك الفريق')
@@ -185,77 +217,134 @@ export const BusinessTeamPanel = ({ dictionary, accessToken, teamId }: Props) =>
   const memberRoleLabel = (member: BusinessTeamOverview['members'][number]) =>
     member.isOwner ? tierLabel('owner') : (member.roleName ?? tierLabel(member.tier));
 
-  return (
-    <section className="dashboard-section" style={{ maxWidth: '100%' }}>
-      {/* Workspace Header & Role Presentation */}
-      <div
-        style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          flexWrap: 'wrap',
-          gap: '1rem',
-          marginBottom: '1.5rem',
-          padding: '1rem',
-          background: 'var(--card-bg, rgba(255, 255, 255, 0.05))',
-          borderRadius: '12px',
-          border: '1px solid rgba(255, 255, 255, 0.1)',
-        }}
-      >
-        <div>
-          <h3 className="dashboard-section-title" style={{ margin: 0, wordBreak: 'break-word' }}>
-            {overview.team.name ?? tr('Business Team', 'فريق العمل')}
-          </h3>
-          <p className="dashboard-card-meta" style={{ margin: '0.25rem 0 0' }}>
-            {tr('Workspace Team ID', 'معرف فريق مساحة العمل')}: {overview.team.id.slice(0, 8)}...
-          </p>
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
-          <span className="dashboard-card-meta">
-            {tr('Your Workspace Role', 'دورك في مساحة العمل')}:
-          </span>
-          <span
-            className={`dashboard-badge dashboard-badge--${workspaceTier}`}
-            style={{
-              padding: '0.35rem 0.85rem',
-              borderRadius: '20px',
-              fontWeight: 600,
-              fontSize: '0.85rem',
-              textTransform: 'capitalize',
-            }}
-          >
-            {tierLabel(workspaceTier)}
-          </span>
+  const requestRemoval = (member: BusinessTeamOverview['members'][number]) => {
+    removalTriggerRef.current = document.activeElement as HTMLElement | null;
+    setPendingRemoval({
+      id: member.id,
+      label: member.displayName ?? member.email ?? 'Member',
+    });
+  };
+
+  if (loading) {
+    return (
+      <div className="team-container" data-testid="team-loading-state">
+        <div className="team-empty-state">
+          <div style={{ fontSize: '1.25rem', fontWeight: 600, marginBottom: '0.5rem' }}>
+            ⏳ {dictionary.admin?.loading ?? tr('Loading business team...', 'جاري تحميل فريق العمل...')}
+          </div>
         </div>
       </div>
+    );
+  }
 
+  if (!overview || !viewer) {
+    return (
+      <div className="team-container" data-testid="team-error-state">
+        <div className="team-alert team-alert--error" role="alert">
+          <div>
+            <strong>⚠️ {tr('Team Error', 'خطأ في تحميل الفريق')}</strong>
+            <p style={{ margin: '0.25rem 0 0', fontSize: '0.88rem' }}>
+              {error ?? tr('Failed to load business team overview.', 'تعذر تحميل بيانات فريق العمل.')}
+            </p>
+          </div>
+          <button type="button" className="team-btn-secondary" onClick={() => void load()}>
+            {tr('Retry', 'إعادة المحاولة')}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  const pendingInvitesCount = overview.invites.filter((i) => i.status === 'pending').length;
+
+  return (
+    <div className="team-container" data-testid="team-overview-surface">
+      {/* Workspace Summary Card */}
+      <header className="team-header-card" data-testid="workspace-summary">
+        <div className="team-header-title-group">
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+            <h2 className="team-header-title">
+              {overview.team.name ?? tr('Business Team', 'فريق العمل')}
+            </h2>
+            <span
+              className={`team-badge team-badge--${workspaceTier}`}
+              data-testid="workspace-role-badge"
+            >
+              {tierLabel(workspaceTier)}
+            </span>
+          </div>
+          <p className="team-header-subtitle">
+            <span>{tr('Workspace Team ID', 'معرف فريق مساحة العمل')}:</span>
+            <code
+              style={{
+                fontFamily: 'monospace',
+                background: 'hsl(var(--muted) / 0.5)',
+                padding: '0.1rem 0.4rem',
+                borderRadius: '4px',
+                fontSize: '0.8rem',
+              }}
+            >
+              {overview.team.id.slice(0, 8)}...
+            </code>
+          </p>
+        </div>
+
+        <div className="team-header-stats">
+          <div className="team-stat-chip">
+            <span>{tr('Members', 'الأعضاء')}</span>
+            <span className="team-stat-chip-count">{overview.members.length}</span>
+          </div>
+          <div className="team-stat-chip">
+            <span>{tr('Pending Invites', 'الدعوات المعلقة')}</span>
+            <span className="team-stat-chip-count">{pendingInvitesCount}</span>
+          </div>
+          <div className="team-stat-chip">
+            <span>{tr('Roles', 'الأدوار')}</span>
+            <span className="team-stat-chip-count">{overview.roles.length}</span>
+          </div>
+        </div>
+      </header>
+
+      {/* Global Alerts & Notices */}
       {error && (
-        <p className="dashboard-error" style={{ marginBottom: '1rem' }} role="alert">
-          {error}
-        </p>
+        <div className="team-alert team-alert--error" role="alert" data-testid="team-alert-error">
+          <span>⚠️ {error}</span>
+          <button
+            type="button"
+            className="team-btn-secondary"
+            style={{ padding: '0.2rem 0.6rem', fontSize: '0.78rem' }}
+            onClick={() => setError(null)}
+          >
+            {tr('Dismiss', 'إغلاق')}
+          </button>
+        </div>
       )}
+
       {formValidationError && (
-        <p className="dashboard-error" style={{ marginBottom: '1rem' }} role="alert">
-          {formValidationError}
-        </p>
+        <div
+          className="team-alert team-alert--warning"
+          role="alert"
+          data-testid="team-form-validation-error"
+        >
+          <span>⚠️ {formValidationError}</span>
+          <button
+            type="button"
+            className="team-btn-secondary"
+            style={{ padding: '0.2rem 0.6rem', fontSize: '0.78rem' }}
+            onClick={() => setFormValidationError(null)}
+          >
+            {tr('Dismiss', 'إغلاق')}
+          </button>
+        </div>
       )}
 
       {notice && (
-        <div
-          role="status"
-          style={{
-            background: 'rgba(16, 185, 129, 0.1)',
-            border: '1px solid rgba(16, 185, 129, 0.3)',
-            borderRadius: '8px',
-            padding: '1rem',
-            marginBottom: '1.5rem',
-          }}
-        >
-          <p style={{ margin: 0, fontSize: '0.9rem', lineHeight: '1.4' }}>{notice}</p>
+        <div className="team-alert team-alert--success" role="status" data-testid="team-alert-notice">
+          <span>✓ {notice}</span>
           <button
             type="button"
-            className="dashboard-secondary-btn"
-            style={{ marginTop: '0.75rem', padding: '0.25rem 0.75rem', fontSize: '0.8rem' }}
+            className="team-btn-secondary"
+            style={{ padding: '0.2rem 0.6rem', fontSize: '0.78rem' }}
             onClick={() => setNotice(null)}
           >
             {tr('Dismiss', 'إغلاق')}
@@ -263,176 +352,232 @@ export const BusinessTeamPanel = ({ dictionary, accessToken, teamId }: Props) =>
         </div>
       )}
 
-      {/* Removal confirmation — an irreversible action asks once. */}
+      {/* Removal Confirmation Dialog Modal */}
       {pendingRemoval && (
         <div
           role="alertdialog"
-          aria-label={tr('Confirm member removal', 'تأكيد إزالة العضو')}
+          aria-modal="true"
+          aria-labelledby="remove-member-title"
+          aria-describedby="remove-member-desc"
+          data-testid="member-removal-dialog"
           style={{
-            background: 'rgba(239, 68, 68, 0.1)',
-            border: '1px solid rgba(239, 68, 68, 0.3)',
-            borderRadius: '8px',
+            position: 'fixed',
+            inset: 0,
+            zIndex: 1000,
+            background: 'rgba(0, 0, 0, 0.6)',
+            backdropFilter: 'blur(4px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
             padding: '1rem',
-            marginBottom: '1.5rem',
           }}
         >
-          <h4 style={{ color: '#ef4444', margin: '0 0 0.5rem 0', fontSize: '1rem' }}>
-            {tr('Remove member?', 'إزالة العضو؟')}
-          </h4>
-          <p style={{ margin: 0, fontSize: '0.9rem', lineHeight: '1.4' }}>
-            {tr(
-              `${pendingRemoval.label} will lose access to this workspace immediately. Their past activity is kept.`,
-              `سيفقد ${pendingRemoval.label} الوصول إلى مساحة العمل فورًا. يتم الاحتفاظ بسجل نشاطه السابق.`,
-            )}
-          </p>
-          <div className="dashboard-actions-row" style={{ marginTop: '0.75rem', gap: '0.5rem' }}>
-            <button
-              type="button"
-              className="dashboard-primary-btn"
-              style={{ padding: '0.25rem 0.75rem', fontSize: '0.8rem' }}
-              disabled={busy}
-              onClick={() => void confirmRemoval()}
-            >
-              {busy ? tr('Removing...', 'جاري الإزالة...') : tr('Remove', 'إزالة')}
-            </button>
-            <button
-              type="button"
-              className="dashboard-secondary-btn"
-              style={{ padding: '0.25rem 0.75rem', fontSize: '0.8rem' }}
-              onClick={() => setPendingRemoval(null)}
-            >
-              {tr('Cancel', 'إلغاء')}
-            </button>
+          <div
+            ref={removalDialogRef}
+            tabIndex={-1}
+            className="team-card"
+            style={{
+              maxWidth: '480px',
+              width: '100%',
+              borderColor: 'rgba(239, 68, 68, 0.4)',
+              boxShadow: '0 20px 40px rgba(0, 0, 0, 0.3)',
+            }}
+          >
+            <h3 id="remove-member-title" style={{ margin: 0, color: '#ef4444', fontSize: '1.2rem' }}>
+              ⚠️ {tr('Remove team member?', 'إزالة عضو الفريق؟')}
+            </h3>
+            <p id="remove-member-desc" style={{ margin: 0, fontSize: '0.9rem', lineHeight: '1.5' }}>
+              {tr(
+                `Are you sure you want to remove ${pendingRemoval.label}? They will lose access to this workspace immediately. Past activity is preserved.`,
+                `هل أنت تأكد من إزالة ${pendingRemoval.label}؟ سيفقد الوصول إلى مساحة العمل فورًا. يتم الاحتفاظ بسجل النشاط السابق.`,
+              )}
+            </p>
+            <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end', marginTop: '0.5rem' }}>
+              <button
+                type="button"
+                className="team-btn-secondary"
+                onClick={() => setPendingRemoval(null)}
+              >
+                {tr('Cancel', 'إلغاء')}
+              </button>
+              <button
+                type="button"
+                className="team-btn-danger"
+                style={{ padding: '0.55rem 1.1rem', fontSize: '0.85rem' }}
+                disabled={busy}
+                onClick={() => void confirmRemoval()}
+              >
+                {busy ? tr('Removing...', 'جاري الإزالة...') : tr('Confirm Removal', 'تأكيد الإزالة')}
+              </button>
+            </div>
           </div>
         </div>
       )}
 
-      {/* Team Administration Forms: visible for Team Owner and Admin. */}
+      {/* Administration Section: Forms */}
       {canAdministerTeam ? (
-        <div className="dashboard-cards" style={{ marginBottom: '2rem' }}>
-          <div className="dashboard-card">
-            <h4 className="dashboard-card-title">{tr('Invite Member', 'دعوة عضو جديد')}</h4>
-            <p className="dashboard-card-meta" style={{ marginBottom: '1rem' }}>
-              {tr(
-                'Enter recipient email and assign a business workspace role.',
-                'أدخل البريد الإلكتروني للمستلم واختر دوره الوظيفي في مساحة العمل.',
-              )}
-            </p>
-            <form className="dashboard-form" onSubmit={(e) => void invite(e)}>
-              <input
-                name="email"
-                type="email"
-                className="dashboard-input"
-                placeholder="name@example.com"
-                aria-label={tr('Recipient email', 'بريد المستلم')}
-                required
-              />
-              <select
-                name="roleId"
-                className="dashboard-select"
-                aria-label={tr('Workspace role', 'دور مساحة العمل')}
-                required
-                defaultValue=""
-              >
-                <option value="" disabled>
-                  {tr('Select role', 'اختر الدور')}
-                </option>
-                {/* Team Owner and retired roles are absent because the backend
-                    refuses them; offering one would only produce an error. */}
-                {assignableRoles.map((role) => (
-                  <option key={role.id} value={role.id}>
-                    {role.name} ({tierLabel(role.tier)})
-                  </option>
-                ))}
-              </select>
-              <button className="dashboard-primary-btn" type="submit" disabled={busy}>
-                {busy ? tr('Sending...', 'جاري الإرسال...') : tr('Send Invitation', 'إرسال الدعوة')}
-              </button>
-            </form>
-          </div>
-
-          {canManageRoles && (
-            <div className="dashboard-card">
-              <h4 className="dashboard-card-title">{tr('Create Custom Role', 'إنشاء دور مخصص')}</h4>
-              <form className="dashboard-form" onSubmit={(e) => void createRole(e)}>
-                <input
-                  name="roleName"
-                  className="dashboard-input"
-                  placeholder={tr('Role name (e.g. Operations)', 'اسم الدور (مثال: العمليات)')}
-                  aria-label={tr('Role name', 'اسم الدور')}
-                  required
-                />
-                <div className="dashboard-actions-row" style={{ flexWrap: 'wrap', gap: '0.5rem' }}>
-                  {BUSINESS_TEAM_PERMISSIONS.map((permission) => {
-                    const isEnforced = permission === 'manage_team';
-                    return (
-                      <label
-                        key={permission}
-                        className="dashboard-chip"
-                        style={{
-                          fontSize: '0.8rem',
-                          opacity: isEnforced ? 1 : 0.6,
-                          cursor: isEnforced ? 'pointer' : 'not-allowed',
-                        }}
-                      >
-                        <input
-                          name={permission}
-                          type="checkbox"
-                          disabled={!isEnforced}
-                          defaultChecked={isEnforced}
-                        />
-                        {permission.replace('_', ' ')}
-                        {!isEnforced && (
-                          <span style={{ fontSize: '0.75rem', opacity: 0.75 }}>
-                            {tr(' (Deferred)', ' (مؤجل)')}
-                          </span>
-                        )}
-                      </label>
-                    );
-                  })}
+        <section className="team-section">
+          <div className="team-card-grid team-card-grid--2col">
+            {/* Invite Member Form */}
+            <div className="team-card" data-testid="invite-member-form-card">
+              <div className="team-section-header">
+                <h3 className="team-section-title">
+                  ✉️ {tr('Invite Member', 'دعوة عضو جديد')}
+                </h3>
+              </div>
+              <p style={{ margin: 0, fontSize: '0.85rem', color: 'hsl(var(--muted-foreground))' }}>
+                {tr(
+                  'Enter recipient email and select a workspace role.',
+                  'أدخل البريد الإلكتروني للمستلم واختر دوره الوظيفي.',
+                )}
+              </p>
+              <form className="team-form" onSubmit={(e) => void invite(e)}>
+                <div className="team-field">
+                  <label htmlFor="invite-email" className="team-label">
+                    {tr('Recipient Email', 'بريد المستلم')}
+                  </label>
+                  <input
+                    id="invite-email"
+                    name="email"
+                    type="email"
+                    className="team-input team-text-wrap"
+                    placeholder="name@example.com"
+                    aria-label={tr('Recipient email', 'بريد المستلم')}
+                    required
+                  />
                 </div>
-                <p
-                  className="dashboard-card-meta"
-                  style={{ margin: '0.25rem 0 0', fontSize: '0.8rem' }}
-                >
-                  {tr(
-                    'Only team administration (manage_team) is enforced for launch. Service, job, financial and analytics permissions are deferred.',
-                    'إدارة الفريق (manage_team) هي الصلاحية المطبقة حالياً. صلاحيات الخدمات والوظائف والمالية والتحليلات مؤجلة.',
-                  )}
-                </p>
-                <button className="dashboard-primary-btn" type="submit" disabled={busy}>
-                  {busy ? tr('Creating...', 'جاري الإنشاء...') : tr('Create Role', 'إنشاء الدور')}
+                <div className="team-field">
+                  <label htmlFor="invite-role" className="team-label">
+                    {tr('Workspace Role', 'دور مساحة العمل')}
+                  </label>
+                  <select
+                    id="invite-role"
+                    name="roleId"
+                    className="team-select"
+                    aria-label={tr('Workspace role', 'دور مساحة العمل')}
+                    required
+                    defaultValue=""
+                  >
+                    <option value="" disabled>
+                      {tr('-- Select Role --', '-- اختر الدور --')}
+                    </option>
+                    {assignableRoles.map((role) => (
+                      <option key={role.id} value={role.id}>
+                        {role.name} ({tierLabel(role.tier)})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <button type="submit" className="team-btn-primary" disabled={busy}>
+                  {busy ? tr('Sending...', 'جاري الإرسال...') : tr('Send Invitation', 'إرسال الدعوة')}
                 </button>
               </form>
             </div>
-          )}
-        </div>
+
+            {/* Custom Role Form */}
+            {canManageRoles && (
+              <div className="team-card" data-testid="create-role-form-card">
+                <div className="team-section-header">
+                  <h3 className="team-section-title">
+                    ⚙️ {tr('Create Custom Role', 'إنشاء دور مخصص')}
+                  </h3>
+                </div>
+                <form className="team-form" onSubmit={(e) => void createRole(e)}>
+                  <div className="team-field">
+                    <label htmlFor="role-name-input" className="team-label">
+                      {tr('Role Name', 'اسم الدور')}
+                    </label>
+                    <input
+                      id="role-name-input"
+                      name="roleName"
+                      className="team-input"
+                      placeholder={tr('e.g. Operations Manager', 'مثال: مدير العمليات')}
+                      aria-label={tr('Role name', 'اسم الدور')}
+                      required
+                    />
+                  </div>
+                  <div className="team-field">
+                    <span className="team-label">{tr('Permissions', 'الصلاحيات')}</span>
+                    <div className="team-permissions-grid">
+                      {BUSINESS_TEAM_PERMISSIONS.map((permission) => {
+                        const isEnforced = permission === 'manage_team';
+                        return (
+                          <label
+                            key={permission}
+                            className={`team-permission-chip ${
+                              isEnforced ? 'team-permission-chip--active' : 'team-permission-chip--deferred'
+                            }`}
+                            data-testid={`permission-chip-${permission}`}
+                          >
+                            <input
+                              name={permission}
+                              type="checkbox"
+                              disabled={!isEnforced}
+                              defaultChecked={isEnforced}
+                              style={{ cursor: isEnforced ? 'pointer' : 'not-allowed' }}
+                            />
+                            <span>{permission.replace(/_/g, ' ')}</span>
+                            {!isEnforced && (
+                              <span
+                                style={{
+                                  fontSize: '0.7rem',
+                                  color: 'hsl(var(--muted-foreground))',
+                                }}
+                              >
+                                {tr('(Deferred)', '(مؤجل)')}
+                              </span>
+                            )}
+                          </label>
+                        );
+                      })}
+                    </div>
+                    <p
+                      style={{
+                        margin: '0.4rem 0 0',
+                        fontSize: '0.78rem',
+                        color: 'hsl(var(--muted-foreground))',
+                        lineHeight: 1.4,
+                      }}
+                      data-testid="deferred-permissions-note"
+                    >
+                      ℹ{' '}
+                      {tr(
+                        'Only team administration (manage_team) is active. Operational permissions are deferred for launch.',
+                        'إدارة الفريق (manage_team) هي الصلاحية المطبقة حالياً. صلاحيات التشغيل والمالية والتحليلات مؤجلة.',
+                      )}
+                    </p>
+                  </div>
+                  <button type="submit" className="team-btn-primary" disabled={busy}>
+                    {busy ? tr('Creating...', 'جاري الإنشاء...') : tr('Create Role', 'إنشاء الدور')}
+                  </button>
+                </form>
+              </div>
+            )}
+          </div>
+        </section>
       ) : (
-        <div
-          style={{
-            padding: '1rem',
-            background: 'rgba(255, 255, 255, 0.03)',
-            borderRadius: '8px',
-            marginBottom: '1.5rem',
-          }}
-        >
-          <p className="dashboard-card-meta">
+        <div className="team-alert team-alert--info" style={{ marginBottom: '2rem' }}>
+          <span>
             ℹ{' '}
             {tr(
-              'Team administration (inviting members and role configuration) requires Team Owner or Admin workspace permissions.',
-              'إدارة الفريق (دعوة الأعضاء وتكوين الأدوار) تتطلب صلاحيات مالك الفريق أو مسؤول في مساحة العمل.',
+              'Team administration (inviting members and custom role creation) requires Team Owner or Admin workspace permissions.',
+              'إدارة الفريق (دعوة الأعضاء وإنشاء الأدوار المخصصة) تتطلب صلاحيات مالك الفريق أو مسؤول في مساحة العمل.',
             )}
-          </p>
+          </span>
         </div>
       )}
 
       {/* Team Members List */}
-      <div style={{ marginBottom: '2rem' }}>
-        <h4 className="dashboard-card-title" style={{ marginBottom: '1rem', fontSize: '1.1rem' }}>
-          {tr('Team Members', 'أعضاء الفريق')} ({overview.members.length})
-        </h4>
-        <div className="service-campaign-table-wrapper" style={{ overflowX: 'auto' }}>
-          <table className="service-campaign-table" style={{ width: '100%', minWidth: '350px' }}>
+      <section className="team-section" data-testid="members-section">
+        <div className="team-section-header">
+          <h3 className="team-section-title">
+            👥 {tr('Team Members', 'أعضاء الفريق')} ({overview.members.length})
+          </h3>
+        </div>
+
+        {/* Desktop Table View */}
+        <div className="team-table-wrapper team-table-desktop-only">
+          <table className="team-table" aria-label={tr('Team Members', 'أعضاء الفريق')}>
             <thead>
               <tr>
                 <th>{tr('Member', 'العضو')}</th>
@@ -443,22 +588,31 @@ export const BusinessTeamPanel = ({ dictionary, accessToken, teamId }: Props) =>
             </thead>
             <tbody>
               {overview.members.map((member) => (
-                <tr key={member.id}>
-                  <td style={{ wordBreak: 'break-word' }}>
-                    <div style={{ fontWeight: 500 }}>
-                      {member.displayName ?? member.userId.slice(0, 8)}
+                <tr key={member.id} data-testid={`member-row-${member.id}`}>
+                  <td>
+                    <div style={{ fontWeight: 600 }}>
+                      <span className="team-text-wrap">
+                        {member.displayName ?? member.userId.slice(0, 8)}
+                      </span>
                       {member.isSelf && (
-                        <span className="dashboard-card-meta"> ({tr('you', 'أنت')})</span>
+                        <span
+                          style={{
+                            fontSize: '0.75rem',
+                            color: 'hsl(var(--muted-foreground))',
+                            marginInlineStart: '0.4rem',
+                          }}
+                        >
+                          ({tr('you', 'أنت')})
+                        </span>
                       )}
                     </div>
                   </td>
-                  <td style={{ wordBreak: 'break-word' }}>{member.email ?? '-'}</td>
+                  <td className="team-text-wrap">{member.email ?? '-'}</td>
                   <td>
-                    {/* The owner's role is shown, never edited here. */}
                     {canAdministerTeam && !member.isOwner ? (
                       <select
-                        className="dashboard-select"
-                        style={{ fontSize: '0.8rem', padding: '0.2rem 0.4rem' }}
+                        className="team-select"
+                        style={{ fontSize: '0.82rem', padding: '0.35rem 0.6rem', width: 'auto' }}
                         aria-label={tr('Change role', 'تغيير الدور')}
                         value={
                           assignableRoles.some((role) => role.id === member.roleId)
@@ -472,19 +626,20 @@ export const BusinessTeamPanel = ({ dictionary, accessToken, teamId }: Props) =>
                             void changeMemberRole(member.id, next);
                         }}
                       >
-                        {/* A member sitting on a retired role keeps showing it
-                            until somebody deliberately moves them. */}
                         {!assignableRoles.some((role) => role.id === member.roleId) && (
                           <option value="">{memberRoleLabel(member)}</option>
                         )}
                         {assignableRoles.map((role) => (
                           <option key={role.id} value={role.id}>
-                            {role.name}
+                            {role.name} ({tierLabel(role.tier)})
                           </option>
                         ))}
                       </select>
                     ) : (
-                      <span className={`dashboard-badge dashboard-badge--${member.tier}`}>
+                      <span
+                        className={`team-badge team-badge--${member.tier}`}
+                        data-testid={`member-badge-${member.tier}`}
+                      >
                         {memberRoleLabel(member)}
                       </span>
                     )}
@@ -493,15 +648,10 @@ export const BusinessTeamPanel = ({ dictionary, accessToken, teamId }: Props) =>
                     {actions?.removeMembers === true && !member.isOwner && (
                       <button
                         type="button"
-                        className="dashboard-secondary-btn"
-                        style={{ fontSize: '0.8rem', padding: '0.2rem 0.5rem', color: '#ef4444' }}
+                        className="team-btn-danger"
                         disabled={busy}
-                        onClick={() =>
-                          setPendingRemoval({
-                            id: member.id,
-                            label: member.displayName ?? member.email ?? 'Member',
-                          })
-                        }
+                        onClick={() => requestRemoval(member)}
+                        aria-label={`${tr('Remove', 'إزالة')} ${member.displayName ?? member.email}`}
                       >
                         {tr('Remove', 'إزالة')}
                       </button>
@@ -512,93 +662,217 @@ export const BusinessTeamPanel = ({ dictionary, accessToken, teamId }: Props) =>
             </tbody>
           </table>
         </div>
-      </div>
+
+        {/* Mobile Responsive Cards View (<=639px) */}
+        <div className="team-cards-mobile-only" data-testid="members-mobile-cards">
+          {overview.members.map((member) => (
+            <div key={member.id} className="team-member-mobile-card">
+              <div className="team-member-mobile-row">
+                <div style={{ fontWeight: 600 }} className="team-text-wrap">
+                  {member.displayName ?? member.userId.slice(0, 8)}
+                  {member.isSelf && (
+                    <span
+                      style={{
+                        fontSize: '0.75rem',
+                        color: 'hsl(var(--muted-foreground))',
+                        marginInlineStart: '0.3rem',
+                      }}
+                    >
+                      ({tr('you', 'أنت')})
+                    </span>
+                  )}
+                </div>
+                <span className={`team-badge team-badge--${member.tier}`}>
+                  {memberRoleLabel(member)}
+                </span>
+              </div>
+              <div className="team-text-wrap" style={{ fontSize: '0.85rem', color: 'hsl(var(--muted-foreground))' }}>
+                {member.email ?? '-'}
+              </div>
+              {canAdministerTeam && !member.isOwner && (
+                <div className="team-member-mobile-row" style={{ marginTop: '0.25rem' }}>
+                  <select
+                    className="team-select"
+                    style={{ fontSize: '0.82rem', padding: '0.35rem 0.5rem' }}
+                    aria-label={tr('Change role', 'تغيير الدور')}
+                    value={
+                      assignableRoles.some((role) => role.id === member.roleId)
+                        ? (member.roleId ?? '')
+                        : ''
+                    }
+                    disabled={busy}
+                    onChange={(event) => {
+                      const next = event.target.value;
+                      if (next && next !== member.roleId)
+                        void changeMemberRole(member.id, next);
+                    }}
+                  >
+                    {!assignableRoles.some((role) => role.id === member.roleId) && (
+                      <option value="">{memberRoleLabel(member)}</option>
+                    )}
+                    {assignableRoles.map((role) => (
+                      <option key={role.id} value={role.id}>
+                        {role.name}
+                      </option>
+                    ))}
+                  </select>
+                  {actions?.removeMembers === true && (
+                    <button
+                      type="button"
+                      className="team-btn-danger"
+                      disabled={busy}
+                      onClick={() => requestRemoval(member)}
+                    >
+                      {tr('Remove', 'إزالة')}
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      </section>
 
       {/* Pending & Historical Invitations */}
-      {overview.invites.length > 0 && (
-        <div style={{ marginBottom: '2rem' }}>
-          <h4 className="dashboard-card-title" style={{ marginBottom: '1rem', fontSize: '1.1rem' }}>
-            {tr('Team Invitations', 'دعوات الفريق')} ({overview.invites.length})
-          </h4>
-          <div className="service-campaign-table-wrapper" style={{ overflowX: 'auto' }}>
-            <table className="service-campaign-table" style={{ width: '100%', minWidth: '350px' }}>
-              <thead>
-                <tr>
-                  <th>{tr('Recipient Email', 'البريد المستلم')}</th>
-                  <th>{tr('Assigned Role', 'الدور المعين')}</th>
-                  <th>{tr('Status', 'الحالة')}</th>
-                  <th>{tr('Expires', 'تاريخ الانتهاء')}</th>
-                  <th>{tr('Actions', 'إجراءات')}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {overview.invites.map((inviteItem) => (
-                  <tr key={inviteItem.id}>
-                    <td style={{ wordBreak: 'break-word' }}>{inviteItem.email}</td>
-                    <td>{inviteItem.roleName}</td>
-                    <td>
-                      <span
-                        className={`dashboard-badge dashboard-badge--${inviteItem.status}`}
-                        style={{
-                          textTransform: 'capitalize',
-                          padding: '0.2rem 0.6rem',
-                          fontSize: '0.75rem',
-                        }}
-                      >
-                        {inviteItem.status}
-                      </span>
-                    </td>
-                    <td>
-                      {new Date(inviteItem.expiresAt).toLocaleDateString(undefined, {
+      <section className="team-section" data-testid="invitations-section">
+        <div className="team-section-header">
+          <h3 className="team-section-title">
+            📨 {tr('Team Invitations', 'دعوات الفريق')} ({overview.invites.length})
+          </h3>
+        </div>
+
+        {overview.invites.length === 0 ? (
+          <div className="team-empty-state" data-testid="invitations-empty-state">
+            <div className="team-empty-icon">📭</div>
+            <h4 style={{ margin: 0, fontSize: '1rem' }}>
+              {tr('No Invitations Sent', 'لم يتم إرسال أي دعوات بعد')}
+            </h4>
+            <p style={{ margin: '0.4rem 0 0', fontSize: '0.85rem' }}>
+              {tr(
+                'Invitations sent to team members will appear here with status updates.',
+                'الدعوات التي ترسلها لأعضاء الفريق ستظهر هنا مع تحديث حالتها.',
+              )}
+            </p>
+          </div>
+        ) : (
+          <>
+            {/* Desktop Invitations Table */}
+            <div className="team-table-wrapper team-table-desktop-only">
+              <table className="team-table" aria-label={tr('Team Invitations', 'دعوات الفريق')}>
+                <thead>
+                  <tr>
+                    <th>{tr('Recipient Email', 'البريد المستلم')}</th>
+                    <th>{tr('Assigned Role', 'الدور المعين')}</th>
+                    <th>{tr('Status', 'الحالة')}</th>
+                    <th>{tr('Expires', 'تاريخ الانتهاء')}</th>
+                    <th>{tr('Actions', 'إجراءات')}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {overview.invites.map((inviteItem) => (
+                    <tr key={inviteItem.id} data-testid={`invite-row-${inviteItem.id}`}>
+                      <td className="team-text-wrap">{inviteItem.email}</td>
+                      <td>{inviteItem.roleName}</td>
+                      <td>
+                        <span
+                          className={`team-badge team-badge--${inviteItem.status}`}
+                          data-testid={`invite-badge-${inviteItem.status}`}
+                        >
+                          {inviteItem.status}
+                        </span>
+                      </td>
+                      <td style={{ fontSize: '0.82rem', whiteSpace: 'nowrap' }}>
+                        {new Date(inviteItem.expiresAt).toLocaleDateString(isArabic ? 'ar-EG' : 'en-US', {
+                          month: 'short',
+                          day: 'numeric',
+                          year: 'numeric',
+                        })}
+                      </td>
+                      <td>
+                        {inviteItem.status === 'pending' && actions?.revokeInvites === true && (
+                          <button
+                            type="button"
+                            className="team-btn-danger"
+                            disabled={busy}
+                            onClick={() => void revokeInvite(inviteItem.id)}
+                            aria-label={`${tr('Revoke', 'إلغاء')} ${inviteItem.email}`}
+                          >
+                            {tr('Revoke', 'إلغاء')}
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Mobile Invitations Cards */}
+            <div className="team-cards-mobile-only" data-testid="invitations-mobile-cards">
+              {overview.invites.map((inviteItem) => (
+                <div key={inviteItem.id} className="team-member-mobile-card">
+                  <div className="team-member-mobile-row">
+                    <span className="team-text-wrap" style={{ fontWeight: 600 }}>
+                      {inviteItem.email}
+                    </span>
+                    <span className={`team-badge team-badge--${inviteItem.status}`}>
+                      {inviteItem.status}
+                    </span>
+                  </div>
+                  <div className="team-member-mobile-row" style={{ fontSize: '0.82rem', color: 'hsl(var(--muted-foreground))' }}>
+                    <span>{tr('Role', 'الدور')}: {inviteItem.roleName}</span>
+                    <span>
+                      {tr('Expires', 'تنتهي')}:{' '}
+                      {new Date(inviteItem.expiresAt).toLocaleDateString(isArabic ? 'ar-EG' : 'en-US', {
                         month: 'short',
                         day: 'numeric',
-                        year: 'numeric',
                       })}
-                    </td>
-                    <td>
-                      {inviteItem.status === 'pending' && actions?.revokeInvites === true && (
-                        <button
-                          className="dashboard-secondary-btn"
-                          type="button"
-                          disabled={busy}
-                          style={{ fontSize: '0.8rem', padding: '0.2rem 0.5rem' }}
-                          onClick={() => void revokeInvite(inviteItem.id)}
-                        >
-                          {tr('Revoke', 'إلغاء')}
-                        </button>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
+                    </span>
+                  </div>
+                  {inviteItem.status === 'pending' && actions?.revokeInvites === true && (
+                    <div style={{ marginTop: '0.25rem', textAlign: 'end' }}>
+                      <button
+                        type="button"
+                        className="team-btn-danger"
+                        disabled={busy}
+                        onClick={() => void revokeInvite(inviteItem.id)}
+                      >
+                        {tr('Revoke Invitation', 'إلغاء الدعوة')}
+                      </button>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+      </section>
 
-      {/* Team ownership is stated for clarity, but no transfer action is offered. */}
+      {/* Team Ownership Section — Unavailable Notice for Launch */}
       {viewer.isOwner && (
-        <div
-          style={{
-            marginTop: '2rem',
-            padding: '1rem',
-            borderTop: '1px solid rgba(255, 255, 255, 0.1)',
-            background: 'rgba(255, 255, 255, 0.02)',
-            borderRadius: '8px',
-          }}
-        >
-          <h4 style={{ margin: 0, fontSize: '0.95rem' }}>{tr('Team Ownership', 'ملكية الفريق')}</h4>
-          <p
-            className="dashboard-card-meta"
-            style={{ margin: '0.4rem 0 0', fontSize: '0.85rem', lineHeight: '1.4' }}
-          >
-            {tr(
-              'Team ownership transfer is unavailable for launch. Workspace-wide asset control and ownership transfer actions are deferred.',
-              'نقل ملكية الفريق غير متاح حالياً للإطلاق. إجراءات نقل الملكية والتحكم التام بالأصول مؤجلة.',
-            )}
-          </p>
-        </div>
+        <section className="team-section" data-testid="team-ownership-section">
+          <div className="team-card" style={{ borderColor: 'hsl(var(--border) / 0.8)' }}>
+            <h3 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 600 }}>
+              👑 {tr('Team Ownership', 'ملكية الفريق')}
+            </h3>
+            <p
+              style={{
+                margin: '0.4rem 0 0',
+                fontSize: '0.85rem',
+                color: 'hsl(var(--muted-foreground))',
+                lineHeight: 1.5,
+              }}
+              data-testid="ownership-transfer-unavailable-notice"
+            >
+              ℹ{' '}
+              {tr(
+                'Team ownership transfer is unavailable for launch. Workspace-wide asset control and ownership transfer actions are deferred.',
+                'نقل ملكية الفريق غير متاح حالياً للإطلاق. إجراءات نقل الملكية والتحكم التام بالأصول مؤجلة.',
+              )}
+            </p>
+          </div>
+        </section>
       )}
-    </section>
+    </div>
   );
 };

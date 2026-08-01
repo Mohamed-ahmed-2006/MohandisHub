@@ -10,6 +10,7 @@ import { BusinessTeamApiError, businessTeamsApiClient } from '@/lib/business-tea
 import { captureInvitation, forgetInvitation } from '@/lib/business-teams/invitation-continuation';
 import { buildLocalePath } from '@/lib/i18n/path';
 import type { Dictionary, Locale } from '@/lib/i18n/types';
+import '@/components/team/team-management.css';
 
 type Props = {
   locale: string;
@@ -26,14 +27,6 @@ type AcceptanceState =
   | 'wrong_account'
   | 'error';
 
-/**
- * Backend error codes mapped onto the screen's states.
- *
- * Matching on codes rather than on message text: the messages are user-facing
- * copy that can be reworded or localised, and a screen that decides what
- * happened by searching for the substring "expired" is one rewrite away from
- * telling someone the wrong thing.
- */
 const STATE_FOR_CODE: Record<string, AcceptanceState> = {
   INVITE_EXPIRED: 'expired',
   INVITE_REVOKED: 'revoked',
@@ -53,34 +46,20 @@ export const InvitationAcceptanceScreen = ({ locale, dictionary }: Props) => {
   const [tokenReady, setTokenReady] = useState(false);
   const [acceptedTeamId, setAcceptedTeamId] = useState<string | null>(null);
 
-  /**
-   * Take the token out of the URL on arrival, and keep it for the round trip
-   * through sign-in or sign-up.
-   *
-   * Runs once, before anything is fetched. After it, the address bar no longer
-   * carries the token — so it is not in this history entry, not in the `Referer`
-   * of the next navigation, and not in a screenshot — while the value itself
-   * lives in `sessionStorage` for the rest of the tab's session.
-   */
+  // Capture the bearer in tab-scoped sessionStorage, then replace the current
+  // history entry so the token is absent from the visible URL, redirects,
+  // referrers, screenshots and durable browser storage.
   useEffect(() => {
     setToken(captureInvitation(searchParams.get('token')));
     setTokenReady(true);
-    // Intentionally arrival-only: re-running on every searchParams change would
-    // re-capture a token this effect has just removed from the URL.
+    // Arrival-only: re-running after URL scrubbing would overwrite the captured
+    // value with the now-tokenless address.
   }, []);
 
   const loc = (locale as Locale) || 'en';
   const isArabic = locale === 'ar';
   const tr = (en: string, ar: string) => (isArabic ? ar : en);
 
-  /**
-   * Verify the link with the server before claiming anything about it.
-   *
-   * Nothing on this screen asserts that an invitation is valid, who sent it or
-   * which workspace it belongs to until this call has answered. Re-run once the
-   * session is known, because the signed-in account is what decides the
-   * `wrong_account` answer.
-   */
   const loadPreview = useCallback(async () => {
     if (!token) {
       setPreviewLoading(false);
@@ -96,9 +75,6 @@ export const InvitationAcceptanceScreen = ({ locale, dictionary }: Props) => {
       else if (result.state === 'wrong_account') setState('wrong_account');
       else setState('idle');
     } catch {
-      // A preview that cannot be reached is not evidence that the invitation is
-      // bad. The screen stays honest and still offers the accept action, which
-      // is the call that actually decides.
       setPreview(null);
     } finally {
       setPreviewLoading(false);
@@ -110,14 +86,6 @@ export const InvitationAcceptanceScreen = ({ locale, dictionary }: Props) => {
     void loadPreview();
   }, [isReady, tokenReady, loadPreview]);
 
-  /**
-   * Stop carrying an invitation nothing can be done with.
-   *
-   * Every one of these is terminal: no retry, no different account and no later
-   * visit changes the answer, so the token is dropped rather than left in the
-   * tab to be replayed by the next navigation. `wrong_account` is deliberately
-   * NOT here — signing in as the invited person is exactly the retry that works.
-   */
   useEffect(() => {
     if (
       state === 'success' ||
@@ -141,9 +109,6 @@ export const InvitationAcceptanceScreen = ({ locale, dictionary }: Props) => {
 
     try {
       const result = await businessTeamsApiClient.acceptInvite(accessToken, token);
-      // The workspace the caller may now open — which is what makes the link
-      // below land somewhere real for an account whose primary role is not
-      // `business`, and for one that already belonged to another workspace.
       setAcceptedTeamId(result.teamId);
       setState('success');
     } catch (err) {
@@ -163,143 +128,160 @@ export const InvitationAcceptanceScreen = ({ locale, dictionary }: Props) => {
     }
   };
 
-  const shell = (children: React.ReactNode) => (
+  const shell = (children: React.ReactNode, testId?: string) => (
     <div
-      className="dashboard-container"
-      style={{ maxWidth: '600px', margin: '3rem auto', padding: '2rem' }}
+      className="team-container"
+      style={{ maxWidth: '640px', margin: '3rem auto', padding: '1rem' }}
+      data-testid={testId ?? 'invitation-acceptance-card'}
     >
-      <div className="dashboard-card" style={{ textAlign: 'center' }}>
+      <div
+        className="team-card"
+        style={{
+          padding: '2rem',
+          textAlign: 'center',
+          boxShadow: '0 20px 40px -15px rgba(0, 0, 0, 0.15)',
+        }}
+      >
         {children}
       </div>
     </div>
   );
 
   if (!isReady || previewLoading) {
-    return (
-      <div className="dashboard-container" style={{ padding: '3rem 1rem', textAlign: 'center' }}>
-        <p className="dashboard-empty">
-          {dictionary.common?.loading ?? tr('Loading...', 'جاري التحميل...')}
-        </p>
-      </div>
+    return shell(
+      <div data-testid="invitation-loading-state">
+        <div style={{ fontSize: '1.2rem', fontWeight: 600, marginBottom: '0.5rem' }}>
+          ⏳ {dictionary.common?.loading ?? tr('Loading invitation details...', 'جاري تحميل تفاصيل الدعوة...')}
+        </div>
+      </div>,
+      'invitation-loading-shell',
     );
   }
 
   if (!token || preview?.state === 'malformed') {
     return shell(
-      <>
-        <h2 className="dashboard-card-title" style={{ fontSize: '1.5rem', color: '#e11d48' }}>
-          {tr('Invalid Invitation Link', 'رابط الدعوة غير صالح')}
+      <div data-testid="invitation-malformed-state">
+        <h2 style={{ fontSize: '1.4rem', color: '#ef4444', margin: '0 0 1rem 0' }}>
+          🚫 {tr('Invalid Invitation Link', 'رابط الدعوة غير صالح')}
         </h2>
-        <p className="dashboard-card-meta" style={{ marginTop: '1rem' }}>
+        <p style={{ margin: 0, fontSize: '0.9rem', lineHeight: '1.5', color: 'hsl(var(--muted-foreground))' }}>
           {tr(
-            'This invitation link is not valid. Please check the link in your invitation email, or ask for a new invitation.',
-            'رابط الدعوة هذا غير صالح. يرجى التحقق من الرابط في بريد الدعوة أو طلب دعوة جديدة.',
+            'This invitation link is not valid. Please check the link in your email, or ask the business administrator for a new invitation.',
+            'رابط الدعوة هذا غير صالح. يرجى التحقق من الرابط في البريد الإلكتروني أو طلب دعوة جديدة من مسؤول الشركة.',
           )}
         </p>
-        <div style={{ marginTop: '1.5rem' }}>
-          <Link href={buildLocalePath(loc, '/')} className="dashboard-primary-btn">
+        <div style={{ marginTop: '1.75rem' }}>
+          <Link href={buildLocalePath(loc, '/')} className="team-btn-primary">
             {tr('Return Home', 'العودة للرئيسية')}
           </Link>
         </div>
-      </>,
+      </div>,
+      'invitation-malformed-shell',
     );
   }
 
-  // What the server verified, shown only after it verified it. `malformed` has
-  // already returned above, so anything reaching here names a real invitation.
   const invitationSummary = preview && (
     <div
       style={{
-        background: 'rgba(255, 255, 255, 0.04)',
-        border: '1px solid rgba(255, 255, 255, 0.1)',
-        borderRadius: '8px',
-        padding: '1rem',
+        background: 'hsl(var(--muted) / 0.3)',
+        border: '1px solid hsl(var(--border))',
+        borderRadius: '10px',
+        padding: '1.25rem',
         marginBottom: '1.5rem',
         textAlign: 'start',
       }}
+      data-testid="invitation-summary"
     >
       {preview.teamName && (
-        <p className="dashboard-card-meta" style={{ margin: 0 }}>
-          {tr('Workspace', 'مساحة العمل')}: <strong>{preview.teamName}</strong>
-        </p>
+        <div style={{ marginBottom: '0.4rem', fontSize: '0.9rem' }}>
+          <span style={{ color: 'hsl(var(--muted-foreground))' }}>{tr('Workspace', 'مساحة العمل')}: </span>
+          <strong className="team-text-wrap">{preview.teamName}</strong>
+        </div>
       )}
       {preview.roleName && (
-        <p className="dashboard-card-meta" style={{ margin: '0.35rem 0 0' }}>
-          {tr('Offered role', 'الدور المعروض')}: <strong>{preview.roleName}</strong>
-        </p>
+        <div style={{ marginBottom: '0.4rem', fontSize: '0.9rem' }}>
+          <span style={{ color: 'hsl(var(--muted-foreground))' }}>{tr('Offered role', 'الدور المعروض')}: </span>
+          <strong className="team-badge team-badge--member">{preview.roleName}</strong>
+        </div>
       )}
       {preview.inviterDisplayName && (
-        <p className="dashboard-card-meta" style={{ margin: '0.35rem 0 0' }}>
-          {tr('Invited by', 'الدعوة من')}: <strong>{preview.inviterDisplayName}</strong>
-        </p>
+        <div style={{ marginBottom: '0.4rem', fontSize: '0.9rem' }}>
+          <span style={{ color: 'hsl(var(--muted-foreground))' }}>{tr('Invited by', 'الدعوة من')}: </span>
+          <strong>{preview.inviterDisplayName}</strong>
+        </div>
       )}
       {preview.maskedEmail && (
-        <p className="dashboard-card-meta" style={{ margin: '0.35rem 0 0' }}>
-          {tr('Sent to', 'مرسلة إلى')}: <strong>{preview.maskedEmail}</strong>
-        </p>
+        <div style={{ marginBottom: '0.4rem', fontSize: '0.9rem' }}>
+          <span style={{ color: 'hsl(var(--muted-foreground))' }}>{tr('Sent to', 'مرسلة إلى')}: </span>
+          <strong className="team-text-wrap" data-testid="invitation-masked-email">{preview.maskedEmail}</strong>
+        </div>
       )}
       {preview.expiresAt && preview.state === 'valid' && (
-        <p className="dashboard-card-meta" style={{ margin: '0.35rem 0 0' }}>
-          {tr('Expires', 'تنتهي في')}:{' '}
-          {new Date(preview.expiresAt).toLocaleDateString(undefined, {
-            month: 'short',
-            day: 'numeric',
-            year: 'numeric',
-          })}
-        </p>
+        <div style={{ fontSize: '0.85rem', color: 'hsl(var(--muted-foreground))', marginTop: '0.5rem' }}>
+          <span>{tr('Expires', 'تنتهي في')}: </span>
+          <span>
+            {new Date(preview.expiresAt).toLocaleDateString(isArabic ? 'ar-EG' : 'en-US', {
+              month: 'short',
+              day: 'numeric',
+              year: 'numeric',
+            })}
+          </span>
+        </div>
       )}
     </div>
   );
 
   if (!isAuthenticated) {
-    // The return path carries NO token. The token is already in this tab's
-    // sessionStorage, and this screen reads it back on the way in — so the auth
-    // flow's `next` parameter, the URL it produces and the history entries in
-    // between never contain the bearer at all.
+    // The token stays in this tab's sessionStorage. Authentication receives a
+    // tokenless, allowlisted continuation path.
     const returnTo = buildLocalePath(loc, '/invitations/accept');
     const authPath = buildLocalePath(loc, '/auth');
     const loginRedirect = `${authPath}?mode=login&next=${encodeURIComponent(returnTo)}`;
     const registerRedirect = `${authPath}?mode=register&next=${encodeURIComponent(returnTo)}`;
     return shell(
-      <>
-        <h2 className="dashboard-card-title" style={{ fontSize: '1.5rem' }}>
-          {tr('Team Invitation', 'دعوة الانضمام للفريق')}
+      <div data-testid="invitation-unauthenticated-state">
+        <h2 style={{ fontSize: '1.5rem', margin: '0 0 1rem 0' }}>
+          🤝 {tr('Team Invitation', 'دعوة الانضمام للفريق')}
         </h2>
         {invitationSummary}
-        <p className="dashboard-card-meta" style={{ marginTop: '1rem' }}>
+        <p style={{ margin: '0 0 1.5rem 0', fontSize: '0.9rem', color: 'hsl(var(--muted-foreground))' }}>
           {tr(
-            'Sign in with the invited email address to accept this invitation.',
-            'سجّل الدخول بالبريد الإلكتروني المدعو لقبول هذه الدعوة.',
+            'Sign in with the invited email address to accept this invitation and join the workspace.',
+            'سجّل الدخول بالبريد الإلكتروني المدعو لقبول هذه الدعوة والانضمام إلى مساحة العمل.',
           )}
         </p>
         <div
-          className="dashboard-actions-row"
           style={{
-            marginTop: '1.5rem',
+            display: 'flex',
+            gap: '0.85rem',
             justifyContent: 'center',
-            gap: '0.75rem',
             flexWrap: 'wrap',
           }}
         >
-          <Link href={loginRedirect} className="dashboard-primary-btn">
+          <Link href={loginRedirect} className="team-btn-primary">
             {tr('Sign In to Accept', 'تسجيل الدخول للقبول')}
           </Link>
-          <Link href={registerRedirect} className="dashboard-secondary-btn">
+          <Link href={registerRedirect} className="team-btn-secondary">
             {tr('Create an Account', 'إنشاء حساب')}
           </Link>
         </div>
-      </>,
+      </div>,
+      'invitation-unauth-shell',
     );
   }
 
   return shell(
-    <>
-      <h2 className="dashboard-card-title" style={{ fontSize: '1.5rem', marginBottom: '0.5rem' }}>
-        {tr('Business Team Invitation', 'دعوة فريق العمل')}
+    <div>
+      <h2 style={{ fontSize: '1.5rem', margin: '0 0 0.5rem 0' }}>
+        🏢 {tr('Business Team Invitation', 'دعوة فريق العمل')}
       </h2>
 
       {authUser && (
-        <p className="dashboard-card-meta" style={{ marginBottom: '1.5rem' }}>
+        <p
+          style={{ margin: '0 0 1.25rem 0', fontSize: '0.88rem', color: 'hsl(var(--muted-foreground))' }}
+          className="team-text-wrap"
+          data-testid="signed-in-user-email"
+        >
           {tr('Signed in as', 'مسجل الدخول كـ')}: <strong>{authUser.email}</strong>
         </p>
       )}
@@ -307,42 +289,37 @@ export const InvitationAcceptanceScreen = ({ locale, dictionary }: Props) => {
       {state !== 'success' && invitationSummary}
 
       {state === 'idle' && (
-        <>
-          <p className="dashboard-card-meta" style={{ marginBottom: '1.5rem' }}>
+        <div data-testid="invitation-idle-state">
+          <p style={{ margin: '0 0 1.5rem 0', fontSize: '0.9rem', color: 'hsl(var(--muted-foreground))', lineHeight: 1.5 }}>
             {tr(
-              'Accepting adds this workspace to your account. Your own account type does not change.',
+              'Accepting adds this workspace to your account. Your primary account role remains unchanged.',
               'قبول الدعوة يضيف مساحة العمل إلى حسابك. لن يتغير نوع حسابك الأساسي.',
             )}
           </p>
           <button
             type="button"
-            className="dashboard-primary-btn"
-            style={{ padding: '0.75rem 2rem', fontSize: '1rem' }}
+            className="team-btn-primary"
+            style={{ padding: '0.75rem 2.25rem', fontSize: '1rem' }}
             onClick={() => void handleAccept()}
+            data-testid="accept-invitation-btn"
           >
             {tr('Accept Invitation', 'قبول الدعوة')}
           </button>
-        </>
+        </div>
       )}
 
       {state === 'submitting' && (
-        <p className="dashboard-empty">{tr('Accepting invitation...', 'جاري قبول الدعوة...')}</p>
+        <div data-testid="invitation-submitting-state">
+          <p style={{ margin: '1rem 0', fontSize: '1rem', fontWeight: 600 }}>
+            ⏳ {tr('Accepting invitation...', 'جاري قبول الدعوة...')}
+          </p>
+        </div>
       )}
 
       {state === 'success' && (
-        <div>
-          <div
-            role="status"
-            style={{
-              background: 'rgba(16, 185, 129, 0.1)',
-              border: '1px solid rgba(16, 185, 129, 0.3)',
-              color: '#10b981',
-              padding: '1rem',
-              borderRadius: '8px',
-              marginBottom: '1.5rem',
-            }}
-          >
-            <h3 style={{ margin: 0, fontSize: '1.1rem' }}>
+        <div data-testid="invitation-success-state">
+          <div className="team-alert team-alert--success" role="status" style={{ display: 'block', textAlign: 'center' }}>
+            <h3 style={{ margin: 0, fontSize: '1.2rem' }}>
               ✓ {tr('Invitation Accepted!', 'تم قبول الدعوة بنجاح!')}
             </h3>
             <p style={{ margin: '0.5rem 0 0', fontSize: '0.9rem' }}>
@@ -357,61 +334,47 @@ export const InvitationAcceptanceScreen = ({ locale, dictionary }: Props) => {
                   )}
             </p>
           </div>
-          <Link
-            href={`${buildLocalePath(loc, '/workspaces')}${
-              acceptedTeamId ? `?teamId=${encodeURIComponent(acceptedTeamId)}` : ''
-            }`}
-            className="dashboard-primary-btn"
-          >
-            {tr('Open Business Workspace', 'فتح مساحة عمل الشركات')}
-          </Link>
+          <div style={{ marginTop: '1.5rem' }}>
+            <Link
+              href={`${buildLocalePath(loc, '/workspaces')}${
+                acceptedTeamId ? `?teamId=${encodeURIComponent(acceptedTeamId)}` : ''
+              }`}
+              className="team-btn-primary"
+            >
+              {tr('Open Business Workspace', 'فتح مساحة عمل الشركات')}
+            </Link>
+          </div>
         </div>
       )}
 
       {state === 'already_used' && (
-        <div>
-          <div
-            style={{
-              background: 'rgba(59, 130, 246, 0.1)',
-              border: '1px solid rgba(59, 130, 246, 0.3)',
-              color: '#3b82f6',
-              padding: '1rem',
-              borderRadius: '8px',
-              marginBottom: '1.5rem',
-            }}
-          >
-            <h3 style={{ margin: 0, fontSize: '1.1rem' }}>
+        <div data-testid="invitation-already-used-state">
+          <div className="team-alert team-alert--info" style={{ display: 'block', textAlign: 'center' }}>
+            <h3 style={{ margin: 0, fontSize: '1.15rem' }}>
               ℹ {tr('Invitation Already Accepted', 'تم قبول هذه الدعوة سابقاً')}
             </h3>
-            <p style={{ margin: '0.5rem 0 0', fontSize: '0.9rem' }}>
+            <p style={{ margin: '0.5rem 0 0', fontSize: '0.88rem' }}>
               {tr(
-                'This invitation link has already been used. You can directly access your business workspace.',
+                'This invitation link has already been used. You can access your business workspace directly.',
                 'تم استخدام رابط الدعوة هذا بالفعل. يمكنك الوصول مباشرة إلى مساحة العمل.',
               )}
             </p>
           </div>
-          <Link href={buildLocalePath(loc, '/workspaces')} className="dashboard-primary-btn">
-            {tr('Open Business Workspace', 'فتح مساحة عمل الشركات')}
-          </Link>
+          <div style={{ marginTop: '1.5rem' }}>
+            <Link href={buildLocalePath(loc, '/workspaces')} className="team-btn-primary">
+              {tr('Open Business Workspace', 'فتح مساحة عمل الشركات')}
+            </Link>
+          </div>
         </div>
       )}
 
       {state === 'wrong_account' && (
-        <div>
-          <div
-            style={{
-              background: 'rgba(245, 158, 11, 0.1)',
-              border: '1px solid rgba(245, 158, 11, 0.3)',
-              color: '#f59e0b',
-              padding: '1rem',
-              borderRadius: '8px',
-              marginBottom: '1.5rem',
-            }}
-          >
-            <h3 style={{ margin: 0, fontSize: '1.1rem' }}>
-              {tr('Signed in with a different account', 'أنت مسجّل الدخول بحساب مختلف')}
+        <div data-testid="invitation-wrong-account-state">
+          <div className="team-alert team-alert--warning" style={{ display: 'block', textAlign: 'center' }}>
+            <h3 style={{ margin: 0, fontSize: '1.15rem' }}>
+              ⚠️ {tr('Signed in with a different account', 'أنت مسجّل الدخول بحساب مختلف')}
             </h3>
-            <p style={{ margin: '0.5rem 0 0', fontSize: '0.9rem' }}>
+            <p style={{ margin: '0.5rem 0 0', fontSize: '0.88rem' }}>
               {preview?.maskedEmail
                 ? tr(
                     `This invitation was sent to ${preview.maskedEmail}. Sign out and sign in with that address to accept it.`,
@@ -423,82 +386,72 @@ export const InvitationAcceptanceScreen = ({ locale, dictionary }: Props) => {
                   )}
             </p>
           </div>
-          <Link href={buildLocalePath(loc, '/app')} className="dashboard-secondary-btn">
-            {tr('Go to App', 'الانتقال للتطبيق')}
-          </Link>
+          <div style={{ marginTop: '1.5rem' }}>
+            <Link href={buildLocalePath(loc, '/app')} className="team-btn-secondary">
+              {tr('Go to App', 'الانتقال للتطبيق')}
+            </Link>
+          </div>
         </div>
       )}
 
       {state === 'expired' && (
-        <div>
-          <div
-            style={{
-              background: 'rgba(245, 158, 11, 0.1)',
-              border: '1px solid rgba(245, 158, 11, 0.3)',
-              color: '#f59e0b',
-              padding: '1rem',
-              borderRadius: '8px',
-              marginBottom: '1.5rem',
-            }}
-          >
-            <h3 style={{ margin: 0, fontSize: '1.1rem' }}>
+        <div data-testid="invitation-expired-state">
+          <div className="team-alert team-alert--warning" style={{ display: 'block', textAlign: 'center' }}>
+            <h3 style={{ margin: 0, fontSize: '1.15rem' }}>
               ⚠️ {tr('Invitation Expired', 'انتهت صلاحية الدعوة')}
             </h3>
-            <p style={{ margin: '0.5rem 0 0', fontSize: '0.9rem' }}>
+            <p style={{ margin: '0.5rem 0 0', fontSize: '0.88rem' }}>
               {tr(
-                'This invitation link has expired. Please ask the business administrator to send a new invite.',
+                'This invitation link has expired. Please ask the business administrator to send a new invitation.',
                 'انتهت صلاحية رابط الدعوة هذا. يرجى طلب دعوة جديدة من مسؤول الشركة.',
               )}
             </p>
           </div>
-          <Link href={buildLocalePath(loc, '/app')} className="dashboard-secondary-btn">
-            {tr('Go to App', 'الانتقال للتطبيق')}
-          </Link>
+          <div style={{ marginTop: '1.5rem' }}>
+            <Link href={buildLocalePath(loc, '/app')} className="team-btn-secondary">
+              {tr('Go to App', 'الانتقال للتطبيق')}
+            </Link>
+          </div>
         </div>
       )}
 
       {state === 'revoked' && (
-        <div>
-          <div
-            style={{
-              background: 'rgba(225, 29, 72, 0.1)',
-              border: '1px solid rgba(225, 29, 72, 0.3)',
-              color: '#e11d48',
-              padding: '1rem',
-              borderRadius: '8px',
-              marginBottom: '1.5rem',
-            }}
-          >
-            <h3 style={{ margin: 0, fontSize: '1.1rem' }}>
+        <div data-testid="invitation-revoked-state">
+          <div className="team-alert team-alert--error" style={{ display: 'block', textAlign: 'center' }}>
+            <h3 style={{ margin: 0, fontSize: '1.15rem' }}>
               🚫 {tr('Invitation Revoked', 'تم إلغاء الدعوة')}
             </h3>
-            <p style={{ margin: '0.5rem 0 0', fontSize: '0.9rem' }}>
+            <p style={{ margin: '0.5rem 0 0', fontSize: '0.88rem' }}>
               {tr(
                 'This invitation was revoked by the business team administrator.',
                 'تم إلغاء هذه الدعوة بواسطة مسؤول فريق العمل.',
               )}
             </p>
           </div>
-          <Link href={buildLocalePath(loc, '/app')} className="dashboard-secondary-btn">
-            {tr('Go to App', 'الانتقال للتطبيق')}
-          </Link>
+          <div style={{ marginTop: '1.5rem' }}>
+            <Link href={buildLocalePath(loc, '/app')} className="team-btn-secondary">
+              {tr('Go to App', 'الانتقال للتطبيق')}
+            </Link>
+          </div>
         </div>
       )}
 
       {state === 'error' && (
-        <div>
-          <div className="dashboard-error" style={{ marginBottom: '1.5rem' }} role="alert">
-            {errorMessage}
+        <div data-testid="invitation-error-state">
+          <div className="team-alert team-alert--error" role="alert" style={{ marginBottom: '1.5rem' }}>
+            <span>⚠️ {errorMessage}</span>
           </div>
           <button
             type="button"
-            className="dashboard-primary-btn"
+            className="team-btn-primary"
             onClick={() => void handleAccept()}
+            data-testid="try-again-btn"
           >
             {tr('Try Again', 'إعادة المحاولة')}
           </button>
         </div>
       )}
-    </>,
+    </div>,
+    'invitation-accepted-shell',
   );
 };

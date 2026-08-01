@@ -2044,4 +2044,16 @@ export const arDictionary: Dictionary = {
     inboxPageHint:
       'اقبل أو ارفض أو قدّم عرضاً مضاداً هنا. استخدم «خدماتي» عند تعديل إعلانات الخدمات.',
   },
+  businessTeam: {
+    owner: 'مالك الفريق',
+    admin: 'مسؤول',
+    member: 'عضو',
+    workspace: 'مساحة العمل',
+    teamMembers: 'أعضاء الفريق',
+    teamInvitations: 'دعوات الفريق',
+    createRole: 'إنشاء دور مخصص',
+    inviteMember: 'دعوة عضو جديد',
+    deferredNotice: 'إدارة الفريق (manage_team) هي الصلاحية المطبقة حالياً. صلاحيات التشغيل والمالية والتحليلات مؤجلة.',
+    ownershipTransferUnavailable: 'نقل ملكية الفريق غير متاح حالياً للإطلاق. إجراءات نقل الملكية والتحكم التام بالأصول مؤجلة.',
+  },
 };
