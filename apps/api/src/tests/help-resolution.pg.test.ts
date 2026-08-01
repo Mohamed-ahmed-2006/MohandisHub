@@ -734,6 +734,37 @@ suite('help & resolution — status transitions', () => {
     expect(adminBodies).toContain('Internal: check the provider history.');
   });
 
+  /**
+   * The support engine shows every ticket message to its owner. An admin note
+   * written there would land in front of the person it was hidden from, so the
+   * route refuses rather than publishing it.
+   */
+  it('refuses an internal note on a support ticket rather than publishing it to the user', async () => {
+    const user = await seedUser('customer');
+    const admin = await seedUser('customer', { isAdmin: true, permissions: ['manage_support'] });
+    const created = await api()
+      .post('/api/support/tickets')
+      .set(authed(user))
+      .send({ category: 'other', subject: 'No internal notes here', body: 'Body' });
+    const ticketId = dataOf<{ id: string }>(created).id;
+    const found = await api()
+      .get(`/api/help-resolution/cases/by-support-ticket/${ticketId}`)
+      .set(authed(user));
+    const caseId = dataOf<{ id: string }>(found).id;
+
+    const attempt = await api()
+      .post(`/api/help-resolution/admin/cases/${caseId}/messages`)
+      .set(authed(admin))
+      .send({ body: 'Internal: user has three prior refunds.', visibility: 'admin' });
+    expect(attempt.status).toBe(409);
+    expect(errorOf(attempt).code).toBe('INTERNAL_NOTES_NOT_SUPPORTED');
+
+    // And nothing was written where the user would read it.
+    const messages = await api().get(`/api/support/tickets/${ticketId}/messages`).set(authed(user));
+    const bodies = dataOf<Array<{ body: string }>>(messages).map((m) => m.body);
+    expect(bodies).not.toContain('Internal: user has three prior refunds.');
+  });
+
   it('closes a case to further messages once it is resolved', async () => {
     const { caseId, customer, admin } = await openCase();
 
