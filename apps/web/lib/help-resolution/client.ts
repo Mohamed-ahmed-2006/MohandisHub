@@ -93,10 +93,7 @@ export const helpResolutionApiClient = {
     apiReq(`/api/help-resolution/cases/by-support-ticket/${ticketId}`, token),
 
   /** Historical `/app/disputes?disputeId=…` deep links. */
-  getCaseByReservationDispute: (
-    token: string,
-    disputeId: string,
-  ): Promise<ResolutionCaseSummary> =>
+  getCaseByReservationDispute: (token: string, disputeId: string): Promise<ResolutionCaseSummary> =>
     apiReq(`/api/help-resolution/cases/by-reservation-dispute/${disputeId}`, token),
 
   createCase: (token: string, body: CreateResolutionCaseBody): Promise<ResolutionCaseSummary> =>

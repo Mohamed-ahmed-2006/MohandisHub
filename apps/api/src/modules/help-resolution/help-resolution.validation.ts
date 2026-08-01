@@ -73,8 +73,7 @@ export const createCaseSchema = z
   ])
   .refine(
     (value) =>
-      value.kind !== 'safety_report' ||
-      (value.subjectType == null) === (value.subjectId == null),
+      value.kind !== 'safety_report' || (value.subjectType == null) === (value.subjectId == null),
     { message: 'subjectType and subjectId must be provided together.' },
   );
 

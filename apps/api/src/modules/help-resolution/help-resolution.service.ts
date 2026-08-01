@@ -486,7 +486,10 @@ export class HelpResolutionService {
     viewer: CaseViewer,
     input: Extract<CreateCaseInput, { kind: 'direct_payment' }>,
   ): Promise<ResolutionCaseSummary> {
-    const activated = await this.repo.hasDirectPaymentActivation(input.subjectType, input.subjectId);
+    const activated = await this.repo.hasDirectPaymentActivation(
+      input.subjectType,
+      input.subjectId,
+    );
     if (!activated) {
       throw new HttpError({
         statusCode: 409,
@@ -501,9 +504,7 @@ export class HelpResolutionService {
     if (!counterpartyId) throw this.notFound();
 
     const amountNote =
-      input.amount != null
-        ? `\n\nReported amount: ${input.amount} ${input.currency ?? 'EGP'}`
-        : '';
+      input.amount != null ? `\n\nReported amount: ${input.amount} ${input.currency ?? 'EGP'}` : '';
 
     return this.insertNativeCaseWithEvidence(viewer, {
       kind: 'direct_payment',
@@ -660,7 +661,12 @@ export class HelpResolutionService {
   }
 
   private emptyProjection(): Omit<ResolutionCaseListRow, keyof ResolutionCaseRow> {
-    return { counterparty_name: null, engine_status: null, message_count: '0', evidence_count: '0' };
+    return {
+      counterparty_name: null,
+      engine_status: null,
+      message_count: '0',
+      evidence_count: '0',
+    };
   }
 
   private translateDuplicate(error: unknown, kind: string): unknown {
