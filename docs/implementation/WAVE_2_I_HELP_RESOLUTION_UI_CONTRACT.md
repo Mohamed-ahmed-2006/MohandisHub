@@ -50,7 +50,17 @@ The **Help & Resolution Center** unifies platform support ticketing and marketpl
 
 ## 3. Missing Backend Endpoints & Required Contracts
 
-To achieve a fully unified backend service for all case types, the following endpoints are proposed. The frontend currently client-side aggregates existing support and dispute APIs while keeping unsupported creation flows safely marked "Pending Deployment".
+> **Status: delivered.** These endpoints now exist, though not all at the shape
+> proposed below. The frontend no longer aggregates client-side and no creation
+> flow is marked "Pending Deployment". See
+> [`WAVE_2_I_HELP_RESOLUTION_BACKEND.md`](./WAVE_2_I_HELP_RESOLUTION_BACKEND.md)
+> for the delivered routes and the reasons each proposal moved:
+> the two dispute-creation endpoints collapsed into `POST /api/help-resolution/cases`
+> discriminated on `kind`, reference codes are issued by the server rather than
+> sliced from a uuid, and `unreadCount` was dropped because neither engine has a
+> per-user read marker to compute it from.
+
+The following endpoints were originally proposed.
 
 ### 3.1 Unified Case Listing Endpoint
 - **Proposed Route**: `GET /api/v1/help-resolution/cases`
