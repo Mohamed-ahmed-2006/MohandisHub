@@ -16,7 +16,6 @@ import { UsageQuotaService } from '../plans/usage-quota.service.js';
 import { SettingsService } from '../settings/settings.service.js';
 import { WalletRepository } from '../wallet/wallet.repository.js';
 
-
 import { NeedsRepository } from './needs.repository.js';
 import type { BidRow, NeedRow } from './needs.repository.js';
 import type {

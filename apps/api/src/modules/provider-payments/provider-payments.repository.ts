@@ -27,10 +27,7 @@ export class ProviderPaymentsRepository {
   private columns = `id, user_id, method_type, label, details, is_active, sort_order,
                      created_at, updated_at`;
 
-  async listForProvider(
-    userId: string,
-    activeOnly = false,
-  ): Promise<ProviderPaymentMethodRow[]> {
+  async listForProvider(userId: string, activeOnly = false): Promise<ProviderPaymentMethodRow[]> {
     const { rows } = await this.db.query<ProviderPaymentMethodRow>(
       `SELECT ${this.columns} FROM provider_payment_methods
        WHERE user_id = $1 ${activeOnly ? 'AND is_active = true' : ''}

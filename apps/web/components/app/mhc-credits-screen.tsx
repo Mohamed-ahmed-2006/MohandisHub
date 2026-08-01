@@ -132,7 +132,11 @@ export const MhcCreditsScreen = () => {
       if (creditsResult.status === 'rejected') {
         const reason: unknown = creditsResult.reason;
         setError(
-          isApiClientError(reason) ? reason.message : loc === 'ar' ? 'تعذر التحميل' : 'Failed to load',
+          isApiClientError(reason)
+            ? reason.message
+            : loc === 'ar'
+              ? 'تعذر التحميل'
+              : 'Failed to load',
         );
       }
     } finally {

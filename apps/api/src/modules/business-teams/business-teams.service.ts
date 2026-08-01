@@ -295,10 +295,7 @@ const provisionWorkspace = async (actor: Actor): Promise<string> =>
  * for its own: provisioning is never a response to a `teamId` the caller cannot
  * reach.
  */
-export const resolveContext = async (
-  actor: Actor,
-  teamId?: string  ,
-): Promise<WorkspaceContext> => {
+export const resolveContext = async (actor: Actor, teamId?: string): Promise<WorkspaceContext> => {
   const pool = getPool();
   let context = await readWorkspaceContext(pool, actor.id, teamId);
 
@@ -362,10 +359,7 @@ const inviteStatusFor = (row: { status: string; expires_at: Date }): BusinessTea
   return row.status as BusinessTeamInviteStatus;
 };
 
-export const getOverview = async (
-  actor: Actor,
-  teamId?: string  ,
-): Promise<BusinessTeamOverview> => {
+export const getOverview = async (actor: Actor, teamId?: string): Promise<BusinessTeamOverview> => {
   const context = await resolveContext(actor, teamId);
   const db = getPool();
 
@@ -504,7 +498,7 @@ export const getOverview = async (
 export const createRole = async (
   actor: Actor,
   body: { name: string; permissions: BusinessTeamPermission[] },
-  teamId?: string  ,
+  teamId?: string,
 ): Promise<BusinessTeamOverview> => {
   const context = requireRoleManagement(await resolveContext(actor, teamId));
   // Belt and braces with the route schema: a role cannot be created carrying a
@@ -539,7 +533,7 @@ export const updateRole = async (
   actor: Actor,
   roleId: string,
   body: { name: string; permissions: BusinessTeamPermission[] },
-  teamId?: string  ,
+  teamId?: string,
 ): Promise<BusinessTeamOverview> => {
   const context = requireRoleManagement(await resolveContext(actor, teamId));
 
@@ -586,7 +580,7 @@ export const deleteRole = async (
   actor: Actor,
   roleId: string,
   body: { replacementRoleId: string },
-  teamId?: string  ,
+  teamId?: string,
 ): Promise<BusinessTeamOverview> => {
   const context = requireRoleManagement(await resolveContext(actor, teamId));
 
@@ -738,7 +732,7 @@ const loadAssignableRole = async (
 export const createInvite = async (
   actor: Actor,
   body: { email: string; roleId: string },
-  teamId?: string  ,
+  teamId?: string,
 ): Promise<BusinessTeamOverview> => {
   const context = requireTeamAdministration(await resolveContext(actor, teamId));
   const email = canonicalEmail(body.email);
@@ -893,7 +887,7 @@ const deliverInviteEmail = async (params: {
 export const revokeInvite = async (
   actor: Actor,
   inviteId: string,
-  teamId?: string  ,
+  teamId?: string,
 ): Promise<BusinessTeamOverview> => {
   const context = requireTeamAdministration(await resolveContext(actor, teamId));
 
@@ -1185,7 +1179,7 @@ export const updateMemberRole = async (
   actor: Actor,
   memberId: string,
   body: { roleId: string },
-  teamId?: string  ,
+  teamId?: string,
 ): Promise<BusinessTeamOverview> => {
   const context = requireTeamAdministration(await resolveContext(actor, teamId));
 
@@ -1232,7 +1226,7 @@ export const updateMemberRole = async (
 export const removeMember = async (
   actor: Actor,
   memberId: string,
-  teamId?: string  ,
+  teamId?: string,
 ): Promise<BusinessTeamOverview> => {
   const context = requireTeamAdministration(await resolveContext(actor, teamId));
 
@@ -1333,7 +1327,7 @@ export const removeMember = async (
 export const transferOwnership = async (
   _actor: Actor,
   _body: { memberId: string; confirmation: string },
-  _teamId?: string  ,
+  _teamId?: string,
 ): Promise<never> => {
   await Promise.resolve();
   throw httpError(

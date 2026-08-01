@@ -118,7 +118,11 @@ describe('Wave 2I Unified Help & Resolution Center', () => {
         'http://localhost:4000/api/support/tickets',
         expect.objectContaining({
           method: 'POST',
-          body: JSON.stringify({ category: 'other', subject: 'New Issue', body: 'Description of problem' }),
+          body: JSON.stringify({
+            category: 'other',
+            subject: 'New Issue',
+            body: 'Description of problem',
+          }),
         }),
       );
     });
@@ -140,7 +144,14 @@ describe('Wave 2I Unified Help & Resolution Center', () => {
     });
 
     it('differentiates case status badges for open and resolved states', () => {
-      const statuses = ['open', 'in_progress', 'waiting_reply', 'under_review', 'resolved', 'closed'];
+      const statuses = [
+        'open',
+        'in_progress',
+        'waiting_reply',
+        'under_review',
+        'resolved',
+        'closed',
+      ];
 
       const isOpen = (s: string) => s === 'open' || s === 'in_progress' || s === 'under_review';
       const isClosed = (s: string) => s === 'resolved' || s === 'closed';
@@ -154,7 +165,11 @@ describe('Wave 2I Unified Help & Resolution Center', () => {
 
   describe('Evidence Security & Missing Backend Operation Contracts', () => {
     it('handles evidence upload validation (max 2 files)', () => {
-      const files = [new File([''], 'file1.jpg'), new File([''], 'file2.jpg'), new File([''], 'file3.jpg')];
+      const files = [
+        new File([''], 'file1.jpg'),
+        new File([''], 'file2.jpg'),
+        new File([''], 'file3.jpg'),
+      ];
       const selected = files.slice(0, 2);
 
       expect(selected).toHaveLength(2);

@@ -29,7 +29,13 @@ const SupportPage = async ({ params }: SupportPageProps) => {
   if (!isSupportedLocale(locale)) notFound();
 
   return (
-    <Suspense fallback={<Container><SkeletonCard /></Container>}>
+    <Suspense
+      fallback={
+        <Container>
+          <SkeletonCard />
+        </Container>
+      }
+    >
       <HelpResolutionScreen defaultTab="support" />
     </Suspense>
   );

@@ -43,7 +43,9 @@ if (/\bprod(uction)?\b/i.test(databaseUrl)) {
 
 if (process.env.CONFIRM_APPLY !== 'yes') {
   console.error('Refusing to run without CONFIRM_APPLY=yes.');
-  console.error('Take a backup (scripts/db-backup.mjs) and dry run first (scripts/migration-dryrun.mjs).');
+  console.error(
+    'Take a backup (scripts/db-backup.mjs) and dry run first (scripts/migration-dryrun.mjs).',
+  );
   process.exit(1);
 }
 

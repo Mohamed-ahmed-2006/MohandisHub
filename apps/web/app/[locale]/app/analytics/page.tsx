@@ -6,7 +6,10 @@ import { SkeletonCard } from '@/components/ui/skeleton';
 import { isSupportedLocale } from '@/lib/i18n/config';
 
 const ProviderAnalyticsScreen = dynamic(
-  () => import('@/components/app/provider-analytics-screen').then((m) => ({ default: m.ProviderAnalyticsScreen })),
+  () =>
+    import('@/components/app/provider-analytics-screen').then((m) => ({
+      default: m.ProviderAnalyticsScreen,
+    })),
   {
     loading: () => (
       <Container>

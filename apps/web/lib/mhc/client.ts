@@ -129,9 +129,9 @@ async function requestJson<T>({
 
   if (!response.ok) {
     const rawErrorBody: unknown = await response.json().catch(() => null);
-    const maybeError = rawErrorBody as
-      | { error?: { code: string; message: string; details?: unknown } }
-      | null;
+    const maybeError = rawErrorBody as {
+      error?: { code: string; message: string; details?: unknown };
+    } | null;
     if (maybeError?.error) {
       throw new ApiClientRequestError({
         code: maybeError.error.code,

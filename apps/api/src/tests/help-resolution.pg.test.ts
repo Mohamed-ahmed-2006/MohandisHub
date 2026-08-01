@@ -822,14 +822,17 @@ suite('help & resolution — evidence security', () => {
     );
 
     const needId = await seedActivatedNeed(customer.id, provider.id);
-    const native = await api().post('/api/help-resolution/cases').set(authed(customer)).send({
-      kind: 'need_job_dispute',
-      subjectType: 'need',
-      subjectId: needId,
-      reason: 'other',
-      description: 'Must not attach KYC.',
-      evidenceUploadIds: [upload.id],
-    });
+    const native = await api()
+      .post('/api/help-resolution/cases')
+      .set(authed(customer))
+      .send({
+        kind: 'need_job_dispute',
+        subjectType: 'need',
+        subjectId: needId,
+        reason: 'other',
+        description: 'Must not attach KYC.',
+        evidenceUploadIds: [upload.id],
+      });
     expect(native.status).toBe(403);
     expect(errorOf(native).code).toBe('UPLOAD_NOT_OWNED');
 
@@ -983,15 +986,15 @@ suite('help & resolution — status transitions', () => {
     expect(resolved.status).toBe(200);
 
     const file = await api().get(`/api/help-resolution/cases/${caseId}`).set(authed(user));
-    expect(dataOf<{ resolution: { outcome: string; notes: string } }>(file).resolution).toMatchObject(
-      { outcome: 'no_action', notes: 'No platform defect was found.' },
-    );
+    expect(
+      dataOf<{ resolution: { outcome: string; notes: string } }>(file).resolution,
+    ).toMatchObject({ outcome: 'no_action', notes: 'No platform defect was found.' });
 
     await pool.query(`UPDATE support_tickets SET status = 'open' WHERE id = $1`, [ticketId]);
     const reopened = await api().get(`/api/help-resolution/cases/${caseId}`).set(authed(user));
-    expect(dataOf<{ resolution: { outcome: null; notes: null } }>(reopened).resolution).toMatchObject(
-      { outcome: null, notes: null },
-    );
+    expect(
+      dataOf<{ resolution: { outcome: null; notes: null } }>(reopened).resolution,
+    ).toMatchObject({ outcome: null, notes: null });
   });
 
   it('closes a case to further messages once it is resolved', async () => {

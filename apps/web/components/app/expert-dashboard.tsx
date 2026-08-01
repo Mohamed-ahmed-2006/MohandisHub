@@ -202,7 +202,10 @@ export const ExpertDashboard = ({
   return (
     <section className="dashboard-section">
       {pendingAwardBids.length > 0 && (
-        <div className="dashboard-award-offers" style={{ marginBottom: '1rem', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+        <div
+          className="dashboard-award-offers"
+          style={{ marginBottom: '1rem', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}
+        >
           {pendingAwardBids.map((bid) => (
             <AwardOfferCard
               key={bid.id}

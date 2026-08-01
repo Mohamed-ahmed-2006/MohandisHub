@@ -17,7 +17,8 @@ const MOCK_SUMMARY: ResolutionCaseSummary = {
   kind: 'need_job_dispute',
   status: 'under_review',
   engineStatus: null,
-  title: 'Very long case title requiring multi-line word wrapping and responsive layout bounds testing on small viewports',
+  title:
+    'Very long case title requiring multi-line word wrapping and responsive layout bounds testing on small viewports',
   openedBy: 'user-1',
   counterpartyId: 'user-2',
   counterpartyName: 'Engineer Tariq',
@@ -66,7 +67,7 @@ describe('Wave 2I Help & Resolution UI Polish Tests', () => {
       expect(screenCss).toContain('.support-layout:not(.support-layout--thread) .support-thread');
       expect(screenCss).toContain('.support-layout.support-layout--thread .support-inbox');
       expect(screenCss).toContain('.support-thread__back');
-      expect(screenSource).toContain("setSelectedCaseId(null)");
+      expect(screenSource).toContain('setSelectedCaseId(null)');
     });
 
     it('supports 375px mobile breakpoint without horizontal overflow', () => {
@@ -112,7 +113,9 @@ describe('Wave 2I Help & Resolution UI Polish Tests', () => {
       for (const key of requiredKeys) {
         expect(en[key], `Missing English key: ${key}`).toBeTruthy();
         expect(ar[key], `Missing Arabic key: ${key}`).toBeTruthy();
-        expect(/[\u0600-\u06FF]/.test(ar[key]!), `Arabic key ${key} is not in Arabic script`).toBe(true);
+        expect(/[\u0600-\u06FF]/.test(ar[key]!), `Arabic key ${key} is not in Arabic script`).toBe(
+          true,
+        );
       }
     });
 

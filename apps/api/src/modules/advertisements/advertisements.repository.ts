@@ -870,7 +870,10 @@ export class AdvertisementsRepository {
     );
   }
 
-  async applyAdminSchedule(id: string, input: AdminScheduleInput): Promise<AdvertisementRow | null> {
+  async applyAdminSchedule(
+    id: string,
+    input: AdminScheduleInput,
+  ): Promise<AdvertisementRow | null> {
     const { rows } = await getPool().query<AdvertisementRow>(
       `UPDATE advertisements
        SET admin_forced_starts_at = $2,

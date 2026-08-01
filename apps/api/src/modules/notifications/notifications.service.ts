@@ -311,7 +311,9 @@ export class NotificationsService {
     const fail = (channel: 'email' | 'push', err: unknown): void => {
       result[channel] = 'failed';
       const message = err instanceof Error ? err.message : String(err);
-      result.error = result.error ? `${result.error}; ${channel}: ${message}` : `${channel}: ${message}`;
+      result.error = result.error
+        ? `${result.error}; ${channel}: ${message}`
+        : `${channel}: ${message}`;
     };
 
     let prefs: Map<string, boolean>;
@@ -367,8 +369,10 @@ export class NotificationsService {
         // No subscription and no configuration are both "nothing to send",
         // which is a completed outcome. Only a real send that failed is a
         // failure worth retrying.
-        result.push = push.failed > 0 && push.sent === 0 ? 'failed' : push.sent > 0 ? 'sent' : 'skipped';
-        if (push.failed > 0 && push.sent === 0) fail('push', new Error(push.error ?? 'push failed'));
+        result.push =
+          push.failed > 0 && push.sent === 0 ? 'failed' : push.sent > 0 ? 'sent' : 'skipped';
+        if (push.failed > 0 && push.sent === 0)
+          fail('push', new Error(push.error ?? 'push failed'));
       } catch (err) {
         fail('push', err);
       }

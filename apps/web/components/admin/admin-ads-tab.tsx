@@ -350,9 +350,7 @@ export const AdminAdsTab = ({ dictionary, accessToken, adminPermissions }: Admin
                       {ad.status === 'rejected' && ad.rejection_reason ? (
                         <>
                           <br />
-                          <span style={{ fontSize: '0.8rem' }}>
-                            Reason: {ad.rejection_reason}
-                          </span>
+                          <span style={{ fontSize: '0.8rem' }}>Reason: {ad.rejection_reason}</span>
                         </>
                       ) : null}
                     </td>

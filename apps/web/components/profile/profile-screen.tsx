@@ -216,8 +216,6 @@ const AccountPreferences = ({ locale, dictionary, accessToken }: AccountPreferen
     return Array.from(map.values());
   };
 
-
-
   const togglePersonalized = async (enabled: boolean) => {
     setPersonalized(enabled);
     try {
@@ -389,7 +387,9 @@ const AccountPreferences = ({ locale, dictionary, accessToken }: AccountPreferen
               return (
                 <section key={group.category} className="profile-screen-pref-card">
                   <div className="profile-screen-category-header">
-                    <h5 className="profile-screen-category-title">{categoryLabel(group.category)}</h5>
+                    <h5 className="profile-screen-category-title">
+                      {categoryLabel(group.category)}
+                    </h5>
                     <button
                       type="button"
                       className="profile-screen-master-toggle-btn"
@@ -423,7 +423,11 @@ const AccountPreferences = ({ locale, dictionary, accessToken }: AccountPreferen
                                 strokeLinecap="round"
                                 strokeLinejoin="round"
                                 aria-hidden="true"
-                                style={{ display: 'inline-block', verticalAlign: 'middle', marginInlineEnd: '0.2rem' }}
+                                style={{
+                                  display: 'inline-block',
+                                  verticalAlign: 'middle',
+                                  marginInlineEnd: '0.2rem',
+                                }}
                               >
                                 <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
                                 <path d="M7 11V7a5 5 0 0 1 10 0v4" />
@@ -438,7 +442,9 @@ const AccountPreferences = ({ locale, dictionary, accessToken }: AccountPreferen
                             if (!pref) return null;
                             return (
                               <label key={ch} className="profile-screen-channel-chip">
-                                <span className="profile-screen-channel-tag">{channelLabel(ch)}</span>
+                                <span className="profile-screen-channel-tag">
+                                  {channelLabel(ch)}
+                                </span>
                                 <span className="profile-screen-toggle-switch profile-screen-toggle-switch--sm">
                                   <input
                                     type="checkbox"
@@ -924,11 +930,7 @@ const WalletTab = () => {
         </div>
       )}
 
-      {isProvider && subTab === 'mhc' ? (
-        <MhcCreditsScreen />
-      ) : (
-        <WalletSettingsScreen hideHeader />
-      )}
+      {isProvider && subTab === 'mhc' ? <MhcCreditsScreen /> : <WalletSettingsScreen hideHeader />}
     </div>
   );
 };
@@ -1611,7 +1613,11 @@ export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
           <h1 className="app-page-title">{dictionary.nav.settings}</h1>
         </div>
 
-        <nav className="profile-screen-tabs-bar" role="tablist" aria-label={dictionary.nav.settings}>
+        <nav
+          className="profile-screen-tabs-bar"
+          role="tablist"
+          aria-label={dictionary.nav.settings}
+        >
           {visibleSections.map((section) => {
             const isActive = activeTab === section.id;
             return (
@@ -1647,7 +1653,10 @@ export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
 
         {/* Preferences tab */}
         {activeTab === 'preferences' && (
-          <section id="notification-preferences" className="profile-screen-card profile-screen-section-card">
+          <section
+            id="notification-preferences"
+            className="profile-screen-card profile-screen-section-card"
+          >
             <AccountPreferences locale={locale} dictionary={dictionary} accessToken={accessToken} />
           </section>
         )}

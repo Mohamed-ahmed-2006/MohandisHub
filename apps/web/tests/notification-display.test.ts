@@ -35,23 +35,23 @@ describe('notification target links', () => {
   });
 
   it('routes customer and provider legacy wallet notifications to /app/history', () => {
-    expect(
-      getNotificationTargetHref('wallet_deposit_approved', null, 'en', 'customer'),
-    ).toBe('/en/app/history');
+    expect(getNotificationTargetHref('wallet_deposit_approved', null, 'en', 'customer')).toBe(
+      '/en/app/history',
+    );
 
-    expect(
-      getNotificationTargetHref('wallet_withdrawal_completed', null, 'ar', 'expert'),
-    ).toBe('/ar/app/history');
+    expect(getNotificationTargetHref('wallet_withdrawal_completed', null, 'ar', 'expert')).toBe(
+      '/ar/app/history',
+    );
   });
 
   it('routes MHC purchase notifications to /app/credits', () => {
-    expect(
-      getNotificationTargetHref('mhc_purchase_completed', null, 'en', 'expert'),
-    ).toBe('/en/app/credits');
+    expect(getNotificationTargetHref('mhc_purchase_completed', null, 'en', 'expert')).toBe(
+      '/en/app/credits',
+    );
 
-    expect(
-      getNotificationTargetHref('mhc_purchase_failed', null, 'ar', 'business'),
-    ).toBe('/ar/app/credits');
+    expect(getNotificationTargetHref('mhc_purchase_failed', null, 'ar', 'business')).toBe(
+      '/ar/app/credits',
+    );
   });
 
   it('routes rejected-bid notification with IDs to need and bid context', () => {

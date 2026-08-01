@@ -20,37 +20,37 @@ API module convention: `*.routes.ts` → `*.controller.ts` → `*.service.ts` �
 
 ## 2. API surface (`apps/api/src/routes/index.ts`)
 
-| Mount | Router | Auth posture |
-|---|---|---|
-| `/api/app` | app | public status |
-| `/api/auth` | auth | `authRateLimiter` |
-| `/api/otp` | otp | `authRateLimiter` |
-| `/api/users` | users | authenticate |
-| `/api/profiles` | profiles | authenticate |
-| `/api/recommendations` | recommendations | authenticate |
-| `/api/admin` | admin | authenticate + `loadAdminFromDb` + `requireAdminPermission` |
-| `/api/analytics` | analytics | `requireRole('expert','business','craftsman')` |
-| `/api/advertisements` | advertisements | authenticate |
-| `/api/support` | support | authenticate + emailVerified |
-| `/api/services` | services | mixed public/auth |
-| `/api/wallet` | wallet | authenticate + emailVerified |
-| `/api/credits` | **mhc** | authenticate + emailVerified |
-| `/api/provider-payments` | provider-payments | authenticate |
-| `/api/chat` | chat | authenticate |
-| `/api/coupons` | coupons | authenticate |
-| `/api/favorites` | favorites | authenticate |
-| `/api/verification` | verification | authenticate |
-| `/api/upload` | upload | authenticate |
-| `/api/plans` | plans | authenticate |
-| `/api/negotiations` | negotiations | authenticate |
-| `/api/needs`, `/api/bids` | needs | authenticate + emailVerified (+ `requireVerified` to bid) |
-| `/api/reservations` | reservations | authenticate |
-| `/api/reviews` | reviews | authenticate |
-| `/api/saved-searches` | saved-searches | authenticate |
-| `/api/jobs` | jobs (**employment**) | authenticate |
-| `/api/notifications` | notifications | authenticate |
-| `/api/geo`, `/api/media` | geo, media | mixed |
-| `/api/business-teams` | business-teams | authenticate + emailVerified |
+| Mount                     | Router                | Auth posture                                                |
+| ------------------------- | --------------------- | ----------------------------------------------------------- |
+| `/api/app`                | app                   | public status                                               |
+| `/api/auth`               | auth                  | `authRateLimiter`                                           |
+| `/api/otp`                | otp                   | `authRateLimiter`                                           |
+| `/api/users`              | users                 | authenticate                                                |
+| `/api/profiles`           | profiles              | authenticate                                                |
+| `/api/recommendations`    | recommendations       | authenticate                                                |
+| `/api/admin`              | admin                 | authenticate + `loadAdminFromDb` + `requireAdminPermission` |
+| `/api/analytics`          | analytics             | `requireRole('expert','business','craftsman')`              |
+| `/api/advertisements`     | advertisements        | authenticate                                                |
+| `/api/support`            | support               | authenticate + emailVerified                                |
+| `/api/services`           | services              | mixed public/auth                                           |
+| `/api/wallet`             | wallet                | authenticate + emailVerified                                |
+| `/api/credits`            | **mhc**               | authenticate + emailVerified                                |
+| `/api/provider-payments`  | provider-payments     | authenticate                                                |
+| `/api/chat`               | chat                  | authenticate                                                |
+| `/api/coupons`            | coupons               | authenticate                                                |
+| `/api/favorites`          | favorites             | authenticate                                                |
+| `/api/verification`       | verification          | authenticate                                                |
+| `/api/upload`             | upload                | authenticate                                                |
+| `/api/plans`              | plans                 | authenticate                                                |
+| `/api/negotiations`       | negotiations          | authenticate                                                |
+| `/api/needs`, `/api/bids` | needs                 | authenticate + emailVerified (+ `requireVerified` to bid)   |
+| `/api/reservations`       | reservations          | authenticate                                                |
+| `/api/reviews`            | reviews               | authenticate                                                |
+| `/api/saved-searches`     | saved-searches        | authenticate                                                |
+| `/api/jobs`               | jobs (**employment**) | authenticate                                                |
+| `/api/notifications`      | notifications         | authenticate                                                |
+| `/api/geo`, `/api/media`  | geo, media            | mixed                                                       |
+| `/api/business-teams`     | business-teams        | authenticate + emailVerified                                |
 
 **Naming trap:** the MHC router is mounted at `/api/credits`, not `/api/mhc`. Anyone grepping for `/mhc` in HTTP paths will find nothing.
 
@@ -60,25 +60,25 @@ Webhooks bypass `express.json()` and are registered directly in `app.ts` with `e
 
 ## 3. Frontend routes (`apps/web/app/[locale]/`)
 
-| Route | Component | In sidebar? |
-|---|---|---|
-| `/app` | `AppHomeScreen` (2,430 lines) | ✅ |
-| `/app/bookings` | `BookingsScreen` (1,699 lines) | ✅ |
-| `/app/disputes` | `DisputesScreen` | ✅ |
-| `/app/services` | `ServicesScreen` | ✅ providers only |
-| `/app/negotiations` | `NegotiationsScreen` | ✅ providers only |
-| `/app/advertisements` | `MyAdsScreen` | ✅ providers only |
-| `/app/calendar` | `CalendarScreen` | ✅ providers only |
-| `/app/settings` | settings | ✅ |
-| `/app/settings/wallet` | `WalletSettingsScreen` | ❌ (linked from pill + notifications) |
-| `/app/chat` | `ChatScreen` | ✅ |
-| `/app/history` | `HistoryScreen` | ✅ |
-| `/app/support` | `SupportScreen` | ✅ |
-| `/app/plan` | `MyPlanScreen` | ✅ (unless `featurePlansEnabled === false`) |
-| `/app/admin` | `AdminPanel` | ✅ admins only |
-| `/app/profile` | `ProfileScreen` | ❌ **orphan from sidebar** — reached via avatar menu |
-| `/app/projects` | `ProjectsScreen` → employment jobs | ❌ **orphan from sidebar** |
-| `/app/browse` | redirect → `/app/services` | ❌ dead route |
+| Route                  | Component                          | In sidebar?                                          |
+| ---------------------- | ---------------------------------- | ---------------------------------------------------- |
+| `/app`                 | `AppHomeScreen` (2,430 lines)      | ✅                                                   |
+| `/app/bookings`        | `BookingsScreen` (1,699 lines)     | ✅                                                   |
+| `/app/disputes`        | `DisputesScreen`                   | ✅                                                   |
+| `/app/services`        | `ServicesScreen`                   | ✅ providers only                                    |
+| `/app/negotiations`    | `NegotiationsScreen`               | ✅ providers only                                    |
+| `/app/advertisements`  | `MyAdsScreen`                      | ✅ providers only                                    |
+| `/app/calendar`        | `CalendarScreen`                   | ✅ providers only                                    |
+| `/app/settings`        | settings                           | ✅                                                   |
+| `/app/settings/wallet` | `WalletSettingsScreen`             | ❌ (linked from pill + notifications)                |
+| `/app/chat`            | `ChatScreen`                       | ✅                                                   |
+| `/app/history`         | `HistoryScreen`                    | ✅                                                   |
+| `/app/support`         | `SupportScreen`                    | ✅                                                   |
+| `/app/plan`            | `MyPlanScreen`                     | ✅ (unless `featurePlansEnabled === false`)          |
+| `/app/admin`           | `AdminPanel`                       | ✅ admins only                                       |
+| `/app/profile`         | `ProfileScreen`                    | ❌ **orphan from sidebar** — reached via avatar menu |
+| `/app/projects`        | `ProjectsScreen` → employment jobs | ❌ **orphan from sidebar**                           |
+| `/app/browse`          | redirect → `/app/services`         | ❌ dead route                                        |
 
 **Two significant surfaces are unreachable from the sidebar:**
 
@@ -93,11 +93,11 @@ Webhooks bypass `express.json()` and are registered directly in `app.ts` with `e
 
 ### 4.1 Identity and access
 
-| Table | Key columns | Notes |
-|---|---|---|
-| `users` | `primary_role`, `is_admin`, `admin_permissions[]`, `plan_id`, `deleted_at` | **One role per identity.** Admin is a flag + permission array, already orthogonal to role. |
-| `otp_codes`, `password_reset_tokens`, `pending_email` | — | Standard |
-| `audit_log` | migration `20260316000001` | Generic admin audit |
+| Table                                                 | Key columns                                                                | Notes                                                                                      |
+| ----------------------------------------------------- | -------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| `users`                                               | `primary_role`, `is_admin`, `admin_permissions[]`, `plan_id`, `deleted_at` | **One role per identity.** Admin is a flag + permission array, already orthogonal to role. |
+| `otp_codes`, `password_reset_tokens`, `pending_email` | —                                                                          | Standard                                                                                   |
+| `audit_log`                                           | migration `20260316000001`                                                 | Generic admin audit                                                                        |
 
 ### 4.2 Profiles
 
@@ -105,32 +105,32 @@ Webhooks bypass `express.json()` and are registered directly in `app.ts` with `e
 
 ### 4.3 Money (legacy EGP model)
 
-| Table | Status |
-|---|---|
-| `wallets` | Extended with `account_type` (`money`\|`provider_credit`) and `asset_code` (`EGP`\|`MHC`). Unique on `(user_id, account_type)`. **All `money` rows frozen.** |
-| `transactions` | Shared ledger for EGP and MHC. MHC meaning carried by `wallets.asset_code` + `reference_type` + metadata; the `type` CHECK was deliberately not changed. |
-| `wallet_holds` | Escrow holds. Used by `job_milestones` and withdrawals. |
-| `deposit_requests` | Extended with `purpose` (`wallet_topup`\|`credit_purchase`), `target_account_type`, `credit_package_id`, `mhc_grant_amount`. **Dual-purpose table.** |
-| `withdrawal_requests` | All rails off |
-| `commission_settings` | Legacy percentage model |
+| Table                 | Status                                                                                                                                                       |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `wallets`             | Extended with `account_type` (`money`\|`provider_credit`) and `asset_code` (`EGP`\|`MHC`). Unique on `(user_id, account_type)`. **All `money` rows frozen.** |
+| `transactions`        | Shared ledger for EGP and MHC. MHC meaning carried by `wallets.asset_code` + `reference_type` + metadata; the `type` CHECK was deliberately not changed.     |
+| `wallet_holds`        | Escrow holds. Used by `job_milestones` and withdrawals.                                                                                                      |
+| `deposit_requests`    | Extended with `purpose` (`wallet_topup`\|`credit_purchase`), `target_account_type`, `credit_package_id`, `mhc_grant_amount`. **Dual-purpose table.**         |
+| `withdrawal_requests` | All rails off                                                                                                                                                |
+| `commission_settings` | Legacy percentage model                                                                                                                                      |
 
 ### 4.4 Money (MHC model)
 
-| Table | Purpose |
-|---|---|
-| `mhc_credit_packages` | Admin-configurable; `mhc_amount` + `external_price_amount` + currency |
-| `mhc_action_prices` | 7 seeded keys, `mhc_price` + `is_active`. **Only 2 are ever charged.** |
-| `mhc_job_activations` | The gate record. Partial unique on `bid_id` (award) and `reservation_id` (booking) → idempotent by construction |
-| `provider_payment_methods` | `bank_transfer`\|`instapay`\|`mobile_wallet`; `details` JSONB is the sensitive part |
-| `provider_payment_disclosures` | Audit: which customer saw which activation's details. Unique `(activation_id, customer_user_id)` |
+| Table                          | Purpose                                                                                                         |
+| ------------------------------ | --------------------------------------------------------------------------------------------------------------- |
+| `mhc_credit_packages`          | Admin-configurable; `mhc_amount` + `external_price_amount` + currency                                           |
+| `mhc_action_prices`            | 7 seeded keys, `mhc_price` + `is_active`. **Only 2 are ever charged.**                                          |
+| `mhc_job_activations`          | The gate record. Partial unique on `bid_id` (award) and `reservation_id` (booking) → idempotent by construction |
+| `provider_payment_methods`     | `bank_transfer`\|`instapay`\|`mobile_wallet`; `details` JSONB is the sensitive part                             |
+| `provider_payment_disclosures` | Audit: which customer saw which activation's details. Unique `(activation_id, customer_user_id)`                |
 
 ### 4.5 Marketplace — needs / bids (the RFP path)
 
-| Table | Notable columns |
-|---|---|
-| `needs` | `status ∈ open, closed, awarded_pending_provider_acceptance, awarded, in_progress, completed`; `pending_award_bid_id`, `pending_award_expires_at`, **`activated_at`** |
-| `bids` | `status ∈ pending, awarded_pending, accepted, rejected, withdrawn, expired`; `award_offered_at/accepted_at/rejected_at/expired_at`; `paid_at`, `payment_transaction_id` (legacy escrow) |
-| `bid_messages` | `contact_redacted` bool + `raw_content` (audit copy of pre-redaction text) |
+| Table          | Notable columns                                                                                                                                                                         |
+| -------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `needs`        | `status ∈ open, closed, awarded_pending_provider_acceptance, awarded, in_progress, completed`; `pending_award_bid_id`, `pending_award_expires_at`, **`activated_at`**                   |
+| `bids`         | `status ∈ pending, awarded_pending, accepted, rejected, withdrawn, expired`; `award_offered_at/accepted_at/rejected_at/expired_at`; `paid_at`, `payment_transaction_id` (legacy escrow) |
+| `bid_messages` | `contact_redacted` bool + `raw_content` (audit copy of pre-redaction text)                                                                                                              |
 
 `needs.activated_at` is the single source of truth for "workspace unlocked", written in the same transaction as the MHC debit.
 
@@ -148,11 +148,11 @@ This is a **hiring/recruitment module**, not project delivery. It has the only m
 
 ### 4.8 Support / disputes / reviews — three systems
 
-| Table | Scope | Links to |
-|---|---|---|
-| `support_tickets` (+ `_messages`, `_attachments`) | Free text, `category ∈ bug, suggestion, error, other` | **Nothing** |
-| `reservation_disputes` (+ `_notes`, `_evidence`) | Reservations only | `reservations` |
-| `review_reports`, review disputes | Reviews only | `reviews` |
+| Table                                             | Scope                                                 | Links to       |
+| ------------------------------------------------- | ----------------------------------------------------- | -------------- |
+| `support_tickets` (+ `_messages`, `_attachments`) | Free text, `category ∈ bug, suggestion, error, other` | **Nothing**    |
+| `reservation_disputes` (+ `_notes`, `_evidence`)  | Reservations only                                     | `reservations` |
+| `review_reports`, review disputes                 | Reviews only                                          | `reviews`      |
 
 ### 4.9 Everything else
 
@@ -196,36 +196,41 @@ Socket.IO (`chat.socket.ts`, `socket-instance.ts`). Notifications are emitted ov
 ## 6. Dead, orphaned, and unused
 
 ### Dead UI (renders, but the action cannot succeed)
+
 - Header "+" deposit button → `WalletDepositModal` → every rail `false` → "No deposit methods are currently available."
 - Withdrawal form in `WalletSettingsScreen` — `canWithdraw` is true for all four roles; `anyWithdrawMethod` is false, so the form is suppressed but the **section, history list, and heading still render**.
 - Advertisement creation with `pricePerDay > 0` → debits a frozen wallet → fails.
 - Plan subscription for a priced plan → same.
 
 ### Orphaned routes
+
 - `/app/browse` — pure redirect to `/app/services`.
 - `/app/projects` — not in sidebar.
 - `/app/profile` — not in sidebar (hosts MHC).
 
 ### Unused backend capability
+
 - `mhc_action_prices`: `subscription_upgrade`, `advertisement`, `service_promotion`, `featured_provider`, `promoted_proposal` — seeded, priced, never read.
 - `business_team_roles.permissions` — seven permissions, zero enforcement outside the module.
 - `PlanLimits.maxTeamSlots`, `canBusinessFeatured`, `canPriorityListing` — defined, validated by zod, never enforced.
 - `POST /api/needs/:id/bids/:bidId/pay` — correctly fenced behind fail-closed `escrow_bid_payment`, returns `410 ESCROW_PAYMENTS_RETIRED`. **This one is handled well** and is the model to copy for other deprecations.
 
 ### Conflicting business logic
+
 - `canRequestWithdrawal()` returns `true` for all four roles while every withdrawal rail is off.
 - `NOTIFICATION_NAVIGATION_MAP` deep-links five wallet notification types to `/app/settings/wallet`, a screen that should be retired.
 - `computeCommissionSplit()` in `packages/shared/src/wallet.ts` implements a commission model the launch product has abandoned; still exported and imported.
 
 ### Inconsistent terminology
-| Concept | Names in use |
-|---|---|
-| A customer's posted requirement | need, RFP, project, request |
-| A provider's response | bid, proposal, application |
-| A hiring post | job, project, hiring post |
-| A service booking | reservation, booking, order |
-| MHC | MHC, credits, نقطة, platform credits |
-| Provider | expert, craftsman, business, provider |
+
+| Concept                         | Names in use                          |
+| ------------------------------- | ------------------------------------- |
+| A customer's posted requirement | need, RFP, project, request           |
+| A provider's response           | bid, proposal, application            |
+| A hiring post                   | job, project, hiring post             |
+| A service booking               | reservation, booking, order           |
+| MHC                             | MHC, credits, نقطة, platform credits  |
+| Provider                        | expert, craftsman, business, provider |
 
 `/app/projects` showing employment jobs, while actual projects live under `/app`, is the worst instance.
 
@@ -233,19 +238,19 @@ Socket.IO (`chat.socket.ts`, `socket-instance.ts`). Notifications are emitted ov
 
 ## 7. Test coverage map
 
-| Area | Tests | Verdict |
-|---|---|---|
-| MHC race safety | `mhc.activation-race.test.ts` | Strong |
-| Award lifecycle | `award-lifecycle.test.ts` | Strong |
-| Contact redaction | `contact-redaction.test.ts` | Strong |
-| Chat access gate | `chat-access.test.ts`, `needs.bid-chat-gate.test.ts` | Strong |
-| Money controls | `phase2-money-controls.test.ts`, `phase4-marketplace-money.test.ts` | Legacy model |
-| Auth | 3 files | Adequate |
-| Plans | `plans.service.test.ts` | Limits only |
-| **Notifications** | `notifications.demo.test.ts` only | **Effectively untested** |
-| **Business teams** | none | **Untested** |
-| **Support/disputes** | none | **Untested** |
-| **Search** | none | **Untested** |
-| **Entitlements** | none | **Untested** |
+| Area                 | Tests                                                               | Verdict                  |
+| -------------------- | ------------------------------------------------------------------- | ------------------------ |
+| MHC race safety      | `mhc.activation-race.test.ts`                                       | Strong                   |
+| Award lifecycle      | `award-lifecycle.test.ts`                                           | Strong                   |
+| Contact redaction    | `contact-redaction.test.ts`                                         | Strong                   |
+| Chat access gate     | `chat-access.test.ts`, `needs.bid-chat-gate.test.ts`                | Strong                   |
+| Money controls       | `phase2-money-controls.test.ts`, `phase4-marketplace-money.test.ts` | Legacy model             |
+| Auth                 | 3 files                                                             | Adequate                 |
+| Plans                | `plans.service.test.ts`                                             | Limits only              |
+| **Notifications**    | `notifications.demo.test.ts` only                                   | **Effectively untested** |
+| **Business teams**   | none                                                                | **Untested**             |
+| **Support/disputes** | none                                                                | **Untested**             |
+| **Search**           | none                                                                | **Untested**             |
+| **Entitlements**     | none                                                                | **Untested**             |
 
 The tests are concentrated exactly on the newest, best-built subsystem, and absent exactly where this audit finds the most defects.

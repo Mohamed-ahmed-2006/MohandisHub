@@ -48,12 +48,12 @@ client.on('notice', (n) => console.log(`  [db] ${n.message}`));
 
 let applied = new Set();
 try {
-  const { rows } = await client.query(
-    `SELECT version FROM supabase_migrations.schema_migrations`,
-  );
+  const { rows } = await client.query(`SELECT version FROM supabase_migrations.schema_migrations`);
   applied = new Set(rows.map((r) => r.version));
 } catch {
-  console.warn('No supabase_migrations.schema_migrations table; treating all migrations as pending.');
+  console.warn(
+    'No supabase_migrations.schema_migrations table; treating all migrations as pending.',
+  );
 }
 
 const pending = migrationFiles.filter((f) => !applied.has(f.split('_')[0]));
@@ -63,9 +63,13 @@ const pending = migrationFiles.filter((f) => !applied.has(f.split('_')[0]));
 const repoVersions = new Set(migrationFiles.map((f) => f.split('_')[0]));
 const drift = [...applied].filter((v) => !repoVersions.has(v)).sort();
 
-console.log(`Repo migrations: ${migrationFiles.length}   Applied: ${applied.size}   Pending: ${pending.length}`);
+console.log(
+  `Repo migrations: ${migrationFiles.length}   Applied: ${applied.size}   Pending: ${pending.length}`,
+);
 if (drift.length > 0) {
-  console.warn(`\nWARNING: ${drift.length} migration(s) applied to the database are NOT in the repository:`);
+  console.warn(
+    `\nWARNING: ${drift.length} migration(s) applied to the database are NOT in the repository:`,
+  );
   for (const v of drift) console.warn(`  ${v}`);
   console.warn('The repository cannot reproduce this database from scratch.');
 }
@@ -98,8 +102,14 @@ try {
   //
   // BLOCKING invariants must hold or the migration is unsafe to apply.
   const blocking = [
-    ['no wallet has a negative balance', `SELECT count(*)::int v FROM public.wallets WHERE balance < 0`],
-    ['no transaction has a negative amount', `SELECT count(*)::int v FROM public.transactions WHERE amount < 0`],
+    [
+      'no wallet has a negative balance',
+      `SELECT count(*)::int v FROM public.wallets WHERE balance < 0`,
+    ],
+    [
+      'no transaction has a negative amount',
+      `SELECT count(*)::int v FROM public.transactions WHERE amount < 0`,
+    ],
     [
       'no wallet hold exceeds its wallet balance',
       `SELECT count(*)::int v FROM (

@@ -66,16 +66,16 @@ of being guessed at.
 
 **Invariants the design intends (VERIFIED from code comments and constraints):**
 
-| # | Invariant | Enforced today? |
-| --- | --- | --- |
-| I1 | MHC is never withdrawable, transferable, or convertible to money | Yes — no code path exists to do so |
-| I2 | A provider is never charged for a job they did not accept | Yes — charge is provider-initiated |
-| I3 | Credits taken and job opened commit together or not at all | Yes — single transaction |
-| I4 | At most one activation charge per bid / per reservation | Yes — partial unique indexes |
-| I5 | Balance can never go negative | Yes — `FOR UPDATE` + pre-check + CHECK constraint |
-| I6 | Contact details are invisible before activation | **No — see MHC-05, MHC-06, MHC-07** |
-| I7 | The customer can pay the provider after activation | **No — see MHC-04** |
-| I8 | A stale offer cannot be activated | Partially — see MHC-03, MHC-14 |
+| #   | Invariant                                                        | Enforced today?                                   |
+| --- | ---------------------------------------------------------------- | ------------------------------------------------- |
+| I1  | MHC is never withdrawable, transferable, or convertible to money | Yes — no code path exists to do so                |
+| I2  | A provider is never charged for a job they did not accept        | Yes — charge is provider-initiated                |
+| I3  | Credits taken and job opened commit together or not at all       | Yes — single transaction                          |
+| I4  | At most one activation charge per bid / per reservation          | Yes — partial unique indexes                      |
+| I5  | Balance can never go negative                                    | Yes — `FOR UPDATE` + pre-check + CHECK constraint |
+| I6  | Contact details are invisible before activation                  | **No — see MHC-05, MHC-06, MHC-07**               |
+| I7  | The customer can pay the provider after activation               | **No — see MHC-04**                               |
+| I8  | A stale offer cannot be activated                                | Partially — see MHC-03, MHC-14                    |
 
 Invariants I6 and I7 are the model's entire commercial premise, and neither holds.
 
@@ -119,13 +119,13 @@ Recording this explicitly so the recovery does not needlessly rewrite sound work
 
 ## A3. Severity ranking scheme
 
-| Rank | Meaning |
-| --- | --- |
-| **1 — Launch blocker** | The product cannot be operated by real users at all. |
-| **2 — Revenue / security critical** | Users can bypass the paywall, or see data they must not. |
-| **3 — Data-safety critical** | Existing balances, historical records, or migrations are at risk. |
-| **4 — Functional defect** | A flow behaves incorrectly but is neither exploitable nor destructive. |
-| **5 — Cleanup / technical debt** | Correctness unaffected. Deferred by default. |
+| Rank                                | Meaning                                                                |
+| ----------------------------------- | ---------------------------------------------------------------------- |
+| **1 — Launch blocker**              | The product cannot be operated by real users at all.                   |
+| **2 — Revenue / security critical** | Users can bypass the paywall, or see data they must not.               |
+| **3 — Data-safety critical**        | Existing balances, historical records, or migrations are at risk.      |
+| **4 — Functional defect**           | A flow behaves incorrectly but is neither exploitable nor destructive. |
+| **5 — Cleanup / technical debt**    | Correctness unaffected. Deferred by default.                           |
 
 Findings are listed in rank order. Within a rank, most urgent first.
 
@@ -133,7 +133,7 @@ Findings are listed in rank order. Within a rank, most urgent first.
 
 ## RANK 1 — LAUNCH BLOCKERS
 
-### MHC-04 — There is no customer→provider payment path *(the central blocker)*
+### MHC-04 — There is no customer→provider payment path _(the central blocker)_
 
 **Exact current behaviour (VERIFIED).**
 Migration `20260728120000` creates `provider_payment_methods` (bank/InstaPay/mobile-wallet
@@ -262,10 +262,10 @@ activate-vs-expire race resolves to exactly one outcome.
 **Database impact.** None.
 
 **Risk of the change.** Low, with one caveat that matters: the fixtures must be updated to
-the *intended* contract, not bent until they pass. The frozen-wallet and insufficient-credits
+the _intended_ contract, not bent until they pass. The frozen-wallet and insufficient-credits
 assertions must be restored to actually reach the code they claim to test.
 
-**Tests required.** This finding *is* test work. The `payBid` test should be re-expressed as
+**Tests required.** This finding _is_ test work. The `payBid` test should be re-expressed as
 "the retired escrow rail returns 410" plus a preserved idempotency test behind the flag, so
 the historical behaviour stays covered if the rail is ever re-enabled — subject to D6.
 
@@ -324,7 +324,7 @@ written but never wired in.
 
 Today this is mitigated by accident rather than design: `expert_email` was removed from
 every `SELECT`, and public profiles do not expose phone or email (VERIFIED — see MHC-09 for
-what they *do* expose). So there is no single dramatic leak through these endpoints right
+what they _do_ expose). So there is no single dramatic leak through these endpoints right
 now. But nothing prevents the next `SELECT` from reintroducing one, and the gate exists
 precisely to make that structurally impossible.
 
@@ -363,7 +363,7 @@ The same need-scoped condition governs `createBidMessage`, so losing bidders als
 ability to post unredacted text and attachments after someone else pays.
 
 **Intended behaviour.** Per D3. At minimum, the unlock condition must be evaluated per bid
-(an `mhc_job_activations` row for *this* `bid_id`), not per need.
+(an `mhc_job_activations` row for _this_ `bid_id`), not per need.
 
 **Files involved.** `apps/api/src/modules/needs/needs.service.ts` (`listBidMessages`,
 `createBidMessage`).
@@ -561,7 +561,7 @@ Per `deposit_requests_provider_status_check_publish_ready`
 `('pending','paid','expired','failed','cancelled','pending_review','rejected','completed','underpaid')`.
 
 So a purchase sitting in `expired`, `failed`, or `underpaid` — three states that
-specifically mean *money did not arrive as expected* — will be granted in full if an admin
+specifically mean _money did not arrive as expected_ — will be granted in full if an admin
 clicks approve. Separately, `fulfilPurchaseFromWebhook` passes `providerStatus` straight
 through and **never checks that it signifies payment**, so wiring it to a webhook as-is would
 credit on any callback, including a failure callback.
@@ -634,7 +634,7 @@ UPDATE needs SET status = 'awarded', awarded_bid_id = $1, activated_at = now(), 
 
 with no re-check that the need is still `awarded_pending_provider_acceptance` for this bid.
 Between the validating read and the transaction, the customer may have re-awarded to another
-provider. The unique index prevents charging the *same* bid twice, but it does not prevent an
+provider. The unique index prevents charging the _same_ bid twice, but it does not prevent an
 `UPDATE` that overwrites a newer award.
 
 **Intended.** The state checks belong inside the charging transaction, with
@@ -650,7 +650,7 @@ A activates → must fail cleanly with no charge. **Decision required.** No.
 ### MHC-15 — `updateNeedSchema` status enum omits the new state
 
 **VERIFIED.** `needs.validation.ts:27` lists `['open','closed','awarded','in_progress','completed']`.
-Impact is low: it prevents a customer from *setting* the pending status via PATCH, which is
+Impact is low: it prevents a customer from _setting_ the pending status via PATCH, which is
 correct behaviour anyway, and the transition map reads `from` out of the database. Recorded
 for consistency; fix alongside MHC-16.
 **Decision required.** No.
@@ -684,7 +684,7 @@ No.
 ### MHC-18 — Losing bids are rejected at offer time, before the offer is accepted
 
 **VERIFIED.** `awardBid` sets every other bid to `'rejected'` and notifies each provider
-"Bid not selected" *at the moment the offer is made* — before the chosen provider has
+"Bid not selected" _at the moment the offer is made_ — before the chosen provider has
 accepted or paid. If the offer is then declined or expires, the need returns to `open` with
 every other bid already rejected and every other provider already told they lost.
 
@@ -755,18 +755,18 @@ rail, and all Rank 5 cleanup.
 
 Each step is one commit, verified before the next begins.
 
-| Step | Work | Findings closed | Blocked by |
-| --- | --- | --- | --- |
-| **M0** | Read-only production checks: EGP balances (MHC-10), duplicate InstaPay references (MHC-11), applied-migration inventory (MHC-13). Produces the evidence D1 needs. | — | Nothing. **Can start now.** |
-| **M1** | Repair the test suite to the intended contract. Restore the frozen-wallet and insufficient-credits assertions so they actually reach the code they test. | MHC-02 | D6 (partial — affects one `payBid` test only) |
-| **M2** | Correct the migration hazards: narrow `uq_deposit_requests_instapay_reference` to `purpose = 'credit_purchase'`; tighten `fulfillCreditPurchase` to fulfil only from `pending`/`pending_review`. Additive migration only. | MHC-11, MHC-12 | Nothing |
-| **M3** | Make the gate real: per-bid unlock instead of need-scoped; wire `assertAwardActivated` into every privileged read; close the TOCTOU by moving state checks inside the charging transaction with guarded `UPDATE`s. | MHC-06, MHC-07, MHC-14 | D3 |
-| **M4** | Build the provider direct-payment rail: CRUD for `provider_payment_methods`, activation-scoped disclosure writing `provider_payment_disclosures`. **This is what makes the launch model function at all.** | MHC-04 | D5 |
-| **M5** | Close the chat bypass per the chosen rule. | MHC-05 | D2 |
-| **M6** | Award-offer lifecycle: expiry worker (or the chosen alternative), consolidate the duplicate release paths, fix the close-with-pending-award orphan, resolve the premature loser-rejection. | MHC-03, MHC-17, MHC-18, part of MHC-21 | D4 |
-| **M7** | Build the web surface: provider credits + purchase, provider award accept/decline, customer pending-award state, admin purchase review + pricing. Arabic and English. | MHC-01 | M3-M6 (the UI must reflect settled rules) |
-| **M8** | Consistency sweep: `updateNeedSchema` enum, `plans.service` quota count. | MHC-15, MHC-16 | Nothing |
-| **M9** | Resolve the EGP wallet position per D1. | MHC-10 | **D1** |
+| Step   | Work                                                                                                                                                                                                                      | Findings closed                        | Blocked by                                    |
+| ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------- | --------------------------------------------- |
+| **M0** | Read-only production checks: EGP balances (MHC-10), duplicate InstaPay references (MHC-11), applied-migration inventory (MHC-13). Produces the evidence D1 needs.                                                         | —                                      | Nothing. **Can start now.**                   |
+| **M1** | Repair the test suite to the intended contract. Restore the frozen-wallet and insufficient-credits assertions so they actually reach the code they test.                                                                  | MHC-02                                 | D6 (partial — affects one `payBid` test only) |
+| **M2** | Correct the migration hazards: narrow `uq_deposit_requests_instapay_reference` to `purpose = 'credit_purchase'`; tighten `fulfillCreditPurchase` to fulfil only from `pending`/`pending_review`. Additive migration only. | MHC-11, MHC-12                         | Nothing                                       |
+| **M3** | Make the gate real: per-bid unlock instead of need-scoped; wire `assertAwardActivated` into every privileged read; close the TOCTOU by moving state checks inside the charging transaction with guarded `UPDATE`s.        | MHC-06, MHC-07, MHC-14                 | D3                                            |
+| **M4** | Build the provider direct-payment rail: CRUD for `provider_payment_methods`, activation-scoped disclosure writing `provider_payment_disclosures`. **This is what makes the launch model function at all.**                | MHC-04                                 | D5                                            |
+| **M5** | Close the chat bypass per the chosen rule.                                                                                                                                                                                | MHC-05                                 | D2                                            |
+| **M6** | Award-offer lifecycle: expiry worker (or the chosen alternative), consolidate the duplicate release paths, fix the close-with-pending-award orphan, resolve the premature loser-rejection.                                | MHC-03, MHC-17, MHC-18, part of MHC-21 | D4                                            |
+| **M7** | Build the web surface: provider credits + purchase, provider award accept/decline, customer pending-award state, admin purchase review + pricing. Arabic and English.                                                     | MHC-01                                 | M3-M6 (the UI must reflect settled rules)     |
+| **M8** | Consistency sweep: `updateNeedSchema` enum, `plans.service` quota count.                                                                                                                                                  | MHC-15, MHC-16                         | Nothing                                       |
+| **M9** | Resolve the EGP wallet position per D1.                                                                                                                                                                                   | MHC-10                                 | **D1**                                        |
 
 **Deferred out of the minimal path**, tracked in `KNOWN_LIMITATIONS.md`: MHC-08 (bookings),
 MHC-09 (profile channels — pending D5), MHC-19 (ads on MHC — pending D6), MHC-13
@@ -809,14 +809,14 @@ mobile widths:
 
 ## A6. Business decisions that block this plan
 
-| ID | Question | Blocks |
-| --- | --- | --- |
-| D1 | Existing EGP wallet balances and withdrawals | M9, MHC-10 |
-| D2 | General pre-activation chat behaviour | M5, MHC-05 |
-| D3 | Losing bidder chat and data access | M3, MHC-07 |
-| D4 | Award-offer expiration behaviour | M6, MHC-03, MHC-18 |
-| D5 | Provider direct-payment-method disclosure | M4, MHC-04, MHC-09 |
-| D6 | Legacy escrow and EGP-denominated features after MHC launch | M1 (partial), MHC-19 |
+| ID  | Question                                                    | Blocks               |
+| --- | ----------------------------------------------------------- | -------------------- |
+| D1  | Existing EGP wallet balances and withdrawals                | M9, MHC-10           |
+| D2  | General pre-activation chat behaviour                       | M5, MHC-05           |
+| D3  | Losing bidder chat and data access                          | M3, MHC-07           |
+| D4  | Award-offer expiration behaviour                            | M6, MHC-03, MHC-18   |
+| D5  | Provider direct-payment-method disclosure                   | M4, MHC-04, MHC-09   |
+| D6  | Legacy escrow and EGP-denominated features after MHC launch | M1 (partial), MHC-19 |
 
 Full statements, options, consequences, and recommendations are in
 `DECISIONS_REQUIRED.md`. **No implementation inside these flows will begin before they are

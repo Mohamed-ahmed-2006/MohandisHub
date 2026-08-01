@@ -59,19 +59,19 @@ If all three return zero, this decision becomes trivial (Option A) and costs not
 
 ### Options
 
-| | Option | What it means |
-| --- | --- | --- |
-| **A** | **Freeze as written** — confirmed only after the queries show zero balances, zero pending withdrawals, zero holds. | The migration is already correct. No further work. |
-| **B** | **Settle before freezing** — keep `withdrawal_instapay` enabled for a defined wind-down window, notify affected users, freeze only after balances reach zero. | Users get their money out through the existing, tested rail. |
-| **C** | **Admin-only manual settlement** — freeze immediately, but build an admin tool to pay out individual balances off-platform and record the reversal in the ledger. | Money leaves under admin control, with an audit trail. |
-| **D** | **Convert EGP balances to MHC** for provider accounts at an agreed rate; settle customer balances manually. | Removes the liability and seeds provider credit. |
+|       | Option                                                                                                                                                            | What it means                                                |
+| ----- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------ |
+| **A** | **Freeze as written** — confirmed only after the queries show zero balances, zero pending withdrawals, zero holds.                                                | The migration is already correct. No further work.           |
+| **B** | **Settle before freezing** — keep `withdrawal_instapay` enabled for a defined wind-down window, notify affected users, freeze only after balances reach zero.     | Users get their money out through the existing, tested rail. |
+| **C** | **Admin-only manual settlement** — freeze immediately, but build an admin tool to pay out individual balances off-platform and record the reversal in the ledger. | Money leaves under admin control, with an audit trail.       |
+| **D** | **Convert EGP balances to MHC** for provider accounts at an agreed rate; settle customer balances manually.                                                       | Removes the liability and seeds provider credit.             |
 
 ### Advantages and disadvantages
 
-- **A** — *Advantage:* zero work, zero risk, and the cleanest launch posture. *Disadvantage:* only valid if the data genuinely is empty. If it is not, this option quietly strands real money.
-- **B** — *Advantage:* uses a rail that already exists and has been exercised; users self-serve; no new money-moving code. *Disadvantage:* delays launch by the wind-down window; keeps a withdrawal rail live during the transition, which is the exact surface the launch model wanted closed.
-- **C** — *Advantage:* immediate freeze, so the launch posture is clean from day one; volume is presumably small. *Disadvantage:* new admin money-movement code, which is precisely the category that most needs to be right; manual process risks error at any real volume.
-- **D** — *Advantage:* no cash leaves the business; converts a liability into engagement. *Disadvantage:* **MHC is explicitly non-cashable and non-refundable.** Converting someone's withdrawable money into a non-withdrawable credit without their consent is not defensible, and probably not lawful, without explicit opt-in. Would need a per-user consent flow, which is more work than Option B.
+- **A** — _Advantage:_ zero work, zero risk, and the cleanest launch posture. _Disadvantage:_ only valid if the data genuinely is empty. If it is not, this option quietly strands real money.
+- **B** — _Advantage:_ uses a rail that already exists and has been exercised; users self-serve; no new money-moving code. _Disadvantage:_ delays launch by the wind-down window; keeps a withdrawal rail live during the transition, which is the exact surface the launch model wanted closed.
+- **C** — _Advantage:_ immediate freeze, so the launch posture is clean from day one; volume is presumably small. _Disadvantage:_ new admin money-movement code, which is precisely the category that most needs to be right; manual process risks error at any real volume.
+- **D** — _Advantage:_ no cash leaves the business; converts a liability into engagement. _Disadvantage:_ **MHC is explicitly non-cashable and non-refundable.** Converting someone's withdrawable money into a non-withdrawable credit without their consent is not defensible, and probably not lawful, without explicit opt-in. Would need a per-user consent flow, which is more work than Option B.
 
 ### Recommendation
 
@@ -80,7 +80,7 @@ and close this in an hour.
 
 If balances exist, take **Option B**. It reuses a tested rail, keeps users whole, requires
 no new money-moving code, and is the option that best survives scrutiny. Option D should be
-rejected outright unless it is offered as a genuinely optional, opt-in alternative *alongside*
+rejected outright unless it is offered as a genuinely optional, opt-in alternative _alongside_
 withdrawal.
 
 ### Blocked by this decision
@@ -119,26 +119,26 @@ only revenue rail — becomes optional for anyone who notices.
 Session 1 clearly did not intend this; `ActivationGateService`'s header comment says every
 privileged endpoint "MUST consult this service". It simply never got to the chat module.
 
-**What I cannot infer:** what general chat is *for*. If it exists so customers can ask
+**What I cannot infer:** what general chat is _for_. If it exists so customers can ask
 providers pre-sales questions, closing it entirely would damage the marketplace. If it is a
 legacy feature from the escrow era, closing it is free. The repository does not say, and
 `apps/web` usage would tell me how it is surfaced but not why it was built.
 
 ### Options
 
-| | Option | What it means |
-| --- | --- | --- |
-| **A** | **Disable general chat for launch.** All customer↔provider messaging goes through bid chat, which is gated and redacted. | One messaging path, one set of rules. |
-| **B** | **Apply the same redaction to general chat.** Contact details stripped, attachments blocked, unless the pair has an activated job together. | Both systems behave identically. |
-| **C** | **Restrict who may start a conversation** — only pairs with an existing bid relationship — *and* redact until activation. | Narrows the surface and redacts what remains. |
-| **D** | **Leave general chat open** and accept that the gate is bypassable. | Status quo, made explicit. |
+|       | Option                                                                                                                                      | What it means                                 |
+| ----- | ------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------- |
+| **A** | **Disable general chat for launch.** All customer↔provider messaging goes through bid chat, which is gated and redacted.                    | One messaging path, one set of rules.         |
+| **B** | **Apply the same redaction to general chat.** Contact details stripped, attachments blocked, unless the pair has an activated job together. | Both systems behave identically.              |
+| **C** | **Restrict who may start a conversation** — only pairs with an existing bid relationship — _and_ redact until activation.                   | Narrows the surface and redacts what remains. |
+| **D** | **Leave general chat open** and accept that the gate is bypassable.                                                                         | Status quo, made explicit.                    |
 
 ### Advantages and disadvantages
 
-- **A** — *Advantage:* simplest, fastest, and structurally impossible to bypass. *Disadvantage:* removes a live feature; any user relying on it loses it; pre-sales questions must move to bid chat, which requires bidding first.
-- **B** — *Advantage:* keeps the feature; consistent rules everywhere. *Disadvantage:* needs schema changes mirroring `contact_redacted`/`raw_content`, plus the socket layer must enforce the same rule or become a third bypass. "Has an activated job together" is a non-trivial query to run per message.
-- **C** — *Advantage:* strongest security posture short of disabling; a stranger cannot cold-message anyone. *Disadvantage:* the most work of the three; breaks any legitimate non-bid conversation such as support or repeat-client contact.
-- **D** — *Advantage:* no work. *Disadvantage:* the revenue model does not survive contact with a motivated user. I do not recommend launching this way.
+- **A** — _Advantage:_ simplest, fastest, and structurally impossible to bypass. _Disadvantage:_ removes a live feature; any user relying on it loses it; pre-sales questions must move to bid chat, which requires bidding first.
+- **B** — _Advantage:_ keeps the feature; consistent rules everywhere. _Disadvantage:_ needs schema changes mirroring `contact_redacted`/`raw_content`, plus the socket layer must enforce the same rule or become a third bypass. "Has an activated job together" is a non-trivial query to run per message.
+- **C** — _Advantage:_ strongest security posture short of disabling; a stranger cannot cold-message anyone. _Disadvantage:_ the most work of the three; breaks any legitimate non-bid conversation such as support or repeat-client contact.
+- **D** — _Advantage:_ no work. _Disadvantage:_ the revenue model does not survive contact with a motivated user. I do not recommend launching this way.
 
 ### Recommendation
 
@@ -190,24 +190,24 @@ receives the customer's contact details for free. A provider could bid low on ma
 purely to harvest contact details once someone else activates.
 
 The per-bid fact needed to fix this already exists: `mhc_job_activations.bid_id`. This looks
-like an oversight rather than a design choice — but the *policy* question underneath it is
+like an oversight rather than a design choice — but the _policy_ question underneath it is
 real and I will not guess at it.
 
 ### Options
 
-| | Option | What it means |
-| --- | --- | --- |
+|       | Option                                                                                                                                             | What it means                                      |
+| ----- | -------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------- |
 | **A** | **Per-bid unlock, permanent lock for losers.** Only the activated bid's thread unlocks. Losing threads stay redacted forever and become read-only. | Strictest. The paywall means exactly what it says. |
-| **B** | **Per-bid unlock, losing threads archived.** Losers keep read access to their own redacted history; posting is disabled. | Same security, softer UX. |
-| **C** | **Per-bid unlock, losing threads deleted** after a retention window. | Minimises stored contact data. |
-| **D** | **Keep need-scoped unlock** (current behaviour). | Status quo. |
+| **B** | **Per-bid unlock, losing threads archived.** Losers keep read access to their own redacted history; posting is disabled.                           | Same security, softer UX.                          |
+| **C** | **Per-bid unlock, losing threads deleted** after a retention window.                                                                               | Minimises stored contact data.                     |
+| **D** | **Keep need-scoped unlock** (current behaviour).                                                                                                   | Status quo.                                        |
 
 ### Advantages and disadvantages
 
-- **A** — *Advantage:* correct and simple; a one-line change to the unlock condition. *Disadvantage:* a losing provider sees permanently redacted markers in their own history, which reads as broken unless the UI explains it.
-- **B** — *Advantage:* same security as A with an honest UX — the thread is visibly closed rather than mysteriously censored. *Disadvantage:* marginally more UI work (an archived/read-only state).
-- **C** — *Advantage:* smallest data-retention footprint, which fits the existing retention module. *Disadvantage:* destroys moderation and dispute evidence; `raw_content` exists specifically to preserve it. I would not do this.
-- **D** — *Advantage:* none that I can identify. *Disadvantage:* it is the bug.
+- **A** — _Advantage:_ correct and simple; a one-line change to the unlock condition. _Disadvantage:_ a losing provider sees permanently redacted markers in their own history, which reads as broken unless the UI explains it.
+- **B** — _Advantage:_ same security as A with an honest UX — the thread is visibly closed rather than mysteriously censored. _Disadvantage:_ marginally more UI work (an archived/read-only state).
+- **C** — _Advantage:_ smallest data-retention footprint, which fits the existing retention module. _Disadvantage:_ destroys moderation and dispute evidence; `raw_content` exists specifically to preserve it. I would not do this.
+- **D** — _Advantage:_ none that I can identify. _Disadvantage:_ it is the bug.
 
 ### Recommendation
 
@@ -238,14 +238,14 @@ valuable.
 - `idx_needs_pending_award_expiry` supports an efficient sweep.
 - `needs.repository.listExpiredPendingAwards` implements the sweep query.
 - **Nothing calls it.** `worker.ts` starts only the reservation and retention workers.
-- `activateAwardForProvider` *does* refuse to charge for an already-expired offer, so the
+- `activateAwardForProvider` _does_ refuse to charge for an already-expired offer, so the
   timestamp is honoured defensively at the point of payment even though nothing sweeps.
 
 So an ignored offer sits in `awarded_pending_provider_acceptance` forever. After the expiry
 instant it can no longer be activated, but it is never released, no notification fires, and
 the need never returns to `open` on its own.
 
-Compounding this: `awardBid` rejects and notifies all *other* bidders at offer time. If the
+Compounding this: `awardBid` rejects and notifies all _other_ bidders at offer time. If the
 offer then lapses, the need reopens with every alternative bid already rejected and every
 alternative provider already told they were not selected.
 
@@ -260,11 +260,11 @@ customer experience, and reasonable businesses choose differently.
 
 ### Options
 
-| | Option | What it means |
-| --- | --- | --- |
-| **A** | **Implement the sweep as designed.** 48-hour default, admin-configurable, releases to `open`, notifies both parties. | Honours the existing design. |
-| **B** | **No expiry; customer-initiated withdrawal.** The offer stands until the customer explicitly withdraws it. Remove the expiry machinery. | Puts the customer in control. |
-| **C** | **Both.** Offers expire, *and* the customer may withdraw early. | Most flexible. |
+|       | Option                                                                                                                                           | What it means                               |
+| ----- | ------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------- |
+| **A** | **Implement the sweep as designed.** 48-hour default, admin-configurable, releases to `open`, notifies both parties.                             | Honours the existing design.                |
+| **B** | **No expiry; customer-initiated withdrawal.** The offer stands until the customer explicitly withdraws it. Remove the expiry machinery.          | Puts the customer in control.               |
+| **C** | **Both.** Offers expire, _and_ the customer may withdraw early.                                                                                  | Most flexible.                              |
 | **D** | **Provider must accept within the window or the bid is withdrawn entirely** (not merely rejected), freeing the slot and penalising non-response. | Strongest provider-responsiveness pressure. |
 
 Each of A, C, and D additionally requires answering: **should losing bids be rejected at
@@ -273,10 +273,10 @@ offer time, or held pending until the offer is accepted?** (MHC-18). Holding the
 
 ### Advantages and disadvantages
 
-- **A** — *Advantage:* everything except the worker already exists; smallest delta. *Disadvantage:* a customer who wants to cancel early still cannot, short of closing the need.
-- **B** — *Advantage:* no worker, no race between sweep and activation, less to get wrong. *Disadvantage:* stalled needs persist indefinitely if the customer is also inactive; discards work already built.
-- **C** — *Advantage:* covers both failure modes — unresponsive provider and changed-mind customer. *Disadvantage:* most surface area; the withdraw path must race-safely interact with an in-flight activation, or a provider could be charged for an offer withdrawn a moment earlier.
-- **D** — *Advantage:* keeps the bid list clean and pushes providers to respond. *Disadvantage:* harshest on providers, who may reasonably need more than 48 hours; risks provider churn at launch when volume is low.
+- **A** — _Advantage:_ everything except the worker already exists; smallest delta. _Disadvantage:_ a customer who wants to cancel early still cannot, short of closing the need.
+- **B** — _Advantage:_ no worker, no race between sweep and activation, less to get wrong. _Disadvantage:_ stalled needs persist indefinitely if the customer is also inactive; discards work already built.
+- **C** — _Advantage:_ covers both failure modes — unresponsive provider and changed-mind customer. _Disadvantage:_ most surface area; the withdraw path must race-safely interact with an in-flight activation, or a provider could be charged for an offer withdrawn a moment earlier.
+- **D** — _Advantage:_ keeps the bid list clean and pushes providers to respond. _Disadvantage:_ harshest on providers, who may reasonably need more than 48 hours; risks provider churn at launch when volume is low.
 
 ### Recommendation
 
@@ -325,7 +325,7 @@ disclosure endpoint, no UI. Meanwhile `payBid` returns 410 and every escrow rail
 
 This is the gap that makes the launch model non-functional. The premise is "customers pay
 providers directly", the escrow path is closed, and the mechanism for the customer to learn
-*how* to pay has not been built. A provider can spend real credits to activate a job and
+_how_ to pay has not been built. A provider can spend real credits to activate a job and
 still have no way to get paid through the product.
 
 The schema tells me the shape but not the policy, and the policy is unavoidably a business
@@ -334,12 +334,12 @@ to customers, and what the platform's exposure is when a direct payment goes wro
 
 ### Options
 
-| | Option | What it means |
-| --- | --- | --- |
-| **A** | **Structured methods as designed.** Providers register bank/InstaPay/mobile-wallet details; customers see them only after activation; every disclosure is audited. | Uses the schema as built. |
-| **B** | **Free-text payment instructions.** One field the provider writes themselves, revealed post-activation. No structured financial data stored. | Minimal storage, minimal liability. |
-| **C** | **No stored details; unlock contact instead.** Post-activation the parties exchange phone numbers and settle payment between themselves. | Platform stores nothing financial. |
-| **D** | **A + mandatory configuration.** As A, but a provider cannot activate an award until at least one active payment method exists. | Guarantees the customer always sees something. |
+|       | Option                                                                                                                                                             | What it means                                  |
+| ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------- |
+| **A** | **Structured methods as designed.** Providers register bank/InstaPay/mobile-wallet details; customers see them only after activation; every disclosure is audited. | Uses the schema as built.                      |
+| **B** | **Free-text payment instructions.** One field the provider writes themselves, revealed post-activation. No structured financial data stored.                       | Minimal storage, minimal liability.            |
+| **C** | **No stored details; unlock contact instead.** Post-activation the parties exchange phone numbers and settle payment between themselves.                           | Platform stores nothing financial.             |
+| **D** | **A + mandatory configuration.** As A, but a provider cannot activate an award until at least one active payment method exists.                                    | Guarantees the customer always sees something. |
 
 Related sub-question (MHC-09): public profiles currently expose `linkedinUrl`,
 `portfolioUrl` (experts) and `website` (businesses) with no gate. These are working
@@ -348,10 +348,10 @@ are they gated too?
 
 ### Advantages and disadvantages
 
-- **A** — *Advantage:* structured data enables validation, display formatting, and later automation; the audit trail supports dispute resolution. *Disadvantage:* the platform now stores provider financial identifiers, raising its data-protection obligations; `details JSONB` is unvalidated and unencrypted at rest as written.
-- **B** — *Advantage:* least storage risk; providers can express anything; fastest to build. *Disadvantage:* unvalidated free text is a phishing and abuse vector (a provider could paste anything, including a third party's account); no structure for dispute handling.
-- **C** — *Advantage:* no financial data stored at all; simplest liability position. *Disadvantage:* renders both tables dead weight; pushes the entire payment conversation off-platform, which weakens dispute resolution and the platform's visibility into whether jobs completed.
-- **D** — *Advantage:* eliminates the worst failure mode, where a provider pays MHC to activate and the customer then finds nothing to pay to. *Disadvantage:* adds friction at the exact moment the provider is spending money; a provider without a configured method hits a wall mid-flow.
+- **A** — _Advantage:_ structured data enables validation, display formatting, and later automation; the audit trail supports dispute resolution. _Disadvantage:_ the platform now stores provider financial identifiers, raising its data-protection obligations; `details JSONB` is unvalidated and unencrypted at rest as written.
+- **B** — _Advantage:_ least storage risk; providers can express anything; fastest to build. _Disadvantage:_ unvalidated free text is a phishing and abuse vector (a provider could paste anything, including a third party's account); no structure for dispute handling.
+- **C** — _Advantage:_ no financial data stored at all; simplest liability position. _Disadvantage:_ renders both tables dead weight; pushes the entire payment conversation off-platform, which weakens dispute resolution and the platform's visibility into whether jobs completed.
+- **D** — _Advantage:_ eliminates the worst failure mode, where a provider pays MHC to activate and the customer then finds nothing to pay to. _Disadvantage:_ adds friction at the exact moment the provider is spending money; a provider without a configured method hits a wall mid-flow.
 
 ### Recommendation
 
@@ -366,7 +366,7 @@ setup step.
 
 Two conditions I would attach: validate `details` against a per-`method_type` schema rather
 than accepting arbitrary JSON, and treat the disclosure endpoint as writing the audit row
-*before* returning the details, so a failed write cannot silently produce an unaudited
+_before_ returning the details, so a failed write cannot silently produce an unaudited
 disclosure.
 
 On the sub-question, I recommend **leaving portfolio and website links visible**. They are
@@ -418,22 +418,22 @@ speculatively.
 
 ### Options
 
-| | Option | What it means |
-| --- | --- | --- |
-| **A** | **Ads and promotions move to MHC now.** Implement the seeded action keys; charge MHC; refunds credit MHC. | One currency, coherent model. |
-| **B** | **Disable paid ads and promotions for launch.** Free ads only; revisit post-launch. | Smallest scope. |
+|       | Option                                                                                                              | What it means                  |
+| ----- | ------------------------------------------------------------------------------------------------------------------- | ------------------------------ |
+| **A** | **Ads and promotions move to MHC now.** Implement the seeded action keys; charge MHC; refunds credit MHC.           | One currency, coherent model.  |
+| **B** | **Disable paid ads and promotions for launch.** Free ads only; revisit post-launch.                                 | Smallest scope.                |
 | **C** | **Keep ads on EGP** and carve out an exception: unfreeze money wallets for ad spending, re-enable one deposit rail. | Preserves existing ad revenue. |
-| **D** | **Remove advertisements from launch scope entirely.** | Least surface. |
+| **D** | **Remove advertisements from launch scope entirely.**                                                               | Least surface.                 |
 
 On escrow specifically: (i) delete the retired `payBid` code, or (ii) keep it fenced behind
 the fail-closed flag as it is now.
 
 ### Advantages and disadvantages
 
-- **A** — *Advantage:* one currency; every paid feature funds through the same rail; the seeded keys become real. *Disadvantage:* meaningful work — purchase, refund, and admin surfaces for four action keys; the ad refund path also moves EGP and needs the same treatment.
-- **B** — *Advantage:* smallest change; free ads already function; nothing is broken that is not already broken. *Disadvantage:* forgoes ad revenue at launch; leaves an obviously-unfinished feature visible.
-- **C** — *Advantage:* preserves an existing revenue stream. *Disadvantage:* directly contradicts the launch model by reopening a customer-funding rail, and reintroduces exactly the wallet surface D1 is trying to close. I do not recommend it.
-- **D** — *Advantage:* cleanest launch. *Disadvantage:* removes a built feature; likely over-correcting.
+- **A** — _Advantage:_ one currency; every paid feature funds through the same rail; the seeded keys become real. _Disadvantage:_ meaningful work — purchase, refund, and admin surfaces for four action keys; the ad refund path also moves EGP and needs the same treatment.
+- **B** — _Advantage:_ smallest change; free ads already function; nothing is broken that is not already broken. _Disadvantage:_ forgoes ad revenue at launch; leaves an obviously-unfinished feature visible.
+- **C** — _Advantage:_ preserves an existing revenue stream. _Disadvantage:_ directly contradicts the launch model by reopening a customer-funding rail, and reintroduces exactly the wallet surface D1 is trying to close. I do not recommend it.
+- **D** — _Advantage:_ cleanest launch. _Disadvantage:_ removes a built feature; likely over-correcting.
 
 ### Recommendation
 
@@ -464,7 +464,7 @@ other five test repairs regardless.
 
 ---
 
-## D7 — The reservation customer-side escrow hold *(BLOCKING step 11)*
+## D7 — The reservation customer-side escrow hold _(BLOCKING step 11)_
 
 **Raised:** 2026-07-29, during the pre-integration inspection of bookings.
 
@@ -474,8 +474,8 @@ Reservations are built on a **customer-side EGP escrow hold taken at reserve
 time**, not on direct payment:
 
 - `reservations.service.createReservation` builds a policy snapshot with
-  `deductionTiming: 'on_reserve_hold'` and the explanation *"Provider price plus
-  the platform fee is held when you click Reserve."*
+  `deductionTiming: 'on_reserve_hold'` and the explanation _"Provider price plus
+  the platform fee is held when you click Reserve."_
 - `ensureFixedPriceHold` (line 3719) looks up the customer's **EGP money wallet**,
   refuses with 402 `INSUFFICIENT_BALANCE` when `balance < holdAmount`, and creates
   a `wallet_hold`.
@@ -503,19 +503,19 @@ am not inferring one.
 
 ### Options
 
-| | Option | What it means |
-| --- | --- | --- |
-| **A** | **Bookings follow the award model.** No customer hold. Provider pays MHC to activate; customer pays provider directly. Cancellation/refund become policy guidance, not money movement. | One model across the platform. |
-| **B** | **Keep the hold for bookings only**, re-enabling a customer deposit rail just for reservations. | Preserves the existing lifecycle intact. |
-| **C** | **Option A, with the hold code fenced rather than deleted** behind a fail-closed flag, exactly as `escrow_bid_payment` was handled. | A, but reversible and auditable. |
-| **D** | **Launch with free reservations only** (no price, no hold), provider MHC activation still required. | Smallest change; defers priced bookings. |
+|       | Option                                                                                                                                                                                 | What it means                            |
+| ----- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------- |
+| **A** | **Bookings follow the award model.** No customer hold. Provider pays MHC to activate; customer pays provider directly. Cancellation/refund become policy guidance, not money movement. | One model across the platform.           |
+| **B** | **Keep the hold for bookings only**, re-enabling a customer deposit rail just for reservations.                                                                                        | Preserves the existing lifecycle intact. |
+| **C** | **Option A, with the hold code fenced rather than deleted** behind a fail-closed flag, exactly as `escrow_bid_payment` was handled.                                                    | A, but reversible and auditable.         |
+| **D** | **Launch with free reservations only** (no price, no hold), provider MHC activation still required.                                                                                    | Smallest change; defers priced bookings. |
 
 ### Advantages and disadvantages
 
-- **A** — *Advantage:* consistent with every decision already taken; customers need no balance; one mental model. *Disadvantage:* the largest edit in this recovery so far, and it removes the only leverage the platform had in a booking dispute.
-- **B** — *Advantage:* the reservation lifecycle keeps working exactly as written and tested. *Disadvantage:* directly contradicts D1 and D6, reopens customer funding, and re-creates the liability the reset just cleared.
-- **C** — *Advantage:* same outcome as A but the escrow machinery stays readable and re-enableable, matching the precedent already set for bid escrow. *Disadvantage:* leaves a large dormant code path (which D6 already accepted for escrow).
-- **D** — *Advantage:* smallest, fastest, unblocks bookings for launch immediately. *Disadvantage:* no booking revenue beyond MHC activation, and "free to reserve" may change no-show behaviour.
+- **A** — _Advantage:_ consistent with every decision already taken; customers need no balance; one mental model. _Disadvantage:_ the largest edit in this recovery so far, and it removes the only leverage the platform had in a booking dispute.
+- **B** — _Advantage:_ the reservation lifecycle keeps working exactly as written and tested. _Disadvantage:_ directly contradicts D1 and D6, reopens customer funding, and re-creates the liability the reset just cleared.
+- **C** — _Advantage:_ same outcome as A but the escrow machinery stays readable and re-enableable, matching the precedent already set for bid escrow. _Disadvantage:_ leaves a large dormant code path (which D6 already accepted for escrow).
+- **D** — _Advantage:_ smallest, fastest, unblocks bookings for launch immediately. _Disadvantage:_ no booking revenue beyond MHC activation, and "free to reserve" may change no-show behaviour.
 
 ### Recommendation
 
@@ -555,9 +555,9 @@ MHC-27 pricing-semantics work and admin pricing configuration.
 
 ## Secondary questions (not blocking, answer when convenient)
 
-| # | Question | Why it matters |
-| --- | --- | --- |
-| S1 | Are bookings/reservations in launch scope? | If yes, MHC-08 becomes Rank 2 — an unpriced second door into paid work. If no, the path should be disabled rather than left free. |
-| S2 | Which migrations are already applied to production? | MHC-13. Only you can supply this; it determines whether corrective migrations must handle two states. |
-| S3 | What MHC prices and package amounts should launch with? | Everything is seeded at 0/inactive. The gate charges nothing until configured — the model earns no revenue until you set prices. Not blocking code, but blocking launch. |
-| S4 | Is there a production database with real users today, or is launch a clean start? | Changes the risk profile of every migration in this plan. |
+| #   | Question                                                                          | Why it matters                                                                                                                                                           |
+| --- | --------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| S1  | Are bookings/reservations in launch scope?                                        | If yes, MHC-08 becomes Rank 2 — an unpriced second door into paid work. If no, the path should be disabled rather than left free.                                        |
+| S2  | Which migrations are already applied to production?                               | MHC-13. Only you can supply this; it determines whether corrective migrations must handle two states.                                                                    |
+| S3  | What MHC prices and package amounts should launch with?                           | Everything is seeded at 0/inactive. The gate charges nothing until configured — the model earns no revenue until you set prices. Not blocking code, but blocking launch. |
+| S4  | Is there a production database with real users today, or is launch a clean start? | Changes the risk profile of every migration in this plan.                                                                                                                |

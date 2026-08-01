@@ -22,8 +22,8 @@ vi.mock('../db/pool.js', () => ({
 }));
 vi.mock('../config/env.js', () => ({ env: {} }));
 
-const notifyMock = vi.fn<(userId: string, payload: Record<string, unknown>) => Promise<void>>(
-  () => Promise.resolve(),
+const notifyMock = vi.fn<(userId: string, payload: Record<string, unknown>) => Promise<void>>(() =>
+  Promise.resolve(),
 );
 vi.mock('../modules/notifications/notifications.service.js', () => ({
   NotificationsService: class {
@@ -56,7 +56,11 @@ beforeEach(() => {
 describe('release is race-safe and never charges', () => {
   it('releases a live pending award', async () => {
     mockRelease({ ...PENDING_NEED });
-    const result = await new MhcRepository().releasePendingAwardForBid('need-1', 'bid-1', 'expired');
+    const result = await new MhcRepository().releasePendingAwardForBid(
+      'need-1',
+      'bid-1',
+      'expired',
+    );
     expect(result.released).toBe(true);
     expect(chargedLedger()).toBe(false);
   });
@@ -65,14 +69,22 @@ describe('release is race-safe and never charges', () => {
     // The need has moved to 'awarded'. Tearing it down here would undo a job the
     // provider has already paid real credits for.
     mockRelease({ status: 'awarded', pending_award_bid_id: null });
-    const result = await new MhcRepository().releasePendingAwardForBid('need-1', 'bid-1', 'expired');
+    const result = await new MhcRepository().releasePendingAwardForBid(
+      'need-1',
+      'bid-1',
+      'expired',
+    );
     expect(result.released).toBe(false);
     expect(executed().some((s) => /UPDATE needs/.test(s))).toBe(false);
   });
 
   it('refuses to release when the offer moved to a different bid', async () => {
     mockRelease({ ...PENDING_NEED, pending_award_bid_id: 'bid-2' });
-    const result = await new MhcRepository().releasePendingAwardForBid('need-1', 'bid-1', 'expired');
+    const result = await new MhcRepository().releasePendingAwardForBid(
+      'need-1',
+      'bid-1',
+      'expired',
+    );
     expect(result.released).toBe(false);
   });
 
@@ -127,7 +139,9 @@ describe('provider decline', () => {
     expect(chargedLedger()).toBe(false);
     expect(notifyMock).toHaveBeenCalledWith(
       'customer-1',
-      expect.objectContaining({ payload: { needId: 'need-1', bidId: 'bid-1', reason: 'declined' } }),
+      expect.objectContaining({
+        payload: { needId: 'need-1', bidId: 'bid-1', reason: 'declined' },
+      }),
     );
   });
 
@@ -145,7 +159,9 @@ describe('provider decline', () => {
   });
 
   it('refuses a provider who does not own the bid', async () => {
-    poolQueryMock.mockImplementation(() => ({ rows: [{ ...bidRow, expert_id: 'other' }] }) as never);
+    poolQueryMock.mockImplementation(
+      () => ({ rows: [{ ...bidRow, expert_id: 'other' }] }) as never,
+    );
     await expect(
       new MhcService().rejectAwardForProvider({
         userId: 'provider-1',
@@ -177,7 +193,9 @@ describe('customer withdrawal', () => {
     expect(chargedLedger()).toBe(false);
     expect(notifyMock).toHaveBeenCalledWith(
       'provider-1',
-      expect.objectContaining({ payload: { needId: 'need-1', bidId: 'bid-1', reason: 'withdrawn' } }),
+      expect.objectContaining({
+        payload: { needId: 'need-1', bidId: 'bid-1', reason: 'withdrawn' },
+      }),
     );
   });
 

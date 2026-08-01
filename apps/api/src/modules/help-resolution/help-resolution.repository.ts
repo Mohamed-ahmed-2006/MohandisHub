@@ -406,10 +406,7 @@ export class HelpResolutionRepository {
     );
   }
 
-  async listEvents(
-    caseId: string,
-    includeAdminNotes: boolean,
-  ): Promise<ResolutionCaseEventRow[]> {
+  async listEvents(caseId: string, includeAdminNotes: boolean): Promise<ResolutionCaseEventRow[]> {
     const { rows } = await getPool().query<ResolutionCaseEventRow>(
       `SELECT *
          FROM resolution_case_events

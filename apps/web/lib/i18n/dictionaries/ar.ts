@@ -961,7 +961,7 @@ export const arDictionary: Dictionary = {
       transactions: 'المعاملات',
       moneyAudit: 'تدقيق الأموال',
       disputes: 'النزاعات',
-    helpResolution: 'الدعم وحل النزاعات',
+      helpResolution: 'الدعم وحل النزاعات',
       services: 'الخدمات',
       categories: 'التصنيفات',
       verifications: 'التحققات',

@@ -16,7 +16,7 @@ UPDATE public.wallets SET is_frozen = true WHERE account_type = 'money';
 
 Every EGP money wallet in production is frozen. The cash wallet is therefore not "possibly unnecessary" — it is **already switched off at the data layer**, and the remaining work is to stop showing and depending on it.
 
-**Recommendation:** retain all EGP wallet *code and data* (audit trail, historic balances, reversal capability), remove every customer-facing EGP surface, and make each remaining server route fail closed with an explicit `410 Gone`-style error, following the pattern already established by `payBid`.
+**Recommendation:** retain all EGP wallet _code and data_ (audit trail, historic balances, reversal capability), remove every customer-facing EGP surface, and make each remaining server route fail closed with an explicit `410 Gone`-style error, following the pattern already established by `payBid`.
 
 ---
 
@@ -42,7 +42,8 @@ The `+` button next to it opens `WalletDepositModal`.
 `wallet-deposit-modal.tsx:41`:
 
 ```ts
-const canDeposit = !depositsPaused &&
+const canDeposit =
+  !depositsPaused &&
   (!cryptoDisabled || !cardDisabled || instapayDepositAllowed || paymobDepositAllowed);
 ```
 
@@ -57,7 +58,8 @@ The modal handles the empty case gracefully — it does not crash. But it is rea
 `getVisibleProfileSections()` (`profile-screen-sections.ts:17`) returns the `wallet` section unconditionally:
 
 ```ts
-if (section.id === 'account' || section.id === 'preferences' || section.id === 'wallet') return true;
+if (section.id === 'account' || section.id === 'preferences' || section.id === 'wallet')
+  return true;
 ```
 
 A customer has no wallet function at launch: cannot deposit, cannot withdraw, cannot pay in-platform, cannot hold MHC (MHC is provider-only, enforced in `MhcService`). The section is pure noise, and worse, it implies the platform holds the customer's money — which sets a false expectation about dispute outcomes.
@@ -70,7 +72,7 @@ A customer has no wallet function at launch: cannot deposit, cannot withdraw, ca
 const canWithdraw = authUser?.role ? canRequestWithdrawal(authUser.role) : false;
 ```
 
-`canRequestWithdrawal` returns `true` for all four roles. `anyWithdrawMethod` is false so the *form* is suppressed — but `loadData()` still calls `walletApiClient.listWithdrawals()` when `canWithdraw`, and the withdrawal **section, heading and history list still render**. `formatStatus()` (lines 29-48) exists solely to label states of a feature nobody can use, in hardcoded English.
+`canRequestWithdrawal` returns `true` for all four roles. `anyWithdrawMethod` is false so the _form_ is suppressed — but `loadData()` still calls `walletApiClient.listWithdrawals()` when `canWithdraw`, and the withdrawal **section, heading and history list still render**. `formatStatus()` (lines 29-48) exists solely to label states of a feature nobody can use, in hardcoded English.
 
 The five withdrawal-method state variables, quote polling, and verification-code flow are all still mounted.
 
@@ -87,7 +89,7 @@ const paymentTxId = await this.walletRepo.debitWalletInTransaction(client, walle
 
 `advertisement_plans.currency DEFAULT 'EGP'`, seeded at 150 EGP for 7 days.
 
-Because the money wallet is frozen, **any ad with a non-zero price fails**. The default `pricePerDay` is `0`, so ads currently work *only* because they are free. The moment an admin sets a price, ad creation breaks.
+Because the money wallet is frozen, **any ad with a non-zero price fails**. The default `pricePerDay` is `0`, so ads currently work _only_ because they are free. The moment an admin sets a price, ad creation breaks.
 
 `mhc_action_prices` already contains an `advertisement` key. It is never read.
 
@@ -97,16 +99,16 @@ Because the money wallet is frozen, **any ad with a non-zero price fails**. The 
 
 ### 2.7 MHC is not applied consistently
 
-| Action key seeded in `mhc_action_prices` | Charged by code? |
-|---|---|
-| `award_activation` | ✅ `mhc.service.ts:636` |
-| `booking_activation` | ✅ `mhc.service.ts:931` |
-| `subscription_upgrade` | ❌ |
-| `advertisement` | ❌ |
-| `service_promotion` | ❌ |
-| `featured_provider` | ❌ |
-| `promoted_proposal` | ❌ |
-| **`bid_submission`** | **does not exist** |
+| Action key seeded in `mhc_action_prices` | Charged by code?        |
+| ---------------------------------------- | ----------------------- |
+| `award_activation`                       | ✅ `mhc.service.ts:636` |
+| `booking_activation`                     | ✅ `mhc.service.ts:931` |
+| `subscription_upgrade`                   | ❌                      |
+| `advertisement`                          | ❌                      |
+| `service_promotion`                      | ❌                      |
+| `featured_provider`                      | ❌                      |
+| `promoted_proposal`                      | ❌                      |
+| **`bid_submission`**                     | **does not exist**      |
 
 Two of eight intended revenue points are wired.
 
@@ -166,14 +168,14 @@ return rows[0]?.enabled !== false;
 
 ### Stage 1 — Remove entry points (frontend only, no schema change)
 
-| Change | File |
-|---|---|
-| Replace header EGP pill with an MHC pill for provider workspaces; render nothing for customers | `app-shell.tsx` |
-| Remove the `+` deposit button and `WalletDepositModal` mount | `app-shell.tsx` |
-| Drop `wallet` from `getVisibleProfileSections()` for customers | `profile-screen-sections.ts` |
-| Remove the withdrawal section entirely (form, history, `formatStatus`) | `wallet-settings-screen.tsx` |
-| Route `/app/settings/wallet` → MHC credits screen for providers; `404` for customers | `app/[locale]/app/settings/wallet/page.tsx` |
-| Add an MHC entry to the sidebar for provider workspaces | `app-sidebar.tsx`, `MANAGED_SIDEBAR_HREFS` |
+| Change                                                                                         | File                                        |
+| ---------------------------------------------------------------------------------------------- | ------------------------------------------- |
+| Replace header EGP pill with an MHC pill for provider workspaces; render nothing for customers | `app-shell.tsx`                             |
+| Remove the `+` deposit button and `WalletDepositModal` mount                                   | `app-shell.tsx`                             |
+| Drop `wallet` from `getVisibleProfileSections()` for customers                                 | `profile-screen-sections.ts`                |
+| Remove the withdrawal section entirely (form, history, `formatStatus`)                         | `wallet-settings-screen.tsx`                |
+| Route `/app/settings/wallet` → MHC credits screen for providers; `404` for customers           | `app/[locale]/app/settings/wallet/page.tsx` |
+| Add an MHC entry to the sidebar for provider workspaces                                        | `app-sidebar.tsx`, `MANAGED_SIDEBAR_HREFS`  |
 
 **Rollback:** revert the commit. No data touched.
 
@@ -209,7 +211,7 @@ await this.mhcService.chargeAction({
   actionKey: 'advertisement',
   referenceType: 'advertisement',
   referenceId: ad.id,
-  client,                       // same transaction
+  client, // same transaction
   idempotencyKey: `ad:${ad.id}`,
 });
 ```
@@ -237,7 +239,7 @@ The brief asks whether proposal fee + activation fee together become too expensi
 If the bid fee is high enough to be a revenue line, providers bid less, customers get fewer proposals, and the marketplace's core value — choice — degrades. Concretely:
 
 - **Bid fee: low.** Enough that spraying 50 identical bids is uneconomic; low enough that a considered bid on a good match is an easy decision. A single-digit MHC figure against a package that buys dozens of bids.
-- **Activation fee: the real price.** The provider has *already won*. Their willingness to pay is at its maximum, and the fee is a known cost against a known job.
+- **Activation fee: the real price.** The provider has _already won_. Their willingness to pay is at its maximum, and the fee is a known cost against a known job.
 
 Suggested ratio: **activation ≈ 10–20× the bid fee.** Both must remain admin-configurable in `mhc_action_prices` — the schema already supports this and no value should be hardcoded.
 
@@ -253,17 +255,17 @@ The bid fee introduces a new failure mode: a provider pays to bid on a need the 
 
 ### 5.3 Recommended launch revenue points
 
-| Point | Action key | Status |
-|---|---|---|
-| Bid submission | `bid_submission` | **Build** |
-| Award activation | `award_activation` | ✅ exists |
-| Booking activation | `booking_activation` | ✅ exists |
-| Provider / business plans | `subscription_upgrade` | Migrate off EGP |
-| Advertisements | `advertisement` | Migrate off EGP |
-| Profile spotlight | `featured_provider` | Seeded, unwired |
-| Promoted proposal | `promoted_proposal` | Seeded, unwired — **defer**, see below |
-| PDF / BoQ export | new key | P2 |
-| Extra team seats | new key | P2, needs teams first |
+| Point                     | Action key             | Status                                 |
+| ------------------------- | ---------------------- | -------------------------------------- |
+| Bid submission            | `bid_submission`       | **Build**                              |
+| Award activation          | `award_activation`     | ✅ exists                              |
+| Booking activation        | `booking_activation`   | ✅ exists                              |
+| Provider / business plans | `subscription_upgrade` | Migrate off EGP                        |
+| Advertisements            | `advertisement`        | Migrate off EGP                        |
+| Profile spotlight         | `featured_provider`    | Seeded, unwired                        |
+| Promoted proposal         | `promoted_proposal`    | Seeded, unwired — **defer**, see below |
+| PDF / BoQ export          | new key                | P2                                     |
+| Extra team seats          | new key                | P2, needs teams first                  |
 
 **Deprioritise `promoted_proposal` for launch.** Paying to appear above other bids on a marketplace this young degrades the customer's comparison experience, which is the one thing that must feel trustworthy first. Revisit once bid volume per need is consistently high.
 
@@ -277,24 +279,24 @@ Correctly avoided already. Since payment happens off-platform, any commission wo
 
 The rule from the brief is right and should be enforced structurally: **a reward requires a verified platform event, never a self-reported one.**
 
-| Trigger | Verifiable? | Reward safe? |
-|---|---|---|
-| "I completed the project" (one party) | ❌ | ❌ Never |
-| Both parties mark a milestone complete | ✅ two-sided | ✅ |
-| Customer approves a deliverable | ✅ recorded action | ✅ |
-| Both parties confirm project completion | ✅ two-sided | ✅ |
-| Review submitted after mutual completion | ✅ | ✅ small |
-| Provider uploads a file | ❌ trivially farmed | ❌ |
+| Trigger                                  | Verifiable?         | Reward safe? |
+| ---------------------------------------- | ------------------- | ------------ |
+| "I completed the project" (one party)    | ❌                  | ❌ Never     |
+| Both parties mark a milestone complete   | ✅ two-sided        | ✅           |
+| Customer approves a deliverable          | ✅ recorded action  | ✅           |
+| Both parties confirm project completion  | ✅ two-sided        | ✅           |
+| Review submitted after mutual completion | ✅                  | ✅ small     |
+| Provider uploads a file                  | ❌ trivially farmed | ❌           |
 
 ### Fraud and farming risks — per incentive
 
 **Mutual completion reward.** Two colluding accounts run fake projects and harvest MHC. Mitigations: require the activation fee to have been paid (so the loop costs more than it returns — **this alone makes the attack unprofitable if the reward is strictly less than the activation fee**); require distinct verified identities; require a minimum elapsed time; cap rewards per counterparty pair per period; flag repeated pairings for review.
 
-**Review reward.** Fake reviews for credit. Mitigations: reward only reviews on completed, activated jobs; one reward per job; freeze the reward if the review is reported and upheld; never reward the *rating value*, only the act.
+**Review reward.** Fake reviews for credit. Mitigations: reward only reviews on completed, activated jobs; one reward per job; freeze the reward if the review is reported and upheld; never reward the _rating value_, only the act.
 
 **Deliverable-approval reward.** Empty deliverables approved instantly. Mitigations: reward on project completion only, not per deliverable; require a minimum interval between submission and approval.
 
-**Non-negotiable invariant:** *total MHC rewarded per job must be strictly less than the MHC charged for that job.* If it is not, the platform pays users to transact and the ledger becomes an arbitrage. Enforce this with a check in the reward service and a test.
+**Non-negotiable invariant:** _total MHC rewarded per job must be strictly less than the MHC charged for that job._ If it is not, the platform pays users to transact and the ledger becomes an arbitrage. Enforce this with a check in the reward service and a test.
 
 ---
 

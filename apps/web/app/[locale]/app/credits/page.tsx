@@ -6,7 +6,8 @@ import { SkeletonCard } from '@/components/ui/skeleton';
 import { isSupportedLocale } from '@/lib/i18n/config';
 
 const MhcCreditsScreen = dynamic(
-  () => import('@/components/app/mhc-credits-screen').then((m) => ({ default: m.MhcCreditsScreen })),
+  () =>
+    import('@/components/app/mhc-credits-screen').then((m) => ({ default: m.MhcCreditsScreen })),
   {
     loading: () => (
       <Container>

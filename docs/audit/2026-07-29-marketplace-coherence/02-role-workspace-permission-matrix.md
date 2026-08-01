@@ -8,14 +8,14 @@
 
 The authoritative permission statement is `ROLE_PERMISSION_MATRIX` in `packages/shared/src/roles.ts:60`:
 
-| Capability | customer | expert | craftsman | business | admin |
-|---|---|---|---|---|---|
-| `manageNeeds` | ✅ | ❌ | ❌ | ❌ | ❌ |
-| `bidOnNeeds` | ❌ | ✅ | ✅ | ✅ | ❌ |
-| `manageProviderServices` | ❌ | ✅ | ✅ | ✅ | ❌ |
-| `manageReservationAvailability` | ❌ | ✅ | ✅ | ✅ | ❌ |
-| `requestWithdrawal` | ✅ | ✅ | ✅ | ✅ | ❌ |
-| `accessAdminPanel` | ❌ | ❌ | ❌ | ❌ | ✅ |
+| Capability                      | customer | expert | craftsman | business | admin |
+| ------------------------------- | -------- | ------ | --------- | -------- | ----- |
+| `manageNeeds`                   | ✅       | ❌     | ❌        | ❌       | ❌    |
+| `bidOnNeeds`                    | ❌       | ✅     | ✅        | ✅       | ❌    |
+| `manageProviderServices`        | ❌       | ✅     | ✅        | ✅       | ❌    |
+| `manageReservationAvailability` | ❌       | ✅     | ✅        | ✅       | ❌    |
+| `requestWithdrawal`             | ✅       | ✅     | ✅        | ✅       | ❌    |
+| `accessAdminPanel`              | ❌       | ❌     | ❌        | ❌       | ✅    |
 
 This matrix is **strictly bipartite**: an identity either creates demand or supplies it. Never both.
 
@@ -25,18 +25,18 @@ This matrix is **strictly bipartite**: an identity either creates demand or supp
 
 The product objective requires a business to:
 
-| Requirement | Enforced today | Where |
-|---|---|---|
-| Sell its own services | ✅ allowed | `manageProviderServices: true` |
-| Receive orders and opportunities | ✅ allowed | reservations, bids |
-| Submit bids | ✅ allowed | `bidOnNeeds: true` |
-| **Purchase services from other providers** | ❌ **blocked** | booking paths assume customer |
-| **Post its own needs** | ❌ **blocked** | `requireRole('customer')` on `POST /api/needs` (`needs.routes.ts:17`) |
-| Manage a team | ⚠️ schema only | see `08-business-team-admin-rbac-audit.md` |
+| Requirement                                | Enforced today | Where                                                                 |
+| ------------------------------------------ | -------------- | --------------------------------------------------------------------- |
+| Sell its own services                      | ✅ allowed     | `manageProviderServices: true`                                        |
+| Receive orders and opportunities           | ✅ allowed     | reservations, bids                                                    |
+| Submit bids                                | ✅ allowed     | `bidOnNeeds: true`                                                    |
+| **Purchase services from other providers** | ❌ **blocked** | booking paths assume customer                                         |
+| **Post its own needs**                     | ❌ **blocked** | `requireRole('customer')` on `POST /api/needs` (`needs.routes.ts:17`) |
+| Manage a team                              | ⚠️ schema only | see `08-business-team-admin-rbac-audit.md`                            |
 
 `POST /api/needs`, `PATCH /api/needs/:id`, `POST /api/needs/:id/award` and `POST /api/needs/:id/bids/:bidId/pay` are **all** `requireRole('customer')`. There is no code path by which a business, expert or craftsman posts a need.
 
-This is not an oversight in one endpoint; it is the design of the role model. Fixing it by adding `'business'` to those four `requireRole` calls would let a business post — and would immediately create a new problem: the business's *own* providers would see the business's *own* needs in their opportunity feed, and the UI has no way to tell a user which hat they are currently wearing. **The endpoint change is the easy 10%; the workspace concept is the necessary 90%.**
+This is not an oversight in one endpoint; it is the design of the role model. Fixing it by adding `'business'` to those four `requireRole` calls would let a business post — and would immediately create a new problem: the business's _own_ providers would see the business's _own_ needs in their opportunity feed, and the UI has no way to tell a user which hat they are currently wearing. **The endpoint change is the easy 10%; the workspace concept is the necessary 90%.**
 
 ---
 
@@ -87,11 +87,11 @@ identity (users row)
 
 Every request that can create or read marketplace data carries an **active workspace**. Authorization becomes:
 
-> *Is this identity a member of this workspace, and does that workspace type permit this action?*
+> _Is this identity a member of this workspace, and does that workspace type permit this action?_
 
 instead of
 
-> *Is `users.primary_role` equal to this string?*
+> _Is `users.primary_role` equal to this string?_
 
 ### 4.2 Proposed schema
 
@@ -163,37 +163,37 @@ New guard `requireWorkspaceKind('customer')` replaces `requireRole('customer')` 
 
 ### 4.5 Target matrix
 
-| Action | customer ws | individual provider ws | business ws | staff |
-|---|---|---|---|---|
-| Post a need | ✅ | ❌ | ✅ | ❌ |
-| Award a bid | ✅ (own need) | ❌ | ✅ (own need) | ❌ |
-| Browse opportunities | ❌ | ✅ | ✅ | ❌ |
-| Submit a bid | ❌ | ✅ | ✅ | ❌ |
-| Pay MHC activation | ❌ | ✅ | ✅ (owner/admin) | ❌ |
-| Publish a service | ❌ | ✅ | ✅ | ❌ |
-| Book a service | ✅ | ❌ | ✅ | ❌ |
-| Hold MHC balance | ❌ | ✅ | ✅ | ❌ |
-| Buy MHC | ❌ | ✅ | ✅ (owner/admin) | ❌ |
-| Manage team | ❌ | ❌ | ✅ (owner/admin) | ❌ |
-| View analytics | ❌ | ✅ | ✅ | ✅ (perm) |
-| Open a help case | ✅ | ✅ | ✅ | ❌ |
-| Admin panel | ❌ | ❌ | ❌ | ✅ (perm) |
+| Action               | customer ws   | individual provider ws | business ws      | staff     |
+| -------------------- | ------------- | ---------------------- | ---------------- | --------- |
+| Post a need          | ✅            | ❌                     | ✅               | ❌        |
+| Award a bid          | ✅ (own need) | ❌                     | ✅ (own need)    | ❌        |
+| Browse opportunities | ❌            | ✅                     | ✅               | ❌        |
+| Submit a bid         | ❌            | ✅                     | ✅               | ❌        |
+| Pay MHC activation   | ❌            | ✅                     | ✅ (owner/admin) | ❌        |
+| Publish a service    | ❌            | ✅                     | ✅               | ❌        |
+| Book a service       | ✅            | ❌                     | ✅               | ❌        |
+| Hold MHC balance     | ❌            | ✅                     | ✅               | ❌        |
+| Buy MHC              | ❌            | ✅                     | ✅ (owner/admin) | ❌        |
+| Manage team          | ❌            | ❌                     | ✅ (owner/admin) | ❌        |
+| View analytics       | ❌            | ✅                     | ✅               | ✅ (perm) |
+| Open a help case     | ✅            | ✅                     | ✅               | ❌        |
+| Admin panel          | ❌            | ❌                     | ❌               | ✅ (perm) |
 
 A business identity holds **both** a business workspace and a personal customer workspace. Selling and procurement are separated by the workspace switcher, not by account.
 
 ### 4.6 Business workspace member roles
 
-| | owner | admin | member |
-|---|---|---|---|
-| Manage team / invite / remove | ✅ | ✅ | ❌ |
-| Transfer ownership | ✅ | ❌ | ❌ |
-| Manage services | ✅ | ✅ | ❌ |
-| Submit bids | ✅ | ✅ | ✅ |
-| **Spend MHC** | ✅ | ✅ | ❌ |
-| Buy MHC | ✅ | ✅ | ❌ |
-| Manage subscription | ✅ | ❌ | ❌ |
-| Work on assigned projects | ✅ | ✅ | ✅ |
-| View analytics | ✅ | ✅ | ❌ |
+|                               | owner | admin | member |
+| ----------------------------- | ----- | ----- | ------ |
+| Manage team / invite / remove | ✅    | ✅    | ❌     |
+| Transfer ownership            | ✅    | ❌    | ❌     |
+| Manage services               | ✅    | ✅    | ❌     |
+| Submit bids                   | ✅    | ✅    | ✅     |
+| **Spend MHC**                 | ✅    | ✅    | ❌     |
+| Buy MHC                       | ✅    | ✅    | ❌     |
+| Manage subscription           | ✅    | ❌    | ❌     |
+| Work on assigned projects     | ✅    | ✅    | ✅     |
+| View analytics                | ✅    | ✅    | ❌     |
 
 **`member` cannot spend MHC.** This is deliberate: MHC is real money the business bought, and a member accepting an award commits the business to a fee. A member who receives an award offer must escalate to an owner/admin.
 
@@ -213,12 +213,12 @@ Two weaker spots worth naming:
 
 ## 6. Migration risk
 
-| Risk | Severity | Mitigation |
-|---|---|---|
-| Existing sessions lack `X-Workspace-Id` | High | Header optional; fall back to `primary_role`. Never require it. |
-| A user ends up in the wrong workspace after switching | Medium | Server derives workspace from the header and validates membership; never trusts client-side state. |
-| Ownership ambiguity for MHC balance | High | MHC stays on `wallets.user_id` = the **owner** identity. Workspaces do not own wallets in phase 1. |
-| Double-counting plan quotas across workspaces | Medium | Quotas stay per-identity in phase 1. Revisit only after workspaces are stable. |
-| `primary_role` drifts from workspaces | Medium | Keep `primary_role` authoritative for fallback; add a nightly consistency check before removing it. |
+| Risk                                                  | Severity | Mitigation                                                                                          |
+| ----------------------------------------------------- | -------- | --------------------------------------------------------------------------------------------------- |
+| Existing sessions lack `X-Workspace-Id`               | High     | Header optional; fall back to `primary_role`. Never require it.                                     |
+| A user ends up in the wrong workspace after switching | Medium   | Server derives workspace from the header and validates membership; never trusts client-side state.  |
+| Ownership ambiguity for MHC balance                   | High     | MHC stays on `wallets.user_id` = the **owner** identity. Workspaces do not own wallets in phase 1.  |
+| Double-counting plan quotas across workspaces         | Medium   | Quotas stay per-identity in phase 1. Revisit only after workspaces are stable.                      |
+| `primary_role` drifts from workspaces                 | Medium   | Keep `primary_role` authoritative for fallback; add a nightly consistency check before removing it. |
 
 **Do not drop `users.primary_role` in this programme of work.** It is the safety net for every un-migrated endpoint.

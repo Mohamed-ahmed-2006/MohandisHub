@@ -9,11 +9,11 @@
 
 **Corrections applied during the audit.** Three assumptions carried in the audit brief were tested against the code and did not hold:
 
-| Assumption | Finding |
-|---|---|
+| Assumption                                                        | Finding                                                                                                                                                                                                                                                    |
+| ----------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Negotiations are an isolated feature and should perhaps be hidden | **Class 1.** Wired into service detail (`app-home-screen.tsx:2181`), backed by `price_negotiations` + `_rounds` with counteroffer history, six states, and five notification emissions. The real gap is narrower: negotiations attach to `service_id` only |
-| The calendar may be a disconnected placeholder | **Class 2.** Reads real `reservations`, `reservation_slots` and `reservation_profiles`; `calendar-utils.test.ts` covers the date logic. Extend it, do not hide it |
-| Employment jobs should be reported as a deferred future module | **Class 1 — fully built.** Deferring means hiding a working subsystem, which is a product decision this audit does not make. See §9 |
+| The calendar may be a disconnected placeholder                    | **Class 2.** Reads real `reservations`, `reservation_slots` and `reservation_profiles`; `calendar-utils.test.ts` covers the date logic. Extend it, do not hide it                                                                                          |
+| Employment jobs should be reported as a deferred future module    | **Class 1 — fully built.** Deferring means hiding a working subsystem, which is a product decision this audit does not make. See §9                                                                                                                        |
 
 ---
 
@@ -32,12 +32,12 @@ Everything around it still assumes the **previous** business model — an EGP ca
 
 The result is not "some inconsistent labels". It is a set of **features that are now structurally dead** because their only funding source is frozen:
 
-| Feature | Funding path today | Status |
-|---|---|---|
-| Advertisement campaigns | `walletRepo.debitWalletInTransaction` on the EGP wallet (`advertisements.service.ts:63`) | **Broken** whenever `pricePerDay > 0` |
-| Plan subscriptions | `WalletRepository` injected into `PlansService` (`plans.service.ts:34`) | **Broken** for any priced plan |
-| Header "+" deposit button | `WalletDepositModal` → all deposit rails `false` | **Dead** — opens to "No deposit methods are currently available." |
-| Withdrawals | All three rails `false`, but `canRequestWithdrawal()` returns `true` for every role | **Dead UI, live route** |
+| Feature                   | Funding path today                                                                       | Status                                                            |
+| ------------------------- | ---------------------------------------------------------------------------------------- | ----------------------------------------------------------------- |
+| Advertisement campaigns   | `walletRepo.debitWalletInTransaction` on the EGP wallet (`advertisements.service.ts:63`) | **Broken** whenever `pricePerDay > 0`                             |
+| Plan subscriptions        | `WalletRepository` injected into `PlansService` (`plans.service.ts:34`)                  | **Broken** for any priced plan                                    |
+| Header "+" deposit button | `WalletDepositModal` → all deposit rails `false`                                         | **Dead** — opens to "No deposit methods are currently available." |
+| Withdrawals               | All three rails `false`, but `canRequestWithdrawal()` returns `true` for every role      | **Dead UI, live route**                                           |
 
 This is the through-line of the whole audit. Almost every P0 item is a consequence of a half-completed migration from the cash model to the credit model.
 
@@ -55,24 +55,24 @@ That is a coherent, defensible model, and the activation gate implements it corr
 **Revenue points that are seeded in `mhc_action_prices` but never charged by any code path:** `subscription_upgrade`, `advertisement`, `service_promotion`, `featured_provider`, `promoted_proposal`.
 **Revenue point named in the product objective that does not exist at all:** the bid-submission fee. There is no `bid_submission` action key, no charge on `POST /api/needs/:needId/bids`, and no MHC check anywhere in the bid-creation path.
 
-So step 3 of the intended workflow — *"Providers submit proposals using MHC platform credits"* — is **not implemented**. Bidding is currently free.
+So step 3 of the intended workflow — _"Providers submit proposals using MHC platform credits"_ — is **not implemented**. Bidding is currently free.
 
 ---
 
 ## 3. The workflow, step by step, against the code
 
-| # | Intended step | Reality |
-|---|---|---|
-| 1 | Customer posts a need | ✅ Works — but **only** `role='customer'` (`requireRole('customer')`, `needs.routes.ts:17`). A business cannot post a need. |
-| 2 | Providers discover it | ⚠️ Partial. `GET /api/needs` exists; discovery UI is buried inside a 2,430-line home screen. |
-| 3 | Providers submit proposals **using MHC** | ❌ Bidding is free. No MHC charge exists. |
-| 4 | Customer compares and awards | ⚠️ Award works (`awarded_pending_provider_acceptance`). There is no comparison surface — no side-by-side, no scoring. |
-| 5 | Awarded provider pays MHC activation | ✅ **Fully implemented and correct.** |
-| 6 | Contact + attachments unlock | ✅ Implemented via `ActivationGateService` + `contact-redaction.ts`. |
-| 7 | Milestones, files, approvals on-platform | ❌ **Does not exist for needs/bids.** `job_milestones` belongs to the *employment-jobs* module and is escrow-backed by the frozen wallet. |
-| 8 | Project completed | ⚠️ `needs.status = 'completed'` exists as a value; no mutual-completion flow. |
-| 9 | Both parties review each other | ❌ **Impossible.** `ReviewsService.create` requires a **completed reservation** (`reviews.service.ts:73`). A need/bid job produces no reviewable entity. |
-| 10 | One Help & Resolution Center | ❌ Three unconnected systems (see §5). |
+| #   | Intended step                            | Reality                                                                                                                                                  |
+| --- | ---------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | Customer posts a need                    | ✅ Works — but **only** `role='customer'` (`requireRole('customer')`, `needs.routes.ts:17`). A business cannot post a need.                              |
+| 2   | Providers discover it                    | ⚠️ Partial. `GET /api/needs` exists; discovery UI is buried inside a 2,430-line home screen.                                                             |
+| 3   | Providers submit proposals **using MHC** | ❌ Bidding is free. No MHC charge exists.                                                                                                                |
+| 4   | Customer compares and awards             | ⚠️ Award works (`awarded_pending_provider_acceptance`). There is no comparison surface — no side-by-side, no scoring.                                    |
+| 5   | Awarded provider pays MHC activation     | ✅ **Fully implemented and correct.**                                                                                                                    |
+| 6   | Contact + attachments unlock             | ✅ Implemented via `ActivationGateService` + `contact-redaction.ts`.                                                                                     |
+| 7   | Milestones, files, approvals on-platform | ❌ **Does not exist for needs/bids.** `job_milestones` belongs to the _employment-jobs_ module and is escrow-backed by the frozen wallet.                |
+| 8   | Project completed                        | ⚠️ `needs.status = 'completed'` exists as a value; no mutual-completion flow.                                                                            |
+| 9   | Both parties review each other           | ❌ **Impossible.** `ReviewsService.create` requires a **completed reservation** (`reviews.service.ts:73`). A need/bid job produces no reviewable entity. |
+| 10  | One Help & Resolution Center             | ❌ Three unconnected systems (see §5).                                                                                                                   |
 
 **Steps 3, 7, 9 and 10 are missing. Step 1 excludes businesses.** Steps 5 and 6 — the security-critical part — are done, and done well. What is absent is the half that creates retention and trust: the provider pays at the moment of maximum uncertainty and receives a phone number, after which every interaction happens off-platform. A provider who takes the relationship off-platform after one activation never pays a second time.
 
@@ -91,7 +91,7 @@ business: { manageNeeds: false, bidOnNeeds: true,  ... }
 
 A business therefore **cannot post a need, cannot hire another provider, and cannot procure anything.** The product objective requires exactly that. This is the deepest architectural gap in the audit and it is the one that most constrains sequencing — see `02-role-workspace-permission-matrix.md`.
 
-The good news: `is_admin` + `admin_permissions[]` are **already** independent of `primary_role` (`load-admin-from-db.ts`, `require-role.ts`). The admin architecture the brief asks for largely exists. It is only the *shared type* (`UserRole` includes `'admin'`) and the ROLE_META table that still conflate them.
+The good news: `is_admin` + `admin_permissions[]` are **already** independent of `primary_role` (`load-admin-from-db.ts`, `require-role.ts`). The admin architecture the brief asks for largely exists. It is only the _shared type_ (`UserRole` includes `'admin'`) and the ROLE_META table that still conflate them.
 
 ---
 
@@ -99,7 +99,7 @@ The good news: `is_admin` + `admin_permissions[]` are **already** independent of
 
 There are **three** parallel, unconnected complaint systems:
 
-1. `support_tickets` — free-text, category ∈ `bug | suggestion | error | other`. **No link to any entity.** A user cannot report a problem *about a specific project*.
+1. `support_tickets` — free-text, category ∈ `bug | suggestion | error | other`. **No link to any entity.** A user cannot report a problem _about a specific project_.
 2. `reservation_disputes` (+ `_notes`, `_evidence`) — rich case file, but **reservation-only**. A need/bid job cannot raise a dispute.
 3. `review_reports` and review disputes — a third channel with its own admin tab.
 
@@ -158,7 +158,7 @@ None of these require re-architecting. Items 1 and 2 are contained; item 3 is ad
 
 ### On deferral
 
-The audit brief asked that physical products and employment jobs be reported as deferred future modules. Applying the classification rule — *grade before deciding* — the two cases are not alike:
+The audit brief asked that physical products and employment jobs be reported as deferred future modules. Applying the classification rule — _grade before deciding_ — the two cases are not alike:
 
 - **Employment jobs: class 1, fully built.** A complete hiring subsystem: salary ranges, CV uploads, interview scheduling via reservations, seven application states, milestones, messaging. Only its milestone escrow settlement is broken (frozen wallet). **Hiding it is a product decision, not an audit conclusion.** The audit recommends giving it an honest name ("Hiring"), a navigation entry, and an escrow repair. If it is then scoped out, that is a deliberate call implemented with a flag and guards at both route and API layers.
 - **Goods / products: class 6 — implementation not located.** See §11.
@@ -178,7 +178,7 @@ Six distinct transaction types exist. They are **not duplicates** — a hiring p
 - `/app/browse` is a dead redirect
 - "bid" / "proposal" / "application" name one thing; "reservation" / "booking" / "order" name another
 
-**Recommended: Option A — rename and re-route.** Keeps all six types, no schema change, no feature loss, complexity *small*. Option B (collapse to four) requires either hiding a class-1 subsystem or forcing it into an abstraction that does not fit, complexity *large*, with real risk of breaking working code.
+**Recommended: Option A — rename and re-route.** Keeps all six types, no schema change, no feature loss, complexity _small_. Option B (collapse to four) requires either hiding a class-1 subsystem or forcing it into an abstraction that does not fit, complexity _large_, with real risk of breaking working code.
 
 ---
 
@@ -196,26 +196,26 @@ The only `product`-named code is `product-growth.ts` (notification preferences) 
 
 Stated plainly so it is not over-promised in marketing copy or in the dispute UI:
 
-Because the platform never holds job money, **a dispute cannot recover funds.** What the platform can genuinely offer is *evidence and consequence*: an approval history, a message record, deliverable timestamps, verified identities, and a rating that follows the offending party. That is worth something — but it must be described as such. See `04-marketplace-workflow-audit.md` §7.
+Because the platform never holds job money, **a dispute cannot recover funds.** What the platform can genuinely offer is _evidence and consequence_: an approval history, a message record, deliverable timestamps, verified identities, and a rating that follows the offending party. That is worth something — but it must be described as such. See `04-marketplace-workflow-audit.md` §7.
 
 ---
 
 ## Reading order
 
-| File | Answers |
-|---|---|
-| `01-current-architecture-map.md` | What exists, where |
-| `02-role-workspace-permission-matrix.md` | Who can do what; the workspace proposal |
-| `03-financial-mhc-audit.md` | Money, credits, and the safe deprecation plan |
-| `04-marketplace-workflow-audit.md` | The end-to-end workflow gaps |
-| `05-support-dispute-unification.md` | Help & Resolution Center design |
-| `06-notification-event-matrix.md` | Event → notification matrix |
-| `07-search-dashboard-navigation-audit.md` | Search, dashboards, sidebars |
-| `08-business-team-admin-rbac-audit.md` | Teams and internal staff |
-| `09-prioritized-backlog.md` | P0–P2 and deferred, with full metadata |
-| `10-safe-implementation-plan.md` | Sequencing and migration safety |
-| `11-acceptance-tests.md` | How to verify each change |
-| `12-capability-classification.md` | **Every capability graded 1–6, including the My Services end-to-end audit** |
-| `backlog.json` | Machine-readable backlog (35 fully specified items) |
+| File                                      | Answers                                                                     |
+| ----------------------------------------- | --------------------------------------------------------------------------- |
+| `01-current-architecture-map.md`          | What exists, where                                                          |
+| `02-role-workspace-permission-matrix.md`  | Who can do what; the workspace proposal                                     |
+| `03-financial-mhc-audit.md`               | Money, credits, and the safe deprecation plan                               |
+| `04-marketplace-workflow-audit.md`        | The end-to-end workflow gaps                                                |
+| `05-support-dispute-unification.md`       | Help & Resolution Center design                                             |
+| `06-notification-event-matrix.md`         | Event → notification matrix                                                 |
+| `07-search-dashboard-navigation-audit.md` | Search, dashboards, sidebars                                                |
+| `08-business-team-admin-rbac-audit.md`    | Teams and internal staff                                                    |
+| `09-prioritized-backlog.md`               | P0–P2 and deferred, with full metadata                                      |
+| `10-safe-implementation-plan.md`          | Sequencing and migration safety                                             |
+| `11-acceptance-tests.md`                  | How to verify each change                                                   |
+| `12-capability-classification.md`         | **Every capability graded 1–6, including the My Services end-to-end audit** |
+| `backlog.json`                            | Machine-readable backlog (35 fully specified items)                         |
 
 **Suggested entry point:** read `12` first. It states what is working before anything states what is wrong.

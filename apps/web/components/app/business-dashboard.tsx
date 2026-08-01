@@ -189,7 +189,10 @@ export const BusinessDashboard = ({
   return (
     <section className="dashboard-section">
       {myAwardBids.length > 0 && (
-        <div className="dashboard-award-offers" style={{ marginBottom: '1rem', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+        <div
+          className="dashboard-award-offers"
+          style={{ marginBottom: '1rem', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}
+        >
           {myAwardBids.map((bid) => (
             <AwardOfferCard
               key={bid.id}
@@ -498,7 +501,10 @@ export const BusinessDashboard = ({
           role="tabpanel"
           aria-labelledby="business-analytics-tab"
         >
-          <div className="dashboard-actions-row" style={{ marginBottom: '1rem', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div
+            className="dashboard-actions-row"
+            style={{ marginBottom: '1rem', justifyContent: 'space-between', alignItems: 'center' }}
+          >
             <div>
               {[7, 30, 90, 365].map((days) => (
                 <button

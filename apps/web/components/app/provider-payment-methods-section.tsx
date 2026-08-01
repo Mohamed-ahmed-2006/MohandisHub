@@ -5,7 +5,11 @@ import { useCallback, useEffect, useState } from 'react';
 import { useAuth } from '@/components/auth/auth-provider';
 import { isApiClientError } from '@/lib/auth/client';
 import { useI18n } from '@/lib/i18n/context';
-import { mhcApiClient, type ProviderPaymentMethod, type ProviderPaymentMethodType } from '@/lib/mhc/client';
+import {
+  mhcApiClient,
+  type ProviderPaymentMethod,
+  type ProviderPaymentMethodType,
+} from '@/lib/mhc/client';
 import { METHOD_TYPE_LABELS, describePaymentMethod, type Locale } from '@/lib/mhc/presentation';
 
 // ---------------------------------------------------------------------------
@@ -201,11 +205,7 @@ const PaymentMethodForm = ({
       onDone();
     } catch (e) {
       setError(
-        isApiClientError(e)
-          ? e.message
-          : locale === 'ar'
-            ? 'تعذر الحفظ.'
-            : 'Could not save.',
+        isApiClientError(e) ? e.message : locale === 'ar' ? 'تعذر الحفظ.' : 'Could not save.',
       );
     } finally {
       setBusy(false);

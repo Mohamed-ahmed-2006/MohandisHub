@@ -34,11 +34,7 @@ const egyptianPhone = z
     message: 'Enter a valid Egyptian mobile number (e.g. 01012345678).',
   });
 
-const accountHolder = z
-  .string()
-  .trim()
-  .min(3, 'Enter the full account holder name.')
-  .max(120);
+const accountHolder = z.string().trim().min(3, 'Enter the full account holder name.').max(120);
 
 export const instapayDetailsSchema = z.object({
   /** InstaPay address, e.g. `name@instapay`. */
@@ -108,7 +104,11 @@ export const upsertPaymentMethodSchema = z
     }),
   ])
   .superRefine((value, ctx) => {
-    if (value.methodType === 'bank_transfer' && !value.details.accountNumber && !value.details.iban) {
+    if (
+      value.methodType === 'bank_transfer' &&
+      !value.details.accountNumber &&
+      !value.details.iban
+    ) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         message: 'Provide an account number or an IBAN.',

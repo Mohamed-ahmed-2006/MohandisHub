@@ -562,8 +562,7 @@ export class AdvertisementBillingService {
       throw new HttpError({
         statusCode: 409,
         code: 'AD_NOT_WEEKLY',
-        message:
-          'This campaign predates weekly billing and is not charged or renewed in credits.',
+        message: 'This campaign predates weekly billing and is not charged or renewed in credits.',
         details: { billingModel: ad.billing_model },
       });
     }

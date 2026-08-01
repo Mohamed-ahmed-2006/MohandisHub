@@ -374,7 +374,8 @@ describe('approval', () => {
 
   it('reports an already-approved campaign instead of charging again', async () => {
     const service = makeService({
-      findAdForUpdate: () => Promise.resolve(pendingRow({ status: 'active', billing_status: 'active' })),
+      findAdForUpdate: () =>
+        Promise.resolve(pendingRow({ status: 'active', billing_status: 'active' })),
     });
 
     const result = await service.approveAd(AD_ID, ADMIN);
@@ -515,9 +516,9 @@ describe('automatic renewal configuration', () => {
         Promise.resolve(pendingRow({ status: 'rejected', billing_status: 'rejected' })),
     });
 
-    await expect(
-      service.setAutoRenewal(AD_ID, PROVIDER, { enabled: false }),
-    ).rejects.toMatchObject({ statusCode: 409, code: 'AD_AUTO_RENEWAL_NOT_CONFIGURABLE' });
+    await expect(service.setAutoRenewal(AD_ID, PROVIDER, { enabled: false })).rejects.toMatchObject(
+      { statusCode: 409, code: 'AD_AUTO_RENEWAL_NOT_CONFIGURABLE' },
+    );
   });
 
   it('refuses a stranger', async () => {
@@ -625,9 +626,9 @@ describe('ownership', () => {
         Promise.resolve(pendingRow({ status: 'scheduled', billing_status: 'awaiting_start' })),
     });
 
-    await expect(service.updateAd(AD_ID, PROVIDER, { titleEn: 'Swapped creative' })).rejects.toMatchObject(
-      { statusCode: 409, code: 'AD_NOT_EDITABLE' },
-    );
+    await expect(
+      service.updateAd(AD_ID, PROVIDER, { titleEn: 'Swapped creative' }),
+    ).rejects.toMatchObject({ statusCode: 409, code: 'AD_NOT_EDITABLE' });
   });
 });
 

@@ -64,10 +64,14 @@ export const createAdSchema = z
   })
   // A service campaign must name the service it points at, and it must be an
   // id — the destination is resolved and ownership-checked against it.
-  .refine((input) => input.linkType !== 'service' || z.string().uuid().safeParse(input.linkTarget).success, {
-    message: 'linkTarget must be the id of one of your active services.',
-    path: ['linkTarget'],
-  });
+  .refine(
+    (input) =>
+      input.linkType !== 'service' || z.string().uuid().safeParse(input.linkTarget).success,
+    {
+      message: 'linkTarget must be the id of one of your active services.',
+      path: ['linkTarget'],
+    },
+  );
 
 /**
  * Provider edits. `status` is deliberately ABSENT: it was accepted here, which

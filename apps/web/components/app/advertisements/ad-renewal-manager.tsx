@@ -206,7 +206,11 @@ export const AdRenewalManager = ({
   };
 
   if (loading && !state) {
-    return <p className="myads-ad-card-meta">{tr('Loading renewal settings…', 'جاري تحميل إعدادات التجديد…')}</p>;
+    return (
+      <p className="myads-ad-card-meta">
+        {tr('Loading renewal settings…', 'جاري تحميل إعدادات التجديد…')}
+      </p>
+    );
   }
   if (!state) {
     return <p className="myads-renewal-warning">{error}</p>;
@@ -258,9 +262,7 @@ export const AdRenewalManager = ({
         <div>
           <dt>{tr('Renewal mode', 'وضع التجديد')}</dt>
           <dd>
-            {state.renewalMode === 'automatic'
-              ? tr('Automatic', 'تلقائي')
-              : tr('Manual', 'يدوي')}
+            {state.renewalMode === 'automatic' ? tr('Automatic', 'تلقائي') : tr('Manual', 'يدوي')}
           </dd>
         </div>
         <div>
@@ -357,7 +359,12 @@ export const AdRenewalManager = ({
               if (!e.target.checked) setConsent(false);
             }}
           />
-          <span>{tr('Renew this advertisement automatically every week', 'جدّد هذا الإعلان تلقائيا كل أسبوع')}</span>
+          <span>
+            {tr(
+              'Renew this advertisement automatically every week',
+              'جدّد هذا الإعلان تلقائيا كل أسبوع',
+            )}
+          </span>
         </label>
 
         {wantsAutomatic ? (

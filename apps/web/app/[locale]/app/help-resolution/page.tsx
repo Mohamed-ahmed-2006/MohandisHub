@@ -29,7 +29,13 @@ const HelpResolutionPage = async ({ params }: HelpResolutionPageProps) => {
   if (!isSupportedLocale(locale)) notFound();
 
   return (
-    <Suspense fallback={<Container><SkeletonCard /></Container>}>
+    <Suspense
+      fallback={
+        <Container>
+          <SkeletonCard />
+        </Container>
+      }
+    >
       <HelpResolutionScreen defaultTab="all" />
     </Suspense>
   );

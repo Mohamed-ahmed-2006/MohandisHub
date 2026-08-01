@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 
-
 import type { MhcPurchase, ProviderPaymentMethod } from '@/lib/mhc/client';
 import {
   describePaymentMethod,
@@ -78,7 +77,8 @@ describe('purchase states', () => {
       describePurchaseState(purchase({ status: 'pending', provider: 'nowpayments' }), 'en').hint,
     ).toMatch(/checkout/i);
     expect(
-      describePurchaseState(purchase({ status: 'pending', provider: 'instapay_manual' }), 'en').hint,
+      describePurchaseState(purchase({ status: 'pending', provider: 'instapay_manual' }), 'en')
+        .hint,
     ).toMatch(/confirmation/i);
   });
 
@@ -169,7 +169,11 @@ describe('payment method display', () => {
     const lines = describePaymentMethod(
       method({
         methodType: 'bank_transfer',
-        details: { bankName: 'CIB', accountHolderName: 'Ahmed Ali', iban: 'EG380019000500000000263180002' },
+        details: {
+          bankName: 'CIB',
+          accountHolderName: 'Ahmed Ali',
+          iban: 'EG380019000500000000263180002',
+        },
       }),
       'en',
     );

@@ -4,18 +4,18 @@
 
 ## 1. The ten-step workflow against the code
 
-| # | Step | Class | Detail |
-|---|---|---|---|
-| 1 | Customer posts a need | 4 | Works for `role='customer'` only. `requireRole('customer')` on `POST /api/needs` |
-| 2 | Providers discover it | 4 | `GET /api/needs` exists; filtering is thin vs. service search |
-| 3 | Providers bid **using MHC** | 6 | Bidding is free. No `bid_submission` action key |
-| 4 | Customer compares and awards | 4 | Award works; no comparison surface |
-| 5 | Provider pays MHC activation | 1 | Race-safe, idempotent, audited |
-| 6 | Contact + attachments unlock | 1 | `ActivationGateService`, fail-closed |
-| 7 | Milestones, files, approvals | 6 | Not on the need path |
-| 8 | Project completed | 4 | Status value exists; no flow writes it |
-| 9 | Mutual reviews | 5 | `ReviewsService.create` requires a completed reservation |
-| 10 | One Help & Resolution Center | 6 | Three separate systems |
+| #   | Step                         | Class | Detail                                                                           |
+| --- | ---------------------------- | ----- | -------------------------------------------------------------------------------- |
+| 1   | Customer posts a need        | 4     | Works for `role='customer'` only. `requireRole('customer')` on `POST /api/needs` |
+| 2   | Providers discover it        | 4     | `GET /api/needs` exists; filtering is thin vs. service search                    |
+| 3   | Providers bid **using MHC**  | 6     | Bidding is free. No `bid_submission` action key                                  |
+| 4   | Customer compares and awards | 4     | Award works; no comparison surface                                               |
+| 5   | Provider pays MHC activation | 1     | Race-safe, idempotent, audited                                                   |
+| 6   | Contact + attachments unlock | 1     | `ActivationGateService`, fail-closed                                             |
+| 7   | Milestones, files, approvals | 6     | Not on the need path                                                             |
+| 8   | Project completed            | 4     | Status value exists; no flow writes it                                           |
+| 9   | Mutual reviews               | 5     | `ReviewsService.create` requires a completed reservation                         |
+| 10  | One Help & Resolution Center | 6     | Three separate systems                                                           |
 
 **Steps 5 and 6 — the hard, security-critical part — are done and done well. Steps 7–9 — the retention half — are absent.**
 
@@ -32,6 +32,7 @@ Trace what happens after activation:
 3. **Nothing else exists.**
 
 There is no way to:
+
 - create a milestone on a need-job,
 - submit a deliverable,
 - approve or reject a deliverable,
@@ -42,7 +43,7 @@ There is no way to:
 
 ### Why this matters commercially
 
-The provider pays at the moment of *maximum* uncertainty — before any work — and receives, in exchange, a phone number. Every subsequent interaction happens off-platform. The platform has no record of whether the job happened, no basis for a review, no evidence for a dispute, and no reason for either party to return.
+The provider pays at the moment of _maximum_ uncertainty — before any work — and receives, in exchange, a phone number. Every subsequent interaction happens off-platform. The platform has no record of whether the job happened, no basis for a review, no evidence for a dispute, and no reason for either party to return.
 
 **A marketplace that charges for introductions and then has no product is a lead-generation business.** That is a viable business, but it is not what the ten-step objective describes, and it will not sustain repeat MHC purchases: a provider who takes the relationship off-platform after one activation never pays a second time.
 
@@ -99,14 +100,14 @@ The original brief proposed collapsing to four surfaces: Needs/Projects, Service
 
 Six distinct transaction types, each with its own schema, lifecycle and UI:
 
-| # | Type | Tables | Lifecycle | Class |
-|---|---|---|---|---|
-| 1 | Need → bid → award → activation | `needs`, `bids`, `bid_messages`, `mhc_job_activations` | 6 need states, 6 bid states | 1 (through activation) |
-| 2 | Service → booking → visit/call | `services`, `reservations`, slots, check-in, calls | rich, worker-driven | 1 |
-| 3 | Service → negotiation → booking | `price_negotiations`, `_rounds` | 6 states | 1 |
-| 4 | Employment job → application → interview → milestone | `jobs`, `job_applications`, `job_milestones` | 7 application states | 1 (except escrow) |
-| 5 | Advertisement campaign | `advertisements`, `advertisement_plans` | scheduled | 5 (payment) |
-| 6 | Provider discovery | via service search | — | 4 |
+| #   | Type                                                 | Tables                                                 | Lifecycle                   | Class                  |
+| --- | ---------------------------------------------------- | ------------------------------------------------------ | --------------------------- | ---------------------- |
+| 1   | Need → bid → award → activation                      | `needs`, `bids`, `bid_messages`, `mhc_job_activations` | 6 need states, 6 bid states | 1 (through activation) |
+| 2   | Service → booking → visit/call                       | `services`, `reservations`, slots, check-in, calls     | rich, worker-driven         | 1                      |
+| 3   | Service → negotiation → booking                      | `price_negotiations`, `_rounds`                        | 6 states                    | 1                      |
+| 4   | Employment job → application → interview → milestone | `jobs`, `job_applications`, `job_milestones`           | 7 application states        | 1 (except escrow)      |
+| 5   | Advertisement campaign                               | `advertisements`, `advertisement_plans`                | scheduled                   | 5 (payment)            |
+| 6   | Provider discovery                                   | via service search                                     | —                           | 4                      |
 
 These are **not** duplicates. They are genuinely different workflows.
 
@@ -117,7 +118,7 @@ The confusion the brief identifies is real, but it is a **labelling** problem:
 - `/app/projects` shows **employment jobs**. Actual projects live under `/app`.
 - "Bid", "proposal" and "application" all appear for provider responses.
 - "Reservation", "booking" and "order" all appear for the same entity.
-- `/app/browse` redirects to `/app/services`, which is the provider's *own* catalogue, not browsing.
+- `/app/browse` redirects to `/app/services`, which is the provider's _own_ catalogue, not browsing.
 
 **Renaming and re-routing fixes most of the perceived incoherence without touching any working feature.** That is a materially cheaper and lower-risk intervention than collapsing the taxonomy.
 
@@ -125,14 +126,14 @@ The confusion the brief identifies is real, but it is a **labelling** problem:
 
 **Option A — Rename and re-route (recommended for launch).** Keep all six types. Fix names and navigation:
 
-| Surface | Contains |
-|---|---|
-| Needs | Post a need; browse open needs |
-| Services | Browse and book services (customer view) |
-| My Catalogue | Provider's own services *(currently mis-titled "My Services" at `/app/services`)* |
-| My Work | Active engagements: activated need-jobs + bookings + employment applications |
-| Hiring | Employment jobs, explicitly separated *(currently mis-titled "Projects")* |
-| Providers | Provider discovery |
+| Surface      | Contains                                                                          |
+| ------------ | --------------------------------------------------------------------------------- |
+| Needs        | Post a need; browse open needs                                                    |
+| Services     | Browse and book services (customer view)                                          |
+| My Catalogue | Provider's own services _(currently mis-titled "My Services" at `/app/services`)_ |
+| My Work      | Active engagements: activated need-jobs + bookings + employment applications      |
+| Hiring       | Employment jobs, explicitly separated _(currently mis-titled "Projects")_         |
+| Providers    | Provider discovery                                                                |
 
 Complexity: **small**. No schema change. No feature loss.
 
@@ -144,7 +145,7 @@ Complexity: **large**. Meaningful risk of breaking a class-1 subsystem.
 
 ### 3.4 On deferring modules
 
-The brief instructed that physical products and employment jobs be reported as deferred future modules. Applying the corrected rule — *classify before deciding* — the two cases differ sharply:
+The brief instructed that physical products and employment jobs be reported as deferred future modules. Applying the corrected rule — _classify before deciding_ — the two cases differ sharply:
 
 - **Employment jobs: class 1, fully built.** Deferring means hiding a working subsystem. That is a **product decision, not an audit conclusion**, and this audit does not make it. The audit's recommendation is narrower: give it an honest name ("Hiring") and its own navigation entry, and fix the class-5 escrow settlement. If it is then hidden, that is a deliberate scope call with a one-line flag.
 - **Goods/products: class 6, not found.** Nothing to defer. See `12-capability-classification.md` §B.1.
@@ -155,13 +156,13 @@ The brief instructed that physical products and employment jobs be reported as d
 
 Verified behaviour:
 
-| Protected | Mechanism | Class |
-|---|---|---|
-| Contact details in bid chat | `contact-redaction.ts`; raw text kept in `bid_messages.raw_content` for moderation | 1 |
-| Attachments pre-activation | Disabled | 1 |
-| Provider payment details | `assertAwardActivated` + `provider_payment_disclosures` | 1 |
-| Exact address | Gated | 1 |
-| Full chat | `chat-access.service.ts` | 1 |
+| Protected                   | Mechanism                                                                          | Class |
+| --------------------------- | ---------------------------------------------------------------------------------- | ----- |
+| Contact details in bid chat | `contact-redaction.ts`; raw text kept in `bid_messages.raw_content` for moderation | 1     |
+| Attachments pre-activation  | Disabled                                                                           | 1     |
+| Provider payment details    | `assertAwardActivated` + `provider_payment_disclosures`                            | 1     |
+| Exact address               | Gated                                                                              | 1     |
+| Full chat                   | `chat-access.service.ts`                                                           | 1     |
 
 The redaction module is honest about its own limits in its header comment: it is defence in depth, not a guarantee, and the real enforcement is that attachments are off and the award requires payment. That is the right framing.
 
@@ -179,7 +180,7 @@ It is wired into the UI (`NegotiationModal` at `app-home-screen.tsx:2181`, reach
 
 **Classification: 1 — implemented and working.** It should not be hidden.
 
-The genuine gap is narrower: negotiations attach **only** to `service_id`. There is no negotiation on a bid, an award, or a change request. That is a *coverage* gap to fill later, not a reason to remove a working feature.
+The genuine gap is narrower: negotiations attach **only** to `service_id`. There is no negotiation on a bid, an award, or a change request. That is a _coverage_ gap to fill later, not a reason to remove a working feature.
 
 ---
 
@@ -208,16 +209,16 @@ This must be stated plainly, because over-promising here creates legal and reput
 
 ### Can be protected
 
-| Mechanism | Status |
-|---|---|
-| Identity verification of both parties | 1 |
-| Communication evidence (timestamped, server-side) | 1 |
-| Provider payment details recorded + disclosure audited | 1 |
-| Reputation consequence via reviews | 5 on need path — fix |
-| Approval history (who approved what, when) | 6 — build with milestones |
-| Deliverable timestamps | 6 — build with milestones |
-| Standard service contract template | 6 |
-| Deposit **recorded** (not held) in the project | 6 |
+| Mechanism                                              | Status                    |
+| ------------------------------------------------------ | ------------------------- |
+| Identity verification of both parties                  | 1                         |
+| Communication evidence (timestamped, server-side)      | 1                         |
+| Provider payment details recorded + disclosure audited | 1                         |
+| Reputation consequence via reviews                     | 5 on need path — fix      |
+| Approval history (who approved what, when)             | 6 — build with milestones |
+| Deliverable timestamps                                 | 6 — build with milestones |
+| Standard service contract template                     | 6                         |
+| Deposit **recorded** (not held) in the project         | 6                         |
 
 The honest positioning: **MohandisHub provides evidence and reputational consequence, not financial guarantee.** Milestones and approval history are what convert that from a claim into a record — which is a further argument for building them.
 

@@ -69,9 +69,9 @@ describe('redactContactDetails — must catch contact details', () => {
   });
 
   it('redacts a phone number spelled out in words', () => {
-    expect(
-      containsContactDetails('zero one zero one two three four five six seven eight'),
-    ).toBe(true);
+    expect(containsContactDetails('zero one zero one two three four five six seven eight')).toBe(
+      true,
+    );
   });
 });
 

@@ -114,8 +114,6 @@ function timelineSteps(reservation: Reservation): string[] {
   return ['pending', 'accepted', 'in_session', 'waiting_customer_done', 'completed'];
 }
 
-
-
 function getReservationStepState(
   currentStatus: string,
   step: string,
@@ -814,7 +812,11 @@ export const BookingsScreen = (_props: Props) => {
                         <h3 className="booking-card-title">{getReservationTitle(r, bp)}</h3>
                         <span className="booking-mode-pill">
                           {r.mode === 'online' ? (
-                            r.onlineType === 'voice' ? <Mic size={13} /> : <Video size={13} />
+                            r.onlineType === 'voice' ? (
+                              <Mic size={13} />
+                            ) : (
+                              <Video size={13} />
+                            )
                           ) : (
                             <MapPin size={13} />
                           )}
@@ -823,12 +825,18 @@ export const BookingsScreen = (_props: Props) => {
                       </div>
                       <div className="booking-meta-row">
                         <span className="booking-date-pill">
-                          <Calendar size={13} style={{ display: 'inline', verticalAlign: 'middle', marginRight: 4 }} />
+                          <Calendar
+                            size={13}
+                            style={{ display: 'inline', verticalAlign: 'middle', marginRight: 4 }}
+                          />
                           {formatDateTime(r.requestedStartAt)}
                         </span>
                         {isInterviewReservation(r) && (
                           <span className="booking-tag">
-                            <Briefcase size={13} style={{ display: 'inline', verticalAlign: 'middle', marginRight: 4 }} />
+                            <Briefcase
+                              size={13}
+                              style={{ display: 'inline', verticalAlign: 'middle', marginRight: 4 }}
+                            />
                             {r.jobApplicationId
                               ? (
                                   bp.hiringInterviewWithApplication ??
@@ -841,7 +849,9 @@ export const BookingsScreen = (_props: Props) => {
                     </div>
 
                     <div className="booking-card-right">
-                      <span className="booking-price-display">{formatMoney(r.expertPriceAmount)}</span>
+                      <span className="booking-price-display">
+                        {formatMoney(r.expertPriceAmount)}
+                      </span>
                       <span className={`booking-status-pill booking-status-pill--${r.status}`}>
                         {statusLabels[r.status] ?? r.status}
                       </span>
@@ -868,30 +878,30 @@ export const BookingsScreen = (_props: Props) => {
                     })}
                   </div>
 
-                    {(r.rejectionReason || r.suggestedSlots.length > 0) && (
-                      <div className="reservation-note-box">
-                        {r.rejectionReason && (
-                          <p className="dashboard-card-meta">{r.rejectionReason}</p>
-                        )}
-                        {r.suggestedSlots.length > 0 && (
-                          <ul className="reservation-suggestion-list">
-                            {r.suggestedSlots.map((slot) => (
-                              <li key={`${slot.startAt}-${slot.endAt}`}>
-                                {(bp.suggestedSlot ?? 'Suggested: {start} – {end}')
-                                  .replace('{start}', formatDateTime(slot.startAt))
-                                  .replace(
-                                    '{end}',
-                                    new Date(slot.endAt).toLocaleTimeString(undefined, {
-                                      hour: '2-digit',
-                                      minute: '2-digit',
-                                    }),
-                                  )}
-                              </li>
-                            ))}
-                          </ul>
-                        )}
-                      </div>
-                    )}
+                  {(r.rejectionReason || r.suggestedSlots.length > 0) && (
+                    <div className="reservation-note-box">
+                      {r.rejectionReason && (
+                        <p className="dashboard-card-meta">{r.rejectionReason}</p>
+                      )}
+                      {r.suggestedSlots.length > 0 && (
+                        <ul className="reservation-suggestion-list">
+                          {r.suggestedSlots.map((slot) => (
+                            <li key={`${slot.startAt}-${slot.endAt}`}>
+                              {(bp.suggestedSlot ?? 'Suggested: {start} – {end}')
+                                .replace('{start}', formatDateTime(slot.startAt))
+                                .replace(
+                                  '{end}',
+                                  new Date(slot.endAt).toLocaleTimeString(undefined, {
+                                    hour: '2-digit',
+                                    minute: '2-digit',
+                                  }),
+                                )}
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
+                  )}
 
                   <div className="booking-card-actions">
                     <button
@@ -1018,25 +1028,35 @@ export const BookingsScreen = (_props: Props) => {
 
       {selectedReservation && (
         <div className="booking-details-modal-overlay" onClick={closeDetails}>
-          <div
-            className="booking-details-modal"
-            onClick={(e) => e.stopPropagation()}
-          >
+          <div className="booking-details-modal" onClick={(e) => e.stopPropagation()}>
             <div className="booking-details-modal-header">
               <div>
                 <h3 className="booking-details-modal-title">
                   {getReservationTitle(selectedReservation, bp)}
                 </h3>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', marginTop: '0.35rem' }}>
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.6rem',
+                    marginTop: '0.35rem',
+                  }}
+                >
                   <span className="booking-mode-pill">
                     {selectedReservation.mode === 'online' ? (
-                      selectedReservation.onlineType === 'voice' ? <Mic size={13} /> : <Video size={13} />
+                      selectedReservation.onlineType === 'voice' ? (
+                        <Mic size={13} />
+                      ) : (
+                        <Video size={13} />
+                      )
                     ) : (
                       <MapPin size={13} />
                     )}
                     {getReservationModeLabel(selectedReservation, bp)}
                   </span>
-                  <span className={`booking-status-pill booking-status-pill--${selectedReservation.status}`}>
+                  <span
+                    className={`booking-status-pill booking-status-pill--${selectedReservation.status}`}
+                  >
                     {statusLabels[selectedReservation.status] ?? selectedReservation.status}
                   </span>
                 </div>
@@ -1054,52 +1074,64 @@ export const BookingsScreen = (_props: Props) => {
             <div className="booking-details-modal-body">
               <div className="booking-details-box">
                 <h4 className="booking-details-box-title">
-                  <User size={14} style={{ display: 'inline', verticalAlign: 'middle', marginRight: 4 }} />
+                  <User
+                    size={14}
+                    style={{ display: 'inline', verticalAlign: 'middle', marginRight: 4 }}
+                  />
                   Session Participants &amp; Date
                 </h4>
                 <div className="booking-details-table">
-                  {authUser.id === selectedReservation.providerId && selectedReservation.customerName && (
-                    <div className="booking-details-row">
-                      <span className="booking-details-key">{bp.customerLabel ?? 'Customer'}</span>
-                      <button
-                        type="button"
-                        className="bookings-filter-btn"
-                        style={{ padding: '0.25rem 0.75rem', fontSize: '0.8rem' }}
-                        onClick={() =>
-                          openProfileModal(selectedReservation.customerId, {
-                            ...(selectedReservation.customerName
-                              ? { displayName: selectedReservation.customerName }
-                              : {}),
-                          })
-                        }
-                      >
-                        {selectedReservation.customerName}
-                      </button>
-                    </div>
-                  )}
-                  {authUser.id === selectedReservation.customerId && selectedReservation.providerName && (
-                    <div className="booking-details-row">
-                      <span className="booking-details-key">{bp.providerLabel ?? 'Provider'}</span>
-                      <button
-                        type="button"
-                        className="bookings-filter-btn"
-                        style={{ padding: '0.25rem 0.75rem', fontSize: '0.8rem' }}
-                        onClick={() =>
-                          openProfileModal(selectedReservation.providerId, {
-                            ...(selectedReservation.providerName
-                              ? { displayName: selectedReservation.providerName }
-                              : {}),
-                          })
-                        }
-                      >
-                        {selectedReservation.providerName}
-                      </button>
-                    </div>
-                  )}
+                  {authUser.id === selectedReservation.providerId &&
+                    selectedReservation.customerName && (
+                      <div className="booking-details-row">
+                        <span className="booking-details-key">
+                          {bp.customerLabel ?? 'Customer'}
+                        </span>
+                        <button
+                          type="button"
+                          className="bookings-filter-btn"
+                          style={{ padding: '0.25rem 0.75rem', fontSize: '0.8rem' }}
+                          onClick={() =>
+                            openProfileModal(selectedReservation.customerId, {
+                              ...(selectedReservation.customerName
+                                ? { displayName: selectedReservation.customerName }
+                                : {}),
+                            })
+                          }
+                        >
+                          {selectedReservation.customerName}
+                        </button>
+                      </div>
+                    )}
+                  {authUser.id === selectedReservation.customerId &&
+                    selectedReservation.providerName && (
+                      <div className="booking-details-row">
+                        <span className="booking-details-key">
+                          {bp.providerLabel ?? 'Provider'}
+                        </span>
+                        <button
+                          type="button"
+                          className="bookings-filter-btn"
+                          style={{ padding: '0.25rem 0.75rem', fontSize: '0.8rem' }}
+                          onClick={() =>
+                            openProfileModal(selectedReservation.providerId, {
+                              ...(selectedReservation.providerName
+                                ? { displayName: selectedReservation.providerName }
+                                : {}),
+                            })
+                          }
+                        >
+                          {selectedReservation.providerName}
+                        </button>
+                      </div>
+                    )}
                   <div className="booking-details-row">
                     <span className="booking-details-key">Requested Date</span>
                     <span className="booking-details-value">
-                      <Calendar size={13} style={{ display: 'inline', verticalAlign: 'middle', marginRight: 4 }} />
+                      <Calendar
+                        size={13}
+                        style={{ display: 'inline', verticalAlign: 'middle', marginRight: 4 }}
+                      />
                       {formatDateTime(selectedReservation.requestedStartAt)}
                     </span>
                   </div>
@@ -1112,9 +1144,16 @@ export const BookingsScreen = (_props: Props) => {
                 <>
                   <div className="reservation-timeline-stepper">
                     {timelineSteps(selectedReservation).map((step, idx, arr) => {
-                      const stepState = getReservationStepState(selectedReservation.status, step, arr);
+                      const stepState = getReservationStepState(
+                        selectedReservation.status,
+                        step,
+                        arr,
+                      );
                       return (
-                        <div key={`details-${selectedReservation.id}-${step}`} className="reservation-timeline-step-wrap">
+                        <div
+                          key={`details-${selectedReservation.id}-${step}`}
+                          className="reservation-timeline-step-wrap"
+                        >
                           <span
                             className={`reservation-timeline-step reservation-timeline-step--${stepState}`}
                           >
@@ -1132,7 +1171,10 @@ export const BookingsScreen = (_props: Props) => {
 
                   <div className="booking-details-box">
                     <h4 className="booking-details-box-title">
-                      <CreditCard size={14} style={{ display: 'inline', verticalAlign: 'middle', marginRight: 4 }} />
+                      <CreditCard
+                        size={14}
+                        style={{ display: 'inline', verticalAlign: 'middle', marginRight: 4 }}
+                      />
                       {isInterviewReservation(selectedReservation)
                         ? (bp.interviewBilling ?? 'Interview Billing')
                         : (bp.billingSummary ?? 'Billing Summary')}
@@ -1149,7 +1191,9 @@ export const BookingsScreen = (_props: Props) => {
                           <div className="booking-details-row">
                             <span className="booking-details-key">Reservation Mode Fee</span>
                             <span className="booking-details-value">
-                              {formatMoney(selectedReservation.pricingBreakdown.reservationPriceAmount)}
+                              {formatMoney(
+                                selectedReservation.pricingBreakdown.reservationPriceAmount,
+                              )}
                             </span>
                           </div>
                           <div className="booking-details-row">
@@ -1161,8 +1205,14 @@ export const BookingsScreen = (_props: Props) => {
                               )}
                             </span>
                           </div>
-                          <div className="booking-details-row" style={{ borderBottom: 'none', paddingTop: '0.4rem' }}>
-                            <span className="booking-details-key" style={{ fontWeight: 700, color: 'hsl(var(--foreground))' }}>
+                          <div
+                            className="booking-details-row"
+                            style={{ borderBottom: 'none', paddingTop: '0.4rem' }}
+                          >
+                            <span
+                              className="booking-details-key"
+                              style={{ fontWeight: 700, color: 'hsl(var(--foreground))' }}
+                            >
                               Total Amount Held
                             </span>
                             <span className="booking-price-display">
@@ -1177,18 +1227,25 @@ export const BookingsScreen = (_props: Props) => {
                         <>
                           <div className="booking-details-row">
                             <span className="booking-details-key">Platform Fee</span>
-                            <span className="booking-details-value">{formatMoney(selectedReservation.adminAcceptanceFee)}</span>
+                            <span className="booking-details-value">
+                              {formatMoney(selectedReservation.adminAcceptanceFee)}
+                            </span>
                           </div>
                           <div className="booking-details-row">
                             <span className="booking-details-key">Fixed Price</span>
-                            <span className="booking-details-value">{formatMoney(selectedReservation.expertPriceAmount)}</span>
+                            <span className="booking-details-value">
+                              {formatMoney(selectedReservation.expertPriceAmount)}
+                            </span>
                           </div>
                         </>
                       )}
                       <div className="booking-details-row">
                         <span className="booking-details-key">Settlement Status</span>
                         <span className="booking-tag">
-                          <Lock size={12} style={{ display: 'inline', verticalAlign: 'middle', marginRight: 4 }} />
+                          <Lock
+                            size={12}
+                            style={{ display: 'inline', verticalAlign: 'middle', marginRight: 4 }}
+                          />
                           {describeSettlement(selectedReservation, bp)}
                         </span>
                       </div>
@@ -1197,22 +1254,33 @@ export const BookingsScreen = (_props: Props) => {
 
                   <div className="booking-details-box">
                     <h4 className="booking-details-box-title">
-                      <FileText size={14} style={{ display: 'inline', verticalAlign: 'middle', marginRight: 4 }} />
+                      <FileText
+                        size={14}
+                        style={{ display: 'inline', verticalAlign: 'middle', marginRight: 4 }}
+                      />
                       {bp.cancellationPolicyTitle ?? 'Cancellation Policy'}
                     </h4>
                     {selectedReservation.policySnapshot ? (
                       <div className="booking-details-table">
                         <div className="booking-details-row">
                           <span className="booking-details-key">Customer Free Window</span>
-                          <span className="booking-details-value">{selectedReservation.policySnapshot.customerFreeCancelHours} hours</span>
+                          <span className="booking-details-value">
+                            {selectedReservation.policySnapshot.customerFreeCancelHours} hours
+                          </span>
                         </div>
                         <div className="booking-details-row">
                           <span className="booking-details-key">Provider Penalty Window</span>
-                          <span className="booking-details-value">{selectedReservation.policySnapshot.providerPenaltyCancelHours} hours</span>
+                          <span className="booking-details-value">
+                            {selectedReservation.policySnapshot.providerPenaltyCancelHours} hours
+                          </span>
                         </div>
                         <div className="booking-details-row">
                           <span className="booking-details-key">Late Provider Penalty</span>
-                          <span className="booking-details-value">{formatMoney(selectedReservation.policySnapshot.providerLateCancelPenaltyAmount)}</span>
+                          <span className="booking-details-value">
+                            {formatMoney(
+                              selectedReservation.policySnapshot.providerLateCancelPenaltyAmount,
+                            )}
+                          </span>
                         </div>
                         {selectedReservation.cancellationEffectiveOutcome && (
                           <div className="booking-details-row">
@@ -1228,440 +1296,517 @@ export const BookingsScreen = (_props: Props) => {
                       </div>
                     ) : (
                       <p className="dashboard-card-meta">
-                        {bp.policySnapshotUnavailable ?? 'Policy snapshot unavailable for this reservation.'}
+                        {bp.policySnapshotUnavailable ??
+                          'Policy snapshot unavailable for this reservation.'}
                       </p>
                     )}
-                    {authUser && (() => {
-                      const preview = getCancellationPreview(selectedReservation, authUser.id, bp, formatMoney);
-                      return preview ? (
-                        <div className="booking-policy-callout">
-                          <Info size={14} style={{ display: 'inline', verticalAlign: 'middle', marginRight: 4 }} />
-                          {preview}
-                        </div>
-                      ) : null;
-                    })()}
-                  </div>
-
-                <div className="booking-details-box">
-                  <h4 className="booking-details-box-title">
-                    <Clock size={14} style={{ display: 'inline', verticalAlign: 'middle', marginRight: 4 }} />
-                    {bp.timelineTitle ?? 'Timeline'}
-                  </h4>
-                  {timeline.length === 0 ? (
-                    <p className="dashboard-card-meta">
-                      {bp.timelineEmpty ?? 'No timeline events yet.'}
-                    </p>
-                  ) : (
-                    <div className="booking-timeline-container">
-                      {timeline.map((event) => (
-                        <div key={event.id} className="booking-timeline-card">
-                          <div className="booking-timeline-header">
-                            <span className="booking-timeline-event-name">
-                              {event.eventType.replaceAll('_', ' ')}
-                            </span>
-                            <span className="booking-timeline-time">{formatDateTime(event.createdAt)}</span>
+                    {authUser &&
+                      (() => {
+                        const preview = getCancellationPreview(
+                          selectedReservation,
+                          authUser.id,
+                          bp,
+                          formatMoney,
+                        );
+                        return preview ? (
+                          <div className="booking-policy-callout">
+                            <Info
+                              size={14}
+                              style={{ display: 'inline', verticalAlign: 'middle', marginRight: 4 }}
+                            />
+                            {preview}
                           </div>
-                          {event.metadata && Object.keys(event.metadata).length > 0 && (
-                            <div className="booking-timeline-meta-chips">
-                              <span className="booking-tag">
-                                {formatTimelineMetadata(event.metadata)}
-                              </span>
-                            </div>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-                {selectedReservation.mode === 'online' && (
-                  <div className="booking-details-box">
-                    {(() => {
-                      const timingState = getReservationTimingState(selectedReservation);
-                      const canShowJoin = ['accepted', 'in_session', 'awaiting_start'].includes(
-                        selectedReservation.status,
-                      );
-                      const joinDisabled = canShowJoin && timingState !== 'in_window';
-                      const joinLabel =
-                        timingState === 'too_early'
-                          ? (
-                              bp.callNotAvailableUntil ??
-                              'Call is not available yet. Starts at {time}.'
-                            ).replace(
-                              '{time}',
-                              formatDateTime(selectedReservation.requestedStartAt),
-                            )
-                          : timingState === 'past'
-                            ? (bp.reservationTimeEnded ?? 'This reservation time has ended.')
-                            : '';
-                      return (
-                        <>
-                          <h4 className="booking-details-box-title">
-                            <Video size={14} style={{ display: 'inline', verticalAlign: 'middle', marginRight: 4 }} />
-                            {isInterviewReservation(selectedReservation)
-                              ? (bp.onlineInterview ?? 'Online Interview')
-                              : (bp.onlineSession ?? 'Online Session')}
-                          </h4>
-                          {callSnapshot ? (
-                            <div className="booking-details-table">
-                              <div className="booking-details-row">
-                                <span className="booking-details-key">{bp.preJoinBuffer ?? 'Pre-join buffer'}</span>
-                                <span className="booking-details-value">{callSnapshot.minimumPrejoinMinutes} {bp.durationMin ?? 'min'}</span>
-                              </div>
-                              <div className="booking-details-row">
-                                <span className="booking-details-key">{bp.yourRemainingTime ?? 'Your remaining time'}</span>
-                                <span className="booking-details-value">{callSnapshot.customerRemainingMinutes} {bp.durationMin ?? 'min'}</span>
-                              </div>
-                              <div className="booking-details-row">
-                                <span className="booking-details-key">{bp.providerRemainingTime ?? 'Provider remaining time'}</span>
-                                <span className="booking-details-value">{callSnapshot.providerRemainingMinutes} {bp.durationMin ?? 'min'}</span>
-                              </div>
-                              {callSnapshot.session && (
-                                <div className="booking-details-row">
-                                  <span className="booking-details-key">Session Status</span>
-                                  <span className="booking-tag">
-                                    {callSnapshot.session.status === 'active'
-                                      ? (bp.inProgress ?? 'In progress')
-                                      : callSnapshot.session.status === 'ended'
-                                        ? (bp.ended ?? 'Ended')
-                                        : callSnapshot.session.status}
-                                  </span>
-                                </div>
-                              )}
-                            </div>
-                          ) : (
-                            <p className="dashboard-card-meta">
-                              {bp.callDetailsWhenStart ??
-                                'Call details will appear when the session starts.'}
-                            </p>
-                          )}
-                          {canShowJoin && (
-                            <button
-                              type="button"
-                              className={`bookings-filter-btn ${joinDisabled ? '' : 'bookings-filter-btn--active'}`}
-                              style={{
-                                width: '100%',
-                                marginTop: '0.75rem',
-                                justifyContent: 'center',
-                                opacity: joinDisabled ? 0.45 : 1,
-                                cursor: joinDisabled ? 'not-allowed' : 'pointer',
-                                pointerEvents: joinDisabled ? 'none' : 'auto',
-                              }}
-                              title={joinDisabled ? joinLabel : undefined}
-                              aria-disabled={joinDisabled}
-                              disabled={joinDisabled}
-                              onClick={() => {
-                                closeDetails();
-                                setCallReservation(selectedReservation);
-                              }}
-                            >
-                              {joinDisabled ? <VideoOff size={14} /> : <Video size={14} />}
-                              {isInterviewReservation(selectedReservation)
-                                ? (bp.joinInterview ?? 'Join Room')
-                                : (bp.joinCall ?? 'Join Room')}
-                            </button>
-                          )}
-                          {canShowJoin && joinDisabled && (
-                            <div className="booking-policy-callout" style={{ marginTop: '0.5rem' }}>
-                              <AlertTriangle size={14} style={{ display: 'inline', verticalAlign: 'middle', marginRight: 4 }} />
-                              {joinLabel}
-                            </div>
-                          )}
-                        </>
-                      );
-                    })()}
+                        ) : null;
+                      })()}
                   </div>
-                )}
 
-                {selectedReservation.mode === 'offline' && (
-                  <div className="reservation-section-box">
-                    <h4>
-                      {isInterviewReservation(selectedReservation)
-                        ? (bp.offlineInterviewTitle ?? 'Offline Interview')
-                        : (bp.offlineMeetingTitle ?? 'Offline Meeting')}
-                    </h4>
-                    {selectedReservation.finalLocationText && (
-                      <p>
-                        {(bp.agreedLocationLine ?? 'Agreed location: {text}').replace(
-                          '{text}',
-                          selectedReservation.finalLocationText,
-                        )}
-                      </p>
-                    )}
-                    <div className="reservation-inline-form">
-                      <input
-                        type="text"
-                        className="dashboard-input"
-                        placeholder={bp.proposeLocationPlaceholder ?? 'Propose meeting location...'}
-                        value={locationText}
-                        onChange={(e) => setLocationText(e.target.value)}
+                  <div className="booking-details-box">
+                    <h4 className="booking-details-box-title">
+                      <Clock
+                        size={14}
+                        style={{ display: 'inline', verticalAlign: 'middle', marginRight: 4 }}
                       />
-                      <button
-                        type="button"
-                        className="dashboard-btn dashboard-btn--small dashboard-btn--secondary"
-                        onClick={() => void proposeLocation()}
-                        disabled={updatingId === selectedReservation.id || !locationText.trim()}
-                      >
-                        {bp.propose ?? 'Propose'}
-                      </button>
-                    </div>
-
-                    {locationProposals.length === 0 ? (
+                      {bp.timelineTitle ?? 'Timeline'}
+                    </h4>
+                    {timeline.length === 0 ? (
                       <p className="dashboard-card-meta">
-                        {bp.noLocationProposals ?? 'No location proposals yet.'}
+                        {bp.timelineEmpty ?? 'No timeline events yet.'}
                       </p>
                     ) : (
-                      <ul className="reservation-proposal-list">
-                        {locationProposals.map((proposal) => {
-                          const mine = proposal.proposedBy === authUser.id;
-                          return (
-                            <li key={proposal.id} className="reservation-proposal-item">
-                              <div>
-                                <strong>{proposal.locationText}</strong>
-                                <p className="dashboard-card-meta">
-                                  {mine
-                                    ? (bp.youProposed ?? 'You proposed')
-                                    : (bp.counterpartyProposed ?? 'Counterparty proposed')}{' '}
-                                  | {proposalStatusLabel(proposal.status, bp)}
-                                </p>
+                      <div className="booking-timeline-container">
+                        {timeline.map((event) => (
+                          <div key={event.id} className="booking-timeline-card">
+                            <div className="booking-timeline-header">
+                              <span className="booking-timeline-event-name">
+                                {event.eventType.replaceAll('_', ' ')}
+                              </span>
+                              <span className="booking-timeline-time">
+                                {formatDateTime(event.createdAt)}
+                              </span>
+                            </div>
+                            {event.metadata && Object.keys(event.metadata).length > 0 && (
+                              <div className="booking-timeline-meta-chips">
+                                <span className="booking-tag">
+                                  {formatTimelineMetadata(event.metadata)}
+                                </span>
                               </div>
-                              {!mine && proposal.status === 'pending' && (
-                                <div className="calendar-booking-actions">
-                                  <button
-                                    type="button"
-                                    className="dashboard-btn dashboard-btn--small dashboard-btn--primary"
-                                    onClick={() => void respondLocation(proposal.id, 'accept')}
-                                    disabled={updatingId === selectedReservation.id}
-                                  >
-                                    {bp.accept ?? 'Accept'}
-                                  </button>
-                                  <button
-                                    type="button"
-                                    className="dashboard-btn dashboard-btn--small dashboard-btn--danger"
-                                    onClick={() => void respondLocation(proposal.id, 'reject')}
-                                    disabled={updatingId === selectedReservation.id}
-                                  >
-                                    {bp.reject ?? 'Reject'}
-                                  </button>
-                                </div>
-                              )}
-                            </li>
-                          );
-                        })}
-                      </ul>
+                            )}
+                          </div>
+                        ))}
+                      </div>
                     )}
+                  </div>
 
-                    <div className="reservation-checkin-box">
-                      <button
-                        type="button"
-                        className="dashboard-btn dashboard-btn--small dashboard-btn--secondary"
-                        onClick={() => void getCheckinCode()}
-                        disabled={updatingId === selectedReservation.id}
-                      >
-                        {bp.getCheckinCode ?? 'Get My Check-in Code'}
-                      </button>
-                      {checkinInfo && (
-                        <div className="reservation-note-box">
-                          <p>
-                            {bp.yourCodeLine ?? 'Your code:'} <strong>{checkinInfo.myCode}</strong>
-                          </p>
-                          <p>
-                            {bp.codeExpiresLine ?? 'Code expires:'}{' '}
-                            {formatDateTime(checkinInfo.expiresAt)}
-                          </p>
-                          <p>
-                            {bp.myCheckin ?? 'My check-in:'}{' '}
-                            {checkinInfo.myVerifiedAt
-                              ? (bp.checkinVerified ?? 'Verified')
-                              : (bp.checkinPending ?? 'Pending')}
-                          </p>
-                          <p>
-                            {bp.counterpartyCheckin ?? 'Counterparty check-in:'}{' '}
-                            {checkinInfo.counterpartyVerifiedAt
-                              ? (bp.checkinVerified ?? 'Verified')
-                              : (bp.checkinPending ?? 'Pending')}
-                          </p>
-                        </div>
+                  {selectedReservation.mode === 'online' && (
+                    <div className="booking-details-box">
+                      {(() => {
+                        const timingState = getReservationTimingState(selectedReservation);
+                        const canShowJoin = ['accepted', 'in_session', 'awaiting_start'].includes(
+                          selectedReservation.status,
+                        );
+                        const joinDisabled = canShowJoin && timingState !== 'in_window';
+                        const joinLabel =
+                          timingState === 'too_early'
+                            ? (
+                                bp.callNotAvailableUntil ??
+                                'Call is not available yet. Starts at {time}.'
+                              ).replace(
+                                '{time}',
+                                formatDateTime(selectedReservation.requestedStartAt),
+                              )
+                            : timingState === 'past'
+                              ? (bp.reservationTimeEnded ?? 'This reservation time has ended.')
+                              : '';
+                        return (
+                          <>
+                            <h4 className="booking-details-box-title">
+                              <Video
+                                size={14}
+                                style={{
+                                  display: 'inline',
+                                  verticalAlign: 'middle',
+                                  marginRight: 4,
+                                }}
+                              />
+                              {isInterviewReservation(selectedReservation)
+                                ? (bp.onlineInterview ?? 'Online Interview')
+                                : (bp.onlineSession ?? 'Online Session')}
+                            </h4>
+                            {callSnapshot ? (
+                              <div className="booking-details-table">
+                                <div className="booking-details-row">
+                                  <span className="booking-details-key">
+                                    {bp.preJoinBuffer ?? 'Pre-join buffer'}
+                                  </span>
+                                  <span className="booking-details-value">
+                                    {callSnapshot.minimumPrejoinMinutes} {bp.durationMin ?? 'min'}
+                                  </span>
+                                </div>
+                                <div className="booking-details-row">
+                                  <span className="booking-details-key">
+                                    {bp.yourRemainingTime ?? 'Your remaining time'}
+                                  </span>
+                                  <span className="booking-details-value">
+                                    {callSnapshot.customerRemainingMinutes}{' '}
+                                    {bp.durationMin ?? 'min'}
+                                  </span>
+                                </div>
+                                <div className="booking-details-row">
+                                  <span className="booking-details-key">
+                                    {bp.providerRemainingTime ?? 'Provider remaining time'}
+                                  </span>
+                                  <span className="booking-details-value">
+                                    {callSnapshot.providerRemainingMinutes}{' '}
+                                    {bp.durationMin ?? 'min'}
+                                  </span>
+                                </div>
+                                {callSnapshot.session && (
+                                  <div className="booking-details-row">
+                                    <span className="booking-details-key">Session Status</span>
+                                    <span className="booking-tag">
+                                      {callSnapshot.session.status === 'active'
+                                        ? (bp.inProgress ?? 'In progress')
+                                        : callSnapshot.session.status === 'ended'
+                                          ? (bp.ended ?? 'Ended')
+                                          : callSnapshot.session.status}
+                                    </span>
+                                  </div>
+                                )}
+                              </div>
+                            ) : (
+                              <p className="dashboard-card-meta">
+                                {bp.callDetailsWhenStart ??
+                                  'Call details will appear when the session starts.'}
+                              </p>
+                            )}
+                            {canShowJoin && (
+                              <button
+                                type="button"
+                                className={`bookings-filter-btn ${joinDisabled ? '' : 'bookings-filter-btn--active'}`}
+                                style={{
+                                  width: '100%',
+                                  marginTop: '0.75rem',
+                                  justifyContent: 'center',
+                                  opacity: joinDisabled ? 0.45 : 1,
+                                  cursor: joinDisabled ? 'not-allowed' : 'pointer',
+                                  pointerEvents: joinDisabled ? 'none' : 'auto',
+                                }}
+                                title={joinDisabled ? joinLabel : undefined}
+                                aria-disabled={joinDisabled}
+                                disabled={joinDisabled}
+                                onClick={() => {
+                                  closeDetails();
+                                  setCallReservation(selectedReservation);
+                                }}
+                              >
+                                {joinDisabled ? <VideoOff size={14} /> : <Video size={14} />}
+                                {isInterviewReservation(selectedReservation)
+                                  ? (bp.joinInterview ?? 'Join Room')
+                                  : (bp.joinCall ?? 'Join Room')}
+                              </button>
+                            )}
+                            {canShowJoin && joinDisabled && (
+                              <div
+                                className="booking-policy-callout"
+                                style={{ marginTop: '0.5rem' }}
+                              >
+                                <AlertTriangle
+                                  size={14}
+                                  style={{
+                                    display: 'inline',
+                                    verticalAlign: 'middle',
+                                    marginRight: 4,
+                                  }}
+                                />
+                                {joinLabel}
+                              </div>
+                            )}
+                          </>
+                        );
+                      })()}
+                    </div>
+                  )}
+
+                  {selectedReservation.mode === 'offline' && (
+                    <div className="reservation-section-box">
+                      <h4>
+                        {isInterviewReservation(selectedReservation)
+                          ? (bp.offlineInterviewTitle ?? 'Offline Interview')
+                          : (bp.offlineMeetingTitle ?? 'Offline Meeting')}
+                      </h4>
+                      {selectedReservation.finalLocationText && (
+                        <p>
+                          {(bp.agreedLocationLine ?? 'Agreed location: {text}').replace(
+                            '{text}',
+                            selectedReservation.finalLocationText,
+                          )}
+                        </p>
                       )}
                       <div className="reservation-inline-form">
                         <input
                           type="text"
                           className="dashboard-input"
-                          placeholder={bp.enterCounterpartyCode ?? 'Enter counterparty code'}
-                          value={counterpartyCode}
-                          onChange={(e) => setCounterpartyCode(e.target.value)}
+                          placeholder={
+                            bp.proposeLocationPlaceholder ?? 'Propose meeting location...'
+                          }
+                          value={locationText}
+                          onChange={(e) => setLocationText(e.target.value)}
                         />
                         <button
                           type="button"
-                          className="dashboard-btn dashboard-btn--small dashboard-btn--primary"
-                          onClick={() => void confirmCheckin()}
-                          disabled={
-                            updatingId === selectedReservation.id || !counterpartyCode.trim()
-                          }
+                          className="dashboard-btn dashboard-btn--small dashboard-btn--secondary"
+                          onClick={() => void proposeLocation()}
+                          disabled={updatingId === selectedReservation.id || !locationText.trim()}
                         >
-                          {bp.confirmCheckin ?? 'Confirm Check-in'}
+                          {bp.propose ?? 'Propose'}
                         </button>
                       </div>
-                    </div>
-                  </div>
-                )}
 
-                {authUser.id === selectedReservation.providerId &&
-                  selectedReservation.status === 'pending' && (
-                    <div className="calendar-booking-actions calendar-booking-actions--spaced">
-                      <button
-                        type="button"
-                        className="dashboard-btn dashboard-btn--small dashboard-btn--primary"
-                        onClick={() => void decide(selectedReservation.id, 'accept')}
-                        disabled={updatingId === selectedReservation.id}
-                      >
-                        {bp.accept ?? 'Accept'}
-                      </button>
-                      <button
-                        type="button"
-                        className="dashboard-btn dashboard-btn--small dashboard-btn--danger"
-                        onClick={() => {
-                          const reason = window.prompt(
-                            bp.rejectionPrompt ?? 'Rejection reason (optional):',
-                          );
-                          void decide(selectedReservation.id, 'reject', reason ?? undefined);
-                        }}
-                        disabled={updatingId === selectedReservation.id}
-                      >
-                        {bp.reject ?? 'Reject'}
-                      </button>
-                    </div>
-                  )}
-
-                {authUser &&
-                  canCancelReservation(selectedReservation) &&
-                  (authUser.id === selectedReservation.customerId ||
-                    authUser.id === selectedReservation.providerId) && (
-                    <div className="booking-details-box" style={{ border: '1px solid color-mix(in srgb, #ef4444 30%, transparent)' }}>
-                      <h4 className="booking-details-box-title" style={{ color: '#ef4444' }}>
-                        <AlertTriangle size={14} style={{ display: 'inline', verticalAlign: 'middle', marginRight: 4, color: '#ef4444' }} />
-                        Cancel Reservation
-                      </h4>
-                      {isFreeCancellationPassed(selectedReservation) && (
-                        <div className="booking-policy-callout">
-                          <AlertTriangle size={14} style={{ display: 'inline', verticalAlign: 'middle', marginRight: 4 }} />
-                          Free cancellation window has passed. You can no longer cancel this reservation.
-                        </div>
-                      )}
-                      <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '0.5rem' }}>
-                        <button
-                          type="button"
-                          className="bookings-filter-btn"
-                          style={{
-                            background: '#ef4444',
-                            color: '#ffffff',
-                            borderColor: '#dc2626',
-                            opacity: isFreeCancellationPassed(selectedReservation) ? 0.45 : 1,
-                            cursor: isFreeCancellationPassed(selectedReservation) ? 'not-allowed' : 'pointer',
-                          }}
-                          disabled={isFreeCancellationPassed(selectedReservation) || updatingId === selectedReservation.id}
-                          onClick={() => setShowCancelModal(true)}
-                        >
-                          {updatingId === selectedReservation.id ? 'Cancelling...' : (bp.cancelReservation ?? 'Cancel Reservation')}
-                        </button>
-                      </div>
-                    </div>
-                  )}
-
-                {authUser.id === selectedReservation.customerId &&
-                  selectedReservation.status === 'waiting_customer_done' && (
-                    <div className="calendar-booking-actions calendar-booking-actions--spaced">
-                      <button
-                        type="button"
-                        className="dashboard-btn dashboard-btn--small dashboard-btn--primary"
-                        onClick={() => void finish(selectedReservation.id, 'done')}
-                        disabled={updatingId === selectedReservation.id}
-                      >
-                        {bp.done ?? 'Done'}
-                      </button>
-                      <button
-                        type="button"
-                        className="dashboard-btn dashboard-btn--small dashboard-btn--danger"
-                        onClick={() => void finish(selectedReservation.id, 'report')}
-                        disabled={updatingId === selectedReservation.id}
-                      >
-                        {bp.report ?? 'Report'}
-                      </button>
-                    </div>
-                  )}
-                {selectedReservation.status === 'completed' &&
-                  !isInterviewReservation(selectedReservation) &&
-                  !reviewedReservationIds.has(selectedReservation.id) && (
-                    <div className="reservation-details-review-box reservation-details-review-box--spaced">
-                      <h4>{bp.leaveReview ?? 'Leave a review'}</h4>
-                      {reviewingReservationId !== selectedReservation.id ? (
-                        <button
-                          type="button"
-                          className="dashboard-btn dashboard-btn--small dashboard-btn--primary"
-                          onClick={() => setReviewingReservationId(selectedReservation.id)}
-                        >
-                          {authUser.id === selectedReservation.customerId
-                            ? (bp.rateProvider ?? 'Rate this provider')
-                            : (bp.rateCustomer ?? 'Rate this customer')}
-                        </button>
+                      {locationProposals.length === 0 ? (
+                        <p className="dashboard-card-meta">
+                          {bp.noLocationProposals ?? 'No location proposals yet.'}
+                        </p>
                       ) : (
-                        <>
-                          <div className="reservation-review-stars">
-                            {[1, 2, 3, 4, 5].map((star) => (
-                              <button
-                                key={star}
-                                type="button"
-                                className="reservation-review-star-btn"
-                                onClick={() => setReviewRating(star)}
-                                aria-label={(bp.starRatingAria ?? '{n} stars').replace(
-                                  '{n}',
-                                  String(star),
+                        <ul className="reservation-proposal-list">
+                          {locationProposals.map((proposal) => {
+                            const mine = proposal.proposedBy === authUser.id;
+                            return (
+                              <li key={proposal.id} className="reservation-proposal-item">
+                                <div>
+                                  <strong>{proposal.locationText}</strong>
+                                  <p className="dashboard-card-meta">
+                                    {mine
+                                      ? (bp.youProposed ?? 'You proposed')
+                                      : (bp.counterpartyProposed ?? 'Counterparty proposed')}{' '}
+                                    | {proposalStatusLabel(proposal.status, bp)}
+                                  </p>
+                                </div>
+                                {!mine && proposal.status === 'pending' && (
+                                  <div className="calendar-booking-actions">
+                                    <button
+                                      type="button"
+                                      className="dashboard-btn dashboard-btn--small dashboard-btn--primary"
+                                      onClick={() => void respondLocation(proposal.id, 'accept')}
+                                      disabled={updatingId === selectedReservation.id}
+                                    >
+                                      {bp.accept ?? 'Accept'}
+                                    </button>
+                                    <button
+                                      type="button"
+                                      className="dashboard-btn dashboard-btn--small dashboard-btn--danger"
+                                      onClick={() => void respondLocation(proposal.id, 'reject')}
+                                      disabled={updatingId === selectedReservation.id}
+                                    >
+                                      {bp.reject ?? 'Reject'}
+                                    </button>
+                                  </div>
                                 )}
-                              >
-                                {star <= reviewRating ? '★' : '☆'}
-                              </button>
-                            ))}
+                              </li>
+                            );
+                          })}
+                        </ul>
+                      )}
+
+                      <div className="reservation-checkin-box">
+                        <button
+                          type="button"
+                          className="dashboard-btn dashboard-btn--small dashboard-btn--secondary"
+                          onClick={() => void getCheckinCode()}
+                          disabled={updatingId === selectedReservation.id}
+                        >
+                          {bp.getCheckinCode ?? 'Get My Check-in Code'}
+                        </button>
+                        {checkinInfo && (
+                          <div className="reservation-note-box">
+                            <p>
+                              {bp.yourCodeLine ?? 'Your code:'}{' '}
+                              <strong>{checkinInfo.myCode}</strong>
+                            </p>
+                            <p>
+                              {bp.codeExpiresLine ?? 'Code expires:'}{' '}
+                              {formatDateTime(checkinInfo.expiresAt)}
+                            </p>
+                            <p>
+                              {bp.myCheckin ?? 'My check-in:'}{' '}
+                              {checkinInfo.myVerifiedAt
+                                ? (bp.checkinVerified ?? 'Verified')
+                                : (bp.checkinPending ?? 'Pending')}
+                            </p>
+                            <p>
+                              {bp.counterpartyCheckin ?? 'Counterparty check-in:'}{' '}
+                              {checkinInfo.counterpartyVerifiedAt
+                                ? (bp.checkinVerified ?? 'Verified')
+                                : (bp.checkinPending ?? 'Pending')}
+                            </p>
                           </div>
+                        )}
+                        <div className="reservation-inline-form">
                           <input
                             type="text"
-                            className="dashboard-input reservation-review-comment reservation-review-comment--spaced"
-                            placeholder={
-                              dictionary.profile?.reviews?.commentPlaceholder ??
-                              bp.optionalComment ??
-                              'Optional comment'
-                            }
-                            value={reviewComment}
-                            onChange={(e) => setReviewComment(e.target.value)}
+                            className="dashboard-input"
+                            placeholder={bp.enterCounterpartyCode ?? 'Enter counterparty code'}
+                            value={counterpartyCode}
+                            onChange={(e) => setCounterpartyCode(e.target.value)}
                           />
-                          <div className="reservation-review-actions reservation-review-actions--spaced">
-                            <button
-                              type="button"
-                              className="dashboard-btn dashboard-btn--small dashboard-btn--secondary"
-                              onClick={() => {
-                                setReviewingReservationId(null);
-                                setReviewComment('');
-                                setReviewRating(5);
-                              }}
-                            >
-                              {bp.cancel ?? 'Cancel'}
-                            </button>
-                            <button
-                              type="button"
-                              className="dashboard-btn dashboard-btn--small dashboard-btn--primary"
-                              disabled={reviewSubmitting}
-                              onClick={() => void submitReview(selectedReservation.id)}
-                            >
-                              {reviewSubmitting
-                                ? (bp.submittingEllipsis ?? '...')
-                                : (bp.submitReview ?? 'Submit review')}
-                            </button>
-                          </div>
-                        </>
-                      )}
+                          <button
+                            type="button"
+                            className="dashboard-btn dashboard-btn--small dashboard-btn--primary"
+                            onClick={() => void confirmCheckin()}
+                            disabled={
+                              updatingId === selectedReservation.id || !counterpartyCode.trim()
+                            }
+                          >
+                            {bp.confirmCheckin ?? 'Confirm Check-in'}
+                          </button>
+                        </div>
+                      </div>
                     </div>
                   )}
-              </>
-            )}
+
+                  {authUser.id === selectedReservation.providerId &&
+                    selectedReservation.status === 'pending' && (
+                      <div className="calendar-booking-actions calendar-booking-actions--spaced">
+                        <button
+                          type="button"
+                          className="dashboard-btn dashboard-btn--small dashboard-btn--primary"
+                          onClick={() => void decide(selectedReservation.id, 'accept')}
+                          disabled={updatingId === selectedReservation.id}
+                        >
+                          {bp.accept ?? 'Accept'}
+                        </button>
+                        <button
+                          type="button"
+                          className="dashboard-btn dashboard-btn--small dashboard-btn--danger"
+                          onClick={() => {
+                            const reason = window.prompt(
+                              bp.rejectionPrompt ?? 'Rejection reason (optional):',
+                            );
+                            void decide(selectedReservation.id, 'reject', reason ?? undefined);
+                          }}
+                          disabled={updatingId === selectedReservation.id}
+                        >
+                          {bp.reject ?? 'Reject'}
+                        </button>
+                      </div>
+                    )}
+
+                  {authUser &&
+                    canCancelReservation(selectedReservation) &&
+                    (authUser.id === selectedReservation.customerId ||
+                      authUser.id === selectedReservation.providerId) && (
+                      <div
+                        className="booking-details-box"
+                        style={{ border: '1px solid color-mix(in srgb, #ef4444 30%, transparent)' }}
+                      >
+                        <h4 className="booking-details-box-title" style={{ color: '#ef4444' }}>
+                          <AlertTriangle
+                            size={14}
+                            style={{
+                              display: 'inline',
+                              verticalAlign: 'middle',
+                              marginRight: 4,
+                              color: '#ef4444',
+                            }}
+                          />
+                          Cancel Reservation
+                        </h4>
+                        {isFreeCancellationPassed(selectedReservation) && (
+                          <div className="booking-policy-callout">
+                            <AlertTriangle
+                              size={14}
+                              style={{ display: 'inline', verticalAlign: 'middle', marginRight: 4 }}
+                            />
+                            Free cancellation window has passed. You can no longer cancel this
+                            reservation.
+                          </div>
+                        )}
+                        <div
+                          style={{
+                            display: 'flex',
+                            justifyContent: 'flex-end',
+                            marginTop: '0.5rem',
+                          }}
+                        >
+                          <button
+                            type="button"
+                            className="bookings-filter-btn"
+                            style={{
+                              background: '#ef4444',
+                              color: '#ffffff',
+                              borderColor: '#dc2626',
+                              opacity: isFreeCancellationPassed(selectedReservation) ? 0.45 : 1,
+                              cursor: isFreeCancellationPassed(selectedReservation)
+                                ? 'not-allowed'
+                                : 'pointer',
+                            }}
+                            disabled={
+                              isFreeCancellationPassed(selectedReservation) ||
+                              updatingId === selectedReservation.id
+                            }
+                            onClick={() => setShowCancelModal(true)}
+                          >
+                            {updatingId === selectedReservation.id
+                              ? 'Cancelling...'
+                              : (bp.cancelReservation ?? 'Cancel Reservation')}
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                  {authUser.id === selectedReservation.customerId &&
+                    selectedReservation.status === 'waiting_customer_done' && (
+                      <div className="calendar-booking-actions calendar-booking-actions--spaced">
+                        <button
+                          type="button"
+                          className="dashboard-btn dashboard-btn--small dashboard-btn--primary"
+                          onClick={() => void finish(selectedReservation.id, 'done')}
+                          disabled={updatingId === selectedReservation.id}
+                        >
+                          {bp.done ?? 'Done'}
+                        </button>
+                        <button
+                          type="button"
+                          className="dashboard-btn dashboard-btn--small dashboard-btn--danger"
+                          onClick={() => void finish(selectedReservation.id, 'report')}
+                          disabled={updatingId === selectedReservation.id}
+                        >
+                          {bp.report ?? 'Report'}
+                        </button>
+                      </div>
+                    )}
+                  {selectedReservation.status === 'completed' &&
+                    !isInterviewReservation(selectedReservation) &&
+                    !reviewedReservationIds.has(selectedReservation.id) && (
+                      <div className="reservation-details-review-box reservation-details-review-box--spaced">
+                        <h4>{bp.leaveReview ?? 'Leave a review'}</h4>
+                        {reviewingReservationId !== selectedReservation.id ? (
+                          <button
+                            type="button"
+                            className="dashboard-btn dashboard-btn--small dashboard-btn--primary"
+                            onClick={() => setReviewingReservationId(selectedReservation.id)}
+                          >
+                            {authUser.id === selectedReservation.customerId
+                              ? (bp.rateProvider ?? 'Rate this provider')
+                              : (bp.rateCustomer ?? 'Rate this customer')}
+                          </button>
+                        ) : (
+                          <>
+                            <div className="reservation-review-stars">
+                              {[1, 2, 3, 4, 5].map((star) => (
+                                <button
+                                  key={star}
+                                  type="button"
+                                  className="reservation-review-star-btn"
+                                  onClick={() => setReviewRating(star)}
+                                  aria-label={(bp.starRatingAria ?? '{n} stars').replace(
+                                    '{n}',
+                                    String(star),
+                                  )}
+                                >
+                                  {star <= reviewRating ? '★' : '☆'}
+                                </button>
+                              ))}
+                            </div>
+                            <input
+                              type="text"
+                              className="dashboard-input reservation-review-comment reservation-review-comment--spaced"
+                              placeholder={
+                                dictionary.profile?.reviews?.commentPlaceholder ??
+                                bp.optionalComment ??
+                                'Optional comment'
+                              }
+                              value={reviewComment}
+                              onChange={(e) => setReviewComment(e.target.value)}
+                            />
+                            <div className="reservation-review-actions reservation-review-actions--spaced">
+                              <button
+                                type="button"
+                                className="dashboard-btn dashboard-btn--small dashboard-btn--secondary"
+                                onClick={() => {
+                                  setReviewingReservationId(null);
+                                  setReviewComment('');
+                                  setReviewRating(5);
+                                }}
+                              >
+                                {bp.cancel ?? 'Cancel'}
+                              </button>
+                              <button
+                                type="button"
+                                className="dashboard-btn dashboard-btn--small dashboard-btn--primary"
+                                disabled={reviewSubmitting}
+                                onClick={() => void submitReview(selectedReservation.id)}
+                              >
+                                {reviewSubmitting
+                                  ? (bp.submittingEllipsis ?? '...')
+                                  : (bp.submitReview ?? 'Submit review')}
+                              </button>
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    )}
+                </>
+              )}
             </div>
 
             <div className="booking-details-modal-footer">

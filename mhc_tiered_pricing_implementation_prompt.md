@@ -44,13 +44,13 @@ R_0 = 2\ \text{EGP per MHC}
 
 Initial tier multipliers:
 
-| Tier | Multiplier | Effective EGP/MHC |
-|---|---:|---:|
-| Launch | 0.50 | 1.00 |
-| Starter | 0.75 | 1.50 |
-| Growth | 1.00 | 2.00 |
-| Professional | 1.50 | 3.00 |
-| Enterprise | 2.00 | 4.00 |
+| Tier         | Multiplier | Effective EGP/MHC |
+| ------------ | ---------: | ----------------: |
+| Launch       |       0.50 |              1.00 |
+| Starter      |       0.75 |              1.50 |
+| Growth       |       1.00 |              2.00 |
+| Professional |       1.50 |              3.00 |
+| Enterprise   |       2.00 |              4.00 |
 
 These values must not be hard-coded across the codebase. Store them in centralized configuration or an admin-controlled pricing table.
 
@@ -74,32 +74,32 @@ All component values must be normalized between 0 and 1.
 V =
 \min\left(
 1,
-\frac{\ln(1+A_{90})}{\ln(1+200000)}
+\frac{\ln(1+A\_{90})}{\ln(1+200000)}
 \right)
 \]
 
 Where:
 
 \[
-A_{90}
+A*{90}
 =
 \sum_i
 \left(
-\text{Award Value}_i
+\text{Award Value}\_i
 \times
-K_{\text{category},i}
+K*{\text{category},i}
 \right)
 \]
 
 Initial category coefficients:
 
-| Category type | Coefficient |
-|---|---:|
-| Pure consultation or digital service | 1.00 |
-| Design or engineering service | 0.90 |
-| Labor-heavy maintenance | 0.75 |
-| Mixed labor and materials | 0.55 |
-| Material-heavy construction or supply | 0.35 |
+| Category type                         | Coefficient |
+| ------------------------------------- | ----------: |
+| Pure consultation or digital service  |        1.00 |
+| Design or engineering service         |        0.90 |
+| Labor-heavy maintenance               |        0.75 |
+| Mixed labor and materials             |        0.55 |
+| Material-heavy construction or supply |        0.35 |
 
 Category coefficients must be configurable.
 
@@ -131,11 +131,11 @@ U =
 
 Use:
 
-| Provider structure | B |
-|---|---:|
-| Unverified individual | 0.00 |
-| Verified individual professional | 0.25 |
-| Verified office | 0.60 |
+| Provider structure                    |    B |
+| ------------------------------------- | ---: |
+| Unverified individual                 | 0.00 |
+| Verified individual professional      | 0.25 |
+| Verified office                       | 0.60 |
 | Registered company or multi-user team | 1.00 |
 
 ## 2.5 Completion Reliability
@@ -157,13 +157,13 @@ Rules:
 
 Use these thresholds:
 
-| PCS | Tier |
-|---:|---|
-| Special temporary eligibility | Launch |
-| 0–34 | Starter |
-| 35–59 | Growth |
-| 60–79 | Professional |
-| 80–100 | Enterprise |
+|                           PCS | Tier         |
+| ----------------------------: | ------------ |
+| Special temporary eligibility | Launch       |
+|                          0–34 | Starter      |
+|                         35–59 | Growth       |
+|                         60–79 | Professional |
+|                        80–100 | Enterprise   |
 
 ## 3.1 Launch Eligibility
 
@@ -212,13 +212,13 @@ Do not change pricing after every single job or wallet transaction.
 
 Initial limits:
 
-| Tier | Monthly purchase ceiling | Recommended wallet ceiling |
-|---|---:|---:|
-| Launch | 200 MHC, 400 lifetime | 400 MHC |
-| Starter | 1,000 MHC | 1,500 MHC |
-| Growth | 3,000 MHC | 5,000 MHC |
-| Professional | 10,000 MHC | 15,000 MHC |
-| Enterprise | Configurable or contract-based | Configurable |
+| Tier         |       Monthly purchase ceiling | Recommended wallet ceiling |
+| ------------ | -----------------------------: | -------------------------: |
+| Launch       |          200 MHC, 400 lifetime |                    400 MHC |
+| Starter      |                      1,000 MHC |                  1,500 MHC |
+| Growth       |                      3,000 MHC |                  5,000 MHC |
+| Professional |                     10,000 MHC |                 15,000 MHC |
+| Enterprise   | Configurable or contract-based |               Configurable |
 
 Clarify in code and UI that purchase ceilings are separate from wallet ceilings.
 
@@ -233,12 +233,12 @@ Do not remove already owned MHC if a tier change causes the provider's wallet to
 Initial package discounts:
 
 | Purchased quantity | Discount |
-|---:|---:|
-| 100 MHC | 0% |
-| 300 MHC | 3% |
-| 1,000 MHC | 5% |
-| 3,000 MHC | 7% |
-| 10,000 MHC | 10% |
+| -----------------: | -------: |
+|            100 MHC |       0% |
+|            300 MHC |       3% |
+|          1,000 MHC |       5% |
+|          3,000 MHC |       7% |
+|         10,000 MHC |      10% |
 
 Rules:
 
@@ -374,18 +374,18 @@ Adapt names to the existing schema and conventions.
 Suggested fields:
 
 ```ts
-providerTier
-providerCommercialScore
-tierEffectiveAt
-tierLastCalculatedAt
-tierBelowThresholdSince
-manualTierOverride
-manualTierOverrideExpiresAt
-launchMhcPurchasedLifetime
-monthlyMhcPurchased
-monthlyPurchasePeriod
-walletLimit
-pricingVersion
+providerTier;
+providerCommercialScore;
+tierEffectiveAt;
+tierLastCalculatedAt;
+tierBelowThresholdSince;
+manualTierOverride;
+manualTierOverrideExpiresAt;
+launchMhcPurchasedLifetime;
+monthlyMhcPurchased;
+monthlyPurchasePeriod;
+walletLimit;
+pricingVersion;
 ```
 
 ## Tier History
@@ -393,16 +393,16 @@ pricingVersion
 Suggested fields:
 
 ```ts
-id
-providerId
-previousTier
-newTier
-previousScore
-newScore
-reason
-calculationBreakdown
-effectiveAt
-createdAt
+id;
+providerId;
+previousTier;
+newTier;
+previousScore;
+newScore;
+reason;
+calculationBreakdown;
+effectiveAt;
+createdAt;
 ```
 
 ## MHC Purchase
@@ -410,23 +410,23 @@ createdAt
 Suggested fields:
 
 ```ts
-id
-providerId
-mhcQuantity
-pricePerMhcMinor
-subtotalMinor
-discountRate
-discountAmountMinor
-totalPaidMinor
-currency
-tierAtPurchase
-providerScoreAtPurchase
-pricingVersion
-paymentReference
-idempotencyKey
-status
-createdAt
-completedAt
+id;
+providerId;
+mhcQuantity;
+pricePerMhcMinor;
+subtotalMinor;
+discountRate;
+discountAmountMinor;
+totalPaidMinor;
+currency;
+tierAtPurchase;
+providerScoreAtPurchase;
+pricingVersion;
+paymentReference;
+idempotencyKey;
+status;
+createdAt;
+completedAt;
 ```
 
 ## Wallet Ledger
@@ -434,18 +434,18 @@ completedAt
 Suggested fields:
 
 ```ts
-id
-providerId
-transactionType
-paidMhcChange
-bonusMhcChange
-totalMhcChange
-balanceAfter
-referenceType
-referenceId
-idempotencyKey
-metadata
-createdAt
+id;
+providerId;
+transactionType;
+paidMhcChange;
+bonusMhcChange;
+totalMhcChange;
+balanceAfter;
+referenceType;
+referenceId;
+idempotencyKey;
+metadata;
+createdAt;
 ```
 
 ## Pricing Configuration
@@ -453,19 +453,19 @@ createdAt
 Suggested fields:
 
 ```ts
-pricingVersion
-baseRateMinor
-tierMultipliers
-tierThresholds
-packageDiscounts
-monthlyPurchaseLimits
-walletLimits
-launchRules
-categoryCoefficients
-overrideThresholds
-effectiveFrom
-effectiveTo
-isActive
+pricingVersion;
+baseRateMinor;
+tierMultipliers;
+tierThresholds;
+packageDiscounts;
+monthlyPurchaseLimits;
+walletLimits;
+launchRules;
+categoryCoefficients;
+overrideThresholds;
+effectiveFrom;
+effectiveTo;
+isActive;
 ```
 
 Store enough pricing context on every purchase so historical transactions remain reproducible even after pricing configuration changes.
@@ -592,12 +592,12 @@ Implement behind feature flags.
 Suggested flags:
 
 ```ts
-mhcTieredPricingEnabled
-mhcLaunchPricingEnabled
-mhcPackageDiscountsEnabled
-mhcMonthlyTierReviewEnabled
-mhcWalletLimitsEnabled
-mhcManualTierOverridesEnabled
+mhcTieredPricingEnabled;
+mhcLaunchPricingEnabled;
+mhcPackageDiscountsEnabled;
+mhcMonthlyTierReviewEnabled;
+mhcWalletLimitsEnabled;
+mhcManualTierOverridesEnabled;
 ```
 
 Recommended rollout:
@@ -606,10 +606,10 @@ Recommended rollout:
 
 Use three tiers only:
 
-| Tier | Price |
-|---|---:|
-| Launch | 1 EGP/MHC |
-| Standard | 2 EGP/MHC |
+| Tier         |     Price |
+| ------------ | --------: |
+| Launch       | 1 EGP/MHC |
+| Standard     | 2 EGP/MHC |
 | Professional | 3 EGP/MHC |
 
 Phase 1 deciding factors:
@@ -813,7 +813,7 @@ Use this only as a pilot configuration, not as permanently final pricing.
     { "quantity": 300, "discountRate": 0.03 },
     { "quantity": 1000, "discountRate": 0.05 },
     { "quantity": 3000, "discountRate": 0.07 },
-    { "quantity": 10000, "discountRate": 0.10 }
+    { "quantity": 10000, "discountRate": 0.1 }
   ],
   "categoryCoefficients": {
     "DIGITAL_CONSULTATION": 1.0,

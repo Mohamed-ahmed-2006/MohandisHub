@@ -299,7 +299,10 @@ export const WalletSettingsScreen = ({ hideHeader = false }: WalletSettingsScree
               <h1 className="app-page-title">{dictionary.wallet.balance}</h1>
             </div>
             <div className="app-page-header-actions">
-              <Link href={buildLocalePath(locale, '/app/settings')} className="wallet-settings-back">
+              <Link
+                href={buildLocalePath(locale, '/app/settings')}
+                className="wallet-settings-back"
+              >
                 {dictionary.nav.settings}
               </Link>
             </div>

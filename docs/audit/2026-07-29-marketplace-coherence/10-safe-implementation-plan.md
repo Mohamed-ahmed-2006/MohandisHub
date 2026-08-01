@@ -21,15 +21,15 @@
 
 **No code.** Agree and record the vocabulary, because every later stage depends on it.
 
-| Concept | Canonical term | Currently also called |
-|---|---|---|
-| A customer's posted requirement | **Need** | project, RFP, request |
-| A provider's response | **Proposal** | bid, application |
-| An awarded, activated engagement | **Project** | job, need |
-| A service booking | **Booking** | reservation, order |
-| A recruitment post | **Hiring post** | job, project |
-| Platform credit | **MHC** | credits, نقطة, balance |
-| A provider's catalogue | **My Catalogue** | My Services |
+| Concept                          | Canonical term   | Currently also called  |
+| -------------------------------- | ---------------- | ---------------------- |
+| A customer's posted requirement  | **Need**         | project, RFP, request  |
+| A provider's response            | **Proposal**     | bid, application       |
+| An awarded, activated engagement | **Project**      | job, need              |
+| A service booking                | **Booking**      | reservation, order     |
+| A recruitment post               | **Hiring post**  | job, project           |
+| Platform credit                  | **MHC**          | credits, نقطة, balance |
+| A provider's catalogue           | **My Catalogue** | My Services            |
 
 Also decide, before any code is written:
 
@@ -44,22 +44,22 @@ Also decide, before any code is written:
 
 Frontend only. Fully reversible by `git revert`.
 
-| Step | Item | Independent? |
-|---|---|---|
-| 2.1 | MHC header pill; remove EGP pill | ✅ |
-| 2.2 | Remove the `+` deposit entry point | after 2.1 |
-| 2.3 | Remove the withdrawal section; `canRequestWithdrawal` → false | ✅ |
-| 2.4 | Hide the wallet section from customers | ✅ |
-| 2.5 | `/app/credits` route + sidebar entry | ✅ |
-| 2.6 | Retarget wallet notification deep links | ✅ |
+| Step | Item                                                          | Independent? |
+| ---- | ------------------------------------------------------------- | ------------ |
+| 2.1  | MHC header pill; remove EGP pill                              | ✅           |
+| 2.2  | Remove the `+` deposit entry point                            | after 2.1    |
+| 2.3  | Remove the withdrawal section; `canRequestWithdrawal` → false | ✅           |
+| 2.4  | Hide the wallet section from customers                        | ✅           |
+| 2.5  | `/app/credits` route + sidebar entry                          | ✅           |
+| 2.6  | Retarget wallet notification deep links                       | ✅           |
 
 **Verify after 2.1–2.6:** no role can reach a deposit or withdrawal surface; a customer sees no financial UI at all; a provider reaches MHC in one click.
 
 **Then, server side (small, additive):**
 
-| Step | Item |
-|---|---|
-| 2.7 | Fail-closed `410` on retired deposit and withdrawal routes |
+| Step | Item                                                       |
+| ---- | ---------------------------------------------------------- |
+| 2.7  | Fail-closed `410` on retired deposit and withdrawal routes |
 
 **Keep open, explicitly:** `GET /wallet/me`, `/me/transactions`, `/me/transactions/:id/receipt`, and **all webhooks**. An in-flight deposit from before the freeze may still settle; dropping the IPN would strand real money.
 
@@ -92,23 +92,23 @@ CREATE UNIQUE INDEX IF NOT EXISTS uq_mhc_action_charge
 
 Then migrate consumers, one at a time, each independently deployable and revertable:
 
-| Step | Item |
-|---|---|
-| 3.1 | Ads → MHC (`advertisement` key) |
-| 3.2 | Plans → MHC or free (`subscription_upgrade`) |
+| Step | Item                                         |
+| ---- | -------------------------------------------- |
+| 3.1  | Ads → MHC (`advertisement` key)              |
+| 3.2  | Plans → MHC or free (`subscription_upgrade`) |
 
 ---
 
 ## Stage 4 — Navigation and dashboards (no schema change)
 
-| Step | Item | Independent? |
-|---|---|---|
-| 4.1 | Rename "Projects" → "Hiring"; add to sidebar | ✅ |
-| 4.2 | Rename "My Services" → "My Catalogue" | ✅ |
-| 4.3 | Delete the `/app/browse` redirect | ✅ |
-| 4.4 | `/app/analytics` route + guard | ✅ |
-| 4.5 | Award offers on the provider dashboard | ✅ |
-| 4.6 | Tag filtering in search | ✅ |
+| Step | Item                                         | Independent? |
+| ---- | -------------------------------------------- | ------------ |
+| 4.1  | Rename "Projects" → "Hiring"; add to sidebar | ✅           |
+| 4.2  | Rename "My Services" → "My Catalogue"        | ✅           |
+| 4.3  | Delete the `/app/browse` redirect            | ✅           |
+| 4.4  | `/app/analytics` route + guard               | ✅           |
+| 4.5  | Award offers on the provider dashboard       | ✅           |
+| 4.6  | Tag filtering in search                      | ✅           |
 
 All six are independent and parallelisable. 4.1–4.3 must land together to avoid a half-renamed navigation.
 
@@ -116,14 +116,14 @@ All six are independent and parallelisable. 4.1–4.3 must land together to avoi
 
 ## Stage 5 — Notifications (small schema change)
 
-| Step | Item |
-|---|---|
-| 5.1 | `mhc_purchase_approved` / `_rejected` |
-| 5.2 | `award_activated` → **customer** |
-| 5.3 | `activation_reminder` (50% and 90% of the window) |
-| 5.4 | `mhc_low_balance` |
-| 5.5 | Derive sidebar badges from `getNotificationCategory()` instead of five prefix-matched booleans |
-| 5.6 | Log notification delivery failures at `warn` |
+| Step | Item                                                                                           |
+| ---- | ---------------------------------------------------------------------------------------------- |
+| 5.1  | `mhc_purchase_approved` / `_rejected`                                                          |
+| 5.2  | `award_activated` → **customer**                                                               |
+| 5.3  | `activation_reminder` (50% and 90% of the window)                                              |
+| 5.4  | `mhc_low_balance`                                                                              |
+| 5.5  | Derive sidebar badges from `getNotificationCategory()` instead of five prefix-matched booleans |
+| 5.6  | Log notification delivery failures at `warn`                                                   |
 
 `describePurchaseState()` already produces correct bilingual copy for every purchase state and is tested — reuse it rather than writing new strings.
 
@@ -135,12 +135,12 @@ Schema: new notification `type` values plus a low-balance threshold in `app_sett
 
 Four phases, each independently revertable. Detail in `05` §3.
 
-| Phase | Action | Rollback |
-|---|---|---|
-| 6.1 | Additive columns on `support_tickets`; CHECK added `NOT VALID` | Drop columns |
-| 6.2 | Dual-write new reservation disputes to both tables | Stop dual-write |
-| 6.3 | Backfill historic disputes into `support_tickets` | Delete rows where `reference_type='reservation'` |
-| 6.4 | Point UI and admin queue at the unified table | Revert the read path |
+| Phase | Action                                                         | Rollback                                         |
+| ----- | -------------------------------------------------------------- | ------------------------------------------------ |
+| 6.1   | Additive columns on `support_tickets`; CHECK added `NOT VALID` | Drop columns                                     |
+| 6.2   | Dual-write new reservation disputes to both tables             | Stop dual-write                                  |
+| 6.3   | Backfill historic disputes into `support_tickets`              | Delete rows where `reference_type='reservation'` |
+| 6.4   | Point UI and admin queue at the unified table                  | Revert the read path                             |
 
 `reservation_disputes` is **never dropped**. It becomes a read-only historical record.
 
@@ -163,15 +163,15 @@ CREATE UNIQUE INDEX uq_reviews_need_reviewer
   ON reviews(need_id, reviewer_id) WHERE need_id IS NOT NULL;
 ```
 
-| Step | Item | Depends on |
-|---|---|---|
-| 7.1 | Milestones + deliverables | Migration B |
-| 7.2 | Mutual completion | 7.1 |
-| 7.3 | Reviews on completed need-jobs | 7.2 |
-| 7.4 | Milestone/deliverable notifications | 7.1 |
-| 7.5 | **Bid submission fee** | Stage 3 |
-| 7.6 | Proposal comparison | ✅ independent |
-| 7.7 | Customer trust signals on the award offer | ✅ independent |
+| Step | Item                                      | Depends on     |
+| ---- | ----------------------------------------- | -------------- |
+| 7.1  | Milestones + deliverables                 | Migration B    |
+| 7.2  | Mutual completion                         | 7.1            |
+| 7.3  | Reviews on completed need-jobs            | 7.2            |
+| 7.4  | Milestone/deliverable notifications       | 7.1            |
+| 7.5  | **Bid submission fee**                    | Stage 3        |
+| 7.6  | Proposal comparison                       | ✅ independent |
+| 7.7  | Customer trust signals on the award offer | ✅ independent |
 
 **Every deliverable read passes `assertAwardActivated`.** No money columns on milestones — that coupling is what broke `job_milestones`.
 
@@ -181,14 +181,14 @@ CREATE UNIQUE INDEX uq_reviews_need_reviewer
 
 ## Stage 8 — Business teams
 
-| Step | Item | Schema |
-|---|---|---|
-| 8.1 | `uq_business_teams_business` unique index | ✅ small |
-| 8.2 | Split `getOverview` from `ensureOwnerTeam` | none |
-| 8.3 | Invitation accept page + link email | none |
-| 8.4 | Member removal + ownership transfer | none |
-| 8.5 | **Enforce team permissions** | none |
-| 8.6 | Seat limits from `maxTeamSlots` | none |
+| Step | Item                                       | Schema   |
+| ---- | ------------------------------------------ | -------- |
+| 8.1  | `uq_business_teams_business` unique index  | ✅ small |
+| 8.2  | Split `getOverview` from `ensureOwnerTeam` | none     |
+| 8.3  | Invitation accept page + link email        | none     |
+| 8.4  | Member removal + ownership transfer        | none     |
+| 8.5  | **Enforce team permissions**               | none     |
+| 8.6  | Seat limits from `maxTeamSlots`            | none     |
 
 8.1–8.4 are prerequisites. **8.5 is where teams become real** — before it, membership grants nothing.
 
@@ -198,13 +198,13 @@ CREATE UNIQUE INDEX uq_reviews_need_reviewer
 
 ## Stage 9 — Plans and central entitlements
 
-| Step | Item |
-|---|---|
-| 9.1 | `EntitlementService.can(userId, workspace, capability)` |
-| 9.2 | Migrate scattered checks (`needs`, `jobs`, `auth`) to it |
-| 9.3 | Enforce or remove `maxTeamSlots`, `canBusinessFeatured`, `canPriorityListing` |
-| 9.4 | Role-aware plan visibility (hide plans where no plan exists for that role) |
-| 9.5 | Separate paid-tier badges from verification badges |
+| Step | Item                                                                          |
+| ---- | ----------------------------------------------------------------------------- |
+| 9.1  | `EntitlementService.can(userId, workspace, capability)`                       |
+| 9.2  | Migrate scattered checks (`needs`, `jobs`, `auth`) to it                      |
+| 9.3  | Enforce or remove `maxTeamSlots`, `canBusinessFeatured`, `canPriorityListing` |
+| 9.4  | Role-aware plan visibility (hide plans where no plan exists for that role)    |
+| 9.5  | Separate paid-tier badges from verification badges                            |
 
 9.3 is a genuine choice: a limit that is defined, validated and never enforced is worse than no limit, because it implies a guarantee that does not exist. Either enforce it or delete it from the type.
 
@@ -214,15 +214,15 @@ CREATE UNIQUE INDEX uq_reviews_need_reviewer
 
 Only after stages 1–9. Detail in `02` §4.
 
-| Step | Item |
-|---|---|
-| 10.1 | `workspaces` + `workspace_members`; backfill |
-| 10.2 | Nullable `workspace_id` on entity tables |
+| Step | Item                                                                              |
+| ---- | --------------------------------------------------------------------------------- |
+| 10.1 | `workspaces` + `workspace_members`; backfill                                      |
+| 10.2 | Nullable `workspace_id` on entity tables                                          |
 | 10.3 | `resolveWorkspace` middleware — **header optional**, falls back to `primary_role` |
-| 10.4 | `requireWorkspaceKind`, adopted endpoint by endpoint |
-| 10.5 | Workspace switcher in the header |
-| 10.6 | Capability-driven navigation |
-| 10.7 | Business procurement (needs, buying) |
+| 10.4 | `requireWorkspaceKind`, adopted endpoint by endpoint                              |
+| 10.5 | Workspace switcher in the header                                                  |
+| 10.6 | Capability-driven navigation                                                      |
+| 10.7 | Business procurement (needs, buying)                                              |
 
 **Non-negotiable:** `X-Workspace-Id` stays optional throughout, and `users.primary_role` is **not dropped**. It is the fallback for every un-migrated endpoint and the rollback path for the whole stage.
 
@@ -273,15 +273,15 @@ Before applying any migration:
 
 The following must pass **unmodified** after every stage. If a change requires editing one of these tests, that is a signal the change altered a security or money invariant and needs review:
 
-| Test | Protects |
-|---|---|
-| `mhc.activation-race.test.ts` | Activation cannot double-charge |
-| `award-lifecycle.test.ts` | Award state machine |
-| `contact-redaction.test.ts` | Contact masking |
-| `chat-access.test.ts`, `needs.bid-chat-gate.test.ts` | Pre-activation chat gate |
-| `admin-verification-auth.test.ts` | Admin authorization |
-| `legacy-egp-reset-migration.test.ts` | Wallet freeze |
-| `mhc-presentation.test.ts` | MHC never formatted as currency |
+| Test                                                 | Protects                        |
+| ---------------------------------------------------- | ------------------------------- |
+| `mhc.activation-race.test.ts`                        | Activation cannot double-charge |
+| `award-lifecycle.test.ts`                            | Award state machine             |
+| `contact-redaction.test.ts`                          | Contact masking                 |
+| `chat-access.test.ts`, `needs.bid-chat-gate.test.ts` | Pre-activation chat gate        |
+| `admin-verification-auth.test.ts`                    | Admin authorization             |
+| `legacy-egp-reset-migration.test.ts`                 | Wallet freeze                   |
+| `mhc-presentation.test.ts`                           | MHC never formatted as currency |
 
 ---
 

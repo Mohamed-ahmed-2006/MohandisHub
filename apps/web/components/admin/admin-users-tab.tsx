@@ -101,16 +101,22 @@ export const AdminUsersTab = ({
 
   const handleBulkAction = async (action: 'activate' | 'deactivate' | 'delete') => {
     if (selectedUserIds.length === 0) return;
-    if (action === 'delete' && !confirm(`Are you sure you want to delete ${selectedUserIds.length} selected user(s)?`)) {
+    if (
+      action === 'delete' &&
+      !confirm(`Are you sure you want to delete ${selectedUserIds.length} selected user(s)?`)
+    ) {
       return;
     }
     setBulkProcessing(true);
     try {
       await Promise.all(
         selectedUserIds.map((userId) => {
-          if (action === 'activate') return adminApiClient.activateUser(accessToken, userId, { refreshSession });
-          if (action === 'deactivate') return adminApiClient.deactivateUser(accessToken, userId, { refreshSession });
-          if (action === 'delete') return adminApiClient.deleteUser(accessToken, userId, { refreshSession });
+          if (action === 'activate')
+            return adminApiClient.activateUser(accessToken, userId, { refreshSession });
+          if (action === 'deactivate')
+            return adminApiClient.deactivateUser(accessToken, userId, { refreshSession });
+          if (action === 'delete')
+            return adminApiClient.deleteUser(accessToken, userId, { refreshSession });
           return Promise.resolve();
         }),
       );

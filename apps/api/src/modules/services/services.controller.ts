@@ -83,9 +83,15 @@ const searchServices = asyncHandler(async (req, res) => {
   if (req.query.verifiedOnly === 'true') filters.verifiedOnly = true;
   if (req.query.tags) {
     if (Array.isArray(req.query.tags)) {
-      filters.tags = req.query.tags.map(String).map((t) => t.trim()).filter(Boolean);
+      filters.tags = req.query.tags
+        .map(String)
+        .map((t) => t.trim())
+        .filter(Boolean);
     } else if (typeof req.query.tags === 'string') {
-      filters.tags = req.query.tags.split(',').map((t) => t.trim()).filter(Boolean);
+      filters.tags = req.query.tags
+        .split(',')
+        .map((t) => t.trim())
+        .filter(Boolean);
     }
   }
   if (req.query.sort && typeof req.query.sort === 'string') filters.sort = req.query.sort;

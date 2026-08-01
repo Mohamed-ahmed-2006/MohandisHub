@@ -123,7 +123,9 @@ export const AdminCommandPalette = ({
             type="text"
             className="admin-cmd-input"
             placeholder={
-              isAr ? 'ابحث عن قسم أو إجراء إداري... (Ctrl + K)' : 'Search admin tabs or commands... (Ctrl + K)'
+              isAr
+                ? 'ابحث عن قسم أو إجراء إداري... (Ctrl + K)'
+                : 'Search admin tabs or commands... (Ctrl + K)'
             }
             value={query}
             onChange={(e) => setQuery(e.target.value)}

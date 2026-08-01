@@ -81,7 +81,11 @@ export const ProviderPaymentDetailsCard = ({ bidId }: { bidId: string }) => {
 
   if (locked) {
     return (
-      <section className="award-offer" dir={loc === 'ar' ? 'rtl' : 'ltr'} data-testid="payment-locked">
+      <section
+        className="award-offer"
+        dir={loc === 'ar' ? 'rtl' : 'ltr'}
+        data-testid="payment-locked"
+      >
         <p className="mhc-note">{tr('locked', loc)}</p>
       </section>
     );

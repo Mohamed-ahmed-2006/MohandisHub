@@ -52,9 +52,11 @@ const AppShellInner = ({ children }: AppShellProps) => {
 
   const { authUser, accessToken, logout, isReady, refreshSession, isAuthenticated } = useAuth();
   const isProvider = authUser?.role ? isProviderRole(authUser.role) : false;
-  const { mhcSummary, isLoading: isMhcLoading, mutate: mutateMhc } = useMhcCredits(
-    isReady && isAuthenticated && accessToken && isProvider ? accessToken : null,
-  );
+  const {
+    mhcSummary,
+    isLoading: isMhcLoading,
+    mutate: mutateMhc,
+  } = useMhcCredits(isReady && isAuthenticated && accessToken && isProvider ? accessToken : null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [depositMessage, setDepositMessage] = useState<'success' | 'cancelled' | null>(null);
   const { addToast } = useToast();

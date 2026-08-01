@@ -95,13 +95,13 @@ split-settlement rules.
 
 ## Authorization matrix
 
-| Case type | User access | Counterparty lifecycle | Admin access | Authoritative write path |
-| --- | --- | --- | --- | --- |
-| General support | Opener only; unrelated users receive 404 | None | DB-reloaded admin with `manage_support` or `manage_transactions`, through `/admin/*` only | Support service/tables |
-| Reservation dispute | Opener/customer and the other reservation participant; unrelated users receive 404 | Derived from the authoritative reservation participants; not independently revocable | Same DB-backed admin gate; generic settlement is refused | Reservation dispute service/tables |
-| Need/job dispute | Opener plus the engagement counterparty only while `counterparty_access=true` | Auto-granted from an activated need or accepted job application; admin grant/revoke route is atomic | Same DB-backed admin gate | Native case tables |
-| Direct-payment issue | Opener plus the activated engagement counterparty only while granted | Auto-granted only after an MHC activation proves the relationship; admin grant/revoke is atomic | Same DB-backed admin gate | Native case tables |
-| Safety report | Opener only; reported user receives 404 and no notification | Forbidden by `chk_resolution_cases_safety_is_private` | Same DB-backed admin gate | Native case tables |
+| Case type            | User access                                                                        | Counterparty lifecycle                                                                              | Admin access                                                                              | Authoritative write path           |
+| -------------------- | ---------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- | ---------------------------------- |
+| General support      | Opener only; unrelated users receive 404                                           | None                                                                                                | DB-reloaded admin with `manage_support` or `manage_transactions`, through `/admin/*` only | Support service/tables             |
+| Reservation dispute  | Opener/customer and the other reservation participant; unrelated users receive 404 | Derived from the authoritative reservation participants; not independently revocable                | Same DB-backed admin gate; generic settlement is refused                                  | Reservation dispute service/tables |
+| Need/job dispute     | Opener plus the engagement counterparty only while `counterparty_access=true`      | Auto-granted from an activated need or accepted job application; admin grant/revoke route is atomic | Same DB-backed admin gate                                                                 | Native case tables                 |
+| Direct-payment issue | Opener plus the activated engagement counterparty only while granted               | Auto-granted only after an MHC activation proves the relationship; admin grant/revoke is atomic     | Same DB-backed admin gate                                                                 | Native case tables                 |
+| Safety report        | Opener only; reported user receives 404 and no notification                        | Forbidden by `chk_resolution_cases_safety_is_private`                                               | Same DB-backed admin gate                                                                 | Native case tables                 |
 
 The common user predicate is in
 `HelpResolutionRepository.listCasesForUser()` and
@@ -244,20 +244,20 @@ contract tests and production build rather than a browser screenshot.
 
 ### Visual-polish contract matrix
 
-| Requirement | Result | Proof |
-| --- | --- | --- |
-| Evidence uses the authorized proxy | Pass | `handleOpenEvidence()` calls `getPrivateFileOpenableUrl()`; the helper fetches `/api/proxy/private-upload`, which forwards auth and returns bytes as a browser blob. |
-| No bucket, object path or raw storage URL reaches the component | Pass | Case DTO tests expose only `/api/upload/private/:id`; the proxy consumes the upstream response server-side. |
-| Canonical backend statuses only | Pass | Unified `status` and authoritative `engineStatus` are mapped by `statusLabel()`/`statusPillInfo()`; no frontend-derived lifecycle status is invented. |
-| Safety reports never show a counterparty | Pass | The database constraint forbids one, the API omits one, and list/detail rendering additionally checks `kind !== 'safety_report'`. |
-| Unsupported creation is disabled honestly | Pass | Availability and eligible subjects come from `GET /api/help-resolution/availability`; unavailable messages use its reason code. |
-| Reservation disputes use the settlement flow | Pass | Creation routes to locale-aware `/app/bookings`; the generic API resolver still refuses this kind. |
-| Historical support/dispute links retain context | Pass | `/app/support` and `/app/disputes` keep their default filters; `ticketId` and `disputeId` resolve through authorized server endpoints. |
-| Mobile selection is retained | Pass | `selectedCaseId` drives `support-layout--thread`; the viewport rule hides only the inactive pane and the back action clears selection explicitly. |
-| Dialog keyboard behavior is real | Pass | Focusable elements are queried at runtime; Tab/Shift+Tab wrap, Escape closes, and cleanup restores prior/opener focus. |
-| Arabic RTL and 375px bounds | Pass by contract/build | Locale root supplies `dir`; logical properties mirror navigation; `min-width: 0`, `max-width: 100%`, wrapping and 375px rules prevent component-level overflow. No screenshot was available. |
-| Long values wrap safely | Pass | Titles, message bodies, metadata, header chips and evidence links use `overflow-wrap: anywhere` and bounded widths. |
-| Shared CSS/dictionaries avoid unrelated regressions | Pass | Focus selector is screen-scoped; full lint, i18n, 292 web tests and production web build pass. |
+| Requirement                                                     | Result                 | Proof                                                                                                                                                                                        |
+| --------------------------------------------------------------- | ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Evidence uses the authorized proxy                              | Pass                   | `handleOpenEvidence()` calls `getPrivateFileOpenableUrl()`; the helper fetches `/api/proxy/private-upload`, which forwards auth and returns bytes as a browser blob.                         |
+| No bucket, object path or raw storage URL reaches the component | Pass                   | Case DTO tests expose only `/api/upload/private/:id`; the proxy consumes the upstream response server-side.                                                                                  |
+| Canonical backend statuses only                                 | Pass                   | Unified `status` and authoritative `engineStatus` are mapped by `statusLabel()`/`statusPillInfo()`; no frontend-derived lifecycle status is invented.                                        |
+| Safety reports never show a counterparty                        | Pass                   | The database constraint forbids one, the API omits one, and list/detail rendering additionally checks `kind !== 'safety_report'`.                                                            |
+| Unsupported creation is disabled honestly                       | Pass                   | Availability and eligible subjects come from `GET /api/help-resolution/availability`; unavailable messages use its reason code.                                                              |
+| Reservation disputes use the settlement flow                    | Pass                   | Creation routes to locale-aware `/app/bookings`; the generic API resolver still refuses this kind.                                                                                           |
+| Historical support/dispute links retain context                 | Pass                   | `/app/support` and `/app/disputes` keep their default filters; `ticketId` and `disputeId` resolve through authorized server endpoints.                                                       |
+| Mobile selection is retained                                    | Pass                   | `selectedCaseId` drives `support-layout--thread`; the viewport rule hides only the inactive pane and the back action clears selection explicitly.                                            |
+| Dialog keyboard behavior is real                                | Pass                   | Focusable elements are queried at runtime; Tab/Shift+Tab wrap, Escape closes, and cleanup restores prior/opener focus.                                                                       |
+| Arabic RTL and 375px bounds                                     | Pass by contract/build | Locale root supplies `dir`; logical properties mirror navigation; `min-width: 0`, `max-width: 100%`, wrapping and 375px rules prevent component-level overflow. No screenshot was available. |
+| Long values wrap safely                                         | Pass                   | Titles, message bodies, metadata, header chips and evidence links use `overflow-wrap: anywhere` and bounded widths.                                                                          |
+| Shared CSS/dictionaries avoid unrelated regressions             | Pass                   | Focus selector is screen-scoped; full lint, i18n, 292 web tests and production web build pass.                                                                                               |
 
 ## Focused corrections made during integration
 

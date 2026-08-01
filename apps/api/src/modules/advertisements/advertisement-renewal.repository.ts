@@ -406,7 +406,11 @@ export class AdvertisementRenewalRepository {
   /** Has this exact boundary outcome already been recorded? */
   async findEventInTx(
     client: PoolClient,
-    params: { advertisementId: string; boundaryPeriodNumber: number; eventType: AdRenewalEventType },
+    params: {
+      advertisementId: string;
+      boundaryPeriodNumber: number;
+      eventType: AdRenewalEventType;
+    },
   ): Promise<AdvertisementRenewalEventRow | null> {
     const { rows } = await client.query<AdvertisementRenewalEventRow>(
       `SELECT ${EVENT_COLUMNS}
@@ -557,7 +561,10 @@ export class AdvertisementRenewalRepository {
   }
 
   /** Provider-facing renewal history, newest first. */
-  async listEvents(advertisementId: string, limit: number): Promise<AdvertisementRenewalEventRow[]> {
+  async listEvents(
+    advertisementId: string,
+    limit: number,
+  ): Promise<AdvertisementRenewalEventRow[]> {
     const { rows } = await getPool().query<AdvertisementRenewalEventRow>(
       `SELECT ${EVENT_COLUMNS}
        FROM advertisement_renewal_events

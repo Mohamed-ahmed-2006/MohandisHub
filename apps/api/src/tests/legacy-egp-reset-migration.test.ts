@@ -111,7 +111,9 @@ describe('legacy EGP reset migration — safety invariants', () => {
   });
 
   it('never touches MHC credit purchases', () => {
-    const depositUpdates = statements.filter((s) => /^UPDATE\s+public\.deposit_requests\b/i.test(s));
+    const depositUpdates = statements.filter((s) =>
+      /^UPDATE\s+public\.deposit_requests\b/i.test(s),
+    );
     expect(depositUpdates.length).toBe(1);
     // Positively scoped to wallet_topup, which excludes credit_purchase rows.
     expect(depositUpdates[0]).toMatch(/purpose\s*=\s*'wallet_topup'/i);
@@ -169,7 +171,9 @@ describe('MHC purchase reference scope migration', () => {
 
   it('replaces the over-broad index with a credit-purchase-scoped one', () => {
     expect(raw).toMatch(/DROP INDEX IF EXISTS public\.uq_deposit_requests_instapay_reference/);
-    expect(raw).toMatch(/CREATE UNIQUE INDEX IF NOT EXISTS uq_deposit_requests_credit_purchase_reference/);
+    expect(raw).toMatch(
+      /CREATE UNIQUE INDEX IF NOT EXISTS uq_deposit_requests_credit_purchase_reference/,
+    );
   });
 
   it('scopes the new index to credit purchases only', () => {

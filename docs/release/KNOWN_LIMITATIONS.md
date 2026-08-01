@@ -21,25 +21,25 @@ With escrow retired, money moves off-platform. The platform sees that a provider
 activate a job and that a customer later marked it complete. It has no evidence that payment
 occurred, in what amount, or at all.
 
-*Consequences:* completion is customer-attested; a dishonest customer can receive work and
+_Consequences:_ completion is customer-attested; a dishonest customer can receive work and
 refuse to mark it complete; dispute resolution has no financial record to work from; the
 platform cannot report GMV.
 
-*Mitigation:* Part B Phase 11 must define a dispute path that works without financial
+_Mitigation:_ Part B Phase 11 must define a dispute path that works without financial
 records. Providers should be told plainly, in-product, that the platform does not hold or
 guarantee job payments.
 
 ### L1.2 — MHC spent on activation is not refundable
 
-**Status:** Inherent · **Proposed acceptance** · *Confirm in Phase 11*
+**Status:** Inherent · **Proposed acceptance** · _Confirm in Phase 11_
 
 MHC is non-cashable by design. A provider who activates a job that then collapses — customer
 disappears, work cancelled, dispute lost — has spent credits with no automatic recourse.
 
-*Consequences:* provider dissatisfaction in exactly the situations where they are already
+_Consequences:_ provider dissatisfaction in exactly the situations where they are already
 unhappy. This is the most likely source of early support load.
 
-*Options not yet decided:* no recourse; discretionary admin re-grant via
+_Options not yet decided:_ no recourse; discretionary admin re-grant via
 `type='adjustment'` (the ledger already supports it); or an automatic re-grant under defined
 conditions. **This will become a blocking decision in Phase 11.** Flagged now so it is not a
 surprise.
@@ -52,10 +52,10 @@ surprise.
 can split a phone number across messages, describe it obliquely, or agree to meet on another
 platform. Redaction raises friction; it does not create a wall.
 
-*Consequences:* some proportion of matches will always leak off-platform. The commercial
+_Consequences:_ some proportion of matches will always leak off-platform. The commercial
 question is what proportion, which only production data answers.
 
-*Mitigation:* attachments are blocked pre-activation, the award itself requires payment, and
+_Mitigation:_ attachments are blocked pre-activation, the award itself requires payment, and
 `raw_content` preserves original text for moderation. Post-launch, monitor the ratio of
 awards to activations — a large gap indicates leakage.
 
@@ -71,12 +71,12 @@ awards to activations — a large gap indicates leakage.
 exchange-rate model. It is **not** to be implemented unless separately requested. Launch uses
 the flat package model already in `mhc_credit_packages`.
 
-*Follow-up:* the file should move under `docs/` so it is not mistaken for an active
+_Follow-up:_ the file should move under `docs/` so it is not mistaken for an active
 specification (MHC-22).
 
 ### L2.2 — Crypto MHC purchase (NOWPayments)
 
-**Status:** Proposed deferral · *Depends on D6*
+**Status:** Proposed deferral · _Depends on D6_
 
 `credit_purchase_nowpayments` is set to `false` and `fulfilPurchaseFromWebhook` has no caller.
 Launch uses manual InstaPay only. The webhook path also carries MHC-12's status-validation
@@ -84,7 +84,7 @@ gap and must not be enabled until that is fixed.
 
 ### L2.3 — Booking / reservation MHC activation
 
-**Status:** Proposed deferral · *Depends on S1*
+**Status:** Proposed deferral · _Depends on S1_
 
 `activateBooking` is implemented but unwired (MHC-08). If bookings ship as-is, work obtained
 through that path is free and ungated — an unpriced second door into the marketplace. If
@@ -92,7 +92,7 @@ bookings are deferred, the path should be **disabled** rather than left open and
 
 ### L2.4 — Advertisements and promotions on MHC
 
-**Status:** Proposed deferral to immediately post-launch · *Depends on D6*
+**Status:** Proposed deferral to immediately post-launch · _Depends on D6_
 
 Four action keys (`advertisement`, `service_promotion`, `featured_provider`,
 `promoted_proposal`) are seeded but unconsumed. Recommendation is free-only ads at launch
@@ -104,14 +104,14 @@ Four action keys (`advertisement`, `service_promotion`, `featured_provider`,
 
 Real, understood, and not worth fixing before launch.
 
-| ID | Limitation | Why accepted |
-| --- | --- | --- |
-| L3.1 | Two implementations of award release and MHC grant exist (MHC-21) | Dead code; harmless until someone edits one and not the other. Consolidated during Part A M6. |
-| L3.2 | MHC wallets store `currency = 'EGP'` (MHC-23) | `asset_code` is authoritative in every query. Cosmetic until reporting is built. |
-| L3.3 | `NUMERIC(14,2)` MHC columns vs `NUMERIC(12,2)` ledger (MHC-24) | Only reachable at absurd values. Fix when a package exceeds 10^10 MHC — i.e. never. |
-| L3.4 | `getMyCredits` writes a wallet row on read (MHC-25) | Idempotent, harmless, and removing it risks a null-wallet path elsewhere. |
-| L3.5 | No generated database types | 83 hand-applied migrations and hand-written row types. Introducing generation now would touch every repository. Phase 17 adds a consistency **check** instead of a rewrite. |
-| L3.6 | Retired escrow code remains in the tree | Fenced behind a fail-closed flag, preserves auditable history. Deleting a large money path during a recovery adds risk for no launch benefit (see D6). |
+| ID   | Limitation                                                        | Why accepted                                                                                                                                                                |
+| ---- | ----------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| L3.1 | Two implementations of award release and MHC grant exist (MHC-21) | Dead code; harmless until someone edits one and not the other. Consolidated during Part A M6.                                                                               |
+| L3.2 | MHC wallets store `currency = 'EGP'` (MHC-23)                     | `asset_code` is authoritative in every query. Cosmetic until reporting is built.                                                                                            |
+| L3.3 | `NUMERIC(14,2)` MHC columns vs `NUMERIC(12,2)` ledger (MHC-24)    | Only reachable at absurd values. Fix when a package exceeds 10^10 MHC — i.e. never.                                                                                         |
+| L3.4 | `getMyCredits` writes a wallet row on read (MHC-25)               | Idempotent, harmless, and removing it risks a null-wallet path elsewhere.                                                                                                   |
+| L3.5 | No generated database types                                       | 83 hand-applied migrations and hand-written row types. Introducing generation now would touch every repository. Phase 17 adds a consistency **check** instead of a rewrite. |
+| L3.6 | Retired escrow code remains in the tree                           | Fenced behind a fail-closed flag, preserves auditable history. Deleting a large money path during a recovery adds risk for no launch benefit (see D6).                      |
 
 ---
 
@@ -122,11 +122,11 @@ Real, understood, and not worth fixing before launch.
 Every credit purchase goes through `pending_review` and an admin decision. Providers wait for
 a human before they can activate a job.
 
-*Consequence:* purchase-to-activation latency is bounded by admin availability, not by
+_Consequence:_ purchase-to-activation latency is bounded by admin availability, not by
 technology. At launch volume this is fine; it will not scale, and it is a poor experience for
 a provider who has just been awarded work and wants to accept immediately.
 
-*Mitigation:* set an internal response-time target and staff to it. Automating this requires
+_Mitigation:_ set an internal response-time target and staff to it. Automating this requires
 the crypto or card rail (L2.2).
 
 ### L4.2 — MHC prices are all zero and inactive at launch

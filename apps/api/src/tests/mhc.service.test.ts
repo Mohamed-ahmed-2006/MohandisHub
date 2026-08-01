@@ -510,7 +510,9 @@ describe('MhcService — award activation gate', () => {
 
   it('returns 402 with the shortfall when the provider lacks credits', async () => {
     const service = new MhcService();
-    poolQueryMock.mockImplementation(routeQuery([{ match: /FROM bids b/, rows: [awardedBid] }, HAS_PAYMENT_METHOD]));
+    poolQueryMock.mockImplementation(
+      routeQuery([{ match: /FROM bids b/, rows: [awardedBid] }, HAS_PAYMENT_METHOD]),
+    );
 
     clientQueryMock.mockImplementation(
       routeQuery([
@@ -537,7 +539,9 @@ describe('MhcService — award activation gate', () => {
 
   it('charges the provider once and unlocks the job', async () => {
     const service = new MhcService();
-    poolQueryMock.mockImplementation(routeQuery([{ match: /FROM bids b/, rows: [awardedBid] }, HAS_PAYMENT_METHOD]));
+    poolQueryMock.mockImplementation(
+      routeQuery([{ match: /FROM bids b/, rows: [awardedBid] }, HAS_PAYMENT_METHOD]),
+    );
 
     clientQueryMock.mockImplementation(
       routeQuery([
@@ -573,7 +577,9 @@ describe('MhcService — award activation gate', () => {
 
   it('does not double-charge an already activated award', async () => {
     const service = new MhcService();
-    poolQueryMock.mockImplementation(routeQuery([{ match: /FROM bids b/, rows: [awardedBid] }, HAS_PAYMENT_METHOD]));
+    poolQueryMock.mockImplementation(
+      routeQuery([{ match: /FROM bids b/, rows: [awardedBid] }, HAS_PAYMENT_METHOD]),
+    );
 
     clientQueryMock.mockImplementation(
       routeQuery([
@@ -602,7 +608,9 @@ describe('MhcService — award activation gate', () => {
   // test asserts today's behaviour so the suite reflects reality until then.
   it('opens the gate for free when the action price is inactive', async () => {
     const service = new MhcService();
-    poolQueryMock.mockImplementation(routeQuery([{ match: /FROM bids b/, rows: [awardedBid] }, HAS_PAYMENT_METHOD]));
+    poolQueryMock.mockImplementation(
+      routeQuery([{ match: /FROM bids b/, rows: [awardedBid] }, HAS_PAYMENT_METHOD]),
+    );
 
     clientQueryMock.mockImplementation(
       routeQuery([
@@ -633,7 +641,9 @@ describe('MhcService — award activation gate', () => {
 
   it('blocks activation when the credit wallet is frozen', async () => {
     const service = new MhcService();
-    poolQueryMock.mockImplementation(routeQuery([{ match: /FROM bids b/, rows: [awardedBid] }, HAS_PAYMENT_METHOD]));
+    poolQueryMock.mockImplementation(
+      routeQuery([{ match: /FROM bids b/, rows: [awardedBid] }, HAS_PAYMENT_METHOD]),
+    );
 
     clientQueryMock.mockImplementation(
       routeQuery([
@@ -670,12 +680,17 @@ describe('MhcService — credit purchase fulfilment states', () => {
       ],
     },
     { match: /INSERT INTO wallets/, rows: [CREDIT_WALLET] },
-    { match: /SELECT balance::text FROM wallets WHERE id = \$1 FOR UPDATE/, rows: [{ balance: '20' }] },
+    {
+      match: /SELECT balance::text FROM wallets WHERE id = \$1 FOR UPDATE/,
+      rows: [{ balance: '20' }],
+    },
     { match: /INSERT INTO transactions/, rows: [{ id: 'tx-1' }] },
   ];
 
   const grantWasWritten = (): boolean =>
-    clientQueryMock.mock.calls.map((c) => String(c[0])).some((sql) => /INSERT INTO transactions/.test(sql));
+    clientQueryMock.mock.calls
+      .map((c) => String(c[0]))
+      .some((sql) => /INSERT INTO transactions/.test(sql));
 
   it.each(['pending', 'pending_review'])('grants credits from %s', async (status) => {
     const service = new MhcService();
@@ -786,13 +801,23 @@ describe('MhcService — webhook fulfilment', () => {
     clientQueryMock.mockImplementation(
       routeQuery([
         {
-          match: /FROM deposit_requests\s+WHERE id = \$1 AND purpose = 'credit_purchase'\s+FOR UPDATE/,
+          match:
+            /FROM deposit_requests\s+WHERE id = \$1 AND purpose = 'credit_purchase'\s+FOR UPDATE/,
           rows: [
-            { id: 'dep-1', user_id: 'provider-1', status: 'pending', mhc_grant_amount: '100', order_id: 'MHC-NP-1' },
+            {
+              id: 'dep-1',
+              user_id: 'provider-1',
+              status: 'pending',
+              mhc_grant_amount: '100',
+              order_id: 'MHC-NP-1',
+            },
           ],
         },
         { match: /INSERT INTO wallets/, rows: [CREDIT_WALLET] },
-        { match: /SELECT balance::text FROM wallets WHERE id = \$1 FOR UPDATE/, rows: [{ balance: '0' }] },
+        {
+          match: /SELECT balance::text FROM wallets WHERE id = \$1 FOR UPDATE/,
+          rows: [{ balance: '0' }],
+        },
         { match: /INSERT INTO transactions/, rows: [{ id: 'tx-1' }] },
       ]),
     );
@@ -869,7 +894,8 @@ describe('MhcService — NOWPayments IPN', () => {
     clientQueryMock.mockImplementation(
       routeQuery([
         {
-          match: /FROM deposit_requests\s+WHERE id = \$1 AND purpose = 'credit_purchase'\s+FOR UPDATE/,
+          match:
+            /FROM deposit_requests\s+WHERE id = \$1 AND purpose = 'credit_purchase'\s+FOR UPDATE/,
           rows: [
             {
               id: 'dep-np-1',
@@ -893,9 +919,10 @@ describe('MhcService — NOWPayments IPN', () => {
     const service = new MhcService();
     const { raw } = sign(settledBody);
 
-    await expect(
-      service.handleNowPaymentsCreditIpn(raw, 'deadbeef'),
-    ).rejects.toMatchObject({ code: 'INVALID_SIGNATURE', statusCode: 400 });
+    await expect(service.handleNowPaymentsCreditIpn(raw, 'deadbeef')).rejects.toMatchObject({
+      code: 'INVALID_SIGNATURE',
+      statusCode: 400,
+    });
 
     expect(poolQueryMock).not.toHaveBeenCalled();
     expect(connectMock).not.toHaveBeenCalled();
@@ -907,9 +934,9 @@ describe('MhcService — NOWPayments IPN', () => {
     // Same signature, inflated amount.
     const tampered = JSON.stringify({ ...settledBody, price_amount: 999999 });
 
-    await expect(
-      service.handleNowPaymentsCreditIpn(tampered, signature),
-    ).rejects.toMatchObject({ code: 'INVALID_SIGNATURE' });
+    await expect(service.handleNowPaymentsCreditIpn(tampered, signature)).rejects.toMatchObject({
+      code: 'INVALID_SIGNATURE',
+    });
     expect(connectMock).not.toHaveBeenCalled();
   });
 
@@ -999,7 +1026,8 @@ describe('MhcService — NOWPayments IPN', () => {
     clientQueryMock.mockImplementation(
       routeQuery([
         {
-          match: /FROM deposit_requests\s+WHERE id = \$1 AND purpose = 'credit_purchase'\s+FOR UPDATE/,
+          match:
+            /FROM deposit_requests\s+WHERE id = \$1 AND purpose = 'credit_purchase'\s+FOR UPDATE/,
           rows: [
             {
               id: 'dep-np-1',

@@ -25,13 +25,25 @@ describe('P1-12 pending award offer card filtering and sorting', () => {
   });
 
   it('includes single active pending offer', () => {
-    const offer: Partial<Bid> = { id: 'b-1', status: 'awarded', expires_at: new Date(Date.now() + 3600000).toISOString() };
+    const offer: Partial<Bid> = {
+      id: 'b-1',
+      status: 'awarded',
+      expires_at: new Date(Date.now() + 3600000).toISOString(),
+    };
     expect(filterAndSortOffers([offer])).toEqual([offer]);
   });
 
   it('sorts multiple offers by nearest expiration first', () => {
-    const near: Partial<Bid> = { id: 'b-near', status: 'awarded', expires_at: new Date(Date.now() + 100000).toISOString() };
-    const far: Partial<Bid> = { id: 'b-far', status: 'awarded', expires_at: new Date(Date.now() + 500000).toISOString() };
+    const near: Partial<Bid> = {
+      id: 'b-near',
+      status: 'awarded',
+      expires_at: new Date(Date.now() + 100000).toISOString(),
+    };
+    const far: Partial<Bid> = {
+      id: 'b-far',
+      status: 'awarded',
+      expires_at: new Date(Date.now() + 500000).toISOString(),
+    };
     const noExpiry: Partial<Bid> = { id: 'b-none', status: 'awarded', expires_at: null };
 
     const sorted = filterAndSortOffers([far, noExpiry, near]);
@@ -39,8 +51,16 @@ describe('P1-12 pending award offer card filtering and sorting', () => {
   });
 
   it('excludes expired offers', () => {
-    const expired: Partial<Bid> = { id: 'b-exp', status: 'awarded', expires_at: new Date(Date.now() - 1000).toISOString() };
-    const active: Partial<Bid> = { id: 'b-act', status: 'awarded', expires_at: new Date(Date.now() + 3600000).toISOString() };
+    const expired: Partial<Bid> = {
+      id: 'b-exp',
+      status: 'awarded',
+      expires_at: new Date(Date.now() - 1000).toISOString(),
+    };
+    const active: Partial<Bid> = {
+      id: 'b-act',
+      status: 'awarded',
+      expires_at: new Date(Date.now() + 3600000).toISOString(),
+    };
 
     expect(filterAndSortOffers([expired, active])).toEqual([active]);
   });
@@ -57,8 +77,16 @@ describe('P1-12 pending award offer card filtering and sorting', () => {
   it('proves that a craftsman role dashboard receives and processes pending award offers', () => {
     const craftsmanRole = 'craftsman';
     const craftsmanBids: Partial<Bid>[] = [
-      { id: 'craftsman-bid-1', status: 'awarded', expires_at: new Date(Date.now() + 7200000).toISOString() },
-      { id: 'craftsman-bid-2', status: 'declined', expires_at: new Date(Date.now() + 7200000).toISOString() },
+      {
+        id: 'craftsman-bid-1',
+        status: 'awarded',
+        expires_at: new Date(Date.now() + 7200000).toISOString(),
+      },
+      {
+        id: 'craftsman-bid-2',
+        status: 'declined',
+        expires_at: new Date(Date.now() + 7200000).toISOString(),
+      },
     ];
 
     expect(craftsmanRole).toBe('craftsman');

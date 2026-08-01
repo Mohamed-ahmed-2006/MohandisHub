@@ -306,8 +306,7 @@ uploadRouter.get(
       // participates in the decision.
       const allowed =
         (await isResolutionEvidenceVisibleToUser(user.id, row.id)) ||
-        (hasAdminPermission(user, 'manage_support') &&
-          (await isResolutionCaseEvidence(row.id))) ||
+        (hasAdminPermission(user, 'manage_support') && (await isResolutionCaseEvidence(row.id))) ||
         (await isJobOwnerOfApplicationWithCv(user.id, row.id)) ||
         (await isMoneyProofVisibleToUser(user.id, row.id));
       if (!allowed) {

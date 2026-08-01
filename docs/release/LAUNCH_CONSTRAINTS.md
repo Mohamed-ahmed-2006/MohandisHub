@@ -25,7 +25,7 @@ answered rather than left open.
 
 1. **Flat per-campaign pricing — resolved.** The billing unit is a period of exactly 168
    hours, pinned by `chk_ad_period_exact_week`. Because the duration is fixed, one price per
-   action key *is* a weekly price; no duration dimension is needed and no consumer multiplies
+   action key _is_ a weekly price; no duration dimension is needed and no consumer multiplies
    anything. A 1-day and a 365-day campaign can no longer cost the same, because neither
    exists — there are only weeks.
 2. **No refund policy — resolved.** The policy is: **a started week is non-refundable.**
@@ -60,7 +60,7 @@ Not because anything is unfinished. Every blocker above is closed and covered by
 PostgreSQL concurrency tests.
 
 The price stays 0 because **choosing a number is a commercial decision, separate from
-building the machinery that would collect it.** Shipping 2F-B is what *unblocks* a price; it
+building the machinery that would collect it.** Shipping 2F-B is what _unblocks_ a price; it
 is not the act of setting one, and this wave deliberately does not set one.
 
 Both `20260730120000_advertisement_weekly_billing.sql` and

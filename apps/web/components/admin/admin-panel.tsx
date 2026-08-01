@@ -125,7 +125,11 @@ export const AdminPanel = ({ locale, dictionary }: AdminPanelProps) => {
       label: dictionary.admin.tabs.reviewReports || 'Review reports',
       permission: 'manage_verifications',
     },
-    { id: 'support', label: dictionary.admin.tabs.support || 'Support', permission: 'manage_support' },
+    {
+      id: 'support',
+      label: dictionary.admin.tabs.support || 'Support',
+      permission: 'manage_support',
+    },
     {
       id: 'notifications',
       label: dictionary.admin.tabs.notifications || 'Notifications',
@@ -133,7 +137,11 @@ export const AdminPanel = ({ locale, dictionary }: AdminPanelProps) => {
     },
     { id: 'ads', label: dictionary.admin.tabs.ads || 'Advertisements', permission: 'manage_ads' },
     { id: 'media', label: 'Media library', permission: 'manage_media' },
-    { id: 'settings', label: dictionary.admin.tabs.settings || 'Settings', permission: 'manage_settings' },
+    {
+      id: 'settings',
+      label: dictionary.admin.tabs.settings || 'Settings',
+      permission: 'manage_settings',
+    },
     { id: 'operations', label: 'Operations', permission: 'super_admin' },
     {
       id: 'retention',
@@ -201,7 +209,9 @@ export const AdminPanel = ({ locale, dictionary }: AdminPanelProps) => {
               <line x1="21" y1="21" x2="16.65" y2="16.65" />
             </svg>
             <span>
-              {locale === 'ar' ? 'بحث سريع وأوامر... (Ctrl + K)' : 'Search or command... (Ctrl + K)'}
+              {locale === 'ar'
+                ? 'بحث سريع وأوامر... (Ctrl + K)'
+                : 'Search or command... (Ctrl + K)'}
             </span>
             <span className="admin-cmd-trigger-key">⌘K</span>
           </button>

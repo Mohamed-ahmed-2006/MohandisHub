@@ -8,31 +8,31 @@
 
 **`GET /api/services/search`** is the only full-featured search endpoint, and it is class 1:
 
-| Facet | Supported |
-|---|---|
-| Free text (`query`) | ✅ |
-| Category | ✅ |
-| City / area | ✅ |
-| Provider type (expert/business/craftsman) | ✅ |
-| Min rating | ✅ |
-| Price range | ✅ |
-| Verified only | ✅ |
-| Sort | ✅ 5 options |
-| Pagination | ✅ |
+| Facet                                     | Supported    |
+| ----------------------------------------- | ------------ |
+| Free text (`query`)                       | ✅           |
+| Category                                  | ✅           |
+| City / area                               | ✅           |
+| Provider type (expert/business/craftsman) | ✅           |
+| Min rating                                | ✅           |
+| Price range                               | ✅           |
+| Verified only                             | ✅           |
+| Sort                                      | ✅ 5 options |
+| Pagination                                | ✅           |
 
 Supporting capabilities, all class 1: `saved_searches` (table + routes + UI, wired at `app-home-screen.tsx:431`), recommendations with explicit consent and event recording, favorites, and `service_view_events` with aggregate triggers.
 
 ### 1.2 What is weak
 
-| Facet | Class | Note |
-|---|---|---|
-| **Tags** | 6 | `tags TEXT[]` with a GIN index exists on `services` and is **not exposed as a filter**. The index is built and unused |
-| Specialties | 6 | Profile data not searchable |
-| Service area (radius) | 6 | Only exact city/area match |
-| Availability | 6 | `reservation_slots` exist; not a filter |
-| Experience | 6 | Profile field, not searchable |
-| Needs search | 4 | `GET /api/needs` lacks a comparable filter set |
-| Provider/people search | 4 | Only reachable indirectly via services |
+| Facet                  | Class | Note                                                                                                                  |
+| ---------------------- | ----- | --------------------------------------------------------------------------------------------------------------------- |
+| **Tags**               | 6     | `tags TEXT[]` with a GIN index exists on `services` and is **not exposed as a filter**. The index is built and unused |
+| Specialties            | 6     | Profile data not searchable                                                                                           |
+| Service area (radius)  | 6     | Only exact city/area match                                                                                            |
+| Availability           | 6     | `reservation_slots` exist; not a filter                                                                               |
+| Experience             | 6     | Profile field, not searchable                                                                                         |
+| Needs search           | 4     | `GET /api/needs` lacks a comparable filter set                                                                        |
+| Provider/people search | 4     | Only reachable indirectly via services                                                                                |
 
 **Adding tag filtering is the cheapest high-value search improvement available** — the column, the data and the index all already exist.
 
@@ -85,28 +85,28 @@ dashboards/*               → already separate; keep
 
 ### 2.2 Customer dashboard vs. required
 
-| Required | Class |
-|---|---|
-| Needs awaiting proposals | 1 |
-| Proposals awaiting review | 4 — bid count shown, no comparison entry |
-| **Awards awaiting activation** | 6 — customer cannot see they are waiting on the provider |
-| Active projects | 4 |
-| **Deliverables awaiting approval** | 6 — feature absent |
-| Unread messages | 1 |
-| **Open support cases** | 6 |
+| Required                           | Class                                                    |
+| ---------------------------------- | -------------------------------------------------------- |
+| Needs awaiting proposals           | 1                                                        |
+| Proposals awaiting review          | 4 — bid count shown, no comparison entry                 |
+| **Awards awaiting activation**     | 6 — customer cannot see they are waiting on the provider |
+| Active projects                    | 4                                                        |
+| **Deliverables awaiting approval** | 6 — feature absent                                       |
+| Unread messages                    | 1                                                        |
+| **Open support cases**             | 6                                                        |
 
 ### 2.3 Provider dashboard vs. required
 
-| Required | Class |
-|---|---|
-| Relevant opportunities | 4 — list exists, no relevance ranking |
-| Draft/submitted proposals | 1 |
-| **Awards awaiting activation** | 2 — `AwardOfferCard` exists and works; **not surfaced on the dashboard** |
-| Active projects | 4 |
-| Upcoming milestones | 6 |
-| Profile completion | 6 |
-| **MHC balance and recent usage** | 5 — dashboard shows the **frozen EGP balance**, not MHC |
-| Pending reviews | 6 |
+| Required                         | Class                                                                    |
+| -------------------------------- | ------------------------------------------------------------------------ |
+| Relevant opportunities           | 4 — list exists, no relevance ranking                                    |
+| Draft/submitted proposals        | 1                                                                        |
+| **Awards awaiting activation**   | 2 — `AwardOfferCard` exists and works; **not surfaced on the dashboard** |
+| Active projects                  | 4                                                                        |
+| Upcoming milestones              | 6                                                                        |
+| Profile completion               | 6                                                                        |
+| **MHC balance and recent usage** | 5 — dashboard shows the **frozen EGP balance**, not MHC                  |
+| Pending reviews                  | 6                                                                        |
 
 `award-offer-card.tsx` (222 lines) is a well-built component for the single most important provider action — accept and activate. It renders inside the needs flow but not on the dashboard, so a provider must go looking for a time-limited, revenue-generating offer.
 
@@ -114,16 +114,16 @@ dashboards/*               → already separate; keep
 
 `business-dashboard.tsx` has tabs: `overview | services | orders | analytics | jobs | team`.
 
-| Required | Class |
-|---|---|
-| Sales pipeline | 4 — orders tab |
-| **Procurement activity** | 6 — a business cannot buy (see `02`) |
-| Team workload | 4 — team panel lists members, no workload |
-| Services | 1 |
-| Projects | 4 |
-| Subscription state | 4 |
-| **MHC state** | 6 |
-| Analytics summary | 2 — works; tab-only |
+| Required                 | Class                                     |
+| ------------------------ | ----------------------------------------- |
+| Sales pipeline           | 4 — orders tab                            |
+| **Procurement activity** | 6 — a business cannot buy (see `02`)      |
+| Team workload            | 4 — team panel lists members, no workload |
+| Services                 | 1                                         |
+| Projects                 | 4                                         |
+| Subscription state       | 4                                         |
+| **MHC state**            | 6                                         |
+| Analytics summary        | 2 — works; tab-only                       |
 
 **Sales and procurement are not separated because procurement does not exist.** This is downstream of the role model, not a dashboard defect.
 
@@ -149,10 +149,10 @@ dashboards/*               → already separate; keep
 
 **Two important surfaces are unreachable.**
 
-| Route | Contains | In sidebar |
-|---|---|---|
-| `/app/profile` | **`MhcCreditsScreen`** — balance, packages, purchase, history | ❌ |
-| `/app/projects` | Employment jobs workspace | ❌ |
+| Route           | Contains                                                      | In sidebar |
+| --------------- | ------------------------------------------------------------- | ---------- |
+| `/app/profile`  | **`MhcCreditsScreen`** — balance, packages, purchase, history | ❌         |
+| `/app/projects` | Employment jobs workspace                                     | ❌         |
 
 The MHC screen is the launch revenue mechanism. It is buried at `profile-screen.tsx:928` while the frozen EGP balance has a permanent header pill. **This inversion is the single clearest symptom of the incomplete migration.**
 
@@ -170,19 +170,19 @@ Replace the role array with declared capabilities:
 type NavItem = {
   href: string;
   labelKey: string;
-  capability: Capability;   // not roles
+  capability: Capability; // not roles
 };
 
 const NAV: NavItem[] = [
-  { href: '/app',            labelKey: 'nav.home',       capability: 'always' },
-  { href: '/app/needs',      labelKey: 'nav.needs',      capability: 'post_needs' },
+  { href: '/app', labelKey: 'nav.home', capability: 'always' },
+  { href: '/app/needs', labelKey: 'nav.needs', capability: 'post_needs' },
   { href: '/app/opportunities', labelKey: 'nav.opportunities', capability: 'submit_bids' },
-  { href: '/app/catalogue',  labelKey: 'nav.myCatalogue', capability: 'manage_services' },
-  { href: '/app/work',       labelKey: 'nav.myWork',     capability: 'always' },
-  { href: '/app/credits',    labelKey: 'nav.credits',    capability: 'hold_mhc' },
-  { href: '/app/analytics',  labelKey: 'nav.analytics',  capability: 'view_analytics' },
-  { href: '/app/team',       labelKey: 'nav.team',       capability: 'manage_team' },
-  { href: '/app/help',       labelKey: 'nav.help',       capability: 'always' },
+  { href: '/app/catalogue', labelKey: 'nav.myCatalogue', capability: 'manage_services' },
+  { href: '/app/work', labelKey: 'nav.myWork', capability: 'always' },
+  { href: '/app/credits', labelKey: 'nav.credits', capability: 'hold_mhc' },
+  { href: '/app/analytics', labelKey: 'nav.analytics', capability: 'view_analytics' },
+  { href: '/app/team', labelKey: 'nav.team', capability: 'manage_team' },
+  { href: '/app/help', labelKey: 'nav.help', capability: 'always' },
 ];
 ```
 
@@ -192,11 +192,11 @@ Interim step before workspaces land: keep role filtering, but **add `/app/credit
 
 ### 3.4 Header
 
-| Current | Proposed |
-|---|---|
+| Current                        | Proposed                                                          |
+| ------------------------------ | ----------------------------------------------------------------- |
 | EGP balance pill for all roles | MHC pill for provider workspaces; nothing for customer workspaces |
-| `+` → empty deposit modal | `+` → buy MHC (providers only) |
-| — | Workspace switcher (once workspaces exist) |
+| `+` → empty deposit modal      | `+` → buy MHC (providers only)                                    |
+| —                              | Workspace switcher (once workspaces exist)                        |
 
 ---
 
@@ -212,11 +212,11 @@ Interim step before workspaces land: keep role filtering, but **add `/app/credit
 
 ## 5. Recommended order
 
-1. Add `/app/credits` to the sidebar; add the MHC header pill *(small, immediate)*
-2. Rename "Projects" → "Hiring"; "My Services" → "My Catalogue"; delete the `/app/browse` redirect *(small)*
-3. Add `/app/analytics` with a guard *(small)*
-4. Expose tag filtering in search *(small — index already exists)*
-5. Surface `AwardOfferCard` on the provider dashboard *(small, high value)*
-6. Extract `ResultCard` and the search panel from the monolith *(medium)*
-7. Add route guards matching sidebar visibility *(medium)*
-8. Capability-driven navigation *(medium — after workspaces)*
+1. Add `/app/credits` to the sidebar; add the MHC header pill _(small, immediate)_
+2. Rename "Projects" → "Hiring"; "My Services" → "My Catalogue"; delete the `/app/browse` redirect _(small)_
+3. Add `/app/analytics` with a guard _(small)_
+4. Expose tag filtering in search _(small — index already exists)_
+5. Surface `AwardOfferCard` on the provider dashboard _(small, high value)_
+6. Extract `ResultCard` and the search panel from the monolith _(medium)_
+7. Add route guards matching sidebar visibility _(medium)_
+8. Capability-driven navigation _(medium — after workspaces)_

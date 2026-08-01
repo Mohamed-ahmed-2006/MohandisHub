@@ -211,8 +211,9 @@ describe('bid chat — posting rules', () => {
   it('rejects a viewer who is neither the customer nor the bidder', async () => {
     const { service } = buildService({ activatedBids: [WINNING_BID], needActivated: true });
 
-    await expect(
-      service.listBidMessages(NEED_ID, WINNING_BID, 'stranger'),
-    ).rejects.toMatchObject({ code: 'FORBIDDEN', statusCode: 403 });
+    await expect(service.listBidMessages(NEED_ID, WINNING_BID, 'stranger')).rejects.toMatchObject({
+      code: 'FORBIDDEN',
+      statusCode: 403,
+    });
   });
 });

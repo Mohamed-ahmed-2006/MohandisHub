@@ -13,9 +13,9 @@ the four `feat/wave-2i-help-resolution-ui` commits cherry-picked).
 
 Two case engines already existed and both hold live user data:
 
-| Engine | Tables |
-| :--- | :--- |
-| Platform support | `support_tickets`, `support_ticket_messages` |
+| Engine                      | Tables                                                                              |
+| :-------------------------- | :---------------------------------------------------------------------------------- |
+| Platform support            | `support_tickets`, `support_ticket_messages`                                        |
 | Reservation escrow disputes | `reservation_disputes`, `reservation_dispute_notes`, `reservation_dispute_evidence` |
 
 Neither was rewritten. Two reasons decided it:
@@ -49,31 +49,31 @@ appears).
 
 ### User surface
 
-| Method | Route | Purpose |
-| :--- | :--- | :--- |
-| `GET` | `/cases` | Unified paginated listing. Filters: `kind`, `status`, `search`, `escalated`, `page`, `limit`. |
-| `GET` | `/cases/:caseId` | Full case file: messages, evidence, timeline, resolution, escalation, capabilities. |
-| `POST` | `/cases` | Open a case. Discriminated on `kind`. |
-| `POST` | `/cases/:caseId/messages` | Post to the thread. |
-| `POST` | `/cases/:caseId/evidence` | Attach a private upload. |
-| `POST` | `/cases/:caseId/escalate` | Escalate for admin review, once. |
-| `GET` | `/availability` | Which kinds this caller may open, and against what. |
-| `GET` | `/cases/by-support-ticket/:ticketId` | Historical `/app/support?ticketId=…` deep links. |
-| `GET` | `/cases/by-reservation-dispute/:disputeId` | Historical `/app/disputes?disputeId=…` deep links. |
+| Method | Route                                      | Purpose                                                                                       |
+| :----- | :----------------------------------------- | :-------------------------------------------------------------------------------------------- |
+| `GET`  | `/cases`                                   | Unified paginated listing. Filters: `kind`, `status`, `search`, `escalated`, `page`, `limit`. |
+| `GET`  | `/cases/:caseId`                           | Full case file: messages, evidence, timeline, resolution, escalation, capabilities.           |
+| `POST` | `/cases`                                   | Open a case. Discriminated on `kind`.                                                         |
+| `POST` | `/cases/:caseId/messages`                  | Post to the thread.                                                                           |
+| `POST` | `/cases/:caseId/evidence`                  | Attach a private upload.                                                                      |
+| `POST` | `/cases/:caseId/escalate`                  | Escalate for admin review, once.                                                              |
+| `GET`  | `/availability`                            | Which kinds this caller may open, and against what.                                           |
+| `GET`  | `/cases/by-support-ticket/:ticketId`       | Historical `/app/support?ticketId=…` deep links.                                              |
+| `GET`  | `/cases/by-reservation-dispute/:disputeId` | Historical `/app/disputes?disputeId=…` deep links.                                            |
 
 ### Admin surface
 
 Requires `authenticate` → `loadAdminFromDb` → `requireRole('admin')` →
 `requireAdminAnyPermission('manage_support', 'manage_transactions')`.
 
-| Method | Route | Purpose |
-| :--- | :--- | :--- |
-| `GET` | `/admin/cases` | Queue, escalated first. |
-| `GET` | `/admin/cases/:caseId` | Case file including internal notes. |
+| Method | Route                           | Purpose                                                 |
+| :----- | :------------------------------ | :------------------------------------------------------ |
+| `GET`  | `/admin/cases`                  | Queue, escalated first.                                 |
+| `GET`  | `/admin/cases/:caseId`          | Case file including internal notes.                     |
 | `POST` | `/admin/cases/:caseId/messages` | Reply, or add an internal note (`visibility: "admin"`). |
-| `POST` | `/admin/cases/:caseId/assign` | Assign or unassign. |
-| `POST` | `/admin/cases/:caseId/status` | Move to `open` / `awaiting_user` / `under_review`. |
-| `POST` | `/admin/cases/:caseId/resolve` | Resolve or close with an outcome. |
+| `POST` | `/admin/cases/:caseId/assign`   | Assign or unassign.                                     |
+| `POST` | `/admin/cases/:caseId/status`   | Move to `open` / `awaiting_user` / `under_review`.      |
+| `POST` | `/admin/cases/:caseId/resolve`  | Resolve or close with an outcome.                       |
 
 The user surface reads **no** admin flag at all. `req.user.isAdmin` there comes
 from a JWT that may be hours old; anything an admin does as an admin goes
@@ -84,13 +84,13 @@ database on every request.
 
 ## 3. Deviations from the UI contract
 
-| UI contract | Built | Why |
-| :--- | :--- | :--- |
-| `POST /help-resolution/job-disputes` | `POST /cases` with `kind: "need_job_dispute"` | One creation endpoint keeps validation, duplicate prevention, evidence ownership and notification in one place. |
-| `POST /help-resolution/payment-disputes` | `POST /cases` with `kind: "direct_payment"` | Same. |
-| `referenceCode: "TKT-84920"` (client-derived from the id) | `MH-000042`, server-issued from a sequence | Eight hex characters of a uuid collide with roughly even odds inside a hundred thousand cases, and a reference a support agent reads aloud must stay unique. |
-| `unreadCount` | `messageCount` | There is no per-user read marker on either engine, so an unread count could only have been invented. |
-| Safety reports fall back to a support ticket with `category: "bug"` | Native `safety_report` kind | A safety report has a reported party who must never gain access; that is a different authorisation rule from any dispute, and it is now enforced in the schema. |
+| UI contract                                                         | Built                                         | Why                                                                                                                                                             |
+| :------------------------------------------------------------------ | :-------------------------------------------- | :-------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `POST /help-resolution/job-disputes`                                | `POST /cases` with `kind: "need_job_dispute"` | One creation endpoint keeps validation, duplicate prevention, evidence ownership and notification in one place.                                                 |
+| `POST /help-resolution/payment-disputes`                            | `POST /cases` with `kind: "direct_payment"`   | Same.                                                                                                                                                           |
+| `referenceCode: "TKT-84920"` (client-derived from the id)           | `MH-000042`, server-issued from a sequence    | Eight hex characters of a uuid collide with roughly even odds inside a hundred thousand cases, and a reference a support agent reads aloud must stay unique.    |
+| `unreadCount`                                                       | `messageCount`                                | There is no per-user read marker on either engine, so an unread count could only have been invented.                                                            |
+| Safety reports fall back to a support ticket with `category: "bug"` | Native `safety_report` kind                   | A safety report has a reported party who must never gain access; that is a different authorisation rule from any dispute, and it is now enforced in the schema. |
 
 ---
 
@@ -144,7 +144,7 @@ so widening the blanket grant to reach a dispute file would have handed support
 admins ID scans along with it.
 
 This also closed a pre-existing gap. A reservation dispute's counterparty could
-already *see* the other side's evidence listed in the case file and got 403 on
+already _see_ the other side's evidence listed in the case file and got 403 on
 opening it, because the upload route had no idea reservation disputes existed.
 
 ---
@@ -195,13 +195,13 @@ second incident, and refusing it would silence a reporter.
 Five types, all categorised under `disputes` alongside the reservation events —
 a new category would have reset every existing user's stored preferences.
 
-| Type | Sent to |
-| :--- | :--- |
-| `resolution_case_opened` | The counterparty, when the case grants them access |
-| `resolution_case_message` | Participants other than the author |
-| `resolution_case_escalated` | The other participant |
-| `resolution_case_status_changed` | Participants |
-| `resolution_case_resolved` | Participants |
+| Type                             | Sent to                                            |
+| :------------------------------- | :------------------------------------------------- |
+| `resolution_case_opened`         | The counterparty, when the case grants them access |
+| `resolution_case_message`        | Participants other than the author                 |
+| `resolution_case_escalated`      | The other participant                              |
+| `resolution_case_status_changed` | Participants                                       |
+| `resolution_case_resolved`       | Participants                                       |
 
 `reported_user_id` never receives anything. Telling somebody a safety report
 about them exists is the one notification this system must not send.

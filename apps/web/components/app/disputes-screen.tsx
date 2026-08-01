@@ -151,7 +151,9 @@ export const DisputesScreen = () => {
                       <span className="disputes-case-name">
                         {item.reservation.serviceTitle ?? 'Reservation dispute'}
                       </span>
-                      <span className={`dispute-status-badge dispute-status-badge--${item.dispute.status}`}>
+                      <span
+                        className={`dispute-status-badge dispute-status-badge--${item.dispute.status}`}
+                      >
                         {item.dispute.status}
                       </span>
                     </div>
@@ -193,7 +195,9 @@ export const DisputesScreen = () => {
                       </p>
                     )}
                   </div>
-                  <span className={`dispute-status-badge dispute-status-badge--${caseFile.dispute.status}`}>
+                  <span
+                    className={`dispute-status-badge dispute-status-badge--${caseFile.dispute.status}`}
+                  >
                     {caseFile.dispute.status}
                   </span>
                 </div>
@@ -262,7 +266,14 @@ export const DisputesScreen = () => {
                       Post Note
                     </button>
                   </div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', marginTop: '0.5rem' }}>
+                  <div
+                    style={{
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '0.6rem',
+                      marginTop: '0.5rem',
+                    }}
+                  >
                     {caseFile.notes.map((item) => (
                       <div key={item.id} className="disputes-note-bubble">
                         <span className="disputes-note-author">{item.authorName ?? 'User'}:</span>

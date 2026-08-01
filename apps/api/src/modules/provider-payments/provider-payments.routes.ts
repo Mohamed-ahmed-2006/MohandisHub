@@ -20,9 +20,6 @@ providerPaymentsRouter.get('/disclosures', providerPaymentsController.myDisclosu
 
 // Customer-facing: only the customer of an ACTIVATED award may read these, and
 // the read is audited.
-providerPaymentsRouter.get(
-  '/disclosure/award/:bidId',
-  providerPaymentsController.discloseForAward,
-);
+providerPaymentsRouter.get('/disclosure/award/:bidId', providerPaymentsController.discloseForAward);
 
 export { providerPaymentsRouter };

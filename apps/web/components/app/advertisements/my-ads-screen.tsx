@@ -54,8 +54,8 @@ export const MyAdsScreen = ({ locale, dictionary }: MyAdsScreenProps) => {
    * notification deep-links straight to the campaign it is about, rather than
    * to a list the advertiser then has to search.
    */
-  const [openRenewalAdId, setOpenRenewalAdId] = useState<string | null>(
-    () => searchParams.get('ad'),
+  const [openRenewalAdId, setOpenRenewalAdId] = useState<string | null>(() =>
+    searchParams.get('ad'),
   );
   const [adControls, setAdControls] = useState<AdminAdControls>({
     acceptAds: true,
@@ -235,9 +235,7 @@ export const MyAdsScreen = ({ locale, dictionary }: MyAdsScreenProps) => {
     setSuccess(null);
     try {
       await advertisementsApiClient.renewAd(accessToken, adId, crypto.randomUUID());
-      setSuccess(
-        tr('Renewed for another 7 days.', 'تم التجديد لمدة 7 أيام أخرى.'),
-      );
+      setSuccess(tr('Renewed for another 7 days.', 'تم التجديد لمدة 7 أيام أخرى.'));
       await load();
     } catch (err) {
       reportError(err, 'Failed to renew ad.');
@@ -607,7 +605,10 @@ export const MyAdsScreen = ({ locale, dictionary }: MyAdsScreenProps) => {
                       )}
                 </span>
                 <span className="myads-price-summary-note">
-                  {tr('Submitting is free — nothing is charged for review.', 'الإرسال مجاني — لا يتم خصم أي رصيد للمراجعة.')}
+                  {tr(
+                    'Submitting is free — nothing is charged for review.',
+                    'الإرسال مجاني — لا يتم خصم أي رصيد للمراجعة.',
+                  )}
                 </span>
                 {plannedStartAt ? (
                   <span className="myads-price-summary-note">
@@ -833,7 +834,10 @@ const AdCard = ({
           'انتهى الأسبوع المدفوع. جدّد ليعمل 7 أيام أخرى.',
         );
       case 'rejected':
-        return tr('Rejected by an admin. Nothing was charged.', 'مرفوض من الإدارة. لم يتم خصم أي رصيد.');
+        return tr(
+          'Rejected by an admin. Nothing was charged.',
+          'مرفوض من الإدارة. لم يتم خصم أي رصيد.',
+        );
       case 'cancelled':
         return tr(
           'Cancelled. The last paid week is not refunded.',

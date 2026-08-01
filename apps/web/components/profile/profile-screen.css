@@ -112,7 +112,11 @@
 
 .profile-screen-tab-btn--active {
   color: hsl(var(--primary-foreground));
-  background: linear-gradient(135deg, hsl(var(--primary)), color-mix(in srgb, hsl(var(--primary)) 78%, #000));
+  background: linear-gradient(
+    135deg,
+    hsl(var(--primary)),
+    color-mix(in srgb, hsl(var(--primary)) 78%, #000)
+  );
   border-color: color-mix(in srgb, hsl(var(--primary)) 40%, transparent);
   box-shadow: 0 10px 24px -14px hsl(var(--primary) / 0.8);
   font-weight: 700;
@@ -627,13 +631,19 @@
   padding: 0.6rem 1.15rem;
   border-radius: 999px;
   border: 1px solid color-mix(in srgb, hsl(var(--primary)) 40%, transparent);
-  background: linear-gradient(135deg, hsl(var(--primary)), color-mix(in srgb, hsl(var(--primary)) 75%, #000));
+  background: linear-gradient(
+    135deg,
+    hsl(var(--primary)),
+    color-mix(in srgb, hsl(var(--primary)) 75%, #000)
+  );
   color: hsl(var(--primary-foreground));
   font-size: 0.88rem;
   font-weight: 600;
   cursor: pointer;
   box-shadow: 0 10px 24px -14px hsl(var(--primary) / 0.8);
-  transition: transform 180ms ease, opacity 180ms ease;
+  transition:
+    transform 180ms ease,
+    opacity 180ms ease;
   white-space: nowrap;
 }
 
@@ -706,7 +716,9 @@
   font-size: 0.75rem;
   font-weight: 600;
   cursor: pointer;
-  transition: background-color 140ms ease, transform 140ms ease;
+  transition:
+    background-color 140ms ease,
+    transform 140ms ease;
   white-space: nowrap;
 }
 
@@ -822,7 +834,9 @@
   border-radius: 999px;
   background: color-mix(in srgb, hsl(var(--muted)) 90%, transparent);
   border: 1px solid hsl(var(--border));
-  transition: background-color 0.2s ease, border-color 0.2s ease;
+  transition:
+    background-color 0.2s ease,
+    border-color 0.2s ease;
   display: block;
 }
 
@@ -834,11 +848,13 @@
   height: 1.05rem;
   border-radius: 999px;
   background: hsl(var(--muted-foreground));
-  transition: transform 0.2s ease, background-color 0.2s ease;
+  transition:
+    transform 0.2s ease,
+    background-color 0.2s ease;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
 }
 
-[dir="rtl"] .profile-screen-toggle-switch-knob {
+[dir='rtl'] .profile-screen-toggle-switch-knob {
   left: auto;
   right: 0.125rem;
 }
@@ -848,12 +864,17 @@
   border-color: hsl(var(--primary) / 0.5);
 }
 
-.profile-screen-toggle-switch-input:checked + .profile-screen-toggle-switch-track .profile-screen-toggle-switch-knob {
+.profile-screen-toggle-switch-input:checked
+  + .profile-screen-toggle-switch-track
+  .profile-screen-toggle-switch-knob {
   transform: translateX(1.2rem);
   background: hsl(var(--primary));
 }
 
-[dir="rtl"] .profile-screen-toggle-switch-input:checked + .profile-screen-toggle-switch-track .profile-screen-toggle-switch-knob {
+[dir='rtl']
+  .profile-screen-toggle-switch-input:checked
+  + .profile-screen-toggle-switch-track
+  .profile-screen-toggle-switch-knob {
   transform: translateX(-1.2rem);
 }
 

@@ -361,10 +361,11 @@ export const advertisementsApiClient = {
   },
   /** Approve. An immediate campaign is charged for its first week right here. */
   adminApprove: (token: string, adId: string, reason?: string) =>
-    apiReq<{ mhcCharged: number; created: boolean }>(
-      `/api/advertisements/admin/${adId}/approve`,
-      { method: 'POST', token, body: reason ? { reason } : {} },
-    ),
+    apiReq<{ mhcCharged: number; created: boolean }>(`/api/advertisements/admin/${adId}/approve`, {
+      method: 'POST',
+      token,
+      body: reason ? { reason } : {},
+    }),
   /** Reject with a reason the advertiser is shown. Charges nothing. */
   adminReject: (token: string, adId: string, reason: string) =>
     apiReq<Advertisement>(`/api/advertisements/admin/${adId}/reject`, {

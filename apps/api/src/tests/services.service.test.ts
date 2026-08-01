@@ -260,11 +260,7 @@ describe('ServicesService launch hardening', () => {
       const service = new ServicesService(repo as never, {} as never, {} as never);
       const res = await service.searchServices({ tags: ['plumbing', 'electrical'] }, 1, 20);
 
-      expect(repo.searchServices).toHaveBeenCalledWith(
-        { tags: ['plumbing', 'electrical'] },
-        1,
-        20,
-      );
+      expect(repo.searchServices).toHaveBeenCalledWith({ tags: ['plumbing', 'electrical'] }, 1, 20);
       expect(res.total).toBe(2);
     });
 

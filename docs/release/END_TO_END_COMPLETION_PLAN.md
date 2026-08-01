@@ -18,7 +18,7 @@ says so and its first task is always "audit before changing". I would rather sta
 present a uniform-looking plan built partly on guesswork.
 
 Every phase carries the same seven fields. A phase is **not complete** until its completion
-criteria are met *and* `npm run typecheck`, `npm run lint`, and `npm test` are green.
+criteria are met _and_ `npm run typecheck`, `npm run lint`, and `npm test` are green.
 
 **Legend:** ⛔ blocked by a decision · 🔍 audit-first (code not yet read) · ⚡ launch-critical
 

@@ -206,7 +206,9 @@ export function describePaymentMethod(
       };
       push(
         ar ? 'المحفظة' : 'Wallet',
-        provider ? (ar ? providerLabels[provider]?.ar : providerLabels[provider]?.en) ?? provider : null,
+        provider
+          ? ((ar ? providerLabels[provider]?.ar : providerLabels[provider]?.en) ?? provider)
+          : null,
       );
       push(ar ? 'رقم الهاتف' : 'Phone number', str('phoneNumber'));
       break;

@@ -60,11 +60,7 @@ const manifest = { takenAt: new Date().toISOString(), tables: {}, totalRows: 0 }
 for (const { table_name: table } of tables) {
   try {
     const { rows } = await client.query(`SELECT * FROM public."${table}"`);
-    fs.writeFileSync(
-      path.join(outDir, `${table}.json`),
-      JSON.stringify(rows, null, 2),
-      'utf8',
-    );
+    fs.writeFileSync(path.join(outDir, `${table}.json`), JSON.stringify(rows, null, 2), 'utf8');
     manifest.tables[table] = rows.length;
     manifest.totalRows += rows.length;
     if (rows.length > 0) console.log(`  ${String(rows.length).padStart(6)}  ${table}`);
@@ -89,18 +85,28 @@ for (const [name, sql] of [
      JOIN pg_namespace n ON n.oid=t.relnamespace WHERE n.nspname='public'
      ORDER BY 1,2`,
   ],
-  ['indexes', `SELECT tablename, indexname, indexdef FROM pg_indexes WHERE schemaname='public' ORDER BY 1,2`],
+  [
+    'indexes',
+    `SELECT tablename, indexname, indexdef FROM pg_indexes WHERE schemaname='public' ORDER BY 1,2`,
+  ],
   [
     'applied_migrations',
     `SELECT version, name FROM supabase_migrations.schema_migrations ORDER BY version`,
   ],
 ]) {
   const { rows } = await client.query(sql);
-  fs.writeFileSync(path.join(outDir, `_schema_${name}.json`), JSON.stringify(rows, null, 2), 'utf8');
+  fs.writeFileSync(
+    path.join(outDir, `_schema_${name}.json`),
+    JSON.stringify(rows, null, 2),
+    'utf8',
+  );
 }
 
 // Best-effort server-side snapshot. Cheap to try, far better restore when it works.
-const snapshotName = `mhc_backup_${stamp.replace(/[^a-z0-9]/gi, '').toLowerCase().slice(0, 24)}`;
+const snapshotName = `mhc_backup_${stamp
+  .replace(/[^a-z0-9]/gi, '')
+  .toLowerCase()
+  .slice(0, 24)}`;
 let snapshot = null;
 try {
   await client.query(`CREATE DATABASE ${snapshotName} TEMPLATE postgres`);

@@ -839,8 +839,7 @@ export const enDictionary: Dictionary = {
   },
   helpResolutionPage: {
     title: 'Help & Resolution Centre',
-    intro:
-      'Support tickets, marketplace disputes, payment issues and safety reports in one place.',
+    intro: 'Support tickets, marketplace disputes, payment issues and safety reports in one place.',
     newCase: 'New case',
     allCases: 'All cases',
     generalSupport: 'General support',
@@ -880,8 +879,7 @@ export const enDictionary: Dictionary = {
     reservationDisputeHint:
       'Reservation disputes are opened from the booking itself, so the money can be settled with the decision. Continue to your bookings.',
     goToBookings: 'Go to bookings',
-    unavailableNoEligibleSubject:
-      'You have no engagement that supports this kind of case yet.',
+    unavailableNoEligibleSubject: 'You have no engagement that supports this kind of case yet.',
     unavailableLifecycle: 'This case type is not available for the selected item.',
     checkingAvailability: 'Checking what you can open...',
     loadFailed: 'Could not load your cases.',
@@ -1016,7 +1014,7 @@ export const enDictionary: Dictionary = {
       transactions: 'Transactions',
       moneyAudit: 'Money audit',
       disputes: 'Disputes',
-    helpResolution: 'Help & Resolution',
+      helpResolution: 'Help & Resolution',
       services: 'Services',
       categories: 'Categories',
       verifications: 'Verifications',

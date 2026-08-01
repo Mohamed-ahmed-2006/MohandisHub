@@ -1083,7 +1083,10 @@ export class HelpResolutionService {
       await client.query('BEGIN');
       const locked = await this.repo.lockCaseById(client, caseId);
       if (!locked) throw this.notFound();
-      if (!['need_job_dispute', 'direct_payment'].includes(locked.kind) || !locked.counterparty_id) {
+      if (
+        !['need_job_dispute', 'direct_payment'].includes(locked.kind) ||
+        !locked.counterparty_id
+      ) {
         throw new HttpError({
           statusCode: 409,
           code: 'COUNTERPARTY_ACCESS_NOT_APPLICABLE',

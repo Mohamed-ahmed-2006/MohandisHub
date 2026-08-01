@@ -235,9 +235,11 @@ describe.skipIf(!pgIntegrationEnabled())('submission is free and unreviewed', ()
 
     expect(second.id).toBe(first.id);
     expect(
-      await countRows(pool, `SELECT count(*)::text c FROM advertisements WHERE advertiser_id = $1`, [
-        userId,
-      ]),
+      await countRows(
+        pool,
+        `SELECT count(*)::text c FROM advertisements WHERE advertiser_id = $1`,
+        [userId],
+      ),
     ).toBe(1);
   });
 });
@@ -396,9 +398,10 @@ describe.skipIf(!pgIntegrationEnabled())('future-dated approval', () => {
     const ad = await submit(userId, { startsAt: future() });
     await service().approveAd(ad.id, adminId);
     // The start arrives.
-    await pool.query(`UPDATE advertisements SET starts_at = now() - interval '1 minute' WHERE id = $1`, [
-      ad.id,
-    ]);
+    await pool.query(
+      `UPDATE advertisements SET starts_at = now() - interval '1 minute' WHERE id = $1`,
+      [ad.id],
+    );
 
     expect(await service().listDueScheduledAdIds()).toContain(ad.id);
     const result = await service().activateDueAdvertisement(ad.id);
@@ -415,9 +418,10 @@ describe.skipIf(!pgIntegrationEnabled())('future-dated approval', () => {
     const { userId } = await seedProvider(pool, { mhc: 500 });
     const ad = await submit(userId, { startsAt: future() });
     await service().approveAd(ad.id, adminId);
-    await pool.query(`UPDATE advertisements SET starts_at = now() - interval '1 minute' WHERE id = $1`, [
-      ad.id,
-    ]);
+    await pool.query(
+      `UPDATE advertisements SET starts_at = now() - interval '1 minute' WHERE id = $1`,
+      [ad.id],
+    );
 
     await Promise.allSettled(
       Array.from({ length: 10 }, () => service().activateDueAdvertisement(ad.id)),
@@ -534,9 +538,7 @@ describe.skipIf(!pgIntegrationEnabled())('zero-price weeks', () => {
     const { userId } = await seedProvider(pool, { mhc: 0 });
     const ad = await submit(userId);
 
-    await Promise.allSettled(
-      Array.from({ length: 10 }, () => service().approveAd(ad.id, adminId)),
-    );
+    await Promise.allSettled(Array.from({ length: 10 }, () => service().approveAd(ad.id, adminId)));
 
     expect(await periodCount(ad.id)).toBe(1);
   });
@@ -656,9 +658,7 @@ describe.skipIf(!pgIntegrationEnabled())('manual renewal', () => {
     await approveThenExpire(ad.id);
 
     const results = await Promise.allSettled(
-      Array.from({ length: 10 }, () =>
-        service().renewAd(ad.id, userId, crypto.randomUUID()),
-      ),
+      Array.from({ length: 10 }, () => service().renewAd(ad.id, userId, crypto.randomUUID())),
     );
 
     expect(results.filter((r) => r.status === 'fulfilled').length).toBeGreaterThanOrEqual(1);
@@ -1015,7 +1015,11 @@ describe.skipIf(!pgIntegrationEnabled())('serving fails closed after a week elap
     // number measures the pooler rather than the query.
     const results = await Promise.all(
       Array.from({ length: 10 }, (_, i) =>
-        i % 2 === 0 ? servedIds() : service().expireDuePeriods().then(() => servedIds()),
+        i % 2 === 0
+          ? servedIds()
+          : service()
+              .expireDuePeriods()
+              .then(() => servedIds()),
       ),
     );
 
@@ -1247,9 +1251,10 @@ describe.skipIf(!pgIntegrationEnabled())('grandfathered legacy campaigns', () =>
     expect((await service().resolveActiveAds({})).map((r) => r.id)).toContain(legacyId);
 
     // Its own window elapses; the legacy sweep still closes it.
-    await pool.query(`UPDATE advertisements SET expires_at = now() - interval '1 hour' WHERE id = $1`, [
-      legacyId,
-    ]);
+    await pool.query(
+      `UPDATE advertisements SET expires_at = now() - interval '1 hour' WHERE id = $1`,
+      [legacyId],
+    );
     await service().resolveActiveAds({});
     expect((await adRow(legacyId)).status).toBe('expired');
   });

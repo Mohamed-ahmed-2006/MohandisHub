@@ -146,9 +146,10 @@ describe('provider payment methods — validation', () => {
 describe('provider payment methods — ownership', () => {
   it('refuses customers', async () => {
     const { service } = buildService({});
-    await expect(
-      service.listMine({ userId: 'cust-1', role: 'customer' }),
-    ).rejects.toMatchObject({ code: 'PROVIDERS_ONLY', statusCode: 403 });
+    await expect(service.listMine({ userId: 'cust-1', role: 'customer' })).rejects.toMatchObject({
+      code: 'PROVIDERS_ONLY',
+      statusCode: 403,
+    });
   });
 
   it("reports another provider's method as not found rather than forbidden", async () => {

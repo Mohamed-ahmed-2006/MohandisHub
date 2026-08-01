@@ -17,7 +17,7 @@ The threading, attachments, staff-flag and admin queue all work. Two problems:
 
 **The categories are engineering taxonomy, not user problems.** A provider whose customer has stopped responding after activation must file that as `bug`, `suggestion`, `error`, or `other`. All four are wrong. Routing, SLA and staffing all depend on this field, and it carries no useful signal.
 
-**There is no link to any entity.** `support_tickets` has `user_id`, `subject`, `category` — and no `reference_type` / `reference_id`. A user cannot open a case *about* a specific need, bid, booking or activation. Staff receive free text and must reconstruct context by hand.
+**There is no link to any entity.** `support_tickets` has `user_id`, `subject`, `category` — and no `reference_type` / `reference_id`. A user cannot open a case _about_ a specific need, bid, booking or activation. Staff receive free text and must reconstruct context by hand.
 
 ### 1.2 Reservation disputes — class 1, scope-limited
 
@@ -39,7 +39,7 @@ Three entry points, three data models, three admin queues, zero connections. The
 
 ## 2. Design: one Help & Resolution Center
 
-**Principle:** the user describes *what* is wrong and *what it concerns*. The system decides whether it is a support case or a dispute.
+**Principle:** the user describes _what_ is wrong and _what it concerns_. The system decides whether it is a support case or a dispute.
 
 ### 2.1 Entry
 
@@ -47,15 +47,15 @@ One button (the existing `SupportFab`, class 1, already global). One flow:
 
 **Step 1 — What is this about?**
 
-| Subject | Requires an entity |
-|---|---|
-| A project or proposal | pick from the user's needs / bids |
-| A booking | pick from bookings |
-| A payment or credits | optionally pick a transaction |
-| My account or verification | no |
-| Something is broken | no |
-| A review | pick a review |
-| Something else | no |
+| Subject                    | Requires an entity                |
+| -------------------------- | --------------------------------- |
+| A project or proposal      | pick from the user's needs / bids |
+| A booking                  | pick from bookings                |
+| A payment or credits       | optionally pick a transaction     |
+| My account or verification | no                                |
+| Something is broken        | no                                |
+| A review                   | pick a review                     |
+| Something else             | no                                |
 
 **Step 2 — What is the problem?** Options are contextual to step 1. For "A project or proposal":
 
@@ -85,12 +85,12 @@ else
 
 **Eligible entity states** — a dispute needs something to dispute:
 
-| Entity | Eligible when |
-|---|---|
-| Need-job | activated (`needs.activated_at IS NOT NULL`) |
-| Booking | accepted or later |
-| Transaction | completed |
-| Review | exists and is not the reporter's own |
+| Entity      | Eligible when                                |
+| ----------- | -------------------------------------------- |
+| Need-job    | activated (`needs.activated_at IS NOT NULL`) |
+| Booking     | accepted or later                            |
+| Transaction | completed                                    |
+| Review      | exists and is not the reporter's own         |
 
 An account or technical problem is always a support case. A conflict about a paid, activated engagement is always a dispute.
 
@@ -145,7 +145,7 @@ Before escalation, `counterparty_id` is `NULL` and every message is effectively 
 
 **Phase 1 — additive.** Add the columns above. Existing tickets default to `case_type='support'`. `reservation_disputes` untouched. Both admin queues run.
 
-**Phase 2 — dual-write.** New reservation disputes create a `support_tickets` row (`case_type='dispute'`, `reference_type='reservation'`) *and* a `reservation_disputes` row, linked by `support_ticket_id`. The reservation lifecycle worker keeps working against the old table.
+**Phase 2 — dual-write.** New reservation disputes create a `support_tickets` row (`case_type='dispute'`, `reference_type='reservation'`) _and_ a `reservation_disputes` row, linked by `support_ticket_id`. The reservation lifecycle worker keeps working against the old table.
 
 **Phase 3 — backfill.**
 
@@ -179,11 +179,11 @@ Then migrate `reservation_dispute_notes` → `support_ticket_messages` (preservi
 Keep the `category` column (schema stability, admin filters depend on it). Introduce `problem_type` as the real signal and map old values forward:
 
 | Old `category` | New `problem_type` |
-|---|---|
-| `bug` | `technical_issue` |
-| `error` | `technical_issue` |
-| `suggestion` | `feedback` |
-| `other` | `other` |
+| -------------- | ------------------ |
+| `bug`          | `technical_issue`  |
+| `error`        | `technical_issue`  |
+| `suggestion`   | `feedback`         |
+| `other`        | `other`            |
 
 New values: `not_responding`, `not_delivered`, `quality`, `charged_incorrectly`, `contact_not_unlocked`, `cancellation`, `account`, `verification`, `credits`, `technical_issue`, `feedback`, `other`.
 
@@ -195,14 +195,14 @@ Routing, SLA and admin queue grouping all key off `problem_type`.
 
 `AdminSupportTab` and `AdminDisputesTab` become one **Resolution Center** with queues, replacing per-table browsing:
 
-| Queue | Filter |
-|---|---|
-| Unassigned | `assigned_to IS NULL AND status='open'` |
-| My cases | `assigned_to = me` |
-| Awaiting user | `status='waiting_reply'` |
-| Disputes — open | `case_type='dispute' AND status IN ('open','in_progress')` |
-| Breaching SLA | `status='open' AND created_at < now() - interval '48 hours'` |
-| Escalated today | `escalated_at > current_date` |
+| Queue           | Filter                                                       |
+| --------------- | ------------------------------------------------------------ |
+| Unassigned      | `assigned_to IS NULL AND status='open'`                      |
+| My cases        | `assigned_to = me`                                           |
+| Awaiting user   | `status='waiting_reply'`                                     |
+| Disputes — open | `case_type='dispute' AND status IN ('open','in_progress')`   |
+| Breaching SLA   | `status='open' AND created_at < now() - interval '48 hours'` |
+| Escalated today | `escalated_at > current_date`                                |
 
 Each case shows the linked entity inline — for a need-job: need, bid, activation record, MHC charged, both parties' verification status, and the activation timestamp. That context is what makes a dispute resolvable, and it is exactly what the current unlinked ticket cannot provide.
 

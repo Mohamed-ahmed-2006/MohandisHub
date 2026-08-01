@@ -828,7 +828,10 @@ export const AppHomeScreen = ({ locale, dictionary }: AppHomeScreenProps) => {
         <section className="home-welcome-section">
           <div className="home-welcome-row">
             <div>
-              <h1 className="home-welcome" style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+              <h1
+                className="home-welcome"
+                style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}
+              >
                 <Sparkles style={{ color: 'hsl(var(--primary))' }} size={26} />
                 {d.welcomeBack}, {authUser.displayName}
               </h1>
@@ -1134,7 +1137,9 @@ export const AppHomeScreen = ({ locale, dictionary }: AppHomeScreenProps) => {
                       <input
                         type="search"
                         className="home-search-input home-search-input--hero"
-                        placeholder={d.searchPlaceholder ?? 'Search services, skills, or keywords...'}
+                        placeholder={
+                          d.searchPlaceholder ?? 'Search services, skills, or keywords...'
+                        }
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
                         aria-label={d.searchPlaceholder}
@@ -1147,7 +1152,9 @@ export const AppHomeScreen = ({ locale, dictionary }: AppHomeScreenProps) => {
                       disabled={searching}
                     >
                       <Search size={16} />
-                      {searching ? (dictionary.common?.loading ?? 'Searching...') : (d.search ?? 'Search')}
+                      {searching
+                        ? (dictionary.common?.loading ?? 'Searching...')
+                        : (d.search ?? 'Search')}
                     </button>
                     <button
                       type="button"
@@ -1157,7 +1164,9 @@ export const AppHomeScreen = ({ locale, dictionary }: AppHomeScreenProps) => {
                       <SlidersHorizontal size={16} />
                       Filters
                       {activeAdvancedFilterCount > 0 && (
-                        <span className="home-search-filter-badge">{activeAdvancedFilterCount}</span>
+                        <span className="home-search-filter-badge">
+                          {activeAdvancedFilterCount}
+                        </span>
                       )}
                     </button>
                   </div>
@@ -1195,11 +1204,12 @@ export const AppHomeScreen = ({ locale, dictionary }: AppHomeScreenProps) => {
                         ))}
                       </select>
                     </div>
-
-                    </div>
+                  </div>
 
                   {/* Collapsible Advanced Filters Tray */}
-                  <div className={`home-search-tray-wrapper ${showAdvancedFilters ? 'home-search-tray-wrapper--open' : ''}`}>
+                  <div
+                    className={`home-search-tray-wrapper ${showAdvancedFilters ? 'home-search-tray-wrapper--open' : ''}`}
+                  >
                     <div className="home-search-advanced-tray">
                       <div className="home-search-field">
                         <label className="home-search-label">{d.area}</label>
@@ -1248,7 +1258,9 @@ export const AppHomeScreen = ({ locale, dictionary }: AppHomeScreenProps) => {
                           placeholder="0"
                           value={minPrice === '' ? '' : minPrice}
                           onChange={(e) =>
-                            setMinPrice(e.target.value === '' ? '' : parseFloat(e.target.value) || 0)
+                            setMinPrice(
+                              e.target.value === '' ? '' : parseFloat(e.target.value) || 0,
+                            )
                           }
                         />
                       </div>
@@ -1263,7 +1275,9 @@ export const AppHomeScreen = ({ locale, dictionary }: AppHomeScreenProps) => {
                           placeholder="—"
                           value={maxPrice === '' ? '' : maxPrice}
                           onChange={(e) =>
-                            setMaxPrice(e.target.value === '' ? '' : parseFloat(e.target.value) || 0)
+                            setMaxPrice(
+                              e.target.value === '' ? '' : parseFloat(e.target.value) || 0,
+                            )
                           }
                         />
                       </div>
@@ -1277,7 +1291,9 @@ export const AppHomeScreen = ({ locale, dictionary }: AppHomeScreenProps) => {
                         >
                           <option value="newest">{d.sortNewest ?? 'Newest'}</option>
                           <option value="rating">{d.sortRating ?? 'Rating'}</option>
-                          <option value="price_asc">{d.sortPriceAsc ?? 'Price: low to high'}</option>
+                          <option value="price_asc">
+                            {d.sortPriceAsc ?? 'Price: low to high'}
+                          </option>
                           <option value="price_desc">
                             {d.sortPriceDesc ?? 'Price: high to low'}
                           </option>
@@ -1285,14 +1301,18 @@ export const AppHomeScreen = ({ locale, dictionary }: AppHomeScreenProps) => {
                         </select>
                       </div>
 
-                      <div
-                        className="home-search-field"
-                        style={{ justifyContent: 'center' }}
-                      >
+                      <div className="home-search-field" style={{ justifyContent: 'center' }}>
                         <label
                           htmlFor="verified-only"
                           className="home-search-label"
-                          style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.65rem', marginTop: '1.4rem', userSelect: 'none' }}
+                          style={{
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '0.65rem',
+                            marginTop: '1.4rem',
+                            userSelect: 'none',
+                          }}
                         >
                           <button
                             type="button"
@@ -1332,7 +1352,10 @@ export const AppHomeScreen = ({ locale, dictionary }: AppHomeScreenProps) => {
                     </div>
                   </div>
                   {searchNotice && (
-                    <p className="home-empty" style={{ padding: '0.75rem 1rem', marginTop: '0.75rem' }}>
+                    <p
+                      className="home-empty"
+                      style={{ padding: '0.75rem 1rem', marginTop: '0.75rem' }}
+                    >
                       {searchNotice}
                     </p>
                   )}
@@ -1758,7 +1781,9 @@ export const AppHomeScreen = ({ locale, dictionary }: AppHomeScreenProps) => {
                       </div>
                       <div className="home-search-field" style={{ gridColumn: '1 / -1' }}>
                         <label className="home-search-label">
-                          {locale === 'ar' ? 'الوسوم (مطابقة أي وسم)' : 'Filter by Tags (match any)'}
+                          {locale === 'ar'
+                            ? 'الوسوم (مطابقة أي وسم)'
+                            : 'Filter by Tags (match any)'}
                         </label>
                         <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.25rem' }}>
                           <input
@@ -1776,7 +1801,11 @@ export const AppHomeScreen = ({ locale, dictionary }: AppHomeScreenProps) => {
                               if (e.key === 'Enter') {
                                 e.preventDefault();
                                 const norm = normalizeServiceTag(tagInput);
-                                if (norm && !selectedTags.includes(norm) && selectedTags.length < 10) {
+                                if (
+                                  norm &&
+                                  !selectedTags.includes(norm) &&
+                                  selectedTags.length < 10
+                                ) {
                                   setSelectedTags([...selectedTags, norm]);
                                   setTagInput('');
                                 }
@@ -1789,7 +1818,11 @@ export const AppHomeScreen = ({ locale, dictionary }: AppHomeScreenProps) => {
                             disabled={selectedTags.length >= 10 || !normalizeServiceTag(tagInput)}
                             onClick={() => {
                               const norm = normalizeServiceTag(tagInput);
-                              if (norm && !selectedTags.includes(norm) && selectedTags.length < 10) {
+                              if (
+                                norm &&
+                                !selectedTags.includes(norm) &&
+                                selectedTags.length < 10
+                              ) {
                                 setSelectedTags([...selectedTags, norm]);
                                 setTagInput('');
                               }
@@ -1840,7 +1873,14 @@ export const AppHomeScreen = ({ locale, dictionary }: AppHomeScreenProps) => {
                             ))}
                         </div>
                         {selectedTags.length > 0 && (
-                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', alignItems: 'center' }}>
+                          <div
+                            style={{
+                              display: 'flex',
+                              flexWrap: 'wrap',
+                              gap: '0.5rem',
+                              alignItems: 'center',
+                            }}
+                          >
                             {selectedTags.map((tag) => (
                               <span
                                 key={tag}
@@ -1859,8 +1899,17 @@ export const AppHomeScreen = ({ locale, dictionary }: AppHomeScreenProps) => {
                                 #{tag}
                                 <button
                                   type="button"
-                                  onClick={() => setSelectedTags(selectedTags.filter((t) => t !== tag))}
-                                  style={{ background: 'none', border: 'none', color: '#0369a1', cursor: 'pointer', padding: 0, fontWeight: 'bold' }}
+                                  onClick={() =>
+                                    setSelectedTags(selectedTags.filter((t) => t !== tag))
+                                  }
+                                  style={{
+                                    background: 'none',
+                                    border: 'none',
+                                    color: '#0369a1',
+                                    cursor: 'pointer',
+                                    padding: 0,
+                                    fontWeight: 'bold',
+                                  }}
                                   aria-label={`Remove tag ${tag}`}
                                 >
                                   ×
@@ -1870,7 +1919,14 @@ export const AppHomeScreen = ({ locale, dictionary }: AppHomeScreenProps) => {
                             <button
                               type="button"
                               onClick={() => setSelectedTags([])}
-                              style={{ background: 'none', border: 'none', color: '#dc2626', cursor: 'pointer', fontSize: '0.875rem', textDecoration: 'underline' }}
+                              style={{
+                                background: 'none',
+                                border: 'none',
+                                color: '#dc2626',
+                                cursor: 'pointer',
+                                fontSize: '0.875rem',
+                                textDecoration: 'underline',
+                              }}
                             >
                               {locale === 'ar' ? 'مسح الكل' : 'Clear tags'}
                             </button>

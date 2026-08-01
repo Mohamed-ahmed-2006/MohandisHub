@@ -177,12 +177,15 @@ export class AdvertisementRenewalService {
         throw new HttpError({
           statusCode: 409,
           code: 'AD_NOT_WEEKLY',
-          message:
-            'This campaign predates weekly billing and cannot renew automatically.',
+          message: 'This campaign predates weekly billing and cannot renew automatically.',
           details: { billingModel: ad.billing_model },
         });
       }
-      if (ad.status === 'cancelled' || ad.status === 'rejected' || ad.billing_status === 'cancelled') {
+      if (
+        ad.status === 'cancelled' ||
+        ad.status === 'rejected' ||
+        ad.billing_status === 'cancelled'
+      ) {
         throw new HttpError({
           statusCode: 409,
           code: 'AD_AUTO_RENEWAL_NOT_CONFIGURABLE',
@@ -551,7 +554,11 @@ export class AdvertisementRenewalService {
     clearPause: boolean,
   ): { outcome: 'skipped'; reason: RenewalSkipReason } | null {
     if (ad.billing_model !== 'weekly') return { outcome: 'skipped', reason: 'not_weekly' };
-    if (ad.status === 'cancelled' || ad.status === 'rejected' || ad.billing_status === 'cancelled') {
+    if (
+      ad.status === 'cancelled' ||
+      ad.status === 'rejected' ||
+      ad.billing_status === 'cancelled'
+    ) {
       return { outcome: 'skipped', reason: 'cancelled_or_rejected' };
     }
     if (!ad.auto_renew_enabled || ad.renewal_mode !== 'automatic') {
@@ -710,12 +717,14 @@ export class AdvertisementRenewalService {
    * lock the advertisement with `SKIP LOCKED`, and stage 5 claims each event
    * row the same way.
    */
-  async runLifecycleSweep(options: {
-    batchSize?: number;
-    reminderWindowHours?: number;
-    /** Checked between campaigns so a shutdown does not wait out a whole batch. */
-    shouldStop?: () => boolean;
-  } = {}): Promise<{
+  async runLifecycleSweep(
+    options: {
+      batchSize?: number;
+      reminderWindowHours?: number;
+      /** Checked between campaigns so a shutdown does not wait out a whole batch. */
+      shouldStop?: () => boolean;
+    } = {},
+  ): Promise<{
     started: number;
     renewed: number;
     paused: number;

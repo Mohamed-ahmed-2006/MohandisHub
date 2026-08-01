@@ -138,10 +138,7 @@ export const redactContactDetails = (input: string): RedactionResult => {
 
   // Collapse repeated markers so a spammy message is not a wall of markers.
   const escapedMarker = REDACTION_MARKER.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  text = text.replace(
-    new RegExp(`(?:${escapedMarker}[\\s]*){2,}`, 'g'),
-    `${REDACTION_MARKER} `,
-  );
+  text = text.replace(new RegExp(`(?:${escapedMarker}[\\s]*){2,}`, 'g'), `${REDACTION_MARKER} `);
 
   return { content: text.trim(), redacted };
 };

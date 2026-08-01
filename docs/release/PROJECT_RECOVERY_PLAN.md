@@ -12,14 +12,14 @@
 This is the entry point. It states where the project actually is, what the other five
 documents are for, and the order in which work must happen.
 
-| Document | Purpose |
-| --- | --- |
-| `PROJECT_RECOVERY_PLAN.md` | This file. Orientation, current state, sequencing. |
-| `MHC_RECOVERY_PLAN.md` | **Part A.** Ranked MHC findings and the exact repair sequence. |
-| `END_TO_END_COMPLETION_PLAN.md` | **Part B.** 25 ordered phases to launch readiness. |
-| `AUDIT_MASTER.md` | Single tracking table for every finding across the project. |
-| `DECISIONS_REQUIRED.md` | Business questions that block implementation. **Read this first.** |
-| `KNOWN_LIMITATIONS.md` | Accepted gaps, deliberate scope cuts, and things that will ship imperfect. |
+| Document                        | Purpose                                                                    |
+| ------------------------------- | -------------------------------------------------------------------------- |
+| `PROJECT_RECOVERY_PLAN.md`      | This file. Orientation, current state, sequencing.                         |
+| `MHC_RECOVERY_PLAN.md`          | **Part A.** Ranked MHC findings and the exact repair sequence.             |
+| `END_TO_END_COMPLETION_PLAN.md` | **Part B.** 25 ordered phases to launch readiness.                         |
+| `AUDIT_MASTER.md`               | Single tracking table for every finding across the project.                |
+| `DECISIONS_REQUIRED.md`         | Business questions that block implementation. **Read this first.**         |
+| `KNOWN_LIMITATIONS.md`          | Accepted gaps, deliberate scope cuts, and things that will ship imperfect. |
 
 ---
 
@@ -52,8 +52,8 @@ supabase/       83 hand-written SQL migrations, applied manually
 render.yaml     deployment configuration
 ```
 
-**Core domain:** customers post *needs* → providers (`expert`, `craftsman`, `business`)
-submit *bids* → customer *awards* → chat → completion → reviews. Alongside this sit a
+**Core domain:** customers post _needs_ → providers (`expert`, `craftsman`, `business`)
+submit _bids_ → customer _awards_ → chat → completion → reviews. Alongside this sit a
 legacy EGP wallet/escrow money system, reservations/bookings, plans, advertisements,
 coupons, business teams, support, retention, disputes, and an admin/super-admin surface
 with granular permissions.
@@ -61,7 +61,7 @@ with granular permissions.
 **Notable architectural fact (VERIFIED):** there is no generated database type file.
 Row types are hand-written per repository. Schema/type agreement is therefore by
 convention only and must be checked by reading, not by the compiler. This is the single
-biggest reason a green `typecheck` is *not* evidence of correctness on this codebase.
+biggest reason a green `typecheck` is _not_ evidence of correctness on this codebase.
 
 ---
 
@@ -81,7 +81,7 @@ The working tree is otherwise clean (only an untracked `.vscode/`).
 escrow money model with **MHC (Mohandis Credits)** — a closed-loop, non-cashable,
 non-transferable, provider-only credit. Customers pay providers **directly**; the
 platform never holds job money; MHC becomes the only revenue rail. Awarding a bid
-becomes an *offer* rather than an activation, and the provider must accept **and spend
+becomes an _offer_ rather than an activation, and the provider must accept **and spend
 MHC** before the job workspace, contact details, attachments, and provider payment
 details unlock.
 
@@ -97,12 +97,12 @@ Full detail is in `MHC_RECOVERY_PLAN.md`. The one-line summary:
 
 ## 5. Current build and test state (VERIFIED)
 
-| Check | Result |
-| --- | --- |
-| `npm run typecheck` | **Passes** (exit 0) |
-| `npm test` | **Fails** — 6 tests across 2 files; 170 pass (176 total) |
-| `npm run lint` | Not yet run |
-| `npm run e2e` | Not run; no spec files present |
+| Check               | Result                                                   |
+| ------------------- | -------------------------------------------------------- |
+| `npm run typecheck` | **Passes** (exit 0)                                      |
+| `npm test`          | **Fails** — 6 tests across 2 files; 170 pass (176 total) |
+| `npm run lint`      | Not yet run                                              |
+| `npm run e2e`       | Not run; no spec files present                           |
 
 The 6 failures are all caused by session 1's own changes:
 
@@ -121,8 +121,8 @@ The 6 failures are all caused by session 1's own changes:
 
 ## 6. The blocking problem, stated plainly
 
-The launch model is: *the customer pays the provider directly, and MohandisHub earns by
-selling providers the credits that unlock a job.*
+The launch model is: _the customer pays the provider directly, and MohandisHub earns by
+selling providers the credits that unlock a job._
 
 Session 1 retired the escrow rail (VERIFIED: `needs.service.payBid` now throws 410) and
 created the `provider_payment_methods` and `provider_payment_disclosures` tables

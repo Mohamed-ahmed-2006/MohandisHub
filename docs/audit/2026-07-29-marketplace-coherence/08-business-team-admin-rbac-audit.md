@@ -8,13 +8,13 @@
 
 More than expected. Five tables:
 
-| Table | Columns |
-|---|---|
-| `business_teams` | `business_id` → users, `name` |
-| `business_members` | `team_id`, `user_id`, `role ∈ owner\|manager\|member\|viewer`, `role_id` |
-| `business_team_roles` | `team_id`, `name`, `role_key`, `built_in`, `permissions JSONB` |
-| `business_team_invites` | `team_id`, `email`, `role_id`, `token_hash`, `status`, `expires_at`, `accepted_at` |
-| `business_team_audit_log` | `team_id`, `actor_user_id`, `action`, `entity_type`, `entity_id`, `detail` |
+| Table                     | Columns                                                                            |
+| ------------------------- | ---------------------------------------------------------------------------------- |
+| `business_teams`          | `business_id` → users, `name`                                                      |
+| `business_members`        | `team_id`, `user_id`, `role ∈ owner\|manager\|member\|viewer`, `role_id`           |
+| `business_team_roles`     | `team_id`, `name`, `role_key`, `built_in`, `permissions JSONB`                     |
+| `business_team_invites`   | `team_id`, `email`, `role_id`, `token_hash`, `status`, `expires_at`, `accepted_at` |
+| `business_team_audit_log` | `team_id`, `actor_user_id`, `action`, `entity_type`, `entity_id`, `detail`         |
 
 Seven permissions: `manage_team`, `manage_services`, `manage_jobs`, `manage_reservations`, `view_wallet`, `manage_support_disputes`, `view_analytics`.
 
@@ -35,7 +35,7 @@ business-teams.routes.ts:495
 
 **Five hits, all inside the file that defines the feature.** No other module reads team membership. `manage_services` does not gate `POST /api/services` — that is gated by `requireRole('expert','business','craftsman')` on `users.primary_role`. `view_wallet` gates nothing. `manage_jobs` gates nothing.
 
-A `business_members` row grants **a row in a table**. What the API actually enforces is the member's own `primary_role`. So a member added as "Manager" with `manage_services` still cannot manage the business's services — because their `primary_role` is `customer` or `expert`, not `business`. Conversely, if they *are* a `business` account, they manage their **own** services, not the team's.
+A `business_members` row grants **a row in a table**. What the API actually enforces is the member's own `primary_role`. So a member added as "Manager" with `manage_services` still cannot manage the business's services — because their `primary_role` is `customer` or `expert`, not `business`. Conversely, if they _are_ a `business` account, they manage their **own** services, not the team's.
 
 **Classification: 3 — frontend/schema-only.** The team feature is a permission model with no enforcement surface.
 
@@ -57,20 +57,17 @@ An invited member whose `primary_role` is `customer` or `expert` gets 403 on the
 
 It runs a full `BEGIN` → create-team → upsert-4-roles → upsert-owner-member → `COMMIT` transaction on every `GET /me`. Functionally idempotent, but it means a read endpoint performs five writes. Under concurrency, two simultaneous reads race on `business_teams` insertion; the `ON CONFLICT` clauses on roles and members cover most of it, but the initial team `INSERT` has **no unique constraint on `business_id`** — two concurrent first-time reads can create two teams for one business.
 
-*Fix:* `CREATE UNIQUE INDEX uq_business_teams_business ON business_teams(business_id);`
+_Fix:_ `CREATE UNIQUE INDEX uq_business_teams_business ON business_teams(business_id);`
 
 **3. Invitations are unusable end-to-end — class 4.**
 
 ```ts
-introLines: [
-  'You were invited to join a MohandisHub business team.',
-  `Invitation token: ${token}`,
-]
+introLines: ['You were invited to join a MohandisHub business team.', `Invitation token: ${token}`];
 ```
 
 The raw token is emailed as body text. There is no accept URL, no accept page, and no UI calling `POST /invites/accept`. The endpoint works; nothing reaches it. A user would have to copy a hex string and construct an API call by hand.
 
-*Fix:* email `${WEB_URL}/${locale}/team/accept?token=${token}`; add the page; call the existing endpoint.
+_Fix:_ email `${WEB_URL}/${locale}/team/accept?token=${token}`; add the page; call the existing endpoint.
 
 **4. No member removal, no ownership transfer — class 6.**
 
@@ -82,7 +79,7 @@ There is no `DELETE /members/:id` and no transfer endpoint. A member cannot be r
 
 **6. Invite creation does not check `manage_team`.**
 
-`POST /invites` calls `ensureOwnerTeam`, which only checks `role === 'business'`. Since only the business owner has that role, this is *currently* safe — but for the wrong reason. It is coincidence, not a check, and it breaks the moment membership is decoupled from `primary_role`.
+`POST /invites` calls `ensureOwnerTeam`, which only checks `role === 'business'`. Since only the business owner has that role, this is _currently_ safe — but for the wrong reason. It is coincidence, not a check, and it breaks the moment membership is decoupled from `primary_role`.
 
 ### A.4 Recommended launch shape
 
@@ -92,13 +89,13 @@ The brief asks for owner / admin / member. Current built-ins are owner / manager
 
 **Order of work:**
 
-1. `uq_business_teams_business` unique index *(small)*
-2. Split `getOverview` from `ensureOwnerTeam`; allow any member to read *(small — fixes the 403)*
-3. Invitation accept page + link email *(small)*
-4. Member removal + ownership transfer *(medium)*
-5. **Enforce permissions** — `requireTeamPermission('manage_services')` alongside `requireRole` *(medium; the payoff for all of the above)*
-6. Seat limits from `maxTeamSlots` *(small — after 5)*
-7. Team-visible projects and assignment *(large — needs workspaces)*
+1. `uq_business_teams_business` unique index _(small)_
+2. Split `getOverview` from `ensureOwnerTeam`; allow any member to read _(small — fixes the 403)_
+3. Invitation accept page + link email _(small)_
+4. Member removal + ownership transfer _(medium)_
+5. **Enforce permissions** — `requireTeamPermission('manage_services')` alongside `requireRole` _(medium; the payoff for all of the above)_
+6. Seat limits from `maxTeamSlots` _(small — after 5)_
+7. Team-visible projects and assignment _(large — needs workspaces)_
 
 Step 5 is where teams start being real. Steps 1–4 are prerequisites.
 
@@ -114,15 +111,15 @@ The brief warns against this, and the current design is already correct: accepti
 
 The brief describes the admin implementation as "a flag attached to an ordinary marketplace account" and proposes separating internal staff from marketplace roles. **That separation already exists.**
 
-| Property | Status |
-|---|---|
-| Admin independent of `primary_role` | ✅ `is_admin` boolean + `admin_permissions text[]` |
-| Permission-based, not binary | ✅ 14 permissions |
-| `super_admin` implies all | ✅ `hasAdminPermission` |
-| Re-read from DB per request | ✅ `loadAdminFromDb` — a stale JWT cannot retain revoked admin |
-| Route-level enforcement | ✅ `requireAdminPermission` / `requireAdminAnyPermission` |
-| UI tabs permission-gated | ✅ `admin-panel.tsx:146` |
-| Audit log | ✅ `audit_log` table |
+| Property                            | Status                                                         |
+| ----------------------------------- | -------------------------------------------------------------- |
+| Admin independent of `primary_role` | ✅ `is_admin` boolean + `admin_permissions text[]`             |
+| Permission-based, not binary        | ✅ 14 permissions                                              |
+| `super_admin` implies all           | ✅ `hasAdminPermission`                                        |
+| Re-read from DB per request         | ✅ `loadAdminFromDb` — a stale JWT cannot retain revoked admin |
+| Route-level enforcement             | ✅ `requireAdminPermission` / `requireAdminAnyPermission`      |
+| UI tabs permission-gated            | ✅ `admin-panel.tsx:146`                                       |
+| Audit log                           | ✅ `audit_log` table                                           |
 
 `loadAdminFromDb` deserves specific credit: revoking admin takes effect on the next request rather than at token expiry. That is the correct posture and must not be weakened.
 
@@ -136,7 +133,7 @@ No row has `primary_role = 'admin'`. `requireRole('admin')` special-cases `isAdm
 
 Runtime is correct; the type invites bugs. Any `switch` over `UserRole` carries a dead branch, and `if (user.role === 'admin')` compiles and never fires.
 
-*Fix:* remove `'admin'` from `UserRole`; introduce `type StaffPermission` separately. Type-only change — **but touching `UserRole` ripples widely, so this needs its own PR with a full typecheck**, not a drive-by edit.
+_Fix:_ remove `'admin'` from `UserRole`; introduce `type StaffPermission` separately. Type-only change — **but touching `UserRole` ripples widely, so this needs its own PR with a full typecheck**, not a drive-by edit.
 
 **2. Missing permissions.**
 
@@ -150,17 +147,17 @@ Add: `manage_disputes`, `manage_credits` (MHC packages, action prices, purchase 
 
 An agent starting a shift has no "what needs me now" view. `admin-dashboard-tab.tsx` shows stats, not queues.
 
-*Proposal:* add a work-queue home above the existing tabs — **do not remove the tabs**, they are class 1 and used for investigation:
+_Proposal:_ add a work-queue home above the existing tabs — **do not remove the tabs**, they are class 1 and used for investigation:
 
-| Queue | Source |
-|---|---|
-| Verifications pending | `verification_requests` |
+| Queue                         | Source                                                                         |
+| ----------------------------- | ------------------------------------------------------------------------------ |
+| Verifications pending         | `verification_requests`                                                        |
 | MHC purchases awaiting review | `deposit_requests WHERE purpose='credit_purchase' AND status='pending_review'` |
-| Support cases unassigned | `support_tickets WHERE assigned_to IS NULL` |
-| Disputes open | `case_type='dispute'` (post-unification) |
-| Services pending review | `services WHERE status='pending_review'` |
-| Review reports | `review_reports` |
-| Ads pending | `advertisements` |
+| Support cases unassigned      | `support_tickets WHERE assigned_to IS NULL`                                    |
+| Disputes open                 | `case_type='dispute'` (post-unification)                                       |
+| Services pending review       | `services WHERE status='pending_review'`                                       |
+| Review reports                | `review_reports`                                                               |
+| Ads pending                   | `advertisements`                                                               |
 
 Each queue: count, oldest item age, one-click claim. This is additive.
 

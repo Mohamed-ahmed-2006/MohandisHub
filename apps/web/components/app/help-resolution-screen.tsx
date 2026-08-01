@@ -506,7 +506,8 @@ export const HelpResolutionScreen = ({ defaultTab = 'all' }: Props) => {
     ].join(',');
     const getFocusableElements = () =>
       Array.from(dialog?.querySelectorAll<HTMLElement>(focusableSelector) ?? []).filter(
-        (element) => !element.hasAttribute('hidden') && element.getAttribute('aria-hidden') !== 'true',
+        (element) =>
+          !element.hasAttribute('hidden') && element.getAttribute('aria-hidden') !== 'true',
       );
 
     const initialTarget = getFocusableElements()[0] ?? dialog;
@@ -786,207 +787,209 @@ export const HelpResolutionScreen = ({ defaultTab = 'all' }: Props) => {
                 {hr.newCase ?? tr('New case', 'قضية جديدة')}
               </h3>
 
-            {unavailableNotice && (
-              <div
-                style={{
-                  background: 'rgba(239, 68, 68, 0.1)',
-                  border: '1px solid rgba(239, 68, 68, 0.3)',
-                  color: '#ef4444',
-                  padding: '0.75rem',
-                  borderRadius: '8px',
-                  marginBottom: '1rem',
-                  fontSize: '0.88rem',
-                }}
-                role="alert"
-              >
-                {unavailableNotice}
-              </div>
-            )}
-
-            <form onSubmit={(e) => void handleCreateCaseSubmit(e)} className="dashboard-form">
-              <label className="dashboard-form-label-inline" htmlFor="hr-kind">
-                {hr.categoryLabel ?? tr('What is this about?', 'ما موضوع القضية؟')}
-              </label>
-              <select
-                id="hr-kind"
-                className="dashboard-input"
-                value={createKind}
-                onChange={(e) => {
-                  setCreateKind(e.target.value as CreatableKind);
-                  setCreateSubjectKey('');
-                  setUnavailableNotice(null);
-                }}
-              >
-                <option value="general_support">{kindLabel('general_support')}</option>
-                <option value="need_job_dispute">{kindLabel('need_job_dispute')}</option>
-                <option value="reservation_dispute">{kindLabel('reservation_dispute')}</option>
-                <option value="direct_payment">{kindLabel('direct_payment')}</option>
-                <option value="safety_report">{kindLabel('safety_report')}</option>
-              </select>
-
-              {createKind === 'reservation_dispute' ? (
+              {unavailableNotice && (
                 <div
                   style={{
+                    background: 'rgba(239, 68, 68, 0.1)',
+                    border: '1px solid rgba(239, 68, 68, 0.3)',
+                    color: '#ef4444',
                     padding: '0.75rem',
-                    background: 'rgba(255, 255, 255, 0.04)',
                     borderRadius: '8px',
+                    marginBottom: '1rem',
+                    fontSize: '0.88rem',
+                  }}
+                  role="alert"
+                >
+                  {unavailableNotice}
+                </div>
+              )}
+
+              <form onSubmit={(e) => void handleCreateCaseSubmit(e)} className="dashboard-form">
+                <label className="dashboard-form-label-inline" htmlFor="hr-kind">
+                  {hr.categoryLabel ?? tr('What is this about?', 'ما موضوع القضية؟')}
+                </label>
+                <select
+                  id="hr-kind"
+                  className="dashboard-input"
+                  value={createKind}
+                  onChange={(e) => {
+                    setCreateKind(e.target.value as CreatableKind);
+                    setCreateSubjectKey('');
+                    setUnavailableNotice(null);
                   }}
                 >
-                  <p className="dashboard-card-meta">
-                    {hr.reservationDisputeHint ??
-                      tr(
-                        'Reservation disputes are opened from the booking itself.',
-                        'تُفتح نزاعات الحجز من الحجز نفسه.',
-                      )}
-                  </p>
-                </div>
-              ) : (
-                <>
-                  {needsSubject && (
-                    <>
-                      <label className="dashboard-form-label-inline" htmlFor="hr-subject">
-                        {hr.subjectLabel ?? tr('Which engagement?', 'أي ارتباط؟')}
-                      </label>
-                      {eligibleSubjects.length === 0 ? (
-                        <p className="dashboard-card-meta" role="status">
-                          {unavailableMessage(selectedAvailability) ??
-                            hr.checkingAvailability ??
-                            tr('Checking what you can open...', 'جارٍ التحقق...')}
-                        </p>
-                      ) : (
+                  <option value="general_support">{kindLabel('general_support')}</option>
+                  <option value="need_job_dispute">{kindLabel('need_job_dispute')}</option>
+                  <option value="reservation_dispute">{kindLabel('reservation_dispute')}</option>
+                  <option value="direct_payment">{kindLabel('direct_payment')}</option>
+                  <option value="safety_report">{kindLabel('safety_report')}</option>
+                </select>
+
+                {createKind === 'reservation_dispute' ? (
+                  <div
+                    style={{
+                      padding: '0.75rem',
+                      background: 'rgba(255, 255, 255, 0.04)',
+                      borderRadius: '8px',
+                    }}
+                  >
+                    <p className="dashboard-card-meta">
+                      {hr.reservationDisputeHint ??
+                        tr(
+                          'Reservation disputes are opened from the booking itself.',
+                          'تُفتح نزاعات الحجز من الحجز نفسه.',
+                        )}
+                    </p>
+                  </div>
+                ) : (
+                  <>
+                    {needsSubject && (
+                      <>
+                        <label className="dashboard-form-label-inline" htmlFor="hr-subject">
+                          {hr.subjectLabel ?? tr('Which engagement?', 'أي ارتباط؟')}
+                        </label>
+                        {eligibleSubjects.length === 0 ? (
+                          <p className="dashboard-card-meta" role="status">
+                            {unavailableMessage(selectedAvailability) ??
+                              hr.checkingAvailability ??
+                              tr('Checking what you can open...', 'جارٍ التحقق...')}
+                          </p>
+                        ) : (
+                          <select
+                            id="hr-subject"
+                            className="dashboard-input"
+                            value={createSubjectKey}
+                            onChange={(e) => setCreateSubjectKey(e.target.value)}
+                            required
+                          >
+                            <option value="">—</option>
+                            {eligibleSubjects.map((subject) => (
+                              <option
+                                key={`${subject.subjectType}::${subject.subjectId}`}
+                                value={`${subject.subjectType}::${subject.subjectId}`}
+                              >
+                                {subject.label}
+                                {subject.counterpartyName ? ` — ${subject.counterpartyName}` : ''}
+                              </option>
+                            ))}
+                          </select>
+                        )}
+                      </>
+                    )}
+
+                    {createKind === 'general_support' ? (
+                      <input
+                        type="text"
+                        className="dashboard-input"
+                        placeholder={hr.summaryLabel ?? tr('Subject', 'الموضوع')}
+                        value={createSubject}
+                        onChange={(e) => setCreateSubject(e.target.value)}
+                        required
+                      />
+                    ) : (
+                      <>
+                        <label className="dashboard-form-label-inline" htmlFor="hr-reason">
+                          {hr.reasonLabel ?? tr('Reason', 'السبب')}
+                        </label>
                         <select
-                          id="hr-subject"
+                          id="hr-reason"
                           className="dashboard-input"
-                          value={createSubjectKey}
-                          onChange={(e) => setCreateSubjectKey(e.target.value)}
-                          required
+                          value={createReason}
+                          onChange={(e) => setCreateReason(e.target.value)}
                         >
-                          <option value="">—</option>
-                          {eligibleSubjects.map((subject) => (
-                            <option
-                              key={`${subject.subjectType}::${subject.subjectId}`}
-                              value={`${subject.subjectType}::${subject.subjectId}`}
-                            >
-                              {subject.label}
-                              {subject.counterpartyName ? ` — ${subject.counterpartyName}` : ''}
+                          {(createKind === 'need_job_dispute'
+                            ? [
+                                ['not_delivered', tr('Work not delivered', 'لم يُسلَّم العمل')],
+                                ['partially_delivered', tr('Partially delivered', 'تسليم جزئي')],
+                                ['quality', tr('Quality of work', 'جودة العمل')],
+                                [
+                                  'unresponsive',
+                                  tr('Other party unresponsive', 'الطرف الآخر لا يرد'),
+                                ],
+                                ['scope_disagreement', tr('Scope disagreement', 'خلاف على النطاق')],
+                                ['other', tr('Other', 'أخرى')],
+                              ]
+                            : createKind === 'direct_payment'
+                              ? [
+                                  [
+                                    'paid_not_acknowledged',
+                                    tr('Paid but not acknowledged', 'دفعت ولم يُعترف'),
+                                  ],
+                                  ['wrong_amount', tr('Wrong amount', 'مبلغ خاطئ')],
+                                  [
+                                    'payment_details_invalid',
+                                    tr('Payment details did not work', 'بيانات الدفع لم تعمل'),
+                                  ],
+                                  [
+                                    'refund_not_received',
+                                    tr('Refund not received', 'لم يصل الاسترداد'),
+                                  ],
+                                  ['other', tr('Other', 'أخرى')],
+                                ]
+                              : [
+                                  ['harassment', tr('Harassment', 'تحرش أو إساءة')],
+                                  ['fraud', tr('Fraud', 'احتيال')],
+                                  [
+                                    'off_platform_solicitation',
+                                    tr('Off-platform solicitation', 'استدراج خارج المنصة'),
+                                  ],
+                                  ['impersonation', tr('Impersonation', 'انتحال هوية')],
+                                  ['unsafe_behaviour', tr('Unsafe behaviour', 'سلوك غير آمن')],
+                                  ['other', tr('Other', 'أخرى')],
+                                ]
+                          ).map(([value, label]) => (
+                            <option key={value} value={value}>
+                              {label}
                             </option>
                           ))}
                         </select>
-                      )}
-                    </>
-                  )}
+                      </>
+                    )}
 
-                  {createKind === 'general_support' ? (
-                    <input
-                      type="text"
+                    <textarea
                       className="dashboard-input"
-                      placeholder={hr.summaryLabel ?? tr('Subject', 'الموضوع')}
-                      value={createSubject}
-                      onChange={(e) => setCreateSubject(e.target.value)}
+                      placeholder={hr.detailsLabel ?? tr('Details', 'التفاصيل')}
+                      value={createBody}
+                      onChange={(e) => setCreateBody(e.target.value)}
                       required
+                      rows={4}
                     />
-                  ) : (
-                    <>
-                      <label className="dashboard-form-label-inline" htmlFor="hr-reason">
-                        {hr.reasonLabel ?? tr('Reason', 'السبب')}
+                    <div>
+                      <label className="dashboard-form-label-inline" htmlFor="hr-files">
+                        {d.upload ?? tr('Attachments', 'المرفقات')} (
+                        {d.maxTwoImages ?? tr('max 2', 'حد أقصى 2')})
                       </label>
-                      <select
-                        id="hr-reason"
+                      <input
+                        id="hr-files"
+                        type="file"
+                        multiple
                         className="dashboard-input"
-                        value={createReason}
-                        onChange={(e) => setCreateReason(e.target.value)}
-                      >
-                        {(createKind === 'need_job_dispute'
-                          ? [
-                              ['not_delivered', tr('Work not delivered', 'لم يُسلَّم العمل')],
-                              ['partially_delivered', tr('Partially delivered', 'تسليم جزئي')],
-                              ['quality', tr('Quality of work', 'جودة العمل')],
-                              [
-                                'unresponsive',
-                                tr('Other party unresponsive', 'الطرف الآخر لا يرد'),
-                              ],
-                              ['scope_disagreement', tr('Scope disagreement', 'خلاف على النطاق')],
-                              ['other', tr('Other', 'أخرى')],
-                            ]
-                          : createKind === 'direct_payment'
-                            ? [
-                                [
-                                  'paid_not_acknowledged',
-                                  tr('Paid but not acknowledged', 'دفعت ولم يُعترف'),
-                                ],
-                                ['wrong_amount', tr('Wrong amount', 'مبلغ خاطئ')],
-                                [
-                                  'payment_details_invalid',
-                                  tr('Payment details did not work', 'بيانات الدفع لم تعمل'),
-                                ],
-                                [
-                                  'refund_not_received',
-                                  tr('Refund not received', 'لم يصل الاسترداد'),
-                                ],
-                                ['other', tr('Other', 'أخرى')],
-                              ]
-                            : [
-                                ['harassment', tr('Harassment', 'تحرش أو إساءة')],
-                                ['fraud', tr('Fraud', 'احتيال')],
-                                [
-                                  'off_platform_solicitation',
-                                  tr('Off-platform solicitation', 'استدراج خارج المنصة'),
-                                ],
-                                ['impersonation', tr('Impersonation', 'انتحال هوية')],
-                                ['unsafe_behaviour', tr('Unsafe behaviour', 'سلوك غير آمن')],
-                                ['other', tr('Other', 'أخرى')],
-                              ]
-                        ).map(([value, label]) => (
-                          <option key={value} value={value}>
-                            {label}
-                          </option>
-                        ))}
-                      </select>
-                    </>
-                  )}
+                        onChange={(e) =>
+                          setCreateFiles(Array.from(e.target.files ?? []).slice(0, 2))
+                        }
+                      />
+                    </div>
+                  </>
+                )}
 
-                  <textarea
-                    className="dashboard-input"
-                    placeholder={hr.detailsLabel ?? tr('Details', 'التفاصيل')}
-                    value={createBody}
-                    onChange={(e) => setCreateBody(e.target.value)}
-                    required
-                    rows={4}
-                  />
-                  <div>
-                    <label className="dashboard-form-label-inline" htmlFor="hr-files">
-                      {d.upload ?? tr('Attachments', 'المرفقات')} (
-                      {d.maxTwoImages ?? tr('max 2', 'حد أقصى 2')})
-                    </label>
-                    <input
-                      id="hr-files"
-                      type="file"
-                      multiple
-                      className="dashboard-input"
-                      onChange={(e) => setCreateFiles(Array.from(e.target.files ?? []).slice(0, 2))}
-                    />
-                  </div>
-                </>
-              )}
-
-              <div style={{ display: 'flex', gap: '0.75rem', marginTop: '0.5rem' }}>
-                <button type="submit" className="dashboard-primary-btn" disabled={submitting}>
-                  {createKind === 'reservation_dispute'
-                    ? (hr.goToBookings ?? tr('Go to bookings', 'الانتقال للحجوزات'))
-                    : (hr.submit ?? tr('Submit case', 'إرسال القضية'))}
-                </button>
-                <button
-                  type="button"
-                  className="dashboard-secondary-btn"
-                  onClick={closeCreateModal}
-                >
-                  {hr.cancel ?? d.cancel ?? tr('Cancel', 'إلغاء')}
-                </button>
-              </div>
-            </form>
+                <div style={{ display: 'flex', gap: '0.75rem', marginTop: '0.5rem' }}>
+                  <button type="submit" className="dashboard-primary-btn" disabled={submitting}>
+                    {createKind === 'reservation_dispute'
+                      ? (hr.goToBookings ?? tr('Go to bookings', 'الانتقال للحجوزات'))
+                      : (hr.submit ?? tr('Submit case', 'إرسال القضية'))}
+                  </button>
+                  <button
+                    type="button"
+                    className="dashboard-secondary-btn"
+                    onClick={closeCreateModal}
+                  >
+                    {hr.cancel ?? d.cancel ?? tr('Cancel', 'إلغاء')}
+                  </button>
+                </div>
+              </form>
+            </div>
           </div>
-        </div>
-      )}
+        )}
 
         <div className={layoutClass}>
           <aside className="support-inbox" aria-label={hr.allCases ?? 'Cases'}>
@@ -1077,9 +1080,7 @@ export const HelpResolutionScreen = ({ defaultTab = 'all' }: Props) => {
                         }}
                       >
                         <span className="support-ticket-row__subject">{item.title}</span>
-                        <span className={kindBadgeClass(item.kind)}>
-                          {kindLabel(item.kind)}
-                        </span>
+                        <span className={kindBadgeClass(item.kind)}>{kindLabel(item.kind)}</span>
                       </div>
                       <span className="support-ticket-row__meta">
                         <span

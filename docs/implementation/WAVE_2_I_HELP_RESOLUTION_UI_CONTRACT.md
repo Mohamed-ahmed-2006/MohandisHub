@@ -1,7 +1,9 @@
 # Wave 2I Unified Help & Resolution Center API Contract & Specification
 
 ## Overview
+
 This document specifies the unified frontend presentation, route consolidation, evidence security model, case lifecycle state machine, and required backend API contracts for:
+
 - **Wave 2I**: Unified Help & Resolution Center
 
 Branch: `feat/wave-2i-help-resolution-ui`  
@@ -15,36 +17,38 @@ The **Help & Resolution Center** unifies platform support ticketing and marketpl
 
 ### Unified Case Categories
 
-| Unified Category Key | Display Name (EN) | Display Name (AR) | Underlying Engine / Endpoint |
-| :--- | :--- | :--- | :--- |
-| `general_support` | General Support | الدعم الفني العام | Support Ticket API (`/api/v1/support/tickets`) |
-| `need_job_dispute` | Need / Job Dispute | نزاع طلب / وظيفة | Documented Contract (Missing standalone API) |
-| `reservation_dispute` | Reservation Dispute | نزاع حجز | Reservation Dispute API (`/api/v1/reservations/disputes/*`) |
-| `direct_payment` | Direct Payment Issue | مشكلة دفع مباشر / تسوية | Documented Contract (Missing standalone API) |
-| `safety_reporting` | Safety & Reporting | بلاغ سلامة / انتهاك | Documented Contract (Support Ticket fallback) |
+| Unified Category Key  | Display Name (EN)    | Display Name (AR)       | Underlying Engine / Endpoint                                |
+| :-------------------- | :------------------- | :---------------------- | :---------------------------------------------------------- |
+| `general_support`     | General Support      | الدعم الفني العام       | Support Ticket API (`/api/v1/support/tickets`)              |
+| `need_job_dispute`    | Need / Job Dispute   | نزاع طلب / وظيفة        | Documented Contract (Missing standalone API)                |
+| `reservation_dispute` | Reservation Dispute  | نزاع حجز                | Reservation Dispute API (`/api/v1/reservations/disputes/*`) |
+| `direct_payment`      | Direct Payment Issue | مشكلة دفع مباشر / تسوية | Documented Contract (Missing standalone API)                |
+| `safety_reporting`    | Safety & Reporting   | بلاغ سلامة / انتهاك     | Documented Contract (Support Ticket fallback)               |
 
 ---
 
 ## 2. Existing Endpoints (Baseline Inventory)
 
 ### 2.1 Support Ticket Endpoints
-| Method | Route | Purpose | Auth Required |
-| :--- | :--- | :--- | :--- |
-| `POST` | `/api/v1/support/tickets` | Create general support ticket (`category`, `subject`, `body`, `attachmentUrls`). | Bearer Token |
-| `GET` | `/api/v1/support/tickets` | List user's support tickets with status and message counts. | Bearer Token |
-| `GET` | `/api/v1/support/tickets/:ticketId` | Fetch ticket details. | Bearer Token |
-| `GET` | `/api/v1/support/tickets/:ticketId/messages` | List thread messages for ticket. | Bearer Token |
-| `POST` | `/api/v1/support/tickets/:ticketId/messages` | Reply to ticket (`body`, `attachmentUrls`). | Bearer Token |
+
+| Method | Route                                        | Purpose                                                                          | Auth Required |
+| :----- | :------------------------------------------- | :------------------------------------------------------------------------------- | :------------ |
+| `POST` | `/api/v1/support/tickets`                    | Create general support ticket (`category`, `subject`, `body`, `attachmentUrls`). | Bearer Token  |
+| `GET`  | `/api/v1/support/tickets`                    | List user's support tickets with status and message counts.                      | Bearer Token  |
+| `GET`  | `/api/v1/support/tickets/:ticketId`          | Fetch ticket details.                                                            | Bearer Token  |
+| `GET`  | `/api/v1/support/tickets/:ticketId/messages` | List thread messages for ticket.                                                 | Bearer Token  |
+| `POST` | `/api/v1/support/tickets/:ticketId/messages` | Reply to ticket (`body`, `attachmentUrls`).                                      | Bearer Token  |
 
 ### 2.2 Reservation Dispute Endpoints
-| Method | Route | Purpose | Auth Required |
-| :--- | :--- | :--- | :--- |
-| `GET` | `/api/v1/reservations/dispute-cases/my` | List user's active/historical reservation disputes. | Bearer Token |
-| `GET` | `/api/v1/reservations/disputes/:disputeId` | Get full dispute case file (dispute, reservation, evidence, notes, money events, audit timeline). | Bearer Token |
-| `POST` | `/api/v1/reservations/disputes/:disputeId/notes` | Add case note / message to dispute thread. | Bearer Token |
-| `POST` | `/api/v1/reservations/disputes/:disputeId/evidence` | Attach private upload evidence to dispute (`uploadId`, `label`). | Bearer Token |
-| `GET` | `/api/v1/reservations/admin/dispute-cases` | Admin list dispute queue. | Admin Bearer Token |
-| `POST` | `/api/v1/reservations/disputes/:disputeId/resolve` | Admin resolve dispute with refund/release decision. | Admin Bearer Token |
+
+| Method | Route                                               | Purpose                                                                                           | Auth Required      |
+| :----- | :-------------------------------------------------- | :------------------------------------------------------------------------------------------------ | :----------------- |
+| `GET`  | `/api/v1/reservations/dispute-cases/my`             | List user's active/historical reservation disputes.                                               | Bearer Token       |
+| `GET`  | `/api/v1/reservations/disputes/:disputeId`          | Get full dispute case file (dispute, reservation, evidence, notes, money events, audit timeline). | Bearer Token       |
+| `POST` | `/api/v1/reservations/disputes/:disputeId/notes`    | Add case note / message to dispute thread.                                                        | Bearer Token       |
+| `POST` | `/api/v1/reservations/disputes/:disputeId/evidence` | Attach private upload evidence to dispute (`uploadId`, `label`).                                  | Bearer Token       |
+| `GET`  | `/api/v1/reservations/admin/dispute-cases`          | Admin list dispute queue.                                                                         | Admin Bearer Token |
+| `POST` | `/api/v1/reservations/disputes/:disputeId/resolve`  | Admin resolve dispute with refund/release decision.                                               | Admin Bearer Token |
 
 ---
 
@@ -63,6 +67,7 @@ The **Help & Resolution Center** unifies platform support ticketing and marketpl
 The following endpoints were originally proposed.
 
 ### 3.1 Unified Case Listing Endpoint
+
 - **Proposed Route**: `GET /api/v1/help-resolution/cases`
 - **Purpose**: Unified paginated listing of support tickets and marketplace disputes for the authenticated user.
 - **Query Parameters**: `category`, `status`, `page`, `limit`, `search`
@@ -91,6 +96,7 @@ The following endpoints were originally proposed.
   ```
 
 ### 3.2 Need/Job Dispute Creation Endpoint
+
 - **Proposed Route**: `POST /api/v1/help-resolution/job-disputes`
 - **Purpose**: Open a dispute for a customer need or expert job bid.
 - **Request Body**:
@@ -104,6 +110,7 @@ The following endpoints were originally proposed.
   ```
 
 ### 3.3 Direct Payment / Settlement Dispute Endpoint
+
 - **Proposed Route**: `POST /api/v1/help-resolution/payment-disputes`
 - **Purpose**: Report direct-payment offline or settlement discrepancy.
 - **Request Body**:

@@ -142,13 +142,17 @@ describe('the provider screen reflects moderation and billing state', () => {
   });
 
   it('offers manual renewal only once a week has ended', () => {
-    expect(source).toMatch(/needsRenewal\s*=\s*isWeekly && ad\.billing_status === 'renewal_required'/);
+    expect(source).toMatch(
+      /needsRenewal\s*=\s*isWeekly && ad\.billing_status === 'renewal_required'/,
+    );
     expect(source).toMatch(/Renew 7 days/);
     expect(source).toMatch(/needsRenewal \?/);
   });
 
   it('offers a start action for a campaign approved without credits', () => {
-    expect(source).toMatch(/awaitingCredits\s*=\s*isWeekly && ad\.billing_status === 'awaiting_credits'/);
+    expect(source).toMatch(
+      /awaitingCredits\s*=\s*isWeekly && ad\.billing_status === 'awaiting_credits'/,
+    );
     expect(source).toMatch(/Start now/);
   });
 
@@ -374,7 +378,9 @@ describe('provider screen stays bilingual and mobile-friendly', () => {
     const css = read(MY_ADS_CSS);
     // 560px covers the 375px target width.
     expect(css).toMatch(/@media \(max-width: 560px\)/);
-    expect(css).toMatch(/@media \(max-width: 560px\)\s*\{\s*\.myads-field-row\s*\{\s*grid-template-columns: 1fr;/s);
+    expect(css).toMatch(
+      /@media \(max-width: 560px\)\s*\{\s*\.myads-field-row\s*\{\s*grid-template-columns: 1fr;/s,
+    );
   });
 });
 
@@ -453,10 +459,7 @@ describe('advertisement API client', () => {
     expect(source).not.toContain('durationDays');
     // Scoped to createAd's own body type: `AdminAdControls.mhcPrice` is a
     // legitimate read elsewhere in this file, but nothing priced may be SENT.
-    const createAdBody = source.slice(
-      source.indexOf('createAd: ('),
-      source.indexOf('getMyAds: ('),
-    );
+    const createAdBody = source.slice(source.indexOf('createAd: ('), source.indexOf('getMyAds: ('));
     expect(createAdBody).not.toContain('mhcPrice');
     expect(createAdBody).not.toContain('price');
     expect(createAdBody).not.toContain('amount');

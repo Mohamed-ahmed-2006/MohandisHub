@@ -41,7 +41,10 @@ const copy = {
   declining: { en: 'Declining…', ar: 'جارٍ الرفض…' },
   activating: { en: 'Activating…', ar: 'جارٍ التفعيل…' },
   free: { en: 'Free', ar: 'مجانًا' },
-  short: { en: 'You need more credits to activate this job.', ar: 'تحتاج رصيدًا أكبر لتفعيل هذا العمل.' },
+  short: {
+    en: 'You need more credits to activate this job.',
+    ar: 'تحتاج رصيدًا أكبر لتفعيل هذا العمل.',
+  },
   buy: { en: 'Buy credits', ar: 'شراء رصيد' },
   expiresIn: { en: 'Expires in', ar: 'ينتهي خلال' },
   expired: { en: 'This offer has expired.', ar: 'انتهت صلاحية هذا العرض.' },
@@ -50,8 +53,14 @@ const copy = {
     ar: 'أضف وسيلة دفع أولًا ليعرف العميل كيف يدفع لك.',
   },
   addPaymentMethod: { en: 'Add payment method', ar: 'إضافة وسيلة دفع' },
-  activated: { en: 'Job activated. Contact details are now available.', ar: 'تم تفعيل العمل. بيانات التواصل متاحة الآن.' },
-  declined: { en: 'Offer declined. No credits were charged.', ar: 'تم رفض العرض. لم يتم خصم أي رصيد.' },
+  activated: {
+    en: 'Job activated. Contact details are now available.',
+    ar: 'تم تفعيل العمل. بيانات التواصل متاحة الآن.',
+  },
+  declined: {
+    en: 'Offer declined. No credits were charged.',
+    ar: 'تم رفض العرض. لم يتم خصم أي رصيد.',
+  },
   noCharge: { en: 'Declining is free.', ar: 'الرفض مجاني.' },
 };
 
@@ -121,7 +130,11 @@ export const AwardOfferCard = ({
       onResolved?.('declined');
     } catch (e) {
       setError({
-        message: isApiClientError(e) ? e.message : loc === 'ar' ? 'تعذر الرفض.' : 'Could not decline.',
+        message: isApiClientError(e)
+          ? e.message
+          : loc === 'ar'
+            ? 'تعذر الرفض.'
+            : 'Could not decline.',
       });
     } finally {
       setBusy(null);

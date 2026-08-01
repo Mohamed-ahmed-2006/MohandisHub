@@ -119,7 +119,9 @@
   text-align: start;
   color: hsl(var(--foreground));
   cursor: pointer;
-  transition: background-color 120ms ease, transform 120ms ease;
+  transition:
+    background-color 120ms ease,
+    transform 120ms ease;
 }
 
 .admin-cmd-item:hover,
