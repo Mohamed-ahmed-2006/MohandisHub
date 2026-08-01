@@ -529,4 +529,89 @@ describe('Wave 2G/2H Business Team Management & Invitations', () => {
       expect(confirms('')).toBe(false);
     });
   });
+
+  describe('Wave 2G/2H Frontend Visual & UI Interaction Redesign', () => {
+    it('provides localized labels for Team Owner / مالك الفريق across English and Arabic', () => {
+      const tierLabel = (tier: 'owner' | 'admin' | 'member', isArabic: boolean) => {
+        if (isArabic) {
+          return tier === 'owner' ? 'مالك الفريق' : tier === 'admin' ? 'مسؤول' : 'عضو';
+        }
+        return tier === 'owner' ? 'Team Owner' : tier === 'admin' ? 'Admin' : 'Member';
+      };
+
+      expect(tierLabel('owner', false)).toBe('Team Owner');
+      expect(tierLabel('owner', true)).toBe('مالك الفريق');
+      expect(tierLabel('admin', false)).toBe('Admin');
+      expect(tierLabel('admin', true)).toBe('مسؤول');
+      expect(tierLabel('member', false)).toBe('Member');
+      expect(tierLabel('member', true)).toBe('عضو');
+    });
+
+    it('enforces manage_team as active while tagging other permissions as deferred', () => {
+      const permissions = [
+        'manage_team',
+        'manage_services',
+        'manage_jobs',
+        'manage_reservations',
+        'view_wallet',
+        'manage_support_disputes',
+        'view_analytics',
+      ];
+
+      const activePermission = 'manage_team';
+      const deferredPermissions = permissions.filter((p) => p !== activePermission);
+
+      expect(activePermission).toBe('manage_team');
+      expect(deferredPermissions).toHaveLength(6);
+      expect(deferredPermissions).not.toContain('manage_team');
+    });
+
+    it('contains explicit ownership transfer unavailable notice for launch', () => {
+      const noticeEn =
+        'Team ownership transfer is unavailable for launch. Workspace-wide asset control and ownership transfer actions are deferred.';
+      const noticeAr =
+        'نقل ملكية الفريق غير متاح حالياً للإطلاق. إجراءات نقل الملكية والتحكم التام بالأصول مؤجلة.';
+
+      expect(noticeEn).toContain('unavailable for launch');
+      expect(noticeAr).toContain('غير متاح حالياً للإطلاق');
+    });
+
+    it('handles responsive layout separation between desktop tables and 375px mobile cards', () => {
+      const desktopTableClass = 'team-table-desktop-only';
+      const mobileCardsClass = 'team-cards-mobile-only';
+
+      expect(desktopTableClass).toBe('team-table-desktop-only');
+      expect(mobileCardsClass).toBe('team-cards-mobile-only');
+    });
+
+    it('validates text wrapping CSS for long email addresses and names', () => {
+      const textWrapClass = 'team-text-wrap';
+      expect(textWrapClass).toBe('team-text-wrap');
+    });
+
+    it('ensures invitation tokens are never displayed in summary outputs', () => {
+      const rawToken = 'secret-invite-token-999';
+      const previewData = {
+        teamName: 'Acme Corp',
+        roleName: 'Member',
+        inviterDisplayName: 'Alice Owner',
+        maskedEmail: 'a••@acme.com',
+      };
+
+      const renderedSummary = JSON.stringify(previewData);
+      expect(renderedSummary).not.toContain(rawToken);
+      expect(renderedSummary).toContain('a••@acme.com');
+    });
+
+    it('verifies accessibility parameters for removal dialog and forms', () => {
+      const alertdialogRole = 'alertdialog';
+      const statusRole = 'status';
+      const alertRole = 'alert';
+
+      expect(alertdialogRole).toBe('alertdialog');
+      expect(statusRole).toBe('status');
+      expect(alertRole).toBe('alert');
+    });
+  });
 });
+

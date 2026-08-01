@@ -2098,4 +2098,16 @@ export const enDictionary: Dictionary = {
     inboxPageHint:
       'Accept, decline, or counter customer offers here. Use My Services when you need to edit listings.',
   },
+  businessTeam: {
+    owner: 'Team Owner',
+    admin: 'Admin',
+    member: 'Member',
+    workspace: 'Workspace',
+    teamMembers: 'Team Members',
+    teamInvitations: 'Team Invitations',
+    createRole: 'Create Custom Role',
+    inviteMember: 'Invite Member',
+    deferredNotice: 'Only team administration (manage_team) is active. Operational permissions are deferred.',
+    ownershipTransferUnavailable: 'Team ownership transfer is unavailable for launch. Workspace-wide asset control and ownership transfer actions are deferred.',
+  },
 };
