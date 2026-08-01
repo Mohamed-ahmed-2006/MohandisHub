@@ -26,6 +26,8 @@ import {
   insertPrivateUpload,
   isJobOwnerOfApplicationWithCv,
   isMoneyProofVisibleToUser,
+  isResolutionCaseEvidence,
+  isResolutionEvidenceVisibleToUser,
 } from './upload.repository.js';
 
 const settingsService = new SettingsService();
@@ -299,9 +301,16 @@ uploadRouter.get(
     }
     const user = req.user!;
     if (row.user_id !== user.id && !canAdminReadPrivateUpload(user)) {
-      const jobOwner = await isJobOwnerOfApplicationWithCv(user.id, row.id);
-      const moneyProofOwner = jobOwner ? true : await isMoneyProofVisibleToUser(user.id, row.id);
-      if (!jobOwner && !moneyProofOwner) {
+      // Every arm is a server-side question about what this file is attached
+      // to. Nothing the client sends — not a case id, not a dispute id —
+      // participates in the decision.
+      const allowed =
+        (await isResolutionEvidenceVisibleToUser(user.id, row.id)) ||
+        (hasAdminPermission(user, 'manage_support') &&
+          (await isResolutionCaseEvidence(row.id))) ||
+        (await isJobOwnerOfApplicationWithCv(user.id, row.id)) ||
+        (await isMoneyProofVisibleToUser(user.id, row.id));
+      if (!allowed) {
         throw new HttpError({ statusCode: 403, code: 'FORBIDDEN', message: 'Access denied.' });
       }
     }
