@@ -9,9 +9,18 @@ import type { Dictionary } from '@/lib/i18n/types';
 type Props = {
   dictionary: Dictionary;
   accessToken: string;
+  /**
+   * Which workspace to operate in.
+   *
+   * Omitted by the business dashboard, which has always shown the account's own
+   * workspace. Supplied by the workspaces route, where a person who belongs to
+   * more than one picks. Either way the server verifies it against the caller's
+   * own memberships, so it selects and never grants.
+   */
+  teamId?: string | null;
 };
 
-export const BusinessTeamPanel = ({ dictionary, accessToken }: Props) => {
+export const BusinessTeamPanel = ({ dictionary, accessToken, teamId }: Props) => {
   const [overview, setOverview] = useState<BusinessTeamOverview | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -19,7 +28,6 @@ export const BusinessTeamPanel = ({ dictionary, accessToken }: Props) => {
   const [notice, setNotice] = useState<string | null>(null);
   const [formValidationError, setFormValidationError] = useState<string | null>(null);
   const [pendingRemoval, setPendingRemoval] = useState<{ id: string; label: string } | null>(null);
-  const [transferOpen, setTransferOpen] = useState(false);
 
   const isArabic = /[؀-ۿ]/.test(dictionary.nav?.home ?? '');
   const tr = (en: string, ar: string) => (isArabic ? ar : en);
@@ -28,7 +36,7 @@ export const BusinessTeamPanel = ({ dictionary, accessToken }: Props) => {
     setLoading(true);
     setError(null);
     try {
-      setOverview(await businessTeamsApiClient.getMine(accessToken));
+      setOverview(await businessTeamsApiClient.getMine(accessToken, teamId));
     } catch (err) {
       setError(
         err instanceof Error ? err.message : tr('Failed to load team.', 'تعذر تحميل الفريق.'),
@@ -36,7 +44,7 @@ export const BusinessTeamPanel = ({ dictionary, accessToken }: Props) => {
     } finally {
       setLoading(false);
     }
-  }, [accessToken]);
+  }, [accessToken, teamId]);
 
   useEffect(() => {
     void load();
@@ -73,11 +81,7 @@ export const BusinessTeamPanel = ({ dictionary, accessToken }: Props) => {
   const workspaceTier = viewer?.tier ?? 'member';
   const canAdministerTeam = actions?.inviteMembers === true;
   const canManageRoles = actions?.manageRoles === true;
-  const canTransferOwnership = actions?.transferOwnership === true;
   const assignableRoles = (overview?.roles ?? []).filter((role) => role.assignable);
-  const transferCandidates = (overview?.members ?? []).filter(
-    (member) => !member.isOwner && !member.isSelf,
-  );
 
   const createRole = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -98,7 +102,7 @@ export const BusinessTeamPanel = ({ dictionary, accessToken }: Props) => {
     }
 
     const ok = await mutate(
-      () => businessTeamsApiClient.createRole(accessToken, { name, permissions }),
+      () => businessTeamsApiClient.createRole(accessToken, { name, permissions }, teamId),
       tr('Could not create role.', 'تعذر إنشاء الدور.'),
     );
     if (ok) form.reset();
@@ -125,7 +129,7 @@ export const BusinessTeamPanel = ({ dictionary, accessToken }: Props) => {
     }
 
     const ok = await mutate(
-      () => businessTeamsApiClient.createInvite(accessToken, { email, roleId }),
+      () => businessTeamsApiClient.createInvite(accessToken, { email, roleId }, teamId),
       tr('Could not send invite.', 'تعذر إرسال الدعوة.'),
     );
     if (ok) {
@@ -141,20 +145,20 @@ export const BusinessTeamPanel = ({ dictionary, accessToken }: Props) => {
 
   const revokeInvite = (inviteId: string) =>
     mutate(
-      () => businessTeamsApiClient.revokeInvite(accessToken, inviteId),
+      () => businessTeamsApiClient.revokeInvite(accessToken, inviteId, teamId),
       tr('Could not revoke invite.', 'تعذر إلغاء الدعوة.'),
     );
 
   const changeMemberRole = (memberId: string, roleId: string) =>
     mutate(
-      () => businessTeamsApiClient.updateMemberRole(accessToken, memberId, { roleId }),
+      () => businessTeamsApiClient.updateMemberRole(accessToken, memberId, { roleId }, teamId),
       tr('Could not update the member role.', 'تعذر تحديث دور العضو.'),
     );
 
   const confirmRemoval = async () => {
     if (!pendingRemoval) return;
     const ok = await mutate(
-      () => businessTeamsApiClient.removeMember(accessToken, pendingRemoval.id),
+      () => businessTeamsApiClient.removeMember(accessToken, pendingRemoval.id, teamId),
       tr('Could not remove the member.', 'تعذر إزالة العضو.'),
     );
     setPendingRemoval(null);
@@ -163,46 +167,6 @@ export const BusinessTeamPanel = ({ dictionary, accessToken }: Props) => {
         tr(
           'Member removed. Their workspace access ended immediately.',
           'تمت إزالة العضو. انتهى وصوله إلى مساحة العمل فورًا.',
-        ),
-      );
-    }
-  };
-
-  const transferOwnership = async (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    if (!overview) return;
-    setFormValidationError(null);
-    const form = event.currentTarget;
-    const memberId = (form.elements.namedItem('targetMemberId') as HTMLSelectElement).value;
-    const confirmation = (form.elements.namedItem('confirmation') as HTMLInputElement).value;
-
-    if (!memberId) {
-      setFormValidationError(
-        tr('Choose the member who will become owner.', 'اختر العضو الذي سيصبح المالك.'),
-      );
-      return;
-    }
-    // Checked here for a quick answer and again by the backend, which is the one
-    // that decides. The typed name is what makes an irreversible action
-    // deliberate.
-    if (confirmation.trim().toLowerCase() !== (overview.team.name ?? '').trim().toLowerCase()) {
-      setFormValidationError(
-        tr('Type the workspace name exactly to confirm.', 'اكتب اسم مساحة العمل تمامًا للتأكيد.'),
-      );
-      return;
-    }
-
-    const ok = await mutate(
-      () => businessTeamsApiClient.transferOwnership(accessToken, { memberId, confirmation }),
-      tr('Could not transfer ownership.', 'تعذر نقل الملكية.'),
-    );
-    if (ok) {
-      form.reset();
-      setTransferOpen(false);
-      setNotice(
-        tr(
-          'Ownership transferred. You are now an admin of this workspace.',
-          'تم نقل الملكية. أنت الآن مسؤول في مساحة العمل.',
         ),
       );
     }
@@ -584,90 +548,24 @@ export const BusinessTeamPanel = ({ dictionary, accessToken }: Props) => {
         </div>
       )}
 
-      {/* Business Workspace Operations & Ownership Transfer */}
-      {canTransferOwnership && (
+      {/* Ownership. Stated, not offered. */}
+      {viewer.isOwner && (
         <div
           style={{
             marginTop: '2rem',
             padding: '1rem',
             borderTop: '1px solid rgba(255, 255, 255, 0.1)',
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            flexWrap: 'wrap',
-            gap: '1rem',
           }}
         >
-          <div>
-            <h4 style={{ margin: 0, fontSize: '0.95rem' }}>
-              {tr('Business Ownership', 'ملكية مساحة العمل')}
-            </h4>
-            <p
-              className="dashboard-card-meta"
-              style={{ margin: '0.2rem 0 0', fontSize: '0.85rem' }}
-            >
-              {tr(
-                'Transfer primary ownership of this business workspace to another member. You become an admin.',
-                'نقل الملكية الرئيسية لمساحة العمل هذه إلى عضو آخر. ستصبح أنت مسؤولاً.',
-              )}
-            </p>
-          </div>
-          <button
-            type="button"
-            className="dashboard-secondary-btn"
-            style={{ fontSize: '0.85rem' }}
-            aria-expanded={transferOpen}
-            onClick={() => setTransferOpen((open) => !open)}
-          >
-            {transferOpen ? tr('Cancel', 'إلغاء') : tr('Transfer Ownership', 'نقل الملكية')}
-          </button>
-        </div>
-      )}
-
-      {canTransferOwnership && transferOpen && (
-        <div className="dashboard-card" style={{ marginTop: '1rem' }}>
-          {transferCandidates.length === 0 ? (
-            <p className="dashboard-card-meta">
-              {tr(
-                'Ownership can only be transferred to another member of this workspace. Invite someone first.',
-                'يمكن نقل الملكية إلى عضو آخر في مساحة العمل فقط. قم بدعوة عضو أولاً.',
-              )}
-            </p>
-          ) : (
-            <form className="dashboard-form" onSubmit={(e) => void transferOwnership(e)}>
-              <select
-                name="targetMemberId"
-                className="dashboard-select"
-                aria-label={tr('New owner', 'المالك الجديد')}
-                required
-                defaultValue=""
-              >
-                <option value="" disabled>
-                  {tr('Select the new owner', 'اختر المالك الجديد')}
-                </option>
-                {transferCandidates.map((member) => (
-                  <option key={member.id} value={member.id}>
-                    {member.displayName ?? member.email ?? member.userId.slice(0, 8)}
-                  </option>
-                ))}
-              </select>
-              <input
-                name="confirmation"
-                className="dashboard-input"
-                aria-label={tr('Confirm workspace name', 'تأكيد اسم مساحة العمل')}
-                placeholder={tr(
-                  `Type "${overview.team.name ?? ''}" to confirm`,
-                  `اكتب "${overview.team.name ?? ''}" للتأكيد`,
-                )}
-                required
-              />
-              <button className="dashboard-primary-btn" type="submit" disabled={busy}>
-                {busy
-                  ? tr('Transferring...', 'جاري النقل...')
-                  : tr('Confirm Transfer', 'تأكيد النقل')}
-              </button>
-            </form>
-          )}
+          <h4 style={{ margin: 0, fontSize: '0.95rem' }}>
+            {tr('Business Ownership', 'ملكية مساحة العمل')}
+          </h4>
+          <p className="dashboard-card-meta" style={{ margin: '0.35rem 0 0', fontSize: '0.85rem' }}>
+            {tr(
+              'This workspace, and the services, jobs, advertisements and billing history that belong to it, are owned by this business account. Ownership cannot be transferred to another member.',
+              'مساحة العمل هذه — وما يتبعها من خدمات ووظائف وإعلانات وسجل فوترة — مملوكة لحساب الشركة هذا. لا يمكن نقل الملكية إلى عضو آخر.',
+            )}
+          </p>
         </div>
       )}
     </section>

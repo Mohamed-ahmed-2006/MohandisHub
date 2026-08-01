@@ -3,9 +3,9 @@ import type {
   BusinessInvitePreview,
   BusinessTeamOverview,
   BusinessTeamPermission,
+  BusinessWorkspaceList,
   CreateBusinessInviteBody,
   CreateBusinessRoleBody,
-  TransferBusinessOwnershipBody,
   UpdateBusinessMemberRoleBody,
 } from '@mohandishub/shared';
 
@@ -87,36 +87,44 @@ const publicRequest = async <T>(path: string, accessToken?: string | null): Prom
   return (body as { data: T }).data;
 };
 
-export const BUSINESS_TEAM_PERMISSIONS: BusinessTeamPermission[] = [
-  'manage_team',
-  'manage_services',
-  'manage_jobs',
-  'manage_reservations',
-  'view_wallet',
-  'manage_support_disputes',
-  'view_analytics',
-];
+/**
+ * Permissions a custom role can be given.
+ *
+ * Exactly the set the backend enforces. The other six values the schema accepts
+ * are still stored on roles that already carry them and are reported separately
+ * as reserved, but offering them here would be offering capabilities the API
+ * ignores — which is what the previous version of this screen did.
+ */
+export const BUSINESS_TEAM_PERMISSIONS: BusinessTeamPermission[] = ['manage_team'];
+
+/** Appends `?teamId=` when a workspace has been selected. */
+const withTeam = (path: string, teamId?: string | null): string =>
+  teamId ? `${path}${path.includes('?') ? '&' : '?'}teamId=${encodeURIComponent(teamId)}` : path;
 
 export const businessTeamsApiClient = {
-  getMine: (accessToken: string) =>
-    request<BusinessTeamOverview>(accessToken, '/api/business-teams/me'),
+  /** Every workspace this account can open, regardless of its primary role. */
+  listWorkspaces: (accessToken: string) =>
+    request<BusinessWorkspaceList>(accessToken, '/api/business-teams/workspaces'),
 
-  createRole: (accessToken: string, body: CreateBusinessRoleBody) =>
-    request<BusinessTeamOverview>(accessToken, '/api/business-teams/roles', {
+  getMine: (accessToken: string, teamId?: string | null) =>
+    request<BusinessTeamOverview>(accessToken, withTeam('/api/business-teams/me', teamId)),
+
+  createRole: (accessToken: string, body: CreateBusinessRoleBody, teamId?: string | null) =>
+    request<BusinessTeamOverview>(accessToken, withTeam('/api/business-teams/roles', teamId), {
       method: 'POST',
       body: JSON.stringify(body),
     }),
 
-  createInvite: (accessToken: string, body: CreateBusinessInviteBody) =>
-    request<BusinessTeamOverview>(accessToken, '/api/business-teams/invites', {
+  createInvite: (accessToken: string, body: CreateBusinessInviteBody, teamId?: string | null) =>
+    request<BusinessTeamOverview>(accessToken, withTeam('/api/business-teams/invites', teamId), {
       method: 'POST',
       body: JSON.stringify(body),
     }),
 
-  revokeInvite: (accessToken: string, inviteId: string) =>
+  revokeInvite: (accessToken: string, inviteId: string, teamId?: string | null) =>
     request<BusinessTeamOverview>(
       accessToken,
-      `/api/business-teams/invites/${encodeURIComponent(inviteId)}/revoke`,
+      withTeam(`/api/business-teams/invites/${encodeURIComponent(inviteId)}/revoke`, teamId),
       {
         method: 'POST',
       },
@@ -141,23 +149,28 @@ export const businessTeamsApiClient = {
       accessToken,
     ),
 
-  updateMemberRole: (accessToken: string, memberId: string, body: UpdateBusinessMemberRoleBody) =>
+  updateMemberRole: (
+    accessToken: string,
+    memberId: string,
+    body: UpdateBusinessMemberRoleBody,
+    teamId?: string | null,
+  ) =>
     request<BusinessTeamOverview>(
       accessToken,
-      `/api/business-teams/members/${encodeURIComponent(memberId)}`,
+      withTeam(`/api/business-teams/members/${encodeURIComponent(memberId)}`, teamId),
       { method: 'PATCH', body: JSON.stringify(body) },
     ),
 
-  removeMember: (accessToken: string, memberId: string) =>
+  removeMember: (accessToken: string, memberId: string, teamId?: string | null) =>
     request<BusinessTeamOverview>(
       accessToken,
-      `/api/business-teams/members/${encodeURIComponent(memberId)}`,
+      withTeam(`/api/business-teams/members/${encodeURIComponent(memberId)}`, teamId),
       { method: 'DELETE' },
     ),
-
-  transferOwnership: (accessToken: string, body: TransferBusinessOwnershipBody) =>
-    request<BusinessTeamOverview>(accessToken, '/api/business-teams/transfer-ownership', {
-      method: 'POST',
-      body: JSON.stringify(body),
-    }),
 };
+
+// Ownership transfer has no client method. The endpoint still exists and always
+// answers OWNERSHIP_TRANSFER_NOT_AVAILABLE; there is nothing here to call it
+// with, because moving the Owner membership would move team administration
+// while every service, job, advertisement, booking and ledger row stayed with
+// the original account.
