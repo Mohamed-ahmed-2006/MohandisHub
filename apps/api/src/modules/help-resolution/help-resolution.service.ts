@@ -727,6 +727,19 @@ export class HelpResolutionService {
   ): Promise<ResolutionCaseMessage> {
     let message: ResolutionCaseMessage;
 
+    // The support engine has no internal-note concept: everything in
+    // support_ticket_messages is shown to the ticket owner. Writing an admin's
+    // note there would show it to the very person it was hidden from, so this
+    // refuses rather than silently publishing it.
+    if (isStaff && input.visibility === 'admin' && row.kind === 'general_support') {
+      throw new HttpError({
+        statusCode: 409,
+        code: 'INTERNAL_NOTES_NOT_SUPPORTED',
+        message:
+          'Support tickets have no internal notes — every message is shown to the ticket owner. Post it as a reply, or record it on a case that supports internal notes.',
+      });
+    }
+
     if (row.kind === 'general_support' && row.support_ticket_id) {
       // The support engine owns ticket status and re-checks ownership itself.
       const reply = await this.supportService.reply(
