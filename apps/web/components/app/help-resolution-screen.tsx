@@ -115,6 +115,80 @@ export const HelpResolutionScreen = ({ defaultTab = 'all' }: Props) => {
     [hr, isArabic],
   );
 
+  const statusPillInfo = useCallback(
+    (status: string) => {
+      switch (status) {
+        case 'open':
+          return {
+            label: hr.statusOpen ?? tr('Open', 'مفتوحة'),
+            className: 'support-pill support-pill--open',
+          };
+        case 'awaiting_user':
+          return {
+            label: hr.statusAwaitingUser ?? tr('Awaiting reply', 'في انتظار ردك'),
+            className: 'support-pill support-pill--wait',
+          };
+        case 'under_review':
+          return {
+            label: hr.statusUnderReview ?? tr('Under review', 'قيد المراجعة'),
+            className: 'support-pill support-pill--progress',
+          };
+        case 'resolved':
+          return {
+            label: hr.statusResolved ?? tr('Resolved', 'تمت التسوية'),
+            className: 'support-pill support-pill--done',
+          };
+        case 'closed':
+          return {
+            label: hr.statusClosed ?? tr('Closed', 'مغلقة'),
+            className: 'support-pill support-pill--done',
+          };
+        default:
+          return { label: status, className: 'support-pill' };
+      }
+    },
+    [hr, isArabic],
+  );
+
+  const kindBadgeClass = useCallback((kind: ResolutionCaseKind): string => {
+    switch (kind) {
+      case 'general_support':
+        return 'support-kind-badge support-kind-badge--support';
+      case 'reservation_dispute':
+      case 'need_job_dispute':
+        return 'support-kind-badge support-kind-badge--dispute';
+      case 'safety_report':
+        return 'support-kind-badge support-kind-badge--safety';
+      case 'direct_payment':
+        return 'support-kind-badge support-kind-badge--payment';
+    }
+  }, []);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && showCreateModal) {
+        setShowCreateModal(false);
+        resetCreateForm();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [showCreateModal]);
+
+  const totalCasesCount = cases.length;
+  const activeCasesCount = useMemo(
+    () => cases.filter((c) => OPEN_STATUSES.includes(c.status)).length,
+    [cases],
+  );
+  const awaitingUserCount = useMemo(
+    () => cases.filter((c) => c.status === 'awaiting_user').length,
+    [cases],
+  );
+  const closedCasesCount = useMemo(
+    () => cases.filter((c) => CLOSED_STATUSES.includes(c.status)).length,
+    [cases],
+  );
+
   useEffect(() => {
     if (!isReady) return;
     if (!isAuthenticated || !authUser) {
@@ -519,7 +593,7 @@ export const HelpResolutionScreen = ({ defaultTab = 'all' }: Props) => {
   return (
     <main className="support-screen">
       <Container className="support-screen__container">
-        <header className="support-screen__header" style={{ marginBottom: '1.5rem' }}>
+        <header className="support-screen__header" style={{ marginBottom: '1.25rem' }}>
           <div
             style={{
               display: 'flex',
@@ -555,7 +629,34 @@ export const HelpResolutionScreen = ({ defaultTab = 'all' }: Props) => {
             </button>
           </div>
 
-          <div className="dashboard-tabs" style={{ marginTop: '1.25rem' }}>
+          <div className="support-stats" style={{ marginTop: '1.25rem' }}>
+            <div className="support-stat-card">
+              <span className="support-stat-card__label">
+                {hr.totalCases ?? tr('Total cases', 'إجمالي القضايا')}
+              </span>
+              <span className="support-stat-card__value">{totalCasesCount}</span>
+            </div>
+            <div className="support-stat-card support-stat-card--active">
+              <span className="support-stat-card__label">
+                {hr.activeCases ?? tr('Active cases', 'قضايا نشطة')}
+              </span>
+              <span className="support-stat-card__value">{activeCasesCount}</span>
+            </div>
+            <div className="support-stat-card support-stat-card--awaiting">
+              <span className="support-stat-card__label">
+                {hr.awaitingUserCases ?? tr('Awaiting response', 'في انتظار ردك')}
+              </span>
+              <span className="support-stat-card__value">{awaitingUserCount}</span>
+            </div>
+            <div className="support-stat-card support-stat-card--closed">
+              <span className="support-stat-card__label">
+                {hr.closedCases ?? tr('Closed cases', 'قضايا مغلقة')}
+              </span>
+              <span className="support-stat-card__value">{closedCasesCount}</span>
+            </div>
+          </div>
+
+          <div className="dashboard-tabs" style={{ marginTop: '1rem' }}>
             {(
               [
                 ['all', hr.allCases ?? tr('All cases', 'جميع القضايا')],
@@ -584,18 +685,23 @@ export const HelpResolutionScreen = ({ defaultTab = 'all' }: Props) => {
 
         {showCreateModal && (
           <div
-            style={{
-              background: 'var(--card-bg, rgba(30, 41, 59, 0.95))',
-              border: '1px solid rgba(255, 255, 255, 0.1)',
-              borderRadius: '12px',
-              padding: '1.5rem',
-              marginBottom: '2rem',
-              maxWidth: '650px',
+            className="support-modal-backdrop"
+            onClick={(e) => {
+              if (e.target === e.currentTarget) {
+                setShowCreateModal(false);
+                resetCreateForm();
+              }
             }}
           >
-            <h3 style={{ margin: '0 0 1rem 0', fontSize: '1.2rem' }}>
-              {hr.newCase ?? tr('New case', 'قضية جديدة')}
-            </h3>
+            <div
+              className="support-modal-card"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="hr-modal-title"
+            >
+              <h3 id="hr-modal-title" style={{ margin: '0 0 1rem 0', fontSize: '1.2rem' }}>
+                {hr.newCase ?? tr('New case', 'قضية جديدة')}
+              </h3>
 
             {unavailableNotice && (
               <div
@@ -799,7 +905,8 @@ export const HelpResolutionScreen = ({ defaultTab = 'all' }: Props) => {
               </div>
             </form>
           </div>
-        )}
+        </div>
+      )}
 
         <div className={layoutClass}>
           <aside className="support-inbox" aria-label={hr.allCases ?? 'Cases'}>
@@ -807,15 +914,40 @@ export const HelpResolutionScreen = ({ defaultTab = 'all' }: Props) => {
               className="support-inbox__toolbar"
               style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}
             >
-              <input
-                type="search"
-                className="dashboard-input"
-                placeholder={hr.searchPlaceholder ?? tr('Search cases...', 'البحث في القضايا...')}
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                style={{ fontSize: '0.85rem' }}
-                aria-label={hr.searchPlaceholder ?? 'Search cases'}
-              />
+              <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                <input
+                  type="search"
+                  className="dashboard-input"
+                  placeholder={hr.searchPlaceholder ?? tr('Search cases...', 'البحث في القضايا...')}
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  style={{
+                    fontSize: '0.85rem',
+                    width: '100%',
+                    paddingInlineEnd: searchQuery ? '2rem' : undefined,
+                  }}
+                  aria-label={hr.searchPlaceholder ?? 'Search cases'}
+                />
+                {searchQuery && (
+                  <button
+                    type="button"
+                    onClick={() => setSearchQuery('')}
+                    style={{
+                      position: 'absolute',
+                      insetInlineEnd: '0.5rem',
+                      background: 'none',
+                      border: 'none',
+                      cursor: 'pointer',
+                      color: 'hsl(var(--muted-foreground))',
+                      fontSize: '0.85rem',
+                      padding: '0.2rem',
+                    }}
+                    aria-label={hr.clearSearch ?? tr('Clear search', 'مسح البحث')}
+                  >
+                    ✕
+                  </button>
+                )}
+              </div>
               <div style={{ display: 'flex', gap: '0.5rem' }}>
                 {(
                   [
@@ -848,8 +980,7 @@ export const HelpResolutionScreen = ({ defaultTab = 'all' }: Props) => {
               ) : (
                 cases.map((item) => {
                   const isActive = selectedCaseId === item.id;
-                  const isDispute =
-                    item.kind === 'reservation_dispute' || item.kind === 'need_job_dispute';
+                  const statusInfo = statusPillInfo(item.status);
                   return (
                     <button
                       key={item.id}
@@ -867,24 +998,16 @@ export const HelpResolutionScreen = ({ defaultTab = 'all' }: Props) => {
                         }}
                       >
                         <span className="support-ticket-row__subject">{item.title}</span>
-                        <span
-                          style={{
-                            fontSize: '0.7rem',
-                            padding: '0.15rem 0.4rem',
-                            borderRadius: '4px',
-                            whiteSpace: 'nowrap',
-                            background: isDispute
-                              ? 'rgba(239, 68, 68, 0.15)'
-                              : 'rgba(59, 130, 246, 0.15)',
-                            color: isDispute ? '#ef4444' : '#3b82f6',
-                          }}
-                        >
+                        <span className={kindBadgeClass(item.kind)}>
                           {kindLabel(item.kind)}
                         </span>
                       </div>
                       <span className="support-ticket-row__meta">
-                        <span className="support-pill">{item.status}</span>
+                        <span className={statusInfo.className}>{statusInfo.label}</span>
                         <span>{item.referenceCode}</span>
+                        {item.counterpartyName && (
+                          <span className="support-pill">{item.counterpartyName}</span>
+                        )}
                         <span>{new Date(item.lastActivityAt).toLocaleDateString(locale)}</span>
                       </span>
                     </button>
@@ -917,16 +1040,20 @@ export const HelpResolutionScreen = ({ defaultTab = 'all' }: Props) => {
                     type="button"
                     className="support-thread__back"
                     onClick={() => setSelectedCaseId(null)}
-                    aria-label={d.back ?? 'Back'}
+                    aria-label={hr.backToList ?? d.back ?? 'Back'}
                   >
-                    <ChevronLeft size={18} aria-hidden />
-                    {d.back ?? 'Back'}
+                    <ChevronLeft size={18} className="support-thread__back-icon" aria-hidden />
+                    {hr.backToList ?? d.back ?? 'Back'}
                   </button>
                   <div className="support-thread__header-body">
                     <h2>{selectedCase.title}</h2>
                     <div className="support-thread__header-chips">
-                      <span className="support-pill">{selectedCase.status}</span>
-                      <span className="support-pill">{kindLabel(selectedCase.kind)}</span>
+                      <span className={statusPillInfo(selectedCase.status).className}>
+                        {statusPillInfo(selectedCase.status).label}
+                      </span>
+                      <span className={kindBadgeClass(selectedCase.kind)}>
+                        {kindLabel(selectedCase.kind)}
+                      </span>
                       <span className="support-pill">{selectedCase.referenceCode}</span>
                       {selectedCase.counterpartyName && (
                         <span className="support-pill">{selectedCase.counterpartyName}</span>
