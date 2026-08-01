@@ -57,6 +57,8 @@ export function getNotificationTargetHref(
   if (payload?.applicationId) q.set('application', String(payload.applicationId));
   // The advertisements screen opens this campaign's renewal panel on `ad`.
   if (payload?.advertisementId) q.set('ad', String(payload.advertisementId));
+  // The help & resolution centre opens the case named here.
+  if (payload?.caseId) q.set('caseId', String(payload.caseId));
   const qs = q.toString();
   return buildLocalePath(locale, qs ? `${base}?${qs}` : base);
 }

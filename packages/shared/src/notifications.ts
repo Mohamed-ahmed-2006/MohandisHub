@@ -20,6 +20,12 @@ export type NotificationType =
   | 'reservation_started'
   | 'reservation_disputed'
   | 'reservation_dispute_resolved'
+  // Unified Help & Resolution cases
+  | 'resolution_case_opened'
+  | 'resolution_case_message'
+  | 'resolution_case_escalated'
+  | 'resolution_case_status_changed'
+  | 'resolution_case_resolved'
   | 'reservation_expired'
   | 'reservation_location_proposed'
   // Negotiations
@@ -77,6 +83,9 @@ export interface NotificationPayload {
   depositId?: string;
   withdrawalId?: string;
   advertisementId?: string;
+  /** Unified Help & Resolution case. Deep links open the case detail view. */
+  caseId?: string;
+  referenceCode?: string;
   /** i18n template params for notification bodies (optional) */
   [key: string]: unknown;
 }
@@ -120,6 +129,14 @@ export const NOTIFICATION_NAVIGATION_MAP: Partial<Record<NotificationType, strin
   reservation_started: '/app/bookings',
   reservation_disputed: '/app/bookings',
   reservation_dispute_resolved: '/app/bookings',
+  // Every unified case event lands on the case itself. The centre is the only
+  // screen that can show a case of any kind, so sending these to /app/bookings
+  // beside the reservation events would strand support and safety cases.
+  resolution_case_opened: '/app/help-resolution',
+  resolution_case_message: '/app/help-resolution',
+  resolution_case_escalated: '/app/help-resolution',
+  resolution_case_status_changed: '/app/help-resolution',
+  resolution_case_resolved: '/app/help-resolution',
   reservation_expired: '/app/bookings',
   reservation_location_proposed: '/app/bookings',
   price_negotiation: '/app/negotiations',
