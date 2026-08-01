@@ -1,5 +1,6 @@
 export * from './admin.js';
 export * from './favorites.js';
+export * from './help-resolution.js';
 export * from './analytics.js';
 export * from './app-settings.js';
 export * from './api.js';
