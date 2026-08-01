@@ -782,21 +782,7 @@ export class HelpResolutionService {
         createdAt: note.createdAt,
       };
     } else {
-      const inserted = await this.repo.insertNativeMessage({
-        caseId: row.id,
-        authorId: viewer.id,
-        body: input.body,
-        visibility: isStaff && input.visibility === 'admin' ? 'admin' : 'participants',
-        isStaff,
-      });
-      await this.repo.touchCase(row.id);
-      await this.repo.insertEvent({
-        caseId: row.id,
-        eventType: isStaff ? 'staff_message' : 'participant_message',
-        actorId: viewer.id,
-      });
-      await this.applyMessageStatusTransition(row, isStaff);
-      message = this.toMessage(inserted, row.id);
+      message = this.toMessage(await this.writeNativeMessage(row, viewer, input, isStaff), row.id);
     }
 
     if (message.visibility === 'participants') {
@@ -806,27 +792,77 @@ export class HelpResolutionService {
   }
 
   /**
-   * Move a native case's status because somebody spoke.
+   * Write a message to a native case: row, timeline entry and status, atomically.
+   *
+   * This was three separate round trips plus a second pooled connection for the
+   * status change. Two things were wrong with that. A crash between the insert
+   * and the status update left a case whose thread had moved on and whose
+   * status had not; and taking a second connection per message meant ten
+   * concurrent replies wanted twenty connections, which is how a pool runs out
+   * under exactly the load this is supposed to survive.
+   *
+   * The `FOR UPDATE` also serialises concurrent writers on the case row, so the
+   * status they leave behind is the one the last writer intended rather than
+   * whichever transaction happened to commit second.
    *
    * Staff replying puts the ball in the user's court; a user replying puts it
-   * back with staff. Nothing here is driven by the request body — the client
-   * says what it wants to post, not what the case should become.
+   * back with staff. Nothing here reads the request body for a status — the
+   * client says what it wants to post, not what the case should become.
    */
-  private async applyMessageStatusTransition(
+  private async writeNativeMessage(
     row: ResolutionCaseListRow,
+    viewer: CaseViewer,
+    input: PostMessageInput,
     isStaff: boolean,
-  ): Promise<void> {
-    const next = isStaff ? 'awaiting_user' : 'under_review';
-    if (row.status === next || TERMINAL_STATUSES.has(row.status)) return;
+  ): Promise<ResolutionCaseMessageRow> {
+    const visibility = isStaff && input.visibility === 'admin' ? 'admin' : 'participants';
     const pool = getPool();
     const client = await pool.connect();
     try {
       await client.query('BEGIN');
       const locked = await this.repo.lockCaseById(client, row.id);
-      if (locked && !TERMINAL_STATUSES.has(locked.status) && locked.status !== next) {
-        await this.repo.updateStatus(client, row.id, next, null);
+      if (!locked) throw this.notFound();
+      // Re-checked under the lock: the case may have been resolved between the
+      // authorisation read and here.
+      if (TERMINAL_STATUSES.has(locked.status)) {
+        throw new HttpError({
+          statusCode: 409,
+          code: 'CASE_NOT_OPEN',
+          message: 'This case is closed. Open a new case if you still need help.',
+        });
       }
+
+      const inserted = await this.repo.insertNativeMessage(
+        {
+          caseId: row.id,
+          authorId: viewer.id,
+          body: input.body,
+          visibility,
+          isStaff,
+        },
+        client,
+      );
+      await this.repo.insertEvent(
+        {
+          caseId: row.id,
+          eventType: isStaff ? 'staff_message' : 'participant_message',
+          actorId: viewer.id,
+          metadata: { visibility },
+        },
+        client,
+      );
+
+      // An internal note is not a reply. It must not hand the case back to a
+      // user who was never asked anything.
+      const next = isStaff ? 'awaiting_user' : 'under_review';
+      if (visibility === 'participants' && locked.status !== next) {
+        await this.repo.updateStatus(client, row.id, next, null);
+      } else {
+        await this.repo.touchCase(row.id, client);
+      }
+
       await client.query('COMMIT');
+      return inserted;
     } catch (error) {
       await client.query('ROLLBACK');
       throw error;
