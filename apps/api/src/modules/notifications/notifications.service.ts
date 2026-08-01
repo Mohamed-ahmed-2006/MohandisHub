@@ -35,6 +35,15 @@ const CATEGORY_BY_TYPE: Record<string, NotificationCategory> = {
   reservation_location_proposed: 'reservations',
   reservation_disputed: 'disputes',
   reservation_dispute_resolved: 'disputes',
+  // Unified Help & Resolution cases. Filed under `disputes` alongside the
+  // reservation events rather than under a new category: a new category would
+  // start every existing user at the default preference and silently discard
+  // the choices they already made about case notifications.
+  resolution_case_opened: 'disputes',
+  resolution_case_message: 'disputes',
+  resolution_case_escalated: 'disputes',
+  resolution_case_status_changed: 'disputes',
+  resolution_case_resolved: 'disputes',
   wallet_deposit_approved: 'wallet',
   wallet_deposit_rejected: 'wallet',
   wallet_deposit_confirmed: 'wallet',
