@@ -530,7 +530,7 @@ export const BusinessTeamPanel = ({ dictionary, accessToken, teamId }: Props) =>
                         const permissionLabels: Record<string, { en: string; ar: string }> = {
                           manage_team: { en: 'Manage Team', ar: 'إدارة الفريق' },
                           manage_services: { en: 'Manage Services', ar: 'إدارة الخدمات' },
-                          manage_jobs: { en: 'Manage Jobs & Hiring', ar: 'إدارة الوظائف والتوفيد' },
+                          manage_jobs: { en: 'Manage Jobs & Hiring', ar: 'إدارة الوظائف والتوظيف' },
                           manage_reservations: {
                             en: 'Manage Orders & Bookings',
                             ar: 'إدارة الطلبات والحجوزات',
@@ -546,7 +546,7 @@ export const BusinessTeamPanel = ({ dictionary, accessToken, teamId }: Props) =>
                           ? isArabic
                             ? permissionLabels[permission].ar
                             : permissionLabels[permission].en
-                          : permission.replace(/_/g, ' ');
+                          : tr('Additional permission', 'صلاحية إضافية');
                         return (
                           <label
                             key={permission}
@@ -590,8 +590,8 @@ export const BusinessTeamPanel = ({ dictionary, accessToken, teamId }: Props) =>
                     >
                       ℹ{' '}
                       {tr(
-                        'Only team administration (manage_team) is active. Operational permissions are deferred for launch.',
-                        'إدارة الفريق (manage_team) هي الصلاحية المطبقة حالياً. صلاحيات التشغيل والمالية والتحليلات مؤجلة.',
+                        'Only team administration is active. Operational permissions are deferred for launch.',
+                        'إدارة الفريق هي الصلاحية المطبقة حالياً. صلاحيات التشغيل والمالية والتحليلات مؤجلة.',
                       )}
                     </p>
                   </div>

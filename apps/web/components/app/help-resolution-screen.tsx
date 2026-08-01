@@ -452,43 +452,16 @@ export const HelpResolutionScreen = ({ defaultTab = 'all' }: Props) => {
 
   const needsSubject = createKind === 'need_job_dispute' || createKind === 'direct_payment';
 
-  /**
-   * Why a kind cannot be opened, in the reader's language.
-   *
-   * Keyed on the server's reason code rather than its English sentence: the
-   * server decides availability, the dictionary decides wording, and an Arabic
-   * reader is not handed an English explanation.
-   */
-  const sanitizeUserNotice = (rawMessage?: string | null): string | null => {
-    if (!rawMessage) return null;
-    if (
-      rawMessage.includes('/api/') ||
-      rawMessage.includes('Contract:') ||
-      rawMessage.includes('need_job_dispute') ||
-      rawMessage.includes('POST') ||
-      rawMessage.includes('backend API')
-    ) {
-      console.warn('Sanitized internal notice from UI:', rawMessage);
-      return tr(
-        'Direct filing for this topic is not available yet. Please use General Support to reach our team.',
-        'تقديم القضايا مباشرة لهذا الموضوع غير متاح حالياً. يرجى استخدام الدعم العام للتواصل مع فريقنا.',
-      );
-    }
-    return rawMessage;
-  };
-
   const unavailableMessage = (entry: ResolutionCaseAvailability | undefined): string | null => {
     if (!entry || entry.available) return null;
     if (entry.reasonCode === 'no_eligible_subject') {
       return (
         hr.unavailableNoEligibleSubject ??
-        sanitizeUserNotice(entry.message) ??
         tr('This case type is not available to you.', 'هذا النوع من القضايا غير متاح لك.')
       );
     }
     return (
       hr.unavailableLifecycle ??
-      sanitizeUserNotice(entry.message) ??
       tr(
         'Direct filing for this topic is not available yet. Please use General Support to reach our team.',
         'تقديم القضايا مباشرة لهذا الموضوع غير متاح حالياً. يرجى استخدام الدعم العام للتواصل مع فريقنا.',
@@ -563,9 +536,9 @@ export const HelpResolutionScreen = ({ defaultTab = 'all' }: Props) => {
       }
     };
 
-    document.addEventListener('keydown', handleDialogKeyDown);
+    dialog?.addEventListener('keydown', handleDialogKeyDown);
     return () => {
-      document.removeEventListener('keydown', handleDialogKeyDown);
+      dialog?.removeEventListener('keydown', handleDialogKeyDown);
       const focusTarget = previousFocusRef.current ?? createCaseButtonRef.current;
       requestAnimationFrame(() => focusTarget?.focus());
       previousFocusRef.current = null;
@@ -670,9 +643,7 @@ export const HelpResolutionScreen = ({ defaultTab = 'all' }: Props) => {
         );
       } else {
         setUnavailableNotice(
-          err instanceof Error
-            ? err.message
-            : (hr.createFailed ?? tr('Could not create the case.', 'تعذر إنشاء القضية.')),
+          hr.createFailed ?? tr('Could not create the case.', 'تعذر إنشاء القضية.'),
         );
       }
     } finally {

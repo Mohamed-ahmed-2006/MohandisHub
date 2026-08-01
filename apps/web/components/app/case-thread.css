@@ -270,11 +270,20 @@
 .support-scroll {
   flex: 1;
   overflow-y: auto;
+  overflow-x: hidden;
   min-height: 0;
   padding: 1rem 1.1rem;
   display: flex;
   flex-direction: column;
   gap: 0.65rem;
+}
+
+.support-scroll input[type='file'],
+.support-composer input[type='file'] {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 .support-bubble {
@@ -528,11 +537,6 @@
   outline-offset: 2px;
 }
 
-/* RTL Icon Mirroring */
-[dir='rtl'] .support-thread__back-icon {
-  transform: scaleX(-1);
-}
-
 /* Truncation & Line Wrapping */
 .support-ticket-row__subject,
 .support-thread__header-body h2,
@@ -605,6 +609,16 @@
 
   .support-thread__back {
     display: inline-flex;
+    align-self: flex-start;
+  }
+
+  .support-thread__header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .support-thread__header > .dashboard-secondary-btn {
+    align-self: flex-start;
   }
 }
 

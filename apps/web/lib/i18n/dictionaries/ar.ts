@@ -1685,6 +1685,14 @@ export const arDictionary: Dictionary = {
     createAd: 'إنشاء إعلان',
     myAds: 'إعلاناتي',
     noAds: 'لا توجد إعلانات بعد.',
+    statusPendingReview: 'قيد المراجعة',
+    statusPendingPayment: 'في انتظار الدفع',
+    statusScheduled: 'معتمد',
+    statusActive: 'نشط',
+    statusExpired: 'منتهي',
+    statusRejected: 'مرفوض',
+    statusPausedByAdmin: 'موقوف مؤقتاً',
+    statusCancelled: 'ملغى',
     selectPlan: 'اختر الخطة',
     payNow: 'ادفع الآن',
     impressions: 'مرات الظهور',
@@ -2141,7 +2149,7 @@ export const arDictionary: Dictionary = {
     createRole: 'إنشاء دور مخصص',
     inviteMember: 'دعوة عضو جديد',
     deferredNotice:
-      'إدارة الفريق (manage_team) هي الصلاحية المطبقة حالياً. صلاحيات التشغيل والمالية والتحليلات مؤجلة.',
+      'إدارة الفريق هي الصلاحية المطبقة حالياً. صلاحيات التشغيل والمالية والتحليلات مؤجلة.',
     ownershipTransferUnavailable:
       'نقل ملكية الفريق غير متاح حالياً للإطلاق. إجراءات نقل الملكية والتحكم التام بالأصول مؤجلة.',
   },

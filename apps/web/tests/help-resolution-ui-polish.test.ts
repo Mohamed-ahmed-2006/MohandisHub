@@ -119,13 +119,24 @@ describe('Wave 2I Help & Resolution UI Polish Tests', () => {
       }
     });
 
-    it('uses CSS logical properties for RTL mirroring', () => {
+    it('uses logical properties and direction-aware back icons without double mirroring', () => {
       const screenCss = readFileSync(
         new URL('../components/app/case-thread.css', import.meta.url),
         'utf8',
       );
+      const screenSource = readFileSync(
+        new URL('../components/app/help-resolution-screen.tsx', import.meta.url),
+        'utf8',
+      );
       expect(screenCss).toContain('border-inline-end');
-      expect(screenCss).toContain("[dir='rtl'] .support-thread__back-icon");
+      expect(screenSource).toContain('isArabic ? (');
+      expect(screenSource).toContain(
+        '<ChevronRight size={18} className="support-thread__back-icon"',
+      );
+      expect(screenSource).toContain(
+        '<ChevronLeft size={18} className="support-thread__back-icon"',
+      );
+      expect(screenCss).not.toContain("[dir='rtl'] .support-thread__back-icon");
     });
   });
 

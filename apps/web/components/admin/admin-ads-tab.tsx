@@ -9,6 +9,7 @@ import {
   type Advertisement,
   type AdminAdControls,
 } from '@/lib/advertisements/client';
+import { formatAdminAdvertisementStatus } from '@/lib/advertisements/status-labels';
 import type { Dictionary } from '@/lib/i18n/types';
 
 type AdminAdsTabProps = {
@@ -110,9 +111,9 @@ export const AdminAdsTab = ({ dictionary, accessToken, adminPermissions }: Admin
       }
     };
 
-    document.addEventListener('keydown', handleKeyDown);
+    dialog?.addEventListener('keydown', handleKeyDown);
     return () => {
-      document.removeEventListener('keydown', handleKeyDown);
+      dialog?.removeEventListener('keydown', handleKeyDown);
       const focusTarget = previousFocusRef.current;
       requestAnimationFrame(() => focusTarget?.focus());
       previousFocusRef.current = null;
@@ -364,17 +365,25 @@ export const AdminAdsTab = ({ dictionary, accessToken, adminPermissions }: Admin
           value={statusFilter}
           onChange={(e) => setStatusFilter(e.target.value)}
         >
-          <option value="pending_review">Awaiting review</option>
+          <option value="pending_review">
+            {formatAdminAdvertisementStatus(dictionary, 'pending_review')}
+          </option>
           <option value="pending_payment">
-            {dictionary.advertisements?.statusPendingPayment ?? 'Pending payment'}
+            {formatAdminAdvertisementStatus(dictionary, 'pending_payment')}
           </option>
           <option value="">{dictionary.admin?.txns?.allStatuses ?? 'All statuses'}</option>
-          <option value="scheduled">Approved</option>
-          <option value="active">Active</option>
-          <option value="expired">Ended</option>
-          <option value="rejected">Rejected</option>
-          <option value="paused_by_admin">Paused</option>
-          <option value="cancelled">Cancelled</option>
+          <option value="scheduled">
+            {formatAdminAdvertisementStatus(dictionary, 'scheduled')}
+          </option>
+          <option value="active">{formatAdminAdvertisementStatus(dictionary, 'active')}</option>
+          <option value="expired">{formatAdminAdvertisementStatus(dictionary, 'expired')}</option>
+          <option value="rejected">{formatAdminAdvertisementStatus(dictionary, 'rejected')}</option>
+          <option value="paused_by_admin">
+            {formatAdminAdvertisementStatus(dictionary, 'paused_by_admin')}
+          </option>
+          <option value="cancelled">
+            {formatAdminAdvertisementStatus(dictionary, 'cancelled')}
+          </option>
         </select>
       </div>
 
@@ -411,22 +420,7 @@ export const AdminAdsTab = ({ dictionary, accessToken, adminPermissions }: Admin
                   isWeekly &&
                   ad.status === 'scheduled' &&
                   (!ad.starts_at || new Date(ad.starts_at).getTime() <= Date.now());
-                const statusLabels: Record<string, string> = {
-                  pending_review: 'Awaiting review',
-                  pending_payment:
-                    dictionary.advertisements?.statusPendingPayment ?? 'Pending payment',
-                  scheduled: 'Approved',
-                  active: 'Active',
-                  expired: 'Ended',
-                  rejected: 'Rejected',
-                  paused_by_admin: 'Paused',
-                  cancelled: 'Cancelled',
-                };
-                const formattedStatus =
-                  statusLabels[ad.status] ??
-                  (typeof ad.status === 'string'
-                    ? ad.status.replace(/_/g, ' ')
-                    : String(ad.status ?? ''));
+                const formattedStatus = formatAdminAdvertisementStatus(dictionary, ad.status);
                 return (
                   <tr key={ad.id}>
                     <td>

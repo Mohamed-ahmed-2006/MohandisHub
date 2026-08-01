@@ -4,8 +4,11 @@
 
 import { readFileSync } from 'node:fs';
 
+import { createElement } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 
+import { formatAdminAdvertisementStatus } from '@/lib/advertisements/status-labels';
 import { arDictionary } from '@/lib/i18n/dictionaries/ar';
 import { enDictionary } from '@/lib/i18n/dictionaries/en';
 
@@ -17,6 +20,10 @@ describe('Wave 2 Visual QA Medium & Low-Risk Fixes Verification', () => {
   const myAdsCssSource = readFileSync(new URL('../app/my-ads.css', import.meta.url), 'utf8');
   const helpResolutionSource = readFileSync(
     new URL('../components/app/help-resolution-screen.tsx', import.meta.url),
+    'utf8',
+  );
+  const caseThreadCssSource = readFileSync(
+    new URL('../components/app/case-thread.css', import.meta.url),
     'utf8',
   );
   const supportScreenSource = readFileSync(
@@ -38,7 +45,9 @@ describe('Wave 2 Visual QA Medium & Low-Risk Fixes Verification', () => {
   describe('W2-01: Admin Advertisement Status Filter', () => {
     it('includes pending_payment option in the status filter dropdown', () => {
       expect(adminAdsTabSource).toContain('value="pending_payment"');
-      expect(adminAdsTabSource).toContain('statusPendingPayment');
+      expect(adminAdsTabSource).toContain(
+        "formatAdminAdvertisementStatus(dictionary, 'pending_payment')",
+      );
     });
   });
 
@@ -46,10 +55,33 @@ describe('Wave 2 Visual QA Medium & Low-Risk Fixes Verification', () => {
   // W2-02: Raw Advertisement Status Token & Fallback
   // ---------------------------------------------------------------------------
   describe('W2-02: Localized Advertisement Status & Fallback', () => {
-    it('renders mapped localized status labels and has safe fallback for unknown status', () => {
-      expect(adminAdsTabSource).toContain('statusLabels: Record<string, string>');
-      expect(adminAdsTabSource).toContain('statusLabels[ad.status]');
-      expect(adminAdsTabSource).toContain("ad.status.replace(/_/g, ' ')");
+    it('renders every known status with the active locale dictionary', () => {
+      const expected = {
+        pending_review: ['Awaiting review', 'قيد المراجعة'],
+        pending_payment: ['Pending payment', 'في انتظار الدفع'],
+        scheduled: ['Approved', 'معتمد'],
+        active: ['Active', 'نشط'],
+        expired: ['Ended', 'منتهي'],
+        rejected: ['Rejected', 'مرفوض'],
+        paused_by_admin: ['Paused', 'موقوف مؤقتاً'],
+        cancelled: ['Cancelled', 'ملغى'],
+      } as const;
+
+      for (const [status, [english, arabic]] of Object.entries(expected)) {
+        expect(formatAdminAdvertisementStatus(enDictionary, status)).toBe(english);
+        expect(formatAdminAdvertisementStatus(arDictionary, status)).toBe(arabic);
+      }
+    });
+
+    it('does not crash or render unknown status markup as HTML', () => {
+      const unknown = '<img src=x onerror=alert(1)>_status';
+      const label = formatAdminAdvertisementStatus(enDictionary, unknown);
+      expect(label).toBe('<img src=x onerror=alert(1)> status');
+      expect(renderToStaticMarkup(createElement('span', null, label))).toBe(
+        '<span>&lt;img src=x onerror=alert(1)&gt; status</span>',
+      );
+      expect(formatAdminAdvertisementStatus(enDictionary, null)).toBe('');
+      expect(formatAdminAdvertisementStatus(enDictionary, { unexpected: true })).toBe('');
     });
   });
 
@@ -71,6 +103,10 @@ describe('Wave 2 Visual QA Medium & Low-Risk Fixes Verification', () => {
       expect(adminAdsTabSource).toContain("event.key === 'Escape'");
       expect(adminAdsTabSource).toContain("event.key !== 'Tab'");
       expect(adminAdsTabSource).toContain('initialTarget?.focus()');
+      expect(adminAdsTabSource).toContain("dialog?.addEventListener('keydown', handleKeyDown)");
+      expect(adminAdsTabSource).not.toContain(
+        "document.addEventListener('keydown', handleKeyDown)",
+      );
     });
   });
 
@@ -92,6 +128,13 @@ describe('Wave 2 Visual QA Medium & Low-Risk Fixes Verification', () => {
     it('imports case-thread.css directly in help-resolution-screen.tsx', () => {
       expect(helpResolutionSource).toContain("import './case-thread.css';");
     });
+
+    it('contains native file controls within the narrow Help thread', () => {
+      expect(caseThreadCssSource).toContain('overflow-x: hidden;');
+      expect(caseThreadCssSource).toContain(".support-scroll input[type='file']");
+      expect(caseThreadCssSource).toContain(".support-composer input[type='file']");
+      expect(caseThreadCssSource).toContain('max-width: 100%;');
+    });
   });
 
   // ---------------------------------------------------------------------------
@@ -106,6 +149,9 @@ describe('Wave 2 Visual QA Medium & Low-Risk Fixes Verification', () => {
       expect(helpResolutionSource).toContain('createCaseButtonRef');
       expect(helpResolutionSource).toContain("event.key === 'Escape'");
       expect(helpResolutionSource).toContain("event.key !== 'Tab'");
+      expect(helpResolutionSource).toContain(
+        "dialog?.addEventListener('keydown', handleDialogKeyDown)",
+      );
     });
   });
 
@@ -113,11 +159,11 @@ describe('Wave 2 Visual QA Medium & Low-Risk Fixes Verification', () => {
   // W2-12: User-Facing Wording & Notice Sanitization
   // ---------------------------------------------------------------------------
   describe('W2-12: User-Facing Product Wording Sanitization', () => {
-    it('sanitizes notices to remove internal API paths, route names, and raw enum tokens', () => {
-      expect(helpResolutionSource).toContain('sanitizeUserNotice');
-      expect(helpResolutionSource).toContain("rawMessage.includes('/api/')");
-      expect(helpResolutionSource).toContain("rawMessage.includes('Contract:')");
-      expect(helpResolutionSource).toContain("rawMessage.includes('need_job_dispute')");
+    it('uses localized product copy instead of rendering or logging server messages', () => {
+      expect(helpResolutionSource).not.toContain('sanitizeUserNotice');
+      expect(helpResolutionSource).not.toContain('entry.message');
+      expect(helpResolutionSource).not.toContain('console.warn');
+      expect(helpResolutionSource).not.toContain('setUnavailableNotice(err.message)');
       expect(helpResolutionSource).not.toContain('POST /api/v1/help-resolution/job-disputes');
     });
   });
@@ -134,6 +180,8 @@ describe('Wave 2 Visual QA Medium & Low-Risk Fixes Verification', () => {
       expect(businessTeamPanelSource).toContain("en: 'View Analytics'");
       expect(businessTeamPanelSource).toContain('team-permission-chip--deferred');
       expect(businessTeamPanelSource).toContain('disabled={!isEnforced}');
+      expect(businessTeamPanelSource).not.toContain("permission.replace(/_/g, ' ')");
+      expect(businessTeamPanelSource).not.toContain('(manage_team)');
     });
   });
 
@@ -164,6 +212,8 @@ describe('Wave 2 Visual QA Medium & Low-Risk Fixes Verification', () => {
         '<ChevronRight size={18} className="support-thread__back-icon"',
       );
       expect(supportScreenSource).toContain('<ChevronRight size={18} aria-hidden');
+      expect(caseThreadCssSource).not.toContain("[dir='rtl'] .support-thread__back-icon");
+      expect(caseThreadCssSource).toContain('flex-direction: column;');
     });
 
     it('replaces physical right positioning with logical insetInlineEnd in app-shell toast', () => {
