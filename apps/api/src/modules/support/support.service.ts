@@ -9,6 +9,7 @@ import type {
   SupportTicketStatus,
 } from '@mohandishub/shared';
 
+import { getPool } from '../../db/pool.js';
 import { HttpError } from '../../utils/http-error.js';
 
 import type { TicketRow, TicketMessageRow } from './support.repository.js';
@@ -76,9 +77,26 @@ export class SupportService {
     },
   ): Promise<SupportTicket> {
     const subject = buildSupportTicketSubject(input.category, input.body, input.subject);
-    const ticket = await this.repo.createTicket(userId, subject, input.category);
-    await this.repo.addMessage(ticket.id, userId, input.body, false, input.attachmentUrls);
-    return this.toTicket(ticket);
+    const client = await getPool().connect();
+    try {
+      await client.query('BEGIN');
+      const ticket = await this.repo.createTicket(userId, subject, input.category, client);
+      await this.repo.addMessage(
+        ticket.id,
+        userId,
+        input.body,
+        false,
+        input.attachmentUrls,
+        client,
+      );
+      await client.query('COMMIT');
+      return this.toTicket(ticket);
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
   }
 
   async getTicket(
@@ -137,29 +155,46 @@ export class SupportService {
     isStaff: boolean,
     attachmentUrls?: string[] | null,
   ): Promise<SupportTicketMessage> {
-    const ticket = await this.repo.getTicketById(ticketId);
-    if (!ticket) {
-      throw new HttpError({
-        statusCode: 404,
-        code: 'TICKET_NOT_FOUND',
-        message: 'Ticket not found.',
-      });
+    const client = await getPool().connect();
+    try {
+      await client.query('BEGIN');
+      const ticket = await this.repo.lockTicketById(client, ticketId);
+      if (!ticket) {
+        throw new HttpError({
+          statusCode: 404,
+          code: 'TICKET_NOT_FOUND',
+          message: 'Ticket not found.',
+        });
+      }
+      if (!isStaff && ticket.user_id !== userId) {
+        throw new HttpError({ statusCode: 403, code: 'FORBIDDEN', message: 'Not your ticket.' });
+      }
+      const terminal = ticket.status === 'resolved' || ticket.status === 'closed';
+      if (terminal && !isStaff) {
+        throw new HttpError({
+          statusCode: 403,
+          code: 'TICKET_NOT_OPEN_FOR_REPLY',
+          message: 'This ticket is resolved or closed. Open a new ticket if you need more help.',
+        });
+      }
+      const msg = await this.repo.addMessage(
+        ticketId,
+        userId,
+        body,
+        isStaff,
+        attachmentUrls,
+        client,
+      );
+      const newStatus = isStaff ? 'in_progress' : 'waiting_reply';
+      await this.repo.updateTicketStatus(ticketId, newStatus, client);
+      await client.query('COMMIT');
+      return this.toMessage(msg);
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
     }
-    if (!isStaff && ticket.user_id !== userId) {
-      throw new HttpError({ statusCode: 403, code: 'FORBIDDEN', message: 'Not your ticket.' });
-    }
-    const terminal = ticket.status === 'resolved' || ticket.status === 'closed';
-    if (terminal && !isStaff) {
-      throw new HttpError({
-        statusCode: 403,
-        code: 'TICKET_NOT_OPEN_FOR_REPLY',
-        message: 'This ticket is resolved or closed. Open a new ticket if you need more help.',
-      });
-    }
-    const msg = await this.repo.addMessage(ticketId, userId, body, isStaff, attachmentUrls);
-    const newStatus = isStaff ? 'in_progress' : 'waiting_reply';
-    await this.repo.updateTicketStatus(ticketId, newStatus);
-    return this.toMessage(msg);
   }
 
   async updateStatus(
@@ -169,6 +204,48 @@ export class SupportService {
   ): Promise<SupportTicket | null> {
     const updated = await this.repo.updateTicketStatus(ticketId, status);
     return updated ? this.toTicket(updated) : null;
+  }
+
+  async resolveWithReply(
+    ticketId: string,
+    adminId: string,
+    body: string,
+    status: 'resolved' | 'closed',
+    outcome: string,
+  ): Promise<SupportTicket> {
+    const client = await getPool().connect();
+    try {
+      await client.query('BEGIN');
+      const ticket = await this.repo.lockTicketById(client, ticketId);
+      if (!ticket) {
+        throw new HttpError({
+          statusCode: 404,
+          code: 'TICKET_NOT_FOUND',
+          message: 'Ticket not found.',
+        });
+      }
+      await this.repo.addMessage(ticketId, adminId, body, true, null, client);
+      const updated = await this.repo.updateTicketStatus(ticketId, status, client);
+      if (!updated) {
+        throw new HttpError({
+          statusCode: 404,
+          code: 'TICKET_NOT_FOUND',
+          message: 'Ticket not found.',
+        });
+      }
+      await this.repo.recordResolution(client, ticketId, {
+        outcome,
+        notes: body,
+        resolvedBy: adminId,
+      });
+      await client.query('COMMIT');
+      return this.toTicket(updated);
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
   }
 
   async assign(

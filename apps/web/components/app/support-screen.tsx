@@ -19,7 +19,7 @@ import { supportApiClient } from '@/lib/support/client';
 import { uploadFile } from '@/lib/upload/client';
 
 import '@/app/dashboard.css';
-import './support-screen.css';
+import './case-thread.css';
 
 const CATEGORY_ADMIN_KEYS: Record<SupportTicketCategory, string> = {
   bug: 'categoryBug',

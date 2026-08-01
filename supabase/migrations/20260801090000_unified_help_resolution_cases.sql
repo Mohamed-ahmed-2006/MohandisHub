@@ -23,6 +23,42 @@
 -- No money moves here and no escrow is introduced. A native case is a record
 -- and a conversation; settlement for reservation disputes remains the existing
 -- reservation endpoint's job.
+--
+-- ----------------------------------------------------------------------------
+-- ROLLBACK (idempotent; triggers before functions, children before parents):
+--
+--   DROP TRIGGER IF EXISTS resolution_touch_reservation_dispute_evidence
+--     ON public.reservation_dispute_evidence;
+--   DROP TRIGGER IF EXISTS resolution_touch_reservation_dispute_note
+--     ON public.reservation_dispute_notes;
+--   DROP TRIGGER IF EXISTS resolution_sync_reservation_dispute_upd
+--     ON public.reservation_disputes;
+--   DROP TRIGGER IF EXISTS resolution_sync_reservation_dispute_ins
+--     ON public.reservation_disputes;
+--   DROP TRIGGER IF EXISTS resolution_touch_support_ticket_message
+--     ON public.support_ticket_messages;
+--   DROP TRIGGER IF EXISTS resolution_sync_support_ticket_upd
+--     ON public.support_tickets;
+--   DROP TRIGGER IF EXISTS resolution_sync_support_ticket_ins
+--     ON public.support_tickets;
+--
+--   DROP FUNCTION IF EXISTS public.resolution_touch_reservation_dispute_case();
+--   DROP FUNCTION IF EXISTS public.resolution_sync_reservation_dispute();
+--   DROP FUNCTION IF EXISTS public.resolution_touch_support_ticket_case();
+--   DROP FUNCTION IF EXISTS public.resolution_sync_support_ticket();
+--   DROP FUNCTION IF EXISTS public.resolution_outcome_from_reservation_dispute(TEXT);
+--   DROP FUNCTION IF EXISTS public.resolution_status_from_reservation_dispute(TEXT);
+--   DROP FUNCTION IF EXISTS public.resolution_status_from_support_ticket(TEXT);
+--
+--   DROP TABLE IF EXISTS public.resolution_case_events;
+--   DROP TABLE IF EXISTS public.resolution_case_evidence;
+--   DROP TABLE IF EXISTS public.resolution_case_messages;
+--   DROP TABLE IF EXISTS public.resolution_cases;
+--   DROP SEQUENCE IF EXISTS public.resolution_case_reference_seq;
+--
+-- This reversal drops only objects introduced by Wave 2I. The legacy support
+-- and reservation-dispute rows were never rewritten, so their data and schema
+-- are byte-for-byte outside the rollback target.
 -- ============================================================================
 
 -- ---------------------------------------------------------------------------
@@ -335,6 +371,21 @@ BEGIN
         title             = EXCLUDED.title,
         assigned_admin_id = EXCLUDED.assigned_admin_id,
         reason_code       = EXCLUDED.reason_code,
+        resolution_outcome = CASE
+                               WHEN EXCLUDED.status IN ('resolved', 'closed')
+                                 THEN resolution_cases.resolution_outcome
+                               ELSE NULL
+                             END,
+        resolution_notes  = CASE
+                               WHEN EXCLUDED.status IN ('resolved', 'closed')
+                                 THEN resolution_cases.resolution_notes
+                               ELSE NULL
+                             END,
+        resolved_by       = CASE
+                               WHEN EXCLUDED.status IN ('resolved', 'closed')
+                                 THEN resolution_cases.resolved_by
+                               ELSE NULL
+                             END,
         -- Reopening a resolved ticket must clear the resolution timestamp, or
         -- chk_resolution_cases_terminal_shape rejects the update.
         resolved_at       = CASE
@@ -342,7 +393,8 @@ BEGIN
                                 THEN COALESCE(resolution_cases.resolved_at, EXCLUDED.updated_at)
                               ELSE NULL
                             END,
-        last_activity_at  = GREATEST(resolution_cases.last_activity_at, EXCLUDED.last_activity_at);
+        last_activity_at  = GREATEST(resolution_cases.last_activity_at, EXCLUDED.last_activity_at),
+        updated_at        = EXCLUDED.updated_at;
   RETURN NEW;
 END;
 $$;
@@ -443,7 +495,8 @@ BEGIN
                                  THEN COALESCE(EXCLUDED.resolved_at, resolution_cases.resolved_at)
                                ELSE NULL
                              END,
-        last_activity_at   = GREATEST(resolution_cases.last_activity_at, EXCLUDED.last_activity_at);
+        last_activity_at   = GREATEST(resolution_cases.last_activity_at, EXCLUDED.last_activity_at),
+        updated_at         = EXCLUDED.updated_at;
   RETURN NEW;
 END;
 $$;

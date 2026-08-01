@@ -2510,7 +2510,7 @@ export class ReservationsService {
     input: { uploadId: string; label?: string | null | undefined },
   ): Promise<ReservationDisputeEvidence> {
     await this.getDisputeCase(userId, role, disputeId);
-    const ownsUpload = await this.repo.privateUploadBelongsToUser(input.uploadId, userId);
+    const ownsUpload = await this.repo.privateUploadIsAttachableEvidence(input.uploadId, userId);
     if (!ownsUpload) {
       throw new HttpError({
         statusCode: 403,

@@ -339,7 +339,7 @@ export class HelpResolutionService {
     const [messageRows, evidenceRows, eventRows] = await Promise.all([
       this.loadMessages(row, isAdmin),
       this.loadEvidence(row),
-      this.loadTimeline(row),
+      this.loadTimeline(row, isAdmin),
     ]);
 
     const terminal = TERMINAL_STATUSES.has(row.status);
@@ -396,11 +396,14 @@ export class HelpResolutionService {
     return this.repo.listNativeEvidence(row.id);
   }
 
-  private async loadTimeline(row: ResolutionCaseListRow): Promise<ResolutionCaseEventRow[]> {
+  private async loadTimeline(
+    row: ResolutionCaseListRow,
+    includeAdminNotes: boolean,
+  ): Promise<ResolutionCaseEventRow[]> {
     if (row.kind === 'reservation_dispute' && row.subject_id) {
       return this.repo.listReservationTimeline(row.subject_id);
     }
-    return this.repo.listEvents(row.id);
+    return this.repo.listEvents(row.id, includeAdminNotes);
   }
 
   // -------------------------------------------------------------------------
@@ -597,7 +600,7 @@ export class HelpResolutionService {
   ): Promise<ResolutionCaseSummary> {
     const uploadIds = [...new Set(input.evidenceUploadIds)];
     for (const uploadId of uploadIds) {
-      if (!(await this.repo.privateUploadBelongsToUser(uploadId, viewer.id))) {
+      if (!(await this.repo.privateUploadIsAttachableEvidence(uploadId, viewer.id))) {
         throw new HttpError({
           statusCode: 403,
           code: 'UPLOAD_NOT_OWNED',
@@ -909,7 +912,7 @@ export class HelpResolutionService {
       };
     }
 
-    if (!(await this.repo.privateUploadBelongsToUser(input.uploadId, viewer.id))) {
+    if (!(await this.repo.privateUploadIsAttachableEvidence(input.uploadId, viewer.id))) {
       throw new HttpError({
         statusCode: 403,
         code: 'UPLOAD_NOT_OWNED',
@@ -917,15 +920,35 @@ export class HelpResolutionService {
       });
     }
 
+    const client = await getPool().connect();
     let inserted: ResolutionCaseEvidenceRow;
     try {
-      inserted = await this.repo.insertNativeEvidence({
-        caseId: row.id,
-        uploadedBy: viewer.id,
-        uploadId: input.uploadId,
-        label: input.label ?? null,
-      });
+      await client.query('BEGIN');
+      const locked = await this.repo.lockCaseById(client, row.id);
+      if (!locked) throw this.notFound();
+      this.ensureNotTerminal(locked);
+      inserted = await this.repo.insertNativeEvidence(
+        {
+          caseId: row.id,
+          uploadedBy: viewer.id,
+          uploadId: input.uploadId,
+          label: input.label ?? null,
+        },
+        client,
+      );
+      await this.repo.touchCase(row.id, client);
+      await this.repo.insertEvent(
+        {
+          caseId: row.id,
+          eventType: 'evidence_added',
+          actorId: viewer.id,
+          metadata: { evidenceId: inserted.id },
+        },
+        client,
+      );
+      await client.query('COMMIT');
     } catch (error) {
+      await client.query('ROLLBACK');
       // Two tabs attaching the same file race to the same (case, upload) pair;
       // the unique index decides and the loser is told plainly.
       if ((error as { code?: string })?.code === '23505') {
@@ -936,15 +959,9 @@ export class HelpResolutionService {
         });
       }
       throw error;
+    } finally {
+      client.release();
     }
-
-    await this.repo.touchCase(row.id);
-    await this.repo.insertEvent({
-      caseId: row.id,
-      eventType: 'evidence_added',
-      actorId: viewer.id,
-      metadata: { evidenceId: inserted.id },
-    });
     this.notifyOtherParticipants(row, viewer.id, 'resolution_case_message', 'New case evidence');
     return this.toEvidence(inserted, row.id);
   }
@@ -1033,7 +1050,7 @@ export class HelpResolutionService {
 
   async assign(caseId: string, adminId: string | null): Promise<ResolutionCaseSummary> {
     await this.loadForAdmin(caseId);
-    if (adminId && !(await this.repo.userExists(adminId))) {
+    if (adminId && !(await this.repo.authorizedCaseAdminExists(adminId))) {
       throw new HttpError({
         statusCode: 404,
         code: 'ADMIN_NOT_FOUND',
@@ -1044,6 +1061,62 @@ export class HelpResolutionService {
     if (!updated) throw this.notFound();
     const refreshed = await this.repo.findCaseById(caseId);
     if (!refreshed) throw this.notFound();
+    return this.toSummary(refreshed, 'admin');
+  }
+
+  async setCounterpartyAccess(
+    caseId: string,
+    viewer: CaseViewer,
+    granted: boolean,
+  ): Promise<ResolutionCaseSummary> {
+    const row = await this.loadForAdmin(caseId);
+    if (!['need_job_dispute', 'direct_payment'].includes(row.kind) || !row.counterparty_id) {
+      throw new HttpError({
+        statusCode: 409,
+        code: 'COUNTERPARTY_ACCESS_NOT_APPLICABLE',
+        message: 'Counterparty access is managed only for native two-party cases.',
+      });
+    }
+
+    const client = await getPool().connect();
+    try {
+      await client.query('BEGIN');
+      const locked = await this.repo.lockCaseById(client, caseId);
+      if (!locked) throw this.notFound();
+      if (!['need_job_dispute', 'direct_payment'].includes(locked.kind) || !locked.counterparty_id) {
+        throw new HttpError({
+          statusCode: 409,
+          code: 'COUNTERPARTY_ACCESS_NOT_APPLICABLE',
+          message: 'Counterparty access is managed only for native two-party cases.',
+        });
+      }
+      if (locked.counterparty_access !== granted) {
+        await this.repo.setCounterpartyAccess(client, caseId, granted);
+        await this.repo.insertEvent(
+          {
+            caseId,
+            eventType: granted ? 'counterparty_access_granted' : 'counterparty_access_revoked',
+            actorId: viewer.id,
+          },
+          client,
+        );
+      }
+      await client.query('COMMIT');
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+
+    const refreshed = await this.repo.findCaseById(caseId);
+    if (!refreshed) throw this.notFound();
+    if (granted && row.counterparty_access !== true && row.counterparty_id) {
+      this.notify(row.counterparty_id, 'resolution_case_status_changed', 'Case access granted', {
+        caseId: row.id,
+        referenceCode: row.reference_code,
+      });
+    }
     return this.toSummary(refreshed, 'admin');
   }
 
@@ -1129,11 +1202,12 @@ export class HelpResolutionService {
     if (row.kind === 'general_support' && row.support_ticket_id) {
       // The ticket is the record of truth; the sync trigger mirrors it here,
       // and the resolution note is posted as a staff reply so the user sees it.
-      await this.supportService.reply(row.support_ticket_id, viewer.id, input.notes, true, null);
-      await this.supportService.updateStatus(
+      await this.supportService.resolveWithReply(
         row.support_ticket_id,
-        status === 'closed' ? 'closed' : 'resolved',
         viewer.id,
+        input.notes,
+        status === 'closed' ? 'closed' : 'resolved',
+        input.outcome,
       );
     } else {
       const pool = getPool();

@@ -196,6 +196,32 @@ const api = () => request(app);
 
 const authed = (actor: Actor) => ({ Authorization: `Bearer ${actor.token}` });
 
+// Kept verbatim with the migration header. The fingerprint test below makes a
+// stale or over-broad rollback a release failure rather than a runbook surprise.
+const WAVE_2I_ROLLBACK_SQL = `
+DROP TRIGGER IF EXISTS resolution_touch_reservation_dispute_evidence ON public.reservation_dispute_evidence;
+DROP TRIGGER IF EXISTS resolution_touch_reservation_dispute_note ON public.reservation_dispute_notes;
+DROP TRIGGER IF EXISTS resolution_sync_reservation_dispute_upd ON public.reservation_disputes;
+DROP TRIGGER IF EXISTS resolution_sync_reservation_dispute_ins ON public.reservation_disputes;
+DROP TRIGGER IF EXISTS resolution_touch_support_ticket_message ON public.support_ticket_messages;
+DROP TRIGGER IF EXISTS resolution_sync_support_ticket_upd ON public.support_tickets;
+DROP TRIGGER IF EXISTS resolution_sync_support_ticket_ins ON public.support_tickets;
+
+DROP FUNCTION IF EXISTS public.resolution_touch_reservation_dispute_case();
+DROP FUNCTION IF EXISTS public.resolution_sync_reservation_dispute();
+DROP FUNCTION IF EXISTS public.resolution_touch_support_ticket_case();
+DROP FUNCTION IF EXISTS public.resolution_sync_support_ticket();
+DROP FUNCTION IF EXISTS public.resolution_outcome_from_reservation_dispute(TEXT);
+DROP FUNCTION IF EXISTS public.resolution_status_from_reservation_dispute(TEXT);
+DROP FUNCTION IF EXISTS public.resolution_status_from_support_ticket(TEXT);
+
+DROP TABLE IF EXISTS public.resolution_case_events;
+DROP TABLE IF EXISTS public.resolution_case_evidence;
+DROP TABLE IF EXISTS public.resolution_case_messages;
+DROP TABLE IF EXISTS public.resolution_cases;
+DROP SEQUENCE IF EXISTS public.resolution_case_reference_seq;
+`;
+
 beforeAll(async () => {
   if (!pgIntegrationEnabled()) return;
   scratch = await createScratchDatabase('helpres');
@@ -350,6 +376,58 @@ suite('help & resolution — historical compatibility', () => {
 
 // ---------------------------------------------------------------------------
 
+suite('help & resolution — migration rollback', () => {
+  it('restores the exact previous schema fingerprint and is idempotent', async () => {
+    const copy = await createScratchDatabase('helpresback');
+    const fingerprint = async (): Promise<Set<string>> => {
+      const { rows } = await copy.pool.query<{ kind: string; sig: string }>(
+        `SELECT 'relation'::text AS kind,
+                n.nspname::text || '.' || c.relname::text || '::' || c.relkind::text AS sig
+           FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+          WHERE n.nspname = 'public' AND c.relkind IN ('r','p','S')
+         UNION ALL
+         SELECT 'column', table_name::text || '.' || column_name::text || '::' ||
+                data_type::text || '::' || is_nullable::text || '::' ||
+                COALESCE(column_default, '')::text
+           FROM information_schema.columns WHERE table_schema = 'public'
+         UNION ALL
+         SELECT 'constraint', conrelid::regclass::text || '::' || conname::text || '::' ||
+                pg_get_constraintdef(oid)::text
+           FROM pg_constraint WHERE connamespace = 'public'::regnamespace
+         UNION ALL
+         SELECT 'index', tablename::text || '.' || indexname::text || '::' || indexdef::text
+           FROM pg_indexes WHERE schemaname = 'public'
+         UNION ALL
+         SELECT 'trigger', event_object_table::text || '.' || trigger_name::text || '::' ||
+                action_statement::text
+           FROM information_schema.triggers WHERE trigger_schema = 'public'
+         UNION ALL
+         SELECT 'function', p.oid::regprocedure::text || '::' || pg_get_functiondef(p.oid)::text
+           FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+          WHERE n.nspname = 'public'
+         ORDER BY 1, 2`,
+      );
+      return new Set(rows.map((row) => `${row.kind}:${row.sig}`));
+    };
+
+    try {
+      // The helper includes Wave 2I. Reverse it to obtain the exact prior
+      // boundary, then prove a full apply/rollback cycle returns to that set.
+      await copy.exec(WAVE_2I_ROLLBACK_SQL);
+      const before = await fingerprint();
+      await copy.exec(readMigration('20260801090000_unified_help_resolution_cases.sql'));
+      await copy.exec(WAVE_2I_ROLLBACK_SQL);
+      await copy.exec(WAVE_2I_ROLLBACK_SQL);
+      const after = await fingerprint();
+      expect(after).toEqual(before);
+    } finally {
+      await copy.drop();
+    }
+  }, 900_000);
+});
+
+// ---------------------------------------------------------------------------
+
 suite('help & resolution — case authorisation', () => {
   it('lets the opener and an explicit counterparty in, and nobody else', async () => {
     const customer = await seedUser('customer');
@@ -452,6 +530,53 @@ suite('help & resolution — case authorisation', () => {
     expect(dataOf<{ items: unknown[] }>(list).items).toHaveLength(0);
   });
 
+  it('grants and revokes native counterparty access through an authorised lifecycle', async () => {
+    const opener = await seedUser('customer');
+    const named = await seedUser('expert');
+    const admin = await seedUser('customer', { isAdmin: true, permissions: ['manage_support'] });
+    const upload = await seedPrivateUpload(opener.id);
+    const { rows } = await pool.query<{ id: string }>(
+      `INSERT INTO resolution_cases
+         (kind, opened_by, counterparty_id, counterparty_access, title, description)
+       VALUES ('direct_payment', $1, $2, false, 'Controlled grant', 'x')
+       RETURNING id`,
+      [opener.id, named.id],
+    );
+    const caseId = rows[0]!.id;
+
+    await api()
+      .post(`/api/help-resolution/cases/${caseId}/evidence`)
+      .set(authed(opener))
+      .send({ uploadId: upload.id })
+      .expect(201);
+
+    await api()
+      .patch(`/api/help-resolution/admin/cases/${caseId}/counterparty-access`)
+      .set(authed(admin))
+      .send({ granted: true })
+      .expect(200);
+    await api().get(`/api/help-resolution/cases/${caseId}`).set(authed(named)).expect(200);
+    await api()
+      .get(`/api/upload/private/${upload.id}`)
+      .set({ ...authed(named), Accept: 'application/json' })
+      .expect(200);
+
+    await api()
+      .patch(`/api/help-resolution/admin/cases/${caseId}/counterparty-access`)
+      .set(authed(admin))
+      .send({ granted: false })
+      .expect(200);
+    await api().get(`/api/help-resolution/cases/${caseId}`).set(authed(named)).expect(404);
+    await api()
+      .get(`/api/upload/private/${upload.id}`)
+      .set({ ...authed(named), Accept: 'application/json' })
+      .expect(403);
+    const list = await api().get('/api/help-resolution/cases').set(authed(named));
+    expect(dataOf<{ items: Array<{ id: string }> }>(list).items).not.toContainEqual(
+      expect.objectContaining({ id: caseId }),
+    );
+  });
+
   it('requires real admin authorisation for the admin queue', async () => {
     const plain = await seedUser('customer');
     const wrongPermission = await seedUser('customer', {
@@ -489,6 +614,39 @@ suite('help & resolution — case authorisation', () => {
       .get('/api/help-resolution/admin/cases')
       .set({ Authorization: `Bearer ${staleToken}` });
     expect(response.status).toBe(403);
+  });
+
+  it('assigns cases only to a database-authorised case admin', async () => {
+    const opener = await seedUser('customer');
+    const plain = await seedUser('customer');
+    const actingAdmin = await seedUser('customer', {
+      isAdmin: true,
+      permissions: ['manage_support'],
+    });
+    const assignee = await seedUser('customer', {
+      isAdmin: true,
+      permissions: ['manage_transactions'],
+    });
+    const { rows } = await pool.query<{ id: string }>(
+      `INSERT INTO resolution_cases (kind, opened_by, title)
+       VALUES ('safety_report', $1, 'Assignment') RETURNING id`,
+      [opener.id],
+    );
+    const caseId = rows[0]!.id;
+
+    const rejected = await api()
+      .post(`/api/help-resolution/admin/cases/${caseId}/assign`)
+      .set(authed(actingAdmin))
+      .send({ adminId: plain.id });
+    expect(rejected.status).toBe(404);
+    expect(errorOf(rejected).code).toBe('ADMIN_NOT_FOUND');
+
+    const accepted = await api()
+      .post(`/api/help-resolution/admin/cases/${caseId}/assign`)
+      .set(authed(actingAdmin))
+      .send({ adminId: assignee.id });
+    expect(accepted.status).toBe(200);
+    expect(dataOf<{ assignedAdminId: string }>(accepted).assignedAdminId).toBe(assignee.id);
   });
 });
 
@@ -651,6 +809,38 @@ suite('help & resolution — evidence security', () => {
       .set({ ...authed(supportAdmin), Accept: 'application/json' });
     expect(unattached.status).toBe(403);
   });
+
+  it('cannot launder identity evidence into native or reservation case evidence', async () => {
+    const customer = await seedUser('customer');
+    const provider = await seedUser('expert');
+    const upload = await seedPrivateUpload(customer.id);
+    await pool.query(
+      `INSERT INTO identity_documents
+         (user_id, document_type, full_name_on_doc, front_image_url)
+       VALUES ($1, 'passport', 'Private Person', $2)`,
+      [customer.id, `/api/upload/private/${upload.id}`],
+    );
+
+    const needId = await seedActivatedNeed(customer.id, provider.id);
+    const native = await api().post('/api/help-resolution/cases').set(authed(customer)).send({
+      kind: 'need_job_dispute',
+      subjectType: 'need',
+      subjectId: needId,
+      reason: 'other',
+      description: 'Must not attach KYC.',
+      evidenceUploadIds: [upload.id],
+    });
+    expect(native.status).toBe(403);
+    expect(errorOf(native).code).toBe('UPLOAD_NOT_OWNED');
+
+    const { disputeId } = await seedReservationDispute(customer.id, provider.id, customer.id);
+    const legacy = await api()
+      .post(`/api/reservations/disputes/${disputeId}/evidence`)
+      .set(authed(customer))
+      .send({ uploadId: upload.id });
+    expect(legacy.status).toBe(403);
+    expect(errorOf(legacy).code).toBe('UPLOAD_NOT_OWNED');
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -724,6 +914,10 @@ suite('help & resolution — status transitions', () => {
       asParticipant,
     ).messages.map((m) => m.body);
     expect(participantBodies).not.toContain('Internal: check the provider history.');
+    const participantEvents = dataOf<{ timeline: Array<{ eventType: string }> }>(
+      asParticipant,
+    ).timeline.map((event) => event.eventType);
+    expect(participantEvents).not.toContain('staff_message');
 
     const asAdmin = await api()
       .get(`/api/help-resolution/admin/cases/${caseId}`)
@@ -732,6 +926,10 @@ suite('help & resolution — status transitions', () => {
       (m) => m.body,
     );
     expect(adminBodies).toContain('Internal: check the provider history.');
+    const adminEvents = dataOf<{ timeline: Array<{ eventType: string }> }>(asAdmin).timeline.map(
+      (event) => event.eventType,
+    );
+    expect(adminEvents).toContain('staff_message');
   });
 
   /**
@@ -763,6 +961,37 @@ suite('help & resolution — status transitions', () => {
     const messages = await api().get(`/api/support/tickets/${ticketId}/messages`).set(authed(user));
     const bodies = dataOf<Array<{ body: string }>>(messages).map((m) => m.body);
     expect(bodies).not.toContain('Internal: user has three prior refunds.');
+  });
+
+  it('preserves a unified support resolution outcome and note in the authoritative transaction', async () => {
+    const user = await seedUser('customer');
+    const admin = await seedUser('customer', { isAdmin: true, permissions: ['manage_support'] });
+    const created = await api()
+      .post('/api/support/tickets')
+      .set(authed(user))
+      .send({ category: 'other', subject: 'Resolved support metadata', body: 'Body' });
+    const ticketId = dataOf<{ id: string }>(created).id;
+    const found = await api()
+      .get(`/api/help-resolution/cases/by-support-ticket/${ticketId}`)
+      .set(authed(user));
+    const caseId = dataOf<{ id: string }>(found).id;
+
+    const resolved = await api()
+      .post(`/api/help-resolution/admin/cases/${caseId}/resolve`)
+      .set(authed(admin))
+      .send({ outcome: 'no_action', notes: 'No platform defect was found.' });
+    expect(resolved.status).toBe(200);
+
+    const file = await api().get(`/api/help-resolution/cases/${caseId}`).set(authed(user));
+    expect(dataOf<{ resolution: { outcome: string; notes: string } }>(file).resolution).toMatchObject(
+      { outcome: 'no_action', notes: 'No platform defect was found.' },
+    );
+
+    await pool.query(`UPDATE support_tickets SET status = 'open' WHERE id = $1`, [ticketId]);
+    const reopened = await api().get(`/api/help-resolution/cases/${caseId}`).set(authed(user));
+    expect(dataOf<{ resolution: { outcome: null; notes: null } }>(reopened).resolution).toMatchObject(
+      { outcome: null, notes: null },
+    );
   });
 
   it('closes a case to further messages once it is resolved', async () => {
@@ -1068,6 +1297,260 @@ suite('help & resolution — duplicates and races', () => {
       [caseId],
     );
     expect(rows[0]?.count).toBe('1');
+  });
+
+  it('rolls a native message back when its timeline write fails', async () => {
+    const customer = await seedUser('customer');
+    const provider = await seedUser('expert');
+    const needId = await seedActivatedNeed(customer.id, provider.id);
+    const created = await api().post('/api/help-resolution/cases').set(authed(customer)).send({
+      kind: 'need_job_dispute',
+      subjectType: 'need',
+      subjectId: needId,
+      reason: 'other',
+      description: 'Atomic message.',
+    });
+    const caseId = dataOf<{ id: string }>(created).id;
+
+    await pool.query(`
+      CREATE FUNCTION test_fail_message_event() RETURNS trigger LANGUAGE plpgsql AS $$
+      BEGIN
+        IF NEW.event_type = 'participant_message' THEN RAISE EXCEPTION 'forced event failure'; END IF;
+        RETURN NEW;
+      END $$;
+      CREATE TRIGGER test_fail_message_event
+        BEFORE INSERT ON resolution_case_events
+        FOR EACH ROW EXECUTE FUNCTION test_fail_message_event()
+    `);
+    try {
+      const response = await api()
+        .post(`/api/help-resolution/cases/${caseId}/messages`)
+        .set(authed(customer))
+        .send({ body: 'Must roll back.' });
+      expect(response.status).toBe(500);
+      const { rows } = await pool.query<{ messages: string; status: string }>(
+        `SELECT (SELECT count(*)::text FROM resolution_case_messages WHERE case_id = c.id) AS messages,
+                c.status
+           FROM resolution_cases c WHERE c.id = $1`,
+        [caseId],
+      );
+      expect(rows[0]).toMatchObject({ messages: '0', status: 'open' });
+    } finally {
+      await pool.query(`DROP TRIGGER test_fail_message_event ON resolution_case_events`);
+      await pool.query(`DROP FUNCTION test_fail_message_event()`);
+    }
+  });
+
+  it('does not change activity or timeline when the message write fails', async () => {
+    const customer = await seedUser('customer');
+    const provider = await seedUser('expert');
+    const needId = await seedActivatedNeed(customer.id, provider.id);
+    const created = await api().post('/api/help-resolution/cases').set(authed(customer)).send({
+      kind: 'need_job_dispute',
+      subjectType: 'need',
+      subjectId: needId,
+      reason: 'other',
+      description: 'Failed message.',
+    });
+    const caseId = dataOf<{ id: string }>(created).id;
+    const { rows: before } = await pool.query<{ last_activity_at: Date; events: string }>(
+      `SELECT c.last_activity_at,
+              (SELECT count(*)::text FROM resolution_case_events WHERE case_id = c.id) AS events
+         FROM resolution_cases c WHERE c.id = $1`,
+      [caseId],
+    );
+
+    await pool.query(`
+      CREATE FUNCTION test_fail_message_write() RETURNS trigger LANGUAGE plpgsql AS $$
+      BEGIN RAISE EXCEPTION 'forced message failure'; END $$;
+      CREATE TRIGGER test_fail_message_write
+        BEFORE INSERT ON resolution_case_messages
+        FOR EACH ROW EXECUTE FUNCTION test_fail_message_write()
+    `);
+    try {
+      const response = await api()
+        .post(`/api/help-resolution/cases/${caseId}/messages`)
+        .set(authed(customer))
+        .send({ body: 'Must fail first.' });
+      expect(response.status).toBe(500);
+      const { rows: after } = await pool.query<{ last_activity_at: Date; events: string }>(
+        `SELECT c.last_activity_at,
+                (SELECT count(*)::text FROM resolution_case_events WHERE case_id = c.id) AS events
+           FROM resolution_cases c WHERE c.id = $1`,
+        [caseId],
+      );
+      expect(after[0]!.events).toBe(before[0]!.events);
+      expect(new Date(after[0]!.last_activity_at).getTime()).toBe(
+        new Date(before[0]!.last_activity_at).getTime(),
+      );
+    } finally {
+      await pool.query(`DROP TRIGGER test_fail_message_write ON resolution_case_messages`);
+      await pool.query(`DROP FUNCTION test_fail_message_write()`);
+    }
+  });
+
+  it('rolls a native message and timeline back when its status write fails', async () => {
+    const customer = await seedUser('customer');
+    const provider = await seedUser('expert');
+    const needId = await seedActivatedNeed(customer.id, provider.id);
+    const created = await api().post('/api/help-resolution/cases').set(authed(customer)).send({
+      kind: 'need_job_dispute',
+      subjectType: 'need',
+      subjectId: needId,
+      reason: 'other',
+      description: 'Atomic status.',
+    });
+    const caseId = dataOf<{ id: string }>(created).id;
+
+    await pool.query(`
+      CREATE FUNCTION test_fail_case_status() RETURNS trigger LANGUAGE plpgsql AS $$
+      BEGIN
+        IF NEW.status IS DISTINCT FROM OLD.status THEN RAISE EXCEPTION 'forced status failure'; END IF;
+        RETURN NEW;
+      END $$;
+      CREATE TRIGGER test_fail_case_status
+        BEFORE UPDATE ON resolution_cases
+        FOR EACH ROW EXECUTE FUNCTION test_fail_case_status()
+    `);
+    try {
+      const response = await api()
+        .post(`/api/help-resolution/cases/${caseId}/messages`)
+        .set(authed(customer))
+        .send({ body: 'Must all roll back.' });
+      expect(response.status).toBe(500);
+      const { rows } = await pool.query<{ messages: string; events: string; status: string }>(
+        `SELECT (SELECT count(*)::text FROM resolution_case_messages WHERE case_id = c.id) AS messages,
+                (SELECT count(*)::text FROM resolution_case_events
+                  WHERE case_id = c.id AND event_type = 'participant_message') AS events,
+                c.status
+           FROM resolution_cases c WHERE c.id = $1`,
+        [caseId],
+      );
+      expect(rows[0]).toMatchObject({ messages: '0', events: '0', status: 'open' });
+    } finally {
+      await pool.query(`DROP TRIGGER test_fail_case_status ON resolution_cases`);
+      await pool.query(`DROP FUNCTION test_fail_case_status()`);
+    }
+  });
+
+  it('rolls native evidence back when its timeline write fails', async () => {
+    const customer = await seedUser('customer');
+    const provider = await seedUser('expert');
+    const needId = await seedActivatedNeed(customer.id, provider.id);
+    const upload = await seedPrivateUpload(customer.id);
+    const created = await api().post('/api/help-resolution/cases').set(authed(customer)).send({
+      kind: 'need_job_dispute',
+      subjectType: 'need',
+      subjectId: needId,
+      reason: 'other',
+      description: 'Atomic evidence.',
+    });
+    const caseId = dataOf<{ id: string }>(created).id;
+
+    await pool.query(`
+      CREATE FUNCTION test_fail_evidence_event() RETURNS trigger LANGUAGE plpgsql AS $$
+      BEGIN
+        IF NEW.event_type = 'evidence_added' THEN RAISE EXCEPTION 'forced event failure'; END IF;
+        RETURN NEW;
+      END $$;
+      CREATE TRIGGER test_fail_evidence_event
+        BEFORE INSERT ON resolution_case_events
+        FOR EACH ROW EXECUTE FUNCTION test_fail_evidence_event()
+    `);
+    try {
+      const response = await api()
+        .post(`/api/help-resolution/cases/${caseId}/evidence`)
+        .set(authed(customer))
+        .send({ uploadId: upload.id });
+      expect(response.status).toBe(500);
+      const { rows } = await pool.query<{ count: string }>(
+        `SELECT count(*)::text AS count FROM resolution_case_evidence WHERE case_id = $1`,
+        [caseId],
+      );
+      expect(rows[0]?.count).toBe('0');
+    } finally {
+      await pool.query(`DROP TRIGGER test_fail_evidence_event ON resolution_case_events`);
+      await pool.query(`DROP FUNCTION test_fail_evidence_event()`);
+    }
+  });
+
+  it('rolls a legacy support reply back when its status write fails', async () => {
+    const user = await seedUser('customer');
+    const created = await api()
+      .post('/api/support/tickets')
+      .set(authed(user))
+      .send({ category: 'other', subject: 'Atomic legacy reply', body: 'Opening message' });
+    const ticketId = dataOf<{ id: string }>(created).id;
+
+    await pool.query(`
+      CREATE FUNCTION test_fail_support_status() RETURNS trigger LANGUAGE plpgsql AS $$
+      BEGIN
+        IF NEW.status IS DISTINCT FROM OLD.status THEN RAISE EXCEPTION 'forced support status failure'; END IF;
+        RETURN NEW;
+      END $$;
+      CREATE TRIGGER test_fail_support_status
+        BEFORE UPDATE ON support_tickets
+        FOR EACH ROW EXECUTE FUNCTION test_fail_support_status()
+    `);
+    try {
+      const response = await api()
+        .post(`/api/support/tickets/${ticketId}/messages`)
+        .set(authed(user))
+        .send({ body: 'Must roll back.' });
+      expect(response.status).toBe(500);
+      const { rows } = await pool.query<{ messages: string; status: string }>(
+        `SELECT (SELECT count(*)::text FROM support_ticket_messages WHERE ticket_id = t.id) AS messages,
+                t.status
+           FROM support_tickets t WHERE t.id = $1`,
+        [ticketId],
+      );
+      expect(rows[0]).toMatchObject({ messages: '1', status: 'open' });
+    } finally {
+      await pool.query(`DROP TRIGGER test_fail_support_status ON support_tickets`);
+      await pool.query(`DROP FUNCTION test_fail_support_status()`);
+    }
+  });
+
+  it('rolls a support resolution message back when final resolution fails', async () => {
+    const user = await seedUser('customer');
+    const admin = await seedUser('customer', { isAdmin: true, permissions: ['manage_support'] });
+    const created = await api()
+      .post('/api/support/tickets')
+      .set(authed(user))
+      .send({ category: 'other', subject: 'Atomic support resolution', body: 'Opening message' });
+    const ticketId = dataOf<{ id: string }>(created).id;
+    const found = await api()
+      .get(`/api/help-resolution/cases/by-support-ticket/${ticketId}`)
+      .set(authed(user));
+    const caseId = dataOf<{ id: string }>(found).id;
+
+    await pool.query(`
+      CREATE FUNCTION test_fail_support_resolution() RETURNS trigger LANGUAGE plpgsql AS $$
+      BEGIN
+        IF NEW.status IN ('resolved', 'closed') THEN RAISE EXCEPTION 'forced resolution failure'; END IF;
+        RETURN NEW;
+      END $$;
+      CREATE TRIGGER test_fail_support_resolution
+        BEFORE UPDATE ON support_tickets
+        FOR EACH ROW EXECUTE FUNCTION test_fail_support_resolution()
+    `);
+    try {
+      const response = await api()
+        .post(`/api/help-resolution/admin/cases/${caseId}/resolve`)
+        .set(authed(admin))
+        .send({ outcome: 'resolved_for_opener', notes: 'Must not survive.' });
+      expect(response.status).toBe(500);
+      const { rows } = await pool.query<{ messages: string; status: string }>(
+        `SELECT (SELECT count(*)::text FROM support_ticket_messages WHERE ticket_id = t.id) AS messages,
+                t.status
+           FROM support_tickets t WHERE t.id = $1`,
+        [ticketId],
+      );
+      expect(rows[0]).toMatchObject({ messages: '1', status: 'open' });
+    } finally {
+      await pool.query(`DROP TRIGGER test_fail_support_resolution ON support_tickets`);
+      await pool.query(`DROP FUNCTION test_fail_support_resolution()`);
+    }
   });
 });
 

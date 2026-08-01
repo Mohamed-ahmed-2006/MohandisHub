@@ -238,18 +238,26 @@ describe('mobile behaviour', () => {
     'utf8',
   );
   const screenCss = readFileSync(
-    new URL('../components/app/support-screen.css', import.meta.url),
+    new URL('../components/app/case-thread.css', import.meta.url),
     'utf8',
   );
 
   /**
    * The screen was written against the `support-*` classes but imported only
-   * dashboard.css, and the component that used to import support-screen.css is
+   * dashboard.css, and the component that used to import the case-thread CSS is
    * no longer routed anywhere — so on a phone the list and the thread rendered
    * stacked and unstyled instead of as a master/detail pair.
    */
   it('loads the stylesheet that defines the classes it uses', () => {
-    expect(screenSource).toContain("import './support-screen.css'");
+    expect(screenSource).toContain("import './case-thread.css'");
+    expect(screenSource).not.toContain("import './support-screen.css'");
+  });
+
+  it('keeps authoritative legacy status and resolution detail visible', () => {
+    expect(screenSource).toContain('item.engineStatus ?? item.status');
+    expect(screenSource).toContain('selectedCase.engineStatus');
+    expect(screenSource).toContain('caseFile.resolution.outcome');
+    expect(screenSource).toContain('caseFile.resolution.notes');
   });
 
   it('collapses to one column and swaps list for thread under 768px', () => {

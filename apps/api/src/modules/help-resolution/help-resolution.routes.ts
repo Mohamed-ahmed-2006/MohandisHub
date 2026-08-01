@@ -44,6 +44,11 @@ helpResolutionRouter.post(
   ...adminOnly,
   helpResolutionController.assignCase,
 );
+helpResolutionRouter.patch(
+  '/admin/cases/:caseId/counterparty-access',
+  ...adminOnly,
+  helpResolutionController.setCounterpartyAccess,
+);
 helpResolutionRouter.post(
   '/admin/cases/:caseId/status',
   ...adminOnly,

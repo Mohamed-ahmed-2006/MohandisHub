@@ -22,11 +22,7 @@ import { toStoredAttachmentUrl } from '@/lib/support/attachment-url';
 import { getPrivateFileOpenableUrl, uploadFile, uploadPrivateFile } from '@/lib/upload/client';
 
 import '@/app/dashboard.css';
-// Every `support-*` class below lives here, including the 768px rules that make
-// the list and the thread a single-column master/detail on a phone. The screen
-// used all of them while only importing dashboard.css, so on mobile the list
-// and the thread rendered stacked and unstyled.
-import './support-screen.css';
+import './case-thread.css';
 
 type Props = {
   defaultTab?: 'all' | 'support' | 'disputes' | 'safety';
@@ -113,6 +109,42 @@ export const HelpResolutionScreen = ({ defaultTab = 'all' }: Props) => {
       }
     },
     [hr, isArabic],
+  );
+
+  const statusLabel = useCallback(
+    (status: string): string => {
+      const labels: Record<string, string> = {
+        open: tr('Open', 'مفتوحة'),
+        awaiting_user: tr('Awaiting user', 'بانتظار المستخدم'),
+        under_review: tr('Under review', 'قيد المراجعة'),
+        escalated: tr('Escalated', 'مصعّدة'),
+        resolved: tr('Resolved', 'تم الحل'),
+        closed: tr('Closed', 'مغلقة'),
+        in_progress: tr('In progress', 'قيد المعالجة'),
+        waiting_reply: tr('Waiting for reply', 'بانتظار الرد'),
+        resolved_customer: tr('Resolved for customer', 'تم الحل لصالح العميل'),
+        resolved_provider: tr('Resolved for provider', 'تم الحل لصالح مقدم الخدمة'),
+        resolved_partial: tr('Resolved with a split', 'تم الحل بالتقسيم'),
+        dismissed: tr('Dismissed', 'مرفوضة'),
+      };
+      return labels[status] ?? status.replaceAll('_', ' ');
+    },
+    [isArabic],
+  );
+
+  const outcomeLabel = useCallback(
+    (outcome: NonNullable<ResolutionCaseFile['resolution']['outcome']>): string => {
+      const labels: Record<typeof outcome, string> = {
+        resolved_for_opener: tr('Resolved for opener', 'تم الحل لصالح مقدم البلاغ'),
+        resolved_for_counterparty: tr('Resolved for counterparty', 'تم الحل لصالح الطرف الآخر'),
+        resolved_partial: tr('Resolved partially', 'تم الحل جزئياً'),
+        no_action: tr('No action', 'لا إجراء'),
+        duplicate: tr('Duplicate', 'مكررة'),
+        withdrawn: tr('Withdrawn', 'مسحوبة'),
+      };
+      return labels[outcome];
+    },
+    [isArabic],
   );
 
   useEffect(() => {
@@ -883,7 +915,9 @@ export const HelpResolutionScreen = ({ defaultTab = 'all' }: Props) => {
                         </span>
                       </div>
                       <span className="support-ticket-row__meta">
-                        <span className="support-pill">{item.status}</span>
+                        <span className="support-pill">
+                          {statusLabel(item.engineStatus ?? item.status)}
+                        </span>
                         <span>{item.referenceCode}</span>
                         <span>{new Date(item.lastActivityAt).toLocaleDateString(locale)}</span>
                       </span>
@@ -925,7 +959,16 @@ export const HelpResolutionScreen = ({ defaultTab = 'all' }: Props) => {
                   <div className="support-thread__header-body">
                     <h2>{selectedCase.title}</h2>
                     <div className="support-thread__header-chips">
-                      <span className="support-pill">{selectedCase.status}</span>
+                      <span className="support-pill">{statusLabel(selectedCase.status)}</span>
+                      {selectedCase.engineStatus &&
+                        selectedCase.engineStatus !== selectedCase.status && (
+                          <span className="support-pill">
+                            {selectedCase.kind === 'reservation_dispute'
+                              ? tr('Reservation: ', 'الحجز: ')
+                              : tr('Support: ', 'الدعم: ')}
+                            {statusLabel(selectedCase.engineStatus)}
+                          </span>
+                        )}
                       <span className="support-pill">{kindLabel(selectedCase.kind)}</span>
                       <span className="support-pill">{selectedCase.referenceCode}</span>
                       {selectedCase.counterpartyName && (
@@ -960,6 +1003,17 @@ export const HelpResolutionScreen = ({ defaultTab = 'all' }: Props) => {
                       <p className="dashboard-card-meta" style={{ margin: 0 }}>
                         {caseFile.description}
                       </p>
+                    </div>
+                  )}
+
+                  {caseFile.resolution.outcome && (
+                    <div className="support-thread__readonly" style={{ marginBottom: '1.25rem' }}>
+                      <p className="support-thread__readonly-title">
+                        {tr('Resolution', 'القرار')}: {outcomeLabel(caseFile.resolution.outcome)}
+                      </p>
+                      {caseFile.resolution.notes && (
+                        <p className="support-thread__readonly-body">{caseFile.resolution.notes}</p>
+                      )}
                     </div>
                   )}
 

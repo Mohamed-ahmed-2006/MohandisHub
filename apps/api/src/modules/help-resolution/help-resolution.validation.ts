@@ -113,6 +113,10 @@ export const assignCaseSchema = z.object({
   adminId: uuid.nullable(),
 });
 
+export const counterpartyAccessSchema = z.object({
+  granted: z.boolean(),
+});
+
 export type CreateCaseInput = z.infer<typeof createCaseSchema>;
 export type PostMessageInput = z.infer<typeof postMessageSchema>;
 export type AddEvidenceInput = z.infer<typeof addEvidenceSchema>;
@@ -120,3 +124,4 @@ export type EscalateInput = z.infer<typeof escalateSchema>;
 export type ResolveCaseInput = z.infer<typeof resolveCaseSchema>;
 export type AdminStatusInput = z.infer<typeof adminStatusSchema>;
 export type AssignCaseInput = z.infer<typeof assignCaseSchema>;
+export type CounterpartyAccessInput = z.infer<typeof counterpartyAccessSchema>;

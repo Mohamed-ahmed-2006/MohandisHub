@@ -18,6 +18,7 @@ import {
   addEvidenceSchema,
   adminStatusSchema,
   assignCaseSchema,
+  counterpartyAccessSchema,
   createCaseSchema,
   escalateSchema,
   postMessageSchema,
@@ -250,6 +251,24 @@ const assignCase = asyncHandler(async (req, res) => {
   res.json({ ok: true, data } satisfies ApiSuccessBody<typeof data>);
 });
 
+const setCounterpartyAccess = asyncHandler(async (req, res) => {
+  const viewer = requireViewer(req);
+  const input = parseBody(counterpartyAccessSchema, req.body);
+  const caseId = requireCaseId(req);
+  const data = await service.setCounterpartyAccess(caseId, viewer, input.granted);
+  await logAudit({
+    actorId: viewer.id,
+    action: input.granted
+      ? 'admin.resolution_case.counterparty_access.grant'
+      : 'admin.resolution_case.counterparty_access.revoke',
+    resourceType: 'resolution_case',
+    resourceId: caseId,
+    details: { granted: input.granted },
+    ip: req.ip ?? req.socket?.remoteAddress ?? null,
+  });
+  res.json({ ok: true, data } satisfies ApiSuccessBody<typeof data>);
+});
+
 const setStatus = asyncHandler(async (req, res) => {
   const viewer = requireViewer(req);
   const input = parseBody(adminStatusSchema, req.body);
@@ -296,6 +315,7 @@ export const helpResolutionController = {
   getAdminCase,
   postAdminMessage,
   assignCase,
+  setCounterpartyAccess,
   setStatus,
   resolveCase,
 };

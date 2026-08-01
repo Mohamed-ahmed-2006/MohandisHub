@@ -406,10 +406,21 @@ export class HelpResolutionRepository {
     );
   }
 
-  async listEvents(caseId: string): Promise<ResolutionCaseEventRow[]> {
+  async listEvents(
+    caseId: string,
+    includeAdminNotes: boolean,
+  ): Promise<ResolutionCaseEventRow[]> {
     const { rows } = await getPool().query<ResolutionCaseEventRow>(
-      `SELECT * FROM resolution_case_events WHERE case_id = $1 ORDER BY created_at ASC, id ASC`,
-      [caseId],
+      `SELECT *
+         FROM resolution_case_events
+        WHERE case_id = $1
+          AND (
+            $2::boolean
+            OR event_type <> 'staff_message'
+            OR COALESCE(metadata->>'visibility', 'participants') <> 'admin'
+          )
+        ORDER BY created_at ASC, id ASC`,
+      [caseId, includeAdminNotes],
     );
     return rows;
   }
@@ -446,7 +457,8 @@ export class HelpResolutionRepository {
               resolution_notes   = CASE WHEN $3::boolean THEN $5::text ELSE NULL END,
               resolved_by        = CASE WHEN $3::boolean THEN $6::uuid ELSE NULL END,
               resolved_at        = CASE WHEN $3::boolean THEN now() ELSE NULL END,
-              last_activity_at   = GREATEST(last_activity_at, now())
+              last_activity_at   = GREATEST(last_activity_at, now()),
+              updated_at        = now()
         WHERE id = $1
         RETURNING *`,
       [
@@ -472,7 +484,8 @@ export class HelpResolutionRepository {
           SET escalated_at = now(),
               escalated_by = $2,
               escalation_reason = $3,
-              last_activity_at = GREATEST(last_activity_at, now())
+              last_activity_at = GREATEST(last_activity_at, now()),
+              updated_at = now()
         WHERE id = $1 AND escalated_at IS NULL
         RETURNING *`,
       [caseId, userId, reason],
@@ -483,10 +496,29 @@ export class HelpResolutionRepository {
   async assignAdmin(caseId: string, adminId: string | null): Promise<ResolutionCaseRow | null> {
     const { rows } = await getPool().query<ResolutionCaseRow>(
       `UPDATE resolution_cases
-          SET assigned_admin_id = $2, last_activity_at = GREATEST(last_activity_at, now())
+          SET assigned_admin_id = $2,
+              last_activity_at = GREATEST(last_activity_at, now()),
+              updated_at = now()
         WHERE id = $1
         RETURNING *`,
       [caseId, adminId],
+    );
+    return rows[0] ?? null;
+  }
+
+  async setCounterpartyAccess(
+    client: PoolClient,
+    caseId: string,
+    granted: boolean,
+  ): Promise<ResolutionCaseRow | null> {
+    const { rows } = await client.query<ResolutionCaseRow>(
+      `UPDATE resolution_cases
+          SET counterparty_access = $2,
+              last_activity_at = GREATEST(last_activity_at, now()),
+              updated_at = now()
+        WHERE id = $1
+        RETURNING *`,
+      [caseId, granted],
     );
     return rows[0] ?? null;
   }
@@ -571,9 +603,32 @@ export class HelpResolutionRepository {
   // Ownership and eligibility
   // -------------------------------------------------------------------------
 
-  async privateUploadBelongsToUser(uploadId: string, userId: string): Promise<boolean> {
+  async privateUploadIsAttachableEvidence(uploadId: string, userId: string): Promise<boolean> {
     const { rows } = await getPool().query<{ ok: boolean }>(
-      `SELECT EXISTS (SELECT 1 FROM private_uploads WHERE id = $1 AND user_id = $2) AS ok`,
+      `SELECT EXISTS (
+         SELECT 1
+           FROM private_uploads pu
+          WHERE pu.id = $1
+            AND pu.user_id = $2
+            AND NOT EXISTS (
+              SELECT 1
+                FROM identity_documents d
+               WHERE d.front_image_url = pu.storage_path
+                  OR d.back_image_url = pu.storage_path
+                  OR d.selfie_image_url = pu.storage_path
+                  OR d.front_image_url LIKE ('%/api/upload/private/' || pu.id::text || '%')
+                  OR d.back_image_url LIKE ('%/api/upload/private/' || pu.id::text || '%')
+                  OR d.selfie_image_url LIKE ('%/api/upload/private/' || pu.id::text || '%')
+            )
+            AND NOT EXISTS (
+              SELECT 1
+                FROM academic_records a
+               WHERE a.certificate_image_url = pu.storage_path
+                  OR a.transcript_image_url = pu.storage_path
+                  OR a.certificate_image_url LIKE ('%/api/upload/private/' || pu.id::text || '%')
+                  OR a.transcript_image_url LIKE ('%/api/upload/private/' || pu.id::text || '%')
+            )
+       ) AS ok`,
       [uploadId, userId],
     );
     return rows[0]?.ok === true;
@@ -735,6 +790,24 @@ export class HelpResolutionRepository {
   async userExists(userId: string): Promise<boolean> {
     const { rows } = await getPool().query<{ ok: boolean }>(
       `SELECT EXISTS (SELECT 1 FROM users WHERE id = $1 AND deleted_at IS NULL) AS ok`,
+      [userId],
+    );
+    return rows[0]?.ok === true;
+  }
+
+  async authorizedCaseAdminExists(userId: string): Promise<boolean> {
+    const { rows } = await getPool().query<{ ok: boolean }>(
+      `SELECT EXISTS (
+         SELECT 1
+           FROM users
+          WHERE id = $1
+            AND deleted_at IS NULL
+            AND is_admin = true
+            AND (
+              admin_permissions ? 'manage_support'
+              OR admin_permissions ? 'manage_transactions'
+            )
+       ) AS ok`,
       [userId],
     );
     return rows[0]?.ok === true;

@@ -1,5 +1,6 @@
 /* Support inbox + thread — aligned with modern chat-style UX */
 
+/* Shared case-thread layout for the legacy support screen and the unified centre. */
 .support-screen {
   padding: 1.5rem 0 2.5rem;
 }

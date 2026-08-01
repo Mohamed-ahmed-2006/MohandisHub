@@ -1116,9 +1116,31 @@ export class ReservationsRepository {
     return rows[0]!;
   }
 
-  async privateUploadBelongsToUser(uploadId: string, userId: string): Promise<boolean> {
+  async privateUploadIsAttachableEvidence(uploadId: string, userId: string): Promise<boolean> {
     const { rows } = await getPool().query<{ id: string }>(
-      `SELECT id FROM private_uploads WHERE id = $1 AND user_id = $2 LIMIT 1`,
+      `SELECT pu.id
+         FROM private_uploads pu
+        WHERE pu.id = $1
+          AND pu.user_id = $2
+          AND NOT EXISTS (
+            SELECT 1
+              FROM identity_documents d
+             WHERE d.front_image_url = pu.storage_path
+                OR d.back_image_url = pu.storage_path
+                OR d.selfie_image_url = pu.storage_path
+                OR d.front_image_url LIKE ('%/api/upload/private/' || pu.id::text || '%')
+                OR d.back_image_url LIKE ('%/api/upload/private/' || pu.id::text || '%')
+                OR d.selfie_image_url LIKE ('%/api/upload/private/' || pu.id::text || '%')
+          )
+          AND NOT EXISTS (
+            SELECT 1
+              FROM academic_records a
+             WHERE a.certificate_image_url = pu.storage_path
+                OR a.transcript_image_url = pu.storage_path
+                OR a.certificate_image_url LIKE ('%/api/upload/private/' || pu.id::text || '%')
+                OR a.transcript_image_url LIKE ('%/api/upload/private/' || pu.id::text || '%')
+          )
+        LIMIT 1`,
       [uploadId, userId],
     );
     return rows.length > 0;

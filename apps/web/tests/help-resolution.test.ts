@@ -13,7 +13,7 @@ describe('Wave 2I Unified Help & Resolution Center', () => {
     vi.restoreAllMocks();
   });
 
-  describe('API Integration & Data Aggregation', () => {
+  describe('Legacy engine API compatibility', () => {
     it('fetches support tickets via listMyTickets', async () => {
       const mockTickets: SupportTicket[] = [
         {
@@ -131,7 +131,7 @@ describe('Wave 2I Unified Help & Resolution Center', () => {
         'need_job_dispute',
         'reservation_dispute',
         'direct_payment',
-        'safety_reporting',
+        'safety_report',
       ];
 
       expect(categories).toHaveLength(5);
@@ -161,22 +161,23 @@ describe('Wave 2I Unified Help & Resolution Center', () => {
     });
 
     it('ensures private dispute evidence files do not invent insecure public URLs', () => {
-      const uploadId = 'private_upload_99.png';
-      const secureProxyPath = `/api/proxy/private-upload?filename=${encodeURIComponent(uploadId)}`;
+      const uploadId = '8e2cb4b5-5990-4b42-8ded-60a4dd221100';
+      const authorisedApiPath = `/api/upload/private/${uploadId}`;
 
-      expect(secureProxyPath).toContain('/api/proxy/private-upload');
-      expect(secureProxyPath).not.toContain('http://insecure-public-bucket');
+      expect(authorisedApiPath).toBe(`/api/upload/private/${uploadId}`);
+      expect(authorisedApiPath).not.toContain('http://insecure-public-bucket');
     });
 
-    it('presents honest unavailable notices for missing backend case endpoints', () => {
-      const missingEndpoints = [
-        { route: 'POST /api/v1/help-resolution/job-disputes', category: 'need_job_dispute' },
-        { route: 'POST /api/v1/help-resolution/payment-disputes', category: 'direct_payment' },
+    it('uses the unified runtime route for native case creation', () => {
+      const creationContracts = [
+        { route: 'POST /api/help-resolution/cases', kind: 'need_job_dispute' },
+        { route: 'POST /api/help-resolution/cases', kind: 'direct_payment' },
       ];
 
-      expect(missingEndpoints).toHaveLength(2);
-      missingEndpoints.forEach((ep) => {
-        expect(ep.route).toBeDefined();
+      expect(creationContracts).toHaveLength(2);
+      creationContracts.forEach((contract) => {
+        expect(contract.route).toBe('POST /api/help-resolution/cases');
+        expect(['need_job_dispute', 'direct_payment']).toContain(contract.kind);
       });
     });
   });

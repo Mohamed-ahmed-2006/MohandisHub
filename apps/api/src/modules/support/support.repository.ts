@@ -2,6 +2,8 @@
 // Support repository — DB access for tickets and messages
 // ---------------------------------------------------------------------------
 
+import type { PoolClient } from 'pg';
+
 import { getPool } from '../../db/pool.js';
 
 export type TicketRow = {
@@ -26,9 +28,14 @@ export type TicketMessageRow = {
 };
 
 export class SupportRepository {
-  async createTicket(userId: string, subject: string, category: string): Promise<TicketRow> {
-    const pool = getPool();
-    const { rows } = await pool.query<TicketRow>(
+  async createTicket(
+    userId: string,
+    subject: string,
+    category: string,
+    client?: PoolClient,
+  ): Promise<TicketRow> {
+    const db = client ?? getPool();
+    const { rows } = await db.query<TicketRow>(
       `INSERT INTO support_tickets (user_id, subject, category, status)
        VALUES ($1, $2, $3, 'open')
        RETURNING id, user_id, subject, category, status, assigned_to, created_at, updated_at`,
@@ -44,17 +51,18 @@ export class SupportRepository {
     body: string,
     isStaff: boolean,
     attachmentUrls?: string[] | null,
+    client?: PoolClient,
   ): Promise<TicketMessageRow> {
-    const pool = getPool();
+    const db = client ?? getPool();
     const urls = attachmentUrls?.length ? attachmentUrls : [];
-    const { rows } = await pool.query<TicketMessageRow>(
+    const { rows } = await db.query<TicketMessageRow>(
       `INSERT INTO support_ticket_messages (ticket_id, author_id, body, is_staff, attachment_urls)
        VALUES ($1, $2, $3, $4, $5::text[])
        RETURNING id, ticket_id, author_id, body, is_staff, created_at, attachment_urls`,
       [ticketId, authorId, body, isStaff, urls],
     );
     if (!rows[0]) throw new Error('Insert message failed');
-    await pool.query(`UPDATE support_tickets SET updated_at = now() WHERE id = $1`, [ticketId]);
+    await db.query(`UPDATE support_tickets SET updated_at = now() WHERE id = $1`, [ticketId]);
     return rows[0];
   }
 
@@ -63,6 +71,15 @@ export class SupportRepository {
     const { rows } = await pool.query<TicketRow>(
       `SELECT id, user_id, subject, category, status, assigned_to, created_at, updated_at
        FROM support_tickets WHERE id = $1`,
+      [ticketId],
+    );
+    return rows[0] ?? null;
+  }
+
+  async lockTicketById(client: PoolClient, ticketId: string): Promise<TicketRow | null> {
+    const { rows } = await client.query<TicketRow>(
+      `SELECT id, user_id, subject, category, status, assigned_to, created_at, updated_at
+       FROM support_tickets WHERE id = $1 FOR UPDATE`,
       [ticketId],
     );
     return rows[0] ?? null;
@@ -99,14 +116,35 @@ export class SupportRepository {
     return rows;
   }
 
-  async updateTicketStatus(ticketId: string, status: string): Promise<TicketRow | null> {
-    const pool = getPool();
-    const { rows } = await pool.query<TicketRow>(
+  async updateTicketStatus(
+    ticketId: string,
+    status: string,
+    client?: PoolClient,
+  ): Promise<TicketRow | null> {
+    const db = client ?? getPool();
+    const { rows } = await db.query<TicketRow>(
       `UPDATE support_tickets SET status = $1, updated_at = now() WHERE id = $2
        RETURNING id, user_id, subject, category, status, assigned_to, created_at, updated_at`,
       [status, ticketId],
     );
     return rows[0] ?? null;
+  }
+
+  async recordResolution(
+    client: PoolClient,
+    ticketId: string,
+    input: { outcome: string; notes: string; resolvedBy: string },
+  ): Promise<void> {
+    await client.query(
+      `UPDATE resolution_cases
+          SET resolution_outcome = $2,
+              resolution_notes = $3,
+              resolved_by = $4,
+              resolved_at = COALESCE(resolved_at, now()),
+              updated_at = now()
+        WHERE support_ticket_id = $1`,
+      [ticketId, input.outcome, input.notes, input.resolvedBy],
+    );
   }
 
   async assignTicket(ticketId: string, assignedTo: string | null): Promise<TicketRow | null> {

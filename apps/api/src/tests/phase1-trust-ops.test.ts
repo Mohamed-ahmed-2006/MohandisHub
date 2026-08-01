@@ -22,7 +22,7 @@ describe('Phase 1 trust operations wiring', () => {
     expect(routes).toContain('/dispute-cases/my');
     expect(routes).toContain('/admin/dispute-cases');
     expect(routes).toContain('/disputes/:disputeId/evidence');
-    expect(service).toContain('privateUploadBelongsToUser');
+    expect(service).toContain('privateUploadIsAttachableEvidence');
     expect(service).toContain('buildDisputeCase');
     expect(service).toContain('moneyEvents: moneyEvents.map(mapDisputeMoneyEvent)');
   });
