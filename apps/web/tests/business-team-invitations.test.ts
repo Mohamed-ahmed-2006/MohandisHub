@@ -1,7 +1,11 @@
 import type { BusinessInvitePreview, BusinessTeamOverview } from '@mohandishub/shared';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { BusinessTeamApiError, businessTeamsApiClient } from '../lib/business-teams/client';
+import {
+  BUSINESS_TEAM_PERMISSIONS,
+  BusinessTeamApiError,
+  businessTeamsApiClient,
+} from '../lib/business-teams/client';
 
 const overviewFixture = (overrides: Partial<BusinessTeamOverview> = {}): BusinessTeamOverview => ({
   team: { id: 'team-1', businessId: 'bus-1', name: 'Acme Corp' },
@@ -13,7 +17,8 @@ const overviewFixture = (overrides: Partial<BusinessTeamOverview> = {}): Busines
     roleId: 'role-owner',
     roleName: 'Owner',
     roleKey: 'owner',
-    permissions: ['manage_team', 'view_analytics'],
+    permissions: ['manage_team'],
+    reservedPermissions: [],
     allowedActions: {
       inviteMembers: true,
       revokeInvites: true,
@@ -21,7 +26,8 @@ const overviewFixture = (overrides: Partial<BusinessTeamOverview> = {}): Busines
       updateMemberRoles: true,
       removeMembers: true,
       manageRoles: true,
-      transferOwnership: true,
+      // False for everyone, including the owner: the capability does not exist.
+      transferOwnership: false,
     },
   },
   roles: [
@@ -32,9 +38,10 @@ const overviewFixture = (overrides: Partial<BusinessTeamOverview> = {}): Busines
       builtIn: true,
       legacy: false,
       tier: 'owner',
-      // Owner is never handed out: it moves only through ownership transfer.
+      // Owner is never handed out, and ownership transfer does not exist.
       assignable: false,
-      permissions: ['manage_team', 'view_analytics'],
+      permissions: ['manage_team'],
+      reservedPermissions: [],
       memberCount: 1,
       createdAt: '2026-01-01T00:00:00Z',
       updatedAt: '2026-01-01T00:00:00Z',
@@ -48,7 +55,8 @@ const overviewFixture = (overrides: Partial<BusinessTeamOverview> = {}): Busines
       legacy: false,
       tier: 'admin',
       assignable: true,
-      permissions: ['manage_team', 'view_analytics'],
+      permissions: ['manage_team'],
+      reservedPermissions: [],
       memberCount: 0,
       createdAt: '2026-01-01T00:00:00Z',
       updatedAt: '2026-01-01T00:00:00Z',
@@ -61,7 +69,10 @@ const overviewFixture = (overrides: Partial<BusinessTeamOverview> = {}): Busines
       legacy: false,
       tier: 'member',
       assignable: true,
-      permissions: ['view_analytics'],
+      permissions: [],
+      // Carried from before Wave 2G-A split enforced from stored. Reported so
+      // the workspace can see it; never counted as a capability.
+      reservedPermissions: ['view_analytics'],
       memberCount: 2,
       createdAt: '2026-01-01T00:00:00Z',
       updatedAt: '2026-01-01T00:00:00Z',
@@ -75,7 +86,8 @@ const overviewFixture = (overrides: Partial<BusinessTeamOverview> = {}): Busines
       legacy: true,
       tier: 'member',
       assignable: false,
-      permissions: ['view_analytics'],
+      permissions: [],
+      reservedPermissions: ['view_analytics'],
       memberCount: 0,
       createdAt: '2026-01-01T00:00:00Z',
       updatedAt: '2026-01-01T00:00:00Z',
@@ -157,7 +169,6 @@ describe('Wave 2G/2H Business Team Management & Invitations', () => {
 
       const result = await businessTeamsApiClient.getMine('token-123');
       expect(result.viewer.tier).toBe('owner');
-      expect(result.viewer.allowedActions.transferOwnership).toBe(true);
       expect(result.viewer.allowedActions.manageRoles).toBe(true);
     });
 
@@ -208,6 +219,9 @@ describe('Wave 2G/2H Business Team Management & Invitations', () => {
       expect(res.accepted).toBe(true);
       expect(res.created).toBe(true);
       expect(res.tier).toBe('member');
+      // The workspace to open next. Without it the success screen has nowhere
+      // real to send an account whose primary role is not `business`.
+      expect(res.teamId).toBe('team-1');
       expect(fetchMock).toHaveBeenCalledWith(
         'http://localhost:4000/api/business-teams/invites/accept',
         expect.objectContaining({
@@ -340,46 +354,18 @@ describe('Wave 2G/2H Business Team Management & Invitations', () => {
       );
     });
 
-    it('transfers ownership with the typed confirmation the backend requires', async () => {
-      const fetchMock = vi.fn().mockResolvedValue(okResponse(overviewFixture()));
-      vi.stubGlobal('fetch', fetchMock);
-
-      await businessTeamsApiClient.transferOwnership('token-123', {
-        memberId: 'm-2',
-        confirmation: 'Acme Corp',
-      });
-
-      expect(fetchMock).toHaveBeenCalledWith(
-        'http://localhost:4000/api/business-teams/transfer-ownership',
-        expect.objectContaining({
-          method: 'POST',
-          body: JSON.stringify({ memberId: 'm-2', confirmation: 'Acme Corp' }),
-        }),
-      );
+    it('offers no way to transfer ownership at all', () => {
+      // Not "disabled in the UI": there is no client method, because moving the
+      // Owner membership would move team administration while every service,
+      // job, advertisement and ledger row stayed with the original account.
+      expect('transferOwnership' in businessTeamsApiClient).toBe(false);
     });
 
-    it('reports the backend refusal when an admin attempts an owner-only action', async () => {
-      vi.stubGlobal(
-        'fetch',
-        vi
-          .fn()
-          .mockResolvedValue(
-            errorResponse(
-              403,
-              'WORKSPACE_OWNER_REQUIRED',
-              'Only the current workspace owner can perform this action.',
-            ),
-          ),
-      );
-
-      await expect(
-        businessTeamsApiClient.transferOwnership('token-admin', {
-          memberId: 'm-2',
-          confirmation: 'Acme Corp',
-        }),
-      ).rejects.toMatchObject({ code: 'WORKSPACE_OWNER_REQUIRED', status: 403 });
+    it('never reports ownership transfer as an allowed action, even to the owner', () => {
+      const overview = overviewFixture();
+      expect(overview.viewer.isOwner).toBe(true);
+      expect(overview.viewer.allowedActions.transferOwnership).toBe(false);
     });
-
     it('reports the backend refusal when the owner is targeted for removal', async () => {
       vi.stubGlobal(
         'fetch',
@@ -399,6 +385,20 @@ describe('Wave 2G/2H Business Team Management & Invitations', () => {
   });
 
   describe('Permission model & action visibility', () => {
+    it('grants only permissions the backend enforces', () => {
+      // One value, because one value is read by an authorization decision. The
+      // previous list offered seven and six of them did nothing.
+      expect(BUSINESS_TEAM_PERMISSIONS).toEqual(['manage_team']);
+    });
+
+    it('reports stored-but-unenforced permissions separately from effective ones', () => {
+      const member = overviewFixture().roles.find((r) => r.key === 'member');
+      expect(member?.permissions).toEqual([]);
+      expect(member?.reservedPermissions).toEqual(['view_analytics']);
+      // The value is preserved on the role and is not claimed to work.
+      expect(member?.permissions).not.toContain('view_analytics');
+    });
+
     it('presents exactly three built-in tiers, with manager carrying Admin', () => {
       const roles = overviewFixture().roles;
       const builtInTiers = roles.filter((r) => r.builtIn && !r.legacy).map((r) => r.tier);
@@ -425,7 +425,8 @@ describe('Wave 2G/2H Business Team Management & Invitations', () => {
           roleId: 'role-member',
           roleName: 'Member',
           roleKey: 'member',
-          permissions: ['view_analytics'],
+          permissions: [],
+          reservedPermissions: ['view_analytics'],
           allowedActions: {
             inviteMembers: false,
             revokeInvites: false,
@@ -452,7 +453,8 @@ describe('Wave 2G/2H Business Team Management & Invitations', () => {
           roleId: 'role-admin',
           roleName: 'Admin',
           roleKey: 'manager',
-          permissions: ['manage_team', 'view_analytics'],
+          permissions: ['manage_team'],
+          reservedPermissions: [],
           allowedActions: {
             inviteMembers: true,
             revokeInvites: true,
@@ -492,6 +494,90 @@ describe('Wave 2G/2H Business Team Management & Invitations', () => {
           roleId: 'role-member',
         }),
       ).rejects.toMatchObject({ code: 'WORKSPACE_ADMIN_REQUIRED', status: 403 });
+    });
+  });
+
+  describe('workspace selection', () => {
+    it('lists every workspace the account can open', async () => {
+      const fetchMock = vi.fn().mockResolvedValue(
+        okResponse({
+          workspaces: [
+            {
+              teamId: 'team-1',
+              teamName: 'Acme Corp',
+              tier: 'member',
+              isOwner: false,
+              roleName: 'Member',
+              ownedByViewerAccount: false,
+              memberCount: 4,
+              joinedAt: '2026-07-01T00:00:00Z',
+            },
+            {
+              teamId: 'team-2',
+              teamName: 'Beta Studio',
+              tier: 'admin',
+              isOwner: false,
+              roleName: 'Admin',
+              ownedByViewerAccount: false,
+              memberCount: 2,
+              joinedAt: '2026-07-20T00:00:00Z',
+            },
+          ],
+          defaultTeamId: 'team-1',
+        }),
+      );
+      vi.stubGlobal('fetch', fetchMock);
+
+      const result = await businessTeamsApiClient.listWorkspaces('token-expert');
+      expect(result.workspaces).toHaveLength(2);
+      expect(result.defaultTeamId).toBe('team-1');
+      expect(fetchMock).toHaveBeenCalledWith(
+        'http://localhost:4000/api/business-teams/workspaces',
+        expect.anything(),
+      );
+    });
+
+    it('sends the selected workspace on every read and every mutation', async () => {
+      const fetchMock = vi.fn().mockResolvedValue(okResponse(overviewFixture()));
+      vi.stubGlobal('fetch', fetchMock);
+
+      await businessTeamsApiClient.getMine('t', 'team-2');
+      await businessTeamsApiClient.createInvite('t', { email: 'a@b.com', roleId: 'r' }, 'team-2');
+      await businessTeamsApiClient.revokeInvite('t', 'inv-1', 'team-2');
+      await businessTeamsApiClient.updateMemberRole('t', 'm-2', { roleId: 'r' }, 'team-2');
+      await businessTeamsApiClient.removeMember('t', 'm-2', 'team-2');
+
+      for (const call of fetchMock.mock.calls) {
+        expect(call[0]).toContain('teamId=team-2');
+      }
+    });
+
+    it('omits the selector entirely when no workspace is chosen', async () => {
+      const fetchMock = vi.fn().mockResolvedValue(okResponse(overviewFixture()));
+      vi.stubGlobal('fetch', fetchMock);
+
+      await businessTeamsApiClient.getMine('t');
+      expect(fetchMock.mock.calls[0]?.[0]).toBe('http://localhost:4000/api/business-teams/me');
+    });
+
+    it("reports the backend refusal for a workspace that is not the caller's", async () => {
+      vi.stubGlobal(
+        'fetch',
+        vi
+          .fn()
+          .mockResolvedValue(
+            errorResponse(
+              403,
+              'WORKSPACE_NOT_ACCESSIBLE',
+              'You do not have access to that workspace.',
+            ),
+          ),
+      );
+
+      await expect(businessTeamsApiClient.getMine('t', 'someone-elses')).rejects.toMatchObject({
+        code: 'WORKSPACE_NOT_ACCESSIBLE',
+        status: 403,
+      });
     });
   });
 

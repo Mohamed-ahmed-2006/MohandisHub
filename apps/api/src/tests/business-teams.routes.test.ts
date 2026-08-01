@@ -22,6 +22,7 @@ vi.mock('../modules/settings/settings.repository.js', () => ({
 const service = vi.hoisted(() => ({
   previewInvite: vi.fn(),
   getOverview: vi.fn(),
+  listWorkspaces: vi.fn(),
   createInvite: vi.fn(),
   acceptInvite: vi.fn(),
   revokeInvite: vi.fn(),
@@ -68,6 +69,17 @@ const bearer = (overrides: Record<string, unknown> = {}): string =>
 
 const UUID = '22222222-2222-4222-8222-222222222222';
 
+/**
+ * The workspace selector a handler passed on.
+ *
+ * The signatures differ — some take a body, some an id, some both — but the
+ * selector is always the last argument, which is the thing being asserted.
+ */
+const trailingTeamArg = (fn: { mock: { calls: unknown[][] } }): unknown => {
+  const call = fn.mock.calls[0] ?? [];
+  return call[call.length - 1];
+};
+
 beforeEach(() => {
   for (const fn of Object.values(service)) fn.mockReset();
 });
@@ -112,6 +124,7 @@ describe('business team route authorization', () => {
     expect(response.status).toBe(200);
     expect(service.getOverview).toHaveBeenCalledWith(
       expect.objectContaining({ id: '11111111-1111-4111-8111-111111111111', role: 'expert' }),
+      undefined,
     );
   }, 15_000);
 
@@ -184,10 +197,11 @@ describe('invitation route validation', () => {
 
     // zod trims; lowercasing is the repository's canonical rule and belongs with
     // the comparison that uses it, not in two places.
-    expect(service.createInvite).toHaveBeenCalledWith(expect.anything(), {
-      email: 'Mixed.Case@Example.COM',
-      roleId: UUID,
-    });
+    expect(service.createInvite).toHaveBeenCalledWith(
+      expect.anything(),
+      { email: 'Mixed.Case@Example.COM', roleId: UUID },
+      undefined,
+    );
   }, 15_000);
 
   it('rejects a token that is not in the issued alphabet', async () => {
@@ -202,7 +216,15 @@ describe('invitation route validation', () => {
     expect(service.acceptInvite).not.toHaveBeenCalled();
   }, 15_000);
 
-  it('requires the workspace name for a transfer', async () => {
+  it('does not validate a transfer body, because no body makes it succeed', async () => {
+    // Validating the input would imply there is a correct input. There is not.
+    service.transferOwnership.mockRejectedValue(
+      new HttpError({
+        statusCode: 409,
+        code: 'OWNERSHIP_TRANSFER_NOT_AVAILABLE',
+        message: 'Workspace ownership transfer is not available.',
+      }),
+    );
     const app = createApp();
 
     const response = await request(app)
@@ -211,9 +233,8 @@ describe('invitation route validation', () => {
       .send({ memberId: UUID });
     const body = response.body as ApiErrorBody;
 
-    expect(response.status).toBe(400);
-    expect(body.error.code).toBe('VALIDATION_ERROR');
-    expect(service.transferOwnership).not.toHaveBeenCalled();
+    expect(response.status).toBe(409);
+    expect(body.error.code).toBe('OWNERSHIP_TRANSFER_NOT_AVAILABLE');
   }, 15_000);
 });
 
@@ -338,4 +359,165 @@ describe('invitation token confidentiality', () => {
 
     expect(JSON.stringify(response.body)).not.toContain(token);
   }, 15_000);
+});
+
+describe('ownership transfer is disabled', () => {
+  it('still answers, and always with the same stable code', async () => {
+    service.transferOwnership.mockRejectedValue(
+      new HttpError({
+        statusCode: 409,
+        code: 'OWNERSHIP_TRANSFER_NOT_AVAILABLE',
+        message: 'Workspace ownership transfer is not available.',
+      }),
+    );
+    const app = createApp();
+
+    // Every shape a client might send, including the one the old contract
+    // documented. None of them is a transfer.
+    for (const payload of [
+      {},
+      { memberId: UUID },
+      { memberId: UUID, confirmation: 'Acme Corp' },
+      { memberId: 'nonsense', confirmation: '' },
+    ]) {
+      const response = await request(app)
+        .post('/api/business-teams/transfer-ownership')
+        .set('Authorization', bearer())
+        .send(payload);
+      const body = response.body as ApiErrorBody;
+
+      expect(response.status).toBe(409);
+      expect(body.error.code).toBe('OWNERSHIP_TRANSFER_NOT_AVAILABLE');
+    }
+  }, 15_000);
+
+  it('is not reachable without a session either', async () => {
+    const app = createApp();
+    const response = await request(app).post('/api/business-teams/transfer-ownership').send({});
+
+    expect(response.status).toBe(401);
+    expect(service.transferOwnership).not.toHaveBeenCalled();
+  }, 15_000);
+});
+
+describe('workspace selection', () => {
+  it('lists the workspaces this account can open', async () => {
+    service.listWorkspaces.mockResolvedValue({ workspaces: [], defaultTeamId: null });
+    const app = createApp();
+
+    const response = await request(app)
+      .get('/api/business-teams/workspaces')
+      .set('Authorization', bearer({ role: 'craftsman' }));
+
+    expect(response.status).toBe(200);
+    // A craftsman, listed the same way a business account is: membership is the
+    // credential and the account role is a separate fact.
+    expect(service.listWorkspaces).toHaveBeenCalledWith(
+      expect.objectContaining({ role: 'craftsman' }),
+    );
+  }, 15_000);
+
+  it('requires a session to list workspaces', async () => {
+    const app = createApp();
+    const response = await request(app).get('/api/business-teams/workspaces');
+
+    expect(response.status).toBe(401);
+  }, 15_000);
+
+  it('passes a selected workspace through to every operation', async () => {
+    const overview = { team: { id: 'team-2' } };
+    service.getOverview.mockResolvedValue(overview);
+    service.createInvite.mockResolvedValue(overview);
+    service.revokeInvite.mockResolvedValue(overview);
+    service.updateMemberRole.mockResolvedValue(overview);
+    service.removeMember.mockResolvedValue(overview);
+    const app = createApp();
+    const team = '33333333-3333-4333-8333-333333333333';
+
+    await request(app).get(`/api/business-teams/me?teamId=${team}`).set('Authorization', bearer());
+    await request(app)
+      .post(`/api/business-teams/invites?teamId=${team}`)
+      .set('Authorization', bearer())
+      .send({ email: 'a@b.com', roleId: UUID });
+    await request(app)
+      .post(`/api/business-teams/invites/${UUID}/revoke?teamId=${team}`)
+      .set('Authorization', bearer());
+    await request(app)
+      .patch(`/api/business-teams/members/${UUID}?teamId=${team}`)
+      .set('Authorization', bearer())
+      .send({ roleId: UUID });
+    await request(app)
+      .delete(`/api/business-teams/members/${UUID}?teamId=${team}`)
+      .set('Authorization', bearer());
+
+    for (const fn of [
+      service.getOverview,
+      service.createInvite,
+      service.revokeInvite,
+      service.updateMemberRole,
+      service.removeMember,
+    ]) {
+      expect(fn).toHaveBeenCalledTimes(1);
+      expect(trailingTeamArg(fn)).toBe(team);
+      // And the actor is still resolved from the session, never from the query.
+      expect(fn.mock.calls[0]?.[0]).toMatchObject({ id: '11111111-1111-4111-8111-111111111111' });
+    }
+  }, 20_000);
+
+  it('refuses a malformed workspace identifier the same way as an inaccessible one', async () => {
+    const app = createApp();
+
+    const response = await request(app)
+      .get('/api/business-teams/me?teamId=not-a-uuid')
+      .set('Authorization', bearer());
+    const body = response.body as ApiErrorBody;
+
+    // 403, not 400: whether a workspace identifier is well-formed is not
+    // something this endpoint confirms.
+    expect(response.status).toBe(403);
+    expect(body.error.code).toBe('WORKSPACE_NOT_ACCESSIBLE');
+    expect(service.getOverview).not.toHaveBeenCalled();
+  }, 15_000);
+
+  it('treats an empty selector as no selector', async () => {
+    service.getOverview.mockResolvedValue({ team: { id: 't' } });
+    const app = createApp();
+
+    await request(app).get('/api/business-teams/me?teamId=').set('Authorization', bearer());
+
+    expect(service.getOverview).toHaveBeenCalledWith(expect.anything(), undefined);
+  }, 15_000);
+});
+
+describe('permissions offered to a role', () => {
+  it('accepts only the permission the backend enforces', async () => {
+    service.createRole.mockResolvedValue({ team: { id: 't' } });
+    const app = createApp();
+
+    const accepted = await request(app)
+      .post('/api/business-teams/roles')
+      .set('Authorization', bearer())
+      .send({ name: 'Coordinator', permissions: ['manage_team'] });
+    expect(accepted.status).toBe(201);
+
+    // The six values the schema still stores are refused as INPUT, so a role
+    // cannot be created advertising work the API will not do.
+    for (const permission of [
+      'manage_services',
+      'manage_jobs',
+      'manage_reservations',
+      'view_wallet',
+      'manage_support_disputes',
+      'view_analytics',
+    ]) {
+      const response = await request(app)
+        .post('/api/business-teams/roles')
+        .set('Authorization', bearer())
+        .send({ name: 'Coordinator', permissions: [permission] });
+      const body = response.body as ApiErrorBody;
+
+      expect(response.status).toBe(400);
+      expect(body.error.code).toBe('VALIDATION_ERROR');
+    }
+  }, 20_000);
 });

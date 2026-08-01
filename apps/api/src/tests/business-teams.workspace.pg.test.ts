@@ -140,12 +140,17 @@ afterAll(async () => {
 
 beforeEach(async () => {
   if (!pgIntegrationEnabled()) return;
-  // A clean slate per test, inside the scratch database only. Order follows the
-  // foreign keys: invitations and audit rows reference roles and teams.
+  // A clean slate per test, inside the scratch database only.
+  //
+  // Teams go LAST but take everything with them: `business_members`,
+  // `business_team_roles`, `business_team_invites` and the audit log all
+  // cascade from `business_teams`. Deleting memberships first would strip a
+  // live workspace of its owner, which the deferred one-owner trigger correctly
+  // refuses — the teardown has to remove the workspace, not hollow it out.
+  // Invitations are cleared explicitly first because their `role_id` foreign
+  // key is ON DELETE RESTRICT.
   await pool.query(`DELETE FROM business_team_audit_log`);
   await pool.query(`DELETE FROM business_team_invites`);
-  await pool.query(`DELETE FROM business_members`);
-  await pool.query(`DELETE FROM business_team_roles`);
   await pool.query(`DELETE FROM business_teams`);
 });
 
@@ -211,8 +216,11 @@ describe.skipIf(!pgIntegrationEnabled())('workspace roles and tiers', () => {
     const overview = await svc.getOverview({ id: owner.userId, role: 'business' });
     expect(overview.viewer.tier).toBe('owner');
     expect(overview.viewer.permissions).toContain('manage_team');
-    expect(overview.viewer.permissions).toContain('view_wallet');
-    expect(overview.viewer.allowedActions.transferOwnership).toBe(true);
+    // Ownership carries every ENFORCED permission, and does not conjure the
+    // unenforced ones into working.
+    expect(overview.viewer.permissions).not.toContain('view_wallet');
+    expect(overview.viewer.allowedActions.manageRoles).toBe(true);
+    expect(overview.viewer.allowedActions.transferOwnership).toBe(false);
   });
 
   it('resolves a custom role permission array server-side, at the member tier', async () => {
@@ -220,6 +228,8 @@ describe.skipIf(!pgIntegrationEnabled())('workspace roles and tiers', () => {
     const svc = await service();
     await svc.createRole(
       { id: owner.userId, role: 'business' },
+      // Requested with two reserved values. The service keeps them in the row
+      // and refuses to report either as effective.
       { name: 'Operations', permissions: ['manage_jobs', 'view_analytics'] },
     );
     const { rows } = await pool.query<{ id: string }>(
@@ -236,7 +246,17 @@ describe.skipIf(!pgIntegrationEnabled())('workspace roles and tiers', () => {
 
     const asMember = await svc.getOverview({ id: member.userId, role: 'expert' });
     expect(asMember.viewer.tier).toBe('member');
-    expect(asMember.viewer.permissions.sort()).toEqual(['manage_jobs', 'view_analytics']);
+    // Both requested values name work no endpoint authorizes, so neither was
+    // stored and neither is reported. A role cannot be created advertising a
+    // capability the API ignores. (An existing role that already carries one
+    // keeps it — covered in business-teams.invariants.pg.test.ts.)
+    expect(asMember.viewer.permissions).toEqual([]);
+    expect(asMember.viewer.reservedPermissions).toEqual([]);
+    const { rows: stored } = await pool.query<{ permissions: string[] }>(
+      `SELECT permissions FROM business_team_roles WHERE id = $1`,
+      [customRoleId],
+    );
+    expect(stored[0]!.permissions).toEqual([]);
     // A custom role never confers ownership, whatever it is called.
     expect(asMember.viewer.isOwner).toBe(false);
     expect(asMember.viewer.allowedActions.transferOwnership).toBe(false);
@@ -329,7 +349,7 @@ describe.skipIf(!pgIntegrationEnabled())('workspace authorization', () => {
     const ownerMember = await memberRowFor(teamId, (await ownerOf(teamId)).userId);
     await expect(
       svc.transferOwnership(actor, { memberId: ownerMember!.id, confirmation: 'anything' }),
-    ).rejects.toMatchObject({ code: 'WORKSPACE_OWNER_REQUIRED' });
+    ).rejects.toMatchObject({ code: 'OWNERSHIP_TRANSFER_NOT_AVAILABLE' });
     await expect(
       svc.createRole(actor, { name: 'Escalation', permissions: ['manage_team'] }),
     ).rejects.toMatchObject({ code: 'WORKSPACE_OWNER_REQUIRED' });
@@ -456,7 +476,7 @@ describe.skipIf(!pgIntegrationEnabled())('workspace authorization', () => {
     ).rejects.toMatchObject({ code: 'WORKSPACE_ADMIN_REQUIRED' });
     await expect(
       svc.transferOwnership(actor, { memberId: ownerMember!.id, confirmation: 'x' }),
-    ).rejects.toMatchObject({ code: 'WORKSPACE_OWNER_REQUIRED' });
+    ).rejects.toMatchObject({ code: 'OWNERSHIP_TRANSFER_NOT_AVAILABLE' });
 
     expect(await ownerCount(teamId)).toBe(1);
   });
@@ -991,6 +1011,8 @@ describe.skipIf(!pgIntegrationEnabled())('membership and ownership', () => {
       [teamId],
     );
     expect(audit.map((a) => a.action)).toEqual([
+      // First access created the workspace, and that is history too.
+      'business_team.workspace.provision',
       'business_team.invite.create',
       'business_team.invite.accept',
       'business_team.member.remove',
@@ -1003,7 +1025,7 @@ describe.skipIf(!pgIntegrationEnabled())('membership and ownership', () => {
     expect(user[0]!.is_active).toBe(true);
   });
 
-  it('transfers ownership atomically, leaving the previous owner an admin', async () => {
+  it('refuses every ownership transfer, and changes nothing when it does', async () => {
     const { owner, teamId, member } = await withAdminAndMember();
     const svc = await service();
     const memberRow = await memberRowFor(teamId, member.userId);
@@ -1012,122 +1034,43 @@ describe.skipIf(!pgIntegrationEnabled())('membership and ownership', () => {
       [teamId],
     );
 
-    await svc.transferOwnership(
-      { id: owner.userId, role: 'business' },
-      {
-        memberId: memberRow!.id,
-        confirmation: team[0]!.name,
-      },
-    );
+    // Even the current owner, with the exact confirmation the old contract
+    // required. Moving the Owner membership would move team administration
+    // while every service, job, advertisement and ledger row stayed with the
+    // original account, so the operation does not exist.
+    await expect(
+      svc.transferOwnership(
+        { id: owner.userId, role: 'business' },
+        { memberId: memberRow!.id, confirmation: team[0]!.name },
+      ),
+    ).rejects.toMatchObject({ code: 'OWNERSHIP_TRANSFER_NOT_AVAILABLE' });
 
+    // Nothing moved, and nothing was recorded as having been attempted.
+    expect((await memberRowFor(teamId, owner.userId))!.role).toBe('owner');
+    expect((await memberRowFor(teamId, member.userId))!.role).toBe('member');
     expect(await ownerCount(teamId)).toBe(1);
-    expect((await memberRowFor(teamId, member.userId))!.role).toBe('owner');
-    // Demoted to Admin, not removed.
-    expect((await memberRowFor(teamId, owner.userId))!.role).toBe('manager');
-
-    // The account that owns this workspace's services, jobs and financial
-    // history is exactly where it was.
     const { rows: after } = await pool.query<{ business_id: string }>(
       `SELECT business_id FROM business_teams WHERE id = $1`,
       [teamId],
     );
     expect(after[0]!.business_id).toBe(team[0]!.business_id);
-    // The primary account roles of both parties are unchanged.
-    const { rows: roles } = await pool.query<{ id: string; primary_role: string }>(
-      `SELECT id, primary_role FROM users WHERE id = ANY($1::uuid[])`,
-      [[owner.userId, member.userId]],
-    );
-    expect(roles.find((r) => r.id === owner.userId)!.primary_role).toBe('business');
-    expect(roles.find((r) => r.id === member.userId)!.primary_role).toBe('craftsman');
-  });
-
-  it('requires the workspace name to be typed before it will transfer', async () => {
-    const { owner, teamId, member } = await withAdminAndMember();
-    const svc = await service();
-    const memberRow = await memberRowFor(teamId, member.userId);
-
-    await expect(
-      svc.transferOwnership(
-        { id: owner.userId, role: 'business' },
-        {
-          memberId: memberRow!.id,
-          confirmation: 'not the workspace name',
-        },
-      ),
-    ).rejects.toMatchObject({ code: 'CONFIRMATION_MISMATCH' });
-    expect((await memberRowFor(teamId, owner.userId))!.role).toBe('owner');
-  });
-
-  it('produces exactly one owner when ten transfers run at once', async () => {
-    const { owner, teamId, roleIdFor } = await seedWorkspace();
-    const svc = await service();
-    const { rows: team } = await pool.query<{ name: string }>(
-      `SELECT name FROM business_teams WHERE id = $1`,
-      [teamId],
-    );
-
-    const candidates: string[] = [];
-    for (let i = 0; i < 10; i += 1) {
-      const candidate = await seedUser({ role: 'expert' });
-      await pool.query(
-        `INSERT INTO business_members (team_id, user_id, role_id) VALUES ($1, $2, $3)`,
-        [teamId, candidate.userId, await roleIdFor('member')],
-      );
-      candidates.push((await memberRowFor(teamId, candidate.userId))!.id);
-    }
-
-    const results = await Promise.allSettled(
-      candidates.map((memberId) =>
-        svc.transferOwnership(
-          { id: owner.userId, role: 'business' },
-          {
-            memberId,
-            confirmation: team[0]!.name,
-          },
-        ),
-      ),
-    );
-
-    // The first to take the workspace lock wins; every later one re-reads an
-    // owner who is no longer the caller.
-    expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(1);
-    for (const rejected of results.filter((r) => r.status === 'rejected')) {
-      expect(rejected.reason).toMatchObject({ code: 'WORKSPACE_OWNER_REQUIRED' });
-    }
-    expect(await ownerCount(teamId)).toBe(1);
-    // And the workspace is not left with a demoted previous owner and no owner.
     expect(
-      await countRows(pool, `SELECT count(*)::text c FROM business_members WHERE team_id = $1`, [
-        teamId,
-      ]),
-    ).toBe(11);
-  }, 300_000);
+      await countRows(
+        pool,
+        `SELECT count(*)::text c FROM business_team_audit_log
+          WHERE team_id = $1 AND action LIKE '%ownership%'`,
+        [teamId],
+      ),
+    ).toBe(0);
+  });
 
-  it('does not restore the previous owner when they next load the workspace', async () => {
-    // The old provisioning helper re-asserted the business account as owner on
-    // every request, which would have undone a transfer at the next page load.
-    const { owner, teamId, member } = await withAdminAndMember();
+  it('never reports ownership transfer as an allowed action, even to the owner', async () => {
+    const { owner } = await withAdminAndMember();
     const svc = await service();
-    const memberRow = await memberRowFor(teamId, member.userId);
-    const { rows: team } = await pool.query<{ name: string }>(
-      `SELECT name FROM business_teams WHERE id = $1`,
-      [teamId],
-    );
-    await svc.transferOwnership(
-      { id: owner.userId, role: 'business' },
-      {
-        memberId: memberRow!.id,
-        confirmation: team[0]!.name,
-      },
-    );
-
     const overview = await svc.getOverview({ id: owner.userId, role: 'business' });
 
-    expect(overview.viewer.tier).toBe('admin');
-    expect(overview.viewer.isOwner).toBe(false);
+    expect(overview.viewer.isOwner).toBe(true);
     expect(overview.viewer.allowedActions.transferOwnership).toBe(false);
-    expect((await memberRowFor(teamId, member.userId))!.role).toBe('owner');
-    expect(await ownerCount(teamId)).toBe(1);
   });
 
   it('refuses to move the workspace billing identity, whatever writes the update', async () => {
@@ -1149,11 +1092,17 @@ describe.skipIf(!pgIntegrationEnabled())('membership and ownership', () => {
 // drift, this fails.
 
 const ROLLBACK_SQL = `
+DROP TRIGGER IF EXISTS trg_users_protect_workspace_owner_role ON public.users;
+DROP TRIGGER IF EXISTS trg_business_teams_owner_present ON public.business_teams;
+DROP TRIGGER IF EXISTS trg_business_members_owner_present ON public.business_members;
 DROP TRIGGER IF EXISTS trg_business_teams_immutable_business ON public.business_teams;
 DROP TRIGGER IF EXISTS trg_business_members_resolve_tier ON public.business_members;
+DROP FUNCTION IF EXISTS public.users_protect_workspace_owner_role();
+DROP FUNCTION IF EXISTS public.business_workspace_assert_one_owner();
 DROP FUNCTION IF EXISTS public.business_teams_reject_business_id_change();
 DROP FUNCTION IF EXISTS public.business_members_resolve_tier();
 
+DROP INDEX IF EXISTS public.uq_business_teams_business_id;
 DROP INDEX IF EXISTS public.uq_business_members_single_owner;
 DROP INDEX IF EXISTS public.uq_business_team_invites_pending_email;
 DROP INDEX IF EXISTS public.idx_business_team_invites_token_hash;
@@ -1168,10 +1117,13 @@ ALTER TABLE public.business_team_invites
   DROP COLUMN IF EXISTS accepted_by,
   DROP COLUMN IF EXISTS accepted_member_id,
   DROP COLUMN IF EXISTS revoked_at,
-  DROP COLUMN IF EXISTS revoked_by;
+  DROP COLUMN IF EXISTS revoked_by,
+  DROP COLUMN IF EXISTS role_name_snapshot;
 
 ALTER TABLE public.business_team_roles
   DROP COLUMN IF EXISTS is_legacy;
+
+COMMENT ON TABLE public.business_team_invites IS NULL;
 `;
 
 describe.skipIf(!pgIntegrationEnabled())('migration forward and rollback', () => {
@@ -1179,8 +1131,11 @@ describe.skipIf(!pgIntegrationEnabled())('migration forward and rollback', () =>
     const copy = await createScratchDatabase('bizfwd');
     try {
       const { rows } = await copy.pool.query<{ name: string; present: boolean }>(
-        `SELECT 'uq_business_members_single_owner' AS name,
-                to_regclass('public.uq_business_members_single_owner') IS NOT NULL AS present
+        `SELECT 'uq_business_teams_business_id' AS name,
+                to_regclass('public.uq_business_teams_business_id') IS NOT NULL AS present
+         UNION ALL
+         SELECT 'uq_business_members_single_owner',
+                to_regclass('public.uq_business_members_single_owner') IS NOT NULL
          UNION ALL
          SELECT 'uq_business_team_invites_pending_email',
                 to_regclass('public.uq_business_team_invites_pending_email') IS NOT NULL
@@ -1189,7 +1144,13 @@ describe.skipIf(!pgIntegrationEnabled())('migration forward and rollback', () =>
                 to_regprocedure('public.business_members_resolve_tier()') IS NOT NULL
          UNION ALL
          SELECT 'business_teams_reject_business_id_change',
-                to_regprocedure('public.business_teams_reject_business_id_change()') IS NOT NULL`,
+                to_regprocedure('public.business_teams_reject_business_id_change()') IS NOT NULL
+         UNION ALL
+         SELECT 'business_workspace_assert_one_owner',
+                to_regprocedure('public.business_workspace_assert_one_owner()') IS NOT NULL
+         UNION ALL
+         SELECT 'users_protect_workspace_owner_role',
+                to_regprocedure('public.users_protect_workspace_owner_role()') IS NOT NULL`,
       );
       for (const row of rows) expect([row.name, row.present]).toEqual([row.name, true]);
 
@@ -1197,10 +1158,24 @@ describe.skipIf(!pgIntegrationEnabled())('migration forward and rollback', () =>
         `SELECT count(*)::text n FROM information_schema.columns
           WHERE table_schema = 'public'
             AND ((table_name = 'business_team_invites'
-                  AND column_name IN ('accepted_by','accepted_member_id','revoked_at','revoked_by'))
+                  AND column_name IN ('accepted_by','accepted_member_id','revoked_at',
+                                      'revoked_by','role_name_snapshot'))
               OR (table_name = 'business_team_roles' AND column_name = 'is_legacy'))`,
       );
-      expect(columns[0]!.n).toBe('5');
+      expect(columns[0]!.n).toBe('6');
+
+      // The deferred constraint triggers are the whole point of the lower
+      // owner bound, so their DEFERRABLE INITIALLY DEFERRED timing is asserted
+      // rather than assumed: an immediate one would reject a workspace between
+      // its own INSERT and its owner's.
+      const { rows: deferred } = await copy.pool.query<{ tgname: string; deferred: boolean }>(
+        `SELECT tgname, tgdeferrable AND tginitdeferred AS deferred
+           FROM pg_trigger
+          WHERE tgname IN ('trg_business_members_owner_present',
+                           'trg_business_teams_owner_present')`,
+      );
+      expect(deferred).toHaveLength(2);
+      for (const row of deferred) expect([row.tgname, row.deferred]).toEqual([row.tgname, true]);
     } finally {
       await copy.drop();
     }
@@ -1236,18 +1211,26 @@ describe.skipIf(!pgIntegrationEnabled())('migration forward and rollback', () =>
 
     try {
       const before = await fingerprint();
+      expect(before.has('index:business_teams.uq_business_teams_business_id')).toBe(true);
       expect(before.has('index:business_members.uq_business_members_single_owner')).toBe(true);
       expect(before.has('column:business_team_roles.is_legacy')).toBe(true);
+      expect(before.has('column:business_team_invites.role_name_snapshot')).toBe(true);
       expect(before.has('trigger:business_members.trg_business_members_resolve_tier')).toBe(true);
+      expect(before.has('trigger:business_members.trg_business_members_owner_present')).toBe(true);
+      expect(before.has('trigger:users.trg_users_protect_workspace_owner_role')).toBe(true);
 
       // Idempotent: the documented sequence runs twice with the same result.
       await copy.exec(ROLLBACK_SQL);
       await copy.exec(ROLLBACK_SQL);
 
       const after = await fingerprint();
+      expect(after.has('index:business_teams.uq_business_teams_business_id')).toBe(false);
       expect(after.has('index:business_members.uq_business_members_single_owner')).toBe(false);
       expect(after.has('column:business_team_roles.is_legacy')).toBe(false);
+      expect(after.has('column:business_team_invites.role_name_snapshot')).toBe(false);
       expect(after.has('trigger:business_members.trg_business_members_resolve_tier')).toBe(false);
+      expect(after.has('trigger:business_members.trg_business_members_owner_present')).toBe(false);
+      expect(after.has('trigger:users.trg_users_protect_workspace_owner_role')).toBe(false);
 
       // Nothing appeared, and everything that disappeared belongs to THIS
       // migration. Asserted as an exact set, so a casualty fails here.
@@ -1256,6 +1239,11 @@ describe.skipIf(!pgIntegrationEnabled())('migration forward and rollback', () =>
       const removed = [...before].filter((k) => !after.has(k)).sort();
       const foreign = removed.filter(
         (k) =>
+          !/uq_business_teams_business_id/.test(k) &&
+          !/trg_business_members_owner_present/.test(k) &&
+          !/trg_business_teams_owner_present/.test(k) &&
+          !/trg_users_protect_workspace_owner_role/.test(k) &&
+          !/business_team_invites\.role_name_snapshot/.test(k) &&
           !/uq_business_members_single_owner/.test(k) &&
           !/uq_business_team_invites_pending_email/.test(k) &&
           !/idx_business_team_invites_token_hash/.test(k) &&
