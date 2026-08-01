@@ -538,15 +538,20 @@ describe.skipIf(!pgIntegrationEnabled())('migration compatibility', () => {
         `INSERT INTO business_teams (business_id, name) VALUES ($1, 'Legacy') RETURNING id`,
         [user[0]!.id],
       );
-      const { rows: role } = await copy.pool.query<{ id: string }>(
+      const { rows: roles } = await copy.pool.query<{ id: string; role_key: string }>(
         `INSERT INTO business_team_roles (team_id, name, role_key, built_in, permissions)
-         VALUES ($1, 'Member', 'member', true, '[]'::jsonb) RETURNING id`,
+         VALUES
+           ($1, 'Owner', 'owner', true, '[]'::jsonb),
+           ($1, 'Member', 'member', true, '[]'::jsonb)
+         RETURNING id, role_key`,
         [team[0]!.id],
       );
+      const ownerRoleId = roles.find((candidate) => candidate.role_key === 'owner')!.id;
+      const memberRoleId = roles.find((candidate) => candidate.role_key === 'member')!.id;
       await copy.pool.query(
         `INSERT INTO business_members (team_id, user_id, role, role_id)
          VALUES ($1, $2, 'owner', $3)`,
-        [team[0]!.id, user[0]!.id, role[0]!.id],
+        [team[0]!.id, user[0]!.id, ownerRoleId],
       );
 
       // Exactly what the baseline revoke path wrote: a status, an updated_at,
@@ -561,7 +566,7 @@ describe.skipIf(!pgIntegrationEnabled())('migration compatibility', () => {
             now() - INTERVAL '10 days', now() - INTERVAL '10 days', now() - INTERVAL '3 days'),
            ($1, 'accepted-one@test.local', $2, repeat('c', 64), 'accepted',
             now() - INTERVAL '9 days', now() - INTERVAL '8 days', now() - INTERVAL '2 days')`,
-        [team[0]!.id, role[0]!.id],
+        [team[0]!.id, memberRoleId],
       );
       // And the duplicate pending invitations the baseline also permitted.
       await copy.pool.query(
@@ -572,7 +577,7 @@ describe.skipIf(!pgIntegrationEnabled())('migration compatibility', () => {
             now() - INTERVAL '5 days', now() + INTERVAL '2 days'),
            ($1, 'Dupe@Test.local', $2, repeat('e', 64), 'pending',
             now() - INTERVAL '1 day', now() + INTERVAL '6 days')`,
-        [team[0]!.id, role[0]!.id],
+        [team[0]!.id, memberRoleId],
       );
 
       const before = await countRows(
@@ -673,6 +678,26 @@ describe.skipIf(!pgIntegrationEnabled())('migration compatibility', () => {
 
       // And it stopped before touching anything.
       expect(await countRows(copy.pool, `SELECT count(*)::text c FROM business_teams`, [])).toBe(2);
+    } finally {
+      await copy.drop();
+    }
+  }, 900_000);
+
+  it('refuses to run when a legacy workspace has no owner', async () => {
+    const copy = await baselineCopy('biznoowner');
+    try {
+      const { rows: user } = await copy.pool.query<{ id: string }>(
+        `INSERT INTO users (email, password_hash, display_name, primary_role)
+         VALUES ('ownerless@test.local', 'x', 'Ownerless', 'business') RETURNING id`,
+      );
+      await copy.pool.query(
+        `INSERT INTO business_teams (business_id, name) VALUES ($1, 'Ownerless')`,
+        [user[0]!.id],
+      );
+
+      await expect(copy.exec(readMigration(MIGRATION_FILE))).rejects.toThrow(
+        /do not have exactly one owner/i,
+      );
     } finally {
       await copy.drop();
     }

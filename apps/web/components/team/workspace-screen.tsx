@@ -46,7 +46,13 @@ export const WorkspaceScreen = ({ locale, dictionary }: Props) => {
   const requestedTeamId = searchParams.get('teamId');
 
   const load = useCallback(async () => {
-    if (!accessToken) return;
+    if (!accessToken) {
+      setWorkspaces([]);
+      setSelected(null);
+      setError(null);
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     setError(null);
     try {
@@ -132,7 +138,7 @@ export const WorkspaceScreen = ({ locale, dictionary }: Props) => {
           </h2>
           <p className="dashboard-card-meta" style={{ marginTop: '1rem' }}>
             {tr(
-              'You are not a member of any business team. An owner or admin can invite you by email.',
+              'You are not a member of any business team. A Team Owner or Admin can invite you by email.',
               'أنت لست عضواً في أي فريق عمل. يمكن لمالك أو مسؤول دعوتك عبر البريد الإلكتروني.',
             )}
           </p>
@@ -148,7 +154,7 @@ export const WorkspaceScreen = ({ locale, dictionary }: Props) => {
 
   const tierLabel = (tier: 'owner' | 'admin' | 'member') =>
     tier === 'owner'
-      ? tr('Owner', 'مالك')
+      ? tr('Team Owner', 'مالك الفريق')
       : tier === 'admin'
         ? tr('Admin', 'مسؤول')
         : tr('Member', 'عضو');

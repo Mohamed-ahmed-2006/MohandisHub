@@ -2,8 +2,9 @@
 // ---------------------------------------------------------------------------
 // Clean-replay schema check.
 // ---------------------------------------------------------------------------
-// Proves that replaying every migration in supabase/migrations against an EMPTY
-// database produces the same structure as the live database. This is the only
+// Proves that replaying the migrations recorded as applied against an EMPTY
+// database produces the same structure as the live database, then proves every
+// pending repository migration also replays cleanly. This is the only
 // real evidence that the repository can rebuild the schema — migration files can
 // drift from a hand-maintained database without anything noticing.
 //
@@ -165,9 +166,35 @@ try {
     .filter((f) => f.endsWith('.sql'))
     .sort();
 
-  console.log(`Replaying ${files.length} migrations into an empty database ...\n`);
+  const { rows: appliedRows } = await admin.query(
+    `SELECT version::text AS version FROM supabase_migrations.schema_migrations`,
+  );
+  const appliedVersions = new Set(appliedRows.map((row) => row.version));
+  const versionOf = (file) => file.split('_', 1)[0];
+  const appliedFiles = files.filter((file) => appliedVersions.has(versionOf(file)));
+  const pendingFiles = files.filter((file) => !appliedVersions.has(versionOf(file)));
+  const repoVersions = new Set(files.map(versionOf));
+  const missingApplied = [...appliedVersions].filter((version) => !repoVersions.has(version));
+
+  if (missingApplied.length > 0) {
+    throw new Error(
+      `Live migration history contains ${missingApplied.length} version(s) absent from the repository: ${missingApplied.join(', ')}`,
+    );
+  }
+
+  // Pending migrations may only extend the deployed prefix. Reordering an
+  // unapplied file ahead of an applied one would produce a sequence production
+  // never actually ran.
+  if (!files.slice(0, appliedFiles.length).every((file, index) => file === appliedFiles[index])) {
+    throw new Error('Pending migrations do not form a suffix after the live applied history.');
+  }
+
+  console.log(
+    `Replaying ${appliedFiles.length} applied migrations into an empty database` +
+      (pendingFiles.length > 0 ? `, then ${pendingFiles.length} pending ...\n` : ' ...\n'),
+  );
   const failures = [];
-  for (const file of files) {
+  const replay = async (file) => {
     const sql = fs.readFileSync(path.join(MIGRATIONS_DIR, file), 'utf8');
     try {
       await scratch.query(sql);
@@ -175,20 +202,32 @@ try {
       failures.push({ file, message: e.message });
       console.log(`  FAIL  ${file}\n        ${e.message}`);
     }
+  };
+
+  for (const file of appliedFiles) {
+    await replay(file);
   }
 
-  if (failures.length === 0) {
-    console.log(`  All ${files.length} migrations replayed without error.`);
-  } else {
+  if (failures.length > 0) {
     ok = false;
-    console.log(`\n  ${failures.length} migration(s) failed to replay.`);
   }
 
-  console.log('\nComparing structure (live vs clean replay):');
+  console.log('\nComparing live structure to the clean replay at its applied boundary:');
   const live = await snapshot(admin);
   const replayed = await snapshot(scratch);
   for (const key of Object.keys(SNAPSHOT_SQL)) {
     if (!diff(key, live[key], replayed[key])) ok = false;
+  }
+
+  for (const file of pendingFiles) {
+    await replay(file);
+  }
+
+  if (failures.length === 0) {
+    console.log(`\n  All ${files.length} repository migrations replayed without error.`);
+  } else {
+    ok = false;
+    console.log(`\n  ${failures.length} migration(s) failed to replay.`);
   }
 } catch (e) {
   ok = false;

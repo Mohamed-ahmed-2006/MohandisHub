@@ -182,6 +182,9 @@ export const BusinessTeamPanel = ({ dictionary, accessToken, teamId }: Props) =>
         ? tr('Admin', 'مسؤول')
         : tr('Member', 'عضو');
 
+  const memberRoleLabel = (member: BusinessTeamOverview['members'][number]) =>
+    member.isOwner ? tierLabel('owner') : (member.roleName ?? tierLabel(member.tier));
+
   return (
     <section className="dashboard-section" style={{ maxWidth: '100%' }}>
       {/* Workspace Header & Role Presentation */}
@@ -388,7 +391,10 @@ export const BusinessTeamPanel = ({ dictionary, accessToken, teamId }: Props) =>
                     );
                   })}
                 </div>
-                <p className="dashboard-card-meta" style={{ margin: '0.25rem 0 0', fontSize: '0.8rem' }}>
+                <p
+                  className="dashboard-card-meta"
+                  style={{ margin: '0.25rem 0 0', fontSize: '0.8rem' }}
+                >
                   {tr(
                     'Only team administration (manage_team) is enforced for launch. Service, job, financial and analytics permissions are deferred.',
                     'إدارة الفريق (manage_team) هي الصلاحية المطبقة حالياً. صلاحيات الخدمات والوظائف والمالية والتحليلات مؤجلة.',
@@ -469,7 +475,7 @@ export const BusinessTeamPanel = ({ dictionary, accessToken, teamId }: Props) =>
                         {/* A member sitting on a retired role keeps showing it
                             until somebody deliberately moves them. */}
                         {!assignableRoles.some((role) => role.id === member.roleId) && (
-                          <option value="">{member.roleName ?? tierLabel(member.tier)}</option>
+                          <option value="">{memberRoleLabel(member)}</option>
                         )}
                         {assignableRoles.map((role) => (
                           <option key={role.id} value={role.id}>
@@ -479,7 +485,7 @@ export const BusinessTeamPanel = ({ dictionary, accessToken, teamId }: Props) =>
                       </select>
                     ) : (
                       <span className={`dashboard-badge dashboard-badge--${member.tier}`}>
-                        {member.roleName ?? tierLabel(member.tier)}
+                        {memberRoleLabel(member)}
                       </span>
                     )}
                   </td>
@@ -581,9 +587,7 @@ export const BusinessTeamPanel = ({ dictionary, accessToken, teamId }: Props) =>
             borderRadius: '8px',
           }}
         >
-          <h4 style={{ margin: 0, fontSize: '0.95rem' }}>
-            {tr('Team Ownership', 'ملكية الفريق')}
-          </h4>
+          <h4 style={{ margin: 0, fontSize: '0.95rem' }}>{tr('Team Ownership', 'ملكية الفريق')}</h4>
           <p
             className="dashboard-card-meta"
             style={{ margin: '0.4rem 0 0', fontSize: '0.85rem', lineHeight: '1.4' }}

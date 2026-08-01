@@ -299,6 +299,33 @@ UPDATE public.business_members m
      ELSE 'member'
    END;
 
+-- Constraint triggers protect future writes, but PostgreSQL does not run a new
+-- constraint trigger against rows that already exist. Validate the reconciled
+-- baseline explicitly so applying this migration can never commit a workspace
+-- that starts out ownerless (or with ownership hidden by tier drift).
+DO $$
+DECLARE
+  v_invalid_owner_count BIGINT;
+BEGIN
+  SELECT count(*) INTO v_invalid_owner_count
+    FROM (
+      SELECT t.id
+        FROM public.business_teams t
+        LEFT JOIN public.business_members m
+          ON m.team_id = t.id
+         AND m.role = 'owner'
+       GROUP BY t.id
+      HAVING count(m.id) <> 1
+    ) invalid_workspaces;
+
+  IF v_invalid_owner_count > 0 THEN
+    RAISE EXCEPTION
+      'Refusing to migrate: % workspace(s) do not have exactly one owner after membership-tier reconciliation. Repair ownership deliberately before applying this migration.',
+      v_invalid_owner_count
+      USING ERRCODE = 'integrity_constraint_violation';
+  END IF;
+END $$;
+
 -- ----------------------------------------------------------------------------
 -- 3. One workspace per business account.
 -- ----------------------------------------------------------------------------
