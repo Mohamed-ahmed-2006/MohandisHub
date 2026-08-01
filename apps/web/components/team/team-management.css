@@ -18,8 +18,12 @@
   border: 1px solid hsl(var(--border, 217 19% 27%));
   border-radius: var(--radius-lg, 16px);
   margin-bottom: 2rem;
-  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
-  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  box-shadow:
+    0 10px 25px -5px rgba(0, 0, 0, 0.1),
+    0 8px 10px -6px rgba(0, 0, 0, 0.1);
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease;
 }
 
 @media (min-width: 768px) {
@@ -210,12 +214,16 @@
   font-size: 0.9rem;
   width: 100%;
   box-sizing: border-box;
-  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
 }
 
 .team-input:focus-visible,
 .team-select:focus-visible,
-.team-button:focus-visible {
+.team-btn-primary:focus-visible,
+.team-btn-secondary:focus-visible,
+.team-btn-danger:focus-visible {
   outline: none;
   border-color: hsl(var(--primary));
   box-shadow: 0 0 0 2px hsl(var(--primary) / 0.25);
@@ -411,7 +419,9 @@
   font-weight: 600;
   font-size: 0.88rem;
   cursor: pointer;
-  transition: filter 0.15s ease, transform 0.1s ease;
+  transition:
+    filter 0.15s ease,
+    transform 0.1s ease;
   text-decoration: none;
 }
 
@@ -466,7 +476,7 @@
 }
 
 /* RTL Support overrides */
-[dir="rtl"] .team-table th,
-[dir="rtl"] .team-table td {
+[dir='rtl'] .team-table th,
+[dir='rtl'] .team-table td {
   text-align: right;
 }

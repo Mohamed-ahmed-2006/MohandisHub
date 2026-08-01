@@ -25,6 +25,7 @@ export const BusinessTeamPanel = ({ dictionary, accessToken, teamId }: Props) =>
   const [notice, setNotice] = useState<string | null>(null);
   const [formValidationError, setFormValidationError] = useState<string | null>(null);
   const [pendingRemoval, setPendingRemoval] = useState<{ id: string; label: string } | null>(null);
+  const teamSurfaceRef = useRef<HTMLDivElement>(null);
   const removalDialogRef = useRef<HTMLDivElement>(null);
   const removalTriggerRef = useRef<HTMLElement | null>(null);
 
@@ -85,7 +86,8 @@ export const BusinessTeamPanel = ({ dictionary, accessToken, teamId }: Props) =>
     window.addEventListener('keydown', handleKeyDown);
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
-      removalTriggerRef.current?.focus();
+      const trigger = removalTriggerRef.current;
+      (trigger?.isConnected ? trigger : teamSurfaceRef.current)?.focus();
       removalTriggerRef.current = null;
     };
   }, [pendingRemoval]);
@@ -230,7 +232,9 @@ export const BusinessTeamPanel = ({ dictionary, accessToken, teamId }: Props) =>
       <div className="team-container" data-testid="team-loading-state">
         <div className="team-empty-state">
           <div style={{ fontSize: '1.25rem', fontWeight: 600, marginBottom: '0.5rem' }}>
-            ⏳ {dictionary.admin?.loading ?? tr('Loading business team...', 'جاري تحميل فريق العمل...')}
+            ⏳{' '}
+            {dictionary.admin?.loading ??
+              tr('Loading business team...', 'جاري تحميل فريق العمل...')}
           </div>
         </div>
       </div>
@@ -244,7 +248,8 @@ export const BusinessTeamPanel = ({ dictionary, accessToken, teamId }: Props) =>
           <div>
             <strong>⚠️ {tr('Team Error', 'خطأ في تحميل الفريق')}</strong>
             <p style={{ margin: '0.25rem 0 0', fontSize: '0.88rem' }}>
-              {error ?? tr('Failed to load business team overview.', 'تعذر تحميل بيانات فريق العمل.')}
+              {error ??
+                tr('Failed to load business team overview.', 'تعذر تحميل بيانات فريق العمل.')}
             </p>
           </div>
           <button type="button" className="team-btn-secondary" onClick={() => void load()}>
@@ -258,7 +263,12 @@ export const BusinessTeamPanel = ({ dictionary, accessToken, teamId }: Props) =>
   const pendingInvitesCount = overview.invites.filter((i) => i.status === 'pending').length;
 
   return (
-    <div className="team-container" data-testid="team-overview-surface">
+    <div
+      ref={teamSurfaceRef}
+      tabIndex={-1}
+      className="team-container"
+      data-testid="team-overview-surface"
+    >
       {/* Workspace Summary Card */}
       <header className="team-header-card" data-testid="workspace-summary">
         <div className="team-header-title-group">
@@ -339,7 +349,11 @@ export const BusinessTeamPanel = ({ dictionary, accessToken, teamId }: Props) =>
       )}
 
       {notice && (
-        <div className="team-alert team-alert--success" role="status" data-testid="team-alert-notice">
+        <div
+          className="team-alert team-alert--success"
+          role="status"
+          data-testid="team-alert-notice"
+        >
           <span>✓ {notice}</span>
           <button
             type="button"
@@ -383,7 +397,10 @@ export const BusinessTeamPanel = ({ dictionary, accessToken, teamId }: Props) =>
               boxShadow: '0 20px 40px rgba(0, 0, 0, 0.3)',
             }}
           >
-            <h3 id="remove-member-title" style={{ margin: 0, color: '#ef4444', fontSize: '1.2rem' }}>
+            <h3
+              id="remove-member-title"
+              style={{ margin: 0, color: '#ef4444', fontSize: '1.2rem' }}
+            >
               ⚠️ {tr('Remove team member?', 'إزالة عضو الفريق؟')}
             </h3>
             <p id="remove-member-desc" style={{ margin: 0, fontSize: '0.9rem', lineHeight: '1.5' }}>
@@ -392,7 +409,14 @@ export const BusinessTeamPanel = ({ dictionary, accessToken, teamId }: Props) =>
                 `هل أنت تأكد من إزالة ${pendingRemoval.label}؟ سيفقد الوصول إلى مساحة العمل فورًا. يتم الاحتفاظ بسجل النشاط السابق.`,
               )}
             </p>
-            <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end', marginTop: '0.5rem' }}>
+            <div
+              style={{
+                display: 'flex',
+                gap: '0.75rem',
+                justifyContent: 'flex-end',
+                marginTop: '0.5rem',
+              }}
+            >
               <button
                 type="button"
                 className="team-btn-secondary"
@@ -407,7 +431,9 @@ export const BusinessTeamPanel = ({ dictionary, accessToken, teamId }: Props) =>
                 disabled={busy}
                 onClick={() => void confirmRemoval()}
               >
-                {busy ? tr('Removing...', 'جاري الإزالة...') : tr('Confirm Removal', 'تأكيد الإزالة')}
+                {busy
+                  ? tr('Removing...', 'جاري الإزالة...')
+                  : tr('Confirm Removal', 'تأكيد الإزالة')}
               </button>
             </div>
           </div>
@@ -421,9 +447,7 @@ export const BusinessTeamPanel = ({ dictionary, accessToken, teamId }: Props) =>
             {/* Invite Member Form */}
             <div className="team-card" data-testid="invite-member-form-card">
               <div className="team-section-header">
-                <h3 className="team-section-title">
-                  ✉️ {tr('Invite Member', 'دعوة عضو جديد')}
-                </h3>
+                <h3 className="team-section-title">✉️ {tr('Invite Member', 'دعوة عضو جديد')}</h3>
               </div>
               <p style={{ margin: 0, fontSize: '0.85rem', color: 'hsl(var(--muted-foreground))' }}>
                 {tr(
@@ -469,7 +493,9 @@ export const BusinessTeamPanel = ({ dictionary, accessToken, teamId }: Props) =>
                   </select>
                 </div>
                 <button type="submit" className="team-btn-primary" disabled={busy}>
-                  {busy ? tr('Sending...', 'جاري الإرسال...') : tr('Send Invitation', 'إرسال الدعوة')}
+                  {busy
+                    ? tr('Sending...', 'جاري الإرسال...')
+                    : tr('Send Invitation', 'إرسال الدعوة')}
                 </button>
               </form>
             </div>
@@ -505,7 +531,9 @@ export const BusinessTeamPanel = ({ dictionary, accessToken, teamId }: Props) =>
                           <label
                             key={permission}
                             className={`team-permission-chip ${
-                              isEnforced ? 'team-permission-chip--active' : 'team-permission-chip--deferred'
+                              isEnforced
+                                ? 'team-permission-chip--active'
+                                : 'team-permission-chip--deferred'
                             }`}
                             data-testid={`permission-chip-${permission}`}
                           >
@@ -686,7 +714,10 @@ export const BusinessTeamPanel = ({ dictionary, accessToken, teamId }: Props) =>
                   {memberRoleLabel(member)}
                 </span>
               </div>
-              <div className="team-text-wrap" style={{ fontSize: '0.85rem', color: 'hsl(var(--muted-foreground))' }}>
+              <div
+                className="team-text-wrap"
+                style={{ fontSize: '0.85rem', color: 'hsl(var(--muted-foreground))' }}
+              >
                 {member.email ?? '-'}
               </div>
               {canAdministerTeam && !member.isOwner && (
@@ -703,8 +734,7 @@ export const BusinessTeamPanel = ({ dictionary, accessToken, teamId }: Props) =>
                     disabled={busy}
                     onChange={(event) => {
                       const next = event.target.value;
-                      if (next && next !== member.roleId)
-                        void changeMemberRole(member.id, next);
+                      if (next && next !== member.roleId) void changeMemberRole(member.id, next);
                     }}
                   >
                     {!assignableRoles.some((role) => role.id === member.roleId) && (
@@ -782,11 +812,14 @@ export const BusinessTeamPanel = ({ dictionary, accessToken, teamId }: Props) =>
                         </span>
                       </td>
                       <td style={{ fontSize: '0.82rem', whiteSpace: 'nowrap' }}>
-                        {new Date(inviteItem.expiresAt).toLocaleDateString(isArabic ? 'ar-EG' : 'en-US', {
-                          month: 'short',
-                          day: 'numeric',
-                          year: 'numeric',
-                        })}
+                        {new Date(inviteItem.expiresAt).toLocaleDateString(
+                          isArabic ? 'ar-EG' : 'en-US',
+                          {
+                            month: 'short',
+                            day: 'numeric',
+                            year: 'numeric',
+                          },
+                        )}
                       </td>
                       <td>
                         {inviteItem.status === 'pending' && actions?.revokeInvites === true && (
@@ -819,14 +852,22 @@ export const BusinessTeamPanel = ({ dictionary, accessToken, teamId }: Props) =>
                       {inviteItem.status}
                     </span>
                   </div>
-                  <div className="team-member-mobile-row" style={{ fontSize: '0.82rem', color: 'hsl(var(--muted-foreground))' }}>
-                    <span>{tr('Role', 'الدور')}: {inviteItem.roleName}</span>
+                  <div
+                    className="team-member-mobile-row"
+                    style={{ fontSize: '0.82rem', color: 'hsl(var(--muted-foreground))' }}
+                  >
+                    <span>
+                      {tr('Role', 'الدور')}: {inviteItem.roleName}
+                    </span>
                     <span>
                       {tr('Expires', 'تنتهي')}:{' '}
-                      {new Date(inviteItem.expiresAt).toLocaleDateString(isArabic ? 'ar-EG' : 'en-US', {
-                        month: 'short',
-                        day: 'numeric',
-                      })}
+                      {new Date(inviteItem.expiresAt).toLocaleDateString(
+                        isArabic ? 'ar-EG' : 'en-US',
+                        {
+                          month: 'short',
+                          day: 'numeric',
+                        },
+                      )}
                     </span>
                   </div>
                   {inviteItem.status === 'pending' && actions?.revokeInvites === true && (

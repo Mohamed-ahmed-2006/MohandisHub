@@ -151,7 +151,9 @@ export const InvitationAcceptanceScreen = ({ locale, dictionary }: Props) => {
     return shell(
       <div data-testid="invitation-loading-state">
         <div style={{ fontSize: '1.2rem', fontWeight: 600, marginBottom: '0.5rem' }}>
-          ⏳ {dictionary.common?.loading ?? tr('Loading invitation details...', 'جاري تحميل تفاصيل الدعوة...')}
+          ⏳{' '}
+          {dictionary.common?.loading ??
+            tr('Loading invitation details...', 'جاري تحميل تفاصيل الدعوة...')}
         </div>
       </div>,
       'invitation-loading-shell',
@@ -164,7 +166,14 @@ export const InvitationAcceptanceScreen = ({ locale, dictionary }: Props) => {
         <h2 style={{ fontSize: '1.4rem', color: '#ef4444', margin: '0 0 1rem 0' }}>
           🚫 {tr('Invalid Invitation Link', 'رابط الدعوة غير صالح')}
         </h2>
-        <p style={{ margin: 0, fontSize: '0.9rem', lineHeight: '1.5', color: 'hsl(var(--muted-foreground))' }}>
+        <p
+          style={{
+            margin: 0,
+            fontSize: '0.9rem',
+            lineHeight: '1.5',
+            color: 'hsl(var(--muted-foreground))',
+          }}
+        >
           {tr(
             'This invitation link is not valid. Please check the link in your email, or ask the business administrator for a new invitation.',
             'رابط الدعوة هذا غير صالح. يرجى التحقق من الرابط في البريد الإلكتروني أو طلب دعوة جديدة من مسؤول الشركة.',
@@ -194,30 +203,46 @@ export const InvitationAcceptanceScreen = ({ locale, dictionary }: Props) => {
     >
       {preview.teamName && (
         <div style={{ marginBottom: '0.4rem', fontSize: '0.9rem' }}>
-          <span style={{ color: 'hsl(var(--muted-foreground))' }}>{tr('Workspace', 'مساحة العمل')}: </span>
+          <span style={{ color: 'hsl(var(--muted-foreground))' }}>
+            {tr('Workspace', 'مساحة العمل')}:{' '}
+          </span>
           <strong className="team-text-wrap">{preview.teamName}</strong>
         </div>
       )}
       {preview.roleName && (
         <div style={{ marginBottom: '0.4rem', fontSize: '0.9rem' }}>
-          <span style={{ color: 'hsl(var(--muted-foreground))' }}>{tr('Offered role', 'الدور المعروض')}: </span>
+          <span style={{ color: 'hsl(var(--muted-foreground))' }}>
+            {tr('Offered role', 'الدور المعروض')}:{' '}
+          </span>
           <strong className="team-badge team-badge--member">{preview.roleName}</strong>
         </div>
       )}
       {preview.inviterDisplayName && (
         <div style={{ marginBottom: '0.4rem', fontSize: '0.9rem' }}>
-          <span style={{ color: 'hsl(var(--muted-foreground))' }}>{tr('Invited by', 'الدعوة من')}: </span>
+          <span style={{ color: 'hsl(var(--muted-foreground))' }}>
+            {tr('Invited by', 'الدعوة من')}:{' '}
+          </span>
           <strong>{preview.inviterDisplayName}</strong>
         </div>
       )}
       {preview.maskedEmail && (
         <div style={{ marginBottom: '0.4rem', fontSize: '0.9rem' }}>
-          <span style={{ color: 'hsl(var(--muted-foreground))' }}>{tr('Sent to', 'مرسلة إلى')}: </span>
-          <strong className="team-text-wrap" data-testid="invitation-masked-email">{preview.maskedEmail}</strong>
+          <span style={{ color: 'hsl(var(--muted-foreground))' }}>
+            {tr('Sent to', 'مرسلة إلى')}:{' '}
+          </span>
+          <strong className="team-text-wrap" data-testid="invitation-masked-email">
+            {preview.maskedEmail}
+          </strong>
         </div>
       )}
       {preview.expiresAt && preview.state === 'valid' && (
-        <div style={{ fontSize: '0.85rem', color: 'hsl(var(--muted-foreground))', marginTop: '0.5rem' }}>
+        <div
+          style={{
+            fontSize: '0.85rem',
+            color: 'hsl(var(--muted-foreground))',
+            marginTop: '0.5rem',
+          }}
+        >
           <span>{tr('Expires', 'تنتهي في')}: </span>
           <span>
             {new Date(preview.expiresAt).toLocaleDateString(isArabic ? 'ar-EG' : 'en-US', {
@@ -244,7 +269,13 @@ export const InvitationAcceptanceScreen = ({ locale, dictionary }: Props) => {
           🤝 {tr('Team Invitation', 'دعوة الانضمام للفريق')}
         </h2>
         {invitationSummary}
-        <p style={{ margin: '0 0 1.5rem 0', fontSize: '0.9rem', color: 'hsl(var(--muted-foreground))' }}>
+        <p
+          style={{
+            margin: '0 0 1.5rem 0',
+            fontSize: '0.9rem',
+            color: 'hsl(var(--muted-foreground))',
+          }}
+        >
           {tr(
             'Sign in with the invited email address to accept this invitation and join the workspace.',
             'سجّل الدخول بالبريد الإلكتروني المدعو لقبول هذه الدعوة والانضمام إلى مساحة العمل.',
@@ -278,7 +309,11 @@ export const InvitationAcceptanceScreen = ({ locale, dictionary }: Props) => {
 
       {authUser && (
         <p
-          style={{ margin: '0 0 1.25rem 0', fontSize: '0.88rem', color: 'hsl(var(--muted-foreground))' }}
+          style={{
+            margin: '0 0 1.25rem 0',
+            fontSize: '0.88rem',
+            color: 'hsl(var(--muted-foreground))',
+          }}
           className="team-text-wrap"
           data-testid="signed-in-user-email"
         >
@@ -290,7 +325,14 @@ export const InvitationAcceptanceScreen = ({ locale, dictionary }: Props) => {
 
       {state === 'idle' && (
         <div data-testid="invitation-idle-state">
-          <p style={{ margin: '0 0 1.5rem 0', fontSize: '0.9rem', color: 'hsl(var(--muted-foreground))', lineHeight: 1.5 }}>
+          <p
+            style={{
+              margin: '0 0 1.5rem 0',
+              fontSize: '0.9rem',
+              color: 'hsl(var(--muted-foreground))',
+              lineHeight: 1.5,
+            }}
+          >
             {tr(
               'Accepting adds this workspace to your account. Your primary account role remains unchanged.',
               'قبول الدعوة يضيف مساحة العمل إلى حسابك. لن يتغير نوع حسابك الأساسي.',
@@ -318,7 +360,11 @@ export const InvitationAcceptanceScreen = ({ locale, dictionary }: Props) => {
 
       {state === 'success' && (
         <div data-testid="invitation-success-state">
-          <div className="team-alert team-alert--success" role="status" style={{ display: 'block', textAlign: 'center' }}>
+          <div
+            className="team-alert team-alert--success"
+            role="status"
+            style={{ display: 'block', textAlign: 'center' }}
+          >
             <h3 style={{ margin: 0, fontSize: '1.2rem' }}>
               ✓ {tr('Invitation Accepted!', 'تم قبول الدعوة بنجاح!')}
             </h3>
@@ -349,7 +395,10 @@ export const InvitationAcceptanceScreen = ({ locale, dictionary }: Props) => {
 
       {state === 'already_used' && (
         <div data-testid="invitation-already-used-state">
-          <div className="team-alert team-alert--info" style={{ display: 'block', textAlign: 'center' }}>
+          <div
+            className="team-alert team-alert--info"
+            style={{ display: 'block', textAlign: 'center' }}
+          >
             <h3 style={{ margin: 0, fontSize: '1.15rem' }}>
               ℹ {tr('Invitation Already Accepted', 'تم قبول هذه الدعوة سابقاً')}
             </h3>
@@ -370,7 +419,10 @@ export const InvitationAcceptanceScreen = ({ locale, dictionary }: Props) => {
 
       {state === 'wrong_account' && (
         <div data-testid="invitation-wrong-account-state">
-          <div className="team-alert team-alert--warning" style={{ display: 'block', textAlign: 'center' }}>
+          <div
+            className="team-alert team-alert--warning"
+            style={{ display: 'block', textAlign: 'center' }}
+          >
             <h3 style={{ margin: 0, fontSize: '1.15rem' }}>
               ⚠️ {tr('Signed in with a different account', 'أنت مسجّل الدخول بحساب مختلف')}
             </h3>
@@ -396,7 +448,10 @@ export const InvitationAcceptanceScreen = ({ locale, dictionary }: Props) => {
 
       {state === 'expired' && (
         <div data-testid="invitation-expired-state">
-          <div className="team-alert team-alert--warning" style={{ display: 'block', textAlign: 'center' }}>
+          <div
+            className="team-alert team-alert--warning"
+            style={{ display: 'block', textAlign: 'center' }}
+          >
             <h3 style={{ margin: 0, fontSize: '1.15rem' }}>
               ⚠️ {tr('Invitation Expired', 'انتهت صلاحية الدعوة')}
             </h3>
@@ -417,7 +472,10 @@ export const InvitationAcceptanceScreen = ({ locale, dictionary }: Props) => {
 
       {state === 'revoked' && (
         <div data-testid="invitation-revoked-state">
-          <div className="team-alert team-alert--error" style={{ display: 'block', textAlign: 'center' }}>
+          <div
+            className="team-alert team-alert--error"
+            style={{ display: 'block', textAlign: 'center' }}
+          >
             <h3 style={{ margin: 0, fontSize: '1.15rem' }}>
               🚫 {tr('Invitation Revoked', 'تم إلغاء الدعوة')}
             </h3>
@@ -438,7 +496,11 @@ export const InvitationAcceptanceScreen = ({ locale, dictionary }: Props) => {
 
       {state === 'error' && (
         <div data-testid="invitation-error-state">
-          <div className="team-alert team-alert--error" role="alert" style={{ marginBottom: '1.5rem' }}>
+          <div
+            className="team-alert team-alert--error"
+            role="alert"
+            style={{ marginBottom: '1.5rem' }}
+          >
             <span>⚠️ {errorMessage}</span>
           </div>
           <button

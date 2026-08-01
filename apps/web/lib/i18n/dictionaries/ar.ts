@@ -2053,7 +2053,9 @@ export const arDictionary: Dictionary = {
     teamInvitations: 'دعوات الفريق',
     createRole: 'إنشاء دور مخصص',
     inviteMember: 'دعوة عضو جديد',
-    deferredNotice: 'إدارة الفريق (manage_team) هي الصلاحية المطبقة حالياً. صلاحيات التشغيل والمالية والتحليلات مؤجلة.',
-    ownershipTransferUnavailable: 'نقل ملكية الفريق غير متاح حالياً للإطلاق. إجراءات نقل الملكية والتحكم التام بالأصول مؤجلة.',
+    deferredNotice:
+      'إدارة الفريق (manage_team) هي الصلاحية المطبقة حالياً. صلاحيات التشغيل والمالية والتحليلات مؤجلة.',
+    ownershipTransferUnavailable:
+      'نقل ملكية الفريق غير متاح حالياً للإطلاق. إجراءات نقل الملكية والتحكم التام بالأصول مؤجلة.',
   },
 };

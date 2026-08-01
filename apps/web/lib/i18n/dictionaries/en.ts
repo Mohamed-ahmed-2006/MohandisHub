@@ -2107,7 +2107,9 @@ export const enDictionary: Dictionary = {
     teamInvitations: 'Team Invitations',
     createRole: 'Create Custom Role',
     inviteMember: 'Invite Member',
-    deferredNotice: 'Only team administration (manage_team) is active. Operational permissions are deferred.',
-    ownershipTransferUnavailable: 'Team ownership transfer is unavailable for launch. Workspace-wide asset control and ownership transfer actions are deferred.',
+    deferredNotice:
+      'Only team administration (manage_team) is active. Operational permissions are deferred.',
+    ownershipTransferUnavailable:
+      'Team ownership transfer is unavailable for launch. Workspace-wide asset control and ownership transfer actions are deferred.',
   },
 };

@@ -604,16 +604,6 @@ describe('Wave 2G/2H Business Team Management & Invitations', () => {
       expect(isArabicRTL('دعوة الفريق')).toBe(true);
       expect(isArabicRTL('Team Invitation')).toBe(false);
     });
-
-    it('matches the workspace name case-insensitively for the transfer confirmation', () => {
-      const teamName = 'Acme Corp';
-      const confirms = (typed: string) =>
-        typed.trim().toLowerCase() === teamName.trim().toLowerCase();
-
-      expect(confirms('  acme corp ')).toBe(true);
-      expect(confirms('Acme')).toBe(false);
-      expect(confirms('')).toBe(false);
-    });
   });
 
   describe('Wave 2G/2H Frontend Visual & UI Interaction Redesign', () => {
@@ -633,23 +623,9 @@ describe('Wave 2G/2H Business Team Management & Invitations', () => {
       expect(tierLabel('member', true)).toBe('عضو');
     });
 
-    it('enforces manage_team as active while tagging other permissions as deferred', () => {
-      const permissions = [
-        'manage_team',
-        'manage_services',
-        'manage_jobs',
-        'manage_reservations',
-        'view_wallet',
-        'manage_support_disputes',
-        'view_analytics',
-      ];
-
-      const activePermission = 'manage_team';
-      const deferredPermissions = permissions.filter((p) => p !== activePermission);
-
-      expect(activePermission).toBe('manage_team');
-      expect(deferredPermissions).toHaveLength(6);
-      expect(deferredPermissions).not.toContain('manage_team');
+    it('exposes only manage_team as an active permission', () => {
+      expect(BUSINESS_TEAM_PERMISSIONS).toEqual(['manage_team']);
+      expect(BUSINESS_TEAM_PERMISSIONS).not.toContain('view_analytics');
     });
 
     it('contains explicit ownership transfer unavailable notice for launch', () => {
@@ -700,4 +676,3 @@ describe('Wave 2G/2H Business Team Management & Invitations', () => {
     });
   });
 });
-
