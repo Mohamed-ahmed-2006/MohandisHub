@@ -17,6 +17,10 @@ export const MANAGED_SIDEBAR_HREFS = [
   '/app/settings',
   '/app/chat',
   '/app/history',
+  '/app/help-resolution',
+  // Kept after the Help & Resolution merge: a deployment may already have one
+  // of these stored in sidebar_hidden_hrefs, and dropping them from the
+  // allowlist would make the next settings save fail validation.
   '/app/support',
   '/app/plan',
   '/app/admin',
