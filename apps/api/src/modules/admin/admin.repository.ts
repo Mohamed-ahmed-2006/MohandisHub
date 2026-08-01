@@ -240,6 +240,22 @@ export class AdminRepository {
     return rows[0] ?? null;
   }
 
+  /**
+   * How many business workspaces this account owns.
+   *
+   * `business_teams.business_id` is the account that owns a workspace's
+   * services, jobs, advertisements and financial history, and it is immutable.
+   * The role-change path reads this before demoting an account out of the
+   * business role.
+   */
+  async countOwnedBusinessWorkspaces(userId: string): Promise<number> {
+    const { rows } = await this.db.query<{ n: string }>(
+      `SELECT count(*)::text AS n FROM business_teams WHERE business_id = $1`,
+      [userId],
+    );
+    return parseInt(rows[0]?.n ?? '0', 10) || 0;
+  }
+
   async setEmailVerified(userId: string): Promise<void> {
     await this.db.query('UPDATE users SET email_verified_at = now() WHERE id = $1', [userId]);
   }

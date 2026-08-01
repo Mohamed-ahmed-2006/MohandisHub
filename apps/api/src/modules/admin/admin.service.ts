@@ -212,6 +212,26 @@ export class AdminService {
   }
 
   async changeUserRole(userId: string, input: ChangeUserRoleInput): Promise<AdminUserListItem> {
+    // An account that owns a business workspace cannot leave the business role
+    // while that workspace exists. Every service, job, advertisement, booking,
+    // subscription and ledger row in it is keyed to this account, and reaching
+    // most of them still requires this role — so the demotion would leave the
+    // workspace standing with its assets unreachable, and no workspace role
+    // could undo it. Refused here with an explanation, and refused again by the
+    // database trigger added in 20260731120000 for anything that does not come
+    // through this service.
+    if (input.role !== 'business') {
+      const owned = await this.repo.countOwnedBusinessWorkspaces(userId);
+      if (owned > 0) {
+        throw new HttpError({
+          statusCode: 409,
+          code: 'BUSINESS_WORKSPACE_OWNER_ROLE_LOCKED',
+          message:
+            'This account owns a business workspace. Delete the workspace before changing its account role, or the workspace assets become unreachable.',
+        });
+      }
+    }
+
     const row = await this.repo.changeUserRole(userId, input.role);
     if (!row) {
       throw new HttpError({ statusCode: 404, code: 'USER_NOT_FOUND', message: 'User not found.' });

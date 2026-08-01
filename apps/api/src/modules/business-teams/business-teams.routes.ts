@@ -26,7 +26,6 @@ import type {
   CreateBusinessInviteBody,
   CreateBusinessRoleBody,
   DeleteBusinessRoleBody,
-  TransferBusinessOwnershipBody,
   UpdateBusinessMemberRoleBody,
 } from '@mohandishub/shared';
 import { Router } from 'express';
@@ -34,18 +33,28 @@ import type { RequestHandler } from 'express';
 import { z } from 'zod';
 
 import { authenticate } from '../../middleware/authenticate.js';
-import { invitePreviewRateLimiter } from '../../middleware/rate-limit.js';
+import {
+  inviteCreationRateLimiter,
+  invitePreviewRateLimiter,
+} from '../../middleware/rate-limit.js';
 import { requireEmailVerified } from '../../middleware/require-email-verified.js';
 import { asyncHandler } from '../../utils/async-handler.js';
 import { HttpError } from '../../utils/http-error.js';
 
-import { ALL_BUSINESS_TEAM_PERMISSIONS } from './business-teams.constants.js';
+import { LAUNCH_BUSINESS_TEAM_PERMISSIONS } from './business-teams.constants.js';
 import * as service from './business-teams.service.js';
 
 const router = Router();
 
+// Only what an authorization decision reads. A role cannot be created carrying
+// a permission that does nothing, because that is how the previous version came
+// to show workspace owners a capability matrix describing capabilities the API
+// ignored. Values already stored on existing roles are preserved by the service.
 const permissionSchema = z.enum(
-  ALL_BUSINESS_TEAM_PERMISSIONS as unknown as [BusinessTeamPermission, ...BusinessTeamPermission[]],
+  LAUNCH_BUSINESS_TEAM_PERMISSIONS as unknown as [
+    BusinessTeamPermission,
+    ...BusinessTeamPermission[],
+  ],
 );
 
 const roleSchema = z.object({
@@ -64,11 +73,6 @@ const deleteRoleSchema = z.object({
 
 const memberRoleSchema = z.object({
   roleId: z.string().uuid(),
-});
-
-const transferSchema = z.object({
-  memberId: z.string().uuid(),
-  confirmation: z.string().min(1).max(200),
 });
 
 /**
@@ -110,6 +114,27 @@ const parse = <Out>(
 const uuidParam = (value: string | undefined, code: string, message: string): string => {
   if (!value || !z.string().uuid().safeParse(value).success) {
     throw new HttpError({ statusCode: 404, code, message });
+  }
+  return value;
+};
+
+/**
+ * The workspace the caller is asking to act in.
+ *
+ * Optional, and never trusted: the resolver matches it against the caller's own
+ * membership rows, so it selects among what they already have and can never
+ * widen it. Absent, the resolver picks their own business workspace and
+ * otherwise their oldest membership, which is what every single-workspace client
+ * has always got.
+ */
+const teamIdQuery = (value: unknown): string | undefined => {
+  if (typeof value !== 'string' || value === '') return undefined;
+  if (!z.string().uuid().safeParse(value).success) {
+    throw new HttpError({
+      statusCode: 403,
+      code: 'WORKSPACE_NOT_ACCESSIBLE',
+      message: 'You do not have access to that workspace.',
+    });
   }
   return value;
 };
@@ -187,10 +212,27 @@ router.get(
 
 router.use(authenticate, requireEmailVerified);
 
+/**
+ * Every workspace this account can open.
+ *
+ * The answer does not consult the primary account role. An expert or craftsman
+ * who accepted an invitation is listed exactly as a business account is, which
+ * is what makes the post-acceptance link land somewhere real for them.
+ */
+router.get(
+  '/workspaces',
+  asyncHandler(async (req, res) => {
+    res.json({ ok: true, data: await service.listWorkspaces(actorOf(req)) });
+  }),
+);
+
 router.get(
   '/me',
   asyncHandler(async (req, res) => {
-    res.json({ ok: true, data: await service.getOverview(actorOf(req)) });
+    res.json({
+      ok: true,
+      data: await service.getOverview(actorOf(req), teamIdQuery(req.query.teamId)),
+    });
   }),
 );
 
@@ -198,7 +240,10 @@ router.post(
   '/roles',
   asyncHandler(async (req, res) => {
     const body = parse(roleSchema, req.body satisfies CreateBusinessRoleBody, 'Invalid role.');
-    res.status(201).json({ ok: true, data: await service.createRole(actorOf(req), body) });
+    res.status(201).json({
+      ok: true,
+      data: await service.createRole(actorOf(req), body, teamIdQuery(req.query.teamId)),
+    });
   }),
 );
 
@@ -212,6 +257,7 @@ router.patch(
         actorOf(req),
         uuidParam(req.params.roleId, 'ROLE_NOT_FOUND', 'Custom role not found in this workspace.'),
         body,
+        teamIdQuery(req.query.teamId),
       ),
     });
   }),
@@ -231,6 +277,7 @@ router.delete(
         actorOf(req),
         uuidParam(req.params.roleId, 'ROLE_NOT_FOUND', 'Custom role not found in this workspace.'),
         body,
+        teamIdQuery(req.query.teamId),
       ),
     });
   }),
@@ -238,13 +285,20 @@ router.delete(
 
 router.post(
   '/invites',
+  // Every accepted request sends an email to an address the caller chose. The
+  // seat limit bounds how many can be outstanding; this bounds how fast they can
+  // be produced, so a workspace cannot be used to relay mail at volume.
+  inviteCreationRateLimiter,
   asyncHandler(async (req, res) => {
     const body = parse(
       inviteSchema,
       req.body satisfies CreateBusinessInviteBody,
       'Invalid invite.',
     );
-    res.status(201).json({ ok: true, data: await service.createInvite(actorOf(req), body) });
+    res.status(201).json({
+      ok: true,
+      data: await service.createInvite(actorOf(req), body, teamIdQuery(req.query.teamId)),
+    });
   }),
 );
 
@@ -260,6 +314,7 @@ router.post(
           'INVITE_NOT_FOUND',
           'Invitation not found in this workspace.',
         ),
+        teamIdQuery(req.query.teamId),
       ),
     });
   }),
@@ -287,6 +342,7 @@ router.patch(
         actorOf(req),
         uuidParam(req.params.memberId, 'MEMBER_NOT_FOUND', 'Member not found in this workspace.'),
         body,
+        teamIdQuery(req.query.teamId),
       ),
     });
   }),
@@ -300,20 +356,31 @@ router.delete(
       data: await service.removeMember(
         actorOf(req),
         uuidParam(req.params.memberId, 'MEMBER_NOT_FOUND', 'Member not found in this workspace.'),
+        teamIdQuery(req.query.teamId),
       ),
     });
   }),
 );
 
+/**
+ * Retained, and always refused.
+ *
+ * The route still exists so a client built against the earlier contract gets the
+ * stable `OWNERSHIP_TRANSFER_NOT_AVAILABLE` code rather than a 404 it would
+ * report as a network fault. The body is not even parsed: there is no input that
+ * makes this succeed, and validating it would suggest otherwise.
+ */
 router.post(
   '/transfer-ownership',
   asyncHandler(async (req, res) => {
-    const body = parse(
-      transferSchema,
-      req.body satisfies TransferBusinessOwnershipBody,
-      'Confirm the transfer with the workspace name.',
+    await service.transferOwnership(
+      actorOf(req),
+      { memberId: '', confirmation: '' },
+      teamIdQuery(req.query.teamId),
     );
-    res.json({ ok: true, data: await service.transferOwnership(actorOf(req), body) });
+    // `transferOwnership` always throws. Unreachable, and present so the handler
+    // has a return type rather than an implicit one.
+    res.status(500).json({ ok: false });
   }),
 );
 

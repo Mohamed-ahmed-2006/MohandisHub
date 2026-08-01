@@ -91,3 +91,20 @@ export const invitePreviewRateLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
 });
+
+/**
+ * Limiter for creating business team invitations.
+ *
+ * Every accepted request sends an email to an address the caller chose, which
+ * makes the endpoint a relay unless something bounds its rate. The workspace
+ * seat limit bounds how many invitations can be OUTSTANDING; this bounds how
+ * fast they can be produced, including the revoke-and-resend loop that would
+ * otherwise slip past a seat count. Sized well above a real team being staffed
+ * in one sitting.
+ */
+export const inviteCreationRateLimiter = rateLimit({
+  windowMs: ONE_HOUR_MS,
+  max: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+});

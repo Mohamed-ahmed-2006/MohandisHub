@@ -15,9 +15,11 @@
 //     row before anything is decided rather than by an application-level check
 //     that another connection can slip past;
 //
-//   * a workspace has ONE owner. Transfers lock the workspace row first, so two
-//     of them cannot interleave, and the partial unique index added in
-//     20260731120000 is the backstop if one ever does.
+//   * a workspace has ONE owner, at every commit. The partial unique index
+//     added in 20260731120000 bounds that from above and a deferred constraint
+//     trigger bounds it from below, so neither this service nor direct SQL can
+//     leave a workspace with none. Ownership transfer is not available — see
+//     `transferOwnership` at the bottom of this file for why.
 // ---------------------------------------------------------------------------
 
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
@@ -30,6 +32,7 @@ import type {
   BusinessTeamInviteStatus,
   BusinessTeamOverview,
   BusinessTeamPermission,
+  BusinessWorkspaceList,
 } from '@mohandishub/shared';
 import type { Pool, PoolClient } from 'pg';
 
@@ -42,19 +45,23 @@ import { sendTransactionalEmail } from '../../utils/send-transactional-email.js'
 import {
   allowedActionsFor,
   canAdministerTeam,
+  listAccessibleWorkspaces,
   readWorkspaceContext,
-  requireOwnership,
   requireRoleManagement,
   requireTeamAdministration,
   requireWorkspace,
+  workspaceNotAccessible,
   type WorkspaceContext,
 } from './business-teams.authorization.js';
 import {
   ALL_BUSINESS_TEAM_PERMISSIONS,
   BUILT_IN_ROLE_SEEDS,
+  DEFAULT_TEAM_SEAT_CEILING,
   INVITE_TTL_DAYS,
   LEGACY_BUILT_IN_ROLE_KEYS,
   isAssignableRole,
+  isLaunchPermission,
+  splitPermissions,
   tierForRole,
   tierForStoredRole,
 } from './business-teams.constants.js';
@@ -169,31 +176,58 @@ const audit = async (
  * Make sure a business account has a workspace, its built-in roles and an owner.
  *
  * Called only for accounts whose primary role is `business` — the account that
- * OWNS a workspace, not the people invited into one. It is careful in one way
- * that its predecessor was not: it never forces the business account back to
- * owner. The old helper re-asserted `role = 'owner'` for the business account on
- * every single request, which would have silently undone an ownership transfer
- * the moment the previous owner loaded any team screen. The owner membership is
- * created only when the workspace has no owner at all.
+ * OWNS a workspace, not the people invited into one.
+ *
+ * The version this replaces looked for a missing row with `SELECT ... FOR
+ * UPDATE` and then inserted. A missing row locks no gap at READ COMMITTED, so
+ * ten concurrent first requests could each find nothing and each commit a
+ * separate workspace, splitting one business into several teams with separate
+ * owners, roles, invitations and audit histories. `ON CONFLICT DO NOTHING`
+ * against the unique index added in 20260731120000 is the fix: at most one
+ * INSERT can win, every loser reads the winner's row, and all ten callers end up
+ * on the same workspace. No advisory lock and no retry loop — the database
+ * already knows how to arbitrate this.
+ *
+ * It is also careful in one way its predecessor was not: it never forces the
+ * business account back to owner. The original helper re-asserted `role =
+ * 'owner'` on every single request. The owner membership is created only when
+ * the workspace has no owner at all.
  */
 const provisionWorkspace = async (actor: Actor): Promise<string> =>
   inTransaction(async (client) => {
-    const existing = await client.query<{ id: string }>(
-      `SELECT id FROM business_teams WHERE business_id = $1 ORDER BY created_at ASC LIMIT 1 FOR UPDATE`,
+    const displayName = await client.query<{ display_name: string | null }>(
+      `SELECT display_name FROM users WHERE id = $1`,
       [actor.id],
     );
 
-    let teamId = existing.rows[0]?.id ?? null;
+    const inserted = await client.query<{ id: string }>(
+      `INSERT INTO business_teams (business_id, name)
+       VALUES ($1, $2)
+       ON CONFLICT (business_id) DO NOTHING
+       RETURNING id`,
+      [actor.id, displayName.rows[0]?.display_name ?? 'Business team'],
+    );
+
+    // DO NOTHING returns no row when another transaction won. Its row is
+    // committed by the time this SELECT runs, because the conflicting INSERT
+    // blocked here until that transaction ended.
+    const teamId =
+      inserted.rows[0]?.id ??
+      (
+        await client.query<{ id: string }>(`SELECT id FROM business_teams WHERE business_id = $1`, [
+          actor.id,
+        ])
+      ).rows[0]?.id;
+
     if (!teamId) {
-      const displayName = await client.query<{ display_name: string | null }>(
-        `SELECT display_name FROM users WHERE id = $1`,
-        [actor.id],
+      // The only way to reach this is a conflicting transaction that rolled
+      // back after this one saw its lock. Failing is correct; the next request
+      // provisions cleanly.
+      throw httpError(
+        409,
+        'WORKSPACE_PROVISIONING_CONFLICT',
+        'Could not initialise the workspace. Please try again.',
       );
-      const created = await client.query<{ id: string }>(
-        `INSERT INTO business_teams (business_id, name) VALUES ($1, $2) RETURNING id`,
-        [actor.id, displayName.rows[0]?.display_name ?? 'Business team'],
-      );
-      teamId = created.rows[0]!.id;
     }
 
     // Built-in roles are upserted so a workspace created before a permission was
@@ -217,9 +251,10 @@ const provisionWorkspace = async (actor: Actor): Promise<string> =>
       [teamId],
     );
 
-    // Only if the workspace has no owner. A transferred workspace has one, and
-    // it is not this account any more.
-    await client.query(
+    // Only if the workspace has no owner. The deferred constraint trigger added
+    // in 20260731120000 checks the result at commit, so a transaction that
+    // created a team and failed to give it an owner cannot commit at all.
+    const ownerInsert = await client.query<{ id: string }>(
       `INSERT INTO business_members (team_id, user_id, role, role_id)
        SELECT $1, $2, 'owner', $3
         WHERE NOT EXISTS (
@@ -227,9 +262,23 @@ const provisionWorkspace = async (actor: Actor): Promise<string> =>
         )
           AND NOT EXISTS (
           SELECT 1 FROM business_members WHERE team_id = $1 AND user_id = $2
-        )`,
+        )
+       RETURNING id`,
       [teamId, actor.id, ownerRole.rows[0]?.id ?? null],
     );
+
+    // Only the transaction that actually created something writes history, so a
+    // repeat first-access request does not append an audit row per page load.
+    if (inserted.rows[0]) {
+      await audit(client, {
+        teamId,
+        actorId: actor.id,
+        action: 'business_team.workspace.provision',
+        entityType: 'workspace',
+        entityId: teamId,
+        detail: { ownerMemberId: ownerInsert.rows[0]?.id ?? null },
+      });
+    }
 
     return teamId;
   });
@@ -237,32 +286,87 @@ const provisionWorkspace = async (actor: Actor): Promise<string> =>
 /**
  * The entry point every team operation starts from.
  *
- * Resolves the caller's workspace from their user id alone. A business account
- * with no workspace yet gets one; anybody else must already be a member.
+ * `teamId` selects among the workspaces this caller already belongs to. It is
+ * matched inside the resolver's own membership query, so it can only ever narrow
+ * that set — supplying somebody else's workspace matches nothing and is refused
+ * with the same answer as supplying an id that does not exist.
+ *
+ * A business account with no workspace yet gets one, but only when it is asking
+ * for its own: provisioning is never a response to a `teamId` the caller cannot
+ * reach.
  */
-export const resolveContext = async (actor: Actor): Promise<WorkspaceContext> => {
+export const resolveContext = async (
+  actor: Actor,
+  teamId?: string  ,
+): Promise<WorkspaceContext> => {
   const pool = getPool();
-  let context = await readWorkspaceContext(pool, actor.id);
+  let context = await readWorkspaceContext(pool, actor.id, teamId);
 
-  if ((!context || !context.memberId) && actor.role === 'business') {
+  if (!context && teamId !== undefined) {
+    // Named a workspace, and it is not one of theirs. Refused BEFORE any
+    // provisioning: a request naming somebody else's workspace must not have
+    // the side effect of creating one, and a caller cannot be asking for their
+    // own by id when they have none. Deliberately the same answer whether the
+    // workspace exists or not.
+    throw workspaceNotAccessible();
+  }
+
+  if ((!context || !context.memberId) && teamId === undefined && actor.role === 'business') {
     await provisionWorkspace(actor);
-    context = await readWorkspaceContext(pool, actor.id);
+    context = await readWorkspaceContext(pool, actor.id, undefined);
   }
 
   return requireWorkspace(context);
+};
+
+/** Every workspace the caller can open, and which one `/me` defaults to. */
+export const listWorkspaces = async (actor: Actor): Promise<BusinessWorkspaceList> => {
+  const pool = getPool();
+  // A business account that has never opened the team screen has no workspace
+  // row yet. Listing is a read, but for its own account this is also the first
+  // access, so it provisions exactly as `/me` would.
+  if (actor.role === 'business') {
+    const owned = await pool.query<{ id: string }>(
+      `SELECT id FROM business_teams WHERE business_id = $1`,
+      [actor.id],
+    );
+    if (!owned.rows[0]) await provisionWorkspace(actor);
+  }
+
+  const workspaces = await listAccessibleWorkspaces(pool, actor.id);
+  return {
+    workspaces,
+    defaultTeamId: workspaces[0]?.teamId ?? null,
+  };
 };
 
 // ---------------------------------------------------------------------------
 // Overview.
 // ---------------------------------------------------------------------------
 
+/** Read a stored role permission array and split it into enforced/reserved. */
+const rolePermissions = (
+  value: unknown,
+): { effective: BusinessTeamPermission[]; reserved: BusinessTeamPermission[] } => {
+  const known = new Set<string>(ALL_BUSINESS_TEAM_PERMISSIONS);
+  const stored = Array.isArray(value)
+    ? (value as unknown[]).filter(
+        (v): v is BusinessTeamPermission => typeof v === 'string' && known.has(v),
+      )
+    : [];
+  return splitPermissions(stored);
+};
+
 const inviteStatusFor = (row: { status: string; expires_at: Date }): BusinessTeamInviteStatus => {
   if (row.status === 'pending' && row.expires_at.getTime() <= Date.now()) return 'expired';
   return row.status as BusinessTeamInviteStatus;
 };
 
-export const getOverview = async (actor: Actor): Promise<BusinessTeamOverview> => {
-  const context = await resolveContext(actor);
+export const getOverview = async (
+  actor: Actor,
+  teamId?: string  ,
+): Promise<BusinessTeamOverview> => {
+  const context = await resolveContext(actor, teamId);
   const db = getPool();
 
   const [rolesResult, membersResult, invitesResult] = await Promise.all([
@@ -319,7 +423,11 @@ export const getOverview = async (actor: Actor): Promise<BusinessTeamOverview> =
           created_at: Date;
           accepted_at: Date | null;
         }>(
-          `SELECT i.id, i.email, i.role_id, r.name AS role_name, i.status,
+          // The snapshot first: it is what this invitation actually offered.
+          // The joined role name is the fallback for rows written before the
+          // column existed, and for nothing else.
+          `SELECT i.id, i.email, i.role_id,
+                  COALESCE(i.role_name_snapshot, r.name) AS role_name, i.status,
                   i.expires_at, i.created_at, i.accepted_at
              FROM business_team_invites i
              JOIN business_team_roles r ON r.id = i.role_id
@@ -352,6 +460,7 @@ export const getOverview = async (actor: Actor): Promise<BusinessTeamOverview> =
       roleName: context.roleName,
       roleKey: context.roleKey,
       permissions: context.permissions,
+      reservedPermissions: context.reservedPermissions,
       allowedActions: allowedActionsFor(context),
     },
     roles: rolesResult.rows.map((r) => ({
@@ -362,11 +471,11 @@ export const getOverview = async (actor: Actor): Promise<BusinessTeamOverview> =
       legacy: r.is_legacy || (r.built_in && LEGACY_BUILT_IN_ROLE_KEYS.has(r.role_key)),
       tier: tierForRole({ roleKey: r.role_key, builtIn: r.built_in }),
       assignable: isAssignableRole({ roleKey: r.role_key, builtIn: r.built_in }) && !r.is_legacy,
-      permissions: Array.isArray(r.permissions)
-        ? (r.permissions as BusinessTeamPermission[]).filter((p) =>
-            (ALL_BUSINESS_TEAM_PERMISSIONS as readonly string[]).includes(p),
-          )
-        : [],
+      // Split, not filtered: a role that still carries `manage_services` from
+      // before Wave 2G-A keeps it in the row and reports it as reserved. It is
+      // never returned as something the role can do.
+      permissions: rolePermissions(r.permissions).effective,
+      reservedPermissions: rolePermissions(r.permissions).reserved,
       memberCount: parseInt(r.member_count, 10) || 0,
       createdAt: r.created_at.toISOString(),
       updatedAt: r.updated_at.toISOString(),
@@ -395,8 +504,13 @@ export const getOverview = async (actor: Actor): Promise<BusinessTeamOverview> =
 export const createRole = async (
   actor: Actor,
   body: { name: string; permissions: BusinessTeamPermission[] },
+  teamId?: string  ,
 ): Promise<BusinessTeamOverview> => {
-  const context = requireRoleManagement(await resolveContext(actor));
+  const context = requireRoleManagement(await resolveContext(actor, teamId));
+  // Belt and braces with the route schema: a role cannot be created carrying a
+  // permission no endpoint reads, because storing one is how the previous
+  // version came to advertise capabilities that did not exist.
+  const permissions = body.permissions.filter(isLaunchPermission);
 
   await inTransaction(async (client) => {
     const { rows } = await client.query<{ id: string }>(
@@ -406,7 +520,7 @@ export const createRole = async (
       `INSERT INTO business_team_roles (team_id, name, role_key, built_in, permissions)
        VALUES ($1, $2, 'custom_' || gen_random_uuid()::text, false, $3::jsonb)
        RETURNING id`,
-      [context.teamId, body.name, JSON.stringify(body.permissions)],
+      [context.teamId, body.name, JSON.stringify(permissions)],
     );
     await audit(client, {
       teamId: context.teamId,
@@ -414,49 +528,67 @@ export const createRole = async (
       action: 'business_team.role.create',
       entityType: 'role',
       entityId: rows[0]?.id,
-      detail: { name: body.name, permissions: body.permissions },
+      detail: { name: body.name, permissions },
     });
   });
 
-  return getOverview(actor);
+  return getOverview(actor, context.teamId);
 };
 
 export const updateRole = async (
   actor: Actor,
   roleId: string,
   body: { name: string; permissions: BusinessTeamPermission[] },
+  teamId?: string  ,
 ): Promise<BusinessTeamOverview> => {
-  const context = requireRoleManagement(await resolveContext(actor));
+  const context = requireRoleManagement(await resolveContext(actor, teamId));
 
   await inTransaction(async (client) => {
-    const { rowCount } = await client.query(
+    const existing = (
+      await client.query<{ permissions: unknown }>(
+        `SELECT permissions FROM business_team_roles
+          WHERE team_id = $1 AND id = $2 AND built_in = false
+          FOR UPDATE`,
+        [context.teamId, roleId],
+      )
+    ).rows[0];
+    if (!existing) {
+      throw httpError(404, 'ROLE_NOT_FOUND', 'Custom role not found in this workspace.');
+    }
+
+    // Editing a role must not silently strip a reserved permission it was
+    // configured with before Wave 2G-A split them. The caller decides the
+    // enforced half; the reserved half is carried through untouched, so nothing
+    // is lost and nothing starts working.
+    const carried = rolePermissions(existing.permissions).reserved;
+    const permissions = [...body.permissions.filter(isLaunchPermission), ...carried];
+
+    await client.query(
       `UPDATE business_team_roles
           SET name = $3, permissions = $4::jsonb, updated_at = now()
         WHERE team_id = $1 AND id = $2 AND built_in = false`,
-      [context.teamId, roleId, body.name, JSON.stringify(body.permissions)],
+      [context.teamId, roleId, body.name, JSON.stringify(permissions)],
     );
-    if (!rowCount) {
-      throw httpError(404, 'ROLE_NOT_FOUND', 'Custom role not found in this workspace.');
-    }
     await audit(client, {
       teamId: context.teamId,
       actorId: actor.id,
       action: 'business_team.role.update',
       entityType: 'role',
       entityId: roleId,
-      detail: { name: body.name, permissions: body.permissions },
+      detail: { name: body.name, permissions },
     });
   });
 
-  return getOverview(actor);
+  return getOverview(actor, context.teamId);
 };
 
 export const deleteRole = async (
   actor: Actor,
   roleId: string,
   body: { replacementRoleId: string },
+  teamId?: string  ,
 ): Promise<BusinessTeamOverview> => {
-  const context = requireRoleManagement(await resolveContext(actor));
+  const context = requireRoleManagement(await resolveContext(actor, teamId));
 
   await inTransaction(async (client) => {
     const role = (
@@ -495,8 +627,9 @@ export const deleteRole = async (
       [context.teamId, roleId, replacement.id],
     );
     // An accepted invitation still points at the role it was issued for. Move
-    // those too rather than let ON DELETE RESTRICT block the delete and lose the
-    // record of what was offered.
+    // those too rather than let ON DELETE RESTRICT block the delete forever.
+    // `role_name_snapshot` is deliberately NOT touched: the pointer moves so the
+    // role can go, and the record of what was actually offered stays readable.
     await client.query(
       `UPDATE business_team_invites SET role_id = $3, updated_at = now()
         WHERE team_id = $1 AND role_id = $2`,
@@ -516,12 +649,52 @@ export const deleteRole = async (
     });
   });
 
-  return getOverview(actor);
+  return getOverview(actor, context.teamId);
 };
 
 // ---------------------------------------------------------------------------
 // Invitations.
 // ---------------------------------------------------------------------------
+
+/**
+ * How many memberships this workspace may hold, and how many it already uses.
+ *
+ * The limit is the account's own `maxTeamSlots` plan entitlement, which has
+ * existed in `plan_limits` since before this wave and is simply read here rather
+ * than invented. No plan currently configures it, so the effective limit is the
+ * technical ceiling — a guard against a workspace being used as an unbounded
+ * invitation-email relay, not a commercial seat tier. Launch sells no seats.
+ *
+ * Counted inside the caller's transaction, under the workspace row lock, so two
+ * simultaneous invitations cannot both see the last free seat.
+ */
+const readSeatUsage = async (
+  db: Queryable,
+  params: { teamId: string; businessAccountId: string },
+): Promise<{ limit: number; used: number }> => {
+  const { rows } = await db.query<{ slots: string | null; used: string }>(
+    `SELECT p.plan_limits ->> 'maxTeamSlots' AS slots,
+            (SELECT count(*)
+               FROM business_members m
+              WHERE m.team_id = $1)
+            +
+            (SELECT count(*)
+               FROM business_team_invites i
+              WHERE i.team_id = $1 AND i.status = 'pending' AND i.expires_at > now())
+            AS used
+       FROM users u
+       LEFT JOIN plans p ON p.id = u.plan_id
+      WHERE u.id = $2`,
+    [params.teamId, params.businessAccountId],
+  );
+
+  const row = rows[0];
+  const configured = row?.slots != null ? Number(row.slots) : NaN;
+  return {
+    limit: Number.isFinite(configured) && configured >= 0 ? configured : DEFAULT_TEAM_SEAT_CEILING,
+    used: parseInt(row?.used ?? '0', 10) || 0,
+  };
+};
 
 /**
  * Roles that may be handed out, looked up inside the caller's own workspace.
@@ -565,8 +738,9 @@ const loadAssignableRole = async (
 export const createInvite = async (
   actor: Actor,
   body: { email: string; roleId: string },
+  teamId?: string  ,
 ): Promise<BusinessTeamOverview> => {
-  const context = requireTeamAdministration(await resolveContext(actor));
+  const context = requireTeamAdministration(await resolveContext(actor, teamId));
   const email = canonicalEmail(body.email);
   const token = issueToken();
 
@@ -616,12 +790,37 @@ export const createInvite = async (
       );
     }
 
+    // A seat is a membership or a live invitation, counted together so a
+    // workspace cannot queue its way past the limit.
+    const seats = await readSeatUsage(client, {
+      teamId: context.teamId,
+      businessAccountId: context.businessAccountId,
+    });
+    if (seats.used >= seats.limit) {
+      throw httpError(
+        409,
+        'TEAM_SEAT_LIMIT_REACHED',
+        `This workspace already uses all ${seats.limit} of its team seats. Remove a member or revoke a pending invitation first.`,
+      );
+    }
+
     const inserted = await client.query<{ id: string; expires_at: Date }>(
+      // `role_name_snapshot` is written once, here. Deleting the role later
+      // moves `role_id` to a replacement so the delete is never blocked, and
+      // this column is what keeps the historical answer readable.
       `INSERT INTO business_team_invites
-         (team_id, email, role_id, token_hash, invited_by, expires_at)
-       VALUES ($1, $2, $3, $4, $5, now() + ($6 || ' days')::interval)
+         (team_id, email, role_id, role_name_snapshot, token_hash, invited_by, expires_at)
+       VALUES ($1, $2, $3, $4, $5, $6, now() + ($7 || ' days')::interval)
        RETURNING id, expires_at`,
-      [context.teamId, email, role.id, hashInviteToken(token), actor.id, String(INVITE_TTL_DAYS)],
+      [
+        context.teamId,
+        email,
+        role.id,
+        role.name,
+        hashInviteToken(token),
+        actor.id,
+        String(INVITE_TTL_DAYS),
+      ],
     );
 
     await audit(client, {
@@ -652,7 +851,7 @@ export const createInvite = async (
     expiresAt: delivery.expiresAt,
   });
 
-  return getOverview(actor);
+  return getOverview(actor, context.teamId);
 };
 
 const deliverInviteEmail = async (params: {
@@ -694,8 +893,9 @@ const deliverInviteEmail = async (params: {
 export const revokeInvite = async (
   actor: Actor,
   inviteId: string,
+  teamId?: string  ,
 ): Promise<BusinessTeamOverview> => {
-  const context = requireTeamAdministration(await resolveContext(actor));
+  const context = requireTeamAdministration(await resolveContext(actor, teamId));
 
   await inTransaction(async (client) => {
     const invite = (
@@ -738,7 +938,7 @@ export const revokeInvite = async (
     });
   });
 
-  return getOverview(actor);
+  return getOverview(actor, context.teamId);
 };
 
 const emptyPreview = (state: BusinessInvitePreviewState): BusinessInvitePreview => ({
@@ -775,7 +975,9 @@ export const previewInvite = async (params: {
     inviter_name: string | null;
   }>(
     `SELECT i.id, i.email, i.status, i.expires_at,
-            t.name AS team_name, r.name AS role_name, u.display_name AS inviter_name
+            t.name AS team_name,
+            COALESCE(i.role_name_snapshot, r.name) AS role_name,
+            u.display_name AS inviter_name
        FROM business_team_invites i
        JOIN business_teams t ON t.id = i.team_id
        JOIN business_team_roles r ON r.id = i.role_id
@@ -983,8 +1185,9 @@ export const updateMemberRole = async (
   actor: Actor,
   memberId: string,
   body: { roleId: string },
+  teamId?: string  ,
 ): Promise<BusinessTeamOverview> => {
-  const context = requireTeamAdministration(await resolveContext(actor));
+  const context = requireTeamAdministration(await resolveContext(actor, teamId));
 
   await inTransaction(async (client) => {
     const member = (
@@ -998,13 +1201,10 @@ export const updateMemberRole = async (
       throw httpError(404, 'MEMBER_NOT_FOUND', 'Member not found in this workspace.');
     }
     // The owner does not change tier through this endpoint in either direction.
-    // Demotion happens only as one half of an ownership transfer.
+    // In either direction, and with no alternative route: ownership transfer is
+    // unavailable, so the owner membership does not move at all.
     if (member.role === 'owner') {
-      throw httpError(
-        409,
-        'OWNER_ROLE_IMMUTABLE',
-        'The workspace owner cannot be changed here. Use ownership transfer.',
-      );
+      throw httpError(409, 'OWNER_ROLE_IMMUTABLE', 'The workspace owner role cannot be changed.');
     }
 
     // `loadAssignableRole` rejects the owner role and anything outside this
@@ -1026,14 +1226,15 @@ export const updateMemberRole = async (
     });
   });
 
-  return getOverview(actor);
+  return getOverview(actor, context.teamId);
 };
 
 export const removeMember = async (
   actor: Actor,
   memberId: string,
+  teamId?: string  ,
 ): Promise<BusinessTeamOverview> => {
-  const context = requireTeamAdministration(await resolveContext(actor));
+  const context = requireTeamAdministration(await resolveContext(actor, teamId));
 
   await inTransaction(async (client) => {
     const member = (
@@ -1048,12 +1249,10 @@ export const removeMember = async (
     if (!member) {
       throw httpError(404, 'MEMBER_NOT_FOUND', 'Member not found in this workspace.');
     }
+    // Refused here, and refused again by the deferred constraint trigger if any
+    // future path forgets: a committed workspace has exactly one owner.
     if (member.role === 'owner') {
-      throw httpError(
-        409,
-        'OWNER_CANNOT_BE_REMOVED',
-        'The workspace owner cannot be removed. Transfer ownership first.',
-      );
+      throw httpError(409, 'OWNER_CANNOT_BE_REMOVED', 'The workspace owner cannot be removed.');
     }
     // An admin removing themselves is fine; an admin removing the owner is not,
     // and is already refused above.
@@ -1085,6 +1284,7 @@ export const removeMember = async (
         roleName: null,
         roleKey: null,
         permissions: [],
+        reservedPermissions: [],
         allowedActions: {
           inviteMembers: false,
           revokeInvites: false,
@@ -1101,122 +1301,44 @@ export const removeMember = async (
     };
   }
 
-  return getOverview(actor);
+  return getOverview(actor, context.teamId);
 };
 
 /**
- * Move the owner membership to another member of the same workspace.
+ * Ownership transfer, refused.
  *
- * What moves is the workspace OWNER MEMBERSHIP. `business_teams.business_id` —
- * the account that owns this workspace's services, jobs, advertisements, wallet
- * and financial history — is not rewritten, and a trigger refuses any attempt
- * to. Rewriting it would orphan every historical record keyed to the original
- * account, which is exactly the destructive rewrite this wave is not allowed to
- * perform.
+ * The operation that used to live here moved the Owner MEMBERSHIP: the target
+ * became Owner, the previous owner became Admin, and the swap was atomic and
+ * race-safe. What it could not move was ownership. `business_teams.business_id`
+ * is immutable by trigger, and every service, job, advertisement, booking,
+ * subscription, wallet balance and ledger row in the workspace is keyed to that
+ * account — as is the primary-role check that most of those endpoints still
+ * make. A "transferred" workspace would have had two principals: one holding
+ * team administration and believing they owned the business, and one still
+ * holding every asset and every charge.
+ *
+ * Splitting authority and calling it ownership is worse than not offering it, so
+ * the endpoint answers with a stable code and changes nothing. No membership is
+ * read, no lock is taken, no audit row is written — there is no mutation to
+ * record. `allowedActionsFor` reports `transferOwnership: false` for everyone
+ * including the owner, so no screen offers the action in the first place; this
+ * is what a client that calls it anyway receives.
+ *
+ * The prerequisite is the workspace-principal architecture deferred to Wave
+ * 2G-B: a business principal that is separable from the account that registered
+ * it, so that assets, charges and financial history can be addressed by
+ * workspace rather than by user id. Until that exists there is nothing to
+ * transfer.
  */
 export const transferOwnership = async (
-  actor: Actor,
-  body: { memberId: string; confirmation: string },
-): Promise<BusinessTeamOverview> => {
-  const context = requireOwnership(await resolveContext(actor));
-
-  // A typed confirmation, matched case-insensitively against the workspace name.
-  // Ownership transfer is the one action here that cannot be undone by the
-  // person who performed it, so it asks for more than a click.
-  const expected = (context.teamName ?? '').trim();
-  if (expected === '' || body.confirmation.trim().toLowerCase() !== expected.toLowerCase()) {
-    throw httpError(
-      400,
-      'CONFIRMATION_MISMATCH',
-      'Type the workspace name exactly to confirm the transfer.',
-    );
-  }
-
-  await inTransaction(async (client) => {
-    // Serialises the whole operation for this workspace. Two transfers arriving
-    // together are ordered here, and the second one re-reads a workspace whose
-    // owner is no longer the caller.
-    const team = (
-      await client.query<{ id: string }>(`SELECT id FROM business_teams WHERE id = $1 FOR UPDATE`, [
-        context.teamId,
-      ])
-    ).rows[0];
-    if (!team) {
-      throw httpError(404, 'WORKSPACE_NOT_FOUND', 'Workspace not found.');
-    }
-
-    const currentOwner = (
-      await client.query<{ id: string; user_id: string }>(
-        `SELECT id, user_id FROM business_members
-          WHERE team_id = $1 AND role = 'owner' FOR UPDATE`,
-        [context.teamId],
-      )
-    ).rows[0];
-    // Re-checked under the lock, not just before it: the caller's ownership may
-    // have been transferred away between resolving the context and getting here.
-    if (!currentOwner || currentOwner.user_id !== actor.id) {
-      throw httpError(
-        409,
-        'WORKSPACE_OWNER_REQUIRED',
-        'Only the current workspace owner can transfer ownership.',
-      );
-    }
-
-    const target = (
-      await client.query<{ id: string; user_id: string; role: string }>(
-        `SELECT id, user_id, role FROM business_members
-          WHERE team_id = $1 AND id = $2 FOR UPDATE`,
-        [context.teamId, body.memberId],
-      )
-    ).rows[0];
-    if (!target) {
-      throw httpError(404, 'MEMBER_NOT_FOUND', 'Member not found in this workspace.');
-    }
-    if (target.id === currentOwner.id) {
-      throw httpError(400, 'ALREADY_OWNER', 'That member already owns this workspace.');
-    }
-
-    const roles = await client.query<{ id: string; role_key: string }>(
-      `SELECT id, role_key FROM business_team_roles
-        WHERE team_id = $1 AND role_key = ANY($2::text[])`,
-      [context.teamId, ['owner', 'manager']],
-    );
-    const ownerRoleId = roles.rows.find((r) => r.role_key === 'owner')?.id;
-    const adminRoleId = roles.rows.find((r) => r.role_key === 'manager')?.id;
-    if (!ownerRoleId || !adminRoleId) {
-      throw httpError(
-        500,
-        'WORKSPACE_ROLES_MISSING',
-        'This workspace is missing its built-in roles.',
-      );
-    }
-
-    // Demote first. The partial unique index permits at most one owner, so the
-    // two updates cannot be reordered — and if they ever were, the index would
-    // reject the second rather than let a second owner exist.
-    await client.query(`UPDATE business_members SET role_id = $2 WHERE id = $1`, [
-      currentOwner.id,
-      adminRoleId,
-    ]);
-    await client.query(`UPDATE business_members SET role_id = $2 WHERE id = $1`, [
-      target.id,
-      ownerRoleId,
-    ]);
-
-    await audit(client, {
-      teamId: context.teamId,
-      actorId: actor.id,
-      action: 'business_team.ownership.transfer',
-      entityType: 'member',
-      entityId: target.id,
-      detail: {
-        previousOwnerUserId: currentOwner.user_id,
-        previousOwnerMemberId: currentOwner.id,
-        newOwnerUserId: target.user_id,
-        newOwnerMemberId: target.id,
-      },
-    });
-  });
-
-  return getOverview(actor);
+  _actor: Actor,
+  _body: { memberId: string; confirmation: string },
+  _teamId?: string  ,
+): Promise<never> => {
+  await Promise.resolve();
+  throw httpError(
+    409,
+    'OWNERSHIP_TRANSFER_NOT_AVAILABLE',
+    'Workspace ownership transfer is not available. The business account that created this workspace owns its services, jobs, advertisements and financial history, and those cannot yet be moved.',
+  );
 };
