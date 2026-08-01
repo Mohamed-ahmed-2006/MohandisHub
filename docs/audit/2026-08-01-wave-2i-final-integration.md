@@ -8,6 +8,8 @@ Integration base: `origin/main` at `cd29dbaf9aa6ac465854aa5078f75ac0dfcc3eb9`
 
 Reviewed feature tip: `3f6e8790eaa584631d2835bd280c55c66c18556f`
 
+Reviewed visual-polish tip: `bfafde3d53cc16c3a87fe111af79efc0b34109b4`
+
 Pending migration: `20260801090000_unified_help_resolution_cases.sql`
 
 ## Executive verdict
@@ -48,6 +50,16 @@ boundary exactly and replayed all 103 repository migrations.
 
 All 16 were cherry-picked in order. There were no conflicts. Git performed
 routine clean auto-merges in the English and Arabic dictionaries.
+
+Antigravity's polish commit `bfafde3` was then cherry-picked as `278981e`.
+Its parent/merge base is exactly Claude's reviewed tip `3f6e879`. The help
+resolution screen had one content conflict because the integration branch had
+already preserved canonical engine status/outcome display and renamed the
+shared stylesheet. The resolution kept Claude's unified API, private-evidence
+flow, availability rules and historical link handling while retaining the
+polished master/detail presentation, metrics, badges, mobile rules, RTL and
+dictionary additions. Git followed the earlier stylesheet rename to
+`case-thread.css` automatically. No backend file conflicted or changed.
 
 ## Architecture and adapter verdict
 
@@ -194,7 +206,9 @@ applied during this review.
 
 ## Frontend integration verdict
 
-- Antigravity's component layout and routes are preserved.
+- Antigravity's master/detail layout, metrics cards, category/status badges,
+  modal presentation, mobile navigation, RTL rules and accessibility styling
+  are preserved.
 - The rendered centre uses `helpResolutionApiClient`; the legacy clients remain
   tested only for backward route compatibility, not browser-side aggregation.
 - `/app/support` and `/app/disputes` render filtered unified views and historical
@@ -202,20 +216,48 @@ applied during this review.
 - Creation availability is server-driven; reservation disputes remain created
   from bookings.
 - Evidence opens only through the authenticated private-upload API.
+- The browser requests evidence from the same-origin
+  `/api/proxy/private-upload` route with authorization. The proxy consumes the
+  upstream redirect/body server-side and the client opens only a temporary
+  `blob:` URL. No storage bucket, object path or raw signed storage URL is
+  serialized to or opened by the help-resolution component.
 - Engine-specific support and reservation status is displayed alongside unified
   status; resolution outcome and notes are visible rather than flattened away.
 - Loading, error, empty and mobile master/detail states are covered.
 - The locale layout sets `dir=rtl` for Arabic and `dir=ltr` for English. The case
   stylesheet uses logical alignment and no left/right layout assumptions.
-- The `max-width: 768px` master/detail rules cover a 375px viewport.
+- The `max-width: 768px` master/detail rules cover a 375px viewport. Grid items,
+  links, filenames, titles, references and header chips have bounded widths and
+  safe wrapping; the modal is capped to the viewport.
 - The stale support-only CSS dependency was replaced by shared
   `case-thread.css`, used by both legacy support and the unified centre.
+- Focus styling is scoped under `.support-screen`, avoiding unrelated dashboard
+  pages. The new-case dialog traps forward/reverse Tab navigation, closes on
+  Escape, and restores focus to the opening control.
 - English/Arabic dictionaries, notification templates and navigation labels
   validate, and the production Next build emits all three help routes.
 
 This review did not use a production authenticated fixture or mutate a real
-account; RTL/mobile verification is from the locale wrapper, CSS contract,
-component tests and production build rather than a production screenshot.
+account. The desktop browser controller could not initialize in this session,
+so RTL/mobile verification is from the locale wrapper, focused CSS/component
+contract tests and production build rather than a browser screenshot.
+
+### Visual-polish contract matrix
+
+| Requirement | Result | Proof |
+| --- | --- | --- |
+| Evidence uses the authorized proxy | Pass | `handleOpenEvidence()` calls `getPrivateFileOpenableUrl()`; the helper fetches `/api/proxy/private-upload`, which forwards auth and returns bytes as a browser blob. |
+| No bucket, object path or raw storage URL reaches the component | Pass | Case DTO tests expose only `/api/upload/private/:id`; the proxy consumes the upstream response server-side. |
+| Canonical backend statuses only | Pass | Unified `status` and authoritative `engineStatus` are mapped by `statusLabel()`/`statusPillInfo()`; no frontend-derived lifecycle status is invented. |
+| Safety reports never show a counterparty | Pass | The database constraint forbids one, the API omits one, and list/detail rendering additionally checks `kind !== 'safety_report'`. |
+| Unsupported creation is disabled honestly | Pass | Availability and eligible subjects come from `GET /api/help-resolution/availability`; unavailable messages use its reason code. |
+| Reservation disputes use the settlement flow | Pass | Creation routes to locale-aware `/app/bookings`; the generic API resolver still refuses this kind. |
+| Historical support/dispute links retain context | Pass | `/app/support` and `/app/disputes` keep their default filters; `ticketId` and `disputeId` resolve through authorized server endpoints. |
+| Mobile selection is retained | Pass | `selectedCaseId` drives `support-layout--thread`; the viewport rule hides only the inactive pane and the back action clears selection explicitly. |
+| Dialog keyboard behavior is real | Pass | Focusable elements are queried at runtime; Tab/Shift+Tab wrap, Escape closes, and cleanup restores prior/opener focus. |
+| Arabic RTL and 375px bounds | Pass by contract/build | Locale root supplies `dir`; logical properties mirror navigation; `min-width: 0`, `max-width: 100%`, wrapping and 375px rules prevent component-level overflow. No screenshot was available. |
+| Long values wrap safely | Pass | Titles, message bodies, metadata, header chips and evidence links use `overflow-wrap: anywhere` and bounded widths. |
+| Shared CSS/dictionaries avoid unrelated regressions | Pass | Focus selector is screen-scoped; full lint, i18n, 292 web tests and production web build pass. |
 
 ## Focused corrections made during integration
 
@@ -229,6 +271,12 @@ component tests and production build rather than a production screenshot.
 8. Add documented, fingerprint-tested migration rollback.
 9. Preserve authoritative engine statuses/outcomes in the UI.
 10. Replace the stale CSS dependency and correct pre-backend frontend tests.
+11. Merge the visual polish without weakening canonical engine status/outcome
+    display or server-driven availability.
+12. Add a real focus trap, Escape behavior and focus restoration to the polished
+    dialog.
+13. Suppress safety counterparties defensively and bound long/mobile content.
+14. Scope the polish focus selector to the help-resolution screen.
 
 ## Validation
 
@@ -236,7 +284,7 @@ component tests and production build rather than a production screenshot.
 - `npm run lint`: passed with zero warnings.
 - `npm run validate:i18n`: passed.
 - `npm run test`: shared 17 passed; API 522 passed with opt-in PG suites skipped;
-  web 279 passed.
+  web 292 passed.
 - `npm run build -w @mohandishub/api`: passed.
 - `npm run build -w @mohandishub/web`: passed.
 - Real PostgreSQL/HTTP Wave 2I suite: 44 passed, serial, no file parallelism.

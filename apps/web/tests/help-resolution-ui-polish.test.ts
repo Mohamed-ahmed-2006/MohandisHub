@@ -201,6 +201,7 @@ describe('Wave 2I Help & Resolution UI Polish Tests', () => {
       expect(screenSource).toContain("event.key === 'Escape'");
       expect(screenSource).toContain("event.key !== 'Tab'");
       expect(screenSource).toContain('document.activeElement');
+      expect(screenSource).toContain('dialog?.contains(document.activeElement)');
       expect(screenSource).toContain('previousFocusRef');
       expect(screenSource).toContain('focusTarget?.focus()');
     });
