@@ -11,9 +11,10 @@
 //
 // Everything is resolved here instead, once, from the authenticated user id:
 //
-//   * the workspace, ALWAYS server-side. No endpoint takes a business or team
-//     identifier from the caller, so there is no identifier to tamper with. The
-//     resolver looks up the workspace the caller actually belongs to;
+//   * the workspace. A caller may NAME one — a person can belong to several —
+//     but naming is all it is: the identifier is matched inside this resolver's
+//     own membership query, so it selects among what the caller already has and
+//     can never widen it;
 //   * ownership — the single `business_members` row whose tier is owner;
 //   * active membership. A removed member has no row, so the resolver fails and
 //     access ends at the next request rather than at the next token refresh;
@@ -39,6 +40,8 @@ import { HttpError } from '../../utils/http-error.js';
 import {
   ALL_BUSINESS_TEAM_PERMISSIONS,
   BUILT_IN_ROLE_SEEDS,
+  LAUNCH_BUSINESS_TEAM_PERMISSIONS,
+  splitPermissions,
   tierForStoredRole,
 } from './business-teams.constants.js';
 
@@ -49,7 +52,7 @@ export type WorkspaceContext = {
   /**
    * The account that owns this workspace's services, jobs, advertisements,
    * wallet and financial history. Immutable — see the trigger added in
-   * 20260731120000. Ownership transfer moves the owner MEMBERSHIP, not this.
+   * 20260731120000, and unmovable: ownership transfer is not available.
    */
   businessAccountId: string;
   teamName: string | null;
@@ -62,22 +65,94 @@ export type WorkspaceContext = {
   roleName: string | null;
   roleKey: string | null;
   roleBuiltIn: boolean;
+  /** Permissions an authorization decision reads. Wave 2G-A enforces one. */
   permissions: BusinessTeamPermission[];
+  /** Stored on the role, enforced by nothing yet. Never a capability. */
+  reservedPermissions: BusinessTeamPermission[];
 };
 
 const forbidden = (code: string, message: string): HttpError =>
   new HttpError({ statusCode: 403, code, message });
 
 /**
- * Read the caller's standing in the workspace they belong to.
+ * Every workspace the caller can actually open, newest membership last.
  *
- * Returns null rather than throwing when there is no workspace at all, so the
- * provisioning path can tell "this business account has not been set up yet"
- * apart from "this person is not a member".
+ * The account's primary role is not a term in this query. A customer, expert or
+ * craftsman who accepted an invitation appears here exactly as a business
+ * account does, which is the whole point: membership is the credential, and the
+ * account role is a separate fact about the account.
+ */
+export const listAccessibleWorkspaces = async (
+  db: Queryable,
+  userId: string,
+): Promise<
+  Array<{
+    teamId: string;
+    teamName: string | null;
+    tier: BusinessWorkspaceTier;
+    isOwner: boolean;
+    roleName: string | null;
+    ownedByViewerAccount: boolean;
+    memberCount: number;
+    joinedAt: string;
+  }>
+> => {
+  const { rows } = await db.query<{
+    team_id: string;
+    team_name: string | null;
+    member_role: string;
+    role_name: string | null;
+    owned: boolean;
+    member_count: string;
+    joined_at: Date;
+  }>(
+    `SELECT t.id          AS team_id,
+            t.name        AS team_name,
+            m.role        AS member_role,
+            r.name        AS role_name,
+            (t.business_id = $1) AS owned,
+            (SELECT count(*) FROM business_members mc WHERE mc.team_id = t.id)::text
+                          AS member_count,
+            m.created_at  AS joined_at
+       FROM business_members m
+       JOIN business_teams t ON t.id = m.team_id
+       LEFT JOIN business_team_roles r ON r.id = m.role_id
+      WHERE m.user_id = $1
+      ORDER BY (t.business_id = $1) DESC, m.created_at ASC`,
+    [userId],
+  );
+
+  return rows.map((row) => ({
+    teamId: row.team_id,
+    teamName: row.team_name,
+    tier: tierForStoredRole(row.member_role),
+    isOwner: row.member_role === 'owner',
+    roleName: row.role_name,
+    ownedByViewerAccount: row.owned,
+    memberCount: parseInt(row.member_count, 10) || 0,
+    joinedAt: row.joined_at.toISOString(),
+  }));
+};
+
+/**
+ * Read the caller's standing in one workspace.
+ *
+ * `teamId` is the workspace the caller ASKED for, and asking is all it is. The
+ * query matches it against the caller's own membership rows, so a workspace the
+ * caller does not belong to produces no row and the caller is refused — the
+ * identifier selects among what they already have, and can never widen it.
+ * Without one, the caller's own business workspace wins and otherwise their
+ * oldest membership, which keeps every existing single-workspace client working
+ * unchanged.
+ *
+ * Returns null rather than throwing when nothing matches, so the provisioning
+ * path can tell "this business account has not been set up yet" apart from
+ * "this person is not a member of that".
  */
 export const readWorkspaceContext = async (
   db: Queryable,
   userId: string,
+  teamId?: string,
 ): Promise<WorkspaceContext | null> => {
   const { rows } = await db.query<{
     team_id: string;
@@ -91,11 +166,11 @@ export const readWorkspaceContext = async (
     role_built_in: boolean | null;
     permissions: unknown;
   }>(
-    // One statement, two ways in: the account that owns the workspace, and any
-    // active membership. A business account that has transferred ownership still
-    // matches the first arm — it keeps its workspace and its (now Admin)
-    // membership — which is why the membership row, not the join arm, decides
-    // the tier.
+    // Two ways in: the account that owns the workspace, and an active
+    // membership. The `$2 IS NULL OR t.id = $2` arm is the selection — it can
+    // only ever NARROW the set this caller already qualifies for, so a
+    // workspace identifier from a client is a filter over their own rows and
+    // never a way to reach somebody else's.
     `SELECT t.id            AS team_id,
             t.business_id   AS business_id,
             t.name          AS team_name,
@@ -111,11 +186,12 @@ export const readWorkspaceContext = async (
               ON m.team_id = t.id AND m.user_id = $1
        LEFT JOIN business_team_roles r
               ON r.id = m.role_id
-      WHERE t.business_id = $1
-         OR t.id IN (SELECT team_id FROM business_members WHERE user_id = $1)
+      WHERE ($2::uuid IS NULL OR t.id = $2::uuid)
+        AND (t.business_id = $1
+             OR t.id IN (SELECT team_id FROM business_members WHERE user_id = $1))
       ORDER BY (t.business_id = $1) DESC, t.created_at ASC
       LIMIT 1`,
-    [userId],
+    [userId, teamId ?? null],
   );
 
   const row = rows[0];
@@ -123,6 +199,7 @@ export const readWorkspaceContext = async (
 
   const tier = tierForStoredRole(row.member_role);
   const isOwner = tier === 'owner' && row.member_id !== null;
+  const stored = splitPermissions(normalisePermissions(row.permissions));
 
   return {
     teamId: row.team_id,
@@ -137,12 +214,11 @@ export const readWorkspaceContext = async (
     roleKey: row.role_key,
     roleBuiltIn: row.role_built_in === true,
     // The owner's capability is not an editable array. Ownership carries every
-    // permission by definition, so a permission row that has drifted — or a role
-    // whose array somebody trimmed — cannot lock an owner out of their own
-    // workspace.
-    permissions: isOwner
-      ? [...ALL_BUSINESS_TEAM_PERMISSIONS]
-      : normalisePermissions(row.permissions),
+    // ENFORCED permission by definition, so a permission row that has drifted —
+    // or a role whose array somebody trimmed — cannot lock an owner out of their
+    // own workspace. It does not conjure the unenforced ones into working.
+    permissions: isOwner ? [...LAUNCH_BUSINESS_TEAM_PERMISSIONS] : stored.effective,
+    reservedPermissions: stored.reserved,
   };
 };
 
@@ -184,7 +260,12 @@ export const allowedActionsFor = (context: WorkspaceContext): BusinessTeamAllowe
     updateMemberRoles: administers,
     removeMembers: administers,
     manageRoles: canManageRoles(context),
-    transferOwnership: context.isOwner,
+    // Not "you are not allowed to", but "this does not exist yet". Moving the
+    // Owner membership would move team administration while every service, job,
+    // advertisement, booking, subscription and ledger row stayed with the
+    // original account — split authority described to the user as ownership.
+    // Reported false for everyone, including the owner, so no screen offers it.
+    transferOwnership: false,
   };
 };
 
@@ -238,6 +319,16 @@ export const requireOwnership = (context: WorkspaceContext): WorkspaceContext =>
   }
   return context;
 };
+
+/**
+ * Whether the caller may hold a workspace's `teamId` at all.
+ *
+ * Used by the selection path to turn "no row matched" into the right answer:
+ * a workspace that exists but is not theirs, and a workspace that does not
+ * exist, are the same 403 — nothing here confirms that a team id is real.
+ */
+export const workspaceNotAccessible = (): HttpError =>
+  forbidden('WORKSPACE_NOT_ACCESSIBLE', 'You do not have access to that workspace.');
 
 /**
  * Seed order for a brand-new workspace. Exported so the provisioning path and

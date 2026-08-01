@@ -232,6 +232,8 @@ export type BusinessTeamRole = {
   name: string;
   key: string;
   builtIn: boolean;
+  /** Stored on the role but enforced by nothing in Wave 2G-A. */
+  reservedPermissions: BusinessTeamPermission[];
   /** A built-in role retained for historical compatibility (currently `viewer`). */
   legacy: boolean;
   /** The tier a member holding this role receives. Custom roles are always `member`. */
@@ -287,8 +289,46 @@ export type BusinessTeamViewer = {
   roleId: string | null;
   roleName: string | null;
   roleKey: string | null;
+  /**
+   * Permissions that an authorization decision actually reads today.
+   *
+   * Wave 2G-A enforces exactly one of them. See `reservedPermissions` for what a
+   * role may still be carrying from before the two were separated.
+   */
   permissions: BusinessTeamPermission[];
+  /**
+   * Stored on the role, understood by the schema, and enforced by nothing yet.
+   *
+   * Reported so a workspace can see what a role was historically configured
+   * with. Never treat a value here as a capability.
+   */
+  reservedPermissions: BusinessTeamPermission[];
   allowedActions: BusinessTeamAllowedActions;
+};
+
+/**
+ * One line per workspace the signed-in account can actually open.
+ *
+ * The account role does not appear here and never decides membership: an
+ * expert, craftsman or customer who accepted an invitation is listed exactly
+ * like a business account is.
+ */
+export type BusinessWorkspaceSummary = {
+  teamId: string;
+  teamName: string | null;
+  tier: BusinessWorkspaceTier;
+  isOwner: boolean;
+  roleName: string | null;
+  /** True when this workspace belongs to the caller's own business account. */
+  ownedByViewerAccount: boolean;
+  memberCount: number;
+  joinedAt: string;
+};
+
+export type BusinessWorkspaceList = {
+  workspaces: BusinessWorkspaceSummary[];
+  /** The workspace `GET /me` resolves when no `teamId` is supplied. */
+  defaultTeamId: string | null;
 };
 
 export type BusinessTeamOverview = {
@@ -342,6 +382,13 @@ export type BusinessInviteAcceptResult = {
   accepted: boolean;
   /** True when this call created the membership, false when it was already there. */
   created: boolean;
+  /**
+   * The workspace the caller may now open.
+   *
+   * Pass it back as `teamId` to the workspace endpoints. It is what makes the
+   * post-acceptance link land somewhere real for an account whose primary role
+   * is not `business`, and for one that already belonged to another workspace.
+   */
   teamId: string;
   teamName: string | null;
   roleName: string | null;
@@ -352,10 +399,20 @@ export type UpdateBusinessMemberRoleBody = {
   roleId: string;
 };
 
+/**
+ * Ownership transfer is not available.
+ *
+ * The shape is retained so the contract stays readable and a client that still
+ * calls the endpoint gets a typed, stable `OWNERSHIP_TRANSFER_NOT_AVAILABLE`
+ * refusal rather than a validation error. Nothing is transferred: moving the
+ * Owner membership would move team administration while every service, job,
+ * advertisement, booking, subscription and ledger row stayed with the original
+ * account, which is split authority rather than ownership.
+ */
 export type TransferBusinessOwnershipBody = {
-  /** The member row that becomes owner. */
+  /** The member row that would become owner. */
   memberId: string;
-  /** Must equal the workspace name exactly; a deliberate confirmation step. */
+  /** Would have to equal the workspace name; a deliberate confirmation step. */
   confirmation: string;
 };
 

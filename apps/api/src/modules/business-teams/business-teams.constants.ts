@@ -13,9 +13,30 @@
 // offered when a role has to be chosen.
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// Wave 2G-A: what a workspace permission actually does today.
+// ---------------------------------------------------------------------------
+// Seven permission values have been storable since 20260613120000. Exactly one
+// of them -- `manage_team` -- is read by an authorization decision. The other
+// six name business-domain work (services, jobs, reservations, wallet, support,
+// analytics) that is still authorized by the acting account's own primary role
+// and its own `req.user.id`. Storing them changed nothing; returning them as
+// "effective permissions" told the frontend, and through it the user, that a
+// delegate could do work the API would refuse.
+//
+// So they are separated rather than deleted. `LAUNCH_BUSINESS_TEAM_PERMISSIONS`
+// is what a role may be granted and what `GET /me` reports as effective.
+// `RESERVED_BUSINESS_TEAM_PERMISSIONS` is what a role may still be CARRYING from
+// before this split: those values stay in the row untouched, are reported
+// separately as reserved, and are never counted by `hasPermission`. Delegating
+// them needs the workspace-principal architecture deferred to Wave 2G-B, because
+// every one of those domains keys its rows to an account id that is
+// simultaneously the financial actor.
+// ---------------------------------------------------------------------------
+
 import type { BusinessTeamPermission, BusinessWorkspaceTier } from '@mohandishub/shared';
 
-/** Every permission a role may carry. Mirrors the shared union exactly. */
+/** Every permission value the schema accepts. Mirrors the shared union exactly. */
 export const ALL_BUSINESS_TEAM_PERMISSIONS: readonly BusinessTeamPermission[] = [
   'manage_team',
   'manage_services',
@@ -25,6 +46,39 @@ export const ALL_BUSINESS_TEAM_PERMISSIONS: readonly BusinessTeamPermission[] = 
   'manage_support_disputes',
   'view_analytics',
 ] as const;
+
+/**
+ * Permissions that a Wave 2G-A authorization decision actually reads.
+ *
+ * Grantable, and reported as effective. Adding to this list means adding an
+ * enforcement point, not adding a checkbox.
+ */
+export const LAUNCH_BUSINESS_TEAM_PERMISSIONS: readonly BusinessTeamPermission[] = [
+  'manage_team',
+] as const;
+
+/**
+ * Permissions the schema stores but no endpoint enforces yet.
+ *
+ * Not grantable, not effective, and not deleted from any role that already has
+ * one. They are surfaced under their own name so a workspace can see what a role
+ * was configured with historically without being told it works.
+ */
+export const RESERVED_BUSINESS_TEAM_PERMISSIONS: readonly BusinessTeamPermission[] =
+  ALL_BUSINESS_TEAM_PERMISSIONS.filter(
+    (permission) => !LAUNCH_BUSINESS_TEAM_PERMISSIONS.includes(permission),
+  );
+
+export const isLaunchPermission = (permission: BusinessTeamPermission): boolean =>
+  LAUNCH_BUSINESS_TEAM_PERMISSIONS.includes(permission);
+
+/** Split a stored permission array into what is enforced and what is not. */
+export const splitPermissions = (
+  stored: readonly BusinessTeamPermission[],
+): { effective: BusinessTeamPermission[]; reserved: BusinessTeamPermission[] } => ({
+  effective: stored.filter(isLaunchPermission),
+  reserved: stored.filter((permission) => !isLaunchPermission(permission)),
+});
 
 /** The value stored in `business_members.role` for the Admin tier. */
 export const ADMIN_ROLE_KEY = 'manager';
@@ -37,34 +91,32 @@ export type BuiltInRoleSeed = {
   permissions: BusinessTeamPermission[];
 };
 
+// Seeded arrays carry only what is enforced. The earlier seeds handed Admin six
+// permissions and Member three, none of which any endpoint read -- a workspace
+// owner opening the role screen was shown a capability matrix that described
+// nothing. Tier, not the permission array, is what separates Owner from Admin
+// from Member today.
 export const BUILT_IN_ROLE_SEEDS: readonly BuiltInRoleSeed[] = [
   {
     key: 'owner',
     name: 'Owner',
     tier: 'owner',
-    permissions: [...ALL_BUSINESS_TEAM_PERMISSIONS],
+    permissions: [...LAUNCH_BUSINESS_TEAM_PERMISSIONS],
   },
   {
-    // Stored as `manager`, presented as Admin. Full operational administration
-    // without any ownership capability: the two are separated by tier, not by
-    // permissions, so no permission array can be edited into ownership.
+    // Stored as `manager`, presented as Admin. Team administration without any
+    // ownership capability: the two are separated by tier, not by permissions,
+    // so no permission array can be edited into ownership.
     key: ADMIN_ROLE_KEY,
     name: 'Admin',
     tier: 'admin',
-    permissions: [
-      'manage_team',
-      'manage_services',
-      'manage_jobs',
-      'manage_reservations',
-      'manage_support_disputes',
-      'view_analytics',
-    ],
+    permissions: [...LAUNCH_BUSINESS_TEAM_PERMISSIONS],
   },
   {
     key: 'member',
     name: 'Member',
     tier: 'member',
-    permissions: ['manage_jobs', 'manage_reservations', 'view_analytics'],
+    permissions: [],
   },
 ] as const;
 
@@ -103,11 +155,22 @@ export const tierForStoredRole = (storedRole: string | null): BusinessWorkspaceT
 export const isAssignableRole = (params: { roleKey: string | null; builtIn: boolean }): boolean => {
   if (!params.builtIn) return true;
   if (params.roleKey === null) return false;
-  // Owner is never assignable through invitation or a role update. It moves
-  // only through ownership transfer.
+  // Owner is never assignable through invitation or a role update, and while
+  // ownership transfer is unavailable it is not assignable through anything.
   if (params.roleKey === 'owner') return false;
   return !LEGACY_BUILT_IN_ROLE_KEYS.has(params.roleKey);
 };
 
 /** How long an invitation stays usable. Bounded by a CHECK at 30 days. */
 export const INVITE_TTL_DAYS = 7;
+
+/**
+ * A technical ceiling on workspace size, used only when the account's plan
+ * configures no `maxTeamSlots` entitlement.
+ *
+ * Not a commercial tier and not a price boundary -- launch sells no team seats,
+ * and inventing one here would be inventing a product. It exists so a single
+ * workspace cannot be used as an unbounded invitation-email relay, and it is
+ * high enough that no genuine team meets it.
+ */
+export const DEFAULT_TEAM_SEAT_CEILING = 50;
