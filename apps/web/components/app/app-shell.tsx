@@ -264,7 +264,7 @@ const AppShellInner = ({ children }: AppShellProps) => {
             style={{
               position: 'fixed',
               bottom: '20px',
-              right: '20px',
+              insetInlineEnd: '20px',
               zIndex: 9999,
               background: depositMessage === 'success' ? '#10b981' : '#ef4444',
               color: 'white',

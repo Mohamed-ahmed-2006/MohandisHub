@@ -527,6 +527,26 @@ export const BusinessTeamPanel = ({ dictionary, accessToken, teamId }: Props) =>
                     <div className="team-permissions-grid">
                       {BUSINESS_TEAM_PERMISSIONS.map((permission) => {
                         const isEnforced = permission === 'manage_team';
+                        const permissionLabels: Record<string, { en: string; ar: string }> = {
+                          manage_team: { en: 'Manage Team', ar: 'إدارة الفريق' },
+                          manage_services: { en: 'Manage Services', ar: 'إدارة الخدمات' },
+                          manage_jobs: { en: 'Manage Jobs & Hiring', ar: 'إدارة الوظائف والتوفيد' },
+                          manage_reservations: {
+                            en: 'Manage Orders & Bookings',
+                            ar: 'إدارة الطلبات والحجوزات',
+                          },
+                          view_wallet: { en: 'View Wallet & Ledger', ar: 'عرض المحفظة والسجل' },
+                          manage_support_disputes: {
+                            en: 'Manage Support & Disputes',
+                            ar: 'إدارة الدعم والنزاعات',
+                          },
+                          view_analytics: { en: 'View Analytics', ar: 'عرض التحليلات' },
+                        };
+                        const label = permissionLabels[permission]
+                          ? isArabic
+                            ? permissionLabels[permission].ar
+                            : permissionLabels[permission].en
+                          : permission.replace(/_/g, ' ');
                         return (
                           <label
                             key={permission}
@@ -544,7 +564,7 @@ export const BusinessTeamPanel = ({ dictionary, accessToken, teamId }: Props) =>
                               defaultChecked={isEnforced}
                               style={{ cursor: isEnforced ? 'pointer' : 'not-allowed' }}
                             />
-                            <span>{permission.replace(/_/g, ' ')}</span>
+                            <span>{label}</span>
                             {!isEnforced && (
                               <span
                                 style={{
@@ -620,7 +640,7 @@ export const BusinessTeamPanel = ({ dictionary, accessToken, teamId }: Props) =>
                   <td>
                     <div style={{ fontWeight: 600 }}>
                       <span className="team-text-wrap">
-                        {member.displayName ?? member.userId.slice(0, 8)}
+                        {member.displayName ?? member.email ?? tr('Team member', 'عضو في الفريق')}
                       </span>
                       {member.isSelf && (
                         <span
@@ -697,7 +717,7 @@ export const BusinessTeamPanel = ({ dictionary, accessToken, teamId }: Props) =>
             <div key={member.id} className="team-member-mobile-card">
               <div className="team-member-mobile-row">
                 <div style={{ fontWeight: 600 }} className="team-text-wrap">
-                  {member.displayName ?? member.userId.slice(0, 8)}
+                  {member.displayName ?? member.email ?? tr('Team member', 'عضو في الفريق')}
                   {member.isSelf && (
                     <span
                       style={{

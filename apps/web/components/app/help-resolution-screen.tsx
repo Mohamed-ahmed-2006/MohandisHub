@@ -7,7 +7,7 @@ import type {
   ResolutionCaseKind,
   ResolutionCaseSummary,
 } from '@mohandishub/shared';
-import { ChevronLeft, Inbox, PlusCircle, ShieldAlert } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Inbox, PlusCircle, ShieldAlert } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
@@ -459,19 +459,40 @@ export const HelpResolutionScreen = ({ defaultTab = 'all' }: Props) => {
    * server decides availability, the dictionary decides wording, and an Arabic
    * reader is not handed an English explanation.
    */
+  const sanitizeUserNotice = (rawMessage?: string | null): string | null => {
+    if (!rawMessage) return null;
+    if (
+      rawMessage.includes('/api/') ||
+      rawMessage.includes('Contract:') ||
+      rawMessage.includes('need_job_dispute') ||
+      rawMessage.includes('POST') ||
+      rawMessage.includes('backend API')
+    ) {
+      console.warn('Sanitized internal notice from UI:', rawMessage);
+      return tr(
+        'Direct filing for this topic is not available yet. Please use General Support to reach our team.',
+        'تقديم القضايا مباشرة لهذا الموضوع غير متاح حالياً. يرجى استخدام الدعم العام للتواصل مع فريقنا.',
+      );
+    }
+    return rawMessage;
+  };
+
   const unavailableMessage = (entry: ResolutionCaseAvailability | undefined): string | null => {
     if (!entry || entry.available) return null;
     if (entry.reasonCode === 'no_eligible_subject') {
       return (
         hr.unavailableNoEligibleSubject ??
-        entry.message ??
+        sanitizeUserNotice(entry.message) ??
         tr('This case type is not available to you.', 'هذا النوع من القضايا غير متاح لك.')
       );
     }
     return (
       hr.unavailableLifecycle ??
-      entry.message ??
-      tr('This case type is not available to you.', 'هذا النوع من القضايا غير متاح لك.')
+      sanitizeUserNotice(entry.message) ??
+      tr(
+        'Direct filing for this topic is not available yet. Please use General Support to reach our team.',
+        'تقديم القضايا مباشرة لهذا الموضوع غير متاح حالياً. يرجى استخدام الدعم العام للتواصل مع فريقنا.',
+      )
     );
   };
 
@@ -1126,7 +1147,11 @@ export const HelpResolutionScreen = ({ defaultTab = 'all' }: Props) => {
                     onClick={() => setSelectedCaseId(null)}
                     aria-label={hr.backToList ?? d.back ?? 'Back'}
                   >
-                    <ChevronLeft size={18} className="support-thread__back-icon" aria-hidden />
+                    {isArabic ? (
+                      <ChevronRight size={18} className="support-thread__back-icon" aria-hidden />
+                    ) : (
+                      <ChevronLeft size={18} className="support-thread__back-icon" aria-hidden />
+                    )}
                     {hr.backToList ?? d.back ?? 'Back'}
                   </button>
                   <div className="support-thread__header-body">

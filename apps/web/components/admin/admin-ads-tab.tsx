@@ -1,7 +1,7 @@
 'use client';
 
 import type { AdminPermission } from '@mohandishub/shared';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import {
   advertisementsApiClient,
@@ -49,6 +49,75 @@ export const AdminAdsTab = ({ dictionary, accessToken, adminPermissions }: Admin
   const canManageAds = hasPermission(adminPermissions, 'manage_ads');
   const canManageAdPricing = hasPermission(adminPermissions, 'manage_ad_pricing');
   const canManageAdScheduling = hasPermission(adminPermissions, 'manage_ad_scheduling');
+
+  const previousFocusRef = useRef<HTMLElement | null>(null);
+  const activeModalRef = useRef<HTMLDivElement>(null);
+  const activeModalId = rejectAdId || scheduleAdId || pricingAdId;
+
+  const closeModal = useCallback(() => {
+    setRejectAdId(null);
+    setScheduleAdId(null);
+    setPricingAdId(null);
+  }, []);
+
+  useEffect(() => {
+    if (!activeModalId) return;
+
+    const dialog = activeModalRef.current;
+    const focusableSelector = [
+      'button:not([disabled])',
+      '[href]',
+      'input:not([disabled])',
+      'select:not([disabled])',
+      'textarea:not([disabled])',
+      '[tabindex]:not([tabindex="-1"])',
+    ].join(',');
+
+    const getFocusableElements = () =>
+      Array.from(dialog?.querySelectorAll<HTMLElement>(focusableSelector) ?? []).filter(
+        (el) => !el.hasAttribute('hidden') && el.getAttribute('aria-hidden') !== 'true',
+      );
+
+    const initialTarget = getFocusableElements()[0] ?? dialog;
+    initialTarget?.focus();
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        closeModal();
+        return;
+      }
+      if (event.key !== 'Tab') return;
+
+      const focusableElements = getFocusableElements();
+      if (focusableElements.length === 0) {
+        event.preventDefault();
+        dialog?.focus();
+        return;
+      }
+
+      const first = focusableElements[0]!;
+      const last = focusableElements[focusableElements.length - 1]!;
+      if (!dialog?.contains(document.activeElement)) {
+        event.preventDefault();
+        (event.shiftKey ? last : first).focus();
+      } else if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+      const focusTarget = previousFocusRef.current;
+      requestAnimationFrame(() => focusTarget?.focus());
+      previousFocusRef.current = null;
+    };
+  }, [activeModalId, closeModal]);
 
   const stats = {
     total: rows.length,
@@ -296,6 +365,9 @@ export const AdminAdsTab = ({ dictionary, accessToken, adminPermissions }: Admin
           onChange={(e) => setStatusFilter(e.target.value)}
         >
           <option value="pending_review">Awaiting review</option>
+          <option value="pending_payment">
+            {dictionary.advertisements?.statusPendingPayment ?? 'Pending payment'}
+          </option>
           <option value="">{dictionary.admin?.txns?.allStatuses ?? 'All statuses'}</option>
           <option value="scheduled">Approved</option>
           <option value="active">Active</option>
@@ -339,6 +411,22 @@ export const AdminAdsTab = ({ dictionary, accessToken, adminPermissions }: Admin
                   isWeekly &&
                   ad.status === 'scheduled' &&
                   (!ad.starts_at || new Date(ad.starts_at).getTime() <= Date.now());
+                const statusLabels: Record<string, string> = {
+                  pending_review: 'Awaiting review',
+                  pending_payment:
+                    dictionary.advertisements?.statusPendingPayment ?? 'Pending payment',
+                  scheduled: 'Approved',
+                  active: 'Active',
+                  expired: 'Ended',
+                  rejected: 'Rejected',
+                  paused_by_admin: 'Paused',
+                  cancelled: 'Cancelled',
+                };
+                const formattedStatus =
+                  statusLabels[ad.status] ??
+                  (typeof ad.status === 'string'
+                    ? ad.status.replace(/_/g, ' ')
+                    : String(ad.status ?? ''));
                 return (
                   <tr key={ad.id}>
                     <td>
@@ -354,7 +442,7 @@ export const AdminAdsTab = ({ dictionary, accessToken, adminPermissions }: Admin
                         </>
                       ) : null}
                     </td>
-                    <td>{ad.status}</td>
+                    <td>{formattedStatus}</td>
                     <td>{BILLING_LABEL[ad.billing_status] ?? ad.billing_status}</td>
                     <td>
                       {ad.current_period_starts_at
@@ -372,7 +460,10 @@ export const AdminAdsTab = ({ dictionary, accessToken, adminPermissions }: Admin
                               type="button"
                               className="admin-btn admin-btn--small"
                               disabled={busy}
-                              onClick={() => void approve(ad.id)}
+                              onClick={(e) => {
+                                previousFocusRef.current = e.currentTarget;
+                                void approve(ad.id);
+                              }}
                             >
                               Approve
                             </button>
@@ -380,7 +471,8 @@ export const AdminAdsTab = ({ dictionary, accessToken, adminPermissions }: Admin
                               type="button"
                               className="admin-btn admin-btn--small admin-btn--danger"
                               disabled={busy}
-                              onClick={() => {
+                              onClick={(e) => {
+                                previousFocusRef.current = e.currentTarget;
                                 setRejectAdId(ad.id);
                                 setRejectReason('');
                               }}
@@ -394,7 +486,10 @@ export const AdminAdsTab = ({ dictionary, accessToken, adminPermissions }: Admin
                             type="button"
                             className="admin-btn admin-btn--small"
                             disabled={busy}
-                            onClick={() => void activateDue(ad.id)}
+                            onClick={(e) => {
+                              previousFocusRef.current = e.currentTarget;
+                              void activateDue(ad.id);
+                            }}
                           >
                             Start due week
                           </button>
@@ -403,7 +498,10 @@ export const AdminAdsTab = ({ dictionary, accessToken, adminPermissions }: Admin
                           <button
                             type="button"
                             className="admin-btn admin-btn--small admin-btn--danger"
-                            onClick={() => void setStatus(ad.id, 'paused_by_admin')}
+                            onClick={(e) => {
+                              previousFocusRef.current = e.currentTarget;
+                              void setStatus(ad.id, 'paused_by_admin');
+                            }}
                           >
                             Pause
                           </button>
@@ -415,7 +513,10 @@ export const AdminAdsTab = ({ dictionary, accessToken, adminPermissions }: Admin
                             <button
                               type="button"
                               className="admin-btn admin-btn--small admin-btn--danger"
-                              onClick={() => void setStatus(ad.id, 'cancelled')}
+                              onClick={(e) => {
+                                previousFocusRef.current = e.currentTarget;
+                                void setStatus(ad.id, 'cancelled');
+                              }}
                             >
                               Cancel
                             </button>
@@ -426,7 +527,10 @@ export const AdminAdsTab = ({ dictionary, accessToken, adminPermissions }: Admin
                             <button
                               type="button"
                               className="admin-btn admin-btn--small"
-                              onClick={() => setScheduleAdId(ad.id)}
+                              onClick={(e) => {
+                                previousFocusRef.current = e.currentTarget;
+                                setScheduleAdId(ad.id);
+                              }}
                             >
                               Schedule
                             </button>
@@ -435,7 +539,10 @@ export const AdminAdsTab = ({ dictionary, accessToken, adminPermissions }: Admin
                           <button
                             type="button"
                             className="admin-btn admin-btn--small"
-                            onClick={() => setPricingAdId(ad.id)}
+                            onClick={(e) => {
+                              previousFocusRef.current = e.currentTarget;
+                              setPricingAdId(ad.id);
+                            }}
                           >
                             Pricing
                           </button>
@@ -452,8 +559,18 @@ export const AdminAdsTab = ({ dictionary, accessToken, adminPermissions }: Admin
 
       {rejectAdId && (
         <div className="admin-modal-overlay" onClick={() => setRejectAdId(null)}>
-          <div className="admin-modal" onClick={(e) => e.stopPropagation()}>
-            <h2 className="admin-modal-title">Reject advertisement</h2>
+          <div
+            ref={activeModalRef}
+            className="admin-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="reject-ad-modal-title"
+            tabIndex={-1}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 id="reject-ad-modal-title" className="admin-modal-title">
+              Reject advertisement
+            </h2>
             <p className="admin-section-desc">
               The advertiser sees this reason. Rejecting creates no billing period and charges
               nothing.
@@ -483,8 +600,16 @@ export const AdminAdsTab = ({ dictionary, accessToken, adminPermissions }: Admin
 
       {scheduleAdId && (
         <div className="admin-modal-overlay" onClick={() => setScheduleAdId(null)}>
-          <div className="admin-modal" onClick={(e) => e.stopPropagation()}>
-            <h2 className="admin-modal-title">
+          <div
+            ref={activeModalRef}
+            className="admin-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="schedule-ad-modal-title"
+            tabIndex={-1}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 id="schedule-ad-modal-title" className="admin-modal-title">
               {dictionary.advertisements?.schedule ?? 'Schedule ad'}
             </h2>
             <input
@@ -523,8 +648,16 @@ export const AdminAdsTab = ({ dictionary, accessToken, adminPermissions }: Admin
 
       {pricingAdId && (
         <div className="admin-modal-overlay" onClick={() => setPricingAdId(null)}>
-          <div className="admin-modal" onClick={(e) => e.stopPropagation()}>
-            <h2 className="admin-modal-title">
+          <div
+            ref={activeModalRef}
+            className="admin-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="pricing-ad-modal-title"
+            tabIndex={-1}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 id="pricing-ad-modal-title" className="admin-modal-title">
               {dictionary.advertisements?.pricing?.override ?? 'Override price'}
             </h2>
             <input

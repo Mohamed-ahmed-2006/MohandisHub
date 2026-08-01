@@ -233,7 +233,7 @@
 .myads-upload-remove {
   position: absolute;
   top: 0.5rem;
-  right: 0.5rem;
+  inset-inline-end: 0.5rem;
   width: 1.75rem;
   height: 1.75rem;
   border-radius: 50%;

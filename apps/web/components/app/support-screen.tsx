@@ -5,7 +5,7 @@ import type {
   SupportTicketCategory,
   SupportTicketMessage,
 } from '@mohandishub/shared';
-import { ChevronLeft, Inbox } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Inbox } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
@@ -104,6 +104,7 @@ export const SupportScreen = () => {
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const sp = (dictionary.supportPage ?? {}) as Record<string, string>;
+  const isArabic = locale === 'ar';
 
   useEffect(() => {
     if (!isReady) return;
@@ -379,7 +380,11 @@ export const SupportScreen = () => {
                     onClick={() => setSelectedTicket(null)}
                     aria-label={d.back ?? 'Back'}
                   >
-                    <ChevronLeft size={18} aria-hidden />
+                    {isArabic ? (
+                      <ChevronRight size={18} aria-hidden />
+                    ) : (
+                      <ChevronLeft size={18} aria-hidden />
+                    )}
                     {d.back ?? 'Back'}
                   </button>
                   <div className="support-thread__header-body">
