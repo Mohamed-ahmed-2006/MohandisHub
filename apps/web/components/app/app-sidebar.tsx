@@ -100,7 +100,6 @@ export const AppSidebar = ({
   const navItems: NavItem[] = [
     { href: '/app', label: dictionary.nav.home },
     { href: '/app/bookings', label: dictionary.nav.bookings },
-    { href: '/app/disputes', label: dictionary.nav.disputes ?? 'Disputes' },
     {
       href: '/app/services',
       label: dictionary.nav.myCatalogue ?? dictionary.nav.myServices ?? 'My Catalogue',
@@ -139,14 +138,29 @@ export const AppSidebar = ({
     { href: '/app/settings', label: dictionary.nav.settings },
     { href: '/app/chat', label: dictionary.nav.chat },
     { href: '/app/history', label: dictionary.nav.history },
-    { href: '/app/support', label: dictionary.nav.support },
+    {
+      href: '/app/help-resolution',
+      label: dictionary.nav.helpResolution ?? dictionary.nav.support,
+    },
     { href: '/app/plan', label: dictionary.nav.plan },
     { href: '/app/admin', label: dictionary.nav.admin, roles: ['admin'] },
   ];
 
   const hiddenHrefs = status?.sidebarHiddenHrefs ?? [];
 
+  /**
+   * Support and Disputes are one screen now, so an admin's old choice to hide
+   * one of them no longer maps onto a single entry. Hiding the merged entry
+   * requires that BOTH legacy entries were hidden: closing an entry an admin
+   * left open would take away access people still have, and that is the worse
+   * of the two ways to get this wrong.
+   */
+  const helpResolutionHidden =
+    hiddenHrefs.includes('/app/help-resolution') ||
+    (hiddenHrefs.includes('/app/support') && hiddenHrefs.includes('/app/disputes'));
+
   const visibleItems = navItems.filter((item) => {
+    if (item.href === '/app/help-resolution') return !helpResolutionHidden;
     if (hiddenHrefs.includes(item.href)) return false;
     if (item.href === '/app/plan' && status?.featurePlansEnabled === false) return false;
     if (!item.roles) return true;
