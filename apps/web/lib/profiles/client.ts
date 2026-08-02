@@ -1,3 +1,4 @@
+import { sanitizePublicUserProfile } from '@mohandishub/shared';
 import type {
   AcademicRecord,
   AcademicRecordBody,
@@ -145,9 +146,13 @@ async function getPublicProfileFetch(
       status: response.status,
     });
   }
-  const rawBody = (await response.json()) as ApiSuccessBody<PublicUserProfile>;
-  return rawBody.data;
+  const rawBody = (await response.json()) as ApiSuccessBody<unknown>;
+  return parsePublicUserProfile(rawBody.data);
 }
+
+/** Browser-side defence in depth for the public profile response. */
+export const parsePublicUserProfile = (value: unknown): PublicUserProfile =>
+  sanitizePublicUserProfile(value);
 
 export const profilesApiClient = {
   getTopExperts: () => publicFetch<TopExpert[]>('/api/profiles/top-experts'),

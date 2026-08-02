@@ -2,6 +2,7 @@
 // Profiles service — business logic for profiles, docs, records, admin review
 // ---------------------------------------------------------------------------
 
+import { sanitizePublicUserProfile } from '@mohandishub/shared';
 import type {
   AcademicRecord,
   AdminReview,
@@ -1054,11 +1055,12 @@ export class ProfilesService {
       displayName: user.display_name,
       avatarUrl: user.avatar_url,
     };
+    const present = (profile: unknown): PublicUserProfile => sanitizePublicUserProfile(profile);
 
     if (role === 'expert') {
       const row = await this.repo.findExpertProfile(userId);
       if (!row) {
-        return { ...base, expertProfile: null };
+        return present({ ...base, expertProfile: null });
       }
       const [averageRating, reviewCount] = await Promise.all([
         this.reviewsRepo.getAvgRating(userId, 'expert'),
@@ -1073,8 +1075,6 @@ export class ProfilesService {
         hourlyRate: row.hourly_rate ? Number(row.hourly_rate) : null,
         city: row.city,
         country: row.country ?? 'Egypt',
-        linkedinUrl: row.linkedin_url,
-        portfolioUrl: row.portfolio_url,
         languages: row.languages ?? [],
         educationSummary: row.education_summary,
         certificationsCount: row.certifications_count ?? 0,
@@ -1083,13 +1083,13 @@ export class ProfilesService {
         averageRating: averageRating ?? null,
         reviewCount,
       };
-      return { ...base, expertProfile, businessProfile: null, customerProfile: null };
+      return present({ ...base, expertProfile, businessProfile: null, customerProfile: null });
     }
 
     if (role === 'craftsman') {
       const row = await this.repo.findCraftsmanProfile(userId);
       if (!row) {
-        return { ...base, craftsmanProfile: null };
+        return present({ ...base, craftsmanProfile: null });
       }
       const [averageRating, reviewCount] = await Promise.all([
         this.reviewsRepo.getAvgRating(userId, 'craftsman'),
@@ -1111,19 +1111,19 @@ export class ProfilesService {
         averageRating: averageRating ?? null,
         reviewCount,
       };
-      return {
+      return present({
         ...base,
         expertProfile: null,
         businessProfile: null,
         craftsmanProfile,
         customerProfile: null,
-      };
+      });
     }
 
     if (role === 'business') {
       const row = await this.repo.findBusinessProfile(userId);
       if (!row) {
-        return { ...base, businessProfile: null };
+        return present({ ...base, businessProfile: null });
       }
       const [averageRating, reviewCount] = await Promise.all([
         this.reviewsRepo.getAvgRating(userId, 'business'),
@@ -1133,7 +1133,6 @@ export class ProfilesService {
         companyName: row.company_name,
         industry: row.industry,
         companySize: row.company_size,
-        website: row.website,
         logoUrl: row.logo_url,
         city: row.city,
         country: row.country ?? 'Egypt',
@@ -1143,26 +1142,26 @@ export class ProfilesService {
         averageRating: averageRating ?? null,
         reviewCount,
       };
-      return {
+      return present({
         ...base,
         expertProfile: null,
         businessProfile,
         craftsmanProfile: null,
         customerProfile: null,
-      };
+      });
     }
 
     const custRow = await this.repo.findCustomerProfile(userId);
     const customerProfile: PublicCustomerProfile | null = custRow
       ? { city: custRow.city, country: custRow.country }
       : null;
-    return {
+    return present({
       ...base,
       expertProfile: null,
       businessProfile: null,
       craftsmanProfile: null,
       customerProfile,
-    };
+    });
   }
 
   // ── Top providers (public) ───────────────────────────────────────────────
