@@ -79,13 +79,13 @@ identity exists at this point and holds customer capability immediately.
 
 **Enablement gates** (there is nothing to "activate"; these are readiness thresholds):
 
-| Action                                        | Requires                                                          |
-| --------------------------------------------- | ------------------------------------------------------------------ |
-| Browse D0                                     | Nothing (guests included)                                         |
-| Browse D1, save favourites, follow providers  | Signed in                                                         |
-| Post a Need, request a quote, request booking | **V0** — verified email *and* verified phone                      |
-| Buy a made-to-order or on-site engagement     | V0 + at least one saved coarse location                           |
-| Confirm delivery, report payment, dispute     | V0 (and being a party to the engagement)                          |
+| Action                                        | Requires                                     |
+| --------------------------------------------- | -------------------------------------------- |
+| Browse D0                                     | Nothing (guests included)                    |
+| Browse D1, save favourites, follow providers  | Signed in                                    |
+| Post a Need, request a quote, request booking | **V0** — verified email _and_ verified phone |
+| Buy a made-to-order or on-site engagement     | V0 + at least one saved coarse location      |
+| Confirm delivery, report payment, dispute     | V0 (and being a party to the engagement)     |
 
 Phone verification is required before demand creation specifically because an unverified
 buyer costs providers real MHC when they activate. The cost of a fake Need is borne by the
@@ -100,11 +100,16 @@ provider, so the friction belongs on the buyer.
   buyer for a government ID to post a Need is a conversion tax with no matching risk
   reduction; the platform holds no buyer money.
 - **Optional V1** is available and, if completed, surfaces a "verified buyer" badge to
-  providers. This is a *provider-confidence* feature, not a gate.
+  providers. This is a _provider-confidence_ feature, not a gate.
 - An **abuse-triggered** verification step-up exists: an identity flagged for repeated
   abandoned awards, fake Needs, or contact-harvesting may be required to complete V1 before
   creating further demand. This is an enforcement action, described in
   [15](./15-suspension-and-enforcement.md), not a default.
+- **The legacy `platform_verified_at` badge is not a buyer verification signal.** A populated
+  legacy timestamp is never presented as, or counted as, the optional V1 "verified buyer"
+  badge, and it never substitutes for an abuse-triggered step-up
+  ([00 §12](./00-overview-and-terminology.md)). Where a historical badge is still shown, it is
+  labelled under clearly legacy semantics until it is retired.
 
 ---
 
@@ -112,13 +117,13 @@ provider, so the friction belongs on the buyer.
 
 The customer's profile is **private by default and minimal by design**.
 
-| Field                                            | Tier | Note                                                      |
-| ------------------------------------------------ | ---- | ----------------------------------------------------------- |
-| Display name, avatar                             | D0   | Shown on reviews the customer writes                       |
-| Coarse location (governorate/city)               | D2   | Given to providers considering a proposal                  |
-| Buyer badges (verified buyer, engagements count) | D2   | Confidence signal for providers                            |
-| Saved locations, labels, access notes            | D3   | Released only on activation, per engagement                |
-| Full name, phone, email                          | D3   | Released only on activation, per engagement                |
+| Field                                            | Tier        | Note                                                  |
+| ------------------------------------------------ | ----------- | ----------------------------------------------------- |
+| Display name, avatar                             | D0          | Shown on reviews the customer writes                  |
+| Coarse location (governorate/city)               | D2          | Given to providers considering a proposal             |
+| Buyer badges (verified buyer, engagements count) | D2          | Confidence signal for providers                       |
+| Saved locations, labels, access notes            | D3          | Released only on activation, per engagement           |
+| Full name, phone, email                          | D3          | Released only on activation, per engagement           |
 | Buyer conduct signal                             | D2 (banded) | Shown to providers as a band, never as a public score |
 
 A customer may maintain **multiple saved locations** (home, site A, office) with per-location
@@ -144,6 +149,10 @@ There is no public customer profile page. A provider cannot browse customers.
 - Ranking must be explainable and must not silently sell placement: any promoted or featured
   result is labelled. Paid promotion itself is out of Wave 3 scope
   ([16 group 3](./16-wave-3-scope.md)).
+- **Verification filters and trust indicators read Wave 3 verification tiers only.** The legacy
+  `platform_verified_at` badge is never a search filter, a ranking input, a facet, or a trust
+  indicator that implies identity or credential verification
+  ([00 §12](./00-overview-and-terminology.md)).
 - Guests may search at D0 and are prompted to sign in at the point of action, not the point
   of browsing.
 
@@ -154,18 +163,18 @@ There is no public customer profile page. A provider cannot browse customers.
 Five ways to create a pending arrangement. All five converge on
 [the Engagement spine](./10-engagement-model.md).
 
-| Route                  | Customer action                                                           | Becomes engagement origin |
-| ---------------------- | ------------------------------------------------------------------------- | ------------------------- |
-| Post a Need → award    | Publish a Need, receive Proposals, select one → **Award Offer**           | `need_award`              |
-| Buy a package/service  | Choose an Offer/package + add-ons + answer requirements → **Purchase Request** | `service_purchase`    |
-| Book a slot            | Choose an availability slot → **Booking Request**                         | `booking`                 |
-| Request a product      | Choose product + variant + quantity + delivery method → **Product Request**| `product_request`         |
-| Accept bespoke terms   | Send a Quote Request → receive a **Custom Proposal** → accept             | `custom_order`            |
+| Route                 | Customer action                                                                | Becomes engagement origin |
+| --------------------- | ------------------------------------------------------------------------------ | ------------------------- |
+| Post a Need → award   | Publish a Need, receive Proposals, select one → **Award Offer**                | `need_award`              |
+| Buy a package/service | Choose an Offer/package + add-ons + answer requirements → **Purchase Request** | `service_purchase`        |
+| Book a slot           | Choose an availability slot → **Booking Request**                              | `booking`                 |
+| Request a product     | Choose product + variant + quantity + delivery method → **Product Request**    | `product_request`         |
+| Accept bespoke terms  | Send a Quote Request → receive a **Custom Proposal** → accept                  | `custom_order`            |
 
 Rules the customer experiences:
 
-- **Nothing is an order until the provider accepts.** Every route produces a *pending
-  request* with a visible deadline. This is a direct consequence of the MHC gate: the
+- **Nothing is an order until the provider accepts.** Every route produces a _pending
+  request_ with a visible deadline. This is a direct consequence of the MHC gate: the
   provider must pay to accept, so the provider must be able to decline.
 - The customer may **withdraw** any pending request before activation, at no cost, and the
   provider is not charged.
@@ -189,13 +198,13 @@ context.
 
 ## 11. Communication capabilities
 
-| Stage                          | Channel                                                                                                      |
-| ------------------------------ | -------------------------------------------------------------------------------------------------------------- |
-| Before any request (D1)        | None privately with a provider. **Public offer Q&A** only, visible to all viewers of that offer, redacted and moderated. |
-| Pending request (D2)           | **Pre-award communication**: structured clarification Q&A **and** free-form text, plain text only, **strictly contact-redacted**, moderated, rate-limited and turn-capped. No attachments of any type, no unrestricted links, no external identifiers, no exact location, no payment instructions. |
-| Activated engagement (D3)      | Full threaded messaging with the counterparty, file exchange, and — where the category supports it — on-platform voice/video. Moderated, retained, and admissible as case evidence. |
-| After completion               | Thread stays open for the warranty/dispute window, then becomes read-only but permanently retained.           |
-| With the platform              | Help & Resolution cases at any time, at any tier, including while suspended.                                  |
+| Stage                     | Channel                                                                                                                                                                                                                                                                                            |
+| ------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Before any request (D1)   | None privately with a provider. **Public offer Q&A** only, visible to all viewers of that offer, redacted and moderated.                                                                                                                                                                           |
+| Pending request (D2)      | **Pre-award communication**: structured clarification Q&A **and** free-form text, plain text only, **strictly contact-redacted**, moderated, rate-limited and turn-capped. No attachments of any type, no unrestricted links, no external identifiers, no exact location, no payment instructions. |
+| Activated engagement (D3) | Full threaded messaging with the counterparty, file exchange, and — where the category supports it — on-platform voice/video. Moderated, retained, and admissible as case evidence.                                                                                                                |
+| After completion          | Thread stays open for the warranty/dispute window, then becomes read-only but permanently retained.                                                                                                                                                                                                |
+| With the platform         | Help & Resolution cases at any time, at any tier, including while suspended.                                                                                                                                                                                                                       |
 
 The customer can never initiate contact outside these channels, and the redaction engine
 applies to customer-authored text exactly as it does to provider-authored text — a customer
@@ -213,13 +222,13 @@ a number on it. So the channel stays open and the payload stays closed.
 
 ## 12. File and attachment capabilities
 
-| Placement                              | Pre-activation visibility to provider                                            | Post-activation |
-| -------------------------------------- | ---------------------------------------------------------------------------------- | --------------- |
-| Attachments on a **Need**              | **Manifest only** — file count, type, size, customer caption. No content, no preview, no download. | Full  |
-| Attachments in **pre-award communication** | Not permitted at all                                                          | n/a             |
-| Attachments in **engagement messaging**| n/a                                                                               | Full            |
-| **Requirement answers** on a purchase  | Structured attributes and text answers visible; attached files manifest-only      | Full            |
-| **Evidence** on a case                 | Visible to the counterparty and to admins per case rules                          | —               |
+| Placement                                  | Pre-activation visibility to provider                                                              | Post-activation |
+| ------------------------------------------ | -------------------------------------------------------------------------------------------------- | --------------- |
+| Attachments on a **Need**                  | **Manifest only** — file count, type, size, customer caption. No content, no preview, no download. | Full            |
+| Attachments in **pre-award communication** | Not permitted at all                                                                               | n/a             |
+| Attachments in **engagement messaging**    | n/a                                                                                                | Full            |
+| **Requirement answers** on a purchase      | Structured attributes and text answers visible; attached files manifest-only                       | Full            |
+| **Evidence** on a case                     | Visible to the counterparty and to admins per case rules                                           | —               |
 
 **No attachment type is accessible before activation.** Images, documents, PDFs, CAD files,
 drawings, spreadsheets, archives, audio and video are all manifest-only at D2. There is no
@@ -289,8 +298,8 @@ hazards and access constraints at Need creation for on-site types.
 - Reviews target the **provider's commercial identity**, and additionally attach to the
   specific Offer and Offer version where the engagement originated from one.
 - Structure: an overall star rating, per-criterion sub-ratings appropriate to the
-  fulfillment type (e.g. *quality, communication, timeliness* for digital;
-  *workmanship, punctuality, cleanliness, price accuracy* for on-site), and free text.
+  fulfillment type (e.g. _quality, communication, timeliness_ for digital;
+  _workmanship, punctuality, cleanliness, price accuracy_ for on-site), and free text.
 - Editable **once**, within the review window; the edit is marked and history retained.
 - Cannot review a **cancelled** engagement. Cancellations feed reliability metrics instead —
   this is deliberate, so a provider cannot dodge a bad review by cancelling
@@ -344,18 +353,18 @@ data.
 Because the customer capability is universal, suspending it is the bluntest tool in the
 system and it is scoped narrowly.
 
-| State                        | Effect on the customer                                                                                                     |
-| ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| **Warning / restriction**    | Rate limits on Need creation, quote requests or messaging. Existing activity untouched.                                    |
+| State                           | Effect on the customer                                                                                                                                                               |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Warning / restriction**       | Rate limits on Need creation, quote requests or messaging. Existing activity untouched.                                                                                              |
 | **Buyer commercial suspension** | Cannot post Needs, request quotes, place purchase/booking/product requests, or award. Open Needs are unpublished; pending requests are withdrawn **before** any provider is charged. |
-| **Profile suspension**       | Reviews authored are hidden pending review; the identity cannot appear anywhere public.                                    |
-| **Account closure / ban**    | No new activity of any kind.                                                                                               |
+| **Profile suspension**          | Reviews authored are hidden pending review; the identity cannot appear anywhere public.                                                                                              |
+| **Account closure / ban**       | No new activity of any kind.                                                                                                                                                         |
 
 In **every** state above, the customer retains: access to existing activated engagements,
 the ability to receive deliveries, confirm completion, request revisions, upload evidence,
 report and confirm settlements, participate in cases, and appeal. This is the baseline rule
 that commercial suspension cannot erase obligations, applied to the buyer side — a suspended
-buyer who cannot confirm delivery would harm the *provider*, who did nothing wrong.
+buyer who cannot confirm delivery would harm the _provider_, who did nothing wrong.
 
 ---
 
@@ -397,5 +406,5 @@ buyer who cannot confirm delivery would harm the *provider*, who did nothing wro
   renditions, thumbnails and "safe" images. Permanently out, not deferred
   ([00 §5.1](./00-overview-and-terminology.md)).
 - **Structured-only pre-award communication** as an optional per-category or
-  under-enforcement mode. A possible future enhancement, and explicitly *not* a replacement for
+  under-enforcement mode. A possible future enhancement, and explicitly _not_ a replacement for
   the free-form channel that Wave 3 ships.

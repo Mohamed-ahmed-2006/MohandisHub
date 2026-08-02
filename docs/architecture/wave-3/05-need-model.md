@@ -15,19 +15,19 @@ information to price without carrying anything that would let a provider bypass 
 Six types. The type is chosen at creation, is immutable after the first proposal, and drives
 eligibility, required fields and the default fulfillment shape.
 
-| Type                   | What it is                                                              | Eligible providers   | Default fulfillment                       |
-| ---------------------- | ------------------------------------------------------------------------ | -------------------- | ------------------------------------------ |
-| `professional_service` | Knowledge work with a deliverable: design, analysis, review, drawings   | Expert, Business     | Digital delivery                          |
-| `consultation`         | Time-boxed attention: advice, diagnosis, remote or on-site session      | Expert, Business (+ Craftsman for paid site surveys) | Consultation/session |
-| `local_service`        | Labour at a place: repair, installation, maintenance, fabrication on site | Craftsman, Business | On-site or workshop service               |
-| `product_supply`       | An existing physical item to be bought                                  | Craftsman, Business  | Physical product + delivery or pickup     |
-| `custom_product`       | A physical item to be made to specification                             | Craftsman, Business  | Made-to-order + delivery or pickup        |
-| `product_plus_service` | An item supplied **and** fitted, commissioned or installed              | Craftsman, Business  | Hybrid product + service                  |
+| Type                   | What it is                                                                | Eligible providers                                   | Default fulfillment                   |
+| ---------------------- | ------------------------------------------------------------------------- | ---------------------------------------------------- | ------------------------------------- |
+| `professional_service` | Knowledge work with a deliverable: design, analysis, review, drawings     | Expert, Business                                     | Digital delivery                      |
+| `consultation`         | Time-boxed attention: advice, diagnosis, remote or on-site session        | Expert, Business (+ Craftsman for paid site surveys) | Consultation/session                  |
+| `local_service`        | Labour at a place: repair, installation, maintenance, fabrication on site | Craftsman, Business                                  | On-site or workshop service           |
+| `product_supply`       | An existing physical item to be bought                                    | Craftsman, Business                                  | Physical product + delivery or pickup |
+| `custom_product`       | A physical item to be made to specification                               | Craftsman, Business                                  | Made-to-order + delivery or pickup    |
+| `product_plus_service` | An item supplied **and** fitted, commissioned or installed                | Craftsman, Business                                  | Hybrid product + service              |
 
 Rules:
 
 - **Type → eligible provider kind is a product rule**, not configuration. Category → type
-  mapping *is* admin-configurable, so a new category can be routed to the right type without
+  mapping _is_ admin-configurable, so a new category can be routed to the right type without
   a release.
 - Business is eligible for **every** type. That is the point of the organizational identity.
 - Craftsman eligibility for `consultation` is limited to categories flagged as
@@ -49,11 +49,11 @@ Two orthogonal axes: **who may see it** and **how much of it they see**. Do not 
 
 ### 2.1 Audience
 
-| Mode              | Audience                                                                                             |
-| ----------------- | ------------------------------------------------------------------------------------------------------ |
-| `open`            | Every eligible, enabled, unsuspended provider whose categories and (for local types) service areas match |
-| `open_verified`   | As `open`, further restricted to providers at or above a buyer-chosen verification tier (V1/V2/V3b)   |
-| `directed`        | One named provider only. Nobody else sees it, and it produces at most one proposal                   |
+| Mode            | Audience                                                                                                 |
+| --------------- | -------------------------------------------------------------------------------------------------------- |
+| `open`          | Every eligible, enabled, unsuspended provider whose categories and (for local types) service areas match |
+| `open_verified` | As `open`, further restricted to providers at or above a buyer-chosen verification tier (V1/V2/V3b)      |
+| `directed`      | One named provider only. Nobody else sees it, and it produces at most one proposal                       |
 
 - `directed` is the Need equivalent of a quote request against a provider rather than an
   offer. It is not a private auction and cannot be re-broadcast; converting a directed Need
@@ -64,13 +64,13 @@ Two orthogonal axes: **who may see it** and **how much of it they see**. Do not 
 
 ### 2.2 Depth (fixed, not buyer-chosen)
 
-| Field group                                                                | Eligible provider | Any other signed-in identity |
-| -------------------------------------------------------------------------- | ----------------- | ---------------------------- |
-| Title, type, category, brief, **structured requirement attributes**, timeline, budget mode, coarse location, proposal count, buyer conduct band | **Visible (D2)** | Not visible |
-| Attachment **manifest** — count, MIME type, size, caption                  | Visible (D2)      | Not visible                  |
-| Buyer display name                                                         | Visible (D2)      | Not visible                  |
-| Buyer full name, phone, email, exact address, geolocation, external links, **attachment contents of every type** | **D3 only** | Never |
-| Other providers' proposals, amounts, counts of who viewed                  | Never             | Never                        |
+| Field group                                                                                                                                     | Eligible provider | Any other signed-in identity |
+| ----------------------------------------------------------------------------------------------------------------------------------------------- | ----------------- | ---------------------------- |
+| Title, type, category, brief, **structured requirement attributes**, timeline, budget mode, coarse location, proposal count, buyer conduct band | **Visible (D2)**  | Not visible                  |
+| Attachment **manifest** — count, MIME type, size, caption                                                                                       | Visible (D2)      | Not visible                  |
+| Buyer display name                                                                                                                              | Visible (D2)      | Not visible                  |
+| Buyer full name, phone, email, exact address, geolocation, external links, **attachment contents of every type**                                | **D3 only**       | Never                        |
+| Other providers' proposals, amounts, counts of who viewed                                                                                       | Never             | Never                        |
 
 Proposal amounts are **never** visible to competing providers. Wave 3 runs sealed proposals
 by construction, not as a feature.
@@ -100,6 +100,15 @@ are all unapproved and must not be implemented ([16 group 3](./16-wave-3-scope.m
 the only scarcity mechanism, and its size is admin-configurable per identity type and
 verification tier.
 
+**This holds regardless of plan status.** Paid-bid ordering, proposal visibility advantages and
+promoted proposals stay disabled whatever a plan record says, and the **reserved
+promoted-proposal action is never activated — at any price, including zero**. Proposal ordering
+and visibility are never purchasable ([00 §14.2](./00-overview-and-terminology.md), INV-144).
+
+**Proposal eligibility reads Wave 3 verification only.** The legacy `platform_verified_at`
+badge is not a tier, does not satisfy the `open_verified` requirement, and confers no proposal
+eligibility ([00 §12](./00-overview-and-terminology.md)).
+
 **Proposal content** is structured: price, currency, payment plan shape, scope statement,
 inclusions/exclusions, delivery time or proposed dates, revision count where applicable,
 travel/delivery/installation line items where applicable, validity period, and a cover note.
@@ -113,12 +122,12 @@ the buyer with an "updated" marker.
 
 ## 4. Budget modes
 
-| Mode                | Buyer supplies              | Shown to providers                     | Binding?  |
-| ------------------- | --------------------------- | -------------------------------------- | --------- |
-| `fixed`             | One amount                  | "Budget: X"                            | No        |
-| `range`             | Min and max                 | "Budget: X–Y"                          | No        |
-| `open_to_proposals` | Nothing                     | "Budget: open"                         | n/a       |
-| `hidden`            | An amount, kept private     | "Budget: not disclosed"                | No        |
+| Mode                | Buyer supplies          | Shown to providers      | Binding? |
+| ------------------- | ----------------------- | ----------------------- | -------- |
+| `fixed`             | One amount              | "Budget: X"             | No       |
+| `range`             | Min and max             | "Budget: X–Y"           | No       |
+| `open_to_proposals` | Nothing                 | "Budget: open"          | n/a      |
+| `hidden`            | An amount, kept private | "Budget: not disclosed" | No       |
 
 Rules that must be enforced, not merely displayed:
 
@@ -139,11 +148,11 @@ Rules that must be enforced, not merely displayed:
 
 Every Need carries a **location precision model**, chosen by its type.
 
-| Precision  | Required for                                    | Public at D2                     | Released at D3   |
-| ---------- | ----------------------------------------------- | -------------------------------- | ---------------- |
-| `remote`   | `professional_service`, remote `consultation`   | Nothing                          | Nothing          |
-| `area`     | Optional on remote types                        | Governorate + city/district      | —                |
-| `exact`    | **Mandatory** for `local_service`, `product_plus_service`, on-site `consultation`, and any delivery/installation fulfillment | Governorate + city/district only | Full address, geolocation, access notes, floor, landmark |
+| Precision | Required for                                                                                                                 | Public at D2                     | Released at D3                                           |
+| --------- | ---------------------------------------------------------------------------------------------------------------------------- | -------------------------------- | -------------------------------------------------------- |
+| `remote`  | `professional_service`, remote `consultation`                                                                                | Nothing                          | Nothing                                                  |
+| `area`    | Optional on remote types                                                                                                     | Governorate + city/district      | —                                                        |
+| `exact`   | **Mandatory** for `local_service`, `product_plus_service`, on-site `consultation`, and any delivery/installation fulfillment | Governorate + city/district only | Full address, geolocation, access notes, floor, landmark |
 
 Hard rules:
 
@@ -168,13 +177,13 @@ Hard rules:
 
 **One rule, no exceptions: no transaction attachment is accessible before activation.**
 
-| Attachment class     | Allowed on a Need                | Provider access at D2                     | At D3    |
-| -------------------- | -------------------------------- | ----------------------------------------- | -------- |
-| Images               | Yes                              | **Manifest only**                         | Full     |
-| Documents, PDFs, spreadsheets, drawings, CAD | Yes              | **Manifest only**                         | Full     |
-| Archives             | Yes                              | **Manifest only**                         | Full     |
-| Video / audio        | Yes, within limits               | **Manifest only**                         | Full     |
-| Executables, scripts | No                               | —                                         | —        |
+| Attachment class                             | Allowed on a Need  | Provider access at D2 | At D3 |
+| -------------------------------------------- | ------------------ | --------------------- | ----- |
+| Images                                       | Yes                | **Manifest only**     | Full  |
+| Documents, PDFs, spreadsheets, drawings, CAD | Yes                | **Manifest only**     | Full  |
+| Archives                                     | Yes                | **Manifest only**     | Full  |
+| Video / audio                                | Yes, within limits | **Manifest only**     | Full  |
+| Executables, scripts                         | No                 | —                     | —     |
 
 The **manifest** exposes: file count, MIME type, size, and a buyer-written caption per file.
 That is enough for a provider to know a Need has three photos and a PDF specification, and
@@ -194,13 +203,13 @@ copy, no per-file buyer opt-in that would create one. Explicitly:
 **What carries the pricing signal instead.** Where an image used to be the brief, the brief is
 now typed:
 
-| Instrument                        | What it carries                                                                                   |
-| --------------------------------- | ------------------------------------------------------------------------------------------------- |
-| **Structured requirement attributes** | Per-type, per-category typed fields: measurements with units, material, finish, quantity, symptom, model and make, age, condition, tolerances, floor, lift access, power, clearance, declared hazards |
-| **Free-form brief text**          | The buyer's own description, at D2, under strict contact redaction                                |
-| **Attachment manifest**           | Proof that four photos and a specification exist and are released on activation                   |
-| **Travel-fee bands by area**      | Lets a Craftsman price distance from their own table without the address ([08 §6](./08-craftsman-storefront.md)) |
-| **`survey_required` / priced site survey** | The honest, paid instrument for work that genuinely cannot be priced remotely ([08 §2](./08-craftsman-storefront.md)) |
+| Instrument                                 | What it carries                                                                                                                                                                                       |
+| ------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Structured requirement attributes**      | Per-type, per-category typed fields: measurements with units, material, finish, quantity, symptom, model and make, age, condition, tolerances, floor, lift access, power, clearance, declared hazards |
+| **Free-form brief text**                   | The buyer's own description, at D2, under strict contact redaction                                                                                                                                    |
+| **Attachment manifest**                    | Proof that four photos and a specification exist and are released on activation                                                                                                                       |
+| **Travel-fee bands by area**               | Lets a Craftsman price distance from their own table without the address ([08 §6](./08-craftsman-storefront.md))                                                                                      |
+| **`survey_required` / priced site survey** | The honest, paid instrument for work that genuinely cannot be priced remotely ([08 §2](./08-craftsman-storefront.md))                                                                                 |
 
 Where a category's structured intake is too thin to price from, the remedy is **to enrich that
 category's intake fields** — an admin-configurable, per-category exercise — not to reintroduce
@@ -263,15 +272,15 @@ Rules:
 `draft` → `open` → `award_pending` → `engaged` → `closed`
 with `cancelled` and `expired` reachable from `open` and `award_pending`.
 
-| State           | Proposals accepted | Visible to providers | Buyer may cancel | Notes                                                             |
-| --------------- | ------------------ | -------------------- | ---------------- | ------------------------------------------------------------------ |
-| `draft`         | —                  | No                   | n/a (delete)     | Not published, not indexed                                        |
-| `open`          | Yes                | Yes (D2)             | Yes, free        | The normal state                                                  |
-| `award_pending` | No                 | Yes, marked awarded  | Yes, free        | One live award offer; no charge yet                                |
-| `engaged`       | No                 | No                   | **No**           | An Engagement exists; cancellation is an engagement action        |
-| `closed`        | No                 | No                   | —                | Engagement completed or terminally closed                          |
-| `cancelled`     | No                 | No                   | —                | Buyer-initiated before activation                                  |
-| `expired`       | No                 | No                   | —                | Open window elapsed with no award                                  |
+| State           | Proposals accepted | Visible to providers | Buyer may cancel | Notes                                                      |
+| --------------- | ------------------ | -------------------- | ---------------- | ---------------------------------------------------------- |
+| `draft`         | —                  | No                   | n/a (delete)     | Not published, not indexed                                 |
+| `open`          | Yes                | Yes (D2)             | Yes, free        | The normal state                                           |
+| `award_pending` | No                 | Yes, marked awarded  | Yes, free        | One live award offer; no charge yet                        |
+| `engaged`       | No                 | No                   | **No**           | An Engagement exists; cancellation is an engagement action |
+| `closed`        | No                 | No                   | —                | Engagement completed or terminally closed                  |
+| `cancelled`     | No                 | No                   | —                | Buyer-initiated before activation                          |
+| `expired`       | No                 | No                   | —                | Open window elapsed with no award                          |
 
 ### 8.2 Cancellation
 

@@ -71,7 +71,7 @@ must always be able to learn who they are actually dealing with once they have e
 - **No inventory system in Wave 3.** Stock is a manually maintained status per variant, not
   a tracked quantity. Overselling is possible and the product must say so honestly to both
   sides ([08 §9](./08-craftsman-storefront.md)).
-- **No cart, no basket, no multi-provider order.** Several products from *this* shop can be
+- **No cart, no basket, no multi-provider order.** Several products from _this_ shop can be
   one request; two shops are two engagements.
 - **No shipping-carrier integration, no tracking numbers, no logistics.** Delivery is the
   Craftsman's own arrangement, recorded as a handover event.
@@ -115,14 +115,14 @@ premises, and moderated public storefront media.
 
 ## 6. Verification requirements
 
-| Requirement                          | Status                                                                        |
-| ------------------------------------ | ------------------------------------------------------------------------------- |
-| V0 contact verification              | Mandatory                                                                     |
-| **V1 identity (KYC)**                | **Mandatory** before enablement                                               |
-| V2 trade credential / licence        | Mandatory in credential-required categories; optional badge elsewhere         |
-| Workshop location evidence           | Required when a fixed workshop is declared; verified at admin discretion      |
-| Sanctions / duplicate-identity check | Mandatory; one PCI per verified natural person                                |
-| Re-verification                      | On expiry, on trade-name or location change, on enforcement flag              |
+| Requirement                          | Status                                                                   |
+| ------------------------------------ | ------------------------------------------------------------------------ |
+| V0 contact verification              | Mandatory                                                                |
+| **V1 identity (KYC)**                | **Mandatory** before enablement                                          |
+| V2 trade credential / licence        | Mandatory in credential-required categories; optional badge elsewhere    |
+| Workshop location evidence           | Required when a fixed workshop is declared; verified at admin discretion |
+| Sanctions / duplicate-identity check | Mandatory; one PCI per verified natural person                           |
+| Re-verification                      | On expiry, on trade-name or location change, on enforcement flag         |
 
 - A trade name must not duplicate a verified Business's registered name, and name collisions
   are a moderation matter at publication time.
@@ -130,6 +130,13 @@ premises, and moderated public storefront media.
   licensed for a regulated trade.
 - Verification tier, credential scope and trade name are **snapshotted** onto every
   engagement at activation.
+- **The legacy `platform_verified_at` badge enables nothing.** It is not V1, not V2, and not a
+  partial substitute for either. It never enables a PCI, never permits storefront or catalog
+  publication, never authorizes proposals, MHC spend or D3 access, and never rescues a lapsed
+  tier — a revoked or expired Wave 3 credential blocks new commercial actions even where the
+  legacy timestamp remains populated. Existing Craftsmen are classified **unverified for Wave 3
+  commercial authority** until they hold valid new verification evidence
+  ([00 §12](./00-overview-and-terminology.md)).
 
 ---
 
@@ -138,21 +145,21 @@ premises, and moderated public storefront media.
 The Craftsman profile **is** the storefront. Full model in
 [08](./08-craftsman-storefront.md); the disclosure split is:
 
-| Element                                                                             | Tier |
-| ----------------------------------------------------------------------------------- | ---- |
-| Trade name, logo, cover, trade categories, storefront description                   | D0   |
-| Rating, review count, completed engagements, verification and credential badges     | D0   |
-| Workshop **name**, coarse workshop location (city/district), coarse service zone, **service areas served**, travel-fee bands | D0 |
-| Approximate map area that cannot identify the exact premises                        | D0   |
-| Operating hours, typical lead time, response time, on-time rate                     | D0   |
-| Service catalog and product catalog with prices, variants and stock status          | D0   |
-| Work gallery (past work, moderated, consent-recorded)                               | D1   |
-| Availability calendar and bookable slots                                            | D1   |
-| Delivery options, fees, minimum order values, warranty terms                        | D1   |
-| **Exact workshop address, building number, floor/unit, exact map pin, GPS coordinates, any map link or directions identifying the exact premises** | **D3 only — no exception** |
-| Pickup instructions containing the exact premises or directions to it               | **D3** |
-| Verified legal name, phone, email, payment instructions                             | **D3** |
-| External links controlled by the Craftsman — website, social handles, booking pages  | **D3** (and never a route around the gate) |
+| Element                                                                                                                                            | Tier                                       |
+| -------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------ |
+| Trade name, logo, cover, trade categories, storefront description                                                                                  | D0                                         |
+| Rating, review count, completed engagements, verification and credential badges                                                                    | D0                                         |
+| Workshop **name**, coarse workshop location (city/district), coarse service zone, **service areas served**, travel-fee bands                       | D0                                         |
+| Approximate map area that cannot identify the exact premises                                                                                       | D0                                         |
+| Operating hours, typical lead time, response time, on-time rate                                                                                    | D0                                         |
+| Service catalog and product catalog with prices, variants and stock status                                                                         | D0                                         |
+| Work gallery (past work, moderated, consent-recorded)                                                                                              | D1                                         |
+| Availability calendar and bookable slots                                                                                                           | D1                                         |
+| Delivery options, fees, minimum order values, warranty terms                                                                                       | D1                                         |
+| **Exact workshop address, building number, floor/unit, exact map pin, GPS coordinates, any map link or directions identifying the exact premises** | **D3 only — no exception**                 |
+| Pickup instructions containing the exact premises or directions to it                                                                              | **D3**                                     |
+| Verified legal name, phone, email, payment instructions                                                                                            | **D3**                                     |
+| External links controlled by the Craftsman — website, social handles, booking pages                                                                | **D3** (and never a route around the gate) |
 
 ---
 
@@ -165,6 +172,10 @@ location, rating, verification tier, response time, on-time rate and availabilit
 Geography is a **filter, not a hint**: a Craftsman whose declared areas do not cover the
 buyer's location is excluded from location-scoped results rather than shown and rejected
 later.
+
+**Verification tier as a ranking input means the Wave 3 tier.** The legacy
+`platform_verified_at` badge confers **no search preference** and is never a filter, facet or
+ranking input ([00 §12](./00-overview-and-terminology.md)).
 
 **Discovering work:**
 
@@ -222,23 +233,23 @@ Self-dealing applies: no buying from one's own Craftsman identity or from an own
 
 ## 10. Providing capabilities
 
-| Capability                          | Wave 3                                                                        |
-| ----------------------------------- | -------------------------------------------------------------------------------- |
-| Publish offers                      | ✅ `craftsman_service`, `physical_product`, `made_to_order_product`             |
-| Service pricing models              | ✅ fixed, from-price, per-unit, survey-required (with optional inspection fee)   |
-| Product variants                    | ✅ option types → values → variants with own price, lead time and stock status   |
-| Made-to-order products              | ✅ with spec intake and a mandatory spec-confirmation gate                       |
-| Service areas and travel fees       | ✅ per-area fee and minimum order value                                          |
-| Delivery                            | ✅ provider delivery with per-area fee, free-above-threshold, or customer-arranged |
-| Pickup                              | ✅ with pickup window and handover confirmation                                  |
-| Installation                        | ✅ as a priced, separately scheduled component                                   |
-| Bookings and availability           | ✅ slots, working hours, blackout dates, daily job cap, lead-time buffer         |
-| Proposals on Needs                  | ✅ free, quota-limited, eligible types only                                      |
-| Custom proposals / quotes after survey | ✅                                                                             |
-| Warranty / rectification terms      | ✅ declared per offer and snapshotted onto the engagement                        |
-| Digital-only knowledge services     | ❌ (Expert)                                                                       |
-| Inventory quantities, reservations, backorders | ❌ Wave 4                                                              |
-| Staff, second location, branch      | ❌ Wave 4                                                                         |
+| Capability                                     | Wave 3                                                                             |
+| ---------------------------------------------- | ---------------------------------------------------------------------------------- |
+| Publish offers                                 | ✅ `craftsman_service`, `physical_product`, `made_to_order_product`                |
+| Service pricing models                         | ✅ fixed, from-price, per-unit, survey-required (with optional inspection fee)     |
+| Product variants                               | ✅ option types → values → variants with own price, lead time and stock status     |
+| Made-to-order products                         | ✅ with spec intake and a mandatory spec-confirmation gate                         |
+| Service areas and travel fees                  | ✅ per-area fee and minimum order value                                            |
+| Delivery                                       | ✅ provider delivery with per-area fee, free-above-threshold, or customer-arranged |
+| Pickup                                         | ✅ with pickup window and handover confirmation                                    |
+| Installation                                   | ✅ as a priced, separately scheduled component                                     |
+| Bookings and availability                      | ✅ slots, working hours, blackout dates, daily job cap, lead-time buffer           |
+| Proposals on Needs                             | ✅ free, quota-limited, eligible types only                                        |
+| Custom proposals / quotes after survey         | ✅                                                                                 |
+| Warranty / rectification terms                 | ✅ declared per offer and snapshotted onto the engagement                          |
+| Digital-only knowledge services                | ❌ (Expert)                                                                        |
+| Inventory quantities, reservations, backorders | ❌ Wave 4                                                                          |
+| Staff, second location, branch                 | ❌ Wave 4                                                                          |
 
 Fulfillment component types a Craftsman may attach: **on-site service**, **workshop service**,
 **physical product**, **made-to-order product**, **delivery**, **pickup** and **installation**.
@@ -274,7 +285,7 @@ Identical gate structure to Expert, with two physical-work additions at D3:
   handover-code exchange.
 
 At D2, **pre-award communication** — structured clarification and free-form text — is bounded,
-strictly contact-redacted and moderated, and is the *only* pre-activation channel. Site
+strictly contact-redacted and moderated, and is the _only_ pre-activation channel. Site
 photographs **cannot be obtained before activation by any route**: not by asking in a message,
 not as a preview, not as a thumbnail. The Craftsman prices from the structured attributes, the
 redacted description and the manifest, or sells a priced survey. The photographs are released
@@ -284,17 +295,17 @@ in full the moment the engagement is activated.
 
 ## 12. File and attachment capabilities
 
-| Surface                                | Rule                                                                                  |
-| -------------------------------------- | --------------------------------------------------------------------------------------- |
-| Storefront gallery, product and service media | Public at D0/D1, moderated, contact-scanned, consent-recorded for customer sites |
-| Proposal / custom proposal attachments | **Not permitted**                                                                      |
-| Pre-award communication                | **No attachments of any type**                                                         |
-| Need attachments received              | **Manifest only** at D2 — no content, no preview, no rendition; full at D3             |
-| **Intake evidence**                    | Required at D3 for workshop jobs: item condition photos at drop-off                    |
-| **Progress and completion evidence**   | Required at D3 per fulfillment type: before/after photos, arrival check-in, installation photos, functional check |
-| **Handover evidence**                  | Recipient confirmation, handover code, or signed/photographed handover record          |
-| Warranty and rectification records     | Attached to the engagement, retained beyond the warranty window                        |
-| Case evidence                          | Permitted per case rules, including while suspended                                    |
+| Surface                                       | Rule                                                                                                              |
+| --------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| Storefront gallery, product and service media | Public at D0/D1, moderated, contact-scanned, consent-recorded for customer sites                                  |
+| Proposal / custom proposal attachments        | **Not permitted**                                                                                                 |
+| Pre-award communication                       | **No attachments of any type**                                                                                    |
+| Need attachments received                     | **Manifest only** at D2 — no content, no preview, no rendition; full at D3                                        |
+| **Intake evidence**                           | Required at D3 for workshop jobs: item condition photos at drop-off                                               |
+| **Progress and completion evidence**          | Required at D3 per fulfillment type: before/after photos, arrival check-in, installation photos, functional check |
+| **Handover evidence**                         | Recipient confirmation, handover code, or signed/photographed handover record                                     |
+| Warranty and rectification records            | Attached to the engagement, retained beyond the warranty window                                                   |
+| Case evidence                                 | Permitted per case rules, including while suspended                                                               |
 
 Evidence media is a **product requirement of the fulfillment type**, not an optional nicety
 — minimum counts and required moments are defined in [11](./11-fulfillment-models.md) and
@@ -377,15 +388,15 @@ configurable per category, but the requirement itself is not optional.
 
 ## 17. Analytics capabilities
 
-| Group          | Metrics                                                                                                                              |
-| -------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
-| Demand         | Storefront views, service and product views, views by area, quote requests, booking requests, conversion by catalog item and variant  |
-| Geography      | Requests by area, accepted vs declined by area, travel-fee realization, out-of-area demand the shop is missing                        |
-| Proposals      | Submitted, quota remaining, win rate, award-to-activation rate, lapse rate                                                            |
-| Operations     | Bookings per day vs cap, on-time arrival rate, average lead time, rework/rectification rate, uncollected-item count, cancellation rate by cause |
-| Settlement     | Agreed vs reported vs **confirmed** vs **verified**, deposit realization, coverage distribution                                       |
-| MHC            | Balance, spend by action key, MHC cost per engagement and per confirmed settled unit, re-grants                                       |
-| Reputation     | Rating trend, per-criterion breakdown, review volume by product and service, reliability metrics                                      |
+| Group      | Metrics                                                                                                                                         |
+| ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| Demand     | Storefront views, service and product views, views by area, quote requests, booking requests, conversion by catalog item and variant            |
+| Geography  | Requests by area, accepted vs declined by area, travel-fee realization, out-of-area demand the shop is missing                                  |
+| Proposals  | Submitted, quota remaining, win rate, award-to-activation rate, lapse rate                                                                      |
+| Operations | Bookings per day vs cap, on-time arrival rate, average lead time, rework/rectification rate, uncollected-item count, cancellation rate by cause |
+| Settlement | Agreed vs reported vs **confirmed** vs **verified**, deposit realization, coverage distribution                                                 |
+| MHC        | Balance, spend by action key, MHC cost per engagement and per confirmed settled unit, re-grants                                                 |
+| Reputation | Rating trend, per-criterion breakdown, review volume by product and service, reliability metrics                                                |
 
 Same honesty rules as Expert: reported ≠ confirmed ≠ verified, three labels, and only
 verified feeds badges or any future GMV-based model.
@@ -394,12 +405,12 @@ verified feeds badges or any future GMV-based model.
 
 ## 18. Suspension behaviour
 
-| Axis                      | Effect                                                                                                                                                                          |
-| ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Restriction**           | Reduced proposal quota, capped daily bookings, new catalog publication paused.                                                                                                   |
+| Axis                      | Effect                                                                                                                                                                                  |
+| ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Restriction**           | Reduced proposal quota, capped daily bookings, new catalog publication paused.                                                                                                          |
 | **Commercial suspension** | Storefront and every catalog item hidden from D0/D1; no proposals, quote replies, purchase or booking acceptances, or activations; MHC purchase blocked; balance frozen, not forfeited. |
-| **Profile suspension**    | Storefront removed from discovery and direct links; authored reviews hidden pending review.                                                                                     |
-| **Termination**           | Only after open engagements complete, are cancelled with customer remedy, or are administratively closed with a determination.                                                  |
+| **Profile suspension**    | Storefront removed from discovery and direct links; authored reviews hidden pending review.                                                                                             |
+| **Termination**           | Only after open engagements complete, are cancelled with customer remedy, or are administratively closed with a determination.                                                          |
 
 Under every state the Craftsman keeps: existing engagement access, scheduling, delivery,
 evidence upload, handover, warranty/rectification handling, messaging, settlement reporting
@@ -456,5 +467,8 @@ still be able to complete handover.** Suspension never traps an item in a worksh
 - **Supplier-side procurement** under the Craftsman identity.
 - **Recurring maintenance contracts** and scheduled service plans.
 - **Structured warranty claims** as their own object, separate from cases.
-- **Paid promotion, featured shop placement, advertisements** — unapproved.
+- **Paid promotion and featured shop placement** — unapproved.
+- **Priced advertisements.** The advertisement machinery is implemented, wired and operational
+  at a **zero price**; what is deferred is non-zero pricing, which requires explicit
+  configuration and commercial approval ([00 §14.1](./00-overview-and-terminology.md)).
 - **Any escrow, cash-on-delivery collection by the platform, or platform-held funds.**

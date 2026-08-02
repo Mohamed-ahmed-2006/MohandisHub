@@ -8,20 +8,20 @@
 
 ## 1. Shop / workshop identity
 
-| Element                              | Rule                                                                                                                   |
-| ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------ |
-| **Trade name**                       | Optional display name (e.g. "Al-Nour Metalworks"). Must not imply a registered company, plural personnel, or an organization. Moderated at publication and on change |
-| **Verified legal name**              | Held always; disclosed at **D3** on every engagement and in every engagement snapshot                                  |
-| Logo, cover image, gallery           | D0/D1; moderated for contact leakage; customer-site photos require recorded consent                                    |
-| Trade categories                     | Drive discovery, eligibility, credential requirements and evidence requirements                                        |
-| Storefront description               | D0; no contact details, links, handles or addresses                                                                    |
-| **Operating model**                  | `mobile_only` (goes to the customer) · `workshop_only` (customer comes) · `both`                                        |
-| **Workshop name**                    | Optional public premises name. D0, moderated. It names a shop; it does not locate one    |
-| **Workshop location**                | Required when the model includes workshop work. **Coarse part D0** — city, district, coarse service zone, and an approximate map area that cannot identify the exact premises. **Exact address, building number, floor/unit, exact map pin and GPS coordinates are D3 only, with no exception** |
-| Operating hours, holidays            | D0                                                                                                                     |
-| Typical lead time, response time, on-time rate | D0, computed, not self-declared                                                                              |
-| Badges                               | V1 verified, V2 credential with scope, rating, completed engagements, verified settled-volume band                     |
-| Payment methods accepted             | Method **types** at D1 (cash, transfer, InstaPay, in-shop card); **instructions and account details at D3 only**       |
+| Element                                        | Rule                                                                                                                                                                                                                                                                                            |
+| ---------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Trade name**                                 | Optional display name (e.g. "Al-Nour Metalworks"). Must not imply a registered company, plural personnel, or an organization. Moderated at publication and on change                                                                                                                            |
+| **Verified legal name**                        | Held always; disclosed at **D3** on every engagement and in every engagement snapshot                                                                                                                                                                                                           |
+| Logo, cover image, gallery                     | D0/D1; moderated for contact leakage; customer-site photos require recorded consent                                                                                                                                                                                                             |
+| Trade categories                               | Drive discovery, eligibility, credential requirements and evidence requirements                                                                                                                                                                                                                 |
+| Storefront description                         | D0; no contact details, links, handles or addresses                                                                                                                                                                                                                                             |
+| **Operating model**                            | `mobile_only` (goes to the customer) · `workshop_only` (customer comes) · `both`                                                                                                                                                                                                                |
+| **Workshop name**                              | Optional public premises name. D0, moderated. It names a shop; it does not locate one                                                                                                                                                                                                           |
+| **Workshop location**                          | Required when the model includes workshop work. **Coarse part D0** — city, district, coarse service zone, and an approximate map area that cannot identify the exact premises. **Exact address, building number, floor/unit, exact map pin and GPS coordinates are D3 only, with no exception** |
+| Operating hours, holidays                      | D0                                                                                                                                                                                                                                                                                              |
+| Typical lead time, response time, on-time rate | D0, computed, not self-declared                                                                                                                                                                                                                                                                 |
+| Badges                                         | V1 verified, V2 credential with scope, rating, completed engagements, verified settled-volume band                                                                                                                                                                                              |
+| Payment methods accepted                       | Method **types** at D1 (cash, transfer, InstaPay, in-shop card); **instructions and account details at D3 only**                                                                                                                                                                                |
 
 ### 1.1 Exact premises are D3 — there is no walk-in address exception
 
@@ -32,27 +32,27 @@ who took it had given away the gate for every engagement, not only for walk-in t
 
 **Public and pre-activation disclosure (D0/D1/D2) may include:**
 
-| Permitted below D3                                                          |
-| --------------------------------------------------------------------------- |
-| Workshop name                                                               |
-| City                                                                        |
-| District                                                                    |
-| Coarse service zone                                                         |
-| Service area(s) served                                                      |
-| An **approximate map area** that cannot identify the exact premises         |
-| Moderated public storefront media                                           |
+| Permitted below D3                                                  |
+| ------------------------------------------------------------------- |
+| Workshop name                                                       |
+| City                                                                |
+| District                                                            |
+| Coarse service zone                                                 |
+| Service area(s) served                                              |
+| An **approximate map area** that cannot identify the exact premises |
+| Moderated public storefront media                                   |
 
 **Public and pre-activation disclosure must not include:**
 
-| Prohibited below D3                                                         |
-| --------------------------------------------------------------------------- |
-| Exact street address                                                        |
-| Building number                                                             |
-| Floor or unit                                                               |
-| Exact map pin                                                               |
-| GPS coordinates                                                             |
-| A map link exposing the exact premises                                      |
-| Directions sufficient to locate the workshop exactly                        |
+| Prohibited below D3                                  |
+| ---------------------------------------------------- |
+| Exact street address                                 |
+| Building number                                      |
+| Floor or unit                                        |
+| Exact map pin                                        |
+| GPS coordinates                                      |
+| A map link exposing the exact premises               |
+| Directions sufficient to locate the workshop exactly |
 
 **Exact workshop address and coordinates are D3-only**, and become accessible solely to
 authorized participants after a successful MHC Engagement Activation
@@ -73,19 +73,19 @@ own handover flow ([§7.2](#72-pickup)) — never on the public storefront.
 
 Craftsman service offers (`craftsman_service`), each with:
 
-| Attribute            | Options                                                                                                         |
-| -------------------- | ------------------------------------------------------------------------------------------------------------------ |
-| **Pricing model**    | `fixed` · `from` (starting at) · `per_unit` (hour, m², metre, point, item) · `survey_required`                    |
-| Inspection fee       | For `survey_required`: optional priced survey, and whether it is credited against the job if the quote is accepted |
-| **Location model**   | `at_customer_site` · `at_workshop` · `either`                                                                     |
-| Duration estimate    | Expected on-site or workshop time; drives slot length                                                             |
-| Crew / access needs  | What the site must provide: power, water, parking, clearance, lift access                                         |
-| **Inclusions / exclusions** | Structured lists, minimum one exclusion — materials included or not is the single most disputed line       |
-| Materials stance     | `materials_included` · `materials_extra` · `customer_supplies`                                                    |
-| **Warranty window**  | Duration and coverage for rectification; snapshotted                                                              |
-| Evidence profile     | Category-driven minimum: arrival check-in, before/after photo counts, functional check                            |
-| Requirements intake  | Structured questions answered at request time                                                                     |
-| Add-ons              | Priced extras with their own duration deltas (extra point, additional unit, out-of-hours)                         |
+| Attribute                   | Options                                                                                                            |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| **Pricing model**           | `fixed` · `from` (starting at) · `per_unit` (hour, m², metre, point, item) · `survey_required`                     |
+| Inspection fee              | For `survey_required`: optional priced survey, and whether it is credited against the job if the quote is accepted |
+| **Location model**          | `at_customer_site` · `at_workshop` · `either`                                                                      |
+| Duration estimate           | Expected on-site or workshop time; drives slot length                                                              |
+| Crew / access needs         | What the site must provide: power, water, parking, clearance, lift access                                          |
+| **Inclusions / exclusions** | Structured lists, minimum one exclusion — materials included or not is the single most disputed line               |
+| Materials stance            | `materials_included` · `materials_extra` · `customer_supplies`                                                     |
+| **Warranty window**         | Duration and coverage for rectification; snapshotted                                                               |
+| Evidence profile            | Category-driven minimum: arrival check-in, before/after photo counts, functional check                             |
+| Requirements intake         | Structured questions answered at request time                                                                      |
+| Add-ons                     | Priced extras with their own duration deltas (extra point, additional unit, out-of-hours)                          |
 
 `survey_required` is the honest model for work that genuinely cannot be priced remotely, and
 with no pre-activation attachment previews it is the primary instrument for work that has to be
@@ -119,7 +119,7 @@ the chain is auditable and the two-charge sequence is measurable.
 ## 4. Variants
 
 | Concept          | Definition                                                                                                    |
-| ---------------- | ----------------------------------------------------------------------------------------------------------------- |
+| ---------------- | ------------------------------------------------------------------------------------------------------------- |
 | **Option type**  | A named dimension: size, material, colour, finish, capacity, thickness. Max count admin-configurable          |
 | **Option value** | A value within a type, with optional swatch/image                                                             |
 | **Variant**      | A combination of one value per option type — the actual purchasable unit                                      |
@@ -158,14 +158,14 @@ points:
 
 ## 6. Service areas
 
-| Element                | Definition                                                                                             |
-| ---------------------- | ---------------------------------------------------------------------------------------------------------- |
-| **Area unit**          | Administrative units — governorate → city → district. The finest declared unit governs matching        |
-| Coverage set           | The list of units the Craftsman serves. Optionally a radius from the workshop, resolved to units       |
-| **Travel fee per area**| A fee band per unit, or a single fee, or free. Displayed at D0 alongside the offer price               |
-| **Minimum order value**| Per area, so distant work can carry a floor                                                            |
-| Out-of-hours surcharge | Optional, declared                                                                                     |
-| Excluded zones         | Explicit exclusions inside an otherwise-covered unit                                                   |
+| Element                 | Definition                                                                                       |
+| ----------------------- | ------------------------------------------------------------------------------------------------ |
+| **Area unit**           | Administrative units — governorate → city → district. The finest declared unit governs matching  |
+| Coverage set            | The list of units the Craftsman serves. Optionally a radius from the workshop, resolved to units |
+| **Travel fee per area** | A fee band per unit, or a single fee, or free. Displayed at D0 alongside the offer price         |
+| **Minimum order value** | Per area, so distant work can carry a floor                                                      |
+| Out-of-hours surcharge  | Optional, declared                                                                               |
+| Excluded zones          | Explicit exclusions inside an otherwise-covered unit                                             |
 
 Rules:
 
@@ -191,11 +191,11 @@ engagement composes them.
 
 ### 7.1 Delivery
 
-| Mode                    | Behaviour                                                                                         |
-| ----------------------- | ----------------------------------------------------------------------------------------------------- |
-| `provider_delivery`     | The Craftsman delivers. Fee per area, or free above a threshold. Delivery window scheduled          |
-| `customer_arranged`     | The buyer sends a courier. The provider's obligation ends at **handover to the courier**, evidenced |
-| `not_offered`           | Pickup only                                                                                         |
+| Mode                | Behaviour                                                                                           |
+| ------------------- | --------------------------------------------------------------------------------------------------- |
+| `provider_delivery` | The Craftsman delivers. Fee per area, or free above a threshold. Delivery window scheduled          |
+| `customer_arranged` | The buyer sends a courier. The provider's obligation ends at **handover to the courier**, evidenced |
+| `not_offered`       | Pickup only                                                                                         |
 
 - **No carrier integration, no tracking numbers, no labels.** Delivery is a scheduled handover
   with evidence: dispatch record, recipient name, handover photo or code.
@@ -231,17 +231,17 @@ engagement composes them.
 
 ## 8. Availability
 
-| Control                | Definition                                                                                     |
-| ---------------------- | -------------------------------------------------------------------------------------------------- |
-| Working hours          | Per weekday, with break windows                                                                |
-| Blackout dates         | Holidays, vacation, closures — with an auto-resume date shown to buyers                        |
-| **Slot generation**    | Slot length per service, plus a buffer between slots                                           |
-| **Lead-time buffer**   | Minimum notice before the earliest bookable slot                                               |
-| **Daily job cap**      | Maximum accepted jobs per day; reaching it removes remaining slots                             |
-| Booking horizon        | How far ahead slots are bookable                                                               |
-| Concurrent cap         | Maximum live engagements across the storefront                                                 |
-| Per-area day rules     | Optional: serve area A on certain days only — the standard way small shops batch travel        |
-| Accepting / paused     | Storefront-level and per-catalog-item pause                                                    |
+| Control              | Definition                                                                              |
+| -------------------- | --------------------------------------------------------------------------------------- |
+| Working hours        | Per weekday, with break windows                                                         |
+| Blackout dates       | Holidays, vacation, closures — with an auto-resume date shown to buyers                 |
+| **Slot generation**  | Slot length per service, plus a buffer between slots                                    |
+| **Lead-time buffer** | Minimum notice before the earliest bookable slot                                        |
+| **Daily job cap**    | Maximum accepted jobs per day; reaching it removes remaining slots                      |
+| Booking horizon      | How far ahead slots are bookable                                                        |
+| Concurrent cap       | Maximum live engagements across the storefront                                          |
+| Per-area day rules   | Optional: serve area A on certain days only — the standard way small shops batch travel |
+| Accepting / paused   | Storefront-level and per-catalog-item pause                                             |
 
 **Slots are not reservations until activation.** A booking request holds the slot
 provisionally for the activation window; if the provider does not activate, the slot is
@@ -269,15 +269,15 @@ under-communicating it produces the worst class of customer disappointment.
 
 **What does not exist in Wave 3:**
 
-| Absent                          | Consequence the product must state honestly                                                  |
-| ------------------------------- | ---------------------------------------------------------------------------------------------- |
-| Tracked quantities              | "Available" means the provider says so, not that a count is above zero                       |
-| Reservation on request          | Two buyers can request the last item; both requests are valid until the provider accepts one |
-| Decrement on completion         | Selling an item does not change its status; the provider must update it                      |
-| Overselling protection          | Overselling is possible and is resolved by the provider declining or cancelling              |
-| Low-stock alerts, backorders    | None                                                                                         |
-| Multi-location stock            | None — a single storefront has one implicit location                                         |
-| Bulk stock editing / import     | None; status is edited item by item                                                          |
+| Absent                       | Consequence the product must state honestly                                                  |
+| ---------------------------- | -------------------------------------------------------------------------------------------- |
+| Tracked quantities           | "Available" means the provider says so, not that a count is above zero                       |
+| Reservation on request       | Two buyers can request the last item; both requests are valid until the provider accepts one |
+| Decrement on completion      | Selling an item does not change its status; the provider must update it                      |
+| Overselling protection       | Overselling is possible and is resolved by the provider declining or cancelling              |
+| Low-stock alerts, backorders | None                                                                                         |
+| Multi-location stock         | None — a single storefront has one implicit location                                         |
+| Bulk stock editing / import  | None; status is edited item by item                                                          |
 
 **Mitigations that are part of the design, not afterthoughts:**
 

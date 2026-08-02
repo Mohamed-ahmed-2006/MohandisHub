@@ -12,10 +12,10 @@
 Wave 3 has **two orthogonal suspension axes**, plus a graded ladder around them. Conflating
 them is the mistake that breaks the baseline rule.
 
-| Axis                       | Scope                                | Stops                                             | Never stops                                    |
-| -------------------------- | ------------------------------------ | ------------------------------------------------- | ---------------------------------------------- |
-| **Commercial suspension**  | One **commercial identity** (PCI or BCI), and for a BCI optionally one surface | Creating **new** commercial activity | Fulfilling existing obligations                |
-| **Profile suspension**     | Public presence of a commercial identity or the account | Being **found**                        | Existing engagement access                     |
+| Axis                      | Scope                                                                          | Stops                                | Never stops                     |
+| ------------------------- | ------------------------------------------------------------------------------ | ------------------------------------ | ------------------------------- |
+| **Commercial suspension** | One **commercial identity** (PCI or BCI), and for a BCI optionally one surface | Creating **new** commercial activity | Fulfilling existing obligations |
+| **Profile suspension**    | Public presence of a commercial identity or the account                        | Being **found**                      | Existing engagement access      |
 
 They compose. A commercial identity can be commercially suspended without being hidden
 (offers hidden, profile still reachable by an existing counterparty), profile-suspended
@@ -26,14 +26,14 @@ while trading continues), or both.
 
 ## 2. The enforcement ladder
 
-| Step | Action                     | Typical trigger                                                                    | Reversible |
-| ---- | -------------------------- | ------------------------------------------------------------------------------------ | ---------- |
-| 1    | **Warning**                | First-instance policy breach; contact leakage caught by redaction                  | n/a        |
-| 2    | **Feature restriction**    | Repeat leakage, quota abuse, spam, high lapse rate                                 | Yes        |
-| 3    | **Content action**         | Offer rejected, review hidden, media removed, need unpublished                     | Yes        |
-| 4    | **Commercial suspension**  | Confirmed bypass attempt, fraud signal, verification lapse, serious conduct finding| Yes        |
-| 5    | **Profile suspension**     | Public-content violation, impersonation, escalated conduct finding                 | Yes        |
-| 6    | **Termination**            | Fraud, identity abuse, harvesting, systematic bypass, sanctions                    | Rarely     |
+| Step | Action                    | Typical trigger                                                                     | Reversible |
+| ---- | ------------------------- | ----------------------------------------------------------------------------------- | ---------- |
+| 1    | **Warning**               | First-instance policy breach; contact leakage caught by redaction                   | n/a        |
+| 2    | **Feature restriction**   | Repeat leakage, quota abuse, spam, high lapse rate                                  | Yes        |
+| 3    | **Content action**        | Offer rejected, review hidden, media removed, need unpublished                      | Yes        |
+| 4    | **Commercial suspension** | Confirmed bypass attempt, fraud signal, verification lapse, serious conduct finding | Yes        |
+| 5    | **Profile suspension**    | Public-content violation, impersonation, escalated conduct finding                  | Yes        |
+| 6    | **Termination**           | Fraud, identity abuse, harvesting, systematic bypass, sanctions                     | Rarely     |
 
 Every step: has a **reason code and written rationale visible to the subject**, is
 **attributed** to an administrator or a system rule, is **time-bounded or condition-bounded**
@@ -51,15 +51,15 @@ not acceptable.
 
 **What it does:** removes a commercial identity's public presence.
 
-| Surface                        | Effect                                                                 |
-| ------------------------------ | ------------------------------------------------------------------------ |
-| Search, browse, recommendations| Removed                                                                |
-| Direct profile link            | **404 / not available** to everyone except the owner and administrators |
-| Published offers               | Hidden (see §5)                                                        |
-| Reviews **authored** by the identity | Hidden pending review                                            |
-| Reviews **received**           | Retained; hidden with the profile, restored on lift                    |
-| Existing counterparties        | **Retain full engagement access**, including the counterparty's identity snapshot |
-| Notifications                  | Continue for existing engagements and cases                            |
+| Surface                              | Effect                                                                            |
+| ------------------------------------ | --------------------------------------------------------------------------------- |
+| Search, browse, recommendations      | Removed                                                                           |
+| Direct profile link                  | **404 / not available** to everyone except the owner and administrators           |
+| Published offers                     | Hidden (see §5)                                                                   |
+| Reviews **authored** by the identity | Hidden pending review                                                             |
+| Reviews **received**                 | Retained; hidden with the profile, restored on lift                               |
+| Existing counterparties              | **Retain full engagement access**, including the counterparty's identity snapshot |
+| Notifications                        | Continue for existing engagements and cases                                       |
 
 Profile suspension does **not** by itself block commercial actions on existing engagements. It
 blocks being found.
@@ -81,20 +81,20 @@ blocks being found.
 
 **Explicitly not blocked — the baseline rule, itemized:**
 
-| Capability                                             | Available under commercial suspension |
-| ------------------------------------------------------ | -------------------------------------- |
-| Viewing existing engagements and their snapshots       | ✅                                     |
-| Messaging the counterparty on an existing engagement   | ✅                                     |
-| Scheduling, rescheduling, arrival check-in             | ✅                                     |
-| Uploading deliverables and all fulfillment evidence    | ✅                                     |
-| Marking completion, handling revisions, rectification  | ✅                                     |
-| **Handover of a customer's property**                  | ✅ — always, without exception         |
-| Confirming receipt, requesting revision (buyer side)   | ✅                                     |
-| Reporting and confirming settlements; attaching proof  | ✅                                     |
-| Opening, answering and appealing cases                 | ✅                                     |
-| Submitting a review and responding to one              | ✅                                     |
-| Reading own analytics and history                      | ✅                                     |
-| Being paid directly by the customer                    | ✅ — the platform was never involved   |
+| Capability                                            | Available under commercial suspension |
+| ----------------------------------------------------- | ------------------------------------- |
+| Viewing existing engagements and their snapshots      | ✅                                    |
+| Messaging the counterparty on an existing engagement  | ✅                                    |
+| Scheduling, rescheduling, arrival check-in            | ✅                                    |
+| Uploading deliverables and all fulfillment evidence   | ✅                                    |
+| Marking completion, handling revisions, rectification | ✅                                    |
+| **Handover of a customer's property**                 | ✅ — always, without exception        |
+| Confirming receipt, requesting revision (buyer side)  | ✅                                    |
+| Reporting and confirming settlements; attaching proof | ✅                                    |
+| Opening, answering and appealing cases                | ✅                                    |
+| Submitting a review and responding to one             | ✅                                    |
+| Reading own analytics and history                     | ✅                                    |
+| Being paid directly by the customer                   | ✅ — the platform was never involved  |
 
 **MHC under commercial suspension:** the balance is **frozen, not forfeited**. It cannot be
 spent (there is nothing to spend it on) and cannot be topped up. Lifting the suspension
@@ -119,7 +119,7 @@ a function of what they owe, because in Wave 3 they owe nothing.
 **Recruitment outcomes are not an enforcement input either.** A rejected job application, a
 withdrawn candidacy or a failed interview is **not** a conduct finding and produces no ladder
 step, no restriction and no reputation change
-([14 §12](./14-reviews-and-reputation.md)). Recruitment *conduct* — a fraudulent vacancy,
+([14 §12](./14-reviews-and-reputation.md)). Recruitment _conduct_ — a fraudulent vacancy,
 abusive applications, harassment — is enforceable in the ordinary way under §2, against the
 acting identity, on the same evidence standard as any other conduct finding.
 
@@ -127,14 +127,14 @@ acting identity, on the same evidence standard as any other conduct finding.
 
 ## 5. Offer hiding
 
-| Cause                                      | Resulting state | Restores to                        |
-| ------------------------------------------ | --------------- | ---------------------------------- |
-| Owner pauses                               | `paused`        | Owner resumes                      |
-| Commercial suspension                      | `hidden`        | Previous state on lift             |
-| Lapsed V2 in a credential-required category| `hidden`        | Previous state on re-verification  |
-| Lapsed KYB                                 | `hidden`        | Previous state on re-verification  |
-| Moderation takedown                        | `hidden`        | Requires resubmission and review   |
-| Concurrent-engagement cap reached          | `paused` (auto) | Automatically, as capacity frees   |
+| Cause                                       | Resulting state | Restores to                       |
+| ------------------------------------------- | --------------- | --------------------------------- |
+| Owner pauses                                | `paused`        | Owner resumes                     |
+| Commercial suspension                       | `hidden`        | Previous state on lift            |
+| Lapsed V2 in a credential-required category | `hidden`        | Previous state on re-verification |
+| Lapsed KYB                                  | `hidden`        | Previous state on re-verification |
+| Moderation takedown                         | `hidden`        | Requires resubmission and review  |
+| Concurrent-engagement cap reached           | `paused` (auto) | Automatically, as capacity frees  |
 
 Rules ([06 §8](./06-offer-model.md)):
 
@@ -151,14 +151,14 @@ Rules ([06 §8](./06-offer-model.md)):
 
 ## 6. Restrictions on proposals and bookings
 
-| Restriction                    | Effect                                                                             |
-| ------------------------------ | ------------------------------------------------------------------------------------ |
-| **Proposal quota reduction**   | Fewer free proposals per period; existing live proposals unaffected                |
-| **Proposal block**             | No new proposals; live proposals may be **withdrawn** but not awarded              |
-| **Booking block**              | Slots removed from discovery; pending booking requests are declined without charge |
-| **Category restriction**       | Blocked from specific categories (e.g. credential lapse) while others continue     |
-| **Area restriction**           | Blocked from specific service areas after repeated out-of-area cancellations       |
-| **Buyer-side request block**   | No new Needs, quote requests or purchase/booking/product requests                  |
+| Restriction                  | Effect                                                                             |
+| ---------------------------- | ---------------------------------------------------------------------------------- |
+| **Proposal quota reduction** | Fewer free proposals per period; existing live proposals unaffected                |
+| **Proposal block**           | No new proposals; live proposals may be **withdrawn** but not awarded              |
+| **Booking block**            | Slots removed from discovery; pending booking requests are declined without charge |
+| **Category restriction**     | Blocked from specific categories (e.g. credential lapse) while others continue     |
+| **Area restriction**         | Blocked from specific service areas after repeated out-of-area cancellations       |
+| **Buyer-side request block** | No new Needs, quote requests or purchase/booking/product requests                  |
 
 Rules:
 
@@ -202,14 +202,14 @@ Hiding is scoped to public discovery surfaces, never to the parties' own record.
 
 When enforcement lands on a provider, the customer must not absorb the cost.
 
-| Situation                                            | Remedy                                                                                          |
-| ---------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
-| Provider suspended with an award pending activation  | The **intent** is declined, no charge, no Engagement created, buyer notified, Need returns to `open` with an extended window and previous respondents re-invited |
-| Provider suspended with a live engagement            | Buyer notified with a neutral, factual statement; buyer may continue, may cancel without conduct penalty, and may open a case |
-| Provider terminated with live engagements            | Engagements are administratively reviewed and closed with a written determination; the buyer's Need is re-postable at no cost |
-| Provider unresponsive in a case after suspension     | The case proceeds; the determination records the non-participation, and reputation and enforcement reflect it |
-| Buyer suspended with a live engagement               | The **provider keeps every fulfillment and settlement capability**, and the buyer retains the ability to confirm, report, dispute and appeal — a buyer penalty must never become a provider penalty |
-| Either party's account closed                        | Display pseudonymizes; the engagement, snapshots and evidence survive for the counterparty     |
+| Situation                                           | Remedy                                                                                                                                                                                              |
+| --------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Provider suspended with an award pending activation | The **intent** is declined, no charge, no Engagement created, buyer notified, Need returns to `open` with an extended window and previous respondents re-invited                                    |
+| Provider suspended with a live engagement           | Buyer notified with a neutral, factual statement; buyer may continue, may cancel without conduct penalty, and may open a case                                                                       |
+| Provider terminated with live engagements           | Engagements are administratively reviewed and closed with a written determination; the buyer's Need is re-postable at no cost                                                                       |
+| Provider unresponsive in a case after suspension    | The case proceeds; the determination records the non-participation, and reputation and enforcement reflect it                                                                                       |
+| Buyer suspended with a live engagement              | The **provider keeps every fulfillment and settlement capability**, and the buyer retains the ability to confirm, report, dispute and appeal — a buyer penalty must never become a provider penalty |
+| Either party's account closed                       | Display pseudonymizes; the engagement, snapshots and evidence survive for the counterparty                                                                                                          |
 
 The platform's honest limit applies throughout: it can notify, re-open, determine, enforce and
 re-grant MHC. **It cannot return the customer's money**, because it never held it
@@ -227,7 +227,7 @@ Enforcement is scoped to a **commercial identity** by default.
   capability.
 
 A **cascade to every identity a person controls** is permitted only for findings against the
-*person*: identity fraud, document forgery, sanctions, systematic gate bypass across
+_person_: identity fraud, document forgery, sanctions, systematic gate bypass across
 identities, or multi-account evasion. A cascade must be an explicit administrative decision
 with a written rationale, recorded against each affected identity, and appealable once. It is
 never an implicit side effect of a single-identity action.
@@ -244,16 +244,16 @@ candidate for evasion, so it is closed explicitly.
 **Conversion must not be usable to evade** commercial suspension, disputes, poor reputation,
 settlement review, verified-GMV obligations, rent obligations, or any enforcement action.
 
-| Control                                                                                                                   |
-| ------------------------------------------------------------------------------------------------------------------------- |
-| Conversion is **rejected** while an **active commercial suspension investigation** is open where conversion could evade enforcement |
-| Conversion is **rejected** while any open dispute, resolution case, appeal, unresolved settlement issue or other unresolved commercial obligation exists ([00 §3.5.2](./00-overview-and-terminology.md)) |
-| Conversion is **Admin/Support-executed**, so no subject of an enforcement action can initiate one against themselves       |
+| Control                                                                                                                                                                                                                                  |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Conversion is **rejected** while an **active commercial suspension investigation** is open where conversion could evade enforcement                                                                                                      |
+| Conversion is **rejected** while any open dispute, resolution case, appeal, unresolved settlement issue or other unresolved commercial obligation exists ([00 §3.5.2](./00-overview-and-terminology.md))                                 |
+| Conversion is **Admin/Support-executed**, so no subject of an enforcement action can initiate one against themselves                                                                                                                     |
 | **There is no administrative override** of a blocker — an operator may execute a conversion that already passed every eligibility check, and may not convert around a live obligation or use conversion to resolve an enforcement matter |
-| **Enforcement state is not cleared by conversion.** Enforcement history, reason codes, appeals and their outcomes remain on the account and on the archived identity |
-| Reviews, ratings and reliability metrics **stay permanently with the archived PCI**, so a poor record cannot be shed       |
-| The archived and replacement identities are **linked by an immutable audited conversion record** available to administrators |
-| Enforcement against the **person** cascades to every identity they control, including a replacement PCI (§9)               |
+| **Enforcement state is not cleared by conversion.** Enforcement history, reason codes, appeals and their outcomes remain on the account and on the archived identity                                                                     |
+| Reviews, ratings and reliability metrics **stay permanently with the archived PCI**, so a poor record cannot be shed                                                                                                                     |
+| The archived and replacement identities are **linked by an immutable audited conversion record** available to administrators                                                                                                             |
+| Enforcement against the **person** cascades to every identity they control, including a replacement PCI (§9)                                                                                                                             |
 
 The design intent is symmetrical with the rest of this file: a provider who genuinely changed
 trades keeps their credit and loses their reputation, which is the honest trade. A provider

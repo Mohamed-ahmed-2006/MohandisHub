@@ -2,8 +2,8 @@
 
 > Reputation attaches to the **commercial identity that did the work** — never to the person
 > across their identities, never to a business's procurement side, never merged, never
-> migrated. Reviews measure *outcomes*; a separate set of **reliability metrics** measures
-> *behaviour*, and the two must not be conflated.
+> migrated. Reviews measure _outcomes_; a separate set of **reliability metrics** measures
+> _behaviour_, and the two must not be conflated.
 
 ---
 
@@ -12,13 +12,13 @@
 Every review targets a **commercial identity**, and additionally attaches to the specific
 thing that was bought.
 
-| Engagement origin  | Primary target                 | Secondary attachment                             |
-| ------------------ | ------------------------------ | -------------------------------------------------- |
-| `need_award`       | Provider commercial identity   | None (there was no offer)                        |
-| `service_purchase` | Provider commercial identity   | Offer + **version** + package                    |
-| `booking`          | Provider commercial identity   | Offer + version (+ session type)                 |
-| `product_request`  | Provider commercial identity   | Product + **variant** purchased                  |
-| `custom_order`     | Provider commercial identity   | Source offer + version, where one existed        |
+| Engagement origin  | Primary target               | Secondary attachment                      |
+| ------------------ | ---------------------------- | ----------------------------------------- |
+| `need_award`       | Provider commercial identity | None (there was no offer)                 |
+| `service_purchase` | Provider commercial identity | Offer + **version** + package             |
+| `booking`          | Provider commercial identity | Offer + version (+ session type)          |
+| `product_request`  | Provider commercial identity | Product + **variant** purchased           |
+| `custom_order`     | Provider commercial identity | Source offer + version, where one existed |
 
 The commercial identity is always the primary target. The secondary attachment is what makes
 offer-level and product-level ratings possible without creating a second, divergent reputation
@@ -30,14 +30,14 @@ system.
 
 Two directions, deliberately asymmetric.
 
-| Direction              | Public? | Free text? | Structure                                                                 |
-| ---------------------- | ------- | ---------- | --------------------------------------------------------------------------- |
-| **Customer → provider**| **Yes** | Yes        | Overall stars + per-criterion sub-ratings + free text + optional media     |
-| **Provider → customer**| **No**  | **No**     | Structured criteria only, aggregated into a **band** visible to providers at D2 |
+| Direction               | Public? | Free text? | Structure                                                                       |
+| ----------------------- | ------- | ---------- | ------------------------------------------------------------------------------- |
+| **Customer → provider** | **Yes** | Yes        | Overall stars + per-criterion sub-ratings + free text + optional media          |
+| **Provider → customer** | **No**  | **No**     | Structured criteria only, aggregated into a **band** visible to providers at D2 |
 
 Why the asymmetry: a public, free-text provider→customer review turns into a retaliation
 weapon, and customers have no reputation to defend commercially. What providers actually need
-is a *risk signal* before they spend MHC accepting work — and a band ("high", "typical",
+is a _risk signal_ before they spend MHC accepting work — and a band ("high", "typical",
 "caution", "insufficient history") delivers that without creating a second public reputation
 market. Free-text buyer reviews are deferred, not merely unbuilt.
 
@@ -169,7 +169,7 @@ unresponsive party a lever over the other's reputation.
 - The review window is **extended** for the duration of the hold, so a long case does not
   consume the reviewer's opportunity.
 - If a determination finds the review's factual basis false, moderation may remove it; a
-  determination in the reviewer's favour never *adds* a review.
+  determination in the reviewer's favour never _adds_ a review.
 - **Soliciting or offering anything in exchange for a review, its wording, its removal, or a
   dispute withdrawal is a violation by either party**, and is a terminating offence when
   systematic.
@@ -187,15 +187,15 @@ unresponsive party a lever over the other's reputation.
   **reliability metrics**, which are separate from reviews and are exactly where cancellation
   belongs:
 
-| Metric                       | What it counts                                                            |
-| ---------------------------- | ---------------------------------------------------------------------------- |
-| Activation rate              | Intents accepted (activated) vs lapsed — awards, purchase, booking, product and custom-order intents |
-| Cancellation rate **by cause** | Post-activation cancellations, attributed to the party at fault          |
-| On-time rate                 | Deliveries and appointments met against the snapshotted dates              |
-| No-show rate                 | Missed appointments, both directions                                       |
-| Response time                | Time to first response on requests and messages                            |
-| Rectification rate           | Warranty callbacks per completed engagement                                |
-| Completion rate              | Activated engagements reaching completion                                  |
+| Metric                         | What it counts                                                                                       |
+| ------------------------------ | ---------------------------------------------------------------------------------------------------- |
+| Activation rate                | Intents accepted (activated) vs lapsed — awards, purchase, booking, product and custom-order intents |
+| Cancellation rate **by cause** | Post-activation cancellations, attributed to the party at fault                                      |
+| On-time rate                   | Deliveries and appointments met against the snapshotted dates                                        |
+| No-show rate                   | Missed appointments, both directions                                                                 |
+| Response time                  | Time to first response on requests and messages                                                      |
+| Rectification rate             | Warranty callbacks per completed engagement                                                          |
+| Completion rate                | Activated engagements reaching completion                                                            |
 
 - Reliability metrics are **computed, not authored**; they cannot be gamed by text, cannot be
   disputed as opinions, and appear at D0 alongside the star rating.
@@ -224,7 +224,7 @@ unresponsive party a lever over the other's reputation.
 - **A review is never removed at the request of the reviewed party.** Only policy violations
   remove reviews, and the reason is recorded.
 - Competitor abuse, review farms and coordinated rating attacks are enforcement matters
-  against the *authoring* identities, with affected reviews removed and aggregates restated.
+  against the _authoring_ identities, with affected reviews removed and aggregates restated.
 
 **Suspicious-review detection**
 
@@ -232,14 +232,14 @@ Detection is a **product requirement**; its scoring algorithm is **implementatio
 The architecture requires that the capability exists, that its outputs are actionable, and that
 it never acts alone — not that it works one particular way.
 
-| Requirement                                                                                  | Status |
-| --------------------------------------------------------------------------------------------- | ------ |
-| A detection pass runs on every submitted review                                              | Required |
-| It produces a **suspicion signal** routed to the moderation queue                            | Required |
-| Signals are recorded with their inputs, so a decision is reviewable                          | Required |
-| **No review is hidden, removed or excluded from aggregates by the detector alone** — a human decides | Required |
-| The reviewed party is never told a review was flagged, and flagging is never a service offered to them | Required |
-| The specific features, weights, thresholds and model used                                    | **Implementation-configurable** |
+| Requirement                                                                                            | Status                          |
+| ------------------------------------------------------------------------------------------------------ | ------------------------------- |
+| A detection pass runs on every submitted review                                                        | Required                        |
+| It produces a **suspicion signal** routed to the moderation queue                                      | Required                        |
+| Signals are recorded with their inputs, so a decision is reviewable                                    | Required                        |
+| **No review is hidden, removed or excluded from aggregates by the detector alone** — a human decides   | Required                        |
+| The reviewed party is never told a review was flagged, and flagging is never a service offered to them | Required                        |
+| The specific features, weights, thresholds and model used                                              | **Implementation-configurable** |
 
 Signals worth feeding it — burst timing, a reviewer whose only activity is reviews, repeated
 buyer-provider pairs with minimal engagement substance, text similarity across reviews,
@@ -264,16 +264,16 @@ gameable one.
 The hardest rule in this file, and the one most likely to be violated by a well-meaning
 "unified profile" feature.
 
-| Boundary                                                       | Rule                                                                                   |
-| -------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
-| Expert PCI ↔ Craftsman PCI                                     | Cannot coexist; on conversion, reviews stay with the archived identity and **never carry over, merge or seed a prior** (§3) |
-| Archived PCI ↔ its replacement PCI                             | Two separate reputations. No merged aggregate, no linkage in any market-facing surface     |
-| PCI ↔ any BCI the person owns                                  | Completely separate. No display linkage, no aggregate, no "also operates" surface      |
-| BCI ↔ BCI (same owner)                                         | Completely separate; the shared ownership is not public                                |
-| Provider rating ↔ buyer conduct (same identity)                | Separate figures, separate labels, never averaged                                      |
-| Business seller rating ↔ business buyer conduct                | Separate figures, separate labels, never averaged                                      |
-| Offer/product rating ↔ identity rating                         | Related but distinct; both shown, neither substituted for the other                    |
-| Person ↔ any commercial identity                               | **There is no person-level rating anywhere in the product**                            |
+| Boundary                                        | Rule                                                                                                                        |
+| ----------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| Expert PCI ↔ Craftsman PCI                      | Cannot coexist; on conversion, reviews stay with the archived identity and **never carry over, merge or seed a prior** (§3) |
+| Archived PCI ↔ its replacement PCI              | Two separate reputations. No merged aggregate, no linkage in any market-facing surface                                      |
+| PCI ↔ any BCI the person owns                   | Completely separate. No display linkage, no aggregate, no "also operates" surface                                           |
+| BCI ↔ BCI (same owner)                          | Completely separate; the shared ownership is not public                                                                     |
+| Provider rating ↔ buyer conduct (same identity) | Separate figures, separate labels, never averaged                                                                           |
+| Business seller rating ↔ business buyer conduct | Separate figures, separate labels, never averaged                                                                           |
+| Offer/product rating ↔ identity rating          | Related but distinct; both shown, neither substituted for the other                                                         |
+| Person ↔ any commercial identity                | **There is no person-level rating anywhere in the product**                                                                 |
 
 Enforcement points:
 
@@ -300,7 +300,7 @@ Enforcement points:
   small one, and no aggregate, badge or ranking input may weight ratings by agreed amount,
   settled amount or verified GMV.
 
-  The reason is that value-weighting silently changes what a rating *means* — a 4.8 would stop
+  The reason is that value-weighting silently changes what a rating _means_ — a 4.8 would stop
   being "customers rated this provider 4.8" and become "customers who spent more rated this
   provider 4.8", which no buyer reads it as. It would also make reputation partly purchasable
   by pricing strategy, and would couple the reputation system to the settlement series, so
@@ -310,6 +310,7 @@ Enforcement points:
   ([12 §12](./12-payment-and-settlement.md)) alongside the rating. That is the honest way to
   show that a provider handles large work: as a separate band a buyer can read, never folded
   into the stars.
+
 - A **minimum review count** applies before a rating is displayed as a headline figure; below
   it, show the count and "not enough reviews yet".
 - **Verified settled volume bands** ([12 §12](./12-payment-and-settlement.md)) are displayed
@@ -328,14 +329,14 @@ The Jobs module is a **recruitment/employment marketplace**, not a service trans
 the ones this file measures, and they must not be allowed to leak into the service reputation
 system.
 
-| Boundary                                                                                                  |
-| ---------------------------------------------------------------------------------------------------------- |
+| Boundary                                                                                                                                                                                                                                                                                |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Candidate reputation as a service provider is never automatically altered by a recruitment application outcome.** A rejection, a withdrawal, a failed interview or an unsuccessful application changes no rating, no per-criterion score, no reliability metric and no ranking signal |
-| **A job application is not a proposal**, so it never enters proposal win rate, activation rate or any reliability numerator |
-| **Hiring is not a completed engagement**, so it unlocks no review in either direction               |
-| **Recruitment reviews, if retained, are a distinct object** — separately labelled, separately aggregated, and never merged into a PCI's or BCI's service rating |
-| **Job hiring records never count as provider verified GMV** and never appear in a verified settled-volume band ([12 §12](./12-payment-and-settlement.md)) |
-| No recruitment signal may be used as a **cold-start prior** or ranking input for service discovery |
+| **A job application is not a proposal**, so it never enters proposal win rate, activation rate or any reliability numerator                                                                                                                                                             |
+| **Hiring is not a completed engagement**, so it unlocks no review in either direction                                                                                                                                                                                                   |
+| **Recruitment reviews, if retained, are a distinct object** — separately labelled, separately aggregated, and never merged into a PCI's or BCI's service rating                                                                                                                         |
+| **Job hiring records never count as provider verified GMV** and never appear in a verified settled-volume band ([12 §12](./12-payment-and-settlement.md))                                                                                                                               |
+| No recruitment signal may be used as a **cold-start prior** or ranking input for service discovery                                                                                                                                                                                      |
 
 The reason is the same one that separates every other identity boundary in this file: a rating
 means what its reviews say it means. A buyer reading a Craftsman's workmanship score is not

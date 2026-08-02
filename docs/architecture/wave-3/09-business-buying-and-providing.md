@@ -10,19 +10,19 @@
 
 **One commercial identity. Two surfaces. Never merged.**
 
-| Dimension                | Procurement surface                            | Sales surface                                        |
-| ------------------------ | ---------------------------------------------- | ---------------------------------------------------- |
-| The Business is the…     | Buyer party                                    | Provider party                                       |
-| Creates                  | Needs, quote requests, purchase/booking/product requests, awards | Offers, proposals, custom proposals, acceptances |
-| Feeds                    | Buyer conduct signal                           | **Public rating and reviews**                        |
-| MHC                      | Spends none                                    | **Spends on every activation**                       |
-| Verification required    | **V3a** — organization-verified                | **V3b** — full KYB                                   |
-| Verification shown       | The accurate stage badge to the provider — organization-verified or KYB-verified | KYB badge to the buyer |
-| Counted in verified GMV  | **No**                                         | Yes, when confirmed or verified                      |
-| Appears on public profile| **No**                                         | Yes                                                  |
-| Inbox                    | Supplier threads                               | Customer threads                                     |
-| Cases                    | Buyer-side case stream                         | Provider-side case stream                            |
-| Analytics                | Spend dashboard                                | Sales dashboard                                      |
+| Dimension                 | Procurement surface                                                              | Sales surface                                    |
+| ------------------------- | -------------------------------------------------------------------------------- | ------------------------------------------------ |
+| The Business is the…      | Buyer party                                                                      | Provider party                                   |
+| Creates                   | Needs, quote requests, purchase/booking/product requests, awards                 | Offers, proposals, custom proposals, acceptances |
+| Feeds                     | Buyer conduct signal                                                             | **Public rating and reviews**                    |
+| MHC                       | Spends none                                                                      | **Spends on every activation**                   |
+| Verification required     | **V3a** — organization-verified                                                  | **V3b** — full KYB                               |
+| Verification shown        | The accurate stage badge to the provider — organization-verified or KYB-verified | KYB badge to the buyer                           |
+| Counted in verified GMV   | **No**                                                                           | Yes, when confirmed or verified                  |
+| Appears on public profile | **No**                                                                           | Yes                                              |
+| Inbox                     | Supplier threads                                                                 | Customer threads                                 |
+| Cases                     | Buyer-side case stream                                                           | Provider-side case stream                        |
+| Analytics                 | Spend dashboard                                                                  | Sales dashboard                                  |
 
 ### 1.1 Enforced separation rules
 
@@ -60,7 +60,7 @@ are in [04 §7](./04-role-business.md). The rules that matter for this section:
 - **The owner is never published.** The profile must not read as a personal brand page; the
   owner is disclosed at D3 as the verified signatory, and to administrators always.
 - **KYB documents are never published or disclosed to counterparties** — only the verified
-  *facts* derived from them appear as badges.
+  _facts_ derived from them appear as badges.
 - **Procurement is absent.** What the company buys is not a selling credential.
 - **Capability statements, project galleries and certifications** are sales-surface content
   at D1, moderated for contact leakage and consent-recorded where a client is named.
@@ -75,20 +75,20 @@ The owner — the identity that created the Business and passed controller verif
 the sole actor for every **commercial** Business action. Team administration is a separate,
 non-commercial surface that continues to work (§4):
 
-| Action class                                                                 | Wave 3 actor |
-| ----------------------------------------------------------------------------- | ------------ |
-| Create, configure and submit the Business for KYB                            | Owner only   |
-| Publish, pause, hide, archive offers and catalog items                       | Owner only   |
-| Submit proposals and custom proposals                                        | Owner only   |
-| **Accept an arrangement and spend business MHC**                             | Owner only   |
-| Purchase MHC for the Business                                                | Owner only   |
-| Post Needs, request quotes, place requests, award                            | Owner only   |
-| Deliver, upload evidence, mark completion, handle revisions and rectification | Owner only   |
-| Report and confirm settlements                                               | Owner only   |
-| Open, answer and appeal cases                                                | Owner only   |
-| Respond to reviews                                                           | Owner only   |
-| Confirm receipt on procurement engagements                                   | Owner only   |
-| **Administer the team** — invite, assign a role, remove a member             | **Owner, or a member holding `manage_team`** (§4) |
+| Action class                                                                  | Wave 3 actor                                      |
+| ----------------------------------------------------------------------------- | ------------------------------------------------- |
+| Create, configure and submit the Business for KYB                             | Owner only                                        |
+| Publish, pause, hide, archive offers and catalog items                        | Owner only                                        |
+| Submit proposals and custom proposals                                         | Owner only                                        |
+| **Accept an arrangement and spend business MHC**                              | Owner only                                        |
+| Purchase MHC for the Business                                                 | Owner only                                        |
+| Post Needs, request quotes, place requests, award                             | Owner only                                        |
+| Deliver, upload evidence, mark completion, handle revisions and rectification | Owner only                                        |
+| Report and confirm settlements                                                | Owner only                                        |
+| Open, answer and appeal cases                                                 | Owner only                                        |
+| Respond to reviews                                                            | Owner only                                        |
+| Confirm receipt on procurement engagements                                    | Owner only                                        |
+| **Administer the team** — invite, assign a role, remove a member              | **Owner, or a member holding `manage_team`** (§4) |
 
 **Recorded attribution now, delegated authority later.** Every Business action records the
 acting human alongside the Business. In Wave 3 that value is always the owner on every
@@ -117,7 +117,7 @@ This is the factual baseline the architecture reconciles against, not a proposal
 - **`business_teams.business_id` references `users.id`.** It is **not** a Business Commercial
   Identity. It is the id of the Business-role **user account** that owns the workspace, and it
   is immutable — one workspace per Business account, enforced by a uniqueness index and a
-  change-rejection trigger. The immutability is real and useful; the *interpretation* that it
+  change-rejection trigger. The immutability is real and useful; the _interpretation_ that it
   is already a BCI is wrong and is corrected here.
 - **`business_profiles.user_id` also references `users.id`.** The company profile hangs off the
   same user account.
@@ -148,7 +148,7 @@ This is the factual baseline the architecture reconciles against, not a proposal
    It governs team administration — inviting, assigning a role, removing a member — and
    nothing beyond it.
 3. **Only the verified Business owner may perform commercial actions** for the Business. Every
-   commercial authorization resolves to *"is the acting identity the owner of this BCI?"* and
+   commercial authorization resolves to _"is the acting identity the owner of this BCI?"_ and
    consults membership **never**.
 4. **The six reserved permissions remain disabled.** They are not grantable, not reported as
    effective, and not readable as an authorization input. They must not be wired to anything.
@@ -185,24 +185,26 @@ delegation model built on a principal that never existed.
 
 **What Wave 3 introduces:**
 
-| Requirement                                                                                                     |
-| --------------------------------------------------------------------------------------------------------------- |
-| A **distinct BCI entity**, additive — introduced beside the legacy structures, never by rewriting them          |
-| **Each legacy Business account maps deterministically to exactly one initial BCI.** Same input, same BCI, every time; re-running the mapping creates nothing new |
-| **The controlling user becomes the owner/controller of the BCI**                                                |
-| **Existing Business team/workspace IDs are preserved unchanged** — no renumbering, no re-keying, no replacement  |
-| **Membership history, roles, invitations and audit records are preserved unchanged**                            |
-| **Commercial assets are re-associated non-destructively**, through compatibility mappings or **additive owner columns** — never by destructive re-keying of user-owned rows |
-| **The current immutable Business-account relationship remains a compatibility anchor** for the duration of the migration |
-| **User-owned historical assets stay readable throughout the compatibility period**                              |
-| **One owner may control multiple BCIs without asset mixing** — each BCI's assets, balance, reputation and enforcement state stay separate |
+| Requirement                                                                                                                                                                                                                                                                                        |
+| -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A **distinct BCI entity**, additive — introduced beside the legacy structures, never by rewriting them                                                                                                                                                                                             |
+| **Each legacy Business account maps deterministically to exactly one initial BCI.** Same input, same BCI, every time; re-running the mapping creates nothing new                                                                                                                                   |
+| **The controlling user becomes the owner/controller of the BCI**                                                                                                                                                                                                                                   |
+| **Existing Business team/workspace IDs are preserved unchanged** — no renumbering, no re-keying, no replacement                                                                                                                                                                                    |
+| **Membership history, roles, invitations and audit records are preserved unchanged**                                                                                                                                                                                                               |
+| **Commercial assets are re-associated non-destructively**, through compatibility mappings or **additive owner columns** — never by destructive re-keying of user-owned rows                                                                                                                        |
+| **The current immutable Business-account relationship remains a compatibility anchor** for the duration of the migration                                                                                                                                                                           |
+| **User-owned historical assets stay readable throughout the compatibility period**                                                                                                                                                                                                                 |
+| **One owner may control multiple BCIs without asset mixing** — each BCI's assets, balance, reputation and enforcement state stay separate                                                                                                                                                          |
+| **Advertisements migrate on the same additive terms.** Advertisement ownership is user-based today and moves to Commercial Identity ownership without destructive re-keying; existing campaigns, periods and renewal state stay readable throughout ([00 §14.1](./00-overview-and-terminology.md)) |
+| **Legacy activation history is re-associated, never rewritten.** `mhc_job_activations` rows and the payment disclosures keyed to them stay immutable; Engagements seeded from them are additive ([00 §13](./00-overview-and-terminology.md))                                                       |
 
 **What this is not:**
 
 - It is **not** a claim that `business_teams.business_id` is a BCI (§4.1).
 - It is **not** a destructive migration. No historical row is deleted, re-pointed or rewritten
   to make the new spine tidy.
-- It is **not** delegation. The BCI spine is the *principal*; granting a non-owner authority
+- It is **not** delegation. The BCI spine is the _principal_; granting a non-owner authority
   over it remains Wave 4 (§4.2, §6).
 - It is **not** a new "workspace" object introduced as Wave 4 scaffolding (§6, B6).
 
@@ -236,25 +238,25 @@ Covered fully in [14](./14-reviews-and-reputation.md). The business-specific poi
 
 These are the concrete tripwires. Each is a testable prohibition, not a guideline.
 
-| #  | Boundary                                                                                                                                     |
-| -- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| B1 | **No non-owner may perform any commercial action for a BCI.** Commercial authorization checks the ownership relation only; membership is never consulted. Team administration under `manage_team` is outside this boundary and continues to work |
-| B2 | **No permission is displayed as effective that is not enforced.** `manage_team` is enforced and may be presented as working. The six reserved permissions are shown only under their reserved label, never as granted or effective |
-| B3 | **No invitation flow may promise commercial authority.** Invitations remain available; they must state that members cannot act commercially in Wave 3 |
-| B3a| **No reserved permission is read by any authorization decision.** `manage_services`, `manage_jobs`, `manage_reservations`, `view_wallet`, `manage_support_disputes` and `view_analytics` authorize nothing, and wiring any of them to an endpoint is a Wave 4 leak |
-| B3b| **Workspace selection never sets commercial context.** It scopes team administration only; the commercial acting context is resolved from the ownership relation, never from the selected workspace |
-| B3c| **No historical membership data is deleted or disabled** — memberships, invitations, roles and audit records are preserved, including roles carrying a reserved permission from before the split |
-| B4 | **No assignment.** An engagement or fulfillment component cannot be assigned to a person other than the owner; there is no assignee concept in the UI or the model |
-| B5 | **No branch, location or sub-entity** may be created inside a BCI, and multi-location behaviour must not be simulated with categories, tags, duplicate offers or a second unregistered brand |
-| B6 | **No delegated workspace-owned asset semantics.** Wave 3 introduces the additive BCI spine (§4.4) so offers, portfolio, templates and saved searches acquire a real commercial principal. What is deferred is *delegated access* to them; no new "workspace" object may be introduced as scaffolding, and the legacy immutable Business-account relation stays a compatibility anchor rather than being presented as the finished model |
-| B6a| **No destructive BCI migration.** Team/workspace IDs, memberships, invitations, roles and audit records are preserved unchanged; commercial assets are re-associated only through compatibility mappings or additive owner columns (§4.4) |
-| B6b| **No non-owner recruitment authority.** Business Jobs — create, edit, publish, manage, close, hire — is owner-only, and `manage_jobs` stays reserved and unread (§8) |
-| B7 | **No spend delegation.** MHC is spendable by the owner only; no spend limits, budgets, approval chains or maker/checker flows exist, and none may be partially built. `view_wallet` grants no MHC visibility or authority |
-| B8 | **No ownership transfer as a self-serve action.** Owner change is an administrative process with full re-verification |
-| B9 | **No cross-BCI aggregation.** No consolidated analytics, no parent/subsidiary relation, no group identity, and no public linkage between two BCIs with a common owner |
-| B10| **No per-member analytics, per-member reputation, or staff-level metrics.** Members exist for team administration but perform no commercial work, so there is nothing commercial to measure per member. `view_analytics` grants nothing |
-| B11| **Attribution is recorded, authority is not granted.** Recording the acting human is required; treating that record as evidence of delegated authority is prohibited |
-| B12| **No API, admin tool or support action may act for a BCI on the owner's behalf** in a way that creates commercial obligations. Administrators may resolve, annotate and enforce; they may not sell, buy, accept or activate |
+| #   | Boundary                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| --- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| B1  | **No non-owner may perform any commercial action for a BCI.** Commercial authorization checks the ownership relation only; membership is never consulted. Team administration under `manage_team` is outside this boundary and continues to work                                                                                                                                                                                        |
+| B2  | **No permission is displayed as effective that is not enforced.** `manage_team` is enforced and may be presented as working. The six reserved permissions are shown only under their reserved label, never as granted or effective                                                                                                                                                                                                      |
+| B3  | **No invitation flow may promise commercial authority.** Invitations remain available; they must state that members cannot act commercially in Wave 3                                                                                                                                                                                                                                                                                   |
+| B3a | **No reserved permission is read by any authorization decision.** `manage_services`, `manage_jobs`, `manage_reservations`, `view_wallet`, `manage_support_disputes` and `view_analytics` authorize nothing, and wiring any of them to an endpoint is a Wave 4 leak                                                                                                                                                                      |
+| B3b | **Workspace selection never sets commercial context.** It scopes team administration only; the commercial acting context is resolved from the ownership relation, never from the selected workspace                                                                                                                                                                                                                                     |
+| B3c | **No historical membership data is deleted or disabled** — memberships, invitations, roles and audit records are preserved, including roles carrying a reserved permission from before the split                                                                                                                                                                                                                                        |
+| B4  | **No assignment.** An engagement or fulfillment component cannot be assigned to a person other than the owner; there is no assignee concept in the UI or the model                                                                                                                                                                                                                                                                      |
+| B5  | **No branch, location or sub-entity** may be created inside a BCI, and multi-location behaviour must not be simulated with categories, tags, duplicate offers or a second unregistered brand                                                                                                                                                                                                                                            |
+| B6  | **No delegated workspace-owned asset semantics.** Wave 3 introduces the additive BCI spine (§4.4) so offers, portfolio, templates and saved searches acquire a real commercial principal. What is deferred is _delegated access_ to them; no new "workspace" object may be introduced as scaffolding, and the legacy immutable Business-account relation stays a compatibility anchor rather than being presented as the finished model |
+| B6a | **No destructive BCI migration.** Team/workspace IDs, memberships, invitations, roles and audit records are preserved unchanged; commercial assets are re-associated only through compatibility mappings or additive owner columns (§4.4)                                                                                                                                                                                               |
+| B6b | **No non-owner recruitment authority.** Business Jobs — create, edit, publish, manage, close, hire — is owner-only, and `manage_jobs` stays reserved and unread (§8)                                                                                                                                                                                                                                                                    |
+| B7  | **No spend delegation.** MHC is spendable by the owner only; no spend limits, budgets, approval chains or maker/checker flows exist, and none may be partially built. `view_wallet` grants no MHC visibility or authority                                                                                                                                                                                                               |
+| B8  | **No ownership transfer as a self-serve action.** Owner change is an administrative process with full re-verification                                                                                                                                                                                                                                                                                                                   |
+| B9  | **No cross-BCI aggregation.** No consolidated analytics, no parent/subsidiary relation, no group identity, and no public linkage between two BCIs with a common owner                                                                                                                                                                                                                                                                   |
+| B10 | **No per-member analytics, per-member reputation, or staff-level metrics.** Members exist for team administration but perform no commercial work, so there is nothing commercial to measure per member. `view_analytics` grants nothing                                                                                                                                                                                                 |
+| B11 | **Attribution is recorded, authority is not granted.** Recording the acting human is required; treating that record as evidence of delegated authority is prohibited                                                                                                                                                                                                                                                                    |
+| B12 | **No API, admin tool or support action may act for a BCI on the owner's behalf** in a way that creates commercial obligations. Administrators may resolve, annotate and enforce; they may not sell, buy, accept or activate                                                                                                                                                                                                             |
 
 ### 6.1 Why these boundaries are strict
 
@@ -272,7 +274,7 @@ A frequent modelling error, named here so it does not get built.
 
 A "business purchase" is **not** an engagement origin. It is any engagement — of any origin
 in [10 §2](./10-engagement-model.md) — whose **buyer party is a BCI**. The origin describes
-*how the arrangement was formed*; the party describes *who formed it*.
+_how the arrangement was formed_; the party describes _who formed it_.
 
 Consequences:
 
@@ -294,20 +296,20 @@ The Business's procurement and sales surfaces (§1) are the two **commercial** s
 **Jobs** module is a third, **non-commercial-transaction** surface — a recruitment/employment
 marketplace — and it belongs to neither.
 
-| Dimension                    | Recruitment surface                                              |
-| ---------------------------- | ---------------------------------------------------------------- |
-| The Business is the…         | **Employer / hiring party** — not a buyer, not a provider        |
-| Creates                      | Job vacancies                                                    |
-| Receives                     | Job applications (recruitment candidacy)                         |
-| Actions                      | Review, shortlist, reject, schedule interviews, hire, close      |
-| Produces                     | A recruitment/employment outcome                                 |
-| MHC                          | **Spends none.** Hiring is not an activation                     |
-| Engagement spine             | **Never enters it** ([10 §15](./10-engagement-model.md))         |
-| Counted in verified GMV      | **No — never**                                                   |
-| Settlement model             | **Not used.** Salary is not an agreed amount and creates no tranche |
-| Who may act                  | **The verified Business owner only**                             |
-| `manage_jobs`                | **Reserved and non-authoritative until Wave 4**                  |
-| Reviews                      | Recruitment reviews, if retained, stay distinct from service reviews |
+| Dimension               | Recruitment surface                                                  |
+| ----------------------- | -------------------------------------------------------------------- |
+| The Business is the…    | **Employer / hiring party** — not a buyer, not a provider            |
+| Creates                 | Job vacancies                                                        |
+| Receives                | Job applications (recruitment candidacy)                             |
+| Actions                 | Review, shortlist, reject, schedule interviews, hire, close          |
+| Produces                | A recruitment/employment outcome                                     |
+| MHC                     | **Spends none.** Hiring is not an activation                         |
+| Engagement spine        | **Never enters it** ([10 §15](./10-engagement-model.md))             |
+| Counted in verified GMV | **No — never**                                                       |
+| Settlement model        | **Not used.** Salary is not an agreed amount and creates no tranche  |
+| Who may act             | **The verified Business owner only**                                 |
+| `manage_jobs`           | **Reserved and non-authoritative until Wave 4**                      |
+| Reviews                 | Recruitment reviews, if retained, stay distinct from service reviews |
 
 **Enforced rules:**
 
@@ -325,5 +327,4 @@ marketplace — and it belongs to neither.
    fees, escrow, milestone money, commissions, provider payouts and wallet movement stay
    **disabled and read-only** ([00 §10.2](./00-overview-and-terminology.md)).
 
-The recruitment module remains a **separately supported legacy/product subsystem** during Wave
-3. Its long-term redesign and any monetization are separate future decisions.
+The recruitment module remains a **separately supported legacy/product subsystem** during Wave 3. Its long-term redesign and any monetization are separate future decisions.

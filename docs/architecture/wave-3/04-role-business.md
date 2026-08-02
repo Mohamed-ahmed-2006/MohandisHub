@@ -15,8 +15,8 @@ distinct from the personal identity of whoever created it.
 Business exists for three reasons the personal identities cannot serve:
 
 1. **Legal reality.** A registered company contracts as itself, not as its founder.
-2. **Scope breadth.** An organization legitimately sells professional services *and*
-   physical work; the Expert/Craftsman exclusivity is a rule about *persons*, not about
+2. **Scope breadth.** An organization legitimately sells professional services _and_
+   physical work; the Expert/Craftsman exclusivity is a rule about _persons_, not about
    companies.
 3. **Procurement.** Organizations buy — materials, subcontracted labour, professional
    review — and they need that activity to be organizational, not filed under the owner's
@@ -52,8 +52,8 @@ Business exists for three reasons the personal identities cannot serve:
 
 ## 3. Main advantages
 
-- **Sells across the whole catalog.** Professional services *and* local services *and*
-  physical products *and* made-to-order production, under one identity. This is the only
+- **Sells across the whole catalog.** Professional services _and_ local services _and_
+  physical products _and_ made-to-order production, under one identity. This is the only
   role with no offer-kind restriction.
 - **Buys as an organization.** Procurement Needs, quote requests, purchases and buyer-side
   engagements are recorded against the company, not the founder.
@@ -82,7 +82,7 @@ Business exists for three reasons the personal identities cannot serve:
 - **Owner-only commercial authority in Wave 3.** Exactly one human can transact. Team members
   may administer the team; they may not publish, propose, accept, spend MHC, buy, deliver,
   confirm settlement or answer cases. No delegates, no approvers, no branch managers, no staff
-  assignment. A business whose *commercial* operations require several people cannot run them
+  assignment. A business whose _commercial_ operations require several people cannot run them
   on the platform yet, and should be told so plainly.
 - **No platform payment machinery.** Same as every other role: direct, off-platform,
   evidence-based. No invoicing, no receivables, no ledger the platform will collect on.
@@ -128,16 +128,16 @@ balance**, spendable by the owner only.
 
 ## 6. Verification requirements
 
-| Requirement                                       | Status                                                                     |
-| ------------------------------------------------- | ---------------------------------------------------------------------------- |
-| Owner V0                                          | Mandatory                                                                  |
-| **Owner/controller V1 (KYC)**                     | **Mandatory before acting through the Business at all** — in either direction. A business is never verified without a verified human |
-| **V3a**: business email, business phone, organization identity | **Mandatory** before buying enablement                        |
-| **V3b KYB**: registration, tax card, premises     | **Mandatory** before selling enablement. **Not** required for ordinary buying |
-| Beneficial-ownership declaration                  | Mandatory at KYB; changes require re-declaration                           |
-| Trade licence / category credential (business V2) | Mandatory in credential-required categories, held in the company's name    |
-| Legal-name uniqueness check                       | Mandatory at approval; collisions are a moderation decision                |
-| Re-verification                                   | On document expiry, legal-name change, ownership change, enforcement flag  |
+| Requirement                                                    | Status                                                                                                                               |
+| -------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| Owner V0                                                       | Mandatory                                                                                                                            |
+| **Owner/controller V1 (KYC)**                                  | **Mandatory before acting through the Business at all** — in either direction. A business is never verified without a verified human |
+| **V3a**: business email, business phone, organization identity | **Mandatory** before buying enablement                                                                                               |
+| **V3b KYB**: registration, tax card, premises                  | **Mandatory** before selling enablement. **Not** required for ordinary buying                                                        |
+| Beneficial-ownership declaration                               | Mandatory at KYB; changes require re-declaration                                                                                     |
+| Trade licence / category credential (business V2)              | Mandatory in credential-required categories, held in the company's name                                                              |
+| Legal-name uniqueness check                                    | Mandatory at approval; collisions are a moderation decision                                                                          |
+| Re-verification                                                | On document expiry, legal-name change, ownership change, enforcement flag                                                            |
 
 - **Ownership transfer is Wave 4.** In Wave 3 the owner is fixed at creation; a change of
   owner requires an administrative process and full re-verification, and must not be a
@@ -148,6 +148,14 @@ balance**, spendable by the owner only.
   to accept.
 - A Business that loses KYB validity has its offers hidden and its selling blocked; **its
   buying continues at V3a**, and existing engagements continue untouched on both surfaces.
+- **The legacy `platform_verified_at` badge is not KYB and not owner verification.** A
+  populated legacy timestamp on the owner's user account never satisfies V1, V3a or V3b, never
+  establishes business-owner/controller authority, never enables buying or selling, never
+  authorizes MHC spend or D3 access, and never presents the Business as KYB-verified. A revoked
+  or expired Wave 3 credential blocks new commercial actions even where the legacy timestamp
+  remains populated. Existing Business accounts are classified **unverified for Wave 3
+  commercial authority** until they hold valid new verification evidence
+  ([00 §12](./00-overview-and-terminology.md)).
 
 ---
 
@@ -155,19 +163,19 @@ balance**, spendable by the owner only.
 
 The Business profile is **organization-facing**: it describes a company, not a person.
 
-| Element                                                                                  | Tier |
-| ---------------------------------------------------------------------------------------- | ---- |
-| Trade name, logo, cover, categories, company description, founding year, size band       | D0   |
-| **Verified legal name and registration reference**                                       | D0 — organizations are public entities; this is a credibility asset, not protected data |
-| Rating, review count, completed engagements, KYB badge, credential badges                | D0   |
-| Coarse location(s) served, service areas, delivery coverage                              | D0   |
-| Platform-hosted moderated media                                                          | D0   |
-| Published offers across all kinds, with prices                                           | D0   |
-| Company portfolio / project gallery, capability statement, certifications                | D1   |
-| Availability, lead times, operating hours                                                | D1   |
-| **Exact premises address, geolocation, phone, email, named contact person, payment instructions** | **D3** |
-| **Business website and every external link the Business controls** (§7.1)                | **D3** |
-| Owner's personal identity                                                                | Never published. Disclosed to admins and, at D3, as the verified signatory name |
+| Element                                                                                           | Tier                                                                                    |
+| ------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| Trade name, logo, cover, categories, company description, founding year, size band                | D0                                                                                      |
+| **Verified legal name and registration reference**                                                | D0 — organizations are public entities; this is a credibility asset, not protected data |
+| Rating, review count, completed engagements, KYB badge, credential badges                         | D0                                                                                      |
+| Coarse location(s) served, service areas, delivery coverage                                       | D0                                                                                      |
+| Platform-hosted moderated media                                                                   | D0                                                                                      |
+| Published offers across all kinds, with prices                                                    | D0                                                                                      |
+| Company portfolio / project gallery, capability statement, certifications                         | D1                                                                                      |
+| Availability, lead times, operating hours                                                         | D1                                                                                      |
+| **Exact premises address, geolocation, phone, email, named contact person, payment instructions** | **D3**                                                                                  |
+| **Business website and every external link the Business controls** (§7.1)                         | **D3**                                                                                  |
+| Owner's personal identity                                                                         | Never published. Disclosed to admins and, at D3, as the verified signatory name         |
 
 ### 7.1 External links are protected D3 data
 
@@ -179,20 +187,20 @@ number — not a profile decoration.
 
 **Classified as protected D3 data:**
 
-| Field                                                            |
-| ---------------------------------------------------------------- |
-| Business website                                                 |
-| External company website                                         |
-| Facebook URL                                                     |
-| LinkedIn URL                                                     |
-| Twitter/X URL                                                    |
-| Instagram URL                                                    |
-| WhatsApp URL                                                     |
-| Telegram handle                                                  |
-| External booking page                                            |
-| External contact form                                            |
-| External marketplace profile                                     |
-| **Any unrestricted navigable URL controlled by the Business**    |
+| Field                                                         |
+| ------------------------------------------------------------- |
+| Business website                                              |
+| External company website                                      |
+| Facebook URL                                                  |
+| LinkedIn URL                                                  |
+| Twitter/X URL                                                 |
+| Instagram URL                                                 |
+| WhatsApp URL                                                  |
+| Telegram handle                                               |
+| External booking page                                         |
+| External contact form                                         |
+| External marketplace profile                                  |
+| **Any unrestricted navigable URL controlled by the Business** |
 
 **None of these may be returned through a public D0/D1 Business profile API**, in any field, in
 any nesting, under any caller. Public Business discovery shows only **platform-controlled and
@@ -204,7 +212,7 @@ moderated media.
 disclosure** — `business_profiles` carries `website`, `linkedin_url`, `social_facebook`,
 `social_linkedin` and `social_twitter`, and the public profile response exposed the website
 field. This is a confirmed live defect, **closed by a focused security hotfix implemented
-separately** (`bad7d503`, *fix(profiles): close public contact disclosure*), which removes the
+separately** (`bad7d503`, _fix(profiles): close public contact disclosure_), which removes the
 fields from the public contract and replaces convention-filtering with runtime field
 allowlists at both the API and web-client boundaries. It is a shipped correction, not an open
 Wave 3 architecture question ([00 §11](./00-overview-and-terminology.md)).
@@ -229,7 +237,9 @@ Two further rules specific to organizations:
 
 **Being discovered (sales surface):** appears in offer search, provider search, category and
 area browse, alongside Experts and Craftsmen, with a Business marker and KYB badge. Buyers
-may filter to Businesses only, or exclude them.
+may filter to Businesses only, or exclude them. **The KYB badge is driven by V3b alone**; the
+legacy `platform_verified_at` badge is never rendered as a KYB indicator, never a search filter
+or facet, and confers no search preference ([00 §12](./00-overview-and-terminology.md)).
 
 **Discovering supply (procurement surface):** the full customer discovery set from
 [01 §8](./01-role-customer.md), executed in `business:<id>` context — searches, filters,
@@ -261,15 +271,15 @@ A Business may do everything a personal customer may do, under its own identity:
 
 What is different from a personal customer:
 
-| Aspect                      | Business buyer                                                                     |
-| --------------------------- | ------------------------------------------------------------------------------------ |
-| Buyer identity on record    | The BCI, with legal name and registration reference in the snapshot                |
-| Who may act                 | The owner only, in Wave 3                                                          |
-| Verification required       | **V3a** — full KYB is not required to buy ([00 §4.1](./00-overview-and-terminology.md)) |
-| MHC                         | **None spent.** Buyers never pay MHC; the accepting provider does                  |
+| Aspect                          | Business buyer                                                                                                                                                       |
+| ------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Buyer identity on record        | The BCI, with legal name and registration reference in the snapshot                                                                                                  |
+| Who may act                     | The owner only, in Wave 3                                                                                                                                            |
+| Verification required           | **V3a** — full KYB is not required to buy ([00 §4.1](./00-overview-and-terminology.md))                                                                              |
+| MHC                             | **None spent.** Buyers never pay MHC; the accepting provider does                                                                                                    |
 | Verification shown to providers | Legal name plus the **accurate stage badge** — organization-verified (V3a) or KYB-verified (V3b), never conflated. A provider spending MHC is entitled to know which |
-| Buyer conduct signal        | Attaches to the BCI, visible to providers at D2, never mixed with the seller rating |
-| Self-dealing                | May not buy from itself, from its owner's PCI, or from another BCI the owner controls |
+| Buyer conduct signal            | Attaches to the BCI, visible to providers at D2, never mixed with the seller rating                                                                                  |
+| Self-dealing                    | May not buy from itself, from its owner's PCI, or from another BCI the owner controls                                                                                |
 
 ---
 
@@ -277,19 +287,19 @@ What is different from a personal customer:
 
 The Business is the **only** identity with an unrestricted offer set.
 
-| Capability                                            | Wave 3                                            |
-| ----------------------------------------------------- | --------------------------------------------------- |
-| `expert_service` offers with packages, add-ons, revisions | ✅ full model from [07](./07-expert-packages.md) |
-| `craftsman_service` offers, service areas, bookings   | ✅ full model from [08](./08-craftsman-storefront.md) |
-| `physical_product` offers with variants               | ✅                                                  |
-| `made_to_order_product` offers                        | ✅                                                  |
-| Delivery, pickup, installation components             | ✅                                                  |
-| Proposals on **all** eligible need types              | ✅ free, higher quota                               |
-| Custom proposals and post-survey quotes               | ✅                                                  |
-| Every fulfillment type in [11](./11-fulfillment-models.md) | ✅ including hybrid product + service          |
-| Warranty / rectification terms                        | ✅                                                  |
-| Delivery by staff, assignment, branches               | ❌ Wave 4                                            |
-| Workspace-owned assets, shared templates              | ❌ Wave 4                                            |
+| Capability                                                 | Wave 3                                                |
+| ---------------------------------------------------------- | ----------------------------------------------------- |
+| `expert_service` offers with packages, add-ons, revisions  | ✅ full model from [07](./07-expert-packages.md)      |
+| `craftsman_service` offers, service areas, bookings        | ✅ full model from [08](./08-craftsman-storefront.md) |
+| `physical_product` offers with variants                    | ✅                                                    |
+| `made_to_order_product` offers                             | ✅                                                    |
+| Delivery, pickup, installation components                  | ✅                                                    |
+| Proposals on **all** eligible need types                   | ✅ free, higher quota                                 |
+| Custom proposals and post-survey quotes                    | ✅                                                    |
+| Every fulfillment type in [11](./11-fulfillment-models.md) | ✅ including hybrid product + service                 |
+| Warranty / rectification terms                             | ✅                                                    |
+| Delivery by staff, assignment, branches                    | ❌ Wave 4                                             |
+| Workspace-owned assets, shared templates                   | ❌ Wave 4                                             |
 
 The Business does **not** get a separate offer model. It composes the same four offer kinds
 under an organizational identity. This is deliberate: a fifth parallel "business offer" model
@@ -307,12 +317,12 @@ Offer, an application is not a Proposal, and hiring is not an Engagement Activat
 
 **Wave 3 recruitment authority:**
 
-| Rule                                                                                                    |
-| ------------------------------------------------------------------------------------------------------- |
-| **Only the verified Business owner** may create, edit, publish, manage, close or hire through Business Jobs |
-| Business **team members receive no delegated recruitment authority**, regardless of role                 |
+| Rule                                                                                                                                                                                |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Only the verified Business owner** may create, edit, publish, manage, close or hire through Business Jobs                                                                         |
+| Business **team members receive no delegated recruitment authority**, regardless of role                                                                                            |
 | The existing `manage_jobs` team permission remains **reserved and non-authoritative until Wave 4** — storable, reported under its reserved label, read by no authorization decision |
-| Recruitment authority resolves to the **ownership relation only**, exactly like commercial authority     |
+| Recruitment authority resolves to the **ownership relation only**, exactly like commercial authority                                                                                |
 
 **Recruitment must not touch the transactional model:**
 
@@ -348,7 +358,7 @@ contact-masked, no attachments), D3 full messaging — with organizational speci
 The union of the Expert and Craftsman rules, plus:
 
 - **Company documents** (registration, tax card, licences, insurance certificates) are
-  uploaded for KYB and are **admin-visible only**. Verified *facts* derived from them —
+  uploaded for KYB and are **admin-visible only**. Verified _facts_ derived from them —
   "registration verified", "licence valid to 2027", scope — are published as badges. The
   documents themselves are never public and never disclosed to a counterparty, at any tier.
 - **Capability statements, company profiles and project galleries** are **public listing
@@ -388,7 +398,7 @@ MHC.
 - MHC is not an asset of the company that can be redeemed, refunded to cash, or recovered on
   dissolution.
 - No receivables, no invoicing as a legal document, no tax computation, no accounting
-  export beyond the analytics record. Records are described as *what the parties reported*.
+  export beyond the analytics record. Records are described as _what the parties reported_.
 
 ---
 
@@ -478,14 +488,14 @@ Rules:
 Business is the one identity where suspension must be **surface-scoped**, because suspending
 selling should not strand the company's purchases and vice versa.
 
-| Axis                                 | Effect                                                                                                                                         |
-| ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **Restriction**                      | Quota, catalog-publication or messaging limits on one surface.                                                                                 |
-| **Commercial suspension (selling)**  | All offers hidden; no proposals, quote replies, acceptances or activations; MHC purchase blocked, balance frozen not forfeited. **Procurement continues.** |
-| **Commercial suspension (buying)**   | No new Needs, quote requests, purchase/booking/product requests, or awards; open Needs unpublished; pending requests withdrawn before any provider is charged. **Selling continues.** |
-| **Full commercial suspension**       | Both of the above.                                                                                                                             |
-| **Profile suspension**               | Business profile and offers removed from discovery and direct links; authored reviews hidden pending review.                                   |
-| **Termination**                      | Only after all open engagements — on both surfaces — complete, cancel with remedy, or are administratively closed with a determination.        |
+| Axis                                | Effect                                                                                                                                                                                |
+| ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Restriction**                     | Quota, catalog-publication or messaging limits on one surface.                                                                                                                        |
+| **Commercial suspension (selling)** | All offers hidden; no proposals, quote replies, acceptances or activations; MHC purchase blocked, balance frozen not forfeited. **Procurement continues.**                            |
+| **Commercial suspension (buying)**  | No new Needs, quote requests, purchase/booking/product requests, or awards; open Needs unpublished; pending requests withdrawn before any provider is charged. **Selling continues.** |
+| **Full commercial suspension**      | Both of the above.                                                                                                                                                                    |
+| **Profile suspension**              | Business profile and offers removed from discovery and direct links; authored reviews hidden pending review.                                                                          |
+| **Termination**                     | Only after all open engagements — on both surfaces — complete, cancel with remedy, or are administratively closed with a determination.                                               |
 
 Under **every** state the Business keeps, on both surfaces: existing engagement access,
 delivery and receipt, scheduling, evidence upload, handover, messaging, settlement reporting
@@ -493,7 +503,7 @@ and confirmation, case participation and appeal.
 
 **Owner-level enforcement does not automatically cascade.** Suspending a person's Expert PCI
 does not suspend a Business they own, and suspending a Business does not suspend the owner's
-personal customer capability — unless the finding is against the *person* (fraud, identity
+personal customer capability — unless the finding is against the _person_ (fraud, identity
 abuse, sanctions), in which case an explicit, recorded cascade applies to every identity
 they control. The cascade must be a deliberate administrative decision with a written
 rationale, never an implicit side effect.
@@ -523,15 +533,15 @@ rationale, never an implicit side effect.
 11. Transmitting contact details, links, handles or payment instructions at D0/D1/D2 —
     including within company profiles, capability statements and gallery media. (The legal
     name and registration reference are published deliberately and are not contact details.)
-11a. **Returning the Business website, any external company website, Facebook, LinkedIn,
+    11a. **Returning the Business website, any external company website, Facebook, LinkedIn,
     Twitter/X, Instagram, WhatsApp, Telegram, an external booking page, an external contact
     form, an external marketplace profile, or any unrestricted navigable URL the Business
     controls, through a public D0/D1 Business profile API or any pre-activation surface** (§7.1).
-11b. **Publishing the Business's exact premises address, geolocation or an exact map pin below
+    11b. **Publishing the Business's exact premises address, geolocation or an exact map pin below
     D3**, by any route including profile fields, media and capability statements.
-11c. **Performing any Business Jobs recruitment action — create, edit, publish, manage, close
+    11c. **Performing any Business Jobs recruitment action — create, edit, publish, manage, close
     or hire — as a non-owner**, or reading `manage_jobs` as an authorization input (§10.1).
-11d. **Routing recruitment salary, compensation, application fees or interview fees through the
+    11d. **Routing recruitment salary, compensation, application fees or interview fees through the
     Wave 3 settlement model, an MHC flow, a wallet, escrow or a payout path** (§10.1).
 12. Disclosing any **transaction attachment** — of any file type — before activation, and
     describing a V3a Business to a provider as KYB-verified.
@@ -551,7 +561,7 @@ This role carries most of the deferred surface. Everything below is **architectu
 and deliberately unbuilt**, and the Wave 3 boundaries in
 [09 §6](./09-business-buying-and-providing.md) exist specifically to stop it leaking in.
 
-- **Members and invitations with *commercial* authority.** The Wave 2G/2H team machinery
+- **Members and invitations with _commercial_ authority.** The Wave 2G/2H team machinery
   itself is **retained and available in Wave 3** for team administration; what is deferred is
   giving a member the ability to act commercially
   ([09 §4](./09-business-buying-and-providing.md)).
@@ -559,7 +569,7 @@ and deliberately unbuilt**, and the Wave 3 boundaries in
   on activation and settlement confirmation. The six reserved permission values already exist
   in the schema and stay **disabled** until this arrives.
 - **Delegated authority**: acting on behalf of the Business, recorded attribution with
-  independent authority (attribution itself is already recorded in Wave 3 — the *authority*
+  independent authority (attribution itself is already recorded in Wave 3 — the _authority_
   is what is deferred).
 - **Staff assignment**: assigning an engagement or a fulfillment component to a person,
   per-staff calendars, capacity and reputation.
@@ -573,8 +583,15 @@ and deliberately unbuilt**, and the Wave 3 boundaries in
 - **B2B commercial terms**: net payment terms, credit accounts, framework agreements,
   contract templates and e-signature.
 - **Consolidated statements, tax documents and accounting integrations.**
-- **Paid promotion, featured placement, advertisements, paid plans** — unapproved for
-  Wave 3, and separately blocked by `LAUNCH_CONSTRAINTS.md` LC-01 and LC-02.
+- **Paid promotion, featured placement and paid plans** — unapproved for Wave 3. Plans are
+  fenced **per plan** (`is_purchasable` false, no approved active price, or scoped
+  configuration), not by a global subscription pause
+  ([00 §14.2](./00-overview-and-terminology.md)).
+- **Priced advertisements.** The advertisement machinery is **implemented, wired and
+  operational at a zero price** — this is a deferred _pricing_ decision, not missing
+  functionality. Non-zero advertisement pricing stays disabled until explicitly configured and
+  commercially approved, and advertisement ownership migrates additively from user-based to
+  Commercial Identity ownership ([00 §14.1](./00-overview-and-terminology.md)).
 - **Any escrow, platform-held funds, receivables management or platform-executed refunds.**
 - **Delegated recruitment authority** — `manage_jobs` becoming effective so a team member may
   manage vacancies, candidates or hiring on the Business's behalf (§10.1).

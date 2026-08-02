@@ -13,8 +13,8 @@ The customer pays the provider directly, by whatever means they agree, off-platf
 platform's role is to (a) withhold the provider's payment instructions until the provider has
 paid to activate the engagement, (b) capture an **agreed amount** and a **payment plan** as
 part of the immutable snapshot, (c) accept **settlement records** reported by either party,
-(d) run each record up an evidence ladder from *reported* to *counterparty-confirmed* to
-*administratively verified*, and (e) count only the top two rungs as **verified GMV**.
+(d) run each record up an evidence ladder from _reported_ to _counterparty-confirmed_ to
+_administratively verified_, and (e) count only the top two rungs as **verified GMV**.
 Nothing in that chain moves money, and no part of the product may imply otherwise.
 
 ---
@@ -24,8 +24,8 @@ Nothing in that chain moves money, and no part of the product may imply otherwis
 **At D3 and never before** — that is, on successful Engagement Activation, and only to the
 counterparty of that engagement.
 
-| Stage                    | Payment-related visibility                                                                                        |
-| ------------------------ | --------------------------------------------------------------------------------------------------------------------- |
+| Stage                    | Payment-related visibility                                                                                          |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------- |
 | D0 / D1 (browse)         | Accepted **method types** only: "cash, bank transfer, InstaPay". No handles, no accounts, no numbers                |
 | D2 (pending arrangement) | Agreed price and payment-plan **shape** ("50% deposit, 50% on delivery"). No instructions, no account details       |
 | **D3 (activated)**       | The provider's **own** payment instructions: account name, bank/InstaPay/wallet identifier, accepted methods, notes |
@@ -44,6 +44,26 @@ Rules:
   ([13 §10](./13-mhc-activation.md)).
 - **No instruction may name MohandisHub as payee**, reference a platform account, or be
   formatted to resemble a platform invoice.
+
+### 2.1 Existing payment-disclosure provenance is preserved
+
+Provider-payment disclosure is not new. The repository already records it in
+`provider_payment_disclosures`, keyed to the legacy activation row
+(`mhc_job_activations.id`) that opened it, unique per activation and customer
+([00 §13](./00-overview-and-terminology.md)).
+
+| Rule                                                                                                                                                |
+| --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Existing disclosure records are **historical facts** — never deleted, never rewritten, never re-issued                                              |
+| A **backfilled Engagement preserves the relationship** to the disclosure records its legacy activation opened                                       |
+| The backfill **does not reopen or repeat payment-method disclosure**, and creates no second disclosure event                                        |
+| **Disclosure provenance is carried, not recomputed** — which activation opened it, for which provider and customer, and when                        |
+| **No orphan payment disclosure** survives the migration: every existing record still resolves through its activation, and reconciliation asserts it |
+| Legacy disclosure records **remain readable during the dual-read transition** and after cutover                                                     |
+
+A disclosure that was paid for once has been delivered once. Re-running it as part of a
+migration would either charge a provider again for what they already bought or present a
+customer with a fresh disclosure event that never happened — both are prohibited.
 
 ---
 
@@ -67,18 +87,18 @@ Rules:
 
 Either party may create a **Settlement Record** against an engagement.
 
-| Field                | Notes                                                                                       |
-| -------------------- | ----------------------------------------------------------------------------------------------- |
-| Direction            | `customer_to_provider` (normal) or `provider_to_customer` (a reported refund)               |
-| Type                 | `payment` · `deposit` · `instalment` · `refund` · `adjustment`                              |
-| Amount and currency  | Must match the engagement currency                                                          |
-| Date of the event    | The date money actually moved, which may precede the report                                 |
-| Method               | `cash` · `bank_transfer` · `instapay` · `wallet` · `card_in_person` · `cheque` · `other`    |
-| Reference            | Free text: transfer reference, receipt number                                               |
-| Linked plan item     | Which scheduled deposit/instalment this satisfies, if any                                   |
-| **Proof**            | Optional attachment(s) — see §5                                                             |
-| Reporter and context | Who reported it, from which acting context, when                                            |
-| **State**            | The evidence ladder position — see §6                                                       |
+| Field                | Notes                                                                                    |
+| -------------------- | ---------------------------------------------------------------------------------------- |
+| Direction            | `customer_to_provider` (normal) or `provider_to_customer` (a reported refund)            |
+| Type                 | `payment` · `deposit` · `instalment` · `refund` · `adjustment`                           |
+| Amount and currency  | Must match the engagement currency                                                       |
+| Date of the event    | The date money actually moved, which may precede the report                              |
+| Method               | `cash` · `bank_transfer` · `instapay` · `wallet` · `card_in_person` · `cheque` · `other` |
+| Reference            | Free text: transfer reference, receipt number                                            |
+| Linked plan item     | Which scheduled deposit/instalment this satisfies, if any                                |
+| **Proof**            | Optional attachment(s) — see §5                                                          |
+| Reporter and context | Who reported it, from which acting context, when                                         |
+| **State**            | The evidence ladder position — see §6                                                    |
 
 Rules:
 
@@ -107,7 +127,7 @@ rule and the most important sentence in this file.
   because a file was attached. A screenshot is trivially forged and the product must behave as
   if every one might be.
 - A record **with** proof and a record **without** proof sit at the same rung until a human
-  moves them. Proof only changes what a *counterparty* or an *administrator* can see when
+  moves them. Proof only changes what a _counterparty_ or an _administrator_ can see when
   deciding.
 - Proof containing contact details is normal and acceptable at D3, since the gate is already
   open; proof is never surfaced at any lower tier.
@@ -124,14 +144,14 @@ reported ──counterparty confirms──▶ counterparty_confirmed ──admin
    └──reporter withdraws──▶ withdrawn
 ```
 
-| State                    | Meaning                                                                                  | Counts toward verified GMV |
-| ------------------------ | ------------------------------------------------------------------------------------------ | -------------------------- |
-| `reported`               | One party says it happened. Nothing else is known                                        | **No**                     |
-| `counterparty_confirmed` | The other party agreed it happened, in the stated amount, on the stated date             | **Yes**                    |
-| `admin_verified`         | An administrator reviewed the record and its evidence and affirmed it                    | **Yes**                    |
-| `disputed`               | Either party contests it, or it is attached to an open case about the money              | **No**                     |
-| `rejected`               | The counterparty denies it                                                               | **No**                     |
-| `withdrawn`              | The reporter retracted it                                                                | **No**                     |
+| State                    | Meaning                                                                      | Counts toward verified GMV |
+| ------------------------ | ---------------------------------------------------------------------------- | -------------------------- |
+| `reported`               | One party says it happened. Nothing else is known                            | **No**                     |
+| `counterparty_confirmed` | The other party agreed it happened, in the stated amount, on the stated date | **Yes**                    |
+| `admin_verified`         | An administrator reviewed the record and its evidence and affirmed it        | **Yes**                    |
+| `disputed`               | Either party contests it, or it is attached to an open case about the money  | **No**                     |
+| `rejected`               | The counterparty denies it                                                   | **No**                     |
+| `withdrawn`              | The reporter retracted it                                                    | **No**                     |
 
 Rules:
 
@@ -160,11 +180,11 @@ Rules:
 The **payment plan** is part of the snapshot and declares expectations; the settlement records
 declare reality. They are separate on purpose, and the gap between them is a product signal.
 
-| Plan shape          | Structure                                                                                       |
-| ------------------- | ----------------------------------------------------------------------------------------------- |
-| `single`            | One expected amount, one trigger                                                                |
-| `deposit_plus_balance` | A deposit (amount or percentage) with a trigger, plus the balance with a trigger             |
-| `instalments`       | N scheduled items, each with an amount and a trigger. The sum must equal the agreed amount      |
+| Plan shape             | Structure                                                                                  |
+| ---------------------- | ------------------------------------------------------------------------------------------ |
+| `single`               | One expected amount, one trigger                                                           |
+| `deposit_plus_balance` | A deposit (amount or percentage) with a trigger, plus the balance with a trigger           |
+| `instalments`          | N scheduled items, each with an amount and a trigger. The sum must equal the agreed amount |
 
 Triggers: `on_activation`, `on_spec_confirmation`, `on_scheduling`, `on_delivery`,
 `on_completion`, `on_date`.
@@ -176,12 +196,12 @@ Triggers: `on_activation`, `on_spec_confirmation`, `on_scheduling`, `on_delivery
   plan item in whole or in part.
 - **Coverage** is derived per engagement from confirmed and verified records only:
 
-  | Coverage   | Condition                                                    |
-  | ---------- | -------------------------------------------------------------- |
-  | `none`     | No counted records                                            |
-  | `partial`  | Counted total > 0 and < agreed amount                         |
-  | `full`     | Counted total ≈ agreed amount, within a rounding tolerance    |
-  | `over`     | Counted total > agreed amount — flagged, not blocked          |
+  | Coverage  | Condition                                                  |
+  | --------- | ---------------------------------------------------------- |
+  | `none`    | No counted records                                         |
+  | `partial` | Counted total > 0 and < agreed amount                      |
+  | `full`    | Counted total ≈ agreed amount, within a rounding tolerance |
+  | `over`    | Counted total > agreed amount — flagged, not blocked       |
 
 - Coverage is displayed to both parties throughout, and the `settlement_open` overlay stays on
   the engagement until coverage is `full`.
@@ -288,15 +308,15 @@ rule that governs what happens with the number.
 
 ### 12A.1 What Wave 3 delivers
 
-| Capability                     | Definition                                                                                                                    |
-| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------- |
-| **Settlement evidence**        | The ladder in §6, complete, with proof handling per §5                                                                        |
-| **Settlement tranches**        | Records in `counterparty_confirmed` or `admin_verified`, the only counted unit                                                |
-| **Verified-GMV calculation**   | Per §12, per provider commercial identity, net of confirmed refunds, in the engagement currency                                |
-| **Period closing**             | A named accounting period per identity, closed on a schedule, producing an immutable closing figure (§12A.2)                  |
-| **Tier calculation**           | The closed figure resolved against an admin-configurable tier table                                                           |
-| **Expected-rent calculation**  | The MHC amount the resolved tier *would* charge for that period                                                               |
-| **Admin reporting**            | Per-identity and aggregate reporting across all of the above, including restatement history                                   |
+| Capability                    | Definition                                                                                                   |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| **Settlement evidence**       | The ladder in §6, complete, with proof handling per §5                                                       |
+| **Settlement tranches**       | Records in `counterparty_confirmed` or `admin_verified`, the only counted unit                               |
+| **Verified-GMV calculation**  | Per §12, per provider commercial identity, net of confirmed refunds, in the engagement currency              |
+| **Period closing**            | A named accounting period per identity, closed on a schedule, producing an immutable closing figure (§12A.2) |
+| **Tier calculation**          | The closed figure resolved against an admin-configurable tier table                                          |
+| **Expected-rent calculation** | The MHC amount the resolved tier _would_ charge for that period                                              |
+| **Admin reporting**           | Per-identity and aggregate reporting across all of the above, including restatement history                  |
 
 ### 12A.2 Period closing
 
@@ -348,15 +368,15 @@ rule that governs what happens with the number.
 The Jobs module is a **recruitment/employment marketplace**
 ([00 §10](./00-overview-and-terminology.md)), and **none of this file applies to it**:
 
-| Rule                                                                                                        |
-| ------------------------------------------------------------------------------------------------------------- |
+| Rule                                                                                                                                                                                   |
+| -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Recruitment salary or compensation is not processed through the Wave 3 service settlement model.** It is not an agreed amount, has no payment plan, and creates no settlement record |
-| **Job salary creates no settlement tranches**, so it can never reach a counted state           |
-| **Job hiring records never count as provider verified GMV**, in any period, for any identity   |
-| **No new customer-money wallet flow, escrow, salary payout, platform-held compensation or provider withdrawal path may be created for Jobs** |
-| **No application fee or interview fee is charged through the retired EGP wallets**              |
-| **Existing historical Jobs financial records remain read-only and auditable** — never deleted, never rewritten, never migrated into settlement records |
-| Any **future recruitment monetization is designed separately**, using approved MHC platform actions, plans, advertisements, recruitment subscriptions or job-posting fees |
+| **Job salary creates no settlement tranches**, so it can never reach a counted state                                                                                                   |
+| **Job hiring records never count as provider verified GMV**, in any period, for any identity                                                                                           |
+| **No new customer-money wallet flow, escrow, salary payout, platform-held compensation or provider withdrawal path may be created for Jobs**                                           |
+| **No application fee or interview fee is charged through the retired EGP wallets**                                                                                                     |
+| **Existing historical Jobs financial records remain read-only and auditable** — never deleted, never rewritten, never migrated into settlement records                                 |
+| Any **future recruitment monetization is designed separately**, using approved MHC platform actions, plans, advertisements, recruitment subscriptions or job-posting fees              |
 
 The legacy Jobs subsystem's application fees, interview fees, escrow, milestone money,
 commissions, provider payouts and internal wallet movement are **frozen legacy assumptions**.
@@ -370,16 +390,16 @@ recruitment money flow.
 
 Permitted statements, and the shape of the language:
 
-- "The provider reported a payment of X on this date." *(reported)*
-- "Both parties confirmed a payment of X on this date." *(confirmed)*
-- "MohandisHub reviewed the submitted evidence and verified this record." *(verified —
-  meaning a human read it, nothing more)*
+- "The provider reported a payment of X on this date." _(reported)_
+- "Both parties confirmed a payment of X on this date." _(confirmed)_
+- "MohandisHub reviewed the submitted evidence and verified this record." _(verified —
+  meaning a human read it, nothing more)_
 - "This engagement's agreed amount is X; confirmed settlement covers Y of it."
 - "This provider has verified settled volume in band Z over the last 12 months."
 - "Payment is made directly between you and the provider. MohandisHub does not hold, process
   or guarantee it."
 - "This record is unconfirmed. Only the reporting party has stated it."
-- "We could not determine what happened." *(a legitimate, necessary outcome)*
+- "We could not determine what happened." _(a legitimate, necessary outcome)_
 
 ---
 

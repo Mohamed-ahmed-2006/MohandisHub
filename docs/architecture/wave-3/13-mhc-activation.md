@@ -20,6 +20,7 @@
   Admin/Support-executed **PCI conversion** (§1.1). It is operator-executed, scoped to one
   person's one PCI slot, and empties the source in the same transaction that funds the
   replacement.
+
 - **Non-cashable.** No withdrawal, no conversion, no redemption, no refund to money. There is
   no provider cash balance anywhere in the product and no screen may imply one.
 - **Held per commercial identity**, not per person: a PCI has its own balance, each BCI has
@@ -57,16 +58,16 @@ Admin/Support executes conversion (all eligibility checks already passed)
 
 **Ledger rules:**
 
-| Rule                          | Statement                                                                                                            |
-| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
-| **Conservation**              | No MHC is created, destroyed or duplicated. The sum across both identities is unchanged by the operation             |
-| **Never doubly spendable**    | The source and the replacement can **never** both spend the same credits. The source ends at zero available balance  |
-| **Source cannot spend after** | Once conversion commits, the archived PCI can spend nothing — it holds no available balance and can activate nothing |
-| **Exactly once**              | **Idempotent.** A re-run, retry or double submission produces one carryover, enforced by locking and a uniqueness constraint on the conversion |
-| **Atomic**                    | Carryover, archival and replacement creation commit together. Any failure rolls back all of them and leaves the source enabled with its balance intact |
+| Rule                          | Statement                                                                                                                                                                                     |
+| ----------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Conservation**              | No MHC is created, destroyed or duplicated. The sum across both identities is unchanged by the operation                                                                                      |
+| **Never doubly spendable**    | The source and the replacement can **never** both spend the same credits. The source ends at zero available balance                                                                           |
+| **Source cannot spend after** | Once conversion commits, the archived PCI can spend nothing — it holds no available balance and can activate nothing                                                                          |
+| **Exactly once**              | **Idempotent.** A re-run, retry or double submission produces one carryover, enforced by locking and a uniqueness constraint on the conversion                                                |
+| **Atomic**                    | Carryover, archival and replacement creation commit together. Any failure rolls back all of them and leaves the source enabled with its balance intact                                        |
 | **History preserved**         | The source's ledger is **never deleted, rewritten or re-pointed**. Every historical MHC transaction — purchases, activation charges, re-grants — **remains attributable to the archived PCI** |
-| **Append-only**               | The carryover is recorded as ledger entries on both sides referencing the conversion event, in the same append-only manner as a re-grant counterentry (§9.0) |
-| **Available balance only**    | Only the remaining **available** balance carries                                                                     |
+| **Append-only**               | The carryover is recorded as ledger entries on both sides referencing the conversion event, in the same append-only manner as a re-grant counterentry (§9.0)                                  |
+| **Available balance only**    | Only the remaining **available** balance carries                                                                                                                                              |
 
 **Non-available MHC blocks the conversion — deterministically, and failing closed.**
 
@@ -135,19 +136,19 @@ with a separate acceptance path, a separate charging rule, or an exemption — t
 order chain ([08 §2](./08-craftsman-storefront.md)) charges at each of its two activations like
 any other pair of engagements.
 
-| Action key                     | Triggered when a provider accepts…            | Charged to                     |
-| ------------------------------ | ----------------------------------------------- | ------------------------------ |
-| `activation.need_award`        | An awarded proposal on a Need                  | The accepting provider identity |
-| `activation.service_purchase`  | A direct package/service purchase request      | The accepting provider identity |
-| `activation.booking`           | A slot booking request                         | The accepting provider identity |
-| `activation.product_request`   | A product order request                        | The accepting provider identity |
-| `activation.custom_order`      | A buyer's acceptance of a Custom Proposal      | The accepting provider identity |
+| Action key                    | Triggered when a provider accepts…        | Charged to                      |
+| ----------------------------- | ----------------------------------------- | ------------------------------- |
+| `activation.need_award`       | An awarded proposal on a Need             | The accepting provider identity |
+| `activation.service_purchase` | A direct package/service purchase request | The accepting provider identity |
+| `activation.booking`          | A slot booking request                    | The accepting provider identity |
+| `activation.product_request`  | A product order request                   | The accepting provider identity |
+| `activation.custom_order`     | A buyer's acceptance of a Custom Proposal | The accepting provider identity |
 
 **Price resolution** may additionally vary by **category** and by **configured action tier**
 within an origin — a low-value local-trade category priced differently from a regulated
 engineering one, or a post-survey custom order priced as its own tier. Resolution is a lookup
-against admin configuration: origin → category → tier → price. What varies is *which configured
-price applies*, never *how the price is computed from the engagement's value* (§3).
+against admin configuration: origin → category → tier → price. What varies is _which configured
+price applies_, never _how the price is computed from the engagement's value_ (§3).
 
 **Free in Wave 3, and deliberately so:**
 
@@ -161,9 +162,12 @@ price applies*, never *how the price is computed from the engagement's value* (�
 - Amendments to a live engagement ([10 §6](./10-engagement-model.md)).
 - Everything the customer does, without exception.
 
-**Not in Wave 3** — advertisements, service promotion, featured placement, promoted proposals
-and paid plans are all separately unapproved or frozen by `LAUNCH_CONSTRAINTS.md` LC-01/LC-02
-and must not be wired to this gate ([16 group 3](./16-wave-3-scope.md)).
+**Not activation origins, and never wired to this gate** — service promotion, featured
+placement, promoted proposals, paid plans and advertisements. None of them may acquire an
+activation action key, share the activation pipeline, or open D3
+([16 group 3](./16-wave-3-scope.md)). Their **actual** repository status is stated in §2.1,
+because "unapproved" and "unbuilt" are not the same claim and the difference matters to anyone
+about to implement.
 
 **Recruitment is not an activation origin.** Publishing a job vacancy, applying to one,
 shortlisting, interviewing and hiring are **recruitment actions, not engagement activations**.
@@ -172,6 +176,36 @@ opened by a hire ([00 §10](./00-overview-and-terminology.md),
 [10 §15](./10-engagement-model.md)). Any future recruitment monetization is a **separate**
 design using approved MHC platform actions, plans, advertisements, recruitment subscriptions or
 job-posting fees — and none is invented or activated here.
+
+### 2.1 Non-activation MHC action keys — advertisements and plans
+
+The generic MHC action-charge path (`mhc_action_prices` → `mhc_action_charges`) is **not**
+exclusive to activation. Two other consumers already exist in the repository, and describing
+them as absent would send an implementer to build a second copy of working machinery.
+
+| Consumer                  | Actual status                                                                                                                                                                                                                                                 |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Advertisements**        | **Implemented and wired.** The `advertisement` action key is **active**, charged through the generic action-charge path, with weekly campaign periods, price snapshots, charge references and **automatic and manual renewal**. The current price is **zero** |
+| **Plans / subscriptions** | **Present and fenced per plan.** `app_settings.pause_plan_subscriptions` is currently **false**; the effective fences are `plans.is_purchasable` (default false), a configured active scoped MHC price, and applicable plan/action eligibility                |
+
+The rules that follow from that ([00 §14](./00-overview-and-terminology.md)):
+
+- **Zero price is a configured value, not missing implementation.** No document, comment or
+  ticket may describe advertisement MHC charging as absent or unwired.
+- **A zero-priced advertisement action must not debit MHC**, and must not fail closed the way
+  an _inactive or unset_ activation price does (§4). The two cases are distinct: an active
+  price of zero is configuration; an unset or inactive **activation** price is a
+  misconfiguration and refuses the action.
+- **Non-zero advertisement pricing stays disabled until explicitly configured and commercially
+  approved.** Enabling it is an activation/configuration decision
+  ([18](./18-decisions-required.md)), not a Wave 3 architecture prerequisite.
+- **Period billing and renewal remain idempotent** — a renewal processed twice charges once.
+- **Advertisement ownership migrates additively** from user-based to PCI/BCI ownership
+  ([09 §4.4](./09-business-buying-and-providing.md)).
+- **No paid plan may be purchased** without both `is_purchasable` and an approved active price;
+  the architecture must not rely on a global subscription pause as its safety fence, and
+  paid-bid ordering, proposal visibility advantages and promoted proposals stay disabled
+  regardless of plan status (INV-070).
 
 ---
 
@@ -204,6 +238,7 @@ job-posting fees — and none is invented or activated here.
   falls hardest on exactly the low-value local work Craftsman exists for. That is mitigated
   with **per-origin, per-category and per-tier prices** — which move the charge to where the
   economics differ — and never by making it proportional to value.
+
 - The charge is a **cost to the provider** and must never appear on the buyer's price
   breakdown, be described to the buyer as a fee they fund, or be added to the agreed amount as
   a pass-through line.
@@ -251,6 +286,28 @@ Hard rules:
 - The **ledger entry** records: action key, price, **origin intent reference**, engagement
   reference, acting human, timestamp, and the resulting balance.
 
+### 4.1 Legacy activation backfill never runs this pipeline
+
+Existing `mhc_job_activations` rows are activations that **already happened and were already
+charged** ([00 §13](./00-overview-and-terminology.md),
+[10 §7.4](./10-engagement-model.md)). Seeding a Wave 3 Engagement from one is a **history
+recording operation, not an activation**.
+
+| Hard rule                                                                                                                                                                                                   |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| The backfill **does not execute the ten-step activation transaction** above                                                                                                                                 |
+| It **resolves no price**, **locks no balance** and **writes no MHC debit**                                                                                                                                  |
+| It **creates no second charge** for an arrangement already charged — a duplicate debit here is ground G1 (§9), not an accepted cost                                                                         |
+| It **does not reopen or repeat payment-method disclosure**; the existing disclosure record and its provenance are preserved ([12 §2](./12-payment-and-settlement.md))                                       |
+| It carries the **legacy MHC charge reference** onto the backfilled Engagement rather than issuing a new one                                                                                                 |
+| It is **idempotent by construction** — a deterministic key derived from the legacy activation identifier, plus a uniqueness constraint or mapping table, so re-running the backfill creates nothing further |
+| Legacy activation rows and the MHC ledger are **immutable** throughout, including under rollback                                                                                                            |
+| A row that cannot be mapped unambiguously is **quarantined for reconciliation**, never charged and never guessed                                                                                            |
+
+**Reconciliation asserts one charge and one Engagement per legacy activation**, no orphan
+activation, no orphan payment disclosure, and no duplicate provider/customer relationship
+created by the migration.
+
 ---
 
 ## 5. What happens when the provider lacks MHC
@@ -274,18 +331,18 @@ Hard rules:
 
 ## 6. Before and after activation
 
-| Category                        | Before (D2 and below)                                     | After (D3)                                        |
-| ------------------------------- | ---------------------------------------------------------- | -------------------------------------------------- |
-| Counterparty name               | Display name only                                          | **Verified legal name** (and registration ref for a BCI) |
-| Phone, email, messaging handles | Hidden                                                     | **Visible**                                       |
-| Address                         | Governorate + city/district                                | **Exact address, geolocation, access notes, floor, landmark** |
-| Attachments                     | **Manifest only, every file type** — no previews, no renditions, no thumbnails | **Full originals, downloadable**              |
+| Category                        | Before (D2 and below)                                                                                                                                       | After (D3)                                                    |
+| ------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------- |
+| Counterparty name               | Display name only                                                                                                                                           | **Verified legal name** (and registration ref for a BCI)      |
+| Phone, email, messaging handles | Hidden                                                                                                                                                      | **Visible**                                                   |
+| Address                         | Governorate + city/district                                                                                                                                 | **Exact address, geolocation, access notes, floor, landmark** |
+| Attachments                     | **Manifest only, every file type** — no previews, no renditions, no thumbnails                                                                              | **Full originals, downloadable**                              |
 | Messaging                       | Pre-award communication: structured **and** free-form, plain text, strictly contact-redacted, moderated, turn-capped, no attachments, no unrestricted links | **Full threaded messaging, file exchange, on-platform calls** |
-| Payment instructions            | Method **types** only                                      | **Full instructions, snapshotted**                |
-| Scheduling                      | Indicative dates only                                      | **Real appointments at the real address**         |
-| Delivery / installation         | Not arrangeable                                            | **Arrangeable**                                   |
-| Evidence, deliverables          | None                                                       | **Full upload and exchange**                      |
-| Identity verification detail    | Tier badges                                                | **Tier, credential scope and expiry, snapshotted** |
+| Payment instructions            | Method **types** only                                                                                                                                       | **Full instructions, snapshotted**                            |
+| Scheduling                      | Indicative dates only                                                                                                                                       | **Real appointments at the real address**                     |
+| Delivery / installation         | Not arrangeable                                                                                                                                             | **Arrangeable**                                               |
+| Evidence, deliverables          | None                                                                                                                                                        | **Full upload and exchange**                                  |
+| Identity verification detail    | Tier badges                                                                                                                                                 | **Tier, credential scope and expiry, snapshotted**            |
 
 D3, once opened, **persists for the parties to that engagement** — through completion, the
 warranty window, disputes, and even the counterparty's later suspension. The provider paid for
@@ -295,8 +352,8 @@ it and does not lose it.
 
 ## 7. Timeout and expiry
 
-| Origin             | Activation window                                                                     |
-| ------------------ | ---------------------------------------------------------------------------------------- |
+| Origin             | Activation window                                                                      |
+| ------------------ | -------------------------------------------------------------------------------------- |
 | `need_award`       | Admin-configurable default (order of a day or two)                                     |
 | `service_purchase` | Admin-configurable, typically shorter                                                  |
 | `custom_order`     | Admin-configurable; also bounded by the Custom Proposal's own validity period          |
@@ -318,16 +375,16 @@ Behaviour:
 
 ## 8. Cancellation behaviour
 
-| When                                                        | MHC outcome                                              |
-| ----------------------------------------------------------- | ---------------------------------------------------------- |
-| Buyer withdraws before activation                           | **No charge** (nothing was charged)                       |
-| Provider declines before activation                         | **No charge**                                             |
-| Activation window expires                                   | **No charge**                                             |
+| When                                                        | MHC outcome                                                                                      |
+| ----------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| Buyer withdraws before activation                           | **No charge** (nothing was charged)                                                              |
+| Provider declines before activation                         | **No charge**                                                                                    |
+| Activation window expires                                   | **No charge**                                                                                    |
 | Buyer cancels after activation                              | **Charged, not refunded** — but a re-grant candidate under ground G5 where the buyer is at fault |
-| Provider cancels after activation                           | **Charged, not refunded.** The provider chose to accept and then withdrew |
-| Mutual cancellation after activation                        | **Charged, not refunded**                                 |
-| Engagement expires at the requirements gate (buyer silence) | **Charged, not refunded** — but an explicit re-grant candidate under ground G5 |
-| Admin closes the engagement on a determination              | Per the determination, including re-grant where the provider is not at fault |
+| Provider cancels after activation                           | **Charged, not refunded.** The provider chose to accept and then withdrew                        |
+| Mutual cancellation after activation                        | **Charged, not refunded**                                                                        |
+| Engagement expires at the requirements gate (buyer silence) | **Charged, not refunded** — but an explicit re-grant candidate under ground G5                   |
+| Admin closes the engagement on a determination              | Per the determination, including re-grant where the provider is not at fault                     |
 
 The governing principle: **MHC buys disclosure, not an outcome.** Once contact, address and
 attachments are released, the thing that was purchased has been delivered, irrespective of
@@ -367,14 +424,14 @@ open-ended, and no ground may be added by operational convention.
 
 Re-grants are permitted **only** in these narrowly defined circumstances:
 
-| #    | Ground                                                                                                       | Automatic? |
-| ---- | -------------------------------------------------------------------------------------------------------------- | ---------- |
-| G1   | **Duplicate or double charge** for one arrangement (system fault)                                            | Automatic  |
-| G2   | **Atomicity breach** — the debit committed but the engagement or disclosure did not                          | Automatic  |
-| G3   | **Price or configuration error** — the wrong price was charged, or a price was active that should not have been | Automatic  |
-| G4   | **Platform outage or defect** that prevented the provider from fulfilling or from being reachable            | Admin      |
-| G5   | **Confirmed buyer fraud or abuse** — a fake Need, a contact-harvesting Need, a buyer banned for abuse, or a buyer who was never able or intending to transact, established by a case determination | Admin, on a case |
-| G6   | **Administrative error** in enforcement or verification that caused the loss                                 | Admin      |
+| #   | Ground                                                                                                                                                                                             | Automatic?       |
+| --- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------- |
+| G1  | **Duplicate or double charge** for one arrangement (system fault)                                                                                                                                  | Automatic        |
+| G2  | **Atomicity breach** — the debit committed but the engagement or disclosure did not                                                                                                                | Automatic        |
+| G3  | **Price or configuration error** — the wrong price was charged, or a price was active that should not have been                                                                                    | Automatic        |
+| G4  | **Platform outage or defect** that prevented the provider from fulfilling or from being reachable                                                                                                  | Admin            |
+| G5  | **Confirmed buyer fraud or abuse** — a fake Need, a contact-harvesting Need, a buyer banned for abuse, or a buyer who was never able or intending to transact, established by a case determination | Admin, on a case |
+| G6  | **Administrative error** in enforcement or verification that caused the loss                                                                                                                       | Admin            |
 
 Rules:
 
@@ -428,16 +485,16 @@ detection signal, an enforcement response and a negative test.
 6. **Pre-award communication is contact-masked, moderated and bounded.** The channel accepts
    structured clarification **and** free-form text; every character passes redaction, turn caps
    and rate limits, and `raw_content` is retained for moderation. What is blocked is the
-   *payload*: contact details, payment instructions, unrestricted links, exact location and
+   _payload_: contact details, payment instructions, unrestricted links, exact location and
    attachments of any type. Removing the channel is not the control — masking it is
    ([00 §5.1](./00-overview-and-terminology.md)).
 7. **Exact location is D3 only, in both directions and with no exception.** This covers the
-   buyer's address *and* the provider's premises — exact street address, building number,
+   buyer's address _and_ the provider's premises — exact street address, building number,
    floor or unit, exact map pin, GPS coordinates, a map link exposing the premises, and
    directions sufficient to locate it exactly. No distance calculator, map pin or radius fine
    enough to identify an address, and **no walk-in address opt-in** for any role or operating
    model ([08 §1.1](./08-craftsman-storefront.md)).
-7a. **External links controlled by a commercial identity are D3 only** — website, external
+   7a. **External links controlled by a commercial identity are D3 only** — website, external
    company site, Facebook, LinkedIn, Twitter/X, Instagram, WhatsApp, Telegram, external
    booking page, external contact form, external marketplace profile, and any unrestricted
    navigable URL. They must not appear on a public D0/D1 profile response
@@ -497,18 +554,18 @@ Wave 3 delivers the whole chain in [12 §12A](./12-payment-and-settlement.md) �
 evidence, settlement tranches, verified-GMV calculation, period closing, tier calculation,
 admin reporting and expected-rent calculation — and then **stops before the debit**.
 
-| Behaviour                                                             | Shadow mode |
-| --------------------------------------------------------------------- | ----------- |
-| Close a period and compute verified GMV per commercial identity        | ✅          |
-| Resolve the identity's tier from the configured tier table             | ✅          |
-| Compute the MHC rent that tier **would** charge                        | ✅          |
-| **Record** the expected charge as a shadow entry, with its inputs      | ✅          |
-| Report it to administrators, per identity and in aggregate             | ✅          |
-| **Deduct MHC from any balance**                                        | ❌          |
-| Write a debit to the MHC ledger                                        | ❌          |
-| Fail, block or restrict an action for insufficient balance against rent| ❌          |
-| **Suspend or restrict a commercial identity for unpaid rent**          | ❌          |
-| Present a rent figure to a provider as owed, due, outstanding or arrears | ❌        |
+| Behaviour                                                                | Shadow mode |
+| ------------------------------------------------------------------------ | ----------- |
+| Close a period and compute verified GMV per commercial identity          | ✅          |
+| Resolve the identity's tier from the configured tier table               | ✅          |
+| Compute the MHC rent that tier **would** charge                          | ✅          |
+| **Record** the expected charge as a shadow entry, with its inputs        | ✅          |
+| Report it to administrators, per identity and in aggregate               | ✅          |
+| **Deduct MHC from any balance**                                          | ❌          |
+| Write a debit to the MHC ledger                                          | ❌          |
+| Fail, block or restrict an action for insufficient balance against rent  | ❌          |
+| **Suspend or restrict a commercial identity for unpaid rent**            | ❌          |
+| Present a rent figure to a provider as owed, due, outstanding or arrears | ❌          |
 
 A shadow entry is an **observation, not an obligation.** It is recorded in its own series,
 never in the MHC ledger, so that no reader of a balance or a ledger can mistake it for a charge

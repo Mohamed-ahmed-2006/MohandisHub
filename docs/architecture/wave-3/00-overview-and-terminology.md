@@ -29,7 +29,7 @@ contradict them.
 15. Contact information, exact locations, unrestricted communication, attachments and
     authoritative payment instructions are protected until activation.
 16. Providers require KYC. Businesses require KYB plus owner/controller verification **to
-    provide**. Ordinary Business *buying* runs on graduated verification — owner KYC plus
+    provide**. Ordinary Business _buying_ runs on graduated verification — owner KYC plus
     basic organization verification — see §4.1.
 17. Payment proof is **evidence**, not final settlement confirmation.
 18. Settlement may be reported, counterparty-confirmed, verified, disputed or rejected.
@@ -45,10 +45,10 @@ contradict them.
 The codebase and the baseline both use "activation" for two unrelated things. Wave 3 gives
 them separate names and they must never be conflated again.
 
-| Term                       | Level      | Meaning                                                                                          | Costs MHC |
-| -------------------------- | ---------- | ------------------------------------------------------------------------------------------------ | --------- |
-| **Provider Enablement**    | Identity   | A commercial identity has passed verification and may publish offers and submit proposals.       | No        |
-| **Engagement Activation**  | Engagement | A provider accepts one specific arrangement; protected information unlocks for that arrangement. | **Yes**   |
+| Term                      | Level      | Meaning                                                                                          | Costs MHC |
+| ------------------------- | ---------- | ------------------------------------------------------------------------------------------------ | --------- |
+| **Provider Enablement**   | Identity   | A commercial identity has passed verification and may publish offers and submit proposals.       | No        |
+| **Engagement Activation** | Engagement | A provider accepts one specific arrangement; protected information unlocks for that arrangement. | **Yes**   |
 
 Wherever this document set says "activation" without a qualifier, it means **Engagement
 Activation**. Enablement is always written out in full.
@@ -98,11 +98,11 @@ and never as a mutation of the existing identity.
 Every commercial write executes in **exactly one** acting context, resolved server-side and
 never inferred from the shape of the payload.
 
-| Context kind        | Exists when                        | Buys | Provides | Reputation carrier         |
-| ------------------- | ---------------------------------- | ---- | -------- | -------------------------- |
-| `personal_buyer`    | Always (universal customer)        | ✅   | ❌       | Buyer conduct signal       |
-| `personal_provider` | A PCI exists and is enabled        | ❌   | ✅       | Expert **or** Craftsman    |
-| `business:<id>`     | A BCI exists and caller owns it    | ✅   | ✅       | Business (provider rating) |
+| Context kind        | Exists when                     | Buys | Provides | Reputation carrier         |
+| ------------------- | ------------------------------- | ---- | -------- | -------------------------- |
+| `personal_buyer`    | Always (universal customer)     | ✅   | ❌       | Buyer conduct signal       |
+| `personal_provider` | A PCI exists and is enabled     | ❌   | ✅       | Expert **or** Craftsman    |
+| `business:<id>`     | A BCI exists and caller owns it | ✅   | ✅       | Business (provider rating) |
 
 Consequences that engineering must be able to test:
 
@@ -140,40 +140,40 @@ zero reputation. **The source identity's commercial type is never mutated in pla
 
 Wave 3 delivers conversion as an **operator-executed operation**, not a user-executed one.
 
-| In Wave 3                                                        | Not in Wave 3                                         |
-| ---------------------------------------------------------------- | ----------------------------------------------------- |
-| Conversion-safe data and domain architecture                     | A user-facing "Switch to Expert / Switch to Craftsman" button |
-| PCI archival                                                     | Self-service conversion                               |
-| Replacement PCI creation                                         | Automatic conversion approval                         |
-| Eligibility validation                                           | Repeated user-controlled switching                    |
-| Blocking validation for active obligations (§3.5.2)              | A general MHC transfer interface                      |
-| **Audited MHC carryover** (§3.5.4)                               |                                                       |
-| **Admin/Support authorization** on every conversion              |                                                       |
-| A recorded **conversion reason**                                 |                                                       |
-| **Immutable conversion audit history**                           |                                                       |
-| Appropriate notifications to the user                            |                                                       |
-| **Safe rollback or failure behaviour before final commit**       |                                                       |
-| **Idempotency protection**                                       |                                                       |
+| In Wave 3                                                  | Not in Wave 3                                                 |
+| ---------------------------------------------------------- | ------------------------------------------------------------- |
+| Conversion-safe data and domain architecture               | A user-facing "Switch to Expert / Switch to Craftsman" button |
+| PCI archival                                               | Self-service conversion                                       |
+| Replacement PCI creation                                   | Automatic conversion approval                                 |
+| Eligibility validation                                     | Repeated user-controlled switching                            |
+| Blocking validation for active obligations (§3.5.2)        | A general MHC transfer interface                              |
+| **Audited MHC carryover** (§3.5.4)                         |                                                               |
+| **Admin/Support authorization** on every conversion        |                                                               |
+| A recorded **conversion reason**                           |                                                               |
+| **Immutable conversion audit history**                     |                                                               |
+| Appropriate notifications to the user                      |                                                               |
+| **Safe rollback or failure behaviour before final commit** |                                                               |
+| **Idempotency protection**                                 |                                                               |
 
-A user may *request* a conversion. Only an authorized Admin/Support actor may *execute* one,
+A user may _request_ a conversion. Only an authorized Admin/Support actor may _execute_ one,
 and the execution records who authorized it and why. This is deliberate: conversion moves
 credit, archives a commercial identity and resets a reputation, and each of those is a decision
 that deserves a named human behind it before self-service is considered.
 
 ### 3.5.2 Preconditions — conversion is rejected while any unresolved obligation exists
 
-| Blocker                                                                                        |
-| ---------------------------------------------------------------------------------------------- |
+| Blocker                                                                                                                                           |
+| ------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Pending provider activation** — any pre-activation intent object awaiting the provider's charged acceptance ([10 §7](./10-engagement-model.md)) |
-| An **active engagement** in any live state                                                     |
-| **Any non-final MHC state** — the full blocking list is in §3.5.6a                             |
-| **Incomplete fulfillment** — any required component not confirmed or auto-confirmed            |
-| **Pending customer confirmation** — a component in `awaiting_customer_confirmation`             |
-| An **open correction request** — a revision round, rectification or objection in progress      |
-| An **open dispute or resolution case**, in either direction                                    |
-| An **unresolved settlement issue** — a disputed record, or an open settlement escalation       |
-| An **active commercial suspension investigation** where conversion could evade enforcement     |
-| Any **other unresolved commercial obligation** defined by the engagement lifecycle             |
+| An **active engagement** in any live state                                                                                                        |
+| **Any non-final MHC state** — the full blocking list is in §3.5.6a                                                                                |
+| **Incomplete fulfillment** — any required component not confirmed or auto-confirmed                                                               |
+| **Pending customer confirmation** — a component in `awaiting_customer_confirmation`                                                               |
+| An **open correction request** — a revision round, rectification or objection in progress                                                         |
+| An **open dispute or resolution case**, in either direction                                                                                       |
+| An **unresolved settlement issue** — a disputed record, or an open settlement escalation                                                          |
+| An **active commercial suspension investigation** where conversion could evade enforcement                                                        |
+| Any **other unresolved commercial obligation** defined by the engagement lifecycle                                                                |
 
 The provider clears these by completing, cancelling or resolving them. **There is no
 administrative override that converts around a live obligation** — not by Admin, not by Support,
@@ -209,21 +209,21 @@ would be a reputation reset with extra steps.
 
 ### 3.5.5 What does and does not carry to the replacement PCI
 
-| Item                                                                 | Carries? |
-| -------------------------------------------------------------------- | -------- |
-| Reviews                                                              | **No**   |
-| Reputation, ratings, distributions, reliability metrics              | **No**   |
-| Offers and services                                                  | **No**   |
-| Products                                                             | **No**   |
-| Portfolio and work gallery                                           | **No**   |
-| Provider analytics and historical series                             | **No**   |
-| Search ranking and any ranking signal derived from the source        | **No**   |
-| Fulfillment history                                                  | **No**   |
-| Commercial verification specific to the provider type (V2 scope, trade credentials) | **No** |
-| Verified settled volume / verified-GMV attribution                   | **No**   |
-| Role-specific onboarding and eligibility                             | **No — completed again in full** |
-| **Available MHC balance**                                            | **Yes — exactly once, by the audited operation in §3.5.6** |
-| Account-level **identity evidence** (V1 KYC documents)               | **Yes, only where still valid and applicable** — it is evidence about the *person*, and re-collecting an unexpired government ID proves nothing new |
+| Item                                                                                | Carries?                                                                                                                                            |
+| ----------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Reviews                                                                             | **No**                                                                                                                                              |
+| Reputation, ratings, distributions, reliability metrics                             | **No**                                                                                                                                              |
+| Offers and services                                                                 | **No**                                                                                                                                              |
+| Products                                                                            | **No**                                                                                                                                              |
+| Portfolio and work gallery                                                          | **No**                                                                                                                                              |
+| Provider analytics and historical series                                            | **No**                                                                                                                                              |
+| Search ranking and any ranking signal derived from the source                       | **No**                                                                                                                                              |
+| Fulfillment history                                                                 | **No**                                                                                                                                              |
+| Commercial verification specific to the provider type (V2 scope, trade credentials) | **No**                                                                                                                                              |
+| Verified settled volume / verified-GMV attribution                                  | **No**                                                                                                                                              |
+| Role-specific onboarding and eligibility                                            | **No — completed again in full**                                                                                                                    |
+| **Available MHC balance**                                                           | **Yes — exactly once, by the audited operation in §3.5.6**                                                                                          |
+| Account-level **identity evidence** (V1 KYC documents)                              | **Yes, only where still valid and applicable** — it is evidence about the _person_, and re-collecting an unexpired government ID proves nothing new |
 
 **Role-specific verification is redone in full.** The replacement PCI is not enabled until its
 own onboarding is complete: the new type's profile or storefront minimum, its category
@@ -242,19 +242,19 @@ forfeited nor permanently frozen — a provider who converts does not lose credi
 
 **This is a special audited system conversion operation, not a transfer feature.**
 
-| Property                              | Rule                                                                                                       |
-| ------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
-| **Not user-accessible**               | No user, provider or Business owner can invoke it. It exists only inside an Admin/Support-executed conversion |
-| **Not a general capability**          | It must not enable transfers between arbitrary personal identities, between Business identities, between users, or between any two commercial identities that are not a conversion source and its replacement |
-| **Source ends at zero**               | The archived PCI finishes with a **zero available MHC balance**                                            |
-| **Replacement receives exactly**      | The replacement PCI receives **exactly the archived PCI's remaining available balance** — no more, no less  |
-| **Conservation**                      | **No MHC is created, destroyed, duplicated, or left spendable by both identities**                          |
-| **Atomic**                            | The carryover, the archival and the replacement creation commit together or not at all                     |
-| **Idempotent**                        | Re-running or double-submitting a conversion produces **exactly one** carryover                             |
-| **Ledger history preserved**          | Nothing in the source's ledger is deleted, rewritten or re-pointed                                          |
-| **Historical attribution unchanged**  | **Historical MHC transactions remain attributable to the archived PCI** — its spend history is its own      |
+| Property                             | Rule                                                                                                                                                                                                          |
+| ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Not user-accessible**              | No user, provider or Business owner can invoke it. It exists only inside an Admin/Support-executed conversion                                                                                                 |
+| **Not a general capability**         | It must not enable transfers between arbitrary personal identities, between Business identities, between users, or between any two commercial identities that are not a conversion source and its replacement |
+| **Source ends at zero**              | The archived PCI finishes with a **zero available MHC balance**                                                                                                                                               |
+| **Replacement receives exactly**     | The replacement PCI receives **exactly the archived PCI's remaining available balance** — no more, no less                                                                                                    |
+| **Conservation**                     | **No MHC is created, destroyed, duplicated, or left spendable by both identities**                                                                                                                            |
+| **Atomic**                           | The carryover, the archival and the replacement creation commit together or not at all                                                                                                                        |
+| **Idempotent**                       | Re-running or double-submitting a conversion produces **exactly one** carryover                                                                                                                               |
+| **Ledger history preserved**         | Nothing in the source's ledger is deleted, rewritten or re-pointed                                                                                                                                            |
+| **Historical attribution unchanged** | **Historical MHC transactions remain attributable to the archived PCI** — its spend history is its own                                                                                                        |
 
-**Only the remaining *available* balance carries, and the rule is deterministic and fails
+**Only the remaining _available_ balance carries, and the rule is deterministic and fails
 closed.** Credits that are pending, reserved, disputed, reversed or otherwise not available are
 **never silently treated as available balance**, and they are never partially carried.
 
@@ -285,34 +285,34 @@ unambiguously **does not proceed**.
 
 **Final treatment, once the blockers are clear:**
 
-| Rule                                                                                                       |
-| ------------------------------------------------------------------------------------------------------------ |
-| The **available balance transfers exactly once**                                                            |
-| **Pending, reserved, held and disputed balances do not transfer** — they blocked the conversion until resolved |
+| Rule                                                                                                                                                                      |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| The **available balance transfers exactly once**                                                                                                                          |
+| **Pending, reserved, held and disputed balances do not transfer** — they blocked the conversion until resolved                                                            |
 | **Reversed, refunded, expired, cancelled and failed ledger entries remain immutable historical records.** They are history, and history never becomes available carryover |
-| **Historical ledger entries remain attributed to the archived PCI**                                         |
-| After success: **source available balance equals zero**                                                     |
-| After success: **the source PCI cannot spend**                                                              |
-| After success: **the replacement receives exactly the source's final available balance**                     |
-| **Atomic conservation holds** — no credit created, no credit destroyed, no duplicated spendable balance      |
-| **Retry and concurrency remain idempotent** — one carryover, one credit, regardless of retries or concurrent requests |
+| **Historical ledger entries remain attributed to the archived PCI**                                                                                                       |
+| After success: **source available balance equals zero**                                                                                                                   |
+| After success: **the source PCI cannot spend**                                                                                                                            |
+| After success: **the replacement receives exactly the source's final available balance**                                                                                  |
+| **Atomic conservation holds** — no credit created, no credit destroyed, no duplicated spendable balance                                                                   |
+| **Retry and concurrency remain idempotent** — one carryover, one credit, regardless of retries or concurrent requests                                                     |
 
 The rule applied to each category is recorded on the immutable conversion record, so a reader
 can see not only what moved but why nothing else did.
 
 **The conversion audit record must identify:**
 
-| Field                                    |
-| ---------------------------------------- |
-| Source PCI                               |
-| Replacement PCI                          |
-| User / account owner                     |
-| Amount moved                             |
-| Original ledger balance                  |
-| Conversion event                         |
-| Administrator or Support actor           |
-| Timestamp                                |
-| Reason                                   |
+| Field                          |
+| ------------------------------ |
+| Source PCI                     |
+| Replacement PCI                |
+| User / account owner           |
+| Amount moved                   |
+| Original ledger balance        |
+| Conversion event               |
+| Administrator or Support actor |
+| Timestamp                      |
+| Reason                         |
 
 The audit record is **immutable** and is the link between the archived and replacement
 identities.
@@ -347,21 +347,21 @@ anything reusable out of it — is prohibited.
 
 ## 4. Verification tiers
 
-| Tier   | Name                | Evidence                                                                   | Unlocks                                                              |
-| ------ | ------------------- | -------------------------------------------------------------------------- | -------------------------------------------------------------------- |
-| **V0** | Contact-verified    | Verified email **and** verified phone                                      | Customer capability: browse, post needs, purchase, message post-gate |
-| **V1** | Identity-verified   | Government ID + liveness/selfie match + name reconciliation (KYC)          | PCI enablement (Expert or Craftsman): publish offers, propose        |
-| **V2** | Credential-verified | Professional syndicate membership, licence, or trade certificate           | Categories flagged `credential_required`; a public badge elsewhere   |
-| **V3a**| Business-basic      | Verified business email **and** business phone, organization identity (legal name + registration reference recorded and format/registry-checked), **plus V1 on the owner/controller** | BCI **buying** enablement — ordinary procurement |
-| **V3b**| Business-verified (KYB) | V3a **plus** commercial registration document, tax card and premises evidence, admin-approved | BCI **selling** enablement, and everything in §4.1 |
+| Tier    | Name                    | Evidence                                                                                                                                                                              | Unlocks                                                              |
+| ------- | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------- |
+| **V0**  | Contact-verified        | Verified email **and** verified phone                                                                                                                                                 | Customer capability: browse, post needs, purchase, message post-gate |
+| **V1**  | Identity-verified       | Government ID + liveness/selfie match + name reconciliation (KYC)                                                                                                                     | PCI enablement (Expert or Craftsman): publish offers, propose        |
+| **V2**  | Credential-verified     | Professional syndicate membership, licence, or trade certificate                                                                                                                      | Categories flagged `credential_required`; a public badge elsewhere   |
+| **V3a** | Business-basic          | Verified business email **and** business phone, organization identity (legal name + registration reference recorded and format/registry-checked), **plus V1 on the owner/controller** | BCI **buying** enablement — ordinary procurement                     |
+| **V3b** | Business-verified (KYB) | V3a **plus** commercial registration document, tax card and premises evidence, admin-approved                                                                                         | BCI **selling** enablement, and everything in §4.1                   |
 
 Rules:
 
 - V1 is a prerequisite for V3a and therefore for V3b. A business is never verified without a
   verified human behind it — this is the "owner/controller verification" the baseline requires.
-- **V3a is not a weaker KYB; it is a different question.** V3b asks *is this a real registered
-  company fit to sell*. V3a asks *is there a verified person behind a real organization,
-  reachable and accountable, fit to buy*.
+- **V3a is not a weaker KYB; it is a different question.** V3b asks _is this a real registered
+  company fit to sell_. V3a asks _is there a verified person behind a real organization,
+  reachable and accountable, fit to buy_.
 - V2 is **category-gated, admin-configurable**. Some engineering categories (structural
   sign-off, electrical, gas, lifting) must be flagged credential-required; others must not
   be. Whether a specific category requires it is an admin setting, not a product decision.
@@ -370,6 +370,10 @@ Rules:
   engagements continue.
 - Verification state is **snapshotted onto every engagement** at activation. A provider who
   later loses V2 does not retroactively change what a past customer was told.
+- **V0/V1/V2/V3a/V3b are the only verification credentials in Wave 3, and they are additive,
+  explicit and independently authoritative.** No legacy field, badge, timestamp or deposit
+  history is a substitute for one. In particular, `users.platform_verified_at` is a **legacy
+  display signal and never a Wave 3 verification credential** (§12).
 
 ### 4.1 Graduated Business verification — what each stage unlocks
 
@@ -378,18 +382,18 @@ imposes a multi-day dead period at the moment an organization is most motivated,
 owners to buy through their personal identity instead — which defeats the separation the
 Business identity exists to provide.
 
-| Activity                                                                  | Requires |
-| ------------------------------------------------------------------------- | -------- |
-| Browse, search, save, follow                                              | V3a      |
-| Post a Need, request proposals, send quote requests                       | V3a      |
-| Place purchase, booking and product requests; award; ordinary buying      | V3a      |
-| Receive D3 disclosure as the **buyer** counterparty; report and confirm settlements; review suppliers | V3a |
-| **Publishing commercial offers or products**                              | **V3b**  |
-| **Submitting provider proposals or custom proposals**                     | **V3b**  |
-| **Providing** — accepting any arrangement as the provider party           | **V3b**  |
-| **Earning Business reputation** — receiving provider reviews              | **V3b**  |
-| **Receiving provider payment disclosures** — publishing payment instructions as a provider | **V3b** |
-| **Accumulating provider verified GMV**                                    | **V3b**  |
+| Activity                                                                                              | Requires |
+| ----------------------------------------------------------------------------------------------------- | -------- |
+| Browse, search, save, follow                                                                          | V3a      |
+| Post a Need, request proposals, send quote requests                                                   | V3a      |
+| Place purchase, booking and product requests; award; ordinary buying                                  | V3a      |
+| Receive D3 disclosure as the **buyer** counterparty; report and confirm settlements; review suppliers | V3a      |
+| **Publishing commercial offers or products**                                                          | **V3b**  |
+| **Submitting provider proposals or custom proposals**                                                 | **V3b**  |
+| **Providing** — accepting any arrangement as the provider party                                       | **V3b**  |
+| **Earning Business reputation** — receiving provider reviews                                          | **V3b**  |
+| **Receiving provider payment disclosures** — publishing payment instructions as a provider            | **V3b**  |
+| **Accumulating provider verified GMV**                                                                | **V3b**  |
 
 - The owner must hold **approved V1 before acting through the Business at all**, in either
   direction. This is the accountability anchor: a fake Business's Needs cost providers real
@@ -409,12 +413,12 @@ Business identity exists to provide.
 Disclosure is what MohandisHub sells. It is modelled explicitly as four tiers, and every
 field in the system is assigned to exactly one.
 
-| Tier   | Audience                                                                    | Visible                                                                                                                                                                  |
-| ------ | --------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **D0** | Anyone, including signed-out                                                | Display name, avatar/logo, headline, categories, **coarse location only** (governorate/city/district, coarse service zone, approximate map area), ratings and counts, published offers and their prices, badges, platform-hosted moderated media |
-| **D1** | Signed-in identities                                                        | Full public profile, portfolio, availability calendar, response-time stats, the ability to place a proposal / purchase request / quote request                           |
-| **D2** | A counterparty with a **pending, unactivated** arrangement                   | Pre-award communication — structured Q&A **and** contact-masked free-form text; coarse location; attachment **manifest** (count, type, size, caption) with **no content of any kind**; structured requirement attributes; indicative budget |
-| **D3** | A counterparty on an **activated engagement**                                | Full legal/contact details of both parties, **exact address and geolocation of both parties — including a Craftsman's workshop and a Business's premises**, **every external link a commercial identity controls**, all attachments, unrestricted (moderated) messaging with file exchange, **payment instructions** |
+| Tier   | Audience                                                   | Visible                                                                                                                                                                                                                                                                                                              |
+| ------ | ---------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **D0** | Anyone, including signed-out                               | Display name, avatar/logo, headline, categories, **coarse location only** (governorate/city/district, coarse service zone, approximate map area), ratings and counts, published offers and their prices, badges, platform-hosted moderated media                                                                     |
+| **D1** | Signed-in identities                                       | Full public profile, portfolio, availability calendar, response-time stats, the ability to place a proposal / purchase request / quote request                                                                                                                                                                       |
+| **D2** | A counterparty with a **pending, unactivated** arrangement | Pre-award communication — structured Q&A **and** contact-masked free-form text; coarse location; attachment **manifest** (count, type, size, caption) with **no content of any kind**; structured requirement attributes; indicative budget                                                                          |
+| **D3** | A counterparty on an **activated engagement**              | Full legal/contact details of both parties, **exact address and geolocation of both parties — including a Craftsman's workshop and a Business's premises**, **every external link a commercial identity controls**, all attachments, unrestricted (moderated) messaging with file exchange, **payment instructions** |
 
 **Two protections the readiness audit made explicit**, because both were previously softened by
 an exception:
@@ -482,19 +486,19 @@ Buyer and provider may communicate before activation. The channel carries **stru
 clarification and free-form text**, and every character of it passes through contact redaction
 and anti-bypass moderation.
 
-| At D2                                          | Status                                                            |
-| ---------------------------------------------- | ----------------------------------------------------------------- |
-| Structured clarification Q&A                   | ✅ Available                                                      |
-| Free-form message text                         | ✅ Available, **strictly redacted**, moderated, rate-limited      |
-| Contact information — phone, email, handles, QR | ❌ Blocked and redacted, including evasion forms                  |
-| Payment instructions or account details        | ❌ Blocked                                                        |
-| Unrestricted links, external handles, external profile URLs | ❌ Blocked                           |
-| Exact location of **either** party, or anything that identifies an address or premises | ❌ Blocked |
-| Transaction attachments of any type            | ❌ Blocked (Rule 1)                                               |
+| At D2                                                                                  | Status                                                       |
+| -------------------------------------------------------------------------------------- | ------------------------------------------------------------ |
+| Structured clarification Q&A                                                           | ✅ Available                                                 |
+| Free-form message text                                                                 | ✅ Available, **strictly redacted**, moderated, rate-limited |
+| Contact information — phone, email, handles, QR                                        | ❌ Blocked and redacted, including evasion forms             |
+| Payment instructions or account details                                                | ❌ Blocked                                                   |
+| Unrestricted links, external handles, external profile URLs                            | ❌ Blocked                                                   |
+| Exact location of **either** party, or anything that identifies an address or premises | ❌ Blocked                                                   |
+| Transaction attachments of any type                                                    | ❌ Blocked (Rule 1)                                          |
 
 The trade-off is deliberate and was decided on its merits: too little communication and
 providers cannot price, so both parties leave to talk elsewhere and the gate loses the
-transaction entirely; too much unmoderated channel and the channel *becomes* the bypass.
+transaction entirely; too much unmoderated channel and the channel _becomes_ the bypass.
 Masking is the position that keeps the conversation on-platform while denying it the payload.
 
 **Structured-only communication is not the model.** A future optional enhancement may offer a
@@ -506,31 +510,34 @@ communication.
 
 ## 6. The core nouns
 
-| Noun                       | Definition                                                                                                                     |
-| -------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| **Need**                   | A buyer-authored statement of demand, open to proposals from eligible providers.                                               |
-| **Offer**                  | A provider-authored, published unit of supply. Four kinds; see [06](./06-offer-model.md).                                      |
-| **Package**                | A named, priced, scoped tier within an Expert service offer.                                                                   |
-| **Proposal**               | A provider's bid against a Need. Free in Wave 3.                                                                               |
-| **Quote Request**          | A buyer-initiated, structured request for bespoke terms against an Offer or a provider.                                        |
-| **Custom Proposal**        | A provider-authored bespoke set of terms, offered to one named buyer.                                                          |
-| **Purchase Request**       | A buyer's commitment to an Offer's published terms, pending provider acceptance.                                               |
-| **Award Offer**            | A buyer's selection of one Proposal, pending provider acceptance.                                                              |
+| Noun                         | Definition                                                                                                                                                                                                                                                                                   |
+| ---------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Need**                     | A buyer-authored statement of demand, open to proposals from eligible providers.                                                                                                                                                                                                             |
+| **Offer**                    | A provider-authored, published unit of supply. Four kinds; see [06](./06-offer-model.md).                                                                                                                                                                                                    |
+| **Package**                  | A named, priced, scoped tier within an Expert service offer.                                                                                                                                                                                                                                 |
+| **Proposal**                 | A provider's bid against a Need. Free in Wave 3.                                                                                                                                                                                                                                             |
+| **Quote Request**            | A buyer-initiated, structured request for bespoke terms against an Offer or a provider.                                                                                                                                                                                                      |
+| **Custom Proposal**          | A provider-authored bespoke set of terms, offered to one named buyer.                                                                                                                                                                                                                        |
+| **Purchase Request**         | A buyer's commitment to an Offer's published terms, pending provider acceptance.                                                                                                                                                                                                             |
+| **Award Offer**              | A buyer's selection of one Proposal, pending provider acceptance.                                                                                                                                                                                                                            |
 | **Commercial Intent Object** | The origin-specific pre-activation object — need award offer, accepted service purchase intent, booking request/accepted booking intent, product request, custom order intent. It is **not** an Engagement, carries no engagement state and opens no D3 ([10 §7](./10-engagement-model.md)). |
-| **Engagement Activation**  | The provider's acceptance, charged in MHC, that **creates** the Engagement from its origin intent and opens D3, in one transaction committing exactly once. |
-| **Engagement**             | The single record of an **activated** commercial arrangement. Carries immutable snapshots. **It does not exist before activation.** |
-| **Fulfillment Component**  | One typed unit of work or handover inside an Engagement. An Engagement has one or more.                                        |
-| **Amendment**              | A mutually accepted, append-only change to an Engagement's agreed terms. Never rewrites the original.                          |
-| **Settlement Record**      | A reported money event (payment, deposit, instalment, refund) attached to an Engagement, carrying an evidence state.           |
-| **Settlement Tranche**     | A settlement record that has reached a **counted** state — `counterparty_confirmed` or `admin_verified`. Tranches are the only input to verified GMV. |
-| **Verified GMV**           | The sum of settlement **tranches**, net of confirmed refunds, attributed to a provider commercial identity over a closed period. Nothing else. |
-| **Verified-GMV Rent**      | A tiered monthly MHC charge derived from a closed period's verified GMV. **Shadow mode in Wave 3**: calculated and recorded, never deducted. |
-| **Archived PCI**           | The source Personal Commercial Identity retired by a conversion (§3.5). Retains its reviews, history and MHC ledger permanently; publishes nothing, proposes on nothing, spends nothing. |
-| **Replacement PCI**        | The new-typed PCI created by a conversion. Starts at zero reputation with a new provider profile; receives exactly the archived PCI's available MHC balance. |
-| **PCI conversion**         | The Admin/Support-executed lifecycle operation that archives a source PCI and creates a replacement of the other type (§3.5). Never a mutation of the source's type. |
-| **MHC**                    | Non-transferable, non-cashable, closed-loop provider-side credit. Held per commercial identity.                                |
-| **Case**                   | A dispute, report or appeal in the Help & Resolution Center. Survives suspension.                                              |
-| **Reliability metrics**    | Non-review behavioural signals: response rate, activation rate, cancellation rate, on-time rate, no-show rate.                 |
+| **Engagement Activation**    | The provider's acceptance, charged in MHC, that **creates** the Engagement from its origin intent and opens D3, in one transaction committing exactly once.                                                                                                                                  |
+| **Engagement**               | The single record of an **activated** commercial arrangement. Carries immutable snapshots. **It does not exist before activation.**                                                                                                                                                          |
+| **Fulfillment Component**    | One typed unit of work or handover inside an Engagement. An Engagement has one or more.                                                                                                                                                                                                      |
+| **Amendment**                | A mutually accepted, append-only change to an Engagement's agreed terms. Never rewrites the original.                                                                                                                                                                                        |
+| **Settlement Record**        | A reported money event (payment, deposit, instalment, refund) attached to an Engagement, carrying an evidence state.                                                                                                                                                                         |
+| **Settlement Tranche**       | A settlement record that has reached a **counted** state — `counterparty_confirmed` or `admin_verified`. Tranches are the only input to verified GMV.                                                                                                                                        |
+| **Verified GMV**             | The sum of settlement **tranches**, net of confirmed refunds, attributed to a provider commercial identity over a closed period. Nothing else.                                                                                                                                               |
+| **Verified-GMV Rent**        | A tiered monthly MHC charge derived from a closed period's verified GMV. **Shadow mode in Wave 3**: calculated and recorded, never deducted.                                                                                                                                                 |
+| **Archived PCI**             | The source Personal Commercial Identity retired by a conversion (§3.5). Retains its reviews, history and MHC ledger permanently; publishes nothing, proposes on nothing, spends nothing.                                                                                                     |
+| **Replacement PCI**          | The new-typed PCI created by a conversion. Starts at zero reputation with a new provider profile; receives exactly the archived PCI's available MHC balance.                                                                                                                                 |
+| **PCI conversion**           | The Admin/Support-executed lifecycle operation that archives a source PCI and creates a replacement of the other type (§3.5). Never a mutation of the source's type.                                                                                                                         |
+| **MHC**                      | Non-transferable, non-cashable, closed-loop provider-side credit. Held per commercial identity.                                                                                                                                                                                              |
+| **Legacy platform badge**    | The historical `users.platform_verified_at` timestamp, awarded for profile completeness plus a 1,000 EGP deposit. A **legacy compatibility/display signal only** — it is not KYC, not KYB, not a credential, and grants no Wave 3 authority (§12).                                           |
+| **Legacy activation record** | An existing `mhc_job_activations` row — a Wave 2 bid-award or reservation activation that already charged MHC and already opened provider-payment disclosure. **Immutable history**; it may seed at most one Wave 3 Engagement and is never charged again (§13).                             |
+| **Backfilled Engagement**    | A Wave 3 Engagement seeded from a legacy activation record, created without executing the live activation-charge pipeline and marked as backfilled rather than natively activated (§13).                                                                                                     |
+| **Case**                     | A dispute, report or appeal in the Help & Resolution Center. Survives suspension.                                                                                                                                                                                                            |
+| **Reliability metrics**      | Non-review behavioural signals: response rate, activation rate, cancellation rate, on-time rate, no-show rate.                                                                                                                                                                               |
 
 ---
 
@@ -539,19 +546,24 @@ communication.
 Wave 3 does not invent a parallel vocabulary for things that already exist. This mapping is
 conceptual; the migration design is out of scope here.
 
-| Wave 1/2 concept                                     | Wave 3 concept                                        | Note                                                                              |
-| ---------------------------------------------------- | ----------------------------------------------------- | --------------------------------------------------------------------------------- |
-| `needs`                                              | **Need**                                              | Gains typing, visibility modes, buyer-context ownership                           |
-| `bids`                                               | **Proposal**                                          | Stays free; paid/promoted proposals remain unapproved                             |
-| `services`                                           | **Offer** (kind `expert_service` / `craftsman_service`) | Splits by provider kind; gains packages and variants                              |
-| `reservations`                                       | **Engagement** with origin `booking`                  | Settlement/hold semantics removed entirely                                        |
-| `jobs`, `job_applications`, job milestones/escrow    | **Not mapped.** Remains the **recruitment subsystem** | **Jobs are not Needs, Offers, Proposals, Bookings, Product Orders, Custom Orders or Engagements.** No job or job application is migrated into the Engagement spine; historical Jobs data keeps its recruitment semantics. Legacy job money flows stay disabled and read-only. See §10 |
-| `users.primary_role`                                 | Identity + PCI type + acting context                  | Role-string authorization is replaced by context authorization                    |
-| `business_teams`, `business_members`                 | **Team administration, retained and available**       | `business_teams.business_id` references **`users.id`** — a **legacy Business-account surrogate**, *not* a BCI. Wave 3 adds an **additive BCI spine** with deterministic mapping ([09 §4.4](./09-business-buying-and-providing.md)). `manage_team` stays enforced; the six reserved permissions stay disabled. Delegated commercial authority is Wave 4 |
-| `business_profiles.user_id`                          | Compatibility anchor for the BCI mapping              | Also references `users.id`. A distinct BCI entity does not yet exist; assets are user-owned and are re-associated non-destructively ([09 §4.4](./09-business-buying-and-providing.md)) |
-| Workspace selection (Wave 2G/2H)                     | **Team-administration scope only**                    | It does not set an application-wide commercial acting context and must not be extended to do so in Wave 3 |
-| `support_tickets` / unified cases (Wave 2I)          | **Case**                                              | Becomes the single dispute, appeal and settlement-escalation surface              |
-| `mhc_action_prices`                                  | Activation price table, keyed per engagement origin   | Shape confirmed in [13](./13-mhc-activation.md); values stay admin-configurable   |
+| Wave 1/2 concept                                  | Wave 3 concept                                                                   | Note                                                                                                                                                                                                                                                                                                                                                                                    |
+| ------------------------------------------------- | -------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `needs`                                           | **Need**                                                                         | Gains typing, visibility modes, buyer-context ownership                                                                                                                                                                                                                                                                                                                                 |
+| `bids`                                            | **Proposal**                                                                     | Stays free; paid/promoted proposals remain unapproved                                                                                                                                                                                                                                                                                                                                   |
+| `services`                                        | **Offer** (kind `expert_service` / `craftsman_service`)                          | Splits by provider kind; gains packages and variants                                                                                                                                                                                                                                                                                                                                    |
+| `reservations`                                    | **Engagement** with origin `booking`                                             | Settlement/hold semantics removed entirely                                                                                                                                                                                                                                                                                                                                              |
+| `jobs`, `job_applications`, job milestones/escrow | **Not mapped.** Remains the **recruitment subsystem**                            | **Jobs are not Needs, Offers, Proposals, Bookings, Product Orders, Custom Orders or Engagements.** No job or job application is migrated into the Engagement spine; historical Jobs data keeps its recruitment semantics. Legacy job money flows stay disabled and read-only. See §10                                                                                                   |
+| `users.primary_role`                              | Identity + PCI type + acting context                                             | Role-string authorization is replaced by context authorization                                                                                                                                                                                                                                                                                                                          |
+| `business_teams`, `business_members`              | **Team administration, retained and available**                                  | `business_teams.business_id` references **`users.id`** — a **legacy Business-account surrogate**, _not_ a BCI. Wave 3 adds an **additive BCI spine** with deterministic mapping ([09 §4.4](./09-business-buying-and-providing.md)). `manage_team` stays enforced; the six reserved permissions stay disabled. Delegated commercial authority is Wave 4                                  |
+| `business_profiles.user_id`                       | Compatibility anchor for the BCI mapping                                         | Also references `users.id`. A distinct BCI entity does not yet exist; assets are user-owned and are re-associated non-destructively ([09 §4.4](./09-business-buying-and-providing.md))                                                                                                                                                                                                  |
+| Workspace selection (Wave 2G/2H)                  | **Team-administration scope only**                                               | It does not set an application-wide commercial acting context and must not be extended to do so in Wave 3                                                                                                                                                                                                                                                                               |
+| `support_tickets` / unified cases (Wave 2I)       | **Case**                                                                         | Becomes the single dispute, appeal and settlement-escalation surface                                                                                                                                                                                                                                                                                                                    |
+| `mhc_action_prices`                               | Activation price table, keyed per engagement origin                              | Shape confirmed in [13](./13-mhc-activation.md); values stay admin-configurable                                                                                                                                                                                                                                                                                                         |
+| `users.platform_verified_at`                      | **Not mapped.** Remains a **legacy display badge**                               | Historically awarded for profile completeness plus a 1,000 EGP deposit. That deposit-based trust model is obsolete and conflicts with Wave 3 verification. It is **never** read as V1/V2/V3a/V3b, never grants commercial authority, and every legacy account is classified **unverified for Wave 3 commercial authority** unless new verification evidence supports otherwise. See §12 |
+| `mhc_job_activations`                             | **Immutable legacy activation history**, seeding at most one **Engagement** each | Existing `award` and `booking` rows already charged MHC and already opened provider-payment disclosure. They are never deleted, rewritten or re-charged; the backfill reads them as the source of truth and creates at most one Engagement per row. See §13                                                                                                                             |
+| `provider_payment_disclosures`                    | **Preserved payment-disclosure provenance**                                      | Keyed to `mhc_job_activations.id`. Backfilled Engagements preserve the existing disclosure relationship and never reopen or repeat payment-method disclosure ([12 §2](./12-payment-and-settlement.md))                                                                                                                                                                                  |
+| `mhc_action_prices.advertisement`                 | **Existing, active, weekly, priced at zero**                                     | Advertisement MHC charging, weekly period billing and automatic/manual renewal are **implemented and wired**. The price is currently zero; it is not missing machinery. Non-zero pricing stays disabled until explicitly configured and commercially approved. See §14                                                                                                                  |
+| `plans.is_purchasable`, per-plan scoped MHC price | **The actual plan fences**                                                       | `app_settings.pause_plan_subscriptions` is currently **false**; plans fail closed through per-plan controls instead. See §14                                                                                                                                                                                                                                                            |
 
 ---
 
@@ -570,6 +582,7 @@ Named here only so the four role definitions do not have to keep gesturing at th
   operator may **execute a conversion that already passed every eligibility check**, and may
   not override a blocker, convert around a live obligation, choose a carryover amount, or use
   conversion to resolve an enforcement matter.
+
 - **System** — automated actors: redaction, expiry, auto-confirmation, reminders,
   reliability metric computation. Every system action is attributed and auditable, and no
   system action may create disclosure or charge MHC without an explicit human trigger.
@@ -588,8 +601,8 @@ conversation-list response. A counterparty's email address is D3 data by
 conversation list disclosed protected contact information without a committed activation and
 without an MHC charge. Historical locked previews carried the same exposure.
 
-**It is fixed.** Commit `bc1681b5cee9f772402bc5ba8a5599e161da871d` — *fix(chat): close
-pre-activation conversation disclosure*:
+**It is fixed.** Commit `bc1681b5cee9f772402bc5ba8a5599e161da871d` — _fix(chat): close
+pre-activation conversation disclosure_:
 
 - **removes `other_email`** from the conversation-list response entirely;
 - **prevents email fallback** — no code path substitutes an email address where a display name
@@ -641,20 +654,20 @@ employment/recruitment outcome, not activation of a service Engagement.**
 
 Therefore, and without exception:
 
-| #  | Rule                                                                                        |
-| -- | -------------------------------------------------------------------------------------------- |
-| 1  | Jobs are **not** Customer Needs                                                             |
-| 2  | Jobs are **not** provider Offers                                                            |
-| 3  | Job applications are **not** marketplace Proposals                                          |
-| 4  | Jobs are **not** Bookings                                                                   |
-| 5  | Jobs are **not** Product Orders                                                             |
-| 6  | Jobs are **not** Custom Orders                                                              |
-| 7  | **Jobs and job applications must not be migrated into the Wave 3 transactional Engagement spine** |
-| 8  | **Historical Jobs data preserves its original recruitment semantics**                       |
-| 9  | The recruitment module remains a **separately supported legacy/product subsystem** during Wave 3 |
-| 10 | Its **long-term redesign may be considered separately after Wave 3**                        |
+| #   | Rule                                                                                              |
+| --- | ------------------------------------------------------------------------------------------------- |
+| 1   | Jobs are **not** Customer Needs                                                                   |
+| 2   | Jobs are **not** provider Offers                                                                  |
+| 3   | Job applications are **not** marketplace Proposals                                                |
+| 4   | Jobs are **not** Bookings                                                                         |
+| 5   | Jobs are **not** Product Orders                                                                   |
+| 6   | Jobs are **not** Custom Orders                                                                    |
+| 7   | **Jobs and job applications must not be migrated into the Wave 3 transactional Engagement spine** |
+| 8   | **Historical Jobs data preserves its original recruitment semantics**                             |
+| 9   | The recruitment module remains a **separately supported legacy/product subsystem** during Wave 3  |
+| 10  | Its **long-term redesign may be considered separately after Wave 3**                              |
 
-**A terminology note.** Elsewhere in this document set the word *job* sometimes appears in its
+**A terminology note.** Elsewhere in this document set the word _job_ sometimes appears in its
 ordinary trade sense — "workshop jobs", "daily job cap", "job value". That colloquial usage
 means **a piece of work**, and it always refers to an Engagement or a fulfillment component.
 **Capital-J Jobs — the module, the vacancy, the application — is what this section governs**,
@@ -662,16 +675,16 @@ and the two never mean the same thing.
 
 ### 10.2 Wave 3 recruitment authority and boundaries
 
-| Rule                                                                                                         |
-| ------------------------------------------------------------------------------------------------------------- |
-| **Only the verified Business owner** may create, edit, publish, manage, close or hire through Business Jobs   |
-| **Business team members receive no delegated recruitment authority**                                          |
-| The existing **`manage_jobs` team permission remains reserved and non-authoritative until Wave 4**            |
-| **Experts and Craftsmen apply through their active Personal Commercial Identity**                             |
+| Rule                                                                                                                 |
+| -------------------------------------------------------------------------------------------------------------------- |
+| **Only the verified Business owner** may create, edit, publish, manage, close or hire through Business Jobs          |
+| **Business team members receive no delegated recruitment authority**                                                 |
+| The existing **`manage_jobs` team permission remains reserved and non-authoritative until Wave 4**                   |
+| **Experts and Craftsmen apply through their active Personal Commercial Identity**                                    |
 | **Candidate reputation as a service provider must not be automatically altered by recruitment application outcomes** |
-| **Job hiring records must not count as provider verified GMV**                                                |
-| **Recruitment salary or compensation must not be processed through the Wave 3 service settlement model**      |
-| **Recruitment reviews, if retained, remain distinct from transactional service reviews**                      |
+| **Job hiring records must not count as provider verified GMV**                                                       |
+| **Recruitment salary or compensation must not be processed through the Wave 3 service settlement model**             |
+| **Recruitment reviews, if retained, remain distinct from transactional service reviews**                             |
 
 ### 10.3 Legacy Jobs money flows — frozen, read-only, not revived
 
@@ -682,15 +695,15 @@ columns that encode them.
 
 The architecture requires:
 
-| Requirement                                                                                     |
-| ------------------------------------------------------------------------------------------------- |
-| **No new customer-money wallet flow for Jobs**                                                   |
-| **No Jobs escrow**                                                                               |
-| **No internal salary payout**                                                                    |
-| **No platform-held employment compensation**                                                     |
-| **No provider withdrawal path**                                                                  |
-| **No application fee or interview fee charged through retired EGP wallets**                      |
-| **Existing historical financial records remain read-only and auditable** — never deleted, never rewritten |
+| Requirement                                                                                                                                                                    |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **No new customer-money wallet flow for Jobs**                                                                                                                                 |
+| **No Jobs escrow**                                                                                                                                                             |
+| **No internal salary payout**                                                                                                                                                  |
+| **No platform-held employment compensation**                                                                                                                                   |
+| **No provider withdrawal path**                                                                                                                                                |
+| **No application fee or interview fee charged through retired EGP wallets**                                                                                                    |
+| **Existing historical financial records remain read-only and auditable** — never deleted, never rewritten                                                                      |
 | Any **future recruitment monetization must be designed separately**, using approved MHC platform actions, plans, advertisements, recruitment subscriptions or job-posting fees |
 
 **No recruitment monetization model is invented or activated by this architecture.** Wave 3
@@ -715,7 +728,7 @@ charge.
 [04 §7.1](./04-role-business.md)).
 
 **It is fixed by a focused security hotfix implemented separately** — commit
-`bad7d503f03eadab4ad12ee5ec38809028525c21`, *fix(profiles): close public contact disclosure*:
+`bad7d503f03eadab4ad12ee5ec38809028525c21`, _fix(profiles): close public contact disclosure_:
 
 - **removes `website` and `linkedinUrl`** from the public profile contract;
 - introduces **runtime allowlists** for `GET /api/profiles/public/:userId` —
@@ -738,7 +751,210 @@ architecture blocker**.
    than trusting the API to have filtered it — defence in depth, because the field exists in
    the row and one careless serializer change reintroduces the exposure.
 3. **Private owner profile retains its editable contact fields.** The correction removes the
-   fields from the *public* response, not from the owner's own profile management surface. A
+   fields from the _public_ response, not from the owner's own profile management surface. A
    Business must still be able to record and edit its website and social links.
 4. **Any future post-activation disclosure uses an activation-aware, participant-authorized
    endpoint**, never the public profile endpoint.
+
+---
+
+## 12. Legacy `platform_verified_at` — a display badge, never a Wave 3 credential
+
+### 12.1 What it actually is
+
+`users.platform_verified_at` is a Wave 1/2 **platform verification badge**. The repository is
+explicit about how it was earned: _profile complete + 1,000 EGP deposit_. It was a
+deposit-backed trust signal from a period in which the platform still expected to hold customer
+money.
+
+**That trust model is obsolete and conflicts with Wave 3 verification.** Wave 3 holds no
+customer money ([§1](#1-the-approved-baseline-restated-not-reopened), items 9–11), so a deposit
+proves nothing about identity, competence, legal existence or fitness to trade. A completed
+profile proves even less. The badge is therefore retained as **compatibility and display only**,
+and is stripped of every authority it may once have implied.
+
+### 12.2 The rule
+
+**`platform_verified_at` is a legacy compatibility/display signal only.** It must never grant,
+imply, satisfy, substitute for, or partially satisfy any of the following:
+
+| It never grants                                    |
+| -------------------------------------------------- |
+| Human KYC status (**V1**)                          |
+| Professional credential status (**V2**)            |
+| Business KYB status (**V3b**)                      |
+| Business-owner / controller authority              |
+| Provider commercial enablement                     |
+| Offer publication permission                       |
+| Proposal eligibility                               |
+| MHC spending authority                             |
+| D3 disclosure access                               |
+| Verified-GMV status                                |
+| Search preference derived from Wave 3 verification |
+
+Consequences that are not negotiable:
+
+- **Wave 3 V1/V2/V3 verification credentials are additive, explicit and independently
+  authoritative.** Each is earned by its own evidence and approved on its own record.
+- **Authorization services consult live Wave 3 verification records, never
+  `platform_verified_at`.** No permission check, eligibility resolver, enablement gate,
+  activation precondition or disclosure decision may read the legacy timestamp.
+- **Existing values are never interpreted as verified KYC or KYB during backfill**, in any
+  direction, for any role.
+- **Historical badges may remain visible only under clearly legacy semantics** — labelled as a
+  legacy platform badge, never as identity, credential or KYB verification — until they are
+  retired.
+- **Search and public trust indicators migrate away from this field.** Ranking, filtering,
+  facets, badges and trust copy derive from Wave 3 verification tiers, not from the legacy
+  timestamp.
+- **Revoked or expired Wave 3 verification immediately blocks new commercial actions**, even
+  where `platform_verified_at` remains populated. The legacy value never rescues a lapsed tier.
+
+### 12.3 Migration direction
+
+| #   | Step                                                                                                                                |
+| --- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | **Preserve the timestamp** for historical compatibility. It is not dropped, cleared or rewritten                                    |
+| 2   | **Introduce the new verification records and statuses** (V1/V2/V3a/V3b) as their own authoritative data                             |
+| 3   | **Classify every legacy account as unverified for Wave 3 commercial authority** unless supported by valid new verification evidence |
+| 4   | **Never auto-upgrade a user** on the strength of the old badge or of deposit history                                                |
+| 5   | **Add negative tests** proving the old timestamp grants no Wave 3 capability                                                        |
+
+The failure mode this prevents is precise: a backfill that reads a populated timestamp as
+"verified" would enable thousands of accounts to publish offers, spend MHC and receive D3
+disclosure on the strength of a deposit made under a retired money model. The migration is
+therefore **deliberately downward** — legacy accounts start unverified and earn their tier.
+
+---
+
+## 13. Legacy `mhc_job_activations` — immutable history, one Engagement each
+
+### 13.1 What the repository already holds
+
+`mhc_job_activations` records Wave 2 **bid-award** and **reservation/booking** activations. Each
+row already:
+
+- charged MHC to a provider (`mhc_charged`, `transaction_id`),
+- recorded the provider account, the acting user, the origin type and the origin reference
+  (`need_id`/`bid_id` or `reservation_id`), the action key and the activation timestamp,
+- and, in many cases, opened **provider-payment disclosure** — `provider_payment_disclosures`
+  keys directly to `mhc_job_activations.id`.
+
+These are real historical commercial events. Wave 3's Engagement spine
+([10](./10-engagement-model.md)) must absorb them without charging anybody twice and without
+losing the disclosure history that already exists.
+
+### 13.2 The rules
+
+| Rule                                                                                                                      |
+| ------------------------------------------------------------------------------------------------------------------------- |
+| Existing `mhc_job_activations` rows remain **immutable historical activation records**                                    |
+| They are **never deleted, never rewritten destructively, and never charged again**                                        |
+| **Legacy activated Need awards and qualifying activated reservations may seed exactly one Wave 3 Engagement each**        |
+| **Backfilled Engagement creation must not execute the live activation-charge pipeline** ([13 §4](./13-mhc-activation.md)) |
+| It **creates no second MHC debit**                                                                                        |
+| It **does not reopen or repeat payment-method disclosure**                                                                |
+| It **preserves the relationship to existing `provider_payment_disclosures`**                                              |
+| Backfilled Engagements use **deterministic idempotency keys derived from the legacy activation identifier**               |
+| A **uniqueness constraint or mapping table** ensures one legacy activation maps to **at most one** Engagement             |
+| **Cross-origin or malformed activation records are quarantined for reconciliation**, never guessed                        |
+| Legacy rows **remain readable during the dual-read transition**                                                           |
+| **New Wave 3 activations use the generic intent-to-Engagement pipeline** ([10 §7](./10-engagement-model.md))              |
+
+**The legacy activation row is the source of truth for the backfill**, for every one of these
+facts:
+
+| Fact taken from the legacy row |
+| ------------------------------ |
+| Activation occurrence          |
+| Provider                       |
+| Acting user                    |
+| Origin type                    |
+| Origin reference               |
+| MHC charge reference           |
+| Activation timestamp           |
+| Existing disclosure provenance |
+
+Nothing in that list is recomputed, re-derived from current state, or inferred. A backfill that
+recomputes a provider or a timestamp is rewriting history, which is exactly what this section
+forbids.
+
+### 13.3 Staged migration and cutover
+
+| Stage | What happens                                                                                                                                                                                                                          |
+| ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1     | **Introduce the Engagement spine additively.** Legacy activation rows are untouched and stay authoritative for history                                                                                                                |
+| 2     | **Map and classify.** Every legacy row is classified as backfillable (award / qualifying reservation) or **quarantined** (cross-origin, malformed, orphaned, ambiguous)                                                               |
+| 3     | **Backfill.** Each backfillable row seeds exactly one Engagement under a deterministic idempotency key derived from the activation id, carrying the legacy MHC charge reference rather than issuing a new one                         |
+| 4     | **Dual read.** Legacy activation rows and Engagements are both readable; provider-payment disclosure continues to resolve through its existing activation relationship                                                                |
+| 5     | **Cutover.** New activations create Engagements natively through the intent pipeline. The two populations stay distinguishable — **legacy backfilled activation** vs **native Wave 3 activation** — on the record itself, permanently |
+
+**Reconciliation must verify**, per legacy activation and in aggregate:
+
+| Reconciliation check                                                    |
+| ----------------------------------------------------------------------- |
+| **One charge** — no second debit for any legacy activation              |
+| **One Engagement** per legacy activation                                |
+| **Preserved disclosure history**                                        |
+| **No orphan activation** — no backfillable row left unmapped            |
+| **No orphan payment disclosure** — every disclosure still resolves      |
+| **No duplicate provider/customer relationship** created by the backfill |
+
+**Rollback is non-destructive.** Reversing a backfill removes backfilled Engagements and their
+mapping rows; it never touches `mhc_job_activations`, `provider_payment_disclosures`, the MHC
+ledger or any transaction record.
+
+---
+
+## 14. Advertisements and plans — the actual commercial baseline
+
+Recorded because earlier drafts described this machinery as absent or unwired, and it is
+neither. **Free is not the same as unbuilt**, and an architecture that confuses the two invites
+somebody to build it a second time.
+
+### 14.1 Advertisements — implemented, wired, priced at zero
+
+| The actual baseline                                                                                                         |
+| --------------------------------------------------------------------------------------------------------------------------- |
+| **Advertisement MHC pricing is wired** — the `advertisement` action key resolves through the generic MHC action-charge path |
+| **Advertisement charging and weekly renewal machinery exist** — campaign periods, price snapshots and charge references     |
+| **The current advertisement action price is zero**                                                                          |
+| **Automatic and manual renewal behaviour exists**                                                                           |
+| **Advertisement ownership is user-based today** and must later migrate to Commercial Identity ownership                     |
+
+The Wave 3 rule:
+
+- **Existing free advertisement machinery may remain operational.** Wave 3 does not switch it
+  off, and does not rebuild it.
+- **Non-zero advertisement pricing remains disabled until explicitly configured and
+  commercially approved.**
+- Wave 3 **preserves idempotent period billing and renewal controls** — a renewal that runs
+  twice charges once.
+- **Advertisement ownership migrates additively to PCI/BCI**, on the same non-destructive terms
+  as every other user-owned commercial asset ([09 §4.4](./09-business-buying-and-providing.md)).
+- **No document may describe advertisement MHC charging as absent or unwired**, and free pricing
+  must not be read as missing implementation.
+- **Future non-zero pricing is an explicit activation/configuration decision**, not a
+  prerequisite for core Wave 3 architecture ([18](./18-decisions-required.md)).
+
+### 14.2 Plans — fenced per plan, not by a global pause
+
+| The actual baseline                                                                                                                                      |
+| -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **`app_settings.pause_plan_subscriptions` is currently `false`**                                                                                         |
+| Plans fail closed through **per-plan controls**: `is_purchasable` (default false), a configured active MHC price, and applicable plan/action eligibility |
+| **Paid-bidding capabilities and promoted-proposal behaviour remain prohibited**                                                                          |
+
+The Wave 3 rule:
+
+- **Do not rely on a nonexistent global pause as the sole safety fence.** The architecture
+  requires every disallowed plan to be **not purchasable**, **without an approved active
+  price**, or **otherwise explicitly gated by scoped configuration** — and to be tested that
+  way.
+- **Paid-bid ordering, proposal visibility advantages and promoted proposals stay disabled
+  regardless of plan status** ([16 group 3](./16-wave-3-scope.md)).
+- **Existing plan records and historical subscriptions remain readable.**
+- **Enabling any paid plan requires explicit product and pricing approval.**
+- **Technical design tests the actual per-plan fences**, never an assumed global pause.
+- If the product later chooses to re-enable the global pause, it is **defence in depth** — an
+  additional layer, not the current source of truth.

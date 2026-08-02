@@ -3,7 +3,7 @@
 **Status: all eight decisions are resolved. No high-impact product decision remains open.**
 
 This file previously held eight blocking decisions with recommended defaults. Every one has now
-been decided. It is retained rather than deleted because the *reasoning* behind each decision is
+been decided. It is retained rather than deleted because the _reasoning_ behind each decision is
 what stops it being reopened by someone who only sees the rule — and because the rejected
 alternatives are the shapes this architecture must not drift back into.
 
@@ -41,7 +41,7 @@ archival-and-replacement with **available-MHC carryover** and no reputation carr
   Role-specific onboarding, eligibility and verification are completed again in full.
 - Source and replacement are linked by an **immutable audited conversion record**.
 
-**MHC carryover** — *approved separately and recorded here in full*
+**MHC carryover** — _approved separately and recorded here in full_
 
 - **The remaining available MHC balance carries over to the replacement PCI.** It is neither
   forfeited nor permanently frozen.
@@ -315,7 +315,7 @@ and if so what shape?
 
 This is the single largest lever on both sides of the central trade-off. Too little communication
 and providers cannot price, so both parties leave to talk elsewhere and the gate loses the
-transaction entirely. Too much unmoderated channel and the channel *becomes* the bypass.
+transaction entirely. Too much unmoderated channel and the channel _becomes_ the bypass.
 
 Masking is what resolves it: the conversation stays on-platform where it can be moderated,
 measured and used as case evidence, while the payload — numbers, handles, addresses, files — is
@@ -468,8 +468,8 @@ Business posts can burn a provider's MHC on activation. That is why the owner's 
 mandatory** rather than optional — it gives providers an accountability anchor and enforcement a
 person to act against — and why administrators can raise the bar where the exposure is largest.
 
-The asymmetry is principled, not a compromise: KYB answers *is this a real registered company fit
-to sell*, and a buyer is not selling. The activities gated at V3b are precisely the ones where a
+The asymmetry is principled, not a compromise: KYB answers _is this a real registered company fit
+to sell_, and a buyer is not selling. The activities gated at V3b are precisely the ones where a
 counterparty relies on the organization's registered standing.
 
 ### Rejected
@@ -526,17 +526,34 @@ blocked — not a quiet divergence in code.
 
 ### Later commercial activation decisions — not Wave 3 blockers
 
-Three items are deliberately deferred. None is an open architecture question, and **none blocks
+Five items are deliberately deferred. None is an open architecture question, and **none blocks
 Wave 3 technical design or implementation**:
 
-| Deferred decision                                    | Status                                                                                                  |
-| ---------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
-| **Live verified-GMV rent charging**                  | Remains a **later explicit production decision**. Rent ships in **shadow mode** — calculated, recorded and reported, deducting nothing. Turning on the debit is a separate decision, informed by the shadow data ([13 §11](./13-mhc-activation.md)) |
-| **Rent-driven commercial suspension**                | Remains a **separate later explicit decision**. Deciding to charge is not deciding to suspend for non-payment ([15 §4](./15-suspension-and-enforcement.md)) |
-| **Jobs/recruitment long-term redesign and monetization** | Remains a **separate future decision**. The recruitment subsystem is separately supported and frozen commercially during Wave 3; nothing about its future shape is settled or needs to be (see above) |
+| Deferred decision                                        | Status                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| -------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Live verified-GMV rent charging**                      | Remains a **later explicit production decision**. Rent ships in **shadow mode** — calculated, recorded and reported, deducting nothing. Turning on the debit is a separate decision, informed by the shadow data ([13 §11](./13-mhc-activation.md))                                                                                                                                                                                             |
+| **Rent-driven commercial suspension**                    | Remains a **separate later explicit decision**. Deciding to charge is not deciding to suspend for non-payment ([15 §4](./15-suspension-and-enforcement.md))                                                                                                                                                                                                                                                                                     |
+| **Jobs/recruitment long-term redesign and monetization** | Remains a **separate future decision**. The recruitment subsystem is separately supported and frozen commercially during Wave 3; nothing about its future shape is settled or needs to be (see above)                                                                                                                                                                                                                                           |
+| **Non-zero advertisement pricing**                       | Remains a **later explicit configuration and commercial-approval decision**. The machinery is **already implemented and wired** — active action key, weekly period billing, automatic and manual renewal — and the **current price is zero**. What is deferred is the price, not the model, and free pricing is not missing implementation ([00 §14.1](./00-overview-and-terminology.md), [13 §2.1](./13-mhc-activation.md))                    |
+| **Enabling any paid plan**                               | Remains a **later explicit product and pricing decision**. Plans fail closed today through **per-plan** controls — `is_purchasable`, an approved active scoped MHC price, plan/action eligibility — and **not** through `app_settings.pause_plan_subscriptions`, which is currently `false`. Paid-bid ordering, proposal visibility advantages and promoted proposals stay prohibited regardless ([00 §14.2](./00-overview-and-terminology.md)) |
 
-**These deferred commercial activations do not block Wave 3 technical design.** All three are
+**These deferred commercial activations do not block Wave 3 technical design.** All five are
 deliberately structured so the answer can be taken later against real data — which is the entire
-point of shadow mode, and the reason the recruitment subsystem is frozen rather than redesigned
-under time pressure. The architecture, the calculation chain and the enforcement boundaries are
-complete in Wave 3; only the commercial switches are deferred.
+point of shadow mode, the reason the recruitment subsystem is frozen rather than redesigned
+under time pressure, and the reason the advertisement and plan machinery is fenced by
+configuration rather than by removal. The architecture, the calculation chain and the
+enforcement boundaries are complete in Wave 3; only the commercial switches are deferred.
+
+### Legacy repository disposition — settled, not a decision
+
+The final repository-disposition pass settled three legacy structures on the evidence in the
+repository. **None of them is an open product question, and none reopens an approved decision:**
+
+| Legacy structure                 | Settled disposition                                                                                                                                                                                                                                                                                                                  |
+| -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **`users.platform_verified_at`** | A **legacy compatibility/display signal only**. It grants no Wave 3 verification status and no commercial authority; the timestamp is preserved, legacy accounts start **unverified for Wave 3 commercial authority**, and nothing auto-upgrades from the badge or from deposit history ([00 §12](./00-overview-and-terminology.md)) |
+| **`mhc_job_activations`**        | **Immutable historical activation records.** Each qualifying row seeds **at most one** Engagement, through a backfill that runs no charge pipeline, writes no second debit and preserves existing payment-disclosure provenance ([00 §13](./00-overview-and-terminology.md))                                                         |
+| **Advertisements and plans**     | **Implemented and fenced by configuration**, not absent. Advertisements are wired at a zero price; plans are fenced per plan. Turning either on is the deferred commercial decision above ([00 §14](./00-overview-and-terminology.md))                                                                                               |
+
+Each disposition follows from what the repository already contains and from the approved
+baseline. **No new product decision is introduced by it**, and the correction pass adds none.

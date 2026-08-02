@@ -10,18 +10,23 @@ endpoints, no tickets, no code.
 public-profile disclosure correction `bad7d503f03eadab4ad12ee5ec38809028525c21`
 ([00 §11](./00-overview-and-terminology.md)).
 
-**Status of this revision:** readiness-audit corrections applied. **Date:** 2026-08-02.
+**Status of this revision:** readiness-audit corrections applied, plus the **final
+repository-disposition corrections** — legacy `platform_verified_at`, legacy
+`mhc_job_activations`, and the advertisement/plan baseline
+([00 §12–§14](./00-overview-and-terminology.md)). **Date:** 2026-08-02.
 
 **Decision status:** **no unresolved Wave 3 marketplace product decisions remain.** All eight
 high-impact decisions are resolved ([18](./18-decisions-required.md)), including the final PCI
-conversion model — Admin/Support-controlled execution and audited MHC carryover.
+conversion model — Admin/Support-controlled execution and audited MHC carryover. The legacy
+repository dispositions introduce **no new product decision**.
 
-Three items are deliberately deferred and **do not block Wave 3 technical design**: live
-verified-GMV rent charging, rent-driven commercial suspension, and the Jobs/recruitment
-long-term redesign and monetization. **Jobs/recruitment remains a separately supported
-subsystem during Wave 3** ([00 §10](./00-overview-and-terminology.md)).
+Five items are deliberately deferred and **do not block Wave 3 technical design**: live
+verified-GMV rent charging, rent-driven commercial suspension, the Jobs/recruitment long-term
+redesign and monetization, **non-zero advertisement pricing**, and **enabling any paid plan**.
+**Jobs/recruitment remains a separately supported subsystem during Wave 3**
+([00 §10](./00-overview-and-terminology.md)).
 
-This set defines what MohandisHub *is* in Wave 3: four roles, one engagement spine, one
+This set defines what MohandisHub _is_ in Wave 3: four roles, one engagement spine, one
 disclosure gate, one credit gate, and an honest settlement record. It is written so that
 engineering can derive schemas, APIs, permission matrices, state machines and test suites
 from it without reopening product questions.
@@ -30,27 +35,27 @@ from it without reopening product questions.
 
 ## Reading order
 
-| #                                                | File                              | What it settles                                                              |
-| ------------------------------------------------ | --------------------------------- | ---------------------------------------------------------------------------- |
-| [00](./00-overview-and-terminology.md)           | Overview and terminology          | The identity/context model, disclosure tiers, verification tiers, vocabulary |
-| [01](./01-role-customer.md)                      | Customer                          | The universal capability every identity holds                                |
-| [02](./02-role-expert.md)                        | Expert                            | Personal provider — knowledge and professional work                          |
-| [03](./03-role-craftsman.md)                     | Craftsman                         | Personal provider — local services, shops, physical goods                    |
-| [04](./04-role-business.md)                      | Business                          | Organizational commercial identity, buys and provides                        |
-| [05](./05-need-model.md)                         | **A** — Customer Need model       | Demand: types, visibility, eligibility, budgets, award, expiry               |
-| [06](./06-offer-model.md)                        | **B** — Provider Offer model      | Supply: shared attributes, four offer kinds, lifecycle states                |
-| [07](./07-expert-packages.md)                    | **C** — Expert packages           | Packages, add-ons, requirements, custom proposals, versioning                |
-| [08](./08-craftsman-storefront.md)               | **D** — Craftsman storefront      | Shop identity, catalogs, variants, areas, delivery, inventory limits         |
-| [09](./09-business-buying-and-providing.md)      | **E** — Business dual activity    | Procurement/sales separation, owner authority, Wave 4 containment            |
-| [10](./10-engagement-model.md)                   | **F** — Engagement model          | The single spine every accepted arrangement converges into                   |
-| [11](./11-fulfillment-models.md)                 | **G** — Fulfillment models        | Nine fulfillment component types plus hybrid composition × eight behavioural dimensions |
-| [12](./12-payment-and-settlement.md)             | **H** — Payment and settlement    | Off-platform money, evidence ladder, verified GMV, honesty limits            |
-| [13](./13-mhc-activation.md)                     | **I** — MHC activation model      | The revenue gate and the anti-bypass regime                                  |
-| [14](./14-reviews-and-reputation.md)             | **J** — Reviews and reputation    | Targets, eligibility, moderation, identity separation                        |
-| [15](./15-suspension-and-enforcement.md)         | **K** — Suspension and enforcement| Two independent axes; obligations survive both                               |
-| [16](./16-wave-3-scope.md)                       | **L** — Wave 3 scope              | Deliver / defer / must-not-build-by-accident                                 |
-| [17](./17-product-invariants.md)                 | **M** — Product invariants        | INV-001…INV-118, each with an enforcement layer                              |
-| [18](./18-decisions-required.md)                 | **N** — Resolved decisions        | All eight decisions settled, with reasoning and rejected alternatives        |
+| #                                           | File                               | What it settles                                                                         |
+| ------------------------------------------- | ---------------------------------- | --------------------------------------------------------------------------------------- |
+| [00](./00-overview-and-terminology.md)      | Overview and terminology           | The identity/context model, disclosure tiers, verification tiers, vocabulary            |
+| [01](./01-role-customer.md)                 | Customer                           | The universal capability every identity holds                                           |
+| [02](./02-role-expert.md)                   | Expert                             | Personal provider — knowledge and professional work                                     |
+| [03](./03-role-craftsman.md)                | Craftsman                          | Personal provider — local services, shops, physical goods                               |
+| [04](./04-role-business.md)                 | Business                           | Organizational commercial identity, buys and provides                                   |
+| [05](./05-need-model.md)                    | **A** — Customer Need model        | Demand: types, visibility, eligibility, budgets, award, expiry                          |
+| [06](./06-offer-model.md)                   | **B** — Provider Offer model       | Supply: shared attributes, four offer kinds, lifecycle states                           |
+| [07](./07-expert-packages.md)               | **C** — Expert packages            | Packages, add-ons, requirements, custom proposals, versioning                           |
+| [08](./08-craftsman-storefront.md)          | **D** — Craftsman storefront       | Shop identity, catalogs, variants, areas, delivery, inventory limits                    |
+| [09](./09-business-buying-and-providing.md) | **E** — Business dual activity     | Procurement/sales separation, owner authority, Wave 4 containment                       |
+| [10](./10-engagement-model.md)              | **F** — Engagement model           | The single spine every accepted arrangement converges into                              |
+| [11](./11-fulfillment-models.md)            | **G** — Fulfillment models         | Nine fulfillment component types plus hybrid composition × eight behavioural dimensions |
+| [12](./12-payment-and-settlement.md)        | **H** — Payment and settlement     | Off-platform money, evidence ladder, verified GMV, honesty limits                       |
+| [13](./13-mhc-activation.md)                | **I** — MHC activation model       | The revenue gate and the anti-bypass regime                                             |
+| [14](./14-reviews-and-reputation.md)        | **J** — Reviews and reputation     | Targets, eligibility, moderation, identity separation                                   |
+| [15](./15-suspension-and-enforcement.md)    | **K** — Suspension and enforcement | Two independent axes; obligations survive both                                          |
+| [16](./16-wave-3-scope.md)                  | **L** — Wave 3 scope               | Deliver / defer / must-not-build-by-accident                                            |
+| [17](./17-product-invariants.md)            | **M** — Product invariants         | INV-001…INV-145, each with an enforcement layer                                         |
+| [18](./18-decisions-required.md)            | **N** — Resolved decisions         | All eight decisions settled, with reasoning and rejected alternatives                   |
 
 ---
 
@@ -117,16 +122,18 @@ thing a reader most often gets wrong:
 
 ## Relationship to existing repository documents
 
-| Existing document                                        | Relationship                                                                              |
-| -------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
-| `docs/audit/2026-07-29-marketplace-coherence/02-*`        | Its "one identity, many workspaces" proposal is superseded by the context model in **00**. |
-| `docs/release/KNOWN_LIMITATIONS.md` L1.1–L1.3             | Carried forward and made structural rather than apologetic (see **12**, **13**).           |
-| `docs/release/KNOWN_LIMITATIONS.md` L1.2 (MHC recourse)   | Answered in **13 §9**.                                                                     |
-| `docs/ESCROW_AND_DISPUTES.md`                             | Obsolete for Wave 3. Escrow is retired; **12** replaces its release rules entirely.        |
-| `docs/release/LAUNCH_CONSTRAINTS.md` LC-01, LC-02         | Untouched. Advertisement and plan pricing remain outside Wave 3 scope (**16 group 3**).    |
-| Wave 2G/2H business teams                                 | **Retained.** Team administration stays available with `manage_team` enforced; commercial authority is owner-only; the six reserved permissions stay disabled (**09 §4**). |
-| Wave 2I Help & Resolution Center                          | Becomes the single surface for disputes, appeals and settlement escalation (**15 §8**).    |
-| Chat conversation-summary fix `bc1681b`                   | A confirmed Wave 2 disclosure defect, **fixed**. No longer a Wave 3 architecture blocker. Its regression tests are standing security invariants (**00 §9**, **17 §12**). |
-| Public profile website/external-link disclosure `bad7d503` | A confirmed defect found by the readiness audit, **fixed** by a separate focused security hotfix (public-field allowlists at the API and web-client boundaries). Not a Wave 3 architecture blocker. Its regression tests are standing security invariants (**00 §11**, **17 §12.1**). |
-| Jobs / recruitment module (`jobs`, `job_applications`, job milestones and escrow) | **Not mapped into Wave 3.** A separately supported recruitment/employment subsystem with its original semantics preserved; legacy money paths disabled and read-only. Long-term redesign is a separate future decision (**00 §10**, **10 §15**). |
-| `docs/reservation-money-abuse-map.md`, `docs/ESCROW_AND_DISPUTES.md` money paths in Jobs | Obsolete for Wave 3. No Jobs escrow, wallet flow, payout or fee path may be revived (**00 §10.3**). |
+| Existing document                                                                        | Relationship                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| ---------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `docs/audit/2026-07-29-marketplace-coherence/02-*`                                       | Its "one identity, many workspaces" proposal is superseded by the context model in **00**.                                                                                                                                                                                                                                                                                                                                                                           |
+| `docs/release/KNOWN_LIMITATIONS.md` L1.1–L1.3                                            | Carried forward and made structural rather than apologetic (see **12**, **13**).                                                                                                                                                                                                                                                                                                                                                                                     |
+| `docs/release/KNOWN_LIMITATIONS.md` L1.2 (MHC recourse)                                  | Answered in **13 §9**.                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| `docs/ESCROW_AND_DISPUTES.md`                                                            | Obsolete for Wave 3. Escrow is retired; **12** replaces its release rules entirely.                                                                                                                                                                                                                                                                                                                                                                                  |
+| `docs/release/LAUNCH_CONSTRAINTS.md` LC-01, LC-02                                        | Untouched as constraints, but **restated accurately**: the advertisement action key is **already active at a zero price** with weekly billing and renewal wired, and plans are fenced **per plan** (`is_purchasable`, approved active price, scoped eligibility) rather than by `pause_plan_subscriptions`, which is currently `false`. What stays outside Wave 3 is **non-zero advertisement pricing** and **enabling any paid plan** (**00 §14**, **16 group 3**). |
+| `users.platform_verified_at` (legacy platform badge)                                     | **Legacy compatibility/display signal only.** Never KYC, KYB, credential status, enablement, MHC spending authority, D3 access, verified-GMV status or search preference. Preserved, never auto-upgraded, and covered by negative tests (**00 §12**, **17 §14**).                                                                                                                                                                                                    |
+| `mhc_job_activations` (legacy activation records)                                        | **Immutable history.** Each qualifying row seeds **at most one** Engagement through a backfill that runs no charge pipeline and writes no second debit; `provider_payment_disclosures` provenance is preserved (**00 §13**, **10 §7.4**, **13 §4.1**, **17 §15**).                                                                                                                                                                                                   |
+| Wave 2G/2H business teams                                                                | **Retained.** Team administration stays available with `manage_team` enforced; commercial authority is owner-only; the six reserved permissions stay disabled (**09 §4**).                                                                                                                                                                                                                                                                                           |
+| Wave 2I Help & Resolution Center                                                         | Becomes the single surface for disputes, appeals and settlement escalation (**15 §8**).                                                                                                                                                                                                                                                                                                                                                                              |
+| Chat conversation-summary fix `bc1681b`                                                  | A confirmed Wave 2 disclosure defect, **fixed**. No longer a Wave 3 architecture blocker. Its regression tests are standing security invariants (**00 §9**, **17 §12**).                                                                                                                                                                                                                                                                                             |
+| Public profile website/external-link disclosure `bad7d503`                               | A confirmed defect found by the readiness audit, **fixed** by a separate focused security hotfix (public-field allowlists at the API and web-client boundaries). Not a Wave 3 architecture blocker. Its regression tests are standing security invariants (**00 §11**, **17 §12.1**).                                                                                                                                                                                |
+| Jobs / recruitment module (`jobs`, `job_applications`, job milestones and escrow)        | **Not mapped into Wave 3.** A separately supported recruitment/employment subsystem with its original semantics preserved; legacy money paths disabled and read-only. Long-term redesign is a separate future decision (**00 §10**, **10 §15**).                                                                                                                                                                                                                     |
+| `docs/reservation-money-abuse-map.md`, `docs/ESCROW_AND_DISPUTES.md` money paths in Jobs | Obsolete for Wave 3. No Jobs escrow, wallet flow, payout or fee path may be revived (**00 §10.3**).                                                                                                                                                                                                                                                                                                                                                                  |

@@ -5,7 +5,7 @@
 > business-only pipeline. One spine, five origins, one lifecycle, immutable snapshots.
 >
 > **An Engagement does not exist before successful activation.** Before activation there is a
-> typed, origin-specific **commercial intent object** (§7). The Engagement is created *by* the
+> typed, origin-specific **commercial intent object** (§7). The Engagement is created _by_ the
 > activation transaction, never before it.
 
 This is the most important structural decision in Wave 3. Wave 1/2 accumulated `bids` and
@@ -39,13 +39,13 @@ a field, not a type.
 
 ## 2. Origins
 
-| Origin            | Formed by                                                                       | Typical provider | Scheduling |
-| ----------------- | --------------------------------------------------------------------------------- | ---------------- | ---------- |
-| `need_award`      | Buyer posts a Need → provider proposes → buyer awards → **provider activates**  | Any              | Type-dependent |
-| `service_purchase`| Buyer buys a published package/service at listed terms → **provider activates** | Any              | Type-dependent |
-| `booking`         | Buyer requests an availability slot → **provider activates**                    | Expert, Craftsman, Business | Mandatory |
-| `product_request` | Buyer requests product variant(s) + quantity + fulfillment method → **provider activates** | Craftsman, Business | Handover only |
-| `custom_order`    | Buyer accepts a provider-authored Custom Proposal (from a Quote Request or a survey) → **provider activates** | Any | Type-dependent |
+| Origin             | Formed by                                                                                                     | Typical provider            | Scheduling     |
+| ------------------ | ------------------------------------------------------------------------------------------------------------- | --------------------------- | -------------- |
+| `need_award`       | Buyer posts a Need → provider proposes → buyer awards → **provider activates**                                | Any                         | Type-dependent |
+| `service_purchase` | Buyer buys a published package/service at listed terms → **provider activates**                               | Any                         | Type-dependent |
+| `booking`          | Buyer requests an availability slot → **provider activates**                                                  | Expert, Craftsman, Business | Mandatory      |
+| `product_request`  | Buyer requests product variant(s) + quantity + fulfillment method → **provider activates**                    | Craftsman, Business         | Handover only  |
+| `custom_order`     | Buyer accepts a provider-authored Custom Proposal (from a Quote Request or a survey) → **provider activates** | Any                         | Type-dependent |
 
 Rules:
 
@@ -66,25 +66,25 @@ Rules:
 
 ## 3. Anatomy of an Engagement
 
-| Group                        | Contents                                                                                                                                                     |
-| ---------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Identity**                 | Engagement id; human-readable reference code; created-at; activated-at. **Created-at and activated-at are the same commit** — the row is written by the activation transaction (§7) |
-| **Origin**                   | Origin kind; origin references; **link to the consumed pre-activation intent object**; **origin snapshot**                                                    |
-| **Buyer party**              | Party kind (`identity` \| `business`); identity/BCI reference; **identity snapshot**                                                                         |
-| **Provider party**           | Party kind (`expert` \| `craftsman` \| `business`); reference; **identity snapshot**                                                                         |
-| **Acting humans**            | The human who acted for each party at each authoritative moment (Wave 3: always the owner for a BCI)                                                          |
-| **Price snapshot**           | Agreed amount; currency; itemized breakdown; payment plan; validity of each line                                                                             |
-| **Scope snapshot**           | Title; deliverables; inclusions; exclusions; requirement answers; variants and quantities; revision/rectification allowance; warranty; tolerances; delivery time or dates |
-| **Fulfillment plan**         | One or more **Fulfillment Components**, each typed, each with its own schedule, evidence profile and state                                                    |
-| **Location snapshot**        | Coarse location always; **both parties'** exact addresses, access notes and geolocation — the buyer's site and, where relevant, the provider's workshop/pickup premises — from activation onward |
-| **Payment-method eligibility** | The payment methods and plan shapes eligible on this engagement, snapshotted at activation                                                                  |
-| **Activation record**        | Activation state; MHC charge reference; action key; amount; timestamp; charging identity                                                                     |
-| **Settlement**               | Settlement records, coverage state, agreed-vs-confirmed totals ([12](./12-payment-and-settlement.md))                                                        |
-| **Amendments**               | Append-only list of accepted changes, each with before/after and both acceptances                                                                            |
-| **Lifecycle**                | State, state history with actor and timestamp, terminal reason                                                                                               |
-| **Overlays**                 | `disputed`, `admin_hold`, `amendment_pending`, `settlement_open` — flags, not states                                                                          |
-| **Communication**            | The engagement thread; structured events (scheduling, arrival, handover, delivery)                                                                           |
-| **Reputation**               | Review eligibility, review windows, submitted reviews, publication state                                                                                     |
+| Group                          | Contents                                                                                                                                                                                         |
+| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Identity**                   | Engagement id; human-readable reference code; created-at; activated-at. **Created-at and activated-at are the same commit** — the row is written by the activation transaction (§7)              |
+| **Origin**                     | Origin kind; origin references; **link to the consumed pre-activation intent object**; **origin snapshot**                                                                                       |
+| **Buyer party**                | Party kind (`identity` \| `business`); identity/BCI reference; **identity snapshot**                                                                                                             |
+| **Provider party**             | Party kind (`expert` \| `craftsman` \| `business`); reference; **identity snapshot**                                                                                                             |
+| **Acting humans**              | The human who acted for each party at each authoritative moment (Wave 3: always the owner for a BCI)                                                                                             |
+| **Price snapshot**             | Agreed amount; currency; itemized breakdown; payment plan; validity of each line                                                                                                                 |
+| **Scope snapshot**             | Title; deliverables; inclusions; exclusions; requirement answers; variants and quantities; revision/rectification allowance; warranty; tolerances; delivery time or dates                        |
+| **Fulfillment plan**           | One or more **Fulfillment Components**, each typed, each with its own schedule, evidence profile and state                                                                                       |
+| **Location snapshot**          | Coarse location always; **both parties'** exact addresses, access notes and geolocation — the buyer's site and, where relevant, the provider's workshop/pickup premises — from activation onward |
+| **Payment-method eligibility** | The payment methods and plan shapes eligible on this engagement, snapshotted at activation                                                                                                       |
+| **Activation record**          | Activation state; MHC charge reference; action key; amount; timestamp; charging identity                                                                                                         |
+| **Settlement**                 | Settlement records, coverage state, agreed-vs-confirmed totals ([12](./12-payment-and-settlement.md))                                                                                            |
+| **Amendments**                 | Append-only list of accepted changes, each with before/after and both acceptances                                                                                                                |
+| **Lifecycle**                  | State, state history with actor and timestamp, terminal reason                                                                                                                                   |
+| **Overlays**                   | `disputed`, `admin_hold`, `amendment_pending`, `settlement_open` — flags, not states                                                                                                             |
+| **Communication**              | The engagement thread; structured events (scheduling, arrival, handover, delivery)                                                                                                               |
+| **Reputation**                 | Review eligibility, review windows, submitted reviews, publication state                                                                                                                         |
 
 ---
 
@@ -147,17 +147,17 @@ may not rewrite what was sold. The only path to different terms is an Amendment.
 
 A mutually accepted, append-only change to a live engagement.
 
-| Aspect             | Rule                                                                                                        |
-| ------------------ | -------------------------------------------------------------------------------------------------------------- |
+| Aspect             | Rule                                                                                                                       |
+| ------------------ | -------------------------------------------------------------------------------------------------------------------------- |
 | What can change    | Agreed amount and its lines; scope items; delivery date or schedule; quantities/variants; payment plan; revision allowance |
-| What cannot change | Parties, origin, activation record, MHC charge, settlement history, prior amendments, review history        |
-| Who proposes       | Either party                                                                                                |
-| Who accepts        | **Both.** An amendment takes effect only on explicit acceptance by the counterparty                         |
-| Effect             | Creates a new **effective terms version**; the original and every prior version are retained and readable   |
-| Timing             | Only while the engagement is live; not after completion, and not on a cancelled engagement                  |
-| MHC                | **No additional charge.** Activation is charged once per engagement, per [13 §3](./13-mhc-activation.md)    |
-| Disputes           | An open dispute blocks amendments unless the amendment is the agreed resolution and is recorded as such     |
-| Evidence           | Amendments are dispute evidence and carry both acceptances with timestamps                                  |
+| What cannot change | Parties, origin, activation record, MHC charge, settlement history, prior amendments, review history                       |
+| Who proposes       | Either party                                                                                                               |
+| Who accepts        | **Both.** An amendment takes effect only on explicit acceptance by the counterparty                                        |
+| Effect             | Creates a new **effective terms version**; the original and every prior version are retained and readable                  |
+| Timing             | Only while the engagement is live; not after completion, and not on a cancelled engagement                                 |
+| MHC                | **No additional charge.** Activation is charged once per engagement, per [13 §3](./13-mhc-activation.md)                   |
+| Disputes           | An open dispute blocks amendments unless the amendment is the agreed resolution and is recorded as such                    |
+| Evidence           | Amendments are dispute evidence and carry both acceptances with timestamps                                                 |
 
 **On the bypass question:** because the activation charge is **fixed per configured action
 key** rather than a percentage of value, there is no incentive to award small and amend upward.
@@ -177,7 +177,7 @@ has to reinvent it.
 **Before activation there is no Engagement row, no engagement id, no engagement state, and no
 D3 disclosure.** What exists is an **origin-specific commercial intent object**: a real,
 persisted object with its own identity, its own deadline and its own lifecycle, visible to both
-parties, which is *not* an Engagement and must never be modelled as one.
+parties, which is _not_ an Engagement and must never be modelled as one.
 
 | Origin             | Pre-activation intent object                            |
 | ------------------ | ------------------------------------------------------- |
@@ -199,18 +199,18 @@ engagement totals, or reliability numerators other than the activation-rate metr
 Activation is **one transaction** that must perform all of the following, atomically, and
 commit **exactly once**:
 
-| #  | Step                                                                                        |
-| -- | ------------------------------------------------------------------------------------------- |
-| 1  | Verify the intent **remains valid** — live, not withdrawn, not expired, deadline not passed |
-| 2  | Verify the provider's **commercial eligibility** — enabled, verified, not suspended, not restricted |
-| 3  | Verify the provider's **MHC balance** against the resolved action price                      |
-| 4  | **Lock and charge** the provider's MHC                                                       |
-| 5  | **Create the immutable Engagement**                                                          |
-| 6  | **Snapshot** parties, offer, scope, price, fulfillment plan and payment-method eligibility   |
-| 7  | **Link** the Engagement to its origin intent                                                 |
-| 8  | Mark the intent **consumed / activated**                                                     |
-| 9  | **Open D3 disclosure** for both parties                                                      |
-| 10 | **Commit exactly once** — idempotent under retry and concurrency                             |
+| #   | Step                                                                                                |
+| --- | --------------------------------------------------------------------------------------------------- |
+| 1   | Verify the intent **remains valid** — live, not withdrawn, not expired, deadline not passed         |
+| 2   | Verify the provider's **commercial eligibility** — enabled, verified, not suspended, not restricted |
+| 3   | Verify the provider's **MHC balance** against the resolved action price                             |
+| 4   | **Lock and charge** the provider's MHC                                                              |
+| 5   | **Create the immutable Engagement**                                                                 |
+| 6   | **Snapshot** parties, offer, scope, price, fulfillment plan and payment-method eligibility          |
+| 7   | **Link** the Engagement to its origin intent                                                        |
+| 8   | Mark the intent **consumed / activated**                                                            |
+| 9   | **Open D3 disclosure** for both parties                                                             |
+| 10  | **Commit exactly once** — idempotent under retry and concurrency                                    |
 
 ### 7.3 Failure behaviour — fail closed, leave nothing behind
 
@@ -230,6 +230,40 @@ not a valid outcome, and is one of the narrow MHC re-grant grounds
 one** charge and **exactly one** Engagement, enforced by row locking and a uniqueness constraint
 on the intent, never by application-level checks alone.
 
+### 7.4 Backfilled Engagements from legacy activations
+
+§7.1–§7.3 govern **native Wave 3 activation**. There is a second, bounded way an Engagement
+comes into existence, and it exists exactly once, during migration: a **backfilled Engagement**
+seeded from an existing `mhc_job_activations` row
+([00 §13](./00-overview-and-terminology.md)).
+
+The legacy row already recorded a real activation — it charged MHC and, in many cases, opened
+provider-payment disclosure. The backfill therefore **records history; it does not perform an
+activation.**
+
+| Rule                                                                                                                                                                                                                                           |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A **legacy activated Need award** and a **qualifying activated reservation** may each seed **exactly one** Engagement                                                                                                                          |
+| The legacy activation row is the **source of truth** — activation occurrence, provider, acting user, origin type, origin reference, MHC charge reference, activation timestamp and existing disclosure provenance are copied, never recomputed |
+| The backfill **does not execute the live activation-charge pipeline** (§7.2, [13 §4](./13-mhc-activation.md))                                                                                                                                  |
+| It **creates no second MHC debit**                                                                                                                                                                                                             |
+| It **does not reopen or repeat payment-method disclosure**, and it preserves the existing disclosure relationship                                                                                                                              |
+| Backfilled Engagements carry a **deterministic idempotency key derived from the legacy activation identifier**                                                                                                                                 |
+| A **uniqueness constraint or mapping table** guarantees **at most one** Engagement per legacy activation                                                                                                                                       |
+| **Cross-origin, malformed, orphaned or ambiguous rows are quarantined for reconciliation**, never guessed at                                                                                                                                   |
+| Legacy activation rows are **immutable** — never deleted, never rewritten destructively, never re-charged                                                                                                                                      |
+| Every Engagement is permanently distinguishable as **legacy backfilled** or **native Wave 3**                                                                                                                                                  |
+
+**This is not an exception to §7.1.** No Engagement exists before _some_ committed activation;
+for a backfilled Engagement the committed activation is the legacy one, which already happened
+and was already paid for. What §7.1 forbids — creating an Engagement in advance of a charge — is
+not what a backfill does, and the backfill may never be used as a route to create an Engagement
+for which no activation was ever charged.
+
+Rollback of a backfill removes backfilled Engagements and their mapping rows only. It never
+touches the legacy activation rows, the payment-disclosure records, the MHC ledger or any
+transaction record.
+
 ---
 
 ## 8. Fulfillment type
@@ -240,7 +274,7 @@ Each engagement carries **one or more Fulfillment Components**, each with a type
 `digital_delivery` · `consultation_session` · `on_site_service` · `workshop_service` ·
 `physical_product` · `made_to_order_product` · `delivery` · `pickup` · `installation`
 
-**Nine component types plus hybrid composition.** *Hybrid* is not a tenth component type and is
+**Nine component types plus hybrid composition.** _Hybrid_ is not a tenth component type and is
 not an enum value — it is the **composition** of two or more of the nine.
 
 Rules:
@@ -292,17 +326,17 @@ runs entirely before this diagram starts and never appears inside it.
 
 ### 9.2 State definitions
 
-| State                             | Meaning                                                                                   |
-| --------------------------------- | ------------------------------------------------------------------------------------------- |
-| `active`                          | Activated; not yet scheduled or started                                                   |
-| `pending_requirements`            | Blocked on buyer input; **the delivery clock does not run**                               |
-| `scheduled`                       | A confirmed future appointment or delivery window exists                                  |
-| `in_progress`                     | Work has started or the slot has begun                                                    |
-| `awaiting_customer_confirmation`  | Evidence submitted; the confirmation window is running                                    |
-| `revision_in_progress`            | A revision round is running against the snapshot's allowance                              |
-| `awaiting_collection`             | Goods or a repaired item are ready and uncollected                                        |
-| `completed`                       | Every required component confirmed (explicitly or by inactivity fallback)                 |
-| `cancelled`                       | Terminated before completion, with a recorded cause and actor                             |
+| State                            | Meaning                                                                   |
+| -------------------------------- | ------------------------------------------------------------------------- |
+| `active`                         | Activated; not yet scheduled or started                                   |
+| `pending_requirements`           | Blocked on buyer input; **the delivery clock does not run**               |
+| `scheduled`                      | A confirmed future appointment or delivery window exists                  |
+| `in_progress`                    | Work has started or the slot has begun                                    |
+| `awaiting_customer_confirmation` | Evidence submitted; the confirmation window is running                    |
+| `revision_in_progress`           | A revision round is running against the snapshot's allowance              |
+| `awaiting_collection`            | Goods or a repaired item are ready and uncollected                        |
+| `completed`                      | Every required component confirmed (explicitly or by inactivity fallback) |
+| `cancelled`                      | Terminated before completion, with a recorded cause and actor             |
 
 Terminal states are `completed`, `cancelled`, and any further fulfillment-specific terminal
 state a type defines. **There is no terminal state meaning "never activated"** — an intent that
@@ -310,12 +344,12 @@ never activated produced no Engagement at all.
 
 ### 9.3 Overlays (flags, not states)
 
-| Overlay             | Effect                                                                                                                       |
-| ------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| Overlay             | Effect                                                                                                                                           |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `disputed`          | A case is open. **Work, messaging, evidence and settlement reporting all continue.** Auto-completion is suspended and review publication is held |
-| `admin_hold`        | An administrator has paused automatic transitions pending investigation. Manual party actions still work                     |
-| `amendment_pending` | An amendment awaits the counterparty's acceptance                                                                            |
-| `settlement_open`   | Agreed amount is not fully covered by confirmed settlement records                                                           |
+| `admin_hold`        | An administrator has paused automatic transitions pending investigation. Manual party actions still work                                         |
+| `amendment_pending` | An amendment awaits the counterparty's acceptance                                                                                                |
+| `settlement_open`   | Agreed amount is not fully covered by confirmed settlement records                                                                               |
 
 Overlays are flags precisely so that a dispute cannot freeze delivery, and so that a
 half-settled engagement is not stuck in a state machine.
@@ -355,14 +389,14 @@ half-settled engagement is not stuck in a state machine.
 
 ## 11. Cancellation
 
-| Cancelling party | When                     | Allowed                                                                 | Consequences                                                                                     |
-| ---------------- | ------------------------ | ----------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
-| Buyer            | Before activation        | Always, free                                                            | No charge; provider notified; no reliability impact on the provider                              |
-| Buyer            | After activation         | Yes, with a cause                                                       | **MHC already spent and not refunded**; recorded on buyer conduct; provider may open a case      |
-| Provider         | Before activation        | Always (this is a decline)                                              | No charge; lapse/decline recorded on provider reliability                                        |
-| Provider         | After activation         | Yes, with a cause                                                       | MHC not refunded; recorded on provider reliability by cause; customer remedy applies             |
-| Both             | Any live state           | **Mutual cancellation** — either proposes, the other accepts            | Cleanest outcome; recorded as mutual; lighter reliability impact                                 |
-| Admin            | Any live state           | Only with a written determination                                       | Records cause, remedy and any MHC re-grant                                                       |
+| Cancelling party | When              | Allowed                                                      | Consequences                                                                                |
+| ---------------- | ----------------- | ------------------------------------------------------------ | ------------------------------------------------------------------------------------------- |
+| Buyer            | Before activation | Always, free                                                 | No charge; provider notified; no reliability impact on the provider                         |
+| Buyer            | After activation  | Yes, with a cause                                            | **MHC already spent and not refunded**; recorded on buyer conduct; provider may open a case |
+| Provider         | Before activation | Always (this is a decline)                                   | No charge; lapse/decline recorded on provider reliability                                   |
+| Provider         | After activation  | Yes, with a cause                                            | MHC not refunded; recorded on provider reliability by cause; customer remedy applies        |
+| Both             | Any live state    | **Mutual cancellation** — either proposes, the other accepts | Cleanest outcome; recorded as mutual; lighter reliability impact                            |
+| Admin            | Any live state    | Only with a written determination                            | Records cause, remedy and any MHC re-grant                                                  |
 
 Rules:
 
@@ -390,11 +424,11 @@ Rules:
 
 Three distinct clocks, often confused:
 
-| Clock                       | Applies to                       | On expiry                                                                              |
-| --------------------------- | -------------------------------- | ---------------------------------------------------------------------------------------- |
-| **Activation deadline**     | The **pre-activation intent** (§7) — *not* an engagement state | The intent lapses; **no Engagement was ever created**; no charge; the Need returns to `open` with its own window extended |
-| **Requirements deadline**   | `pending_requirements`           | After reminders, the engagement expires **without penalty to the provider**; MHC is a re-grant candidate under [13 §9](./13-mhc-activation.md) |
-| **Confirmation window**     | `awaiting_customer_confirmation` | The type's inactivity fallback runs ([11](./11-fulfillment-models.md))                  |
+| Clock                     | Applies to                                                     | On expiry                                                                                                                                      |
+| ------------------------- | -------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Activation deadline**   | The **pre-activation intent** (§7) — _not_ an engagement state | The intent lapses; **no Engagement was ever created**; no charge; the Need returns to `open` with its own window extended                      |
+| **Requirements deadline** | `pending_requirements`                                         | After reminders, the engagement expires **without penalty to the provider**; MHC is a re-grant candidate under [13 §9](./13-mhc-activation.md) |
+| **Confirmation window**   | `awaiting_customer_confirmation`                               | The type's inactivity fallback runs ([11](./11-fulfillment-models.md))                                                                         |
 
 Only the second and third clocks run against an Engagement. The first runs against an intent
 object, which is why its expiry produces no engagement record of any kind.
@@ -447,7 +481,7 @@ The properties that must hold forever, and which most of this file exists to gua
 6. **Reputation references, not recomputes.** A review is bound to its engagement and to the
    offer version it was earned on; recomputation of aggregates never changes what an
    individual review says or which version it belongs to.
-7. **Money history is never rewritten.** Settlement records may change *state* along the
+7. **Money history is never rewritten.** Settlement records may change _state_ along the
    evidence ladder; their reported facts, timestamps and attachments never change. A
    correction is a new record, not an edit.
 8. **Every automatic transition is attributed.** Auto-confirmation, engagement expiry and
@@ -469,14 +503,14 @@ publishes a vacancy, Experts and Craftsmen apply as candidates, and the Business
 interviews, rejects, hires or closes the vacancy. That is candidacy for employment, not a
 commercial service transaction.
 
-| Recruitment object   | Is **not** a…                                             |
-| -------------------- | --------------------------------------------------------- |
-| Job vacancy          | Customer Need · provider Offer                            |
-| Job application      | Proposal · Custom Proposal · pre-activation intent object |
-| Shortlist / interview| Award offer · booking                                     |
-| Hire                 | Engagement Activation                                     |
-| Hiring record        | Engagement · Booking · Product Order · Custom Order       |
-| Salary / compensation| Agreed amount · settlement record · settlement tranche    |
+| Recruitment object    | Is **not** a…                                             |
+| --------------------- | --------------------------------------------------------- |
+| Job vacancy           | Customer Need · provider Offer                            |
+| Job application       | Proposal · Custom Proposal · pre-activation intent object |
+| Shortlist / interview | Award offer · booking                                     |
+| Hire                  | Engagement Activation                                     |
+| Hiring record         | Engagement · Booking · Product Order · Custom Order       |
+| Salary / compensation | Agreed amount · settlement record · settlement tranche    |
 
 Consequences for this spine, each testable:
 
@@ -489,7 +523,7 @@ Consequences for this spine, each testable:
 4. **No recruitment record contributes to provider verified GMV** or creates a settlement
    tranche ([12 §12](./12-payment-and-settlement.md)).
 5. **INV-038 is unaffected.** "Every accepted commercial arrangement is an Engagement" scopes
-   to *commercial service arrangements*. A recruitment candidacy is not one, and reading
+   to _commercial service arrangements_. A recruitment candidacy is not one, and reading
    INV-038 as a mandate to fold Jobs into the spine is the specific misreading this section
    exists to prevent.
 

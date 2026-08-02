@@ -48,7 +48,7 @@ installation; delivery days versus service areas; a portfolio versus a storefron
 - **Structured revisions.** Revision count is part of the sold scope and is enforced by the
   fulfillment machinery, so "one more small change" has a defined boundary and a defined
   price (an add-on or an Amendment).
-- **Requirements collected up front.** Intake questions are answered *at purchase*, so the
+- **Requirements collected up front.** Intake questions are answered _at purchase_, so the
   clock does not start on a brief the Expert has not received.
 - **Portfolio as evidence.** Verified credentials (V2) plus a curated portfolio plus verified
   settled volume give a signal that a rating alone cannot.
@@ -100,7 +100,7 @@ installation; delivery days versus service areas; a portfolio versus a storefron
 **Engagement Activation** is separate and per-engagement: see
 [13](./13-mhc-activation.md). An enabled Expert with zero MHC is enabled but cannot accept.
 
-**Ordering rule:** enablement must not be granted before V1 is *approved*, not merely
+**Ordering rule:** enablement must not be granted before V1 is _approved_, not merely
 submitted. A pending KYC yields a `pending_verification` state where the Expert can build
 drafts but publish nothing.
 
@@ -108,13 +108,13 @@ drafts but publish nothing.
 
 ## 6. Verification requirements
 
-| Requirement                         | Status                                                           |
-| ----------------------------------- | ------------------------------------------------------------------ |
-| V0 contact verification             | Mandatory (inherited from customer capability)                    |
-| **V1 identity (KYC)**               | **Mandatory** before enablement                                   |
-| V2 professional credential          | Mandatory per credential-required category; optional badge elsewhere |
-| Sanctions / duplicate-identity check| Mandatory at V1; one PCI per verified natural person              |
-| Re-verification                     | On document expiry, on ownership/name change, on enforcement flag |
+| Requirement                          | Status                                                               |
+| ------------------------------------ | -------------------------------------------------------------------- |
+| V0 contact verification              | Mandatory (inherited from customer capability)                       |
+| **V1 identity (KYC)**                | **Mandatory** before enablement                                      |
+| V2 professional credential           | Mandatory per credential-required category; optional badge elsewhere |
+| Sanctions / duplicate-identity check | Mandatory at V1; one PCI per verified natural person                 |
+| Re-verification                      | On document expiry, on ownership/name change, on enforcement flag    |
 
 Additional rules:
 
@@ -127,22 +127,29 @@ Additional rules:
   activation.
 - A lapsed V2 in a credential-required category **hides** the affected offers and blocks new
   proposals in that category; it does not touch existing engagements.
+- **The legacy `platform_verified_at` badge enables nothing.** It is not V1, not V2, and not a
+  partial substitute for either. It never enables a PCI, never permits offer publication or
+  proposal submission, never authorizes MHC spend or D3 access, and never rescues a lapsed
+  tier — a revoked or expired Wave 3 credential blocks new commercial actions even where the
+  legacy timestamp remains populated. Existing Experts are classified **unverified for Wave 3
+  commercial authority** until they hold valid new verification evidence
+  ([00 §12](./00-overview-and-terminology.md)).
 
 ---
 
 ## 7. Profile capabilities
 
-| Element                                                       | Tier |
-| ------------------------------------------------------------- | ---- |
-| Display name, avatar, headline, categories, languages         | D0   |
-| Rating, review count, completed engagements, verification tier and credential badges | D0 |
-| Verified settled volume band, response time, on-time rate     | D0   |
-| Coarse location and timezone                                  | D0   |
-| Bio, experience, education, skills, certifications            | D1   |
-| **Portfolio**: cases with title, scope, category, media, outcome; optional client name with recorded consent | D1 |
-| Availability: accepting/paused, working hours, lead time, concurrent-work cap | D1 |
-| Published offers and packages with prices                     | D0   |
-| Full legal name, phone, email, address, payment instructions  | **D3** |
+| Element                                                                                                      | Tier   |
+| ------------------------------------------------------------------------------------------------------------ | ------ |
+| Display name, avatar, headline, categories, languages                                                        | D0     |
+| Rating, review count, completed engagements, verification tier and credential badges                         | D0     |
+| Verified settled volume band, response time, on-time rate                                                    | D0     |
+| Coarse location and timezone                                                                                 | D0     |
+| Bio, experience, education, skills, certifications                                                           | D1     |
+| **Portfolio**: cases with title, scope, category, media, outcome; optional client name with recorded consent | D1     |
+| Availability: accepting/paused, working hours, lead time, concurrent-work cap                                | D1     |
+| Published offers and packages with prices                                                                    | D0     |
+| Full legal name, phone, email, address, payment instructions                                                 | **D3** |
 
 Portfolio rules that matter:
 
@@ -160,6 +167,10 @@ Portfolio rules that matter:
 **Being discovered:** appears in offer search, provider search, category browse and
 recommendations, filtered by category, price, delivery time, rating, verification tier,
 credential, language and availability. Remote-capable by default, so not geo-restricted.
+
+**Verification-derived ranking and badges read Wave 3 tiers only.** The legacy
+`platform_verified_at` badge confers **no search preference** and is never a filter, facet or
+ranking input ([00 §12](./00-overview-and-terminology.md)).
 
 **Discovering work:**
 
@@ -193,21 +204,21 @@ Two hard consequences:
 
 ## 10. Providing capabilities
 
-| Capability                  | Wave 3                                                                                                    |
-| --------------------------- | ----------------------------------------------------------------------------------------------------------- |
-| Publish offers              | ✅ `expert_service` only                                                                                   |
-| Packages                    | ✅ 0–3 tiers per offer, optional; see [07](./07-expert-packages.md)                                        |
-| Add-ons                     | ✅ priced, optional, with delivery-day deltas                                                              |
-| Requirements intake         | ✅ structured questions answered at purchase                                                               |
-| Quote-only offers           | ✅ an offer may carry no package and take custom proposals only                                            |
-| Custom proposals            | ✅ against a Need, or against a buyer Quote Request                                                        |
-| Proposals on Needs          | ✅ free, quota-limited, types `professional_service` and `consultation`                                    |
-| Availability and bookings   | ✅ consultation/session slots                                                                              |
-| Digital deliverables        | ✅ with revisions, per the sold scope                                                                      |
-| Physical products           | ❌                                                                                                          |
-| On-site / workshop service  | ❌                                                                                                          |
-| Delivery, pickup, installation | ❌                                                                                                        |
-| Staff or delegated delivery | ❌ Wave 4                                                                                                   |
+| Capability                     | Wave 3                                                                  |
+| ------------------------------ | ----------------------------------------------------------------------- |
+| Publish offers                 | ✅ `expert_service` only                                                |
+| Packages                       | ✅ 0–3 tiers per offer, optional; see [07](./07-expert-packages.md)     |
+| Add-ons                        | ✅ priced, optional, with delivery-day deltas                           |
+| Requirements intake            | ✅ structured questions answered at purchase                            |
+| Quote-only offers              | ✅ an offer may carry no package and take custom proposals only         |
+| Custom proposals               | ✅ against a Need, or against a buyer Quote Request                     |
+| Proposals on Needs             | ✅ free, quota-limited, types `professional_service` and `consultation` |
+| Availability and bookings      | ✅ consultation/session slots                                           |
+| Digital deliverables           | ✅ with revisions, per the sold scope                                   |
+| Physical products              | ❌                                                                      |
+| On-site / workshop service     | ❌                                                                      |
+| Delivery, pickup, installation | ❌                                                                      |
+| Staff or delegated delivery    | ❌ Wave 4                                                               |
 
 Fulfillment types an Expert may attach to an engagement:
 **digital delivery**, **consultation/session**, and their combination. Nothing else.
@@ -251,17 +262,17 @@ number to a proposal is the single most likely bypass in this product.
 
 ## 12. File and attachment capabilities
 
-| Surface                              | Rule                                                                                     |
-| ------------------------------------ | ------------------------------------------------------------------------------------------ |
-| Portfolio media                      | Public at D1, moderated, contact-scanned, consent-recorded                               |
-| Offer / package media                | Public at D0, moderated, no contact, no external links                                   |
-| Proposal attachments                 | **Not permitted.** A proposal is text and numbers only                                   |
-| Custom proposal attachments          | **Not permitted** pre-acceptance; the scope must be expressible in structured fields     |
-| Pre-award communication              | **No attachments of any type**                                                           |
-| Need attachments received            | **Manifest only** at D2 — no content, no preview, no rendition; full access at D3        |
-| **Deliverables**                     | Full upload at D3, versioned per revision round, retained for the dispute window and beyond |
-| External delivery links              | Permitted at D3 only, recorded, and never a substitute for evidence — an unreachable link is not a delivery |
-| Case evidence                        | Permitted per case rules, even while suspended                                           |
+| Surface                     | Rule                                                                                                        |
+| --------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| Portfolio media             | Public at D1, moderated, contact-scanned, consent-recorded                                                  |
+| Offer / package media       | Public at D0, moderated, no contact, no external links                                                      |
+| Proposal attachments        | **Not permitted.** A proposal is text and numbers only                                                      |
+| Custom proposal attachments | **Not permitted** pre-acceptance; the scope must be expressible in structured fields                        |
+| Pre-award communication     | **No attachments of any type**                                                                              |
+| Need attachments received   | **Manifest only** at D2 — no content, no preview, no rendition; full access at D3                           |
+| **Deliverables**            | Full upload at D3, versioned per revision round, retained for the dispute window and beyond                 |
+| External delivery links     | Permitted at D3 only, recorded, and never a substitute for evidence — an unreachable link is not a delivery |
+| Case evidence               | Permitted per case rules, even while suspended                                                              |
 
 Deliverable retention is a product commitment, not a storage detail: the files that prove
 what was delivered must outlive the engagement, the offer and the dispute window, because
@@ -349,14 +360,14 @@ they are the only record of performance either side has.
 
 Scoped to the Expert PCI only.
 
-| Group          | Metrics                                                                                                                  |
-| -------------- | -------------------------------------------------------------------------------------------------------------------------- |
-| Demand         | Offer views, package-level views, quote requests, conversion by package, saved/favourited counts, search impressions       |
-| Proposals      | Submitted, quota remaining, win rate, time-to-first-response, award-to-activation rate, lapse rate                        |
-| Engagements    | Active, by state, by fulfillment type, on-time delivery rate, revision rate, cancellation rate (by cause), completion rate |
-| Settlement     | Agreed vs reported vs **confirmed** vs **verified** volume, coverage distribution, average days-to-confirmation           |
-| MHC            | Balance, spend by action key, effective MHC cost per engagement and per confirmed settled unit, re-grants received        |
-| Reputation     | Rating trend, per-criterion breakdown, review volume, response rate, reliability metrics with their inputs                |
+| Group       | Metrics                                                                                                                    |
+| ----------- | -------------------------------------------------------------------------------------------------------------------------- |
+| Demand      | Offer views, package-level views, quote requests, conversion by package, saved/favourited counts, search impressions       |
+| Proposals   | Submitted, quota remaining, win rate, time-to-first-response, award-to-activation rate, lapse rate                         |
+| Engagements | Active, by state, by fulfillment type, on-time delivery rate, revision rate, cancellation rate (by cause), completion rate |
+| Settlement  | Agreed vs reported vs **confirmed** vs **verified** volume, coverage distribution, average days-to-confirmation            |
+| MHC         | Balance, spend by action key, effective MHC cost per engagement and per confirmed settled unit, re-grants received         |
+| Reputation  | Rating trend, per-criterion breakdown, review volume, response rate, reliability metrics with their inputs                 |
 
 Presentation rules that are product requirements, not UI preferences:
 
@@ -370,12 +381,12 @@ Presentation rules that are product requirements, not UI preferences:
 
 ## 18. Suspension behaviour
 
-| Axis                      | Effect on the Expert                                                                                                                                                     |
-| ------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Restriction**           | Reduced proposal quota, publication of new offers paused, or messaging rate-limited. Existing activity untouched.                                                        |
+| Axis                      | Effect on the Expert                                                                                                                                                          |
+| ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Restriction**           | Reduced proposal quota, publication of new offers paused, or messaging rate-limited. Existing activity untouched.                                                             |
 | **Commercial suspension** | All offers hidden from D0/D1; no new proposals, quote replies, purchase acceptances, bookings or activations; MHC purchase blocked; MHC balance frozen but **not** forfeited. |
-| **Profile suspension**    | Public Expert profile and all offers removed from discovery and from direct links; reviews authored are hidden pending review.                                          |
-| **Termination**           | Only after open engagements are completed, cancelled with customer remedy, or administratively closed with a written determination.                                      |
+| **Profile suspension**    | Public Expert profile and all offers removed from discovery and from direct links; reviews authored are hidden pending review.                                                |
+| **Termination**           | Only after open engagements are completed, cancelled with customer remedy, or administratively closed with a written determination.                                           |
 
 Under **every** state above the Expert keeps: existing engagement access, delivery and
 evidence upload, revision handling, engagement messaging, settlement reporting and
@@ -417,8 +428,11 @@ customer penalty, which the baseline forbids.
   rather than the person.
 - **Milestone-structured engagements** with per-milestone acceptance and evidence.
 - **Retainers, subscriptions and recurring engagements.**
-- **Paid proposal promotion, featured placement, advertisements** — explicitly unapproved,
-  not merely unbuilt ([16 group 3](./16-wave-3-scope.md)).
+- **Paid proposal promotion and featured placement** — explicitly unapproved, not merely
+  unbuilt ([16 group 3](./16-wave-3-scope.md)).
+- **Priced advertisements.** The advertisement machinery is implemented, wired and operational
+  at a **zero price**; what is deferred is non-zero pricing, which requires explicit
+  configuration and commercial approval ([00 §14.1](./00-overview-and-terminology.md)).
 - **Multi-currency pricing and FX presentation.**
 - **Platform-issued contracts, NDAs, e-signature, and legal invoicing.**
 - **Time tracking, hourly billing meters, and work-in-progress reporting.**

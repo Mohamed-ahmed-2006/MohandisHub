@@ -15,17 +15,17 @@ offer.
 **Packages are optional.** An `expert_service` Offer declares one of three pricing shapes at
 creation:
 
-| Shape                  | Packages | Custom proposals | Buyer's entry action                          |
+| Shape                  | Packages | Custom proposals | Buyer's entry action                            |
 | ---------------------- | -------- | ---------------- | ----------------------------------------------- |
-| `packaged`             | 1–3      | No               | Buy a package directly                        |
+| `packaged`             | 1–3      | No               | Buy a package directly                          |
 | `quote_only`           | 0        | Yes              | Send a Quote Request; receive a Custom Proposal |
-| `packaged_with_custom` | 1–3      | Yes              | Either                                        |
+| `packaged_with_custom` | 1–3      | Yes              | Either                                          |
 
 Rationale for making them optional rather than mandatory: forcing a package on work that
 genuinely cannot be scoped in advance produces fictional listings — a "starting at" price
 that never matches the real one — which is precisely the bait pattern
 [06 §1](./06-offer-model.md) prohibits. Forcing quote-only on everything, conversely,
-destroys the fast path for the work that *is* standard.
+destroys the fast path for the work that _is_ standard.
 
 A `quote_only` offer must still publish a **price indication** — a band, an hourly rate, or
 a typical-project range — so that discovery filtering and buyer expectation both work. An
@@ -51,15 +51,15 @@ offer with no price signal at all is not publishable.
 Each package carries a scope definition that is precise enough to be **snapshotted and
 adjudicated**, because it is what a dispute will be decided against.
 
-| Element                  | Requirement                                                                                          |
-| ------------------------ | ------------------------------------------------------------------------------------------------------ |
-| **Deliverables list**    | Mandatory. Itemized, countable where countable (e.g. "3 plan drawings", "1 report, 10–15 pages")     |
-| **Deliverable formats**  | Mandatory. File formats and whether editable source files are included — the classic hidden dispute  |
-| **Inclusions**           | Mandatory. What the work covers                                                                      |
-| **Explicit exclusions**  | Mandatory, minimum one. What it does not cover                                                       |
-| **Assumptions**          | Optional. Conditions the price depends on                                                            |
-| **Rights and usage**     | Optional in Wave 3, but if declared it is snapshotted; the platform records, it does not adjudicate IP |
-| **Session component**    | Optional. Duration, count, platform, and whether recording is permitted                              |
+| Element                 | Requirement                                                                                            |
+| ----------------------- | ------------------------------------------------------------------------------------------------------ |
+| **Deliverables list**   | Mandatory. Itemized, countable where countable (e.g. "3 plan drawings", "1 report, 10–15 pages")       |
+| **Deliverable formats** | Mandatory. File formats and whether editable source files are included — the classic hidden dispute    |
+| **Inclusions**          | Mandatory. What the work covers                                                                        |
+| **Explicit exclusions** | Mandatory, minimum one. What it does not cover                                                         |
+| **Assumptions**         | Optional. Conditions the price depends on                                                              |
+| **Rights and usage**    | Optional in Wave 3, but if declared it is snapshotted; the platform records, it does not adjudicate IP |
+| **Session component**   | Optional. Duration, count, platform, and whether recording is permitted                                |
 
 Validation rules:
 
@@ -101,7 +101,7 @@ Validation rules:
 - A **revision round pauses the delivery clock** and starts a separate, shorter revision
   clock.
 - Provider **lead-time buffer** (a queue delay before the clock starts, declared on the
-  Offer's availability) is disclosed to the buyer *before* purchase, and is added to the
+  Offer's availability) is disclosed to the buyer _before_ purchase, and is added to the
   displayed "delivered by" date. Hiding queue time until after purchase is the most common
   source of avoidable lateness disputes.
 - On-time performance is measured against the snapshotted date, adjusted only by recorded
@@ -163,7 +163,7 @@ Validation rules:
   activation for every file type, with no preview or sanitized rendition**, full access at D3.
   For a direct purchase, activation and requirement submission are close together, so in
   practice the provider sees the files immediately after accepting.
-- Because file content is unavailable pre-activation, an intake that *needs* to be seen before
+- Because file content is unavailable pre-activation, an intake that _needs_ to be seen before
   pricing must express that need in **structured fields** — measurements with units, formats,
   counts, choices — rather than in a "please attach an example" question. An intake whose
   mandatory question is an attachment is an unpriceable intake and a moderation matter.
@@ -179,14 +179,14 @@ Validation rules:
 Declared per Offer, with per-package overrides where useful.
 
 | Control                       | Effect                                                                                            |
-| ----------------------------- | --------------------------------------------------------------------------------------------------- |
+| ----------------------------- | ------------------------------------------------------------------------------------------------- |
 | Accepting / paused            | Paused offers keep their link and reviews but take no new requests ([06 §8](./06-offer-model.md)) |
 | Per-package pause             | One tier can be closed while others stay open                                                     |
 | **Concurrent-engagement cap** | A hard limit on live engagements from this Offer; reaching it auto-pauses new requests            |
 | **Lead-time buffer**          | Queue delay added to the displayed delivery date, disclosed before purchase                       |
 | Vacation / away mode          | Time-bounded pause across the identity, with an auto-resume date shown to buyers                  |
 | Session slots                 | For session-shaped offers: working hours, slot length, buffer, blackout dates, booking horizon    |
-| Buyer requirements            | Optional minimum buyer verification tier for the *request action*                                 |
+| Buyer requirements            | Optional minimum buyer verification tier for the _request action_                                 |
 
 The concurrent-engagement cap is the single most valuable availability control for an
 individual Expert, because over-acceptance — not under-demand — is what destroys on-time
@@ -219,7 +219,7 @@ that exists for one buyer.
   may **decline** or let it expire.
 - Buyer acceptance produces a pending arrangement, **not** an engagement: the provider must
   still activate and pay MHC. This matters — the provider authored the terms, but the
-  *charge* happens at acceptance-of-the-acceptance, so the provider always has a final
+  _charge_ happens at acceptance-of-the-acceptance, so the provider always has a final
   decision point and is never charged by a buyer's unilateral action.
 - A Custom Proposal is **not published** and is invisible to anyone but its two parties.
 - Custom proposals are subject to the same redaction, moderation and price-bound rules as
@@ -233,15 +233,15 @@ that exists for one buyer.
 
 This is where the immutability invariant becomes concrete.
 
-| Event                                                            | Effect on live engagements | Effect on the Offer                              |
-| ---------------------------------------------------------------- | -------------------------- | -------------------------------------------------- |
+| Event                                                            | Effect on live engagements | Effect on the Offer                                 |
+| ---------------------------------------------------------------- | -------------------------- | --------------------------------------------------- |
 | Price change on a package                                        | **None**                   | Version increments; new purchases use the new price |
-| Scope, deliverables, exclusions, delivery days, revisions change | **None**                   | Version increments                                 |
-| Add-on added, repriced or removed                                | **None**                   | Version increments                                 |
-| Requirements changed                                             | **None**                   | Version increments                                 |
-| Package paused or deleted                                        | **None**                   | Discovery only                                     |
-| Offer paused, hidden, rejected, archived                         | **None**                   | Discovery only                                     |
-| Cosmetic edit (typo, media order)                                | None                       | No version increment                               |
+| Scope, deliverables, exclusions, delivery days, revisions change | **None**                   | Version increments                                  |
+| Add-on added, repriced or removed                                | **None**                   | Version increments                                  |
+| Requirements changed                                             | **None**                   | Version increments                                  |
+| Package paused or deleted                                        | **None**                   | Discovery only                                      |
+| Offer paused, hidden, rejected, archived                         | **None**                   | Discovery only                                      |
+| Cosmetic edit (typo, media order)                                | None                       | No version increment                                |
 
 Rules:
 
