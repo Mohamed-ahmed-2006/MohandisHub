@@ -35,6 +35,11 @@ Rules:
   sell advice.
 - A Need whose type does not match its content is a moderation matter; the type cannot be
   changed once a proposal exists, because proposals were priced against it.
+- **A Need is not a job vacancy.** There is no seventh, employment-shaped Need type. A Business
+  hiring an employee publishes a **job vacancy** in the recruitment module, which is a separate
+  subsystem with its own objects and lifecycle
+  ([00 §10](./00-overview-and-terminology.md)); it does not post a Need, and a job application
+  is never a Proposal.
 
 ---
 
@@ -64,7 +69,7 @@ Two orthogonal axes: **who may see it** and **how much of it they see**. Do not 
 | Title, type, category, brief, **structured requirement attributes**, timeline, budget mode, coarse location, proposal count, buyer conduct band | **Visible (D2)** | Not visible |
 | Attachment **manifest** — count, MIME type, size, caption                  | Visible (D2)      | Not visible                  |
 | Buyer display name                                                         | Visible (D2)      | Not visible                  |
-| Buyer full name, phone, email, exact address, **attachment contents of every type** | **D3 only** | Never                        |
+| Buyer full name, phone, email, exact address, geolocation, external links, **attachment contents of every type** | **D3 only** | Never |
 | Other providers' proposals, amounts, counts of who viewed                  | Never             | Never                        |
 
 Proposal amounts are **never** visible to competing providers. Wave 3 runs sealed proposals
@@ -142,13 +147,15 @@ Every Need carries a **location precision model**, chosen by its type.
 
 Hard rules:
 
-- **Exact location is D3. Always.** No exception for "the provider needs it to quote", no
-  exception for map pins, no exception for distance calculators that reveal a radius small
-  enough to identify an address.
+- **Exact location is D3. Always, and in both directions.** No exception for "the provider
+  needs it to quote", no exception for map pins, no exception for distance calculators that
+  reveal a radius small enough to identify an address — and, symmetrically, **no walk-in
+  exception for the provider's own workshop address**
+  ([08 §1.1](./08-craftsman-storefront.md)).
 - Coarse granularity must be **fine enough to price travel** — city or district, not
   governorate alone — because otherwise Craftsmen either overprice or refuse.
 - **Travel and delivery pricing is provider-declared per area**
-  ([08 §5](./08-craftsman-storefront.md)), so a provider prices from its own table against
+  ([08 §6](./08-craftsman-storefront.md)), so a provider prices from its own table against
   the coarse unit rather than needing the address.
 - Buyers may reuse **saved locations**; selecting one publishes only its coarse part.
 - Site hazards, access constraints and parking/lift availability are structured fields
@@ -273,7 +280,7 @@ with `cancelled` and `expired` reachable from `open` and `award_pending`.
 - **During `award_pending`, before activation:** free. The awarded provider is notified with
   a neutral reason. **No MHC is charged**, because no charge has occurred.
 - **After activation:** the Need cannot be cancelled. The Engagement can be, under
-  [10 §10](./10-engagement-model.md), and the provider's MHC is already spent.
+  [10 §11](./10-engagement-model.md), and the provider's MHC is already spent.
 - **Repeated late cancellation** (cancelling during `award_pending` more than a configured
   number of times in a window) is an abuse signal: it wastes provider attention and is a
   known contact-harvesting pattern. It feeds the buyer conduct signal and triggers

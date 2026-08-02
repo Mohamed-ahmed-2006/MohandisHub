@@ -339,6 +339,30 @@ rule that governs what happens with the number.
   ([09 §6](./09-business-buying-and-providing.md), B9).
 - **No procurement-side counting.** A Business's buying is never verified GMV
   ([09 §1](./09-business-buying-and-providing.md)).
+- **No recruitment counting.** A job hiring record is **never** verified GMV, recruitment
+  salary or compensation is **never** an agreed amount, and no recruitment event creates a
+  settlement record or a settlement tranche (§12A.5).
+
+### 12A.5 Recruitment is outside this model entirely
+
+The Jobs module is a **recruitment/employment marketplace**
+([00 §10](./00-overview-and-terminology.md)), and **none of this file applies to it**:
+
+| Rule                                                                                                        |
+| ------------------------------------------------------------------------------------------------------------- |
+| **Recruitment salary or compensation is not processed through the Wave 3 service settlement model.** It is not an agreed amount, has no payment plan, and creates no settlement record |
+| **Job salary creates no settlement tranches**, so it can never reach a counted state           |
+| **Job hiring records never count as provider verified GMV**, in any period, for any identity   |
+| **No new customer-money wallet flow, escrow, salary payout, platform-held compensation or provider withdrawal path may be created for Jobs** |
+| **No application fee or interview fee is charged through the retired EGP wallets**              |
+| **Existing historical Jobs financial records remain read-only and auditable** — never deleted, never rewritten, never migrated into settlement records |
+| Any **future recruitment monetization is designed separately**, using approved MHC platform actions, plans, advertisements, recruitment subscriptions or job-posting fees |
+
+The legacy Jobs subsystem's application fees, interview fees, escrow, milestone money,
+commissions, provider payouts and internal wallet movement are **frozen legacy assumptions**.
+They conflict with the approved launch model — the platform holds no customer money and
+operates no payout rail — and Wave 3 neither revives them nor replaces them with a new
+recruitment money flow.
 
 ---
 

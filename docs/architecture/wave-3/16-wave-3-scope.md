@@ -50,6 +50,38 @@ well-meaning "while we're in here".
   permissions disabled, membership history preserved, commercial authority owner-only
   ([09 §4](./09-business-buying-and-providing.md)).
 
+### 1.1a The additive Business Commercial Identity spine
+
+The repository has **no distinct BCI entity today** — `business_teams.business_id` and
+`business_profiles.user_id` both reference `users.id`, and commercial assets are user-owned.
+Wave 3 delivers the spine that closes the gap ([09 §4.4](./09-business-buying-and-providing.md)):
+
+- A **distinct BCI entity**, introduced **additively** beside the legacy structures.
+- **Deterministic mapping**: each legacy Business account maps to **exactly one** initial BCI,
+  reproducibly, with the controlling user as owner/controller.
+- **Preservation**: Business team/workspace IDs, memberships, invitations, roles and audit
+  records are carried forward **unchanged**.
+- **Non-destructive re-association** of commercial assets, through compatibility mappings or
+  **additive owner columns** — never destructive re-keying.
+- **The legacy immutable Business-account relation remains a compatibility anchor** for the
+  duration of the migration, and user-owned historical assets stay readable throughout.
+- **One owner may control multiple BCIs without asset mixing.**
+
+Deliberately **not** delivered: delegated authority over a BCI (Wave 4), a new "workspace"
+object as scaffolding (Group 3), or any claim that the current schema already satisfies
+multi-BCI ownership.
+
+### 1.1b Recruitment Jobs — separately supported, not folded in
+
+- The **Jobs recruitment subsystem remains separately supported** throughout Wave 3, with its
+  original recruitment semantics preserved
+  ([00 §10](./00-overview-and-terminology.md), [10 §15](./10-engagement-model.md)).
+- **Owner-only recruitment authority**; `manage_jobs` stays reserved and unread.
+- **Legacy Jobs money paths stay disabled and read-only** — application fees, interview fees,
+  escrow, milestone money, commissions, provider payouts and wallet movement.
+- Deliberately **not** delivered: migration of Jobs into the Engagement spine, a recruitment
+  monetization model, delegated recruitment authority, or any new recruitment money flow.
+
 ### 1.2 Disclosure gate
 
 - **D0/D1/D2/D3** tiers with every field assigned to exactly one.
@@ -59,10 +91,21 @@ well-meaning "while we're in here".
   moderated, turn-capped and rate-limited.
 - **Structured requirement attributes** rich enough to price from, per type and per category,
   since they replace what previews were carrying.
-- Exact location, payment instructions and full contact at **D3 only**.
+- Exact location, payment instructions and full contact at **D3 only**, **in both directions** —
+  including a Craftsman's exact workshop address and coordinates, with **no walk-in address
+  exception** ([08 §1.1](./08-craftsman-storefront.md)).
+- **External links classified as D3**: website, external company site, Facebook, LinkedIn,
+  Twitter/X, Instagram, WhatsApp, Telegram, external booking page, external contact form,
+  external marketplace profile, and any unrestricted navigable URL a commercial identity
+  controls ([04 §7.1](./04-role-business.md)).
+- **Public profile allowlist discipline** — public profile responses serialize from an explicit
+  permitted-field contract, with a **browser-client defensive allowlist** as defence in depth,
+  and the **private owner profile retaining its editable contact fields**
+  ([00 §11](./00-overview-and-terminology.md)).
 - D3 opened **exclusively** by successful Engagement Activation.
-- **Conversation-list and historical-preview redaction regression tests** as standing security
-  invariants ([00 §9](./00-overview-and-terminology.md)).
+- **Conversation-list, historical-preview and public-profile redaction regression tests** as
+  standing security invariants ([00 §9](./00-overview-and-terminology.md),
+  [00 §11](./00-overview-and-terminology.md)).
 
 ### 1.3 Demand
 
@@ -89,18 +132,26 @@ well-meaning "while we're in here".
 ### 1.5 The engagement spine
 
 - **One Engagement concept**, five origins, one lifecycle, overlays as flags.
+- **The activation boundary**: an Engagement **does not exist before successful activation**.
+  Each origin carries a typed **pre-activation commercial intent object**, and the ten-step
+  activation transaction creates the Engagement, links it to its intent, marks the intent
+  consumed, opens D3 and commits exactly once ([10 §7](./10-engagement-model.md)).
+  `pending_activation` and `lapsed` are **intent** states and are **not** Engagement states.
 - **Immutable snapshots**: origin, buyer party, provider party, price, scope, location,
-  verification, acting humans.
-- **Fulfillment Components** with declared dependencies; hybrid as composition, not a type.
+  verification, fulfillment plan, payment-method eligibility, acting humans.
+- **Fulfillment Components** with declared dependencies; **nine component types plus hybrid
+  composition** — hybrid is a composition, never a type.
+- **Recruitment Jobs excluded from the spine** ([10 §15](./10-engagement-model.md)).
 - **Amendments**: mutual, append-only, non-destructive, no extra MHC charge.
 - Completion, cancellation with mandatory cause codes, expiry across three clocks, and the
   historical-integrity guarantees.
 
 ### 1.6 Fulfillment
 
-- All ten fulfillment types with their scheduling, evidence, completion, confirmation,
-  correction, inactivity, dispute and review behaviour as specified in
-  [11](./11-fulfillment-models.md).
+- **All nine fulfillment component types plus hybrid composition**, with their scheduling,
+  evidence, completion, confirmation, correction, inactivity, dispute and review behaviour as
+  specified in [11](./11-fulfillment-models.md). Hybrid is the composition of two or more
+  component types — **not a tenth type and not an enum value**.
 - Type-specific hard rules: the **spec-confirmation gate**, the **workshop intake record**,
   **arrival check-in**, **handover codes where the policy requires them**, and **no
   auto-completion for pickup or pre-handover workshop work**.
@@ -186,6 +237,66 @@ well-meaning "while we're in here".
 - Analytics per role with the reported/confirmed/verified labelling discipline.
 - Notifications for every state transition, deadline and evidence event on both sides.
 
+### 1.12 Required test coverage
+
+These five groups are **required Wave 3 test coverage**, not suggestions. Each corresponds to a
+correction the readiness audit demanded, and each is where the corresponding failure would
+actually surface.
+
+#### A. Public-profile disclosure
+
+| # | Required test                                                                             |
+| - | ------------------------------------------------------------------------------------------- |
+| A1| **Business website is absent** from the public profile response                            |
+| A2| **Social and external links are absent** — Facebook, LinkedIn, Twitter/X, Instagram, WhatsApp, Telegram, external booking page, external contact form, external marketplace profile |
+| A3| **Exact Craftsman workshop address is absent** from every public and pre-activation response |
+| A4| **Coordinates are absent** — no GPS, no exact map pin, no radius-with-centre that resolves to premises |
+| A5| The **public DTO/schema allowlist** is asserted as a closed set; adding a field fails the test until its tier is assigned |
+| A6| The **browser client's defensive allowlist** re-filters the payload, asserted independently of the API test |
+| A7| The **private owner profile still returns its editable contact fields** — the fix removes them from the public response only |
+
+#### B. BCI compatibility migration
+
+| # | Required test                                                                             |
+| - | ------------------------------------------------------------------------------------------- |
+| B1| A legacy Business account maps to **exactly one** initial BCI, deterministically; re-running creates none |
+| B2| **Team/workspace IDs remain unchanged** across the migration                               |
+| B3| **Memberships, invitations, roles and audit history remain unchanged**, including roles carrying a reserved permission |
+| B4| **User-owned historical assets remain readable** throughout the compatibility period       |
+| B5| **One owner may control multiple BCIs without asset mixing** — assets, balance, reputation and enforcement stay separate per BCI |
+
+#### C. Activation boundary
+
+| # | Required test                                                                             |
+| - | ------------------------------------------------------------------------------------------- |
+| C1| **No Engagement row exists before successful activation**, in any state, for any origin     |
+| C2| **Activation rollback leaves no MHC debit and no Engagement**, and the intent returns to its defined state |
+| C3| **Concurrent retries create exactly one Engagement and exactly one debit**                 |
+| C4| **An expired intent cannot activate**                                                      |
+| C5| **D3 remains closed until the transaction commits** — no preview, no partial reveal, no early field |
+
+#### D. PCI conversion MHC
+
+| # | Required test                                                                             |
+| - | ------------------------------------------------------------------------------------------- |
+| D1| **Every non-final MHC state blocks conversion** — one case per state in [13 §1.1](./13-mhc-activation.md) |
+| D2| **The available balance transfers exactly once**                                            |
+| D3| **The source becomes non-spendable** and ends at a zero available balance                   |
+| D4| **Retry does not duplicate credit**                                                         |
+| D5| **Concurrent conversion requests allow exactly one success**                                |
+| D6| **Ledger conservation holds** — nothing created, destroyed or doubly spendable              |
+
+#### E. Jobs separation
+
+| # | Required test                                                                             |
+| - | ------------------------------------------------------------------------------------------- |
+| E1| **Job applications create no Proposals and no Engagements**                                 |
+| E2| **Hiring does not increment service verified GMV**                                          |
+| E3| **Job salary creates no settlement tranches**                                               |
+| E4| **Non-owner Business team members cannot manage Jobs** — create, edit, publish, manage, close or hire |
+| E5| **An Expert or Craftsman may apply through their own PCI**                                  |
+| E6| **Legacy Jobs wallet/escrow paths remain disabled**, and historical financial records stay readable |
+
 ---
 
 ## Group 2 — Architecture-compatible but deferred
@@ -197,7 +308,7 @@ a migration of engagement, settlement or reputation data.
 | ------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
 | **Delegated commercial authority for Business members**             | Team administration already ships; `manage_team` enforced and the six reserved permissions already named, stored and disabled; acting-human attribution on every Business action; the owner check isolated in one place |
 | **Spend limits, budgets, approval chains, maker/checker**           | MHC spend as a distinct, attributed authorization point                               |
-| **Workspace-scoped commercial context**                             | `business_teams.business_id` already the immutable commercial principal; workspace selection deliberately scoped to team administration only |
+| **Workspace-scoped commercial context**                             | The **additive BCI spine** delivered in §1.1a gives commercial context a real principal; the legacy immutable `business_teams.business_id` → `users.id` relation stays a compatibility anchor, and workspace selection remains deliberately scoped to team administration only ([09 §4.4](./09-business-buying-and-providing.md)) |
 | **Staff assignment to engagements and components**                  | Components as first-class objects with their own state and evidence                   |
 | **Branches and multi-location**                                     | Service areas and locations as data on the identity, not hardcoded to one             |
 | **Workspace-owned assets**                                          | Assets already owned by the commercial identity, not by the person                    |
@@ -258,6 +369,21 @@ is named.
 11. **Any disclosure of contact, exact location, attachments or payment instructions before a
     successful charge** — including previews, partial reveals, "shortly" placeholders, and
     map radii fine enough to identify an address.
+11a. **A walk-in address exception, or any opt-in that publishes an exact workshop address,
+    building number, floor/unit, exact map pin, GPS coordinates, a map link exposing the
+    premises, or directions sufficient to locate it exactly, below D3** — for any role, any
+    operating model, under any moderation determination
+    ([08 §1.1](./08-craftsman-storefront.md)).
+11b. **Returning any external link a commercial identity controls through a public D0/D1
+    profile API** — website, external company site, Facebook, LinkedIn, Twitter/X, Instagram,
+    WhatsApp, Telegram, external booking page, external contact form, external marketplace
+    profile, or any unrestricted navigable URL. Post-activation disclosure, if ever built,
+    requires an activation-aware participant-authorized endpoint and never the public profile
+    endpoint ([04 §7.1](./04-role-business.md)).
+11c. **Creating an Engagement row before a committed activation** — including a "pending"
+    engagement shell updated on success. The pre-activation object is a typed **intent**, and
+    `pending_activation` and `lapsed` must not appear as Engagement states
+    ([10 §7](./10-engagement-model.md)).
 12. **Any pre-activation attachment preview**, of any file type, under any treatment.
     Watermarking, downscaling, EXIF stripping, OCR screening, contact scanning and a "safe
     image" determination are all prohibited routes to the same prohibited disclosure.
@@ -355,3 +481,25 @@ is named.
 52. **Personalized ranking that sells placement** without labelling it.
 53. **Any feature justified by "the schema already supports it"** — every item in Group 2 is
     architecture-compatible on purpose, and compatibility is not permission.
+
+### 3.7 Recruitment Jobs
+
+54. **Migrating jobs or job applications into the Wave 3 transactional Engagement spine**, or
+    modelling a vacancy as a Need or an Offer, an application as a Proposal, or a hire as an
+    activation ([10 §15](./10-engagement-model.md)).
+55. **Rewriting historical Jobs data out of its recruitment semantics.**
+56. **Any new customer-money flow for Jobs** — a wallet flow, Jobs escrow, internal salary
+    payout, platform-held employment compensation, a provider withdrawal path, or an
+    application or interview fee charged through the retired EGP wallets. Existing historical
+    financial records stay **read-only and auditable**
+    ([00 §10.3](./00-overview-and-terminology.md)).
+57. **Counting a job hiring record as provider verified GMV**, or routing recruitment salary
+    through the settlement model ([12 §12A.5](./12-payment-and-settlement.md)).
+58. **Delegated recruitment authority** — any non-owner performing a Business Jobs action, or
+    `manage_jobs` being read by an authorization decision.
+59. **Automatically altering a candidate's service-provider reputation from a recruitment
+    application outcome**, or merging recruitment reviews into a service rating
+    ([14 §12](./14-reviews-and-reputation.md)).
+60. **Inventing or activating a recruitment monetization model in Wave 3.** Any future
+    recruitment revenue is a separate design using approved MHC platform actions, plans,
+    advertisements, recruitment subscriptions or job-posting fees.

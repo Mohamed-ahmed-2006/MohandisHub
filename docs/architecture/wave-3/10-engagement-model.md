@@ -1,12 +1,20 @@
 # F — Engagement Model
 
-> **Every accepted commercial arrangement on MohandisHub is an Engagement.** There is no
+> **Every activated commercial arrangement on MohandisHub is an Engagement.** There is no
 > second kind of order, no parallel booking object, no separate product order and no
 > business-only pipeline. One spine, five origins, one lifecycle, immutable snapshots.
+>
+> **An Engagement does not exist before successful activation.** Before activation there is a
+> typed, origin-specific **commercial intent object** (§7). The Engagement is created *by* the
+> activation transaction, never before it.
 
-This is the most important structural decision in Wave 3. Wave 1/2 accumulated `bids`,
-`reservations` and `jobs` as parallel half-implementations of the same idea, each with its own
-settlement, cancellation and dispute semantics. Wave 3 collapses them.
+This is the most important structural decision in Wave 3. Wave 1/2 accumulated `bids` and
+`reservations` as parallel half-implementations of the same transactional idea, each with its
+own settlement, cancellation and dispute semantics. Wave 3 collapses **those** into one spine.
+
+**`jobs` is not among them.** The legacy `jobs` subsystem is a **recruitment/employment
+marketplace**, not a service transaction, and it is explicitly excluded from this spine — see
+§15 and [00 §10](./00-overview-and-terminology.md).
 
 ---
 
@@ -44,7 +52,10 @@ Rules:
 - **Every origin ends with provider activation.** There is no instant-purchase path, no
   auto-accept and no "buy now" that creates an obligation without the provider's charged
   acceptance. This is a direct consequence of the MHC gate and is uniform by design.
+- **Every origin begins as a pre-activation intent object** (§7), never as an Engagement.
 - **Business purchases are not an origin** — see [09 §7](./09-business-buying-and-providing.md).
+- **Recruitment Jobs are not an origin.** A job vacancy is not a Need or an Offer, a job
+  application is not a Proposal, and hiring is not an activation (§15).
 - The origin is **immutable** and carries a reference to the object that produced it (Need +
   Proposal, Offer + version + package, slot, Custom Proposal), plus the inline snapshot that
   governs if that object later changes or disappears.
@@ -57,15 +68,16 @@ Rules:
 
 | Group                        | Contents                                                                                                                                                     |
 | ---------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Identity**                 | Engagement id; human-readable reference code; created-at; activated-at                                                                                       |
-| **Origin**                   | Origin kind; origin references; **origin snapshot**                                                                                                          |
+| **Identity**                 | Engagement id; human-readable reference code; created-at; activated-at. **Created-at and activated-at are the same commit** — the row is written by the activation transaction (§7) |
+| **Origin**                   | Origin kind; origin references; **link to the consumed pre-activation intent object**; **origin snapshot**                                                    |
 | **Buyer party**              | Party kind (`identity` \| `business`); identity/BCI reference; **identity snapshot**                                                                         |
 | **Provider party**           | Party kind (`expert` \| `craftsman` \| `business`); reference; **identity snapshot**                                                                         |
 | **Acting humans**            | The human who acted for each party at each authoritative moment (Wave 3: always the owner for a BCI)                                                          |
 | **Price snapshot**           | Agreed amount; currency; itemized breakdown; payment plan; validity of each line                                                                             |
 | **Scope snapshot**           | Title; deliverables; inclusions; exclusions; requirement answers; variants and quantities; revision/rectification allowance; warranty; tolerances; delivery time or dates |
 | **Fulfillment plan**         | One or more **Fulfillment Components**, each typed, each with its own schedule, evidence profile and state                                                    |
-| **Location snapshot**        | Coarse location always; exact address, access notes and geolocation from activation onward                                                                    |
+| **Location snapshot**        | Coarse location always; **both parties'** exact addresses, access notes and geolocation — the buyer's site and, where relevant, the provider's workshop/pickup premises — from activation onward |
+| **Payment-method eligibility** | The payment methods and plan shapes eligible on this engagement, snapshotted at activation                                                                  |
 | **Activation record**        | Activation state; MHC charge reference; action key; amount; timestamp; charging identity                                                                     |
 | **Settlement**               | Settlement records, coverage state, agreed-vs-confirmed totals ([12](./12-payment-and-settlement.md))                                                        |
 | **Amendments**               | Append-only list of accepted changes, each with before/after and both acceptances                                                                            |
@@ -155,31 +167,81 @@ This is one of the reasons it stays prohibited.
 
 ---
 
-## 7. Activation status
+## 7. The pre-activation intent object and the activation boundary
 
-| Status              | Meaning                                                                                     |
-| ------------------- | ----------------------------------------------------------------------------------------------- |
-| `pending_activation`| The arrangement exists; the provider has not yet accepted; **no MHC charged, D2 still applies** |
-| `activated`         | MHC charged successfully; D3 open; the engagement is live                                    |
-| `lapsed`            | The activation deadline passed or the provider declined; no charge; no engagement            |
+### 7.1 An Engagement does not exist before activation
 
-The atomic rule: **charge + engagement creation + D3 disclosure are one transaction.** Any
-failure rolls back all three. A charge that succeeded without disclosure is a system fault and
-is one of the narrow MHC refund grounds ([13 §9](./13-mhc-activation.md)).
+This is the boundary the whole model turns on, and it is stated once here so no other document
+has to reinvent it.
 
-A `pending_activation` arrangement is a real object with a real deadline, visible to both
-parties, but it is not an obligation and does not appear in engagement counts, analytics
-totals or reliability numerators other than the lapse metric.
+**Before activation there is no Engagement row, no engagement id, no engagement state, and no
+D3 disclosure.** What exists is an **origin-specific commercial intent object**: a real,
+persisted object with its own identity, its own deadline and its own lifecycle, visible to both
+parties, which is *not* an Engagement and must never be modelled as one.
+
+| Origin             | Pre-activation intent object                            |
+| ------------------ | ------------------------------------------------------- |
+| `need_award`       | **Need award offer**                                    |
+| `service_purchase` | **Accepted service purchase intent** (purchase request) |
+| `booking`          | **Booking request / accepted booking intent**           |
+| `product_request`  | **Product request**                                     |
+| `custom_order`     | **Custom order intent** (accepted Custom Proposal)      |
+
+The exact names may vary by origin and by surface. What may not vary is that **none of them is
+an active Engagement**, none of them carries an engagement lifecycle state, and none of them
+opens D3.
+
+An intent object is not an obligation. It does not appear in engagement counts, analytics
+engagement totals, or reliability numerators other than the activation-rate metric.
+
+### 7.2 The activation transaction
+
+Activation is **one transaction** that must perform all of the following, atomically, and
+commit **exactly once**:
+
+| #  | Step                                                                                        |
+| -- | ------------------------------------------------------------------------------------------- |
+| 1  | Verify the intent **remains valid** — live, not withdrawn, not expired, deadline not passed |
+| 2  | Verify the provider's **commercial eligibility** — enabled, verified, not suspended, not restricted |
+| 3  | Verify the provider's **MHC balance** against the resolved action price                      |
+| 4  | **Lock and charge** the provider's MHC                                                       |
+| 5  | **Create the immutable Engagement**                                                          |
+| 6  | **Snapshot** parties, offer, scope, price, fulfillment plan and payment-method eligibility   |
+| 7  | **Link** the Engagement to its origin intent                                                 |
+| 8  | Mark the intent **consumed / activated**                                                     |
+| 9  | **Open D3 disclosure** for both parties                                                      |
+| 10 | **Commit exactly once** — idempotent under retry and concurrency                             |
+
+### 7.3 Failure behaviour — fail closed, leave nothing behind
+
+If the transaction fails at any step:
+
+- **No Engagement is created.** There is no partially-created engagement row, in any state.
+- **No D3 disclosure opens** — not a preview, not a partial reveal, not a deferred one.
+- **No MHC charge remains.** Any debit is rolled back with the rest of the transaction.
+- The **origin intent stays pending**, fails, expires, or returns to its own defined
+  origin-specific state. It is never left referencing an engagement that does not exist.
+
+A debit that committed while engagement creation or disclosure did not is a **system fault**,
+not a valid outcome, and is one of the narrow MHC re-grant grounds
+([13 §9](./13-mhc-activation.md), ground G2).
+
+**Retry and concurrency:** duplicate or concurrent acceptance of one intent produces **exactly
+one** charge and **exactly one** Engagement, enforced by row locking and a uniqueness constraint
+on the intent, never by application-level checks alone.
 
 ---
 
 ## 8. Fulfillment type
 
-Each engagement carries **one or more Fulfillment Components**, each with a type from
-[11](./11-fulfillment-models.md):
+Each engagement carries **one or more Fulfillment Components**, each with a type from the
+**nine fulfillment component types** in [11](./11-fulfillment-models.md):
 
 `digital_delivery` · `consultation_session` · `on_site_service` · `workshop_service` ·
 `physical_product` · `made_to_order_product` · `delivery` · `pickup` · `installation`
+
+**Nine component types plus hybrid composition.** *Hybrid* is not a tenth component type and is
+not an enum value — it is the **composition** of two or more of the nine.
 
 Rules:
 
@@ -187,8 +249,8 @@ Rules:
   snapshot. Adding or removing a component requires an Amendment.
 - **Delivery, pickup and installation are modifiers**: they attach to a product or service
   component and never stand alone as an engagement's only component.
-- A **hybrid** engagement is simply one with several required components — there is no special
-  hybrid type.
+- A **hybrid** engagement is simply one with two or more required components drawn from the
+  nine — there is no hybrid component type and no hybrid enum value.
 - Each component has its own schedule, evidence profile, completion action, confirmation and
   inactivity behaviour. The engagement completes only when every **required** component
   completes; optional components (e.g. a declined installation) are marked `not_required`.
@@ -198,35 +260,40 @@ Rules:
 
 ## 9. Lifecycle
 
+**The Engagement lifecycle begins at activation.** `pending_activation` and `lapsed` are
+**not** Engagement states — they describe the pre-activation **intent object** (§7) and belong
+to its lifecycle, not to this one. No Engagement is ever in a state that represents "not yet
+activated".
+
 ### 9.1 States
 
 ```
-                    ┌───────────────── lapsed (terminal, no charge)
-pending_activation ─┤
-                    └─ ACTIVATE ─▶ active
-                                     │
-                                     ├─▶ pending_requirements ─┐  (clock stopped)
-                                     │                          │
-                                     ├─▶ scheduled ─────────────┤
-                                     │                          │
-                                     └─▶ in_progress ◀──────────┘
-                                                │
-                                                ├─▶ awaiting_customer_confirmation
-                                                │        ├─ accept ─────────▶ completed
-                                                │        ├─ revise ─────────▶ revision_in_progress ─▶ (back)
-                                                │        └─ inactivity ─────▶ completed (auto)
-                                                │
-                                                └─▶ awaiting_collection  (pickup / workshop only; never auto-completes)
-                                                             └─ handover ──▶ awaiting_customer_confirmation
+ACTIVATION COMMITS ─▶ active
+                        │
+                        ├─▶ pending_requirements ─┐  (clock stopped)
+                        │                          │
+                        ├─▶ scheduled ─────────────┤
+                        │                          │
+                        └─▶ in_progress ◀──────────┘
+                                   │
+                                   ├─▶ awaiting_customer_confirmation
+                                   │        ├─ accept ─────────▶ completed
+                                   │        ├─ revise ─────────▶ revision_in_progress ─▶ (back)
+                                   │        └─ inactivity ─────▶ completed (auto)
+                                   │
+                                   └─▶ awaiting_collection  (pickup / workshop only; never auto-completes)
+                                                └─ handover ──▶ awaiting_customer_confirmation
 
 any live state ──▶ cancelled (terminal, with cause and actor)
 ```
+
+The intent object's own lifecycle — pending, withdrawn, declined, expired/lapsed, consumed —
+runs entirely before this diagram starts and never appears inside it.
 
 ### 9.2 State definitions
 
 | State                             | Meaning                                                                                   |
 | --------------------------------- | ------------------------------------------------------------------------------------------- |
-| `pending_activation`              | Awaiting the provider's charged acceptance                                                |
 | `active`                          | Activated; not yet scheduled or started                                                   |
 | `pending_requirements`            | Blocked on buyer input; **the delivery clock does not run**                               |
 | `scheduled`                       | A confirmed future appointment or delivery window exists                                  |
@@ -236,7 +303,10 @@ any live state ──▶ cancelled (terminal, with cause and actor)
 | `awaiting_collection`             | Goods or a repaired item are ready and uncollected                                        |
 | `completed`                       | Every required component confirmed (explicitly or by inactivity fallback)                 |
 | `cancelled`                       | Terminated before completion, with a recorded cause and actor                             |
-| `lapsed`                          | Never activated                                                                           |
+
+Terminal states are `completed`, `cancelled`, and any further fulfillment-specific terminal
+state a type defines. **There is no terminal state meaning "never activated"** — an intent that
+never activated produced no Engagement at all.
 
 ### 9.3 Overlays (flags, not states)
 
@@ -322,9 +392,12 @@ Three distinct clocks, often confused:
 
 | Clock                       | Applies to                       | On expiry                                                                              |
 | --------------------------- | -------------------------------- | ---------------------------------------------------------------------------------------- |
-| **Activation deadline**     | `pending_activation`             | Arrangement lapses; no charge; the Need returns to `open` with its own window extended  |
+| **Activation deadline**     | The **pre-activation intent** (§7) — *not* an engagement state | The intent lapses; **no Engagement was ever created**; no charge; the Need returns to `open` with its own window extended |
 | **Requirements deadline**   | `pending_requirements`           | After reminders, the engagement expires **without penalty to the provider**; MHC is a re-grant candidate under [13 §9](./13-mhc-activation.md) |
 | **Confirmation window**     | `awaiting_customer_confirmation` | The type's inactivity fallback runs ([11](./11-fulfillment-models.md))                  |
+
+Only the second and third clocks run against an Engagement. The first runs against an intent
+object, which is why its expiry produces no engagement record of any kind.
 
 Never expiring: `awaiting_collection` (it escalates and flags, but a customer's property is
 never disposed of by a timer), open cases, and settlement reporting.
@@ -336,8 +409,10 @@ never disposed of by a timer), open cases, and settlement reporting.
 - A **Case** attaches to the engagement, or to one component of it, and sets the `disputed`
   overlay.
 - **Eligibility window:** from activation until a configured period after completion or
-  cancellation; extended while a case is open; never available on a `lapsed` arrangement,
-  because nothing was agreed and nothing was charged.
+  cancellation; extended while a case is open. **An intent that never activated has no
+  engagement to attach a case to**, because nothing was agreed and nothing was charged;
+  pre-activation grievances (a fake Need, a harvesting Need) are raised as platform reports,
+  not as engagement disputes.
 - **A dispute does not stop the work.** Delivery, evidence, messaging, scheduling and
   settlement reporting all continue. Auto-completion is suspended and review publication is
   held ([14 §7](./14-reviews-and-reputation.md)).
@@ -375,6 +450,49 @@ The properties that must hold forever, and which most of this file exists to gua
 7. **Money history is never rewritten.** Settlement records may change *state* along the
    evidence ladder; their reported facts, timestamps and attachments never change. A
    correction is a new record, not an edit.
-8. **Every automatic transition is attributed.** Auto-confirmation, expiry and lapse are
-   recorded as system actions with their triggering rule and timestamp, so that "the system
-   completed it" is auditable rather than mysterious.
+8. **Every automatic transition is attributed.** Auto-confirmation, engagement expiry and
+   intent lapse are recorded as system actions with their triggering rule and timestamp, so
+   that "the system completed it" is auditable rather than mysterious.
+
+---
+
+## 15. Recruitment Jobs are not Engagements
+
+Named here because the legacy `jobs` table sits next to `bids` and `reservations` in the Wave
+1/2 schema and looks, from the schema alone, like a fourth half-implementation of the same
+transactional idea. **It is not.** The full model is
+[00 §10](./00-overview-and-terminology.md); this section states the engagement-spine
+consequence.
+
+The MohandisHub Jobs module is a **recruitment / employment marketplace** — a Business
+publishes a vacancy, Experts and Craftsmen apply as candidates, and the Business shortlists,
+interviews, rejects, hires or closes the vacancy. That is candidacy for employment, not a
+commercial service transaction.
+
+| Recruitment object   | Is **not** a…                                             |
+| -------------------- | --------------------------------------------------------- |
+| Job vacancy          | Customer Need · provider Offer                            |
+| Job application      | Proposal · Custom Proposal · pre-activation intent object |
+| Shortlist / interview| Award offer · booking                                     |
+| Hire                 | Engagement Activation                                     |
+| Hiring record        | Engagement · Booking · Product Order · Custom Order       |
+| Salary / compensation| Agreed amount · settlement record · settlement tranche    |
+
+Consequences for this spine, each testable:
+
+1. **No job or job application is migrated into the Engagement spine.** Historical Jobs data
+   keeps its original recruitment semantics.
+2. **A job application creates no Proposal row and no Engagement row**, at any point in its
+   lifecycle.
+3. **Hiring performs no activation**, charges no MHC through an activation action key, and
+   opens no engagement D3 disclosure.
+4. **No recruitment record contributes to provider verified GMV** or creates a settlement
+   tranche ([12 §12](./12-payment-and-settlement.md)).
+5. **INV-038 is unaffected.** "Every accepted commercial arrangement is an Engagement" scopes
+   to *commercial service arrangements*. A recruitment candidacy is not one, and reading
+   INV-038 as a mandate to fold Jobs into the spine is the specific misreading this section
+   exists to prevent.
+
+The recruitment module remains a **separately supported legacy/product subsystem** throughout
+Wave 3. Its long-term redesign is a separate future decision
+([18](./18-decisions-required.md)).

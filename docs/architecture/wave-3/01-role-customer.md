@@ -364,14 +364,16 @@ buyer who cannot confirm delivery would harm the *provider*, who did nothing wro
 1. Holding, buying, earning, receiving, transferring or spending MHC.
 2. Holding any platform balance, wallet or credit; requesting any withdrawal.
 3. Publishing offers, submitting proposals, or appearing in provider discovery.
-4. Obtaining provider contact details, exact address, unredacted attachments or payment
-   instructions before that engagement is activated.
+4. Obtaining provider contact details, the provider's exact premises address or coordinates,
+   external links the provider controls, unredacted attachments, or payment instructions
+   before that engagement is activated.
 5. Sharing or requesting contact details, external handles, links, QR codes, or
    number-as-words in any D0/D1/D2 surface.
 6. Paying the platform for an engagement, or being asked to.
 7. Proposing on, awarding to, or purchasing from a commercial identity controlled by the
    same person (self-dealing).
-8. Reviewing a cancelled, lapsed or never-activated engagement.
+8. Reviewing a cancelled engagement, or an intent that lapsed or never activated — the latter
+   produced no engagement at all ([10 §7](./10-engagement-model.md)).
 9. Conditioning a review or its removal on a settlement, discount or dispute withdrawal.
 10. Bulk-harvesting provider data, scraping, or automating quote requests.
 11. Posting a Need whose actual purpose is to obtain contact details rather than to buy.

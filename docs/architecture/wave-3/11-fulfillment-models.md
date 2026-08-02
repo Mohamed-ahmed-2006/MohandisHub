@@ -4,8 +4,18 @@
 > An engagement has one or more. Each type defines its own scheduling, evidence, completion,
 > confirmation, correction, inactivity, dispute and review behaviour.
 
-Ten types. `delivery`, `pickup` and `installation` are **modifiers** — they attach to a
-product or service component and never stand alone.
+**Nine fulfillment component types plus hybrid composition.**
+
+The nine component types are: `digital_delivery` · `consultation_session` · `on_site_service` ·
+`workshop_service` · `physical_product` · `made_to_order_product` · `delivery` · `pickup` ·
+`installation`.
+
+`delivery`, `pickup` and `installation` are **modifiers** — they attach to a product or service
+component and never stand alone.
+
+**Hybrid is a composition, not a type.** A hybrid engagement is one carrying **two or more** of
+the nine component types (§11). There is no tenth component type, no `hybrid` enum value, and
+nothing in the data model that a component's type field may be set to called "hybrid".
 
 ---
 
@@ -267,7 +277,7 @@ handover.
 | **Provider completion**    | *Mark ready* → `awaiting_collection`; then *Confirm handover*                                                                    |
 | **Customer confirmation**  | Confirms collection at handover; then confirms the goods/work within the window running from handover                            |
 | **Revisions / corrections**| Condition objections at handover are raised immediately and recorded before the item leaves; later objections run through the return/rectification path |
-| **Inactivity fallback**    | **Never auto-completes.** Reminders → storage-policy notice → stale flag → administrative escalation. A customer's property is never disposed of by a timer, and an uncollected item is never recorded as a completed job |
+| **Inactivity fallback**    | **Never auto-completes.** Reminders → storage-policy notice → stale flag → administrative escalation. A customer's property is never disposed of by a timer, and an uncollected item is never recorded as a completed engagement |
 | **Dispute eligibility**    | Item not ready as promised, item not released, condition at handover, storage charges not in the snapshot                        |
 | **Review unlock**          | Contributes to parent completion after handover                                                                                  |
 
@@ -296,8 +306,10 @@ reschedules rather than cancels.
 
 *A composite engagement — an item supplied **and** fitted, commissioned or serviced.*
 
-There is **no special hybrid type**. A hybrid engagement is one with several required
-components, and this section defines only how they interact.
+There is **no hybrid component type and no tenth enum value**. A hybrid engagement is one
+carrying **two or more of the nine component types**, and this section defines only how those
+components interact. Hybrid is a property of the engagement's component set, never of a
+component.
 
 | Dimension                  | Definition                                                                                                                                 |
 | -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -318,6 +330,9 @@ can be reasoned about per component even though settlement itself is engagement-
 
 ## 12. Summary matrix
 
+**The nine component types**, followed by the hybrid **composition** row — which describes an
+engagement shape, not a tenth type.
+
 | Type                   | Scheduling | Auto-confirms? | Correction mechanism        | Holds customer property |
 | ---------------------- | ---------- | -------------- | --------------------------- | ----------------------- |
 | Digital delivery       | No         | Yes            | Revisions (counted)         | No                      |
@@ -329,7 +344,7 @@ can be reasoned about per component even though settlement itself is engagement-
 | Delivery *(mod)*       | Mandatory  | Yes, with evidence | Re-attempt policy       | In transit              |
 | Pickup *(mod)*         | Mandatory  | **Never**      | Objection at handover       | **Yes**                 |
 | Installation *(mod)*   | Mandatory, dependent | Yes  | Rectification (own warranty)| No                      |
-| Hybrid                 | Per component | Per component | Per component              | Per component           |
+| *Hybrid — **composition** of 2+ of the above, not a type* | Per component | Per component | Per component | Per component |
 
 ---
 

@@ -164,8 +164,9 @@ that deserves a named human behind it before self-service is considered.
 
 | Blocker                                                                                        |
 | ---------------------------------------------------------------------------------------------- |
-| **Pending provider activation** — any arrangement awaiting the provider's charged acceptance   |
+| **Pending provider activation** — any pre-activation intent object awaiting the provider's charged acceptance ([10 §7](./10-engagement-model.md)) |
 | An **active engagement** in any live state                                                     |
+| **Any non-final MHC state** — the full blocking list is in §3.5.6a                             |
 | **Incomplete fulfillment** — any required component not confirmed or auto-confirmed            |
 | **Pending customer confirmation** — a component in `awaiting_customer_confirmation`             |
 | An **open correction request** — a revision round, rectification or objection in progress      |
@@ -253,12 +254,51 @@ forfeited nor permanently frozen — a provider who converts does not lose credi
 | **Ledger history preserved**          | Nothing in the source's ledger is deleted, rewritten or re-pointed                                          |
 | **Historical attribution unchanged**  | **Historical MHC transactions remain attributable to the archived PCI** — its spend history is its own      |
 
-**Only the remaining *available* balance carries.** Credits that are pending, reserved,
-disputed, reversed or otherwise not available are **never silently treated as available
-balance**. Each category follows an explicit ledger rule that states what happens to it — settle
-first, resolve first, remain on the source, or fail the conversion — and the applicable rule is
-recorded on the conversion. A conversion that cannot determine the available balance
-unambiguously does not proceed.
+**Only the remaining *available* balance carries, and the rule is deterministic and fails
+closed.** Credits that are pending, reserved, disputed, reversed or otherwise not available are
+**never silently treated as available balance**, and they are never partially carried.
+
+### 3.5.6a Non-available MHC blocks conversion
+
+**Conversion is blocked while the source PCI has any non-final MHC state.** This is a
+precondition, not a reconciliation step performed during the conversion.
+
+| Blocking non-final MHC state          |
+| ------------------------------------- |
+| Pending MHC purchase                  |
+| Pending credit approval               |
+| Reserved MHC                          |
+| Held MHC                              |
+| Pending action charge                 |
+| Disputed action charge                |
+| Pending refund                        |
+| Pending reversal                      |
+| Unresolved chargeback                 |
+| In-flight idempotent ledger operation |
+| Unreconciled balance discrepancy      |
+| Any other non-final MHC state         |
+
+**Every one of these must reach a final ledger outcome before conversion may execute.** There
+is no "settle it during the conversion" path, no operator override, and no partial carryover of
+a balance that is still moving. A conversion that cannot determine the available balance
+unambiguously **does not proceed**.
+
+**Final treatment, once the blockers are clear:**
+
+| Rule                                                                                                       |
+| ------------------------------------------------------------------------------------------------------------ |
+| The **available balance transfers exactly once**                                                            |
+| **Pending, reserved, held and disputed balances do not transfer** — they blocked the conversion until resolved |
+| **Reversed, refunded, expired, cancelled and failed ledger entries remain immutable historical records.** They are history, and history never becomes available carryover |
+| **Historical ledger entries remain attributed to the archived PCI**                                         |
+| After success: **source available balance equals zero**                                                     |
+| After success: **the source PCI cannot spend**                                                              |
+| After success: **the replacement receives exactly the source's final available balance**                     |
+| **Atomic conservation holds** — no credit created, no credit destroyed, no duplicated spendable balance      |
+| **Retry and concurrency remain idempotent** — one carryover, one credit, regardless of retries or concurrent requests |
+
+The rule applied to each category is recorded on the immutable conversion record, so a reader
+can see not only what moved but why nothing else did.
 
 **The conversion audit record must identify:**
 
@@ -371,16 +411,35 @@ field in the system is assigned to exactly one.
 
 | Tier   | Audience                                                                    | Visible                                                                                                                                                                  |
 | ------ | --------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **D0** | Anyone, including signed-out                                                | Display name, avatar/logo, headline, categories, coarse location (governorate/city), ratings and counts, published offers and their prices, badges                       |
+| **D0** | Anyone, including signed-out                                                | Display name, avatar/logo, headline, categories, **coarse location only** (governorate/city/district, coarse service zone, approximate map area), ratings and counts, published offers and their prices, badges, platform-hosted moderated media |
 | **D1** | Signed-in identities                                                        | Full public profile, portfolio, availability calendar, response-time stats, the ability to place a proposal / purchase request / quote request                           |
 | **D2** | A counterparty with a **pending, unactivated** arrangement                   | Pre-award communication — structured Q&A **and** contact-masked free-form text; coarse location; attachment **manifest** (count, type, size, caption) with **no content of any kind**; structured requirement attributes; indicative budget |
-| **D3** | A counterparty on an **activated engagement**                                | Full legal/contact details of both parties, exact address and geolocation, all attachments, unrestricted (moderated) messaging with file exchange, **payment instructions** |
+| **D3** | A counterparty on an **activated engagement**                                | Full legal/contact details of both parties, **exact address and geolocation of both parties — including a Craftsman's workshop and a Business's premises**, **every external link a commercial identity controls**, all attachments, unrestricted (moderated) messaging with file exchange, **payment instructions** |
+
+**Two protections the readiness audit made explicit**, because both were previously softened by
+an exception:
+
+1. **Exact location is D3 in both directions.** The buyer's exact address and the provider's
+   exact premises — workshop address, building number, floor/unit, exact map pin, GPS
+   coordinates, a map link exposing the premises, or directions sufficient to locate it
+   exactly — are the same class of data and unlock at the same moment. **There is no walk-in
+   address exception, for any role or operating model**
+   ([08 §1.1](./08-craftsman-storefront.md)).
+2. **External links are D3.** A website, external company site, Facebook, LinkedIn, Twitter/X,
+   Instagram, WhatsApp, Telegram, an external booking page, an external contact form, an
+   external marketplace profile, or **any unrestricted navigable URL a commercial identity
+   controls**, is a direct off-platform contact channel and is protected data
+   ([04 §7.1](./04-role-business.md)).
 
 Hard rules:
 
 - Nothing in D3 may leak into D0, D1 or D2 by any route, including profile free-text,
   offer descriptions, need bodies, review text, provider responses, file names, image
-  content, portfolio items, or display names.
+  content, portfolio items, display names, **structured profile URL fields**, or **map,
+  radius and geolocation representations**.
+- **Public profile responses serialize from an explicit allowlist**, never from a repository
+  row filtered by convention. A field's presence in a public DTO is a disclosure decision
+  requiring a tier assignment under this section (§11, INV-103).
 - D3 is reached **only** by a successful Engagement Activation. There is no other door.
 - D3, once reached, persists for the parties to that engagement. The provider paid for it.
 - Contact redaction is **defence in depth, not a wall** — this is inherent and must be said
@@ -429,8 +488,8 @@ and anti-bypass moderation.
 | Free-form message text                         | ✅ Available, **strictly redacted**, moderated, rate-limited      |
 | Contact information — phone, email, handles, QR | ❌ Blocked and redacted, including evasion forms                  |
 | Payment instructions or account details        | ❌ Blocked                                                        |
-| Unrestricted links                             | ❌ Blocked                                                        |
-| Exact location or anything that identifies an address | ❌ Blocked                                                 |
+| Unrestricted links, external handles, external profile URLs | ❌ Blocked                           |
+| Exact location of **either** party, or anything that identifies an address or premises | ❌ Blocked |
 | Transaction attachments of any type            | ❌ Blocked (Rule 1)                                               |
 
 The trade-off is deliberate and was decided on its merits: too little communication and
@@ -457,8 +516,9 @@ communication.
 | **Custom Proposal**        | A provider-authored bespoke set of terms, offered to one named buyer.                                                          |
 | **Purchase Request**       | A buyer's commitment to an Offer's published terms, pending provider acceptance.                                               |
 | **Award Offer**            | A buyer's selection of one Proposal, pending provider acceptance.                                                              |
-| **Engagement Activation**  | The provider's acceptance, charged in MHC, that converts a pending arrangement into an Engagement and opens D3.                |
-| **Engagement**             | The single record of an accepted commercial arrangement. Carries immutable snapshots.                                          |
+| **Commercial Intent Object** | The origin-specific pre-activation object — need award offer, accepted service purchase intent, booking request/accepted booking intent, product request, custom order intent. It is **not** an Engagement, carries no engagement state and opens no D3 ([10 §7](./10-engagement-model.md)). |
+| **Engagement Activation**  | The provider's acceptance, charged in MHC, that **creates** the Engagement from its origin intent and opens D3, in one transaction committing exactly once. |
+| **Engagement**             | The single record of an **activated** commercial arrangement. Carries immutable snapshots. **It does not exist before activation.** |
 | **Fulfillment Component**  | One typed unit of work or handover inside an Engagement. An Engagement has one or more.                                        |
 | **Amendment**              | A mutually accepted, append-only change to an Engagement's agreed terms. Never rewrites the original.                          |
 | **Settlement Record**      | A reported money event (payment, deposit, instalment, refund) attached to an Engagement, carrying an evidence state.           |
@@ -485,9 +545,10 @@ conceptual; the migration design is out of scope here.
 | `bids`                                               | **Proposal**                                          | Stays free; paid/promoted proposals remain unapproved                             |
 | `services`                                           | **Offer** (kind `expert_service` / `craftsman_service`) | Splits by provider kind; gains packages and variants                              |
 | `reservations`                                       | **Engagement** with origin `booking`                  | Settlement/hold semantics removed entirely                                        |
-| `jobs`, milestone escrow                             | **Engagement** with components; escrow retired        | `ESCROW_AND_DISPUTES.md` is obsolete for Wave 3                                   |
+| `jobs`, `job_applications`, job milestones/escrow    | **Not mapped.** Remains the **recruitment subsystem** | **Jobs are not Needs, Offers, Proposals, Bookings, Product Orders, Custom Orders or Engagements.** No job or job application is migrated into the Engagement spine; historical Jobs data keeps its recruitment semantics. Legacy job money flows stay disabled and read-only. See §10 |
 | `users.primary_role`                                 | Identity + PCI type + acting context                  | Role-string authorization is replaced by context authorization                    |
-| `business_teams`, `business_members`                 | **Team administration, retained and available**       | `business_teams.business_id` **is** the BCI — the immutable commercial and billing principal. `manage_team` stays enforced; the six reserved permissions stay disabled. Delegated commercial authority is Wave 4. See [09 §4](./09-business-buying-and-providing.md) |
+| `business_teams`, `business_members`                 | **Team administration, retained and available**       | `business_teams.business_id` references **`users.id`** — a **legacy Business-account surrogate**, *not* a BCI. Wave 3 adds an **additive BCI spine** with deterministic mapping ([09 §4.4](./09-business-buying-and-providing.md)). `manage_team` stays enforced; the six reserved permissions stay disabled. Delegated commercial authority is Wave 4 |
+| `business_profiles.user_id`                          | Compatibility anchor for the BCI mapping              | Also references `users.id`. A distinct BCI entity does not yet exist; assets are user-owned and are re-associated non-destructively ([09 §4.4](./09-business-buying-and-providing.md)) |
 | Workspace selection (Wave 2G/2H)                     | **Team-administration scope only**                    | It does not set an application-wide commercial acting context and must not be extended to do so in Wave 3 |
 | `support_tickets` / unified cases (Wave 2I)          | **Case**                                              | Becomes the single dispute, appeal and settlement-escalation surface              |
 | `mhc_action_prices`                                  | Activation price table, keyed per engagement origin   | Shape confirmed in [13](./13-mhc-activation.md); values stay admin-configurable   |
@@ -556,3 +617,128 @@ INV-101 to INV-103):
 3. The allowlist discipline itself: the pre-activation conversation surface serializes from an
    explicit permitted-field contract, and adding a field to it is a disclosure decision
    requiring the tier assignment in [§5](#5-disclosure-tiers--the-products-central-mechanic).
+
+---
+
+## 10. Jobs / recruitment — a separate subsystem, not part of the Wave 3 spine
+
+The existing MohandisHub **Jobs** module is a **recruitment / employment marketplace**, in the
+shape of Wuzzuf. It is not a service marketplace, and Wave 3's transactional models do not
+apply to it. This section is the authority; the role- and spine-level consequences are in
+[04 §10.1](./04-role-business.md), [09 §8](./09-business-buying-and-providing.md) and
+[10 §15](./10-engagement-model.md).
+
+### 10.1 The model
+
+A **Business publishes a job vacancy**, which may carry employment-oriented details: job title,
+description, required skills, experience, employment type, location or remote status, salary
+range where applicable, and an application deadline. **Experts and Craftsmen may apply as
+candidates.** The Business may review applications, shortlist, reject, schedule interviews,
+accept or hire a candidate, and close the vacancy.
+
+**A job application is recruitment candidacy, not a commercial service proposal. Hiring is an
+employment/recruitment outcome, not activation of a service Engagement.**
+
+Therefore, and without exception:
+
+| #  | Rule                                                                                        |
+| -- | -------------------------------------------------------------------------------------------- |
+| 1  | Jobs are **not** Customer Needs                                                             |
+| 2  | Jobs are **not** provider Offers                                                            |
+| 3  | Job applications are **not** marketplace Proposals                                          |
+| 4  | Jobs are **not** Bookings                                                                   |
+| 5  | Jobs are **not** Product Orders                                                             |
+| 6  | Jobs are **not** Custom Orders                                                              |
+| 7  | **Jobs and job applications must not be migrated into the Wave 3 transactional Engagement spine** |
+| 8  | **Historical Jobs data preserves its original recruitment semantics**                       |
+| 9  | The recruitment module remains a **separately supported legacy/product subsystem** during Wave 3 |
+| 10 | Its **long-term redesign may be considered separately after Wave 3**                        |
+
+**A terminology note.** Elsewhere in this document set the word *job* sometimes appears in its
+ordinary trade sense — "workshop jobs", "daily job cap", "job value". That colloquial usage
+means **a piece of work**, and it always refers to an Engagement or a fulfillment component.
+**Capital-J Jobs — the module, the vacancy, the application — is what this section governs**,
+and the two never mean the same thing.
+
+### 10.2 Wave 3 recruitment authority and boundaries
+
+| Rule                                                                                                         |
+| ------------------------------------------------------------------------------------------------------------- |
+| **Only the verified Business owner** may create, edit, publish, manage, close or hire through Business Jobs   |
+| **Business team members receive no delegated recruitment authority**                                          |
+| The existing **`manage_jobs` team permission remains reserved and non-authoritative until Wave 4**            |
+| **Experts and Craftsmen apply through their active Personal Commercial Identity**                             |
+| **Candidate reputation as a service provider must not be automatically altered by recruitment application outcomes** |
+| **Job hiring records must not count as provider verified GMV**                                                |
+| **Recruitment salary or compensation must not be processed through the Wave 3 service settlement model**      |
+| **Recruitment reviews, if retained, remain distinct from transactional service reviews**                      |
+
+### 10.3 Legacy Jobs money flows — frozen, read-only, not revived
+
+The current Jobs subsystem carries legacy assumptions that conflict with the approved
+MohandisHub launch model: **application fees, interview fees, escrow, milestone money,
+commissions, provider payouts and internal wallet movement.** The repository still holds the
+columns that encode them.
+
+The architecture requires:
+
+| Requirement                                                                                     |
+| ------------------------------------------------------------------------------------------------- |
+| **No new customer-money wallet flow for Jobs**                                                   |
+| **No Jobs escrow**                                                                               |
+| **No internal salary payout**                                                                    |
+| **No platform-held employment compensation**                                                     |
+| **No provider withdrawal path**                                                                  |
+| **No application fee or interview fee charged through retired EGP wallets**                      |
+| **Existing historical financial records remain read-only and auditable** — never deleted, never rewritten |
+| Any **future recruitment monetization must be designed separately**, using approved MHC platform actions, plans, advertisements, recruitment subscriptions or job-posting fees |
+
+**No recruitment monetization model is invented or activated by this architecture.** Wave 3
+freezes these paths; it does not replace them.
+
+---
+
+## 11. Inherited security correction — public profile external-link disclosure
+
+Recorded alongside §9 because it is the same class of defect — protected data crossing a
+public API boundary — found by the final readiness audit rather than the Wave 2 review.
+
+**The issue is real and confirmed.** `business_profiles` carries `website`, plus
+`linkedin_url`, `social_facebook`, `social_linkedin` and `social_twitter`, and the **public
+profile response disclosed the Business website**. An unrestricted navigable URL the Business
+controls is a direct off-platform contact channel — the phone number, the email address, the
+premises address and an enquiry form are all one click away — and serving it on a public D0/D1
+profile gives away what activation exists to sell, with no committed engagement and no MHC
+charge.
+
+**Its tier is D3** ([§5](#5-disclosure-tiers--the-products-central-mechanic),
+[04 §7.1](./04-role-business.md)).
+
+**It is fixed by a focused security hotfix implemented separately** — commit
+`3027ea28b63eb60da60d90a1ddbe06e9993034e4`, *fix(profiles): close public contact disclosure*:
+
+- **removes `website` and `linkedinUrl`** from the public profile contract;
+- introduces **runtime allowlists** for `GET /api/profiles/public/:userId` —
+  `PUBLIC_USER_PROFILE_FIELDS`, `PUBLIC_EXPERT_PROFILE_FIELDS`,
+  `PUBLIC_BUSINESS_PROFILE_FIELDS`, `PUBLIC_CRAFTSMAN_PROFILE_FIELDS` and
+  `PUBLIC_CUSTOMER_PROFILE_FIELDS` in `packages/shared/src/profiles.ts` — so the response is a
+  closed set of permitted fields rather than a repository row filtered by convention;
+- applies a **defensive allowlist in the web client** as well as at the API boundary;
+- ships **regression tests** at all three layers: `apps/api/src/tests/public-profiles.security.test.ts`,
+  `apps/web/tests/public-profile-client.test.ts` and `packages/shared/src/profiles.test.ts`.
+
+It is a shipped correction on the same footing as `bc1681b`, **not an unresolved Wave 3
+architecture blocker**.
+
+**Standing requirements** ([17 §12](./17-product-invariants.md), INV-105 to INV-108):
+
+1. **Public-profile allowlist discipline.** The public profile DTO/schema is an explicit
+   permitted-field contract. No external link, exact address or coordinate may be added to it.
+2. **Browser-client defensive allowlist.** The web client re-filters the profile payload rather
+   than trusting the API to have filtered it — defence in depth, because the field exists in
+   the row and one careless serializer change reintroduces the exposure.
+3. **Private owner profile retains its editable contact fields.** The correction removes the
+   fields from the *public* response, not from the owner's own profile management surface. A
+   Business must still be able to record and edit its website and social links.
+4. **Any future post-activation disclosure uses an activation-aware, participant-authorized
+   endpoint**, never the public profile endpoint.

@@ -99,10 +99,15 @@ must always be able to learn who they are actually dealing with once they have e
 6. → **Provider Enablement granted.**
 
 **Location evidence:** a Craftsman declaring a fixed workshop must record its address. The
-coarse part is public (D0); the exact address is D3 for engagement counterparties, and D1
-only if the Craftsman explicitly opts to publish a walk-in shop address. Publishing a
-walk-in address is a deliberate, revocable choice — not a default, and not a way around the
-disclosure gate for callout work.
+**coarse part is public (D0); the exact address and coordinates are D3 only**, released solely
+to authorized participants after a successful Engagement Activation.
+
+**There is no walk-in address exception.** No opt-in, no toggle, no "published premises" mode
+and no moderation determination publishes an exact workshop address, at any tier below D3, for
+any operating model — `mobile_only`, `workshop_only` or `both` alike. What a shop with public
+premises may publish instead is in [08 §1](./08-craftsman-storefront.md): workshop name, city,
+district, coarse service zone, service area, an approximate map area that cannot identify the
+premises, and moderated public storefront media.
 
 **Engagement Activation** remains separate and per-engagement.
 
@@ -137,14 +142,17 @@ The Craftsman profile **is** the storefront. Full model in
 | ----------------------------------------------------------------------------------- | ---- |
 | Trade name, logo, cover, trade categories, storefront description                   | D0   |
 | Rating, review count, completed engagements, verification and credential badges     | D0   |
-| Coarse workshop location, **service areas served**, travel-fee bands                | D0   |
+| Workshop **name**, coarse workshop location (city/district), coarse service zone, **service areas served**, travel-fee bands | D0 |
+| Approximate map area that cannot identify the exact premises                        | D0   |
 | Operating hours, typical lead time, response time, on-time rate                     | D0   |
 | Service catalog and product catalog with prices, variants and stock status          | D0   |
-| Work gallery (past jobs, moderated, consent-recorded)                               | D1   |
+| Work gallery (past work, moderated, consent-recorded)                               | D1   |
 | Availability calendar and bookable slots                                            | D1   |
-| Delivery options, fees, minimum order values, pickup instructions, warranty terms   | D1   |
-| Exact workshop address                                                              | D1 only if walk-in is explicitly published; otherwise **D3** |
+| Delivery options, fees, minimum order values, warranty terms                        | D1   |
+| **Exact workshop address, building number, floor/unit, exact map pin, GPS coordinates, any map link or directions identifying the exact premises** | **D3 only — no exception** |
+| Pickup instructions containing the exact premises or directions to it               | **D3** |
 | Verified legal name, phone, email, payment instructions                             | **D3** |
+| External links controlled by the Craftsman — website, social handles, booking pages  | **D3** (and never a route around the gate) |
 
 ---
 
@@ -173,6 +181,11 @@ to know the distance to price travel. Wave 3 resolves it by making the **coarse 
 granular enough to price** (city/district), publishing **travel-fee bands by area** so the
 Craftsman prices from their own table rather than from the exact address, and disclosing the
 exact address only at D3.
+
+The rule is symmetrical, and this is the correction the readiness audit required: **the
+Craftsman's own exact workshop address and coordinates are equally D3-only.** The buyer's exact
+address and the provider's exact premises are the same class of protected data, released to
+authorized participants by the same event — a committed activation — and by nothing else.
 
 **Pricing physical work without seeing the photographs.** This is the second sharp tension in
 this role, and it is resolved the same way — by structure rather than by exception. The
@@ -227,11 +240,26 @@ Self-dealing applies: no buying from one's own Craftsman identity or from an own
 | Inventory quantities, reservations, backorders | ❌ Wave 4                                                              |
 | Staff, second location, branch      | ❌ Wave 4                                                                         |
 
-Fulfillment types a Craftsman may attach: **on-site service**, **workshop service**,
-**physical product**, **made-to-order product**, **delivery**, **pickup**, **installation**,
-and **hybrid product + service**. Also **consultation/session** where a category supports a
-paid site survey or remote diagnosis, but never a purely digital deliverable as the whole
-engagement.
+Fulfillment component types a Craftsman may attach: **on-site service**, **workshop service**,
+**physical product**, **made-to-order product**, **delivery**, **pickup** and **installation**.
+Also **consultation/session** where a category supports a paid site survey or remote diagnosis,
+but never a purely digital deliverable as the whole engagement. A **product + service** job is
+a **hybrid composition** of two or more of those component types, not a component type of its
+own ([11 §11](./11-fulfillment-models.md)).
+
+### 10.1 Applying to recruitment Jobs
+
+Separately from providing, a Craftsman may **apply as a candidate** to a Business's job vacancy
+in the **Jobs** recruitment module ([00 §10](./00-overview-and-terminology.md)).
+
+- The Craftsman applies **through their active Personal Commercial Identity**.
+- **A job application is recruitment candidacy, not a Proposal.** It creates no Proposal row,
+  no pre-activation intent object and no Engagement, and it consumes no proposal quota.
+- **Applying and being hired cost no MHC.** Hiring is not an Engagement Activation.
+- **Recruitment outcomes do not alter the Craftsman's service reputation** — no rating, no
+  reliability metric, no ranking signal ([14 §12](./14-reviews-and-reputation.md)).
+- **Being hired is an employment outcome.** Any resulting salary is outside the platform's
+  settlement model entirely ([12 §12A.5](./12-payment-and-settlement.md)).
 
 ---
 
@@ -389,8 +417,11 @@ still be able to complete handover.** Suspension never traps an item in a worksh
    engagement.
 2. Presenting the trade name as a registered company, or concealing the verified legal name
    at D3.
-3. Publishing an exact workshop address as a route around the disclosure gate for callout
-   work, or embedding an address in gallery media, product photos or item titles.
+3. **Publishing an exact workshop address, building number, floor or unit, exact map pin, GPS
+   coordinates, a map link exposing the exact premises, or directions sufficient to locate the
+   workshop exactly — at D0, D1 or D2, for any operating model, under any opt-in.** This
+   includes embedding an address in gallery media, product photos, pickup instructions or item
+   titles.
 4. Transmitting contact details, links, handles or payment instructions at D0/D1/D2 by any
    means, including images and file names.
 5. Attaching files to proposals, custom proposals or pre-activation Q&A.

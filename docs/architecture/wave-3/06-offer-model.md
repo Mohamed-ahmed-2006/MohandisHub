@@ -57,6 +57,12 @@ Enforcement note: kind availability is derived from the **owning commercial iden
 kind**, not from a permission flag. An Expert cannot hold a `physical_product` offer in any
 state, including draft.
 
+**There is no fifth kind, and a job vacancy is not one.** A Business publishing an employment
+vacancy is using the **recruitment module**, a separate subsystem with its own objects and
+lifecycle ([00 §10](./00-overview-and-terminology.md)). A vacancy is not an Offer, it does not
+appear in offer search, and an application against it is not a Proposal and produces no
+Engagement.
+
 ---
 
 ## 3. Expert service offers

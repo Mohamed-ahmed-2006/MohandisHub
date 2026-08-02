@@ -114,10 +114,20 @@ scoped precisely to what it actually enforces.
 
 This is the factual baseline the architecture reconciles against, not a proposal:
 
-- **`business_teams.business_id` is the Business commercial and billing principal**, and it is
-  immutable — one workspace per Business account, enforced by a uniqueness index and a
-  change-rejection trigger. The BCI is therefore already the owner of its own assets, which is
-  what makes Business assets Business-owned rather than owner-user-owned.
+- **`business_teams.business_id` references `users.id`.** It is **not** a Business Commercial
+  Identity. It is the id of the Business-role **user account** that owns the workspace, and it
+  is immutable — one workspace per Business account, enforced by a uniqueness index and a
+  change-rejection trigger. The immutability is real and useful; the *interpretation* that it
+  is already a BCI is wrong and is corrected here.
+- **`business_profiles.user_id` also references `users.id`.** The company profile hangs off the
+  same user account.
+- **A distinct BCI entity does not exist yet.** Existing services, jobs, reservations, wallets,
+  payment methods, advertisements, analytics and files are **user-owned**, keyed to an account
+  id that is simultaneously the financial actor.
+- **The current Business-role user account is a legacy Business-account surrogate.** It may
+  seed and map deterministically to a BCI; it is not itself the final BCI model, and Business
+  assets are **owner-user-owned today**, not Business-owned. §4.4 defines the additive spine
+  that closes the gap.
 - **Exactly one team permission is read by an authorization decision: `manage_team`.**
 - Six further permission values are storable and **authorize nothing**: `manage_services`,
   `manage_jobs`, `manage_reservations`, `view_wallet`, `manage_support_disputes`,
@@ -125,7 +135,8 @@ This is the factual baseline the architecture reconciles against, not a proposal
   holds them, reported under their own name, and never counted by `hasPermission`.
 - **Non-owner members hold no commercial-domain authority.** Every commercial domain keys its
   rows to an account id that is simultaneously the financial actor, which is exactly why
-  delegation needs the Wave 4 workspace-principal work and cannot be switched on here.
+  delegation needs the BCI spine (§4.4) plus the Wave 4 authorization work, and cannot be
+  switched on here.
 - **Workspace selection controls team administration only.** It does not set an
   application-wide commercial acting context, and Wave 3 must not extend it to do so.
 
@@ -166,6 +177,38 @@ The failure mode being prevented is not that Wave 4 is late. It is a half-implem
 model shipping silently: a member sees a button, the API happens to allow it, and an engagement
 is created under an authority nobody designed.
 
+### 4.4 The additive Business Commercial Identity spine
+
+Wave 3 requires an **additive BCI spine**. The current schema does **not** already satisfy
+multi-BCI ownership, and describing it as if it does would send implementation into a Wave 4
+delegation model built on a principal that never existed.
+
+**What Wave 3 introduces:**
+
+| Requirement                                                                                                     |
+| --------------------------------------------------------------------------------------------------------------- |
+| A **distinct BCI entity**, additive — introduced beside the legacy structures, never by rewriting them          |
+| **Each legacy Business account maps deterministically to exactly one initial BCI.** Same input, same BCI, every time; re-running the mapping creates nothing new |
+| **The controlling user becomes the owner/controller of the BCI**                                                |
+| **Existing Business team/workspace IDs are preserved unchanged** — no renumbering, no re-keying, no replacement  |
+| **Membership history, roles, invitations and audit records are preserved unchanged**                            |
+| **Commercial assets are re-associated non-destructively**, through compatibility mappings or **additive owner columns** — never by destructive re-keying of user-owned rows |
+| **The current immutable Business-account relationship remains a compatibility anchor** for the duration of the migration |
+| **User-owned historical assets stay readable throughout the compatibility period**                              |
+| **One owner may control multiple BCIs without asset mixing** — each BCI's assets, balance, reputation and enforcement state stay separate |
+
+**What this is not:**
+
+- It is **not** a claim that `business_teams.business_id` is a BCI (§4.1).
+- It is **not** a destructive migration. No historical row is deleted, re-pointed or rewritten
+  to make the new spine tidy.
+- It is **not** delegation. The BCI spine is the *principal*; granting a non-owner authority
+  over it remains Wave 4 (§4.2, §6).
+- It is **not** a new "workspace" object introduced as Wave 4 scaffolding (§6, B6).
+
+Wave 4 delegation then becomes an **authorization change on a real principal**, which is what
+the earlier — incorrect — "already the principal" wording was reaching for and did not have.
+
 ---
 
 ## 5. Business reviews
@@ -203,7 +246,9 @@ These are the concrete tripwires. Each is a testable prohibition, not a guidelin
 | B3c| **No historical membership data is deleted or disabled** — memberships, invitations, roles and audit records are preserved, including roles carrying a reserved permission from before the split |
 | B4 | **No assignment.** An engagement or fulfillment component cannot be assigned to a person other than the owner; there is no assignee concept in the UI or the model |
 | B5 | **No branch, location or sub-entity** may be created inside a BCI, and multi-location behaviour must not be simulated with categories, tags, duplicate offers or a second unregistered brand |
-| B6 | **No delegated workspace-owned asset semantics.** Offers, portfolio, templates and saved searches belong to the BCI already, keyed to the immutable `business_id` principal. What is deferred is *delegated access* to them; no new "workspace" object may be introduced as scaffolding |
+| B6 | **No delegated workspace-owned asset semantics.** Wave 3 introduces the additive BCI spine (§4.4) so offers, portfolio, templates and saved searches acquire a real commercial principal. What is deferred is *delegated access* to them; no new "workspace" object may be introduced as scaffolding, and the legacy immutable Business-account relation stays a compatibility anchor rather than being presented as the finished model |
+| B6a| **No destructive BCI migration.** Team/workspace IDs, memberships, invitations, roles and audit records are preserved unchanged; commercial assets are re-associated only through compatibility mappings or additive owner columns (§4.4) |
+| B6b| **No non-owner recruitment authority.** Business Jobs — create, edit, publish, manage, close, hire — is owner-only, and `manage_jobs` stays reserved and unread (§8) |
 | B7 | **No spend delegation.** MHC is spendable by the owner only; no spend limits, budgets, approval chains or maker/checker flows exist, and none may be partially built. `view_wallet` grants no MHC visibility or authority |
 | B8 | **No ownership transfer as a self-serve action.** Owner change is an administrative process with full re-verification |
 | B9 | **No cross-BCI aggregation.** No consolidated analytics, no parent/subsidiary relation, no group identity, and no public linkage between two BCIs with a common owner |
@@ -240,3 +285,45 @@ Consequences:
   carried in the buyer identity snapshot.
 - The provider still pays the MHC activation charge. A business buyer changes nothing about
   who is charged.
+
+---
+
+## 8. Recruitment Jobs are a third surface, outside both
+
+The Business's procurement and sales surfaces (§1) are the two **commercial** surfaces. The
+**Jobs** module is a third, **non-commercial-transaction** surface — a recruitment/employment
+marketplace — and it belongs to neither.
+
+| Dimension                    | Recruitment surface                                              |
+| ---------------------------- | ---------------------------------------------------------------- |
+| The Business is the…         | **Employer / hiring party** — not a buyer, not a provider        |
+| Creates                      | Job vacancies                                                    |
+| Receives                     | Job applications (recruitment candidacy)                         |
+| Actions                      | Review, shortlist, reject, schedule interviews, hire, close      |
+| Produces                     | A recruitment/employment outcome                                 |
+| MHC                          | **Spends none.** Hiring is not an activation                     |
+| Engagement spine             | **Never enters it** ([10 §15](./10-engagement-model.md))         |
+| Counted in verified GMV      | **No — never**                                                   |
+| Settlement model             | **Not used.** Salary is not an agreed amount and creates no tranche |
+| Who may act                  | **The verified Business owner only**                             |
+| `manage_jobs`                | **Reserved and non-authoritative until Wave 4**                  |
+| Reviews                      | Recruitment reviews, if retained, stay distinct from service reviews |
+
+**Enforced rules:**
+
+1. **Owner-only recruitment authority.** Create, edit, publish, manage, close and hire all
+   resolve to the ownership relation. Membership is never consulted, and `manage_jobs`
+   authorizes nothing — wiring it to a recruitment endpoint is a Wave 4 leak exactly like
+   wiring it to a commercial one (§6, B3a and B6b).
+2. **No cross-surface contamination.** A job vacancy never appears in offer search, a job
+   application never appears in the proposals inbox, and no merged list mixes recruitment with
+   procurement or sales.
+3. **Candidate reputation is untouched.** A rejection, a withdrawal or a failed interview must
+   **not** automatically alter the candidate's service-provider reputation, rating, reliability
+   metrics or ranking ([14 §12](./14-reviews-and-reputation.md)).
+4. **No legacy money flow is revived.** The legacy Jobs subsystem's application fees, interview
+   fees, escrow, milestone money, commissions, provider payouts and wallet movement stay
+   **disabled and read-only** ([00 §10.2](./00-overview-and-terminology.md)).
+
+The recruitment module remains a **separately supported legacy/product subsystem** during Wave
+3. Its long-term redesign and any monetization are separate future decisions.

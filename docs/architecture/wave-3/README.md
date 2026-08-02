@@ -5,16 +5,21 @@
 endpoints, no tickets, no code.
 
 **Repository baseline:** Wave 2 final baseline `11ae5cf64de2e0a47f2a453ab82ffe2de47cc70b`;
-103 production migrations; urgent chat disclosure correction
-`bc1681b5cee9f772402bc5ba8a5599e161da871d` ([00 §9](./00-overview-and-terminology.md)).
+**103 production migrations**; urgent chat disclosure correction
+`bc1681b5cee9f772402bc5ba8a5599e161da871d` ([00 §9](./00-overview-and-terminology.md));
+public-profile disclosure correction `3027ea28b63eb60da60d90a1ddbe06e9993034e4`
+([00 §11](./00-overview-and-terminology.md)).
 
-**Decision status:** **no unresolved Wave 3 product architecture decisions remain.** All eight
+**Status of this revision:** readiness-audit corrections applied. **Date:** 2026-08-02.
+
+**Decision status:** **no unresolved Wave 3 marketplace product decisions remain.** All eight
 high-impact decisions are resolved ([18](./18-decisions-required.md)), including the final PCI
 conversion model — Admin/Support-controlled execution and audited MHC carryover.
 
-Two items are deliberately deferred to a later **production activation** decision and **do not
-block Wave 3 implementation**: live verified-GMV rent charging, and rent-driven commercial
-suspension.
+Three items are deliberately deferred and **do not block Wave 3 technical design**: live
+verified-GMV rent charging, rent-driven commercial suspension, and the Jobs/recruitment
+long-term redesign and monetization. **Jobs/recruitment remains a separately supported
+subsystem during Wave 3** ([00 §10](./00-overview-and-terminology.md)).
 
 This set defines what MohandisHub *is* in Wave 3: four roles, one engagement spine, one
 disclosure gate, one credit gate, and an honest settlement record. It is written so that
@@ -38,13 +43,13 @@ from it without reopening product questions.
 | [08](./08-craftsman-storefront.md)               | **D** — Craftsman storefront      | Shop identity, catalogs, variants, areas, delivery, inventory limits         |
 | [09](./09-business-buying-and-providing.md)      | **E** — Business dual activity    | Procurement/sales separation, owner authority, Wave 4 containment            |
 | [10](./10-engagement-model.md)                   | **F** — Engagement model          | The single spine every accepted arrangement converges into                   |
-| [11](./11-fulfillment-models.md)                 | **G** — Fulfillment models        | Ten fulfillment types × eight behavioural dimensions                         |
+| [11](./11-fulfillment-models.md)                 | **G** — Fulfillment models        | Nine fulfillment component types plus hybrid composition × eight behavioural dimensions |
 | [12](./12-payment-and-settlement.md)             | **H** — Payment and settlement    | Off-platform money, evidence ladder, verified GMV, honesty limits            |
 | [13](./13-mhc-activation.md)                     | **I** — MHC activation model      | The revenue gate and the anti-bypass regime                                  |
 | [14](./14-reviews-and-reputation.md)             | **J** — Reviews and reputation    | Targets, eligibility, moderation, identity separation                        |
 | [15](./15-suspension-and-enforcement.md)         | **K** — Suspension and enforcement| Two independent axes; obligations survive both                               |
 | [16](./16-wave-3-scope.md)                       | **L** — Wave 3 scope              | Deliver / defer / must-not-build-by-accident                                 |
-| [17](./17-product-invariants.md)                 | **M** — Product invariants        | INV-001…INV-104, each with an enforcement layer                              |
+| [17](./17-product-invariants.md)                 | **M** — Product invariants        | INV-001…INV-118, each with an enforcement layer                              |
 | [18](./18-decisions-required.md)                 | **N** — Resolved decisions        | All eight decisions settled, with reasoning and rejected alternatives        |
 
 ---
@@ -60,10 +65,11 @@ from it without reopening product questions.
 > settlement counts as verified GMV; reputation attaches to the **commercial identity** that
 > did the work and never mixes across identities.
 
-Everything in these eighteen files is an elaboration of that sentence.
+Everything in these files is an elaboration of that sentence — for **service transactions**.
+The **Jobs recruitment subsystem** is deliberately outside it (clarification 6 below).
 
-Four clarifications the reconciliation made load-bearing, stated here because each is the thing
-a reader most often gets wrong:
+Eight clarifications this document set makes load-bearing, stated here because each is the
+thing a reader most often gets wrong:
 
 1. **Pre-award conversation is open; pre-award payload is closed.** Buyer and provider may talk
    freely before activation, and every character is contact-masked. **No attachment of any type
@@ -78,7 +84,21 @@ a reader most often gets wrong:
    as an **Admin/Support-executed** operation — no self-service button. The source identity is
    archived and keeps its reviews permanently; the replacement starts at zero reputation and
    receives the source's **available MHC balance exactly once**, through an audited, atomic,
-   idempotent system operation that is **not** a transfer feature.
+   idempotent system operation that is **not** a transfer feature. **Any non-final MHC state
+   blocks the conversion** until it reaches a final ledger outcome
+   ([00 §3.5.6a](./00-overview-and-terminology.md)).
+6. **Jobs are recruitment, not commerce.** The Jobs module is an employment marketplace. A
+   vacancy is not a Need or an Offer, an application is not a Proposal, and hiring is not an
+   activation. **Nothing in Jobs enters the Engagement spine, the settlement model or verified
+   GMV** ([00 §10](./00-overview-and-terminology.md)).
+7. **An Engagement does not exist before activation.** Every origin carries a typed
+   pre-activation **intent object**; the activation transaction creates the Engagement, opens
+   D3 and commits exactly once. `pending_activation` and `lapsed` are intent states, never
+   Engagement states ([10 §7](./10-engagement-model.md)).
+8. **Exact location and external links are D3, in both directions.** The provider's exact
+   premises and every external URL a commercial identity controls are protected exactly like a
+   buyer's address. **There is no walk-in address exception**
+   ([08 §1.1](./08-craftsman-storefront.md), [04 §7.1](./04-role-business.md)).
 
 ---
 
@@ -107,3 +127,6 @@ a reader most often gets wrong:
 | Wave 2G/2H business teams                                 | **Retained.** Team administration stays available with `manage_team` enforced; commercial authority is owner-only; the six reserved permissions stay disabled (**09 §4**). |
 | Wave 2I Help & Resolution Center                          | Becomes the single surface for disputes, appeals and settlement escalation (**15 §8**).    |
 | Chat conversation-summary fix `bc1681b`                   | A confirmed Wave 2 disclosure defect, **fixed**. No longer a Wave 3 architecture blocker. Its regression tests are standing security invariants (**00 §9**, **17 §12**). |
+| Public profile website/external-link disclosure `3027ea2` | A confirmed defect found by the readiness audit, **fixed** by a separate focused security hotfix (public-field allowlists at the API and web-client boundaries). Not a Wave 3 architecture blocker. Its regression tests are standing security invariants (**00 §11**, **17 §12.1**). |
+| Jobs / recruitment module (`jobs`, `job_applications`, job milestones and escrow) | **Not mapped into Wave 3.** A separately supported recruitment/employment subsystem with its original semantics preserved; legacy money paths disabled and read-only. Long-term redesign is a separate future decision (**00 §10**, **10 §15**). |
+| `docs/reservation-money-abuse-map.md`, `docs/ESCROW_AND_DISPUTES.md` money paths in Jobs | Obsolete for Wave 3. No Jobs escrow, wallet flow, payout or fee path may be revived (**00 §10.3**). |

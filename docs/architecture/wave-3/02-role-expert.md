@@ -212,6 +212,21 @@ Two hard consequences:
 Fulfillment types an Expert may attach to an engagement:
 **digital delivery**, **consultation/session**, and their combination. Nothing else.
 
+### 10.1 Applying to recruitment Jobs
+
+Separately from providing, an Expert may **apply as a candidate** to a Business's job vacancy
+in the **Jobs** recruitment module ([00 §10](./00-overview-and-terminology.md)).
+
+- The Expert applies **through their active Personal Commercial Identity**.
+- **A job application is recruitment candidacy, not a Proposal.** It creates no Proposal row,
+  no pre-activation intent object and no Engagement, and it consumes no proposal quota.
+- **Applying and being hired cost no MHC.** Hiring is not an Engagement Activation.
+- **Recruitment outcomes do not alter the Expert's service reputation.** A rejection, a
+  withdrawal or a failed interview changes no rating, no reliability metric and no ranking
+  signal ([14 §12](./14-reviews-and-reputation.md)).
+- **Being hired is an employment outcome.** Any resulting salary is outside the platform's
+  settlement model entirely ([12 §12A.5](./12-payment-and-settlement.md)).
+
 ---
 
 ## 11. Communication capabilities

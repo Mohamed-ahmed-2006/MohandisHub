@@ -52,9 +52,19 @@ archival-and-replacement with **available-MHC carryover** and no reputation carr
   that amount. No MHC is created, destroyed, duplicated, or left spendable by both identities.
 - The operation is **atomic and idempotent**, and **preserves complete ledger history**.
   Historical MHC transactions remain attributable to the archived PCI.
-- **Only the remaining available balance carries.** Pending, reserved, disputed, reversed and
-  otherwise non-available credits follow explicit ledger rules and are never silently treated as
-  available balance.
+- **Only the remaining available balance carries, and the rule is deterministic and fails
+  closed.** **Any non-final MHC state on the source blocks the conversion** — pending MHC
+  purchase, pending credit approval, reserved MHC, held MHC, pending action charge, disputed
+  action charge, pending refund, pending reversal, unresolved chargeback, in-flight idempotent
+  ledger operation, unreconciled balance discrepancy, or any other non-final state. Each must
+  reach a **final ledger outcome before conversion executes**; there is no
+  reconcile-during-conversion path and **no operator override**.
+- **Pending, reserved, held and disputed balances never transfer**, in whole or in part.
+  **Reversed, refunded, expired, cancelled and failed ledger entries remain immutable
+  historical records and never become available carryover.**
+- After success: the source's **available balance is zero**, the **source cannot spend**, and
+  the replacement holds **exactly** the source's final available balance. **Concurrent
+  conversion requests allow exactly one success**, and retry duplicates no credit.
 - The audit record identifies: source PCI, replacement PCI, user/account owner, amount moved,
   original ledger balance, conversion event, Administrator or Support actor, timestamp, reason.
 
@@ -169,10 +179,22 @@ happens to the shipped feature and to live members?
 This matches what the repository already enforces rather than fighting it. `manage_team` is
 genuinely read by an authorization decision; the other six are storable values that authorize
 nothing, already separated as reserved precisely so a role's history is preserved without
-telling a user it works. `business_teams.business_id` is already the immutable Business
-commercial and billing principal, which is what makes Business assets Business-owned rather than
-owner-user-owned — and therefore what makes Wave 4 delegation an authorization change rather than
-a data migration.
+telling a user it works.
+
+**Corrected repository reality.** An earlier draft of this decision asserted that
+`business_teams.business_id` was already the immutable Business commercial and billing
+principal. **It is not.** `business_teams.business_id` references `users.id`, as does
+`business_profiles.user_id`; commercial assets are user-owned, and **no distinct BCI entity
+exists yet**. The immutability of the Business-account relation is real and remains a useful
+**compatibility anchor** — but the current Business-role user account is a **legacy
+Business-account surrogate**, not the final BCI model.
+
+What the earlier wording was reaching for is delivered instead by the **additive BCI spine** in
+[09 §4.4](./09-business-buying-and-providing.md) and [16 §1.1a](./16-wave-3-scope.md): a
+distinct BCI entity, a deterministic one-to-one mapping from each legacy Business account,
+preserved team/workspace IDs and membership history, and non-destructive re-association of
+commercial assets. **That** is what makes Wave 4 delegation an authorization change on a real
+principal rather than a data migration — and it is Wave 3 work, not an existing property.
 
 This was the single most likely route by which unfinished Wave 4 behaviour reached production: a
 member sees a button, the API happens to allow it, and an engagement is created under an
@@ -263,7 +285,7 @@ contested.
 hostage problem and unreliable completion metrics.
 
 **Universal auto-confirmation.** Rejected specifically for pickup and pre-handover workshop work,
-where a timer would record an uncollected customer possession as a completed job.
+where a timer would record an uncollected customer possession as a completed engagement.
 
 ---
 
@@ -464,10 +486,33 @@ happened.
 
 ## Final status
 
-> **No unresolved Wave 3 product architecture decisions remain.**
+> **No unresolved Wave 3 marketplace product decisions remain.**
 
 Every high-impact product decision in this document set is settled. Wave 3 implementation is not
 blocked on a product answer.
+
+### Jobs / recruitment — separately supported, not an open decision
+
+**Jobs/recruitment remains a separately supported subsystem during Wave 3.** This is a settled
+position, not a deferred decision and not a gap:
+
+- The Jobs module is a **recruitment/employment marketplace**. Jobs are not Needs, Offers,
+  Bookings, Product Orders or Custom Orders; job applications are not Proposals; hiring is not
+  an Engagement Activation ([00 §10](./00-overview-and-terminology.md)).
+- **No job or job application is migrated into the Wave 3 transactional Engagement spine**, and
+  historical Jobs data preserves its original recruitment semantics.
+- **Recruitment authority is owner-only**; `manage_jobs` stays reserved and non-authoritative
+  until Wave 4.
+- **Legacy Jobs money paths stay disabled and read-only** — application fees, interview fees,
+  escrow, milestone money, commissions, provider payouts and internal wallet movement. No new
+  customer-money wallet flow, escrow, salary payout, platform-held compensation or provider
+  withdrawal path is created ([00 §10.3](./00-overview-and-terminology.md)).
+
+**Its long-term redesign and monetization are separate future decisions**, deliberately not
+taken here. Any future recruitment monetization must be designed separately using approved MHC
+platform actions, plans, advertisements, recruitment subscriptions or job-posting fees. **No
+recruitment monetization model is invented or activated by this correction pass**, and none is
+required for Wave 3 to proceed.
 
 ### What would reopen any of these
 
@@ -481,14 +526,17 @@ blocked — not a quiet divergence in code.
 
 ### Later commercial activation decisions — not Wave 3 blockers
 
-Two items are deliberately deferred to a later **production activation** decision. Neither is an
-open architecture question, and **neither blocks Wave 3 implementation**:
+Three items are deliberately deferred. None is an open architecture question, and **none blocks
+Wave 3 technical design or implementation**:
 
 | Deferred decision                                    | Status                                                                                                  |
 | ---------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
-| **Live verified-GMV rent charging**                  | Remains a later production activation decision. Rent ships in **shadow mode** — calculated, recorded and reported, deducting nothing. Turning on the debit is a separate decision, informed by the shadow data ([13 §11](./13-mhc-activation.md)) |
-| **Rent-driven commercial suspension**                | Remains a **separate** later production decision. Deciding to charge is not deciding to suspend for non-payment ([15 §4](./15-suspension-and-enforcement.md)) |
+| **Live verified-GMV rent charging**                  | Remains a **later explicit production decision**. Rent ships in **shadow mode** — calculated, recorded and reported, deducting nothing. Turning on the debit is a separate decision, informed by the shadow data ([13 §11](./13-mhc-activation.md)) |
+| **Rent-driven commercial suspension**                | Remains a **separate later explicit decision**. Deciding to charge is not deciding to suspend for non-payment ([15 §4](./15-suspension-and-enforcement.md)) |
+| **Jobs/recruitment long-term redesign and monetization** | Remains a **separate future decision**. The recruitment subsystem is separately supported and frozen commercially during Wave 3; nothing about its future shape is settled or needs to be (see above) |
 
-Both are deliberately structured so the answer can be taken later against real data, which is the
-entire point of shadow mode. The architecture, the calculation chain and the enforcement
-boundaries are all complete in Wave 3; only the commercial switch is deferred.
+**These deferred commercial activations do not block Wave 3 technical design.** All three are
+deliberately structured so the answer can be taken later against real data — which is the entire
+point of shadow mode, and the reason the recruitment subsystem is frozen rather than redesigned
+under time pressure. The architecture, the calculation chain and the enforcement boundaries are
+complete in Wave 3; only the commercial switches are deferred.

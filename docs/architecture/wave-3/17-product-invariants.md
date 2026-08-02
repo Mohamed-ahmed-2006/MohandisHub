@@ -32,7 +32,12 @@ references stay valid.
 | INV-003 | Every commercial write executes in exactly one acting context, resolved server-side from the authenticated identity and the target resource — never taken from client-supplied role or type fields. | `A` `S` |
 | INV-004 | **Business actions must execute under an explicit Business context**, and the acting identity must be the owner of that BCI. **(baseline, Wave 3)**        | `A` `S` |
 | INV-005 | Two commercial identities controlled by the same identity may not transact with each other in any role, at any origin.                                    | `S`     |
-| INV-006 | A BCI's assets, balance, reputation and enforcement state are owned by the BCI, never by its owner's personal identity.                                   | `D`     |
+| INV-006 | A BCI's assets, balance, reputation and enforcement state are owned by the BCI, never by its owner's personal identity. **This is a Wave 3 target delivered by the additive BCI spine (INV-006a–e), not a property the current schema already has.** | `D`     |
+| INV-006a| **`business_teams.business_id` and `business_profiles.user_id` both reference `users.id`, and no distinct BCI entity exists yet.** The Business-role user account is a **legacy Business-account surrogate** that may seed and map to a BCI; it is not the final BCI model. No document, schema comment or code path may describe the current schema as already satisfying multi-BCI ownership. | `P` `D` |
+| INV-006b| Wave 3 introduces an **additive** Business Commercial Identity spine — created beside the legacy structures, never by rewriting them. | `D` `S` |
+| INV-006c| **Each legacy Business account maps deterministically to exactly one initial BCI**, with the controlling user as owner/controller. Re-running the mapping creates no additional BCI. | `D` `S` |
+| INV-006d| **Business team/workspace IDs, memberships, invitations, roles and audit records are preserved unchanged** across the BCI migration. Commercial assets are re-associated **non-destructively**, through compatibility mappings or additive owner columns, and user-owned historical assets remain readable throughout the compatibility period. | `D` `S` |
+| INV-006e| **One owner may control multiple BCIs without asset mixing.** Assets, balance, reputation and enforcement state stay separated per BCI. The legacy immutable Business-account relation remains a **compatibility anchor** during migration, never a substitute for the BCI. | `D` `S` |
 | INV-007 | One verified natural person maps to at most one PCI. A second identity resolving to the same identity document is an enforcement case, not a second provider. | `S` `J` |
 | INV-008 | Every Business action records the acting human alongside the Business, even when only the owner can act.                                                  | `D` `S` |
 | INV-009 | Membership of a Business confers **no** commercial authority in Wave 3; every commercial authorization resolves to the ownership relation alone. Team administration under `manage_team` is not a commercial authorization and is unaffected. | `A` `S` |
@@ -72,7 +77,12 @@ references stay valid.
 
 | #       | Invariant                                                                                                                                              | Layer       |
 | ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------- |
-| INV-016 | **Contact disclosure cannot occur before successful activation.** Full contact, verified legal name of a personal party, exact address, geolocation, attachment contents, free messaging and payment instructions are D3-only. **(baseline)** | `A` `S` `U` |
+| INV-016 | **Contact disclosure cannot occur before successful activation.** Full contact, verified legal name of a personal party, exact address, geolocation, **external links**, attachment contents, free messaging and payment instructions are D3-only. **(baseline)** | `A` `S` `U` |
+| INV-016a| **Exact location is D3 in both directions.** A provider's exact premises — workshop address, building number, floor/unit, exact map pin, GPS coordinates, a map link exposing the premises, or directions sufficient to locate it exactly — is protected identically to a buyer's exact address. **No walk-in address exception, opt-in, toggle or moderation determination publishes it below D3**, for any role or operating model. | `A` `S` `D` |
+| INV-016b| Public and pre-activation location disclosure is limited to: workshop name, city, district, coarse service zone, service area, an **approximate map area that cannot identify the exact premises**, and moderated public storefront media. | `S` `U` |
+| INV-016c| **Every external link a commercial identity controls is D3 data** — website, external company website, Facebook, LinkedIn, Twitter/X, Instagram, WhatsApp, Telegram, external booking page, external contact form, external marketplace profile, and any unrestricted navigable URL. **None is returned through a public D0/D1 profile API**, in any field or nesting. | `A` `S` `D` |
+| INV-016d| Public profile discovery returns only **platform-controlled and moderated** information: company/display name, logo, description, industry, company size, founded year, coarse location, accurate verification indicators, platform reputation, and platform-hosted moderated media. | `S` `U` |
+| INV-016e| Any future **post-activation** disclosure of external links uses an **activation-aware, participant-authorized endpoint** that verifies a committed Engagement between caller and subject. It is never served from the public profile endpoint. | `A` `S` `P` |
 | INV-017 | D3 is reachable **only** through a committed Engagement Activation. No other code path may grant it — not admin tooling, not support, not a preview, not a partial reveal. | `A` `S`     |
 | INV-018 | Every field in the system is assigned to exactly one disclosure tier, and serializers filter by tier at the boundary rather than by caller convention. | `S`         |
 | INV-019 | **No transaction attachment content is exposed below D3, for any file type.** Pre-activation attachments are exposed as a manifest only — count, MIME type, size, caption. There is no preview class and no per-file opt-in that creates one. | `D` `S` |
@@ -84,7 +94,7 @@ references stay valid.
 | INV-021 | Every pre-activation free-text surface — structured **and** free-form — passes through contact redaction, and the unredacted original is retained for moderation. | `S`     |
 | INV-022 | Needs are never visible to unauthenticated requests.                                                                                                   | `A`         |
 | INV-023 | A proposal's amount is never visible to any identity other than its author, the buyer, and administrators.                                             | `A` `S`     |
-| INV-024 | No location representation below D3 — map pin, radius, distance, travel estimate — may be fine enough to identify an address.                          | `S` `P`     |
+| INV-024 | No location representation below D3 — map pin, radius, distance, travel estimate — may be fine enough to identify an address **or a provider's premises**. A declared radius is resolved to administrative units before display; a radius published with its centre point is a coordinate disclosure. | `S` `P` |
 | INV-025 | Once opened, D3 persists for the parties to that engagement through completion, dispute, suspension and termination.                                   | `S`         |
 
 ---
@@ -112,8 +122,13 @@ references stay valid.
 | INV-035 | An engagement renders and is adjudicable in full with its source offer archived, its Need deleted and either party suspended. Snapshots are inline and self-sufficient. | `S`     |
 | INV-036 | No actor — party, support agent or administrator — can modify a snapshot. Administrators may annotate and may rule; they may not rewrite what was sold.                 | `A` `S` |
 | INV-037 | Terms change only through an Amendment accepted by **both** parties, recorded append-only with the prior version preserved.                                             | `S`     |
-| INV-038 | Every accepted commercial arrangement is an Engagement. No parallel order, booking or purchase object may exist.                                                        | `D`     |
+| INV-038 | Every **activated commercial service** arrangement is an Engagement. No parallel order, booking or purchase object may exist. **Recruitment Jobs are outside this scope** (INV-109) and are never folded into the spine to satisfy it. | `D`     |
 | INV-039 | Every origin terminates in provider activation. There is no instant-purchase, auto-accept or buy-now path that creates an obligation without a charged acceptance.      | `S`     |
+| INV-039a| **No Engagement exists before successful activation.** No Engagement row is created, in any state, until the activation transaction commits. Creating a "pending" engagement shell and updating it on success is prohibited. | `D` `S` |
+| INV-039b| Before activation, each origin carries a typed **pre-activation commercial intent object** — need award offer, accepted service purchase intent, booking request/accepted booking intent, product request, custom order intent. It is not an Engagement, carries no engagement state and opens no D3. | `D` `S` |
+| INV-039c| **`pending_activation` and `lapsed` are not Engagement states.** They belong to the intent lifecycle. No Engagement state may represent a pre-activation condition. | `D` `S` |
+| INV-039d| The activation transaction performs, atomically and committing **exactly once**: verify intent validity · verify provider commercial eligibility · verify MHC balance · lock and charge MHC · create the immutable Engagement · snapshot parties, offer, scope, price, fulfillment and payment-method eligibility · link the Engagement to its origin intent · mark the intent consumed · open D3. | `S` |
+| INV-039e| **Activation fails closed.** On any failure: no Engagement is created, no D3 opens, no MHC charge remains, and the origin intent stays pending, fails, expires, or returns to its defined origin-specific state. | `S` |
 | INV-040 | An engagement completes only when every **required** fulfillment component is confirmed or auto-confirmed.                                                              | `S`     |
 | INV-041 | Cancellation requires a cause code from the closed list, and never deletes snapshots, messages, evidence or settlement records.                                         | `D` `S` |
 | INV-042 | Completion is irreversible. A post-completion defect is a rectification or a dispute, never a return to `in_progress`.                                                  | `S`     |
@@ -126,10 +141,11 @@ references stay valid.
 
 | #       | Invariant                                                                                                                              | Layer   |
 | ------- | ------------------------------------------------------------------------------------------------------------------------------------------ | ------- |
+| INV-044a| There are **nine fulfillment component types**: `digital_delivery`, `consultation_session`, `on_site_service`, `workshop_service`, `physical_product`, `made_to_order_product`, `delivery`, `pickup`, `installation`. **Hybrid is a composition of two or more of them, never a tenth type and never an enum value** a component's type field may hold. | `D` `S` |
 | INV-045 | A provider cannot reach `evidence_submitted` on a component without satisfying its resolved **evidence policy**.                       | `S`     |
 | INV-045a| Evidence policies resolve from fulfillment type, category, risk level, delivery method and engagement terms. **No evidence requirement is imposed universally regardless of fulfillment type** — specifically not customer OTP on every on-site service, carrier tracking on every physical product, or a platform-uploaded SHA-256 artifact on every digital engagement. | `S` `P` |
 | INV-046 | Delivery clocks do not run during `pending_requirements`, during a correction round awaiting buyer input, or during an `admin_hold`.   | `S` `J` |
-| INV-047 | **Pickup components and pre-handover workshop components never auto-complete.** A customer's property is never disposed of, and an uncollected item is never recorded as a completed job. | `S` `J` |
+| INV-047 | **Pickup components and pre-handover workshop components never auto-complete.** A customer's property is never disposed of, and an uncollected item is never recorded as a completed engagement. | `S` `J` |
 | INV-048 | Auto-confirmation fires only where valid evidence is already on file, and always extends the dispute window rather than closing it.    | `S` `J` |
 | INV-048a| The auto-confirmation window **starts only on a valid provider fulfillment submission**, and **pauses** on a customer correction request, issue report or dispute. It never runs from activation or scheduling. | `S` `J` |
 | INV-048b| At least two reminders, including an explicit warning naming the auto-confirmation moment, precede any inactivity fallback.            | `J`     |
@@ -169,7 +185,13 @@ references stay valid.
 | INV-059c| **The source PCI cannot spend MHC after a successful conversion.** It ends at a zero available balance, and the source and replacement can never both spend the same credits. | `D` `S` |
 | INV-059d| A conversion **creates, destroys and duplicates no MHC**. The amount credited to the replacement equals the source's available balance exactly; the amount is computed, never chosen. | `S`     |
 | INV-059e| **MHC is never forfeited or permanently frozen by a valid PCI conversion.**                                                                                   | `S` `P`     |
-| INV-059f| Conversion **preserves complete ledger history**. Historical MHC transactions remain attributable to the archived PCI and are never deleted, rewritten or re-pointed. Only the remaining **available** balance carries; pending, reserved, disputed and reversed credits follow explicit recorded ledger rules and are never silently treated as available. | `D` `S` |
+| INV-059f| Conversion **preserves complete ledger history**. Historical MHC transactions remain attributable to the archived PCI and are never deleted, rewritten or re-pointed. Only the remaining **available** balance carries; non-available credits are never silently treated as available. | `D` `S` |
+| INV-059g| **Any non-final MHC state on the source PCI blocks conversion**, deterministically and failing closed: pending MHC purchase, pending credit approval, reserved MHC, held MHC, pending action charge, disputed action charge, pending refund, pending reversal, unresolved chargeback, in-flight idempotent ledger operation, unreconciled balance discrepancy, or any other non-final MHC state. **Each must reach a final ledger outcome before conversion executes**; there is no reconcile-during-conversion path and no operator override. | `S` `D` |
+| INV-059h| **Pending, reserved, held and disputed balances never transfer**, in whole or in part. They block the conversion until resolved. | `S` |
+| INV-059i| **Reversed, refunded, expired, cancelled and failed ledger entries remain immutable historical records and never become available carryover.** | `D` `S` |
+| INV-059j| After a successful conversion: the source's **available balance equals zero**, the **source cannot spend**, and the replacement holds **exactly** the source's final available balance. | `D` `S` |
+| INV-059k| **Concurrent conversion requests on one PCI allow exactly one success.** Retry, double submission and concurrency each produce one carryover and one credit. | `D` `S` |
+| INV-059l| A conversion that **cannot determine the available balance unambiguously does not proceed.** | `S` |
 | INV-060 | MHC is non-cashable. No withdrawal, conversion, redemption or cash refund path exists, and no surface implies a provider cash balance. **(baseline)**         | `D` `S` `U` |
 | INV-061 | Only the provider party is charged for activation. No customer, and no business acting as a buyer, is ever charged MHC. **(baseline)**                        | `S`         |
 | INV-062 | Activation is charged from the **accepting commercial identity's own** balance — a BCI's balance for a Business action, a PCI's for a personal one.           | `S`         |
@@ -261,3 +283,37 @@ security requirements rather than a one-off fix**.
 | INV-102 | **Locked historical previews stay redacted**, for conversations created before the correction as well as after it. A **regression test** covers the historical path specifically, because that is where the original exposure survived. | `S` `J` |
 | INV-103 | The conversation summary serializes from an **explicit allowlisted field contract**, never from a repository row filtered by convention. Repository rows may carry participant data for authorization decisions; only allowlisted fields cross the API boundary. Adding a field is a disclosure decision requiring a tier assignment under [00 §5](./00-overview-and-terminology.md). | `S` `P` |
 | INV-104 | **No email fallback anywhere.** No surface substitutes an email address, phone number or other contact identifier where a display name is absent. A missing display name renders a neutral label. | `S` `U`     |
+
+### 12.1 Public-profile disclosure regression invariants
+
+Derived from the readiness-audit finding that the public Business profile disclosed the
+**website** field ([00 §11](./00-overview-and-terminology.md)). The hotfix ships separately;
+these are the invariants that keep it closed.
+
+| #       | Invariant                                                                                                                                                                    | Layer       |
+| ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------- |
+| INV-105 | The **public profile response contains no external link** — no website, external company website, Facebook, LinkedIn, Twitter/X, Instagram, WhatsApp, Telegram, external booking page, external contact form, external marketplace profile, or any unrestricted navigable URL. A **regression test** asserts each. | `S` `A` |
+| INV-106 | The **public profile response contains no exact address and no coordinates** — no street address, building number, floor/unit, exact map pin, GPS coordinates, map link exposing the premises, or directions sufficient to locate it exactly. A **regression test** asserts this for Craftsman and Business profiles alike. | `S` `A` |
+| INV-107 | The public profile serializes from an **explicit DTO/schema allowlist** asserted as a closed set, and the **browser client applies its own defensive allowlist** to the payload it receives. Both are tested independently, because one careless serializer change otherwise reintroduces the exposure. | `S` `U` `P` |
+| INV-108 | The **private owner profile retains its editable contact fields.** The correction removes external links from the *public* response only; a Business must still record and edit its own website and social links. A test asserts the owner surface is unaffected. | `S` `U` |
+
+---
+
+## 13. Recruitment Jobs separation
+
+The Jobs module is a **recruitment/employment marketplace**, not a service transaction
+([00 §10](./00-overview-and-terminology.md)). These invariants keep it out of the Wave 3
+transactional models.
+
+| #       | Invariant                                                                                                                                                                    | Layer       |
+| ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------- |
+| INV-109 | **Jobs are not Customer Needs, provider Offers, Bookings, Product Orders or Custom Orders, and job applications are not marketplace Proposals.** A job application creates **no Proposal row and no Engagement row**, at any point in its lifecycle. | `D` `S` |
+| INV-110 | **No job or job application is migrated into the Wave 3 transactional Engagement spine**, and historical Jobs data preserves its original recruitment semantics. | `D` `P` |
+| INV-111 | **Hiring is a recruitment/employment outcome, not an Engagement Activation.** It charges no MHC through an activation action key, opens no engagement D3 disclosure, and creates no Engagement. | `S` |
+| INV-112 | **Only the verified Business owner** may create, edit, publish, manage, close or hire through Business Jobs. Membership is never consulted, and **`manage_jobs` remains reserved and non-authoritative until Wave 4** — read by no authorization decision. | `A` `S` |
+| INV-113 | Experts and Craftsmen apply to vacancies **through their active Personal Commercial Identity**. Applying consumes no proposal quota. | `A` `S` |
+| INV-114 | **Candidate reputation as a service provider is never automatically altered by a recruitment application outcome** — no rating, per-criterion score, reliability metric or ranking signal changes. Recruitment reviews, if retained, remain distinct from transactional service reviews and are never merged into a service rating. | `S` `D` |
+| INV-115 | **Job hiring records never count as provider verified GMV**, and **recruitment salary or compensation is never processed through the Wave 3 service settlement model** — it is not an agreed amount and creates no settlement record or tranche. | `S` |
+| INV-116 | **No new customer-money flow exists for Jobs**: no wallet flow, no Jobs escrow, no internal salary payout, no platform-held employment compensation, no provider withdrawal path, and no application or interview fee charged through the retired EGP wallets. Legacy Jobs money paths stay **disabled**. | `A` `S` `D` |
+| INV-117 | **Existing historical Jobs financial records remain read-only and auditable** — never deleted, never rewritten, never migrated into settlement records. | `D` `P` |
+| INV-118 | **No recruitment monetization model is invented or activated in Wave 3.** Any future recruitment revenue is designed separately using approved MHC platform actions, plans, advertisements, recruitment subscriptions or job-posting fees. | `P` |

@@ -116,6 +116,13 @@ deducts nothing. Consequently:
 A provider's enforcement state in Wave 3 is a function of conduct and verification. It is never
 a function of what they owe, because in Wave 3 they owe nothing.
 
+**Recruitment outcomes are not an enforcement input either.** A rejected job application, a
+withdrawn candidacy or a failed interview is **not** a conduct finding and produces no ladder
+step, no restriction and no reputation change
+([14 §12](./14-reviews-and-reputation.md)). Recruitment *conduct* — a fraudulent vacancy,
+abusive applications, harassment — is enforceable in the ordinary way under §2, against the
+acting identity, on the same evidence standard as any other conduct finding.
+
 ---
 
 ## 5. Offer hiding
@@ -155,9 +162,10 @@ Rules ([06 §8](./06-offer-model.md)):
 
 Rules:
 
-- **Pending arrangements are resolved without charging anyone.** When a provider is suspended
-  with awards pending activation, those arrangements are declined, the buyer is notified with a
-  neutral reason, and **no MHC is charged**. A suspension must never produce a debit.
+- **Pending intents are resolved without charging anyone.** When a provider is suspended with
+  awards pending activation, those **pre-activation intent objects** are declined, the buyer is
+  notified with a neutral reason, and **no MHC is charged and no Engagement is created**
+  ([10 §7](./10-engagement-model.md)). A suspension must never produce a debit.
 - A restriction on the provider side must not silently harm the buyer: a buyer whose awarded
   provider is suspended is notified, may re-award immediately, and their Need's window is
   extended.
@@ -196,7 +204,7 @@ When enforcement lands on a provider, the customer must not absorb the cost.
 
 | Situation                                            | Remedy                                                                                          |
 | ---------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
-| Provider suspended with an award pending activation  | Arrangement declined, no charge, buyer notified, Need returns to `open` with an extended window and previous respondents re-invited |
+| Provider suspended with an award pending activation  | The **intent** is declined, no charge, no Engagement created, buyer notified, Need returns to `open` with an extended window and previous respondents re-invited |
 | Provider suspended with a live engagement            | Buyer notified with a neutral, factual statement; buyer may continue, may cancel without conduct penalty, and may open a case |
 | Provider terminated with live engagements            | Engagements are administratively reviewed and closed with a written determination; the buyer's Need is re-postable at no cost |
 | Provider unresponsive in a case after suspension     | The case proceeds; the determination records the non-participation, and reputation and enforcement reflect it |

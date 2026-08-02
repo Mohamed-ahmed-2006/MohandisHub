@@ -16,17 +16,56 @@
 | Trade categories                     | Drive discovery, eligibility, credential requirements and evidence requirements                                        |
 | Storefront description               | D0; no contact details, links, handles or addresses                                                                    |
 | **Operating model**                  | `mobile_only` (goes to the customer) · `workshop_only` (customer comes) · `both`                                        |
-| **Workshop location**                | Required when the model includes workshop work. Coarse part D0; **exact address D3**, unless the Craftsman explicitly opts into a published walk-in address at D1 |
+| **Workshop name**                    | Optional public premises name. D0, moderated. It names a shop; it does not locate one    |
+| **Workshop location**                | Required when the model includes workshop work. **Coarse part D0** — city, district, coarse service zone, and an approximate map area that cannot identify the exact premises. **Exact address, building number, floor/unit, exact map pin and GPS coordinates are D3 only, with no exception** |
 | Operating hours, holidays            | D0                                                                                                                     |
 | Typical lead time, response time, on-time rate | D0, computed, not self-declared                                                                              |
 | Badges                               | V1 verified, V2 credential with scope, rating, completed engagements, verified settled-volume band                     |
 | Payment methods accepted             | Method **types** at D1 (cash, transfer, InstaPay, in-shop card); **instructions and account details at D3 only**       |
 
-The **walk-in address exception** is deliberately narrow: it exists because a shop with a
-public premises is a real thing customers expect to find, and suppressing it is absurd. It
-is opt-in, revocable, moderated, and applies only to the declared premises. It is **not** a
-route to publish contact details, and it does not weaken the gate for callout work — a
-mobile-only Craftsman has no publishable address at all.
+### 1.1 Exact premises are D3 — there is no walk-in address exception
+
+The earlier "walk-in address exception", which allowed an opt-in published premises address at
+D1, is **removed**. It was a hole in the disclosure gate: an opt-in that publishes the exact
+premises publishes exactly what activation is supposed to sell, and a `workshop_only` Craftsman
+who took it had given away the gate for every engagement, not only for walk-in trade.
+
+**Public and pre-activation disclosure (D0/D1/D2) may include:**
+
+| Permitted below D3                                                          |
+| --------------------------------------------------------------------------- |
+| Workshop name                                                               |
+| City                                                                        |
+| District                                                                    |
+| Coarse service zone                                                         |
+| Service area(s) served                                                      |
+| An **approximate map area** that cannot identify the exact premises         |
+| Moderated public storefront media                                           |
+
+**Public and pre-activation disclosure must not include:**
+
+| Prohibited below D3                                                         |
+| --------------------------------------------------------------------------- |
+| Exact street address                                                        |
+| Building number                                                             |
+| Floor or unit                                                               |
+| Exact map pin                                                               |
+| GPS coordinates                                                             |
+| A map link exposing the exact premises                                      |
+| Directions sufficient to locate the workshop exactly                        |
+
+**Exact workshop address and coordinates are D3-only**, and become accessible solely to
+authorized participants after a successful MHC Engagement Activation
+([13 §6](./13-mhc-activation.md)).
+
+This applies to **every operating model** — `mobile_only`, `workshop_only` and `both` — with no
+opt-in, no revocable toggle, no moderation determination and no per-category variation. The
+customer-facing answer to "where is the shop" is the coarse area and the approximate map area,
+which is enough to decide whether a shop is reachable and is not enough to arrive at its door
+without engaging.
+
+A pickup location is disclosed to the collecting party at D3, as part of the pickup component's
+own handover flow ([§7.2](#72-pickup)) — never on the public storefront.
 
 ---
 
@@ -134,8 +173,11 @@ Rules:
   from location-scoped results outside their coverage
   ([03 §8](./03-role-craftsman.md)).
 - **Travel fees are published before engagement**, so a buyer's total is knowable at D2
-  without the exact address ever being disclosed. This is what makes the coarse-location rule
-  workable for physical trades.
+  without either party's exact address ever being disclosed. This is what makes the
+  coarse-location rule workable for physical trades in both directions (§1.1).
+- **A radius declared from the workshop is resolved to administrative units before it is
+  displayed.** A published radius with a centre point is a coordinate disclosure, and is
+  prohibited below D3 exactly like a map pin ([17](./17-product-invariants.md), INV-024).
 - Accepting work outside the declared coverage is possible only by the buyer's directed Need
   or quote request, and the travel fee then comes from the Custom Proposal.
 - Coverage changes never affect live engagements.
@@ -167,10 +209,13 @@ engagement composes them.
 - Requires a **pickup location** (the workshop or a declared point), a **pickup window**, and
   the provider's **storage policy** (how long an item is held, any storage fee, and what
   happens after).
+- **The pickup location's exact address and coordinates are D3**, released to the buyer through
+  the activated engagement. The storefront advertises pickup availability and its coarse area;
+  it never publishes the collection address (§1.1).
 - Handover is confirmed by a **handover code** shared by the provider and entered by the
   buyer, or by mutual confirmation.
 - **Pickup never auto-completes.** An uncollected item sits in `awaiting_collection` with
-  reminders and an admin-visible stale flag ([11 §8](./11-fulfillment-models.md)).
+  reminders and an admin-visible stale flag ([11 §9](./11-fulfillment-models.md)).
 
 ### 7.3 Installation
 
@@ -257,7 +302,8 @@ Beyond the per-offer metrics in [06 §10](./06-offer-model.md):
 - **Views and requests by area**, including demand from areas **not** covered — the single
   most actionable signal a small shop can get.
 - Accept vs decline rate by area, by category and by cause.
-- Slot utilization against the daily cap; lost slots from lapsed activations.
+- Slot utilization against the daily cap; lost slots from **booking intents that lapsed before
+  activation** ([10 §7](./10-engagement-model.md)).
 - Travel-fee realization: fees quoted vs fees on completed engagements.
 - Stock-status hygiene: items not reconfirmed, `out_of_stock` decline rate.
 - Rectification/callback rate within warranty, by category and by product.

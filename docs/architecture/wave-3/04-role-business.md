@@ -33,10 +33,14 @@ Business exists for three reasons the personal identities cannot serve:
 - In Wave 3 **only the verified owner may perform commercial actions** for a BCI. Team
   membership confers **team-administration** rights only and **no commercial authority**
   ([09 §4](./09-business-buying-and-providing.md)).
-- The BCI **is** the workspace principal. `business_teams.business_id` is the immutable
-  commercial and billing principal, so Business assets, balance and reputation are
-  Business-owned by construction rather than owner-user-owned — which is what makes Wave 4
-  delegation an authorization change rather than a data migration.
+- **The BCI is a Wave 3 deliverable, not an existing schema fact.** The repository today has
+  **no distinct BCI entity**: `business_teams.business_id` references `users.id`, and
+  `business_profiles.user_id` references `users.id`. The current Business-role user account is
+  a **legacy Business-account surrogate** — it may seed and map deterministically to a BCI, but
+  it is **not itself the final BCI model**. Wave 3 therefore requires an **additive Business
+  Commercial Identity spine** with a deterministic compatibility mapping
+  ([09 §4.4](./09-business-buying-and-providing.md)). Nothing in this document set may describe
+  the current schema as already satisfying multi-BCI ownership.
 - A BCI is **both a provider party and a buyer party**, in one commercial identity, across
   two separated activity surfaces.
 - Owning a Business does not consume the owner's PCI slot, does not change their PCI type,
@@ -157,13 +161,61 @@ The Business profile is **organization-facing**: it describes a company, not a p
 | **Verified legal name and registration reference**                                       | D0 — organizations are public entities; this is a credibility asset, not protected data |
 | Rating, review count, completed engagements, KYB badge, credential badges                | D0   |
 | Coarse location(s) served, service areas, delivery coverage                              | D0   |
+| Platform-hosted moderated media                                                          | D0   |
 | Published offers across all kinds, with prices                                           | D0   |
 | Company portfolio / project gallery, capability statement, certifications                | D1   |
 | Availability, lead times, operating hours                                                | D1   |
-| **Exact premises address, phone, email, named contact person, payment instructions**     | **D3** |
+| **Exact premises address, geolocation, phone, email, named contact person, payment instructions** | **D3** |
+| **Business website and every external link the Business controls** (§7.1)                | **D3** |
 | Owner's personal identity                                                                | Never published. Disclosed to admins and, at D3, as the verified signatory name |
 
-Two rules specific to organizations:
+### 7.1 External links are protected D3 data
+
+An unrestricted navigable URL under the Business's control is a **direct off-platform contact
+channel**. It carries the phone number, the email address, the premises address and an
+off-platform enquiry form on the far side of one click, and publishing it at D0/D1 hands over
+everything activation is supposed to sell. It is protected data, in the same class as a phone
+number — not a profile decoration.
+
+**Classified as protected D3 data:**
+
+| Field                                                            |
+| ---------------------------------------------------------------- |
+| Business website                                                 |
+| External company website                                         |
+| Facebook URL                                                     |
+| LinkedIn URL                                                     |
+| Twitter/X URL                                                    |
+| Instagram URL                                                    |
+| WhatsApp URL                                                     |
+| Telegram handle                                                  |
+| External booking page                                            |
+| External contact form                                            |
+| External marketplace profile                                     |
+| **Any unrestricted navigable URL controlled by the Business**    |
+
+**None of these may be returned through a public D0/D1 Business profile API**, in any field, in
+any nesting, under any caller. Public Business discovery shows only **platform-controlled and
+moderated** information: company name, logo, description, industry, company size, founded year,
+coarse location, accurate verification indicators, platform reputation, and platform-hosted
+moderated media.
+
+**Repository status.** The readiness audit found a **current public-profile website
+disclosure** — `business_profiles` carries `website`, `linkedin_url`, `social_facebook`,
+`social_linkedin` and `social_twitter`, and the public profile response exposed the website
+field. This is a confirmed live defect, **closed by a focused security hotfix implemented
+separately** (`3027ea2`, *fix(profiles): close public contact disclosure*), which removes the
+fields from the public contract and replaces convention-filtering with runtime field
+allowlists at both the API and web-client boundaries. It is a shipped correction, not an open
+Wave 3 architecture question ([00 §11](./00-overview-and-terminology.md)).
+
+**Future post-activation disclosure.** If external links are ever disclosed to a counterparty
+after activation, that must run through an **activation-aware, participant-authorized
+endpoint** that verifies a committed Engagement between the caller and the Business. It must
+**never** be added back to the public profile endpoint, and no allowlist entry on the public DTO
+may reintroduce it.
+
+Two further rules specific to organizations:
 
 - **The public profile must not name the owner as a personal brand.** The Business is the
   participant; the owner is its controller. Presenting the profile as a person's page is the
@@ -243,6 +295,34 @@ The Business does **not** get a separate offer model. It composes the same four 
 under an organizational identity. This is deliberate: a fifth parallel "business offer" model
 would duplicate every rule in [06](./06-offer-model.md), [07](./07-expert-packages.md) and
 [08](./08-craftsman-storefront.md) and immediately drift out of sync.
+
+---
+
+## 10.1 Recruitment Jobs — a separate subsystem, owner-only authority
+
+A Business may also **publish job vacancies** through the MohandisHub **Jobs** module. This is a
+**recruitment / employment marketplace**, separate from everything above: a vacancy is not an
+Offer, an application is not a Proposal, and hiring is not an Engagement Activation
+([00 §10](./00-overview-and-terminology.md), [10 §15](./10-engagement-model.md)).
+
+**Wave 3 recruitment authority:**
+
+| Rule                                                                                                    |
+| ------------------------------------------------------------------------------------------------------- |
+| **Only the verified Business owner** may create, edit, publish, manage, close or hire through Business Jobs |
+| Business **team members receive no delegated recruitment authority**, regardless of role                 |
+| The existing `manage_jobs` team permission remains **reserved and non-authoritative until Wave 4** — storable, reported under its reserved label, read by no authorization decision |
+| Recruitment authority resolves to the **ownership relation only**, exactly like commercial authority     |
+
+**Recruitment must not touch the transactional model:**
+
+- Hiring records **do not count as provider verified GMV** and create no settlement tranche.
+- Recruitment **salary or compensation is not processed through the Wave 3 service settlement
+  model** — no agreed amount, no payment plan, no settlement record, no coverage.
+- Recruitment reviews, if retained, stay **distinct from transactional service reviews** and
+  never merge into the BCI's seller rating ([14 §12](./14-reviews-and-reputation.md)).
+- No new customer-money wallet flow, escrow, salary payout, platform-held compensation or
+  provider withdrawal path is created for Jobs ([00 §10.2](./00-overview-and-terminology.md)).
 
 ---
 
@@ -443,6 +523,16 @@ rationale, never an implicit side effect.
 11. Transmitting contact details, links, handles or payment instructions at D0/D1/D2 —
     including within company profiles, capability statements and gallery media. (The legal
     name and registration reference are published deliberately and are not contact details.)
+11a. **Returning the Business website, any external company website, Facebook, LinkedIn,
+    Twitter/X, Instagram, WhatsApp, Telegram, an external booking page, an external contact
+    form, an external marketplace profile, or any unrestricted navigable URL the Business
+    controls, through a public D0/D1 Business profile API or any pre-activation surface** (§7.1).
+11b. **Publishing the Business's exact premises address, geolocation or an exact map pin below
+    D3**, by any route including profile fields, media and capability statements.
+11c. **Performing any Business Jobs recruitment action — create, edit, publish, manage, close
+    or hire — as a non-owner**, or reading `manage_jobs` as an authorization input (§10.1).
+11d. **Routing recruitment salary, compensation, application fees or interview fees through the
+    Wave 3 settlement model, an MHC flow, a wallet, escrow or a payout path** (§10.1).
 12. Disclosing any **transaction attachment** — of any file type — before activation, and
     describing a V3a Business to a provider as KYB-verified.
 13. Accepting an engagement without a successful MHC charge from the **business** balance.
@@ -486,3 +576,11 @@ and deliberately unbuilt**, and the Wave 3 boundaries in
 - **Paid promotion, featured placement, advertisements, paid plans** — unapproved for
   Wave 3, and separately blocked by `LAUNCH_CONSTRAINTS.md` LC-01 and LC-02.
 - **Any escrow, platform-held funds, receivables management or platform-executed refunds.**
+- **Delegated recruitment authority** — `manage_jobs` becoming effective so a team member may
+  manage vacancies, candidates or hiring on the Business's behalf (§10.1).
+- **Recruitment monetization and the long-term Jobs redesign.** Any future recruitment revenue
+  must be designed separately, using approved MHC platform actions, plans, advertisements,
+  recruitment subscriptions or job-posting fees — never a customer-money wallet flow, escrow or
+  payout ([18](./18-decisions-required.md)).
+- **Post-activation disclosure of the Business's external links**, which would require a
+  dedicated activation-aware participant-authorized endpoint and is not built in Wave 3 (§7.1).

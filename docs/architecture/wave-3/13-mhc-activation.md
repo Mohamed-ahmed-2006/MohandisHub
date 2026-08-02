@@ -68,11 +68,47 @@ Admin/Support executes conversion (all eligibility checks already passed)
 | **Append-only**               | The carryover is recorded as ledger entries on both sides referencing the conversion event, in the same append-only manner as a re-grant counterentry (§9.0) |
 | **Available balance only**    | Only the remaining **available** balance carries                                                                     |
 
-**Non-available credits.** Pending, reserved, disputed, reversed or otherwise non-available
-credits are **never silently treated as available balance**. Each category carries an explicit
-ledger rule — resolve before conversion, settle before conversion, remain on the source, or
-block the conversion — and the rule applied is recorded on the conversion record. Where the
-available balance cannot be determined unambiguously, **the conversion does not proceed**.
+**Non-available MHC blocks the conversion — deterministically, and failing closed.**
+
+Pending, reserved, held, disputed and otherwise non-final credits are **never silently treated
+as available balance**, and they are never partially carried. Instead they are a **precondition
+check that rejects the conversion** until each reaches a final ledger outcome:
+
+| Blocking non-final MHC state on the source PCI |
+| ---------------------------------------------- |
+| Pending MHC purchase                           |
+| Pending credit approval                        |
+| Reserved MHC                                   |
+| Held MHC                                       |
+| Pending action charge                          |
+| Disputed action charge                         |
+| Pending refund                                 |
+| Pending reversal                               |
+| Unresolved chargeback                          |
+| In-flight idempotent ledger operation          |
+| Unreconciled balance discrepancy               |
+| Any other non-final MHC state                  |
+
+There is **no reconcile-during-conversion path** and no operator override. Where the available
+balance cannot be determined unambiguously, **the conversion does not proceed**.
+
+**Final treatment once the blockers clear:**
+
+- The **available balance transfers exactly once**.
+- **Pending, reserved, held and disputed balances never transfer** — they blocked the
+  conversion until they were resolved.
+- **Reversed, refunded, expired, cancelled and failed ledger entries remain immutable
+  historical records** and **never become available carryover**. A reversal is history, not a
+  credit waiting to be claimed.
+- **Historical ledger entries stay attributed to the archived PCI.**
+- After success: the **source's available balance is zero**, the **source cannot spend**, and
+  the **replacement holds exactly the source's final available balance**.
+- **Atomic conservation holds**: no credit created, no credit destroyed, no duplicated
+  spendable balance.
+- **Retry and concurrency remain idempotent**: one carryover regardless of retries, double
+  submissions or concurrent requests; concurrent conversion attempts allow exactly one success.
+
+The rule applied to each category is recorded on the immutable conversion record.
 
 **What this is not.** It is not a transfer feature and nothing reusable may be built from it:
 
@@ -129,6 +165,14 @@ price applies*, never *how the price is computed from the engagement's value* (�
 and paid plans are all separately unapproved or frozen by `LAUNCH_CONSTRAINTS.md` LC-01/LC-02
 and must not be wired to this gate ([16 group 3](./16-wave-3-scope.md)).
 
+**Recruitment is not an activation origin.** Publishing a job vacancy, applying to one,
+shortlisting, interviewing and hiring are **recruitment actions, not engagement activations**.
+There is no sixth action key for them, no MHC charge on hiring, and no engagement D3 disclosure
+opened by a hire ([00 §10](./00-overview-and-terminology.md),
+[10 §15](./10-engagement-model.md)). Any future recruitment monetization is a **separate**
+design using approved MHC platform actions, plans, advertisements, recruitment subscriptions or
+job-posting fees — and none is invented or activated here.
+
 ---
 
 ## 3. Who pays, and how much
@@ -168,31 +212,43 @@ and must not be wired to this gate ([16 group 3](./16-wave-3-scope.md)).
 
 ## 4. When the charge occurs
 
-At the instant of acceptance, and atomically with everything acceptance produces:
+At the instant of acceptance, and atomically with everything acceptance produces. **The
+Engagement is created by this transaction and does not exist before it**
+([10 §7](./10-engagement-model.md)):
 
 ```
-provider clicks Accept
-   ├─ validate: arrangement live · deadline not passed · identity enabled · not suspended · price active
-   ├─ lock the identity's MHC balance
-   ├─ debit the action key's price               ─┐
-   ├─ create the Engagement with all snapshots     ├── ONE TRANSACTION
-   ├─ open D3 disclosure for both parties          │
-   └─ emit notifications and ledger entries      ─┘
+provider clicks Accept   (on a pre-activation INTENT object — there is no Engagement yet)
+   ├─ 1  verify the intent remains valid: live · not withdrawn · not expired · deadline not passed
+   ├─ 2  verify provider commercial eligibility: enabled · verified · not suspended · not restricted
+   ├─ 3  verify the provider's MHC balance against the resolved price   (price active, else fail closed)
+   ├─ 4  lock and charge the provider's MHC                            ─┐
+   ├─ 5  create the immutable Engagement                                │
+   ├─ 6  snapshot parties, offer, scope, price, fulfillment,            │
+   │     and payment-method eligibility                                 ├── ONE TRANSACTION
+   ├─ 7  link the Engagement to its origin intent                       │
+   ├─ 8  mark the intent consumed / activated                           │
+   ├─ 9  open D3 disclosure for both parties                            │
+   └─ 10 commit EXACTLY ONCE — emit notifications and ledger entries  ─┘
 ```
 
 Hard rules:
 
-- **All or nothing.** If engagement creation or disclosure fails, the debit is rolled back. A
-  debit that persisted without disclosure is a system fault and a refund ground (§9).
-- **Idempotent.** A double-submitted acceptance produces one charge and one engagement.
-  Concurrency is resolved by row locking and a unique constraint on the arrangement, not by
-  application-level checks.
+- **All or nothing.** If any step fails: **no Engagement is created, no D3 disclosure opens, no
+  MHC charge remains**, and the **origin intent stays pending, fails, expires, or returns to
+  its defined origin-specific state**. A debit that persisted without disclosure is a system
+  fault and a re-grant ground (§9, G2) — never a valid end state.
+- **Idempotent.** A double-submitted or concurrent acceptance produces **one** charge and
+  **one** Engagement. Concurrency is resolved by row locking and a unique constraint on the
+  **intent**, not by application-level checks.
 - **No disclosure before the debit commits.** Not a preview, not a partial reveal, not a
   "contact will appear shortly".
+- **No pre-created engagement shell.** Creating an Engagement row in a "pending" state before
+  the charge, and updating it on success, is prohibited — it is the exact shape this boundary
+  exists to prevent.
 - **An inactive or unset price fails closed** with a specific error — the action is refused,
   never given away. This preserves the existing `MHC_ACTION_DISABLED` behaviour and prevents a
   misconfiguration from silently making the marketplace free.
-- The **ledger entry** records: action key, price, arrangement reference, engagement
+- The **ledger entry** records: action key, price, **origin intent reference**, engagement
   reference, acting human, timestamp, and the resulting balance.
 
 ---
@@ -200,15 +256,15 @@ Hard rules:
 ## 5. What happens when the provider lacks MHC
 
 - Acceptance is **refused** with a specific, provider-facing error and a direct route to
-  purchase credit.
-- The pending arrangement **stays alive** for the remainder of its activation window. The
+  purchase credit. **No Engagement is created** and no disclosure opens.
+- The **pending intent object stays alive** for the remainder of its activation window. The
   provider may top up and accept again.
 - **The buyer is not told why.** Insufficient credit is the provider's private financial
   state; the buyer sees a neutral "awaiting provider acceptance" with the deadline. Leaking it
   would be both a privacy failure and a negotiating lever.
-- If the window expires before top-up, the arrangement **lapses**: no charge, the Need returns
-  to `open` with its own window extended by the wait, and the lapse is recorded on provider
-  reliability.
+- If the window expires before top-up, the **intent lapses**: no charge, **no Engagement was
+  ever created**, the Need returns to `open` with its own window extended by the wait, and the
+  lapse is recorded on provider reliability.
 - MHC purchase itself remains subject to the existing operational reality — manual admin
   approval on the launch rail (`KNOWN_LIMITATIONS.md` L4.1) — which is precisely why the
   activation window must be long enough to absorb a human approval step, and why providers
@@ -250,9 +306,9 @@ it and does not lose it.
 Behaviour:
 
 - Reminders to the provider at configured intervals, escalating near the deadline.
-- On expiry: **no charge**, the arrangement lapses, both parties are notified, the buyer may
-  award or request elsewhere, the Need's own expiry is extended by the time it spent waiting,
-  and a held booking slot is released.
+- On expiry: **no charge**, the **intent** lapses (no Engagement is created), both parties are
+  notified, the buyer may award or request elsewhere, the Need's own expiry is extended by the
+  time it spent waiting, and a held booking slot is released.
 - A lapse is recorded on the provider's **reliability metrics** (activation rate), which is
   the correct penalty — not a fee, since no charge occurred.
 - Repeated lapses trigger restriction, because they consume buyer attention and slots for free
@@ -375,8 +431,17 @@ detection signal, an enforcement response and a negative test.
    *payload*: contact details, payment instructions, unrestricted links, exact location and
    attachments of any type. Removing the channel is not the control — masking it is
    ([00 §5.1](./00-overview-and-terminology.md)).
-7. **Exact location is D3 only**, with no distance calculator, map pin or radius fine enough
-   to identify an address.
+7. **Exact location is D3 only, in both directions and with no exception.** This covers the
+   buyer's address *and* the provider's premises — exact street address, building number,
+   floor or unit, exact map pin, GPS coordinates, a map link exposing the premises, and
+   directions sufficient to locate it exactly. No distance calculator, map pin or radius fine
+   enough to identify an address, and **no walk-in address opt-in** for any role or operating
+   model ([08 §1.1](./08-craftsman-storefront.md)).
+7a. **External links controlled by a commercial identity are D3 only** — website, external
+   company site, Facebook, LinkedIn, Twitter/X, Instagram, WhatsApp, Telegram, external
+   booking page, external contact form, external marketplace profile, and any unrestricted
+   navigable URL. They must not appear on a public D0/D1 profile response
+   ([04 §7.1](./04-role-business.md), [00 §11](./00-overview-and-terminology.md)).
 8. **Payment instructions are D3 only**, and are snapshotted so mid-engagement changes are
    visible.
 9. **Demand is signed-in only.** Needs are never visible to guests — an open Need index is the

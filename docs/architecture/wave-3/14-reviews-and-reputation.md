@@ -134,7 +134,8 @@ suspension investigation cannot start a conversion at all
    an administrative determination.
 3. The reviewer has not already reviewed this engagement (one per engagement per direction).
 4. The **review window** is open.
-5. The engagement is not `lapsed` or `cancelled` (§8).
+5. The engagement is not `cancelled` (§8). An intent that never activated produced **no
+   engagement at all**, so there is nothing to review ([10 §7](./10-engagement-model.md)).
 
 **Reviews unlock from legitimate fulfillment completion, and from nothing else.** Settlement
 state is not an eligibility condition in either direction: an engagement completed with zero
@@ -177,17 +178,18 @@ unresponsive party a lever over the other's reputation.
 
 ## 8. Cancelled engagements
 
-- **No reviews on unactivated or cancelled engagements**, in either direction. A `lapsed`
-  arrangement was never activated, nothing was charged and nothing was agreed; a `cancelled`
-  engagement has no completed performance to rate. Neither produces a review under any
-  circumstance, including an administrative determination.
+- **No reviews on unactivated arrangements or cancelled engagements**, in either direction. An
+  **intent that lapsed** was never activated — nothing was charged, nothing was agreed, and no
+  engagement exists to attach a review to; a `cancelled` engagement has no completed
+  performance to rate. Neither produces a review under any circumstance, including an
+  administrative determination.
 - The obvious objection — a provider dodging a bad review by cancelling — is answered by
   **reliability metrics**, which are separate from reviews and are exactly where cancellation
   belongs:
 
 | Metric                       | What it counts                                                            |
 | ---------------------------- | ---------------------------------------------------------------------------- |
-| Activation rate              | Awards and requests accepted vs lapsed                                     |
+| Activation rate              | Intents accepted (activated) vs lapsed — awards, purchase, booking, product and custom-order intents |
 | Cancellation rate **by cause** | Post-activation cancellations, attributed to the party at fault          |
 | On-time rate                 | Deliveries and appointments met against the snapshotted dates              |
 | No-show rate                 | Missed appointments, both directions                                       |
@@ -316,3 +318,30 @@ Enforcement points:
   behavioural score is indistinguishable from an arbitrary one.
 - Hidden and removed reviews are excluded and aggregates restated; the restatement is
   auditable.
+
+---
+
+## 12. Recruitment is not reputation
+
+The Jobs module is a **recruitment/employment marketplace**, not a service transaction
+([00 §10](./00-overview-and-terminology.md)). Its outcomes are a different kind of event from
+the ones this file measures, and they must not be allowed to leak into the service reputation
+system.
+
+| Boundary                                                                                                  |
+| ---------------------------------------------------------------------------------------------------------- |
+| **Candidate reputation as a service provider is never automatically altered by a recruitment application outcome.** A rejection, a withdrawal, a failed interview or an unsuccessful application changes no rating, no per-criterion score, no reliability metric and no ranking signal |
+| **A job application is not a proposal**, so it never enters proposal win rate, activation rate or any reliability numerator |
+| **Hiring is not a completed engagement**, so it unlocks no review in either direction               |
+| **Recruitment reviews, if retained, are a distinct object** — separately labelled, separately aggregated, and never merged into a PCI's or BCI's service rating |
+| **Job hiring records never count as provider verified GMV** and never appear in a verified settled-volume band ([12 §12](./12-payment-and-settlement.md)) |
+| No recruitment signal may be used as a **cold-start prior** or ranking input for service discovery |
+
+The reason is the same one that separates every other identity boundary in this file: a rating
+means what its reviews say it means. A buyer reading a Craftsman's workmanship score is not
+reading whether that person got a job, and folding one into the other would tell them something
+the reviews never said.
+
+Recruitment conduct remains an **enforcement** matter where it warrants one — abusive
+applications, fraudulent vacancies, harassment — handled through the Help & Resolution Center
+against the acting identity, never through the star rating.
