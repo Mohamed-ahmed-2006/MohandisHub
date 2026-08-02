@@ -1,4 +1,4 @@
-import type { ApiSuccessBody } from '@mohandishub/shared';
+import type { ApiSuccessBody, ConversationSummary } from '@mohandishub/shared';
 
 import { getSocketServer } from '../../lib/socket-instance.js';
 import { asyncHandler } from '../../utils/async-handler.js';
@@ -28,7 +28,8 @@ const listConversations = asyncHandler(async (req, res) => {
   if (!user)
     throw new HttpError({ statusCode: 401, code: 'UNAUTHORIZED', message: 'Auth required.' });
   const conversations = await chatService.listConversations(user.id);
-  res.json({ ok: true, data: conversations });
+  const response: ApiSuccessBody<ConversationSummary[]> = { ok: true, data: conversations };
+  res.json(response);
 });
 
 const getMessages = asyncHandler(async (req, res) => {

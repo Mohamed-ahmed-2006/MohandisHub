@@ -6,6 +6,7 @@ export * from './app-settings.js';
 export * from './api.js';
 export * from './notifications.js';
 export * from './auth.js';
+export * from './chat.js';
 export * from './ids.js';
 export * from './jobs.js';
 export * from './negotiations.js';

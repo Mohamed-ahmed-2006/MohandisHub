@@ -114,6 +114,28 @@ describe('reading messages', () => {
     expect(result.contactLocked).toBe(true);
   });
 
+  it('re-redacts a historical stored body while locked', async () => {
+    const { service, repo } = build({
+      allowed: true,
+      unlocked: false,
+      reason: 'reservation_pending',
+    });
+    repo.getMessages.mockResolvedValueOnce([
+      {
+        id: 'historical-message',
+        body: 'Email old-record@example.com or pay via InstaPay',
+        raw_content: null,
+      },
+    ]);
+
+    const result = await service.getMessages('customer-1', 'conv-1');
+    const message = result.messages[0] as Record<string, unknown>;
+
+    expect(message.body).toBe('[contact hidden until activation]');
+    expect(message).not.toHaveProperty('raw_content');
+    expect(JSON.stringify(message)).not.toContain('old-record@example.com');
+  });
+
   it('reveals the original text once the job is activated', async () => {
     const { service } = build({ allowed: true, unlocked: true, reason: 'activated_booking' });
 

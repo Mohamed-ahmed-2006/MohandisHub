@@ -1,19 +1,9 @@
+import type { ConversationSummary } from '@mohandishub/shared';
+
 import { fetchWithAuthRetry } from '@/lib/auth/fetch-with-auth-retry';
 import { getApiBaseUrl } from '@/lib/env';
 
-export type Conversation = {
-  id: string;
-  participant_a: string;
-  participant_b: string;
-  status: string;
-  last_message_at: string | null;
-  created_at: string;
-  other_user_id: string;
-  other_display_name: string;
-  other_email: string;
-  last_message_body: string | null;
-  has_unread?: boolean;
-};
+export type Conversation = ConversationSummary;
 
 export type Message = {
   id: string;
@@ -62,8 +52,40 @@ async function apiReq<T>(path: string, accessToken: string, opts?: RequestInit):
   return json.data;
 }
 
+const requiredString = (value: unknown, field: string): string => {
+  if (typeof value !== 'string') throw new Error(`Invalid conversation summary field: ${field}`);
+  return value;
+};
+
+const nullableString = (value: unknown, field: string): string | null =>
+  value === null ? null : requiredString(value, field);
+
+/**
+ * Browser-side defence in depth: retain only the shared public allowlist even if
+ * a future API regression accidentally appends an internal repository field.
+ */
+export const parseConversationSummary = (value: unknown): ConversationSummary => {
+  if (typeof value !== 'object' || value === null) {
+    throw new Error('Invalid conversation summary.');
+  }
+  const row = value as Record<string, unknown>;
+  return {
+    id: requiredString(row.id, 'id'),
+    status: requiredString(row.status, 'status'),
+    last_message_at: nullableString(row.last_message_at, 'last_message_at'),
+    created_at: requiredString(row.created_at, 'created_at'),
+    other_user_id: requiredString(row.other_user_id, 'other_user_id'),
+    other_display_name: requiredString(row.other_display_name, 'other_display_name'),
+    last_message_body: nullableString(row.last_message_body, 'last_message_body'),
+    has_unread: row.has_unread === true,
+  };
+};
+
 export const chatApiClient = {
-  listConversations: (token: string) => apiReq<Conversation[]>('/api/chat/conversations', token),
+  listConversations: async (token: string) => {
+    const rows = await apiReq<unknown[]>('/api/chat/conversations', token);
+    return rows.map(parseConversationSummary);
+  },
 
   getMessages: (token: string, convId: string) =>
     apiReq<{ messages: Message[]; status: string }>(

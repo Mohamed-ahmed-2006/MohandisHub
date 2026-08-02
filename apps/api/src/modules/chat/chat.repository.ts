@@ -7,10 +7,21 @@ export type ConversationRow = {
   status: string;
   last_message_at: string | null;
   created_at: string;
+};
+
+/** Internal row used to authorize and present a public conversation summary. */
+export type ConversationSummaryRow = ConversationRow & {
   other_user_id: string;
   other_display_name: string;
-  other_email: string;
   last_message_body: string | null;
+  last_message_raw_content: string | null;
+  last_message_type: string | null;
+  last_message_attachment_url: string | null;
+  last_message_link_url: string | null;
+  last_message_location_lat: string | null;
+  last_message_location_lng: string | null;
+  last_message_location_label: string | null;
+  has_unread: boolean | null;
 };
 
 export type MessageRow = {
@@ -32,37 +43,47 @@ export type MessageRow = {
 };
 
 export class ChatRepository {
-  async listConversations(userId: string): Promise<ConversationRow[]> {
-    const { rows } = await getPool().query(
-      `SELECT c.*,
+  async listConversations(userId: string): Promise<ConversationSummaryRow[]> {
+    const { rows } = await getPool().query<ConversationSummaryRow>(
+      `SELECT c.id, c.participant_a, c.participant_b, c.status,
+        c.last_message_at, c.created_at,
         CASE WHEN c.participant_a = $1 THEN c.participant_b ELSE c.participant_a END AS other_user_id,
-        COALESCE(u.display_name, u.email) AS other_display_name,
-        u.email AS other_email,
-        (SELECT CASE
-          WHEN m.message_type = 'link' THEN COALESCE(NULLIF(TRIM(m.body), ''), '[Link]')
-          WHEN m.message_type = 'location' THEN COALESCE(NULLIF(TRIM(m.location_label), ''), '[Location]')
-          ELSE COALESCE(NULLIF(TRIM(m.body), ''), '[Media]')
-        END FROM messages m
-         WHERE m.conversation_id = c.id AND m.deleted_for_everyone = false
-           AND (m.deleted_for_sender = false OR m.sender_id != $1)
-         ORDER BY m.created_at DESC LIMIT 1) AS last_message_body,
+        COALESCE(NULLIF(BTRIM(u.display_name), ''), 'Member') AS other_display_name,
+        lm.body AS last_message_body,
+        lm.raw_content AS last_message_raw_content,
+        lm.message_type AS last_message_type,
+        lm.attachment_url AS last_message_attachment_url,
+        lm.link_url AS last_message_link_url,
+        lm.location_lat::text AS last_message_location_lat,
+        lm.location_lng::text AS last_message_location_lng,
+        lm.location_label AS last_message_location_label,
         CASE WHEN c.participant_a = $1 THEN (c.last_message_at > c.participant_a_last_read_at) ELSE (c.last_message_at > c.participant_b_last_read_at) END AS has_unread
       FROM conversations c
       JOIN users u ON u.id = CASE WHEN c.participant_a = $1 THEN c.participant_b ELSE c.participant_a END
+      LEFT JOIN LATERAL (
+        SELECT m.body, m.raw_content, m.message_type, m.attachment_url,
+               m.link_url, m.location_lat, m.location_lng, m.location_label
+          FROM messages m
+         WHERE m.conversation_id = c.id
+           AND m.deleted_for_everyone = false
+           AND (m.deleted_for_sender = false OR m.sender_id != $1)
+         ORDER BY m.created_at DESC
+         LIMIT 1
+      ) lm ON true
       WHERE c.participant_a = $1 OR c.participant_b = $1
       ORDER BY COALESCE(c.last_message_at, c.created_at) DESC`,
       [userId],
     );
-    return rows as ConversationRow[];
+    return rows;
   }
 
   async getConversation(convId: string): Promise<ConversationRow | null> {
-    const { rows } = await getPool().query(
-      `SELECT c.*, '' AS other_user_id, '' AS other_display_name, '' AS other_email, '' AS last_message_body
-       FROM conversations c WHERE c.id = $1 LIMIT 1`,
+    const { rows } = await getPool().query<ConversationRow>(
+      `SELECT id, participant_a, participant_b, status, last_message_at, created_at
+       FROM conversations WHERE id = $1 LIMIT 1`,
       [convId],
     );
-    return (rows[0] as ConversationRow) ?? null;
+    return rows[0] ?? null;
   }
 
   async getMessages(

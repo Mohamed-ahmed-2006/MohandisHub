@@ -1,11 +1,21 @@
-import { redactContactDetails } from '../../utils/contact-redaction.js';
+import type { ConversationSummary } from '@mohandishub/shared';
+
+import { redactContactDetails, REDACTION_MARKER } from '../../utils/contact-redaction.js';
 import { HttpError } from '../../utils/http-error.js';
 import { NotificationsService } from '../notifications/notifications.service.js';
 import { SettingsService } from '../settings/settings.service.js';
 
 import { ChatAccessService } from './chat-access.service.js';
-import { ChatRepository } from './chat.repository.js';
+import { ChatRepository, type ConversationSummaryRow } from './chat.repository.js';
 import type { SendMessageInput } from './chat.validation.js';
+
+/** Historical locked-text signals not covered by the general contact regex. */
+const PAYMENT_INSTRUCTION_PATTERN =
+  /\b(?:instapay|iban|bank\s+account|wallet\s+address|payment\s+handle|vodafone\s+cash|orange\s+cash|etisalat\s+cash)\b/i;
+
+/** A conservative numbered-street shape; ordinary quantities remain readable. */
+const EXACT_ADDRESS_PATTERN =
+  /\b\d{1,5}\s+[\p{L}\p{N}.'-]+(?:\s+[\p{L}\p{N}.'-]+){0,5}\s+(?:street|st|road|rd|avenue|ave|lane|ln|boulevard|blvd|building|apartment|unit)\b/iu;
 
 export class ChatService {
   constructor(
@@ -15,9 +25,19 @@ export class ChatService {
     private readonly chatAccess: ChatAccessService = new ChatAccessService(),
   ) {}
 
-  async listConversations(userId: string) {
+  async listConversations(userId: string): Promise<ConversationSummary[]> {
     try {
-      return await this.repo.listConversations(userId);
+      const rows = await this.repo.listConversations(userId);
+      return await Promise.all(
+        rows.map(async (row) => {
+          const access = await this.chatAccess.resolveForConversation({
+            conversationId: row.id,
+            participantA: row.participant_a,
+            participantB: row.participant_b,
+          });
+          return this.presentConversationSummary(row, access.unlocked);
+        }),
+      );
     } catch (err: unknown) {
       const pgErr = err as { code?: string; message?: string };
       if (pgErr.code === '42703' || (pgErr.message?.includes('does not exist') ?? false)) {
@@ -30,6 +50,80 @@ export class ChatService {
       }
       throw err;
     }
+  }
+
+  /**
+   * Serialize an internal repository row into the complete public allowlist.
+   * Authorization-only participant fields and raw message values cannot cross
+   * this boundary because they are never copied into the returned object.
+   */
+  private presentConversationSummary(
+    row: ConversationSummaryRow,
+    unlocked: boolean,
+  ): ConversationSummary {
+    return {
+      id: row.id,
+      status: row.status,
+      last_message_at: row.last_message_at,
+      created_at: row.created_at,
+      other_user_id: row.other_user_id,
+      other_display_name: row.other_display_name.trim() || 'Member',
+      last_message_body: this.presentConversationPreview(row, unlocked),
+      has_unread: row.has_unread === true,
+    };
+  }
+
+  /**
+   * Apply the same unlock decision used by individual message presentation.
+   *
+   * Locked historical text is redacted again even when its stored row predates
+   * the redaction columns. Non-text channels become generic labels, so their
+   * URL, path, coordinates, or exact location label never becomes a preview.
+   */
+  private presentConversationPreview(
+    row: ConversationSummaryRow,
+    unlocked: boolean,
+  ): string | null {
+    if (!row.last_message_type) return null;
+
+    if (!unlocked) {
+      if (
+        row.last_message_type === 'location' ||
+        row.last_message_location_lat != null ||
+        row.last_message_location_lng != null ||
+        row.last_message_location_label != null
+      ) {
+        return '[Location]';
+      }
+      if (row.last_message_type === 'link' || row.last_message_link_url != null) {
+        return '[Link]';
+      }
+      if (
+        row.last_message_type === 'image' ||
+        row.last_message_type === 'voice' ||
+        row.last_message_attachment_url != null
+      ) {
+        return '[Media]';
+      }
+
+      return this.presentLockedText(row.last_message_body);
+    }
+
+    const revealedBody = (row.last_message_raw_content ?? row.last_message_body)?.trim() ?? '';
+    if (row.last_message_type === 'link') return revealedBody || '[Link]';
+    if (row.last_message_type === 'location') {
+      return row.last_message_location_label?.trim() || '[Location]';
+    }
+    return revealedBody || '[Media]';
+  }
+
+  private presentLockedText(value: unknown): string | null {
+    const storedBody = typeof value === 'string' ? value.trim() : '';
+    if (!storedBody) return null;
+    if (PAYMENT_INSTRUCTION_PATTERN.test(storedBody) || EXACT_ADDRESS_PATTERN.test(storedBody)) {
+      return REDACTION_MARKER;
+    }
+    return redactContactDetails(storedBody).content || null;
   }
 
   async getMessages(userId: string, conversationId: string) {
@@ -81,6 +175,7 @@ export class ChatService {
     const { raw_content: _raw, ...rest } = message;
     return {
       ...rest,
+      body: this.presentLockedText(message.body),
       attachment_url: null,
       link_url: null,
       location_lat: null,
