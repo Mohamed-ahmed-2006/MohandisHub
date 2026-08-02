@@ -63,9 +63,9 @@ not prose.
 - A PCI's reputation **does not transfer** to a Business the person later forms, does not
   merge with their buyer conduct, and **does not carry across a PCI conversion**.
 
-**On conversion (Expert ⇄ Craftsman), reviews stay where they were earned.** The controlled
-conversion process in [00 §3.5](./00-overview-and-terminology.md) archives the old PCI rather
-than mutating it, and:
+**On conversion (Expert ⇄ Craftsman), reviews stay where they were earned.** The
+Admin/Support-executed conversion process in [00 §3.5](./00-overview-and-terminology.md)
+**archives the source PCI rather than mutating its type**, and:
 
 - Every review, its text, its criteria, its version reference and its engagement binding remain
   **permanently attached to the archived PCI**, readable on the archived profile.
@@ -83,6 +83,11 @@ than mutating it, and:
 This is the honest cost of the trade being different work. Craftsman reviews measure
 workmanship, punctuality and cleanliness; Expert reviews measure analysis, scope accuracy and
 documentation. Carrying one into the other would tell a buyer something the reviews never said.
+
+It is also what stops conversion becoming a reputation reset: a provider carries their **credit**
+across a conversion but not their **record**, and a provider with an unresolved case or an open
+suspension investigation cannot start a conversion at all
+([15 §9.1](./15-suspension-and-enforcement.md)).
 
 ---
 

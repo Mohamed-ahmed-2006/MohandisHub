@@ -227,6 +227,30 @@ never an implicit side effect of a single-identity action.
 Multi-account evasion — creating a new identity or Business to escape enforcement — is itself
 a terminating offence, and detection of it is a cascade trigger.
 
+### 9.1 PCI conversion is not an escape route
+
+Converting a Personal Commercial Identity ([00 §3.5](./00-overview-and-terminology.md)) archives
+a source identity and creates a replacement at zero reputation. That shape makes it an obvious
+candidate for evasion, so it is closed explicitly.
+
+**Conversion must not be usable to evade** commercial suspension, disputes, poor reputation,
+settlement review, verified-GMV obligations, rent obligations, or any enforcement action.
+
+| Control                                                                                                                   |
+| ------------------------------------------------------------------------------------------------------------------------- |
+| Conversion is **rejected** while an **active commercial suspension investigation** is open where conversion could evade enforcement |
+| Conversion is **rejected** while any open dispute, resolution case, appeal, unresolved settlement issue or other unresolved commercial obligation exists ([00 §3.5.2](./00-overview-and-terminology.md)) |
+| Conversion is **Admin/Support-executed**, so no subject of an enforcement action can initiate one against themselves       |
+| **There is no administrative override** of a blocker — an operator may execute a conversion that already passed every eligibility check, and may not convert around a live obligation or use conversion to resolve an enforcement matter |
+| **Enforcement state is not cleared by conversion.** Enforcement history, reason codes, appeals and their outcomes remain on the account and on the archived identity |
+| Reviews, ratings and reliability metrics **stay permanently with the archived PCI**, so a poor record cannot be shed       |
+| The archived and replacement identities are **linked by an immutable audited conversion record** available to administrators |
+| Enforcement against the **person** cascades to every identity they control, including a replacement PCI (§9)               |
+
+The design intent is symmetrical with the rest of this file: a provider who genuinely changed
+trades keeps their credit and loses their reputation, which is the honest trade. A provider
+trying to outrun a case cannot start the process at all.
+
 ---
 
 ## 10. Appeals

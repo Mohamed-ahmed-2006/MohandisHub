@@ -31,10 +31,12 @@ collected — and the fulfillment machinery must model those.
   reputation, reliability metrics, **MHC balance**, and enforcement state.
 - Distinct from the person's `personal_buyer` context in every respect.
 - Cannot coexist with an Expert PCI on the same identity. Conversion to Expert is
-  **permitted through the controlled process** in
-  [00 §3.5](./00-overview-and-terminology.md) — audited, administratively reviewed, archival
-  rather than mutation, and blocked while any live, pending, incomplete or disputed
-  engagement exists.
+  **permitted, and delivered in Wave 3 as an Admin/Support-executed operation**
+  ([00 §3.5](./00-overview-and-terminology.md)) — audited, archival rather than mutation, never
+  a self-service button, and blocked while any unresolved commercial obligation exists. The
+  Craftsman identity is **archived, not retyped**; its reviews and reputation stay with it
+  permanently, and its **available MHC balance carries over exactly once** to the replacement
+  Expert identity.
 
 The trade-name allowance carries an obligation: at D3, and on every engagement snapshot,
 the **verified legal name** of the person is disclosed alongside the trade name. A customer

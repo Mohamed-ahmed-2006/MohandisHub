@@ -126,50 +126,103 @@ they paid themself.
 
 ### 3.5 Personal Commercial Identity conversion (Expert ⇄ Craftsman)
 
-**Conversion is permitted.** An identity whose PCI is Expert may become a Craftsman, and the
-reverse, through a controlled, audited process. Trades and careers change; the alternative —
-telling a real person to abandon an account and register again — produces duplicate identities
-and a worse data model than the one it avoids.
+**Conversion is permitted, and Wave 3 supports it operationally — through an Admin/Support
+controlled workflow only.** An identity whose PCI is Expert may become a Craftsman, and the
+reverse. Trades and careers change; the alternative — telling a real person to abandon an
+account and register again — produces duplicate identities and a worse data model than the one
+it avoids.
 
-Conversion is a **lifecycle event with archival**, never a type toggle. The old PCI is
-preserved intact; a new PCI of the other type is created beside it at zero reputation.
+Conversion is a **lifecycle event with archival**, never a type toggle. The source PCI is
+preserved intact and archived; a **replacement PCI** of the other type is created beside it at
+zero reputation. **The source identity's commercial type is never mutated in place.**
 
-**Preconditions — conversion is forbidden while any of these exist on the current PCI:**
+### 3.5.1 Who may execute it — Admin/Support only
 
-| Blocker                                                                      |
-| ---------------------------------------------------------------------------- |
-| An **active** engagement in any live state                                    |
-| A **pending-activation** arrangement (award offer, purchase, booking, product or custom request) |
-| An **incomplete** engagement — anything not `completed`, `cancelled` or `lapsed` |
-| A **disputed** engagement, or any open Case in either direction                |
-| An open appeal, or an unexpired enforcement action under review               |
+Wave 3 delivers conversion as an **operator-executed operation**, not a user-executed one.
 
-The provider clears these by completing, cancelling or resolving them. There is no
-administrative override that converts around a live obligation, because conversion would
-strand a counterparty mid-engagement.
+| In Wave 3                                                        | Not in Wave 3                                         |
+| ---------------------------------------------------------------- | ----------------------------------------------------- |
+| Conversion-safe data and domain architecture                     | A user-facing "Switch to Expert / Switch to Craftsman" button |
+| PCI archival                                                     | Self-service conversion                               |
+| Replacement PCI creation                                         | Automatic conversion approval                         |
+| Eligibility validation                                           | Repeated user-controlled switching                    |
+| Blocking validation for active obligations (§3.5.2)              | A general MHC transfer interface                      |
+| **Audited MHC carryover** (§3.5.4)                               |                                                       |
+| **Admin/Support authorization** on every conversion              |                                                       |
+| A recorded **conversion reason**                                 |                                                       |
+| **Immutable conversion audit history**                           |                                                       |
+| Appropriate notifications to the user                            |                                                       |
+| **Safe rollback or failure behaviour before final commit**       |                                                       |
+| **Idempotency protection**                                       |                                                       |
 
-**What happens to the old PCI:**
+A user may *request* a conversion. Only an authorized Admin/Support actor may *execute* one,
+and the execution records who authorized it and why. This is deliberate: conversion moves
+credit, archives a commercial identity and resets a reputation, and each of those is a decision
+that deserves a named human behind it before self-service is considered.
 
-- It is **archived**, not mutated and not deleted. Its record, its type and its history are
-  frozen as they stood.
-- Its offers are archived; it publishes nothing and proposes on nothing.
+### 3.5.2 Preconditions — conversion is rejected while any unresolved obligation exists
+
+| Blocker                                                                                        |
+| ---------------------------------------------------------------------------------------------- |
+| **Pending provider activation** — any arrangement awaiting the provider's charged acceptance   |
+| An **active engagement** in any live state                                                     |
+| **Incomplete fulfillment** — any required component not confirmed or auto-confirmed            |
+| **Pending customer confirmation** — a component in `awaiting_customer_confirmation`             |
+| An **open correction request** — a revision round, rectification or objection in progress      |
+| An **open dispute or resolution case**, in either direction                                    |
+| An **unresolved settlement issue** — a disputed record, or an open settlement escalation       |
+| An **active commercial suspension investigation** where conversion could evade enforcement     |
+| Any **other unresolved commercial obligation** defined by the engagement lifecycle             |
+
+The provider clears these by completing, cancelling or resolving them. **There is no
+administrative override that converts around a live obligation** — not by Admin, not by Support,
+not by a determination. Converting around one would strand a counterparty mid-engagement.
+
+### 3.5.3 What happens to the source PCI
+
+- It is **archived** — never mutated, never retyped, never deleted. Its record, its type and its
+  history are frozen as they stood.
+- It **remains available** for historical engagement, review, dispute, settlement, audit and
+  administrative views. Archival is a change of capability, not of visibility.
+- It **cannot**: publish new offers, submit proposals, accept bookings, activate engagements,
+  spend MHC, or acquire new commercial work of any kind.
+- **Existing historical records continue to reference the archived PCI.** Nothing is re-pointed
+  at the replacement.
 - **Historical reviews and reputation remain permanently attached to the archived PCI** and
   remain readable on the archived profile. Reviews are never moved, re-pointed, re-aggregated
   or merged into the replacement.
-- Its completed engagements, evidence, settlement records and case history stay bound to it.
+- Its completed engagements, evidence, settlement records, case history and **MHC ledger
+  history** stay bound to it.
+- The archived PCI and the replacement PCI are **linked by an audited conversion record**
+  (§3.5.4). That link is administrative; it is never surfaced to the market.
 
-**What does and does not carry to the replacement PCI:**
+### 3.5.4 Conversion must not become an escape route
 
-| Item                                                                | Carries? |
-| ------------------------------------------------------------------- | -------- |
-| Reputation — rating, review count, distribution, reliability metrics | **No**   |
-| Offers, packages, products, variants, storefront                     | **No**   |
+Conversion is **prohibited as a means of evading**: commercial suspension, disputes, poor
+reputation, settlement review, verified-GMV obligations, rent obligations, or any platform
+enforcement action.
+
+This is what §3.5.2's blocker list and the Admin/Support gate exist to enforce, and it is why
+reputation cannot carry: a conversion that both cleared a bad record and preserved standing
+would be a reputation reset with extra steps.
+
+### 3.5.5 What does and does not carry to the replacement PCI
+
+| Item                                                                 | Carries? |
+| -------------------------------------------------------------------- | -------- |
+| Reviews                                                              | **No**   |
+| Reputation, ratings, distributions, reliability metrics              | **No**   |
+| Offers and services                                                  | **No**   |
+| Products                                                             | **No**   |
 | Portfolio and work gallery                                           | **No**   |
 | Provider analytics and historical series                             | **No**   |
+| Search ranking and any ranking signal derived from the source        | **No**   |
+| Fulfillment history                                                  | **No**   |
+| Commercial verification specific to the provider type (V2 scope, trade credentials) | **No** |
 | Verified settled volume / verified-GMV attribution                   | **No**   |
-| Account-level **KYC evidence** (V1 identity documents)               | **Yes, where still valid** — it is evidence about the *person*, and re-collecting an unexpired government ID proves nothing new |
-| **MHC balance**                                                      | **Yes** — see the note below |
-| Role-specific onboarding, eligibility and verification               | **No — must be completed again** |
+| Role-specific onboarding and eligibility                             | **No — completed again in full** |
+| **Available MHC balance**                                            | **Yes — exactly once, by the audited operation in §3.5.6** |
+| Account-level **identity evidence** (V1 KYC documents)               | **Yes, only where still valid and applicable** — it is evidence about the *person*, and re-collecting an unexpired government ID proves nothing new |
 
 **Role-specific verification is redone in full.** The replacement PCI is not enabled until its
 own onboarding is complete: the new type's profile or storefront minimum, its category
@@ -178,17 +231,71 @@ trade**. An Expert's structural-review credential does not enable a Craftsman's 
 certification, and the reverse. Enablement follows the ordinary path in
 [02 §5](./02-role-expert.md) / [03 §5](./03-role-craftsman.md).
 
-**MHC balance.** The balance stays on the identity's single PCI slot and is available to the
-replacement. This is **not** a transfer between commercial identities and does not weaken
-non-transferability: it is the same natural person, the same one-per-identity slot, and no
-second identity gains spendable credit. Nothing else about the conversion moves value.
+The replacement PCI starts with a **new provider profile and new provider-type-specific
+commercial history**. It is not a continuation of the source presented under a different label.
 
-**Governance:**
+### 3.5.6 MHC carryover
 
-- Every conversion is an **administratively reviewed** request with a recorded decision,
-  rationale and actor, and the full before/after state is retained in the audit record.
-- An **admin-configurable cooldown** applies before another conversion may be requested. The
-  cooldown's length is configuration; its existence is product.
+**The remaining available MHC balance carries over to the replacement PCI.** It is neither
+forfeited nor permanently frozen — a provider who converts does not lose credit they paid for.
+
+**This is a special audited system conversion operation, not a transfer feature.**
+
+| Property                              | Rule                                                                                                       |
+| ------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| **Not user-accessible**               | No user, provider or Business owner can invoke it. It exists only inside an Admin/Support-executed conversion |
+| **Not a general capability**          | It must not enable transfers between arbitrary personal identities, between Business identities, between users, or between any two commercial identities that are not a conversion source and its replacement |
+| **Source ends at zero**               | The archived PCI finishes with a **zero available MHC balance**                                            |
+| **Replacement receives exactly**      | The replacement PCI receives **exactly the archived PCI's remaining available balance** — no more, no less  |
+| **Conservation**                      | **No MHC is created, destroyed, duplicated, or left spendable by both identities**                          |
+| **Atomic**                            | The carryover, the archival and the replacement creation commit together or not at all                     |
+| **Idempotent**                        | Re-running or double-submitting a conversion produces **exactly one** carryover                             |
+| **Ledger history preserved**          | Nothing in the source's ledger is deleted, rewritten or re-pointed                                          |
+| **Historical attribution unchanged**  | **Historical MHC transactions remain attributable to the archived PCI** — its spend history is its own      |
+
+**Only the remaining *available* balance carries.** Credits that are pending, reserved,
+disputed, reversed or otherwise not available are **never silently treated as available
+balance**. Each category follows an explicit ledger rule that states what happens to it — settle
+first, resolve first, remain on the source, or fail the conversion — and the applicable rule is
+recorded on the conversion. A conversion that cannot determine the available balance
+unambiguously does not proceed.
+
+**The conversion audit record must identify:**
+
+| Field                                    |
+| ---------------------------------------- |
+| Source PCI                               |
+| Replacement PCI                          |
+| User / account owner                     |
+| Amount moved                             |
+| Original ledger balance                  |
+| Conversion event                         |
+| Administrator or Support actor           |
+| Timestamp                                |
+| Reason                                   |
+
+The audit record is **immutable** and is the link between the archived and replacement
+identities.
+
+**Why this does not weaken non-transferability.** MHC remains non-transferable between
+commercial identities as an ordinary capability ([13 §1](./13-mhc-activation.md)). This is a
+single, narrowly scoped, operator-executed lifecycle operation on **one natural person's one PCI
+slot**, in which the source is emptied in the same transaction that the replacement is funded.
+No second identity ever gains spendable credit, no balance is ever pooled, and there is no
+surface through which a user could invoke it. Treating it as a transfer feature — or building
+anything reusable out of it — is prohibited.
+
+### 3.5.7 Governance
+
+- Every conversion carries an **Admin/Support authorization**, a recorded **reason**, a decision
+  and an actor, and the full before/after state is retained in the immutable audit record.
+- An **admin-configurable cooldown** may apply before another conversion is executed. **Cooldown
+  configuration does not create self-service conversion** — the workflow remains
+  Admin/Support-controlled regardless of how the cooldown is set, including when it is set to
+  zero.
+- **Failure is safe.** Any validation failure, any unresolved obligation, and any inability to
+  resolve the available balance aborts the conversion **before final commit**, leaving the
+  source PCI untouched, enabled and in possession of its balance.
 - The archived PCI is never reactivated. Converting back creates a further archival and a
   further new identity — it does not resurrect the first.
 - Reputation isolation is absolute across the boundary: no aggregate, badge, ranking signal,
@@ -358,7 +465,9 @@ communication.
 | **Settlement Tranche**     | A settlement record that has reached a **counted** state — `counterparty_confirmed` or `admin_verified`. Tranches are the only input to verified GMV. |
 | **Verified GMV**           | The sum of settlement **tranches**, net of confirmed refunds, attributed to a provider commercial identity over a closed period. Nothing else. |
 | **Verified-GMV Rent**      | A tiered monthly MHC charge derived from a closed period's verified GMV. **Shadow mode in Wave 3**: calculated and recorded, never deducted. |
-| **Archived PCI**           | A Personal Commercial Identity retired by a conversion (§3.5). Retains its reviews and history permanently; publishes nothing. |
+| **Archived PCI**           | The source Personal Commercial Identity retired by a conversion (§3.5). Retains its reviews, history and MHC ledger permanently; publishes nothing, proposes on nothing, spends nothing. |
+| **Replacement PCI**        | The new-typed PCI created by a conversion. Starts at zero reputation with a new provider profile; receives exactly the archived PCI's available MHC balance. |
+| **PCI conversion**         | The Admin/Support-executed lifecycle operation that archives a source PCI and creates a replacement of the other type (§3.5). Never a mutation of the source's type. |
 | **MHC**                    | Non-transferable, non-cashable, closed-loop provider-side credit. Held per commercial identity.                                |
 | **Case**                   | A dispute, report or appeal in the Help & Resolution Center. Survives suspension.                                              |
 | **Reliability metrics**    | Non-review behavioural signals: response rate, activation rate, cancellation rate, on-time rate, no-show rate.                 |
@@ -390,10 +499,16 @@ conceptual; the migration design is out of scope here.
 Named here only so the four role definitions do not have to keep gesturing at them.
 
 - **Guest** — signed-out. Sees D0 only. Cannot post, propose, purchase or message.
-- **Administrator** — platform staff with granular permissions. Performs verification
-  decisions, moderation, settlement verification, dispute resolution and enforcement.
+- **Administrator / Support** — platform staff with granular permissions. Performs verification
+  decisions, moderation, settlement verification, dispute resolution, enforcement, and — in
+  Wave 3 — **execution of PCI conversion** (§3.5), which is the one lifecycle operation that
+  moves MHC and archives a commercial identity.
+
   Never a party to an engagement, never a payment intermediary, and cannot alter an
-  engagement's commercial snapshots.
+  engagement's commercial snapshots. The conversion authority is deliberately narrow: an
+  operator may **execute a conversion that already passed every eligibility check**, and may
+  not override a blocker, convert around a live obligation, choose a carryover amount, or use
+  conversion to resolve an enforcement matter.
 - **System** — automated actors: redaction, expiry, auto-confirmation, reminders,
   reliability metric computation. Every system action is attributed and auditable, and no
   system action may create disclosure or charge MHC without an explicit human trigger.

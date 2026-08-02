@@ -23,9 +23,29 @@ well-meaning "while we're in here".
 - **Graduated Business verification**: V3a gates buying, V3b (KYB) gates providing, with
   admin-configurable step-ups for high-risk or high-value procurement
   ([00 §4.1](./00-overview-and-terminology.md)).
-- **PCI conversion (Expert ⇄ Craftsman)**: the controlled, audited archival-and-replacement
-  process in [00 §3.5](./00-overview-and-terminology.md) — blockers, archival semantics,
-  what carries and what does not, redone role verification, and the configurable cooldown.
+- **PCI conversion (Expert ⇄ Craftsman) — delivered as an Admin/Support-controlled operation**
+  ([00 §3.5](./00-overview-and-terminology.md)). Wave 3 ships it operationally, not merely as a
+  compatible data shape:
+
+  | Delivered                                                        |
+  | ---------------------------------------------------------------- |
+  | Conversion-safe data and domain architecture                     |
+  | PCI archival — source archived, never retyped in place           |
+  | Replacement PCI creation at zero reputation                      |
+  | Eligibility validation                                           |
+  | Blocking validation for unresolved commercial obligations        |
+  | **Audited MHC carryover** ([13 §1.1](./13-mhc-activation.md))     |
+  | **Admin/Support authorization** on every execution               |
+  | Recorded conversion **reason**                                   |
+  | **Immutable conversion audit history**                           |
+  | User notifications                                               |
+  | **Safe rollback / failure behaviour before final commit**        |
+  | **Idempotency protection**                                       |
+  | Admin-configurable conversion cooldown                           |
+
+  Deliberately **not** delivered: a user-facing "Switch to Expert / Switch to Craftsman" button,
+  self-service conversion, automatic approval, repeated user-controlled switching, or any
+  general MHC transfer interface (Group 3).
 - **Business team administration retained**: `manage_team` enforced, the six reserved
   permissions disabled, membership history preserved, commercial authority owner-only
   ([09 §4](./09-business-buying-and-providing.md)).
@@ -249,7 +269,10 @@ is named.
     going live is a separate explicit production decision ([13 §11](./13-mhc-activation.md)).
 16. **Customer-side MHC** — balances, purchases, charges or surfaces of any kind.
 17. **MHC transfer, gifting, sale, pooling or conversion** between any two identities, and
-    **MHC cashout** in any form.
+    **MHC cashout** in any form. The audited carryover inside an Admin/Support-executed PCI
+    conversion ([13 §1.1](./13-mhc-activation.md)) is the sole exception, and **no
+    user-accessible transfer interface, partial-move capability or reusable transfer primitive
+    may be built from it**.
 
 ### 3.3 Wave 4 leakage
 
@@ -284,37 +307,51 @@ is named.
     **including between an archived PCI and its replacement**.
 31. **Any market-facing linkage of an archived PCI to its replacement** — "previously traded
     as", merged aggregates, redirected profiles.
-32. **Converting a PCI around a live obligation** — with an active, pending-activation,
-    incomplete or disputed engagement, or an open case or appeal.
-33. **Reviews on unactivated or cancelled engagements.**
-34. **Transaction-value-weighted star ratings**, or any aggregate, badge or ranking input that
+32. **Converting a PCI around a live obligation** — pending provider activation, an active
+    engagement, incomplete fulfillment, pending customer confirmation, an open correction
+    request, an open dispute or case, an unresolved settlement issue, an active suspension
+    investigation, or any other unresolved commercial obligation. **No administrative override
+    exists.**
+33. **Self-service PCI conversion in Wave 3** — a user-facing "Switch to Expert / Switch to
+    Craftsman" control, automatic approval, or repeated user-controlled switching. Conversion is
+    Admin/Support-executed, and a configured cooldown of any length does not make it
+    self-service.
+34. **Mutating a PCI's commercial type in place.** Conversion archives a source and creates a
+    replacement; it never retypes the source identity.
+35. **Using conversion to evade** suspension, disputes, poor reputation, settlement review,
+    verified-GMV or rent obligations, or any enforcement action
+    ([15 §9.1](./15-suspension-and-enforcement.md)).
+36. **Leaving MHC spendable by both** an archived PCI and its replacement, or forfeiting a
+    provider's available balance on a valid conversion.
+37. **Reviews on unactivated or cancelled engagements.**
+38. **Transaction-value-weighted star ratings**, or any aggregate, badge or ranking input that
     weights reviews by agreed amount, settled amount or verified GMV.
-35. **Review removal at the reviewed party's request**, or any review-for-settlement mechanism.
+39. **Review removal at the reviewed party's request**, or any review-for-settlement mechanism.
 
 ### 3.5 Data and integrity
 
-36. **Editing an engagement snapshot** by any actor — party, support or administrator.
-37. **Deleting engagements, evidence, settlement records, messages or case history**,
+40. **Editing an engagement snapshot** by any actor — party, support or administrator.
+41. **Deleting engagements, evidence, settlement records, messages or case history**,
     including in response to account-deletion requests (pseudonymize instead).
-38. **Hard-deleting an offer, package, product or variant** that carries an engagement or a
+42. **Hard-deleting an offer, package, product or variant** that carries an engagement or a
     review.
-39. **Silent restatement of verified GMV** without an auditable trail.
-40. **Auto-confirmation of a settlement record** from silence — money is never presumed.
-41. **Auto-completion of pickup or pre-handover workshop components.**
+43. **Silent restatement of verified GMV** without an auditable trail.
+44. **Auto-confirmation of a settlement record** from silence — money is never presumed.
+45. **Auto-completion of pickup or pre-handover workshop components.**
 
 ### 3.6 Scope creep with a plausible excuse
 
-42. **Real inventory**, even "just a quantity field that we won't use yet".
-43. **Carrier integration or tracking numbers**, even as a free-text field presented as
+46. **Real inventory**, even "just a quantity field that we won't use yet".
+47. **Carrier integration or tracking numbers**, even as a free-text field presented as
     tracking, and **never as a universal evidence requirement** for physical products
     ([11 §1.2](./11-fulfillment-models.md)).
-44. **Universal evidence mandates applied regardless of fulfillment type** — a customer OTP on
+48. **Universal evidence mandates applied regardless of fulfillment type** — a customer OTP on
     every on-site service, carrier tracking on every physical product, or a platform-uploaded
     SHA-256 artifact on every digital engagement. Evidence is policy-resolved, not decreed.
-45. **A generic marketplace cart** or multi-provider checkout.
-46. **Tax computation, legal invoices, or accounting exports** presented as authoritative
+49. **A generic marketplace cart** or multi-provider checkout.
+50. **Tax computation, legal invoices, or accounting exports** presented as authoritative
     documents.
-47. **Milestones**, in any form, on any engagement.
-48. **Personalized ranking that sells placement** without labelling it.
-49. **Any feature justified by "the schema already supports it"** — every item in Group 2 is
+51. **Milestones**, in any form, on any engagement.
+52. **Personalized ranking that sells placement** without labelling it.
+53. **Any feature justified by "the schema already supports it"** — every item in Group 2 is
     architecture-compatible on purpose, and compatibility is not permission.

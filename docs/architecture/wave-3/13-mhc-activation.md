@@ -13,19 +13,79 @@
   platform actions.
 - **Non-transferable** between identities, in any direction, for any reason — not from a
   person to their Business, not between two Businesses with the same owner, not as a gift, not
-  as a sale, not on dissolution.
+  as a sale, not on dissolution. There is **no user-accessible transfer capability of any
+  kind**, and no surface through which one could be invoked.
+
+  The **single** exception is not a transfer feature: the audited MHC carryover inside an
+  Admin/Support-executed **PCI conversion** (§1.1). It is operator-executed, scoped to one
+  person's one PCI slot, and empties the source in the same transaction that funds the
+  replacement.
 - **Non-cashable.** No withdrawal, no conversion, no redemption, no refund to money. There is
   no provider cash balance anywhere in the product and no screen may imply one.
 - **Held per commercial identity**, not per person: a PCI has its own balance, each BCI has
-  its own, and no transfer between them is possible in either direction. This is what makes
-  non-transferability enforceable by construction rather than by policy, and what makes
+  its own, and no user-invocable movement between them exists in either direction. This is what
+  makes non-transferability enforceable by construction rather than by policy, and what makes
   per-identity cost analytics — the input to the tiered-rent model — meaningful at all.
   Existing balances stay with the personal identity's PCI; every Business starts at zero
-  ([18 §3](./18-decisions-required.md)).
+  ([18 §3](./18-decisions-required.md)). A PCI's balance follows its **PCI slot** through an
+  audited conversion (§1.1), and never crosses to a Business or to another person.
 - **Not an asset the platform owes.** MHC is a prepaid entitlement to platform actions, and
   every surface must describe it that way.
 
 Customers hold no MHC, ever, and no customer-facing surface mentions a balance.
+
+### 1.1 MHC carryover during PCI conversion
+
+The one lifecycle operation that moves MHC between two commercial identity records. The full
+conversion model is [00 §3.5](./00-overview-and-terminology.md); this section states the
+**ledger** rules.
+
+**MHC is not forfeited and not permanently frozen by a valid conversion.** The provider paid for
+that credit, and a conversion is not a penalty.
+
+**What the operation does:**
+
+```
+Admin/Support executes conversion (all eligibility checks already passed)
+   ├─ resolve the source PCI's AVAILABLE balance          ─┐
+   ├─ debit the source to a zero available balance         │
+   ├─ credit the replacement with EXACTLY that amount      ├── ONE TRANSACTION
+   ├─ archive the source PCI                               │
+   ├─ create the replacement PCI                           │
+   └─ write the immutable conversion audit record         ─┘
+```
+
+**Ledger rules:**
+
+| Rule                          | Statement                                                                                                            |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| **Conservation**              | No MHC is created, destroyed or duplicated. The sum across both identities is unchanged by the operation             |
+| **Never doubly spendable**    | The source and the replacement can **never** both spend the same credits. The source ends at zero available balance  |
+| **Source cannot spend after** | Once conversion commits, the archived PCI can spend nothing — it holds no available balance and can activate nothing |
+| **Exactly once**              | **Idempotent.** A re-run, retry or double submission produces one carryover, enforced by locking and a uniqueness constraint on the conversion |
+| **Atomic**                    | Carryover, archival and replacement creation commit together. Any failure rolls back all of them and leaves the source enabled with its balance intact |
+| **History preserved**         | The source's ledger is **never deleted, rewritten or re-pointed**. Every historical MHC transaction — purchases, activation charges, re-grants — **remains attributable to the archived PCI** |
+| **Append-only**               | The carryover is recorded as ledger entries on both sides referencing the conversion event, in the same append-only manner as a re-grant counterentry (§9.0) |
+| **Available balance only**    | Only the remaining **available** balance carries                                                                     |
+
+**Non-available credits.** Pending, reserved, disputed, reversed or otherwise non-available
+credits are **never silently treated as available balance**. Each category carries an explicit
+ledger rule — resolve before conversion, settle before conversion, remain on the source, or
+block the conversion — and the rule applied is recorded on the conversion record. Where the
+available balance cannot be determined unambiguously, **the conversion does not proceed**.
+
+**What this is not.** It is not a transfer feature and nothing reusable may be built from it:
+
+- **No user can invoke it.** It exists only inside an Admin/Support-executed conversion.
+- It must **not** enable movement between arbitrary personal identities, between Business
+  identities, between users, or between any two commercial identities that are not a conversion
+  source and its own replacement.
+- It creates **no general MHC transfer interface**, no partial-move capability, and no
+  discretionary amount — the amount is the available balance, computed, not chosen.
+
+**Audit.** The conversion record identifies the source PCI, the replacement PCI, the
+user/account owner, the amount moved, the original ledger balance, the conversion event, the
+Administrator or Support actor, the timestamp and the reason. It is immutable.
 
 ---
 

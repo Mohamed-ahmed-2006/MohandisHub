@@ -32,10 +32,12 @@ installation; delivery days versus service areas; a portfolio versus a storefron
   makes never appear on the Expert profile, and Expert reputation never applies to their
   buying.
 - Cannot coexist with a Craftsman PCI on the same identity. Conversion to Craftsman is
-  **permitted through the controlled process** in
-  [00 §3.5](./00-overview-and-terminology.md) — an audited, administratively reviewed
-  archival-and-replacement, never a settings change, and never available while a live,
-  pending, incomplete or disputed engagement exists.
+  **permitted, and delivered in Wave 3 as an Admin/Support-executed operation**
+  ([00 §3.5](./00-overview-and-terminology.md)) — an audited archival-and-replacement, never a
+  settings change, never a self-service button, and never available while any unresolved
+  commercial obligation exists. The Expert identity is **archived, not retyped**; its reviews
+  and reputation stay with it permanently, and its **available MHC balance carries over exactly
+  once** to the replacement Craftsman identity.
 
 ---
 

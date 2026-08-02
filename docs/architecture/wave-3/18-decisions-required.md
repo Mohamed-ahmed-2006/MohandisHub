@@ -23,28 +23,64 @@ if so what happens to reviews, engagements, offers and MHC balance?
 
 ### Decision
 
-**Permitted, through a controlled, audited, administratively reviewed conversion with archival
-and no reputation carry-over.**
+**Permitted, and delivered in Wave 3 as an Admin/Support-controlled operation** — an audited
+archival-and-replacement with **available-MHC carryover** and no reputation carry-over.
 
-- Conversion is **forbidden** while any active, pending-activation, incomplete or disputed
-  engagement — or any open case or appeal — exists. No administrative override.
-- The old PCI is **archived**, never mutated and never deleted.
-- **Historical reviews and reputation remain permanently attached to the archived PCI** and
-  stay readable on the archived profile.
-- **Reputation, offers, portfolio and provider analytics do not transfer.** The replacement
-  starts at zero.
-- **Account-level KYC evidence may be reused where still valid** — it is evidence about the
-  person, and re-collecting an unexpired government ID proves nothing new.
-- **Role-specific onboarding, eligibility and verification are completed again in full**,
-  including V2 credentials for every credential-required category of the new trade.
-- The MHC balance stays on the identity's single PCI slot. This is not a transfer between
-  commercial identities: same natural person, same one-per-identity slot, no second identity
-  gains spendable credit.
-- Every conversion is **audited**, and an **admin-configurable cooldown** governs how soon
-  another may be requested.
+**Conversion mechanics**
 
-**Specified in:** [00 §3.5](./00-overview-and-terminology.md) · [14 §3](./14-reviews-and-reputation.md) ·
-[16 §1.1](./16-wave-3-scope.md) · [17](./17-product-invariants.md) INV-009d–f, INV-072a–b
+- The source PCI is **archived, never mutated, never retyped, never deleted.** A **replacement
+  PCI** of the other type is created at zero reputation with a new provider profile.
+- The archived identity stays available for historical engagement, review, dispute, settlement,
+  audit and administrative views. It **cannot** publish offers, submit proposals, accept
+  bookings, activate engagements, spend MHC, or acquire new commercial work.
+- **Historical reviews and reputation remain permanently attached to the archived PCI.**
+- **Reviews, reputation, ratings, offers, services, products, portfolio, provider analytics,
+  search ranking, fulfillment history and provider-type-specific commercial verification do not
+  transfer.**
+- **Account-level identity evidence may be reused only where still valid and applicable.**
+  Role-specific onboarding, eligibility and verification are completed again in full.
+- Source and replacement are linked by an **immutable audited conversion record**.
+
+**MHC carryover** — *approved separately and recorded here in full*
+
+- **The remaining available MHC balance carries over to the replacement PCI.** It is neither
+  forfeited nor permanently frozen.
+- Carryover happens through a **special audited system conversion operation**. It is **not a
+  user-accessible MHC transfer feature**, and must not enable transfers between arbitrary
+  personal identities, Business identities or users.
+- **The archived PCI finishes at a zero available balance**; the replacement receives **exactly**
+  that amount. No MHC is created, destroyed, duplicated, or left spendable by both identities.
+- The operation is **atomic and idempotent**, and **preserves complete ledger history**.
+  Historical MHC transactions remain attributable to the archived PCI.
+- **Only the remaining available balance carries.** Pending, reserved, disputed, reversed and
+  otherwise non-available credits follow explicit ledger rules and are never silently treated as
+  available balance.
+- The audit record identifies: source PCI, replacement PCI, user/account owner, amount moved,
+  original ledger balance, conversion event, Administrator or Support actor, timestamp, reason.
+
+**Authorization and Wave 3 delivery**
+
+- **Only authorized Admin/Support actors may execute a conversion.** Wave 3 ships conversion-safe
+  architecture, archival, replacement creation, eligibility validation, blocking validation,
+  audited carryover, Admin/Support authorization, conversion reason, immutable audit history,
+  user notifications, safe rollback before final commit, and idempotency protection.
+- Wave 3 ships **no** user-facing "Switch to Expert / Switch to Craftsman" button, **no**
+  self-service conversion, **no** automatic approval, **no** repeated user-controlled switching,
+  and **no** general MHC transfer interface.
+- Conversion is **rejected** while any unresolved commercial obligation exists — pending provider
+  activation, active engagement, incomplete fulfillment, pending customer confirmation, open
+  correction request, open dispute or case, unresolved settlement issue, active commercial
+  suspension investigation where conversion could evade enforcement, or any other unresolved
+  obligation defined by the engagement lifecycle. **No administrative override.**
+- **Conversion must not be usable to evade** suspension, disputes, poor reputation, rent
+  obligations, settlement reviews or enforcement actions.
+- An **admin-configurable cooldown** may apply. **Cooldown configuration does not create
+  self-service conversion** — the workflow stays Admin/Support-controlled at any setting.
+
+**Specified in:** [00 §3.5](./00-overview-and-terminology.md) · [13 §1.1](./13-mhc-activation.md) ·
+[14 §3](./14-reviews-and-reputation.md) · [15 §9.1](./15-suspension-and-enforcement.md) ·
+[16 §1.1](./16-wave-3-scope.md) · [17](./17-product-invariants.md) INV-009d–l, INV-059a–f,
+INV-072a–b
 
 ### Why
 
@@ -59,6 +95,19 @@ fixed attribute or a lifecycle with archival — which changes how reputation ag
 engagement snapshots and profile reads are keyed. Retrofitting archival onto an attribute assumed
 permanent means rewriting every reputation and profile read path after real data exists.
 
+### Why the MHC carryover is safe
+
+MHC non-transferability exists to stop credit becoming a currency — pooled, gifted, sold, or
+moved between market participants. The carryover does none of that. It is operator-executed
+inside one lifecycle event, scoped to **one natural person's one PCI slot**, and it empties the
+source in the same transaction that funds the replacement. No second identity ever holds
+spendable credit, and there is no surface a user could reach.
+
+The alternative — forfeiting the balance — would make conversion a punishment for a legitimate
+career change, and would push providers to burn credit on marginal activations before converting,
+which corrupts the activation data. Freezing it permanently would be the same outcome with worse
+bookkeeping.
+
 ### Rejected
 
 **Immutable PCI type.** Simplest to build and impossible to abuse, but it pushes real users into
@@ -68,6 +117,18 @@ prevent.
 **Conversion with reputation carry-over.** Would have made conversion painless and is what users
 will ask for. Rejected because it is reputation transfer between two commercial identities, which
 the baseline prohibits, and because the two trades' review criteria measure different things.
+
+**MHC forfeited or frozen on conversion.** Rejected: it penalises a legitimate lifecycle event
+and creates a perverse incentive to spend credit down before converting.
+
+**Self-service conversion in Wave 3.** Rejected for the first release. Conversion moves credit,
+archives a commercial identity and resets a reputation; each deserves a named human behind it
+before the flow is opened to users. Self-service remains a possible later enhancement and is
+**not** blocked by anything in this architecture.
+
+**Deferring conversion out of Wave 3 entirely.** Rejected: archival cannot be retrofitted onto an
+attribute assumed permanent without rewriting every reputation and profile read path after real
+data exists, and the operational need is immediate.
 
 ---
 
@@ -401,7 +462,14 @@ happened.
 
 ---
 
-## What would reopen any of these
+## Final status
+
+> **No unresolved Wave 3 product architecture decisions remain.**
+
+Every high-impact product decision in this document set is settled. Wave 3 implementation is not
+blocked on a product answer.
+
+### What would reopen any of these
 
 Nothing in ordinary implementation. These are settled product decisions, and an implementation
 difficulty is not grounds to revisit one — it is grounds to raise the difficulty.
@@ -411,13 +479,16 @@ approved set, or if a factual premise proves wrong. In that case the route is an
 decision request naming the question, why it matters, the options, a recommendation and what is
 blocked — not a quiet divergence in code.
 
-**Two items are deliberately deferred to a later explicit decision and are not open questions
-here:**
+### Later commercial activation decisions — not Wave 3 blockers
+
+Two items are deliberately deferred to a later **production activation** decision. Neither is an
+open architecture question, and **neither blocks Wave 3 implementation**:
 
 | Deferred decision                                    | Status                                                                                                  |
 | ---------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
-| **Live verified-GMV rent charging**                  | Rent ships in **shadow mode**. Turning on the debit is a separate production activation decision, informed by the shadow data ([13 §11](./13-mhc-activation.md)) |
-| **Rent-driven commercial suspension**                | A **further** separate decision. Deciding to charge is not deciding to suspend for non-payment ([15 §4](./15-suspension-and-enforcement.md)) |
+| **Live verified-GMV rent charging**                  | Remains a later production activation decision. Rent ships in **shadow mode** — calculated, recorded and reported, deducting nothing. Turning on the debit is a separate decision, informed by the shadow data ([13 §11](./13-mhc-activation.md)) |
+| **Rent-driven commercial suspension**                | Remains a **separate** later production decision. Deciding to charge is not deciding to suspend for non-payment ([15 §4](./15-suspension-and-enforcement.md)) |
 
-Neither blocks Wave 3. Both are deliberately structured so the answer can be taken later against
-real data, which is the entire point of shadow mode.
+Both are deliberately structured so the answer can be taken later against real data, which is the
+entire point of shadow mode. The architecture, the calculation chain and the enforcement
+boundaries are all complete in Wave 3; only the commercial switch is deferred.

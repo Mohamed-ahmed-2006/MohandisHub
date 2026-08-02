@@ -8,10 +8,13 @@ endpoints, no tickets, no code.
 103 production migrations; urgent chat disclosure correction
 `bc1681b5cee9f772402bc5ba8a5599e161da871d` ([00 §9](./00-overview-and-terminology.md)).
 
-**Decision status:** all eight high-impact product decisions are **resolved**
-([18](./18-decisions-required.md)). Two items — live verified-GMV rent charging and rent-driven
-suspension — are deliberately deferred to a later explicit production decision and do not block
-Wave 3.
+**Decision status:** **no unresolved Wave 3 product architecture decisions remain.** All eight
+high-impact decisions are resolved ([18](./18-decisions-required.md)), including the final PCI
+conversion model — Admin/Support-controlled execution and audited MHC carryover.
+
+Two items are deliberately deferred to a later **production activation** decision and **do not
+block Wave 3 implementation**: live verified-GMV rent charging, and rent-driven commercial
+suspension.
 
 This set defines what MohandisHub *is* in Wave 3: four roles, one engagement spine, one
 disclosure gate, one credit gate, and an honest settlement record. It is written so that
@@ -71,6 +74,11 @@ a reader most often gets wrong:
    authority is owner-only until Wave 4.
 4. **Rent is calculated, not charged.** The whole verified-GMV rent chain ships and runs in
    shadow mode. Nothing is deducted.
+5. **PCI conversion archives; it never retypes.** Expert ⇄ Craftsman conversion ships in Wave 3
+   as an **Admin/Support-executed** operation — no self-service button. The source identity is
+   archived and keeps its reviews permanently; the replacement starts at zero reputation and
+   receives the source's **available MHC balance exactly once**, through an audited, atomic,
+   idempotent system operation that is **not** a transfer feature.
 
 ---
 
