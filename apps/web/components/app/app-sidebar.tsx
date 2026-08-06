@@ -40,7 +40,6 @@ export const AppSidebar = ({
   const [hasUnreadChat, setHasUnreadChat] = useState(false);
   const [hasUnreadJobs, setHasUnreadJobs] = useState(false);
   const [hasUnreadBookings, setHasUnreadBookings] = useState(false);
-  const [hasUnreadWallet, setHasUnreadWallet] = useState(false);
   const [hasUnreadNegotiations, setHasUnreadNegotiations] = useState(false);
 
   useEffect(() => {
@@ -54,10 +53,6 @@ export const AppSidebar = ({
       }
       if (type.startsWith('reservation_')) {
         setHasUnreadBookings(true);
-        return;
-      }
-      if (type.startsWith('wallet_')) {
-        setHasUnreadWallet(true);
         return;
       }
       if (type === 'price_negotiation') {
@@ -93,7 +88,6 @@ export const AppSidebar = ({
     if (pathname.includes('/app/chat')) setHasUnreadChat(false);
     if (pathname === buildLocalePath(locale, '/app')) setHasUnreadJobs(false);
     if (pathname.includes('/app/bookings')) setHasUnreadBookings(false);
-    if (pathname.includes('/app/settings/wallet')) setHasUnreadWallet(false);
     if (pathname.includes('/app/negotiations')) setHasUnreadNegotiations(false);
   }, [pathname, locale]);
 
@@ -230,16 +224,6 @@ export const AppSidebar = ({
                     width: '8px',
                     height: '8px',
                     background: '#f97316',
-                    borderRadius: '50%',
-                  }}
-                />
-              )}
-              {item.href === '/app/settings' && hasUnreadWallet && (
-                <span
-                  style={{
-                    width: '8px',
-                    height: '8px',
-                    background: '#22c55e',
                     borderRadius: '50%',
                   }}
                 />

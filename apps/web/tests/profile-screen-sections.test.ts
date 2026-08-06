@@ -18,7 +18,6 @@ describe('getVisibleProfileSections', () => {
       'preferences',
       'profile',
       'verification',
-      'wallet',
     ]);
   });
 
@@ -28,7 +27,6 @@ describe('getVisibleProfileSections', () => {
       'preferences',
       'profile',
       'verification',
-      'wallet',
     ]);
   });
 
@@ -38,7 +36,6 @@ describe('getVisibleProfileSections', () => {
       'preferences',
       'profile',
       'verification',
-      'wallet',
     ]);
   });
 
@@ -49,10 +46,11 @@ describe('getVisibleProfileSections', () => {
     ]);
   });
 
-  it('anchors the wallet section at wallet-settings', () => {
-    // profile-screen.tsx resolves the `#wallet-settings` hash to this tab, and
-    // the award-offer "buy credits" link points at it.
-    const wallet = getVisibleProfileSections('expert').find((s) => s.id === 'wallet');
-    expect(wallet?.anchorId).toBe('wallet-settings');
+  it('does not expose the retired wallet section for any provider role', () => {
+    for (const role of ['expert', 'craftsman', 'business']) {
+      expect(getVisibleProfileSections(role).map((section) => String(section.id))).not.toContain(
+        'wallet',
+      );
+    }
   });
 });

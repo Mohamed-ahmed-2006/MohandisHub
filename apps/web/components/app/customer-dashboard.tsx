@@ -16,7 +16,6 @@ import type { Bid, BidMessage, Need } from '@/lib/needs/client';
 import { needsApiClient } from '@/lib/needs/client';
 import { plansApiClient } from '@/lib/plans/client';
 import { uploadFile } from '@/lib/upload/client';
-import { walletApiClient } from '@/lib/wallet/client';
 
 type Props = {
   locale: Locale;
@@ -406,24 +405,6 @@ export const CustomerDashboard = ({
       void loadNeeds();
     } catch (err: unknown) {
       addToast('Error', err instanceof Error ? err.message : 'Failed to award bid');
-    }
-  };
-
-  const handlePay = async (bidId: string, amountRaw: string) => {
-    if (!selectedNeed) return;
-    try {
-      const amount = parseFloat(amountRaw);
-      const wallet = await walletApiClient.getMyWallet(accessToken);
-      if (wallet.balance < amount) {
-        addToast('Insufficient balance', 'Please deposit funds first.');
-        return;
-      }
-      await needsApiClient.payBid(accessToken, selectedNeed.id, bidId);
-      setSelectedNeed(null);
-      void loadNeeds();
-      addToast('Success', 'Payment completed.');
-    } catch (err: unknown) {
-      addToast('Error', err instanceof Error ? err.message : 'Failed to pay bid');
     }
   };
 
@@ -1080,16 +1061,7 @@ export const CustomerDashboard = ({
                       </div>
                     )}
                     {bid.status === 'accepted' && (
-                      <div className="dashboard-bid-actions dashboard-bid-actions--accepted">
-                        <span className="dashboard-badge dashboard-badge--awarded">Accepted</span>
-                        <button
-                          type="button"
-                          className="dashboard-primary-btn dashboard-primary-btn--sm dashboard-bid-pay-btn"
-                          onClick={() => void handlePay(bid.id, bid.amount)}
-                        >
-                          Pay Expert
-                        </button>
-                      </div>
+                      <span className="dashboard-badge dashboard-badge--awarded">Accepted</span>
                     )}
                   </div>
                 ))}

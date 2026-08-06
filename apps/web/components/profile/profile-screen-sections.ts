@@ -1,4 +1,4 @@
-export type ProfileSectionId = 'account' | 'preferences' | 'profile' | 'verification' | 'wallet';
+export type ProfileSectionId = 'account' | 'preferences' | 'profile' | 'verification';
 
 export type ProfileSection = {
   id: ProfileSectionId;
@@ -10,7 +10,6 @@ const SECTION_CONFIG: ProfileSection[] = [
   { id: 'preferences', anchorId: 'notification-preferences' },
   { id: 'profile', anchorId: 'profile-settings' },
   { id: 'verification', anchorId: 'verification-settings' },
-  { id: 'wallet', anchorId: 'wallet-settings' },
 ];
 
 export function getVisibleProfileSections(role?: string | null): ProfileSection[] {
@@ -18,7 +17,6 @@ export function getVisibleProfileSections(role?: string | null): ProfileSection[
 
   return SECTION_CONFIG.filter((section) => {
     if (section.id === 'account' || section.id === 'preferences') return true;
-    if (section.id === 'wallet') return hasRoleProfile;
     return hasRoleProfile;
   });
 }

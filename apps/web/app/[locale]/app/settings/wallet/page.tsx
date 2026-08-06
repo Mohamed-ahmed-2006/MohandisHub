@@ -9,7 +9,7 @@ type WalletSettingsPageProps = {
 const WalletSettingsPage = async ({ params }: WalletSettingsPageProps) => {
   const { locale } = await params;
   if (!isSupportedLocale(locale)) notFound();
-  redirect(`/${locale}/app/settings?tab=wallet`);
+  redirect(`/${locale}/app/settings`);
 };
 
 export default WalletSettingsPage;

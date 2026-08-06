@@ -20,8 +20,6 @@ import { useCallback, useEffect, useState } from 'react';
 
 import { getVisibleProfileSections, type ProfileSectionId } from './profile-screen-sections';
 
-import { MhcCreditsScreen } from '@/components/app/mhc-credits-screen';
-import { WalletSettingsScreen } from '@/components/app/wallet-settings-screen';
 import { useAppStatus } from '@/components/app-status-provider';
 import { useAuth } from '@/components/auth/auth-provider';
 import { LanguageToggle } from '@/components/language-toggle';
@@ -35,7 +33,6 @@ import { SkeletonForm } from '@/components/ui/skeleton';
 import { resolvePublicAssetUrl, toAbsoluteAssetUrl } from '@/lib/asset-url';
 import { COUNTRIES } from '@/lib/data/countries';
 import { getApiBaseUrl } from '@/lib/env';
-import { useI18n } from '@/lib/i18n/context';
 import { buildLocalePath } from '@/lib/i18n/path';
 import type { Dictionary, Locale } from '@/lib/i18n/types';
 import { notificationsApiClient } from '@/lib/notifications/client';
@@ -508,7 +505,6 @@ function getSectionLabel(
   if (sectionId === 'account') return dictionary.profile.accountTab;
   if (sectionId === 'preferences')
     return locale === 'ar' ? 'تفضيلات التنبيهات' : 'Notification Preferences';
-  if (sectionId === 'wallet') return locale === 'ar' ? 'المحفظة والرصيد' : 'Wallet & Balance';
   if (sectionId === 'profile') {
     if (roleProfileKind === 'business') return dictionary.profile.businessTab;
     if (roleProfileKind === 'craftsman') return dictionary.profile.craftsmanTab;
@@ -901,40 +897,6 @@ const AccountForm = ({
   );
 };
 
-const WalletTab = () => {
-  const { locale } = useI18n();
-  const loc = locale === 'ar' ? 'ar' : 'en';
-  const { authUser } = useAuth();
-  const isProvider =
-    authUser?.role === 'expert' || authUser?.role === 'craftsman' || authUser?.role === 'business';
-  const [subTab, setSubTab] = useState<'mhc' | 'cash'>(isProvider ? 'mhc' : 'cash');
-
-  return (
-    <div id="wallet-settings" className="unified-wallet-tab">
-      {isProvider && (
-        <div className="unified-wallet-subtabs">
-          <button
-            type="button"
-            className={`unified-wallet-subtab${subTab === 'mhc' ? ' is-active' : ''}`}
-            onClick={() => setSubTab('mhc')}
-          >
-            🪙 {loc === 'ar' ? 'نقاط المنصة (MHC)' : 'Platform Credits (MHC)'}
-          </button>
-          <button
-            type="button"
-            className={`unified-wallet-subtab${subTab === 'cash' ? ' is-active' : ''}`}
-            onClick={() => setSubTab('cash')}
-          >
-            💵 {loc === 'ar' ? 'الرصيد المالي (EGP)' : 'Cash Balance (EGP)'}
-          </button>
-        </div>
-      )}
-
-      {isProvider && subTab === 'mhc' ? <MhcCreditsScreen /> : <WalletSettingsScreen hideHeader />}
-    </div>
-  );
-};
-
 // ── Main Profile Screen ──────────────────────────────────────────────────
 
 export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
@@ -946,7 +908,6 @@ export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
     if (typeof window !== 'undefined') {
       const urlParams = new URLSearchParams(window.location.search);
       const tabParam = urlParams.get('tab');
-      if (tabParam === 'wallet' || tabParam === 'balance') return 'wallet';
       if (tabParam === 'account') return 'account';
       if (tabParam === 'preferences') return 'preferences';
       if (tabParam === 'profile') return 'profile';
@@ -955,7 +916,6 @@ export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
       if (window.location.hash) {
         const hash = window.location.hash.replace('#', '');
         if (hash === 'notification-preferences' || hash === 'preferences') return 'preferences';
-        if (hash === 'wallet-settings' || hash === 'wallet' || hash === 'balance') return 'wallet';
         if (hash === 'profile-settings' || hash === 'profile') return 'profile';
         if (hash === 'verification-settings' || hash === 'verification') return 'verification';
         if (hash === 'account-settings' || hash === 'account') return 'account';
@@ -964,19 +924,6 @@ export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
     return 'account';
   });
 
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const urlParams = new URLSearchParams(window.location.search);
-    const tabParam = urlParams.get('tab');
-    if (tabParam === 'wallet' || tabParam === 'balance') {
-      setActiveTab('wallet');
-    } else if (window.location.hash) {
-      const hash = window.location.hash.replace('#', '');
-      if (hash === 'wallet-settings' || hash === 'wallet' || hash === 'balance') {
-        setActiveTab('wallet');
-      }
-    }
-  }, []);
   const [expertProfile, setExpertProfile] = useState<ExpertProfile | null>(null);
   const [craftsmanProfile, setCraftsmanProfile] = useState<CraftsmanProfile | null>(null);
   const [businessProfile, setBusinessProfile] = useState<BusinessProfile | null>(null);
@@ -1660,9 +1607,6 @@ export const ProfileScreen = ({ locale, dictionary }: ProfileScreenProps) => {
             <AccountPreferences locale={locale} dictionary={dictionary} accessToken={accessToken} />
           </section>
         )}
-
-        {/* Wallet & Balance tab */}
-        {activeTab === 'wallet' && <WalletTab />}
 
         {/* Role-specific profile tab */}
         {activeTab === 'profile' && hasRoleProfile && loading && (

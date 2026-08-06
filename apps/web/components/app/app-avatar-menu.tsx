@@ -100,14 +100,6 @@ export const AppAvatarMenu = ({
             {dictionary.nav.settings}
           </Link>
           <Link
-            href={buildLocalePath(locale, '/app/settings?tab=wallet')}
-            className="app-avatar-dropdown-item"
-            role="menuitem"
-            onClick={() => setOpen(false)}
-          >
-            {dictionary.wallet.balance}
-          </Link>
-          <Link
             href={buildLocalePath(locale, '/app/plan')}
             className="app-avatar-dropdown-item"
             role="menuitem"
