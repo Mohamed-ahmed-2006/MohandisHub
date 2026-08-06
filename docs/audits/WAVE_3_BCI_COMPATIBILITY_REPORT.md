@@ -9,16 +9,20 @@
 
 ## 1. Verdict
 
-**BCI SLICE COMPLETE WITH NON-BLOCKING RISKS.**
+**BCI SLICE DATABASE-VALIDATED WITH NON-BLOCKING RISKS.**
+
+_Updated 2026-08-06 after PostgreSQL execution — see §17._
 
 The additive spine, the deterministic backfill, the constraint set, the domain layer, the
-authorization boundary and the B1–B5 coverage are all implemented and committed. The full
-ordinary validation chain passes.
+authorization boundary and the B1–B5 coverage are implemented, committed and now **executed
+against a real PostgreSQL server**. All 104 migrations replay from an empty database, migration
+104 applies and reconciles, and all 23 BCI PostgreSQL tests pass. **No change to the migration
+was required.**
 
-The single non-blocking risk is that the new migration has **not been executed against a real
-PostgreSQL server** in this session: no disposable scratch database was configured, and
-inventing a `DATABASE_URL` was out of scope. The 22 migration tests that would prove it are
-written, committed and skipped. See §14.
+Two non-blocking risks remain, neither in this slice: two pre-existing schema-fingerprint tests
+in unrelated suites fail on PostgreSQL 18 for a reason proven independent of migration 104, and
+the validation ran on PostgreSQL 18.4 rather than the deployment's PostgreSQL major version.
+See §14.
 
 ---
 
@@ -284,10 +288,10 @@ assertion itself is unchanged, and mutating the route away from the trusted `/pu
 object-id form still fails the test — verified by mutating the source, re-running, and
 restoring. Committed in isolation.
 
-| Suite                                     | Tests                                    |
-| ----------------------------------------- | ---------------------------------------- |
-| `business-identity.compatibility.test.ts` | 46 passing (no database required)        |
-| `business-identity.migration.pg.test.ts`  | 22, PostgreSQL-gated (skipped — see §14) |
+| Suite                                     | Tests                                            |
+| ----------------------------------------- | ------------------------------------------------ |
+| `business-identity.compatibility.test.ts` | 46 passing (no database required)                |
+| `business-identity.migration.pg.test.ts`  | **23 passing** against PostgreSQL 18.4 — see §17 |
 
 **Ordinary counts:**
 
@@ -299,44 +303,57 @@ restoring. Committed in isolation.
 
 941 = 20 (shared) + 601 (api) + 320 (web). The delta is exactly the 46 new compatibility tests.
 
-**Skipped PostgreSQL tests: 331** — 309 pre-existing plus the 22 added by this slice.
+**PostgreSQL-gated tests: 332** — 309 pre-existing plus the 23 added by this slice. They skip in
+an ordinary run and were executed in full during the §17 validation.
 
 ---
 
 ## 13. Validation
 
-| Check                       | Result                                                                                                                                                                                                                 |
-| --------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `npm test`                  | **PASS** — 941 passing, 331 skipped                                                                                                                                                                                    |
-| `npm run typecheck`         | **PASS**                                                                                                                                                                                                               |
-| `npm run lint`              | **PASS** — `--max-warnings=0`, api and web                                                                                                                                                                             |
-| `npm run validate:i18n`     | **PASS**                                                                                                                                                                                                               |
-| `npm run build`             | **PASS**                                                                                                                                                                                                               |
-| Prettier on changed files   | **PASS** (`.sql` has no Prettier parser and is not covered)                                                                                                                                                            |
-| `git diff --check`          | **PASS** — no whitespace errors                                                                                                                                                                                        |
-| Migration static validation | **PARTIAL** — structure verified (balanced `$$`, parentheses, quotes; 3 `DO` blocks all closed). `scripts/migration-dryrun.mjs` and `scripts/migration-replay-check.mjs` both require `DATABASE_URL` and could not run |
+| Check                       | Result                                                                                                                                                                                                   |
+| --------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `npm test`                  | **PASS** — 941 passing, 331 skipped                                                                                                                                                                      |
+| `npm run typecheck`         | **PASS**                                                                                                                                                                                                 |
+| `npm run lint`              | **PASS** — `--max-warnings=0`, api and web                                                                                                                                                               |
+| `npm run validate:i18n`     | **PASS**                                                                                                                                                                                                 |
+| `npm run build`             | **PASS**                                                                                                                                                                                                 |
+| Prettier on changed files   | **PASS** (`.sql` has no Prettier parser and is not covered)                                                                                                                                              |
+| `git diff --check`          | **PASS** — no whitespace errors                                                                                                                                                                          |
+| Migration static validation | superseded by the live replay in §17. `scripts/migration-dryrun.mjs` and `scripts/migration-replay-check.mjs` both target an existing `DATABASE_URL` deployment and were deliberately not pointed at one |
 
 ---
 
 ## 14. Known Risks
 
-1. **The migration has not been executed against a real PostgreSQL server.** This is the only
-   material risk in the slice. No `apps/api/.env` exists, `PG_INTEGRATION_URL` is unset, and
-   inventing a connection string was out of scope. The migration's structure was verified
-   statically and every construct used is standard (`md5`, `overlay`, `position`, `format`,
-   plpgsql `DO` blocks, composite foreign keys, a CHECK calling an `IMMUTABLE` function), but
-   _statically verified_ is not _executed_.
-   **Mitigation:** run `RUN_PG_INTEGRATION=1 npm run test -w @mohandishub/api` against a
-   disposable scratch database before applying this migration anywhere. The 22 tests that
-   prove it are already written and committed.
-2. **A CHECK constraint calls a user-defined function.** Supported and `IMMUTABLE`, but it makes
+1. ~~**The migration has not been executed against a real PostgreSQL server.**~~ **Closed
+   2026-08-06** — all 104 migrations replay from empty, migration 104 applies and reconciles,
+   and all 23 BCI PostgreSQL tests pass. See §17.
+2. **Validation ran on PostgreSQL 18.4, not the deployment's major version.** The disposable
+   cluster was whatever the workstation had. Nothing migration 104 uses is version-sensitive
+   (`md5`, `overlay`, `position`, `substr`, `format`, plpgsql `DO` blocks, composite foreign
+   keys, a CHECK calling an `IMMUTABLE` function), and PostgreSQL 18 is the _stricter_ direction
+   for this schema. It is still a different major version from Supabase's.
+   **Mitigation:** re-run the gated suite once against the deployment's major version.
+3. **Two pre-existing schema-fingerprint tests fail on PostgreSQL 18, for a reason proven
+   unrelated to this slice.** `advertisements.weekly-billing.pg.test.ts` and
+   `business-teams.workspace.pg.test.ts` each roll a migration back and assert nothing foreign
+   disappeared. PostgreSQL 18 materializes `NOT NULL` constraints as `pg_constraint` rows
+   (`contype = 'n'`), which PostgreSQL ≤ 17 does not, so dropping a column now also removes a
+   constraint row those allowlists were never written to expect. Reproduced on a database built
+   from migrations 1–103 with migration 104 **absent entirely**, yielding the identical key and
+   **zero** removed keys naming a BCI object. Classified: **previously legal data now visible
+   through a changed catalog representation** — a test/PostgreSQL-version incompatibility, not
+   corrupt data and not an architecture contradiction. Left unchanged: they are unrelated
+   suites, out of scope for this slice, and they do not fail on the deployment's version.
+4. **A CHECK constraint calls a user-defined function.** Supported and `IMMUTABLE`, but it makes
    `pg_dump` restore order matter — the function must exist before the table. Within this
    migration it does, and a clean replay builds them in order.
-3. **The preflight can block a deployment.** If production holds a workspace whose owning account
+5. **The preflight can block a deployment.** If production holds a workspace whose owning account
    has drifted out of the `business` primary role, the migration aborts by design. That is the
    fail-closed posture the architecture requires, and the error message names the repair. The
-   `20260731120000` header records that production held none of the equivalent states.
-4. **`ON DELETE CASCADE` on `owner_user_id`.** Deleting a Business account removes its BCI. This
+   `20260731120000` header records that production held none of the equivalent states. Verified
+   live: the abort leaves the two BCI tables non-existent.
+6. **`ON DELETE CASCADE` on `owner_user_id`.** Deleting a Business account removes its BCI. This
    matches the existing `business_teams.business_id` behaviour and is harmless while no
    commercial asset hangs off a BCI, but it must be revisited when assets are re-associated.
 
@@ -384,3 +401,193 @@ configuration and commercial-approval decision.
 If a spine-hardening slice is preferred first, the alternative is **converting the Business
 commercial routes to `resolveBusinessIdentityContext`**, which has no data migration at all and
 would retire the last places where `req.user.id` doubles as the commercial principal.
+
+---
+
+## 17. PostgreSQL Execution Validation — 2026-08-06
+
+Added after the implementation report above. This section records the live execution of
+migration 104 and the PostgreSQL-gated suites. **No change to the migration was required.**
+
+### 17.1 Scratch environment
+
+| Item                    | Value                                                                              |
+| ----------------------- | ---------------------------------------------------------------------------------- |
+| Method                  | A brand-new PostgreSQL cluster created with `initdb` for this task alone           |
+| Server                  | PostgreSQL 18.4 (workstation `scoop` install of the client/server binaries)        |
+| Data directory          | The session scratchpad, outside the repository                                     |
+| Listen address          | `127.0.0.1` only, port `55432` (non-default)                                       |
+| Contents at creation    | `postgres`, `template0`, `template1` — **no user database, no user data**          |
+| Disposability           | The cluster did not exist before this task; teardown is stop + delete the data dir |
+| Scratch database prefix | `mohandishub_wave3_bci_test_`, plus the harness's own `mhc_it_*`                   |
+
+**Nothing pre-existing was touched.** The workstation's persisted cluster
+(`scoop/persist/postgresql/data`) was never started and never connected to; no server was
+listening on 5432 or 54322 at any point. No `DATABASE_URL` existed in the environment or in the
+repository, none was invented, and no credential was written to a repository file or a commit.
+`PG_INTEGRATION_URL` was supplied per-command for the duration of a single shell invocation.
+
+**Environment prerequisite discovered.** A vanilla PostgreSQL cluster does not carry Supabase's
+cluster roles, so the replay first failed at migration 76
+(`20260610132000_backend_only_rls_storage_indexes.sql`) with `role "anon" does not exist`
+(SQLSTATE `42704`). This is a property of the empty cluster, not of any migration: 19 migrations
+reference `anon` and `authenticated`. Creating `anon`, `authenticated`, `service_role` and
+`authenticator` as cluster roles resolved it. Worth recording for anyone replaying this schema
+outside Supabase.
+
+### 17.2 Full migration replay
+
+| Check                                     | Result                                                                                                           |
+| ----------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| All 104 migrations from an empty database | **PASS** — applied in repository order, zero failures                                                            |
+| Migration 104 execution                   | **PASS**                                                                                                         |
+| Reconciliation block                      | **PASS** — emitted `BCI compatibility: 0 legacy Business account(s) reconciled to 0 initial BCI(s), one to one.` |
+| Existing migration files modified         | **None** — the diff against the base touches no file under `supabase/migrations/` other than the new 104         |
+
+Objects created by migration 104, read back from the catalog:
+
+- **Tables:** `business_commercial_identities`, `business_commercial_identity_legacy_map` — both
+  with `relrowsecurity = true`.
+- **Keys:** `business_commercial_identities_pkey (id)`;
+  `uq_business_commercial_identities_id_owner UNIQUE (id, owner_user_id)`;
+  `business_commercial_identity_legacy_map_pkey (business_account_id)`;
+  `uq_business_commercial_identity_legacy_map_bci UNIQUE (bci_id)`.
+- **Foreign keys:** `owner_user_id → users(id) ON DELETE CASCADE`;
+  `business_account_id → users(id) ON DELETE CASCADE`; and the composite
+  `(bci_id, business_account_id) → business_commercial_identities(id, owner_user_id) ON DELETE CASCADE`.
+- **CHECKs:** `chk_business_commercial_identities_legacy_id_deterministic`;
+  `chk_business_commercial_identity_legacy_map_deterministic`; status and origin enums.
+- **Index:** `idx_business_commercial_identities_owner`.
+- **Trigger:** `trg_business_commercial_identities_immutable_owner`.
+- **Functions:** `business_commercial_identity_deterministic_id` — reported `provolatile = i`
+  (IMMUTABLE), `proparallel = s` (PARALLEL SAFE), `proisstrict = true`; and
+  `business_commercial_identities_reject_owner_change`.
+
+### 17.3 PostgreSQL-gated test results
+
+Command: `RUN_PG_INTEGRATION=1 PG_INTEGRATION_URL=… npx vitest run` in `apps/api`.
+
+| Population                             | Passed  | Failed | Notes                                        |
+| -------------------------------------- | ------- | ------ | -------------------------------------------- |
+| **New BCI PostgreSQL tests**           | **23**  | **0**  | `business-identity.migration.pg.test.ts`     |
+| Pre-existing PostgreSQL-gated tests    | 307     | 2      | both PostgreSQL 18 artifacts, see §14.3      |
+| Whole `@mohandishub/api` suite (gated) | **931** | 2      | 933 total, duration ≈ 30 s wall / 222 s test |
+
+The 23 BCI tests are one more than the 22 originally written: the SQL↔TypeScript determinism
+check was strengthened during this validation to pin five fixed UUIDs spanning the variant
+nibble's range, and a test was added for an account that becomes a Business after the first run.
+
+**Two harness defects were found and fixed in the new pg test file. Neither was a migration
+defect, and the migration was not touched:**
+
+1. Seventeen tests failed with
+   `business workspace … must have exactly one owner at commit (found 0)`. The fixture inserted
+   the workspace, its role and its owner membership as three autocommitted statements, so the
+   deferred constraint trigger `trg_business_teams_owner_present` from `20260731120000`
+   correctly refused an ownerless committed workspace. **The database was right and the fixture
+   was wrong**; workspace provisioning is now transactional, as the real provisioning path is.
+   Incidental live confirmation that migration 103's lower owner bound works.
+2. One test asserted that no table matching `%proposal%` (among other patterns) exists, which
+   matched the pre-existing `reservation_location_proposals`. Replaced with a before/after
+   table-set diff asserting the migration's entire footprint is exactly the two BCI tables and
+   that no table disappeared — strictly stronger than the pattern it replaced.
+
+### 17.4 Deterministic backfill
+
+Verified live, all passing:
+
+| Case                                                        | Result                                                 |
+| ----------------------------------------------------------- | ------------------------------------------------------ |
+| Zero Business accounts → zero BCIs                          | PASS (reconciliation NOTICE reported 0 → 0)            |
+| One Business → exactly one initial BCI                      | PASS, id equals the deterministic value                |
+| Several Businesses → isolated, distinct identities          | PASS, 3 accounts → 3 distinct BCIs                     |
+| Deactivated Business account included (documented decision) | PASS                                                   |
+| Non-Business accounts receive no BCI                        | PASS (`customer`, `expert`)                            |
+| Account promoted to Business after the first run            | PASS — no BCI until re-run, then the deterministic one |
+| SQL and TypeScript agree on fixed UUIDs                     | PASS for all five, each matching `…-3xxx-[89ab]xxx-…`  |
+| Owner on the BCI matches the legacy Business account        | PASS                                                   |
+| Legacy map and BCI records agree                            | PASS (owner mismatch count 0 in every state exercised) |
+
+### 17.5 Idempotency
+
+Re-applying the whole migration file leaves the identity id, the mapping, the row counts and the
+`created_at` timestamp unchanged; the DDL re-applies without duplicate triggers, indexes or
+constraints. A full reversal followed by a re-application produces the **identical** BCI
+identifier — which is the practical meaning of determinism. All passing.
+
+### 17.6 Concurrency
+
+Ten concurrent transactions each running both backfill statements against the same Business
+settled on **one** identity and **one** mapping, with no owner mismatch, no deadlock, and no
+uniqueness violation surfacing as a partial success. Separate Businesses stayed fully isolated.
+Executed against the real server rather than inferred from `ON CONFLICT`.
+
+### 17.7 Preflight, rejection and rollback
+
+The preflight abort was exercised live: a workspace whose owning account had drifted out of the
+`business` primary role caused the migration to raise `Refusing to migrate: …`, and afterwards
+`to_regclass('public.business_commercial_identities')` was **NULL** — DDL is transactional, so
+the abort left no partial BCI state and no mutated legacy row.
+
+Every conflicting write was refused by the database, with the data intact afterwards
+(`identities=2 mappings=2 owner_mismatches=0`):
+
+| Attempt                                       | SQLSTATE | Refused by                          |
+| --------------------------------------------- | -------- | ----------------------------------- |
+| Map a Business to a non-deterministic BCI     | 23514    | deterministic CHECK                 |
+| Two Businesses sharing one BCI                | 23514    | deterministic CHECK (before UNIQUE) |
+| A second mapping for one Business             | 23505    | mapping primary key                 |
+| Repoint a mapping to another account          | 23514    | deterministic CHECK                 |
+| Mutate a BCI's owner                          | 23514    | immutable-owner trigger             |
+| Legacy-origin BCI with a non-deterministic id | 23514    | legacy-id CHECK                     |
+| Invalid `status`                              | 23514    | status CHECK                        |
+| Map to a BCI that does not exist              | 23503    | composite foreign key               |
+
+### 17.8 RLS and privileges
+
+Tested with `SET ROLE` on a live connection, not by reading the migration:
+
+| Role            | Operation                                     | Result                             |
+| --------------- | --------------------------------------------- | ---------------------------------- |
+| `authenticated` | `SELECT` either table                         | refused, `42501` permission denied |
+| `authenticated` | `INSERT` an identity with arbitrary ownership | refused, `42501`                   |
+| `authenticated` | `UPDATE owner_user_id`                        | refused, `42501`                   |
+| `authenticated` | `INSERT` a mapping claiming another Business  | refused, `42501`                   |
+| `authenticated` | `DELETE` mappings                             | refused, `42501`                   |
+| `anon`          | `SELECT` identities                           | refused, `42501`                   |
+
+Both tables report `relrowsecurity = true`, and `information_schema.role_table_grants` returns
+**no rows** for `anon` or `authenticated`. This is the repository's existing backend-only
+posture: the API connects with the service role, and browser-facing roles reach these tables
+through no path at all. No policy was disabled to test this.
+
+### 17.9 Legacy compatibility
+
+A JSON snapshot of `business_teams`, `business_members`, `business_team_roles`,
+`business_team_invites` and `business_profiles` — taken with a seeded workspace, a pending
+invitation and a role deliberately carrying the reserved `manage_jobs` and `view_analytics`
+permissions — is **byte-identical** before and after migration 104. The reserved permission
+survives on its role. The shape of every `user_id` / `provider_id` / `business_id` / `owner_id`
+column in the public schema is unchanged, no table outside the mapping gained a `bci_id` or
+`commercial_identity_id` column, and the migration's entire table footprint is exactly the two
+BCI tables with nothing removed.
+
+### 17.10 Cleanup
+
+| Step                                     | Result                                                             |
+| ---------------------------------------- | ------------------------------------------------------------------ |
+| Scratch databases dropped                | Done — `mohandishub_wave3_bci_test_*` and the harness's `mhc_it_*` |
+| Cluster left holding only defaults       | Verified — `postgres`, `template0`, `template1`                    |
+| Throwaway cluster stopped                | Done (`pg_ctl -m fast stop`), port 55432 no longer listening       |
+| Throwaway data directory deleted         | Done                                                               |
+| Any other database touched               | **None**                                                           |
+| Credentials, dumps or `.env` in the repo | **None** — the only working-tree change is the pg test file        |
+
+### 17.11 Files changed by this validation
+
+- `apps/api/src/tests/business-identity.migration.pg.test.ts` — transactional workspace fixture,
+  footprint-diff assertion, fixed-UUID determinism check, promoted-account test.
+
+The migration, the domain layer and the ordinary test suite were **not** modified. Ordinary
+counts are unchanged at **941 passing**; `typecheck`, `lint`, `validate:i18n`, `build`,
+changed-file Prettier and `git diff --check` all pass.
