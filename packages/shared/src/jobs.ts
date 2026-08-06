@@ -18,6 +18,7 @@ export interface Job {
   description: string;
   requirements?: string | null | undefined;
   salaryRange?: string | null | undefined;
+  /** Historical value; newly-created jobs always return 0. */
   applicationFeeAmount: number;
   interviewEnabled: boolean;
   interviewInstructions?: string | null | undefined;
@@ -37,6 +38,7 @@ export interface JobApplication {
   submissionType: JobApplicationSubmissionType;
   profileSnapshot: unknown | null;
   cvFileUrl: string | null;
+  /** Historical value; new applications always return 0. */
   applicationFeeAmount: number;
   applicationCommissionAmount: number;
   businessPayoutAmount: number;
@@ -52,7 +54,8 @@ export interface CreateJobDto {
   description: string;
   requirements?: string | undefined;
   salaryRange?: string | undefined;
-  applicationFeeAmount: number;
+  /** Retired EGP field accepted only for backward compatibility and ignored for new jobs. */
+  applicationFeeAmount?: number;
   interviewEnabled?: boolean;
   interviewInstructions?: string | undefined;
 }
@@ -115,7 +118,8 @@ export interface JobSubmission {
 
 export interface CreateMilestoneDto {
   title: string;
-  amount: number;
+  /** Retired EGP field accepted only for backward compatibility and ignored. */
+  amount?: number;
 }
 
 export interface SubmitMilestoneDto {

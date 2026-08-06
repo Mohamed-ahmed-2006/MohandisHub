@@ -1,5 +1,4 @@
 import {
-  computeCommissionSplit,
   type EffectivePlanLimits,
   type ApplyJobDto,
   type BookJobInterviewDto,
@@ -28,7 +27,6 @@ import { ProfilesService } from '../profiles/profiles.service.js';
 import { ReservationsRepository } from '../reservations/reservations.repository.js';
 import { ReservationsService } from '../reservations/reservations.service.js';
 import { SettingsService } from '../settings/settings.service.js';
-import { WalletRepository } from '../wallet/wallet.repository.js';
 
 import { JobsRepository } from './jobs.repository.js';
 import type {
@@ -78,7 +76,6 @@ export class JobsService {
     private readonly notificationsService: NotificationsService = new NotificationsService(),
     private readonly reservationsRepo: ReservationsRepository = new ReservationsRepository(),
     private readonly reservationsService: ReservationsService = new ReservationsService(),
-    private readonly walletRepo: WalletRepository = new WalletRepository(),
     private readonly settingsService: SettingsService = new SettingsService(),
     private readonly profilesService: ProfilesService = new ProfilesService(),
     private readonly plansService: PlansService = new PlansService(),
@@ -121,7 +118,9 @@ export class JobsService {
       const createInput = {
         title: input.title,
         description: input.description,
-        applicationFeeAmount: input.applicationFeeAmount,
+        // The retired EGP application fee remains in the schema for historical
+        // records only. Every newly-created hiring post is non-financial.
+        applicationFeeAmount: 0,
         interviewEnabled: input.interviewEnabled ?? false,
         ...(input.requirements !== undefined ? { requirements: input.requirements } : {}),
         ...(input.salaryRange !== undefined ? { salaryRange: input.salaryRange } : {}),
@@ -187,30 +186,6 @@ export class JobsService {
       input.submissionType === 'profile_snapshot'
         ? await this.getIndividualProviderProfileSnapshot(expertId)
         : null;
-    const applicationFeeAmount = toNumber(job.application_fee_amount);
-    const settings = await this.settingsService.getAppStatus();
-    const applicationCommissionAmount = Math.min(
-      applicationFeeAmount,
-      Math.max(
-        applicationFeeAmount * (settings.commissionPercent / 100),
-        settings.commissionMinEgp,
-      ),
-    );
-    const businessPayoutAmount = Math.max(0, applicationFeeAmount - applicationCommissionAmount);
-
-    let expertWallet = null;
-    if (applicationFeeAmount > 0) {
-      expertWallet = await this.walletRepo.findByUserId(expertId);
-      if (!expertWallet) {
-        throw new HttpError({
-          statusCode: 402,
-          code: 'INSUFFICIENT_BALANCE',
-          message: 'A provider wallet is required to submit this application.',
-        });
-      }
-      await this.walletRepo.createForUser(job.business_id);
-    }
-
     const pool = getPool();
     const client = await pool.connect();
     try {
@@ -219,72 +194,22 @@ export class JobsService {
         jobId,
         expertId,
         submissionType: input.submissionType,
-        applicationFeeAmount,
-        applicationCommissionAmount,
-        businessPayoutAmount,
+        // Never reuse fee values from a historical job row for a new
+        // application. These columns are retained strictly as audit history.
+        applicationFeeAmount: 0,
+        applicationCommissionAmount: 0,
+        businessPayoutAmount: 0,
         ...(input.coverLetter !== undefined ? { coverLetter: input.coverLetter } : {}),
         ...(profileSnapshot != null ? { profileSnapshot } : {}),
         ...(input.cvFileUrl?.trim() ? { cvFileUrl: input.cvFileUrl.trim() } : {}),
       };
       const app = await this.repo.applyForJob(applicationInput, client);
 
-      if (applicationFeeAmount > 0) {
-        const businessWallet = await this.walletRepo.findByUserId(job.business_id);
-        if (!businessWallet || !expertWallet) {
-          throw new HttpError({
-            statusCode: 402,
-            code: 'INSUFFICIENT_BALANCE',
-            message: 'Wallets are not configured for this application payment.',
-          });
-        }
-
-        const platformWalletId = await this.walletRepo.getOrCreateCommissionWallet(
-          client,
-          settings.commissionReceiverId,
-        );
-
-        await this.walletRepo.debitWalletInTransaction(
-          client,
-          expertWallet.id,
-          expertId,
-          applicationFeeAmount,
-          'Paid hiring application submission',
-          'job_application',
-          app.id,
-        );
-
-        if (businessPayoutAmount > 0) {
-          await this.walletRepo.creditWithTypeInTransaction(
-            client,
-            businessWallet.id,
-            job.business_id,
-            businessPayoutAmount,
-            'payment',
-            'Hiring application payout',
-            'job_application',
-            app.id,
-          );
-        }
-
-        if (applicationCommissionAmount > 0) {
-          await this.walletRepo.creditWithTypeInTransaction(
-            client,
-            platformWalletId,
-            settings.commissionReceiverId,
-            applicationCommissionAmount,
-            'commission',
-            'Hiring application commission',
-            'job_application',
-            app.id,
-          );
-        }
-      }
-
       await client.query('COMMIT');
       await this.notificationsService.createForUser(job.business_id, {
         type: 'job_application',
         title: 'New hiring application',
-        message: 'A new provider submitted a paid application to your hiring post.',
+        message: 'A new provider submitted an application to your hiring post.',
         payload: { jobId: job.id, applicationId: app.id },
       });
       return this.toApplication(app);
@@ -296,13 +221,6 @@ export class JobsService {
           statusCode: 409,
           code: 'DUPLICATE_APPLICATION',
           message: 'You already applied for this job.',
-        });
-      }
-      if (err instanceof Error && err.message === 'INSUFFICIENT_BALANCE') {
-        throw new HttpError({
-          statusCode: 402,
-          code: 'INSUFFICIENT_BALANCE',
-          message: 'Insufficient balance to submit this application.',
         });
       }
       throw err;
@@ -700,12 +618,6 @@ export class JobsService {
     businessId: string,
     input: CreateMilestoneDto,
   ): Promise<JobMilestone> {
-    const settings = await this.settingsService.getAppStatus();
-    const { commission, providerAmount } = computeCommissionSplit(
-      input.amount,
-      settings.commissionPercent,
-      settings.commissionMinEgp,
-    );
     const pool = getPool();
     const client = await pool.connect();
     try {
@@ -738,59 +650,12 @@ export class JobsService {
         });
       }
 
-      const businessWallet = await this.walletRepo.getOrCreateUserWalletInTransaction(
-        client,
-        businessId,
-      );
-      const milestone = await this.repo.createMilestone(
-        applicationId,
-        input.title,
-        input.amount,
-        client,
-      );
-      const hold = await this.walletRepo.createHoldInTransaction(
-        client,
-        businessWallet.id,
-        businessId,
-        input.amount,
-        'EGP',
-        'job_milestone',
-        milestone.id,
-        {
-          jobId: job.id,
-          applicationId,
-          commissionAmount: commission,
-          providerPayoutAmount: providerAmount,
-        },
-      );
-      const funded = await this.repo.updateMilestoneEscrow(
-        milestone.id,
-        {
-          status: 'active',
-          walletHoldId: hold.id,
-          commissionAmount: commission,
-          providerPayoutAmount: providerAmount,
-        },
-        client,
-      );
+      const milestone = await this.repo.createMilestone(applicationId, input.title, 0, client);
+      const active = await this.repo.updateMilestoneStatus(milestone.id, 'active', client);
       await client.query('COMMIT');
-      return this.toMilestone(funded);
+      return this.toMilestone(active);
     } catch (err: unknown) {
       await client.query('ROLLBACK');
-      if (err instanceof Error && err.message === 'INSUFFICIENT_BALANCE') {
-        throw new HttpError({
-          statusCode: 402,
-          code: 'INSUFFICIENT_BALANCE',
-          message: 'Insufficient wallet balance to fund this milestone.',
-        });
-      }
-      if (err instanceof Error && err.message === 'WALLET_FROZEN') {
-        throw new HttpError({
-          statusCode: 423,
-          code: 'WALLET_FROZEN',
-          message: 'Wallet is frozen and cannot fund milestones.',
-        });
-      }
       throw err;
     } finally {
       client.release();
@@ -879,7 +744,6 @@ export class JobsService {
     businessId: string,
     status: 'approved' | 'rejected',
   ): Promise<JobMilestone> {
-    const settings = await this.settingsService.getAppStatus();
     const pool = getPool();
     const client = await pool.connect();
     let updated: JobMilestoneRow | null = null;
@@ -934,77 +798,7 @@ export class JobsService {
           throw new HttpError({ statusCode: 400, code: 'JOB_CLOSED', message: 'Job is closed' });
         }
 
-        if (status === 'rejected') {
-          updated = await this.repo.updateMilestoneStatus(milestoneId, 'rejected', client);
-        } else {
-          if (!milestone.wallet_hold_id) {
-            throw new HttpError({
-              statusCode: 409,
-              code: 'MILESTONE_ESCROW_MISSING',
-              message: 'Milestone is not funded and cannot be approved.',
-            });
-          }
-          const amount = toNumber(milestone.amount);
-          const { commission, providerAmount } = computeCommissionSplit(
-            amount,
-            settings.commissionPercent,
-            settings.commissionMinEgp,
-          );
-          await this.walletRepo.captureHoldInTransaction(
-            client,
-            milestone.wallet_hold_id,
-            'Job milestone approved',
-            {
-              milestoneId,
-              applicationId: app.id,
-              jobId: job.id,
-              commissionAmount: commission,
-              providerPayoutAmount: providerAmount,
-            },
-          );
-          const providerWallet = await this.walletRepo.getOrCreateUserWalletInTransaction(
-            client,
-            app.expert_id,
-          );
-          const platformWalletId = await this.walletRepo.getOrCreateCommissionWallet(
-            client,
-            settings.commissionReceiverId,
-          );
-          if (providerAmount > 0) {
-            await this.walletRepo.creditWithTypeInTransaction(
-              client,
-              providerWallet.id,
-              app.expert_id,
-              providerAmount,
-              'payment',
-              'Job milestone payout',
-              'job_milestone',
-              milestoneId,
-            );
-          }
-          if (commission > 0) {
-            await this.walletRepo.creditWithTypeInTransaction(
-              client,
-              platformWalletId,
-              settings.commissionReceiverId,
-              commission,
-              'commission',
-              'Job milestone commission',
-              'job_milestone',
-              milestoneId,
-            );
-          }
-          updated = await this.repo.updateMilestoneEscrow(
-            milestoneId,
-            {
-              status: 'approved',
-              commissionAmount: commission,
-              providerPayoutAmount: providerAmount,
-              settledAt: new Date(),
-            },
-            client,
-          );
-        }
+        updated = await this.repo.updateMilestoneStatus(milestoneId, status, client);
         await client.query('COMMIT');
       }
     } catch (err) {
@@ -1140,21 +934,6 @@ export class JobsService {
           code: 'NOT_FOUND',
           message: 'Job not found or unauthorized',
         });
-      }
-      const refundable = await this.repo.listRefundableMilestonesForJob(jobId, businessId, client);
-      for (const milestone of refundable) {
-        if (!milestone.wallet_hold_id) continue;
-        await this.walletRepo.releaseHoldInTransaction(
-          client,
-          milestone.wallet_hold_id,
-          'Job closed - milestone escrow refunded',
-          { milestoneId: milestone.id, jobId },
-        );
-        await this.repo.updateMilestoneEscrow(
-          milestone.id,
-          { status: 'refunded', settledAt: new Date() },
-          client,
-        );
       }
       const updated = await this.repo.updateJobStatus(jobId, businessId, 'closed', client);
       await client.query('COMMIT');

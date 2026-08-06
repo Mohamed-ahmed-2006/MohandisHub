@@ -7,7 +7,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { ExpertApplications } from './jobs/expert-applications';
 import { JobCard } from './jobs/job-card';
 
-import { getJobsCopy, interpolate } from '@/components/app/jobs/jobs-copy';
+import { getJobsCopy } from '@/components/app/jobs/jobs-copy';
 import { useToast } from '@/components/app/toast';
 import type { Dictionary } from '@/lib/i18n/types';
 import { jobsApiClient } from '@/lib/jobs/client';
@@ -111,11 +111,6 @@ export const ExpertJobsTab = ({
             <h3 className="plan-modal-title">
               {copy.applyFor} {applyJob.title}
             </h3>
-            <p className="dashboard-card-meta">
-              {interpolate(copy.applyChargeNotice, {
-                amount: applyJob.applicationFeeAmount.toFixed(2),
-              })}
-            </p>
             {applyJob.interviewEnabled && applyJob.interviewInstructions && (
               <p className="dashboard-card-meta">{applyJob.interviewInstructions}</p>
             )}
@@ -164,11 +159,7 @@ export const ExpertJobsTab = ({
                   {copy.cancel}
                 </button>
                 <button type="submit" className="dashboard-primary-btn" disabled={applying}>
-                  {applying
-                    ? copy.creating
-                    : interpolate(copy.payAndSubmit, {
-                        amount: applyJob.applicationFeeAmount.toFixed(2),
-                      })}
+                  {applying ? copy.creating : copy.apply}
                 </button>
               </div>
             </form>

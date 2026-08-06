@@ -105,9 +105,6 @@ export const BusinessJobsTab = ({
         description: (form.elements.namedItem('description') as HTMLTextAreaElement).value,
         requirements: (form.elements.namedItem('requirements') as HTMLTextAreaElement).value,
         salaryRange: (form.elements.namedItem('salaryRange') as HTMLInputElement).value,
-        applicationFeeAmount: parseFloat(
-          (form.elements.namedItem('applicationFeeAmount') as HTMLInputElement).value || '0',
-        ),
         interviewEnabled: (form.elements.namedItem('interviewEnabled') as HTMLInputElement).checked,
         interviewInstructions: (
           form.elements.namedItem('interviewInstructions') as HTMLTextAreaElement
@@ -240,11 +237,6 @@ export const BusinessJobsTab = ({
                           {app.submissionType === 'cv_upload'
                             ? copy.cvUploaded
                             : copy.profileSnapshot}
-                        </p>
-                        <p className="dashboard-card-meta">
-                          {copy.paid} {app.applicationFeeAmount.toFixed(2)} EGP |{' '}
-                          {copy.businessGets} {app.businessPayoutAmount.toFixed(2)} EGP |{' '}
-                          {copy.platformGets} {app.applicationCommissionAmount.toFixed(2)} EGP
                         </p>
                         {app.coverLetter && (
                           <p style={{ marginTop: '0.75rem' }}>{app.coverLetter}</p>
@@ -474,15 +466,6 @@ export const BusinessJobsTab = ({
                 name="salaryRange"
                 className="dashboard-input"
                 placeholder={copy.salaryRangePlaceholder}
-              />
-              <input
-                name="applicationFeeAmount"
-                type="number"
-                min="0"
-                step="0.01"
-                className="dashboard-input"
-                placeholder={copy.applicationFeePlaceholder}
-                required
               />
               <label style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
                 <input name="interviewEnabled" type="checkbox" /> {copy.enableInterviews}

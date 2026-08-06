@@ -18,7 +18,6 @@ export const JobCard = ({ job, copy, children }: JobCardProps) => {
       </p>
       <p className="dashboard-card-desc">{job.description}</p>
       <p className="dashboard-card-meta">
-        {copy.applicationFee}: {job.applicationFeeAmount.toFixed(2)} EGP |{' '}
         {job.interviewEnabled ? copy.interviewsEnabled : copy.interviewsDisabled}
       </p>
       {job.interviewInstructions && (

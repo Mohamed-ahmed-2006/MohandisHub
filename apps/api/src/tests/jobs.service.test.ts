@@ -146,7 +146,7 @@ describe('JobsService hardening', () => {
     });
   });
 
-  it('stores paid profile snapshot applications and splits wallet amounts', async () => {
+  it('stores profile snapshot applications without a wallet or legacy financial mutation', async () => {
     queryMock.mockResolvedValueOnce({}).mockResolvedValueOnce({});
 
     const repo = {
@@ -154,36 +154,17 @@ describe('JobsService hardening', () => {
       applyForJob: vi.fn().mockResolvedValue(
         makeApp({
           profile_snapshot: { headline: 'Expert snapshot' },
-          application_fee_amount: '20',
-          application_commission_amount: '3',
-          business_payout_amount: '17',
+          application_fee_amount: '0',
+          application_commission_amount: '0',
+          business_payout_amount: '0',
         }),
       ),
     };
     const notificationsService = {
       createForUser: vi.fn().mockResolvedValue(undefined),
     };
-    const walletRepo = {
-      findByUserId: vi.fn((userId: string) => {
-        if (userId === 'expert-1') return Promise.resolve({ id: 'wallet-expert' });
-        if (userId === 'business-1') return Promise.resolve({ id: 'wallet-business' });
-        return Promise.resolve(null);
-      }),
-      createForUser: vi.fn().mockResolvedValue({ id: 'wallet-business' }),
-      getOrCreateCommissionWallet: vi.fn().mockResolvedValue('wallet-platform'),
-      debitWalletInTransaction: vi.fn().mockResolvedValue('tx-1'),
-      creditWithTypeInTransaction: vi.fn().mockResolvedValue(undefined),
-    };
-    const settingsService = {
-      getAppStatus: vi.fn().mockResolvedValue({
-        commissionPercent: 10,
-        commissionMinEgp: 3,
-        commissionReceiverId: 'platform-1',
-      }),
-    };
     const profilesService = {
       getExpertProfile: vi.fn().mockResolvedValue({ headline: 'Expert snapshot' }),
-      // JobsService now probes craftsmen profile first and falls back to expert.
       getCraftsmanProfile: vi.fn().mockResolvedValue(null),
     };
 
@@ -192,8 +173,7 @@ describe('JobsService hardening', () => {
       notificationsService as never,
       {} as never,
       {} as never,
-      walletRepo as never,
-      settingsService as never,
+      {} as never,
       profilesService as never,
     );
 
@@ -207,69 +187,70 @@ describe('JobsService hardening', () => {
       expect.objectContaining({
         submissionType: 'profile_snapshot',
         profileSnapshot: { headline: 'Expert snapshot' },
-        applicationFeeAmount: 20,
-        applicationCommissionAmount: 3,
-        businessPayoutAmount: 17,
+        applicationFeeAmount: 0,
+        applicationCommissionAmount: 0,
+        businessPayoutAmount: 0,
       }),
       expect.any(Object),
     );
-    expect(walletRepo.debitWalletInTransaction).toHaveBeenCalledWith(
-      expect.any(Object),
-      'wallet-expert',
-      'expert-1',
-      20,
-      'Paid hiring application submission',
-      'job_application',
-      'app-1',
-    );
-    expect(walletRepo.creditWithTypeInTransaction).toHaveBeenNthCalledWith(
-      1,
-      expect.any(Object),
-      'wallet-business',
-      'business-1',
-      17,
-      'payment',
-      'Hiring application payout',
-      'job_application',
-      'app-1',
-    );
-    expect(walletRepo.creditWithTypeInTransaction).toHaveBeenNthCalledWith(
-      2,
-      expect.any(Object),
-      'wallet-platform',
-      'platform-1',
-      3,
-      'commission',
-      'Hiring application commission',
-      'job_application',
-      'app-1',
-    );
     expect(result.submissionType).toBe('profile_snapshot');
-    expect(result.applicationCommissionAmount).toBe(3);
-    expect(result.businessPayoutAmount).toBe(17);
+    expect(result.applicationFeeAmount).toBe(0);
+    expect(result.applicationCommissionAmount).toBe(0);
+    expect(result.businessPayoutAmount).toBe(0);
   });
 
-  it('blocks paid applications when expert wallet is missing', async () => {
+  it('stores every new hiring post with the retired application fee set to zero', async () => {
     const repo = {
-      getJobById: vi.fn().mockResolvedValue(makeJob({ application_fee_amount: '25' })),
+      createJob: vi.fn().mockResolvedValue(makeJob({ application_fee_amount: '0' })),
     };
-    const walletRepo = {
-      findByUserId: vi.fn().mockResolvedValue(null),
+    const usageQuotaService = {
+      withActionLock: vi.fn(
+        async (_userId: string, _feature: string, action: () => Promise<unknown>) => action(),
+      ),
     };
-
     const service = new JobsService(
       repo as never,
       {} as never,
       {} as never,
       {} as never,
-      walletRepo as never,
-      {
-        getAppStatus: vi.fn().mockResolvedValue({
-          commissionPercent: 10,
-          commissionMinEgp: 3,
-          commissionReceiverId: 'platform-1',
+      { getAppStatus: vi.fn().mockResolvedValue({ featurePlansEnabled: false }) } as never,
+      {} as never,
+      {} as never,
+      usageQuotaService as never,
+    );
+
+    const result = await service.createJob('business-1', {
+      title: 'Mechanical engineer',
+      description: 'Recruiting for a full-time engineering role.',
+      applicationFeeAmount: 99,
+    });
+
+    expect(repo.createJob).toHaveBeenCalledWith(
+      'business-1',
+      expect.objectContaining({ applicationFeeAmount: 0 }),
+    );
+    expect(result.applicationFeeAmount).toBe(0);
+  });
+
+  it('allows applications without an EGP wallet even when a historical job fee is present', async () => {
+    queryMock.mockResolvedValueOnce({}).mockResolvedValueOnce({});
+    const repo = {
+      getJobById: vi.fn().mockResolvedValue(makeJob({ application_fee_amount: '25' })),
+      applyForJob: vi.fn().mockResolvedValue(
+        makeApp({
+          application_fee_amount: '0',
+          application_commission_amount: '0',
+          business_payout_amount: '0',
         }),
-      } as never,
+      ),
+    };
+
+    const service = new JobsService(
+      repo as never,
+      { createForUser: vi.fn().mockResolvedValue(undefined) } as never,
+      {} as never,
+      {} as never,
+      {} as never,
       { getExpertProfile: vi.fn(), getCraftsmanProfile: vi.fn().mockResolvedValue(null) } as never,
     );
 
@@ -278,9 +259,15 @@ describe('JobsService hardening', () => {
         submissionType: 'profile_snapshot',
         coverLetter: 'Ready to help',
       }),
-    ).rejects.toMatchObject({
-      code: 'INSUFFICIENT_BALANCE',
-    });
+    ).resolves.toMatchObject({ applicationFeeAmount: 0 });
+    expect(repo.applyForJob).toHaveBeenCalledWith(
+      expect.objectContaining({
+        applicationFeeAmount: 0,
+        applicationCommissionAmount: 0,
+        businessPayoutAmount: 0,
+      }),
+      expect.any(Object),
+    );
   });
 
   it('rejects external CV URLs for job applications', async () => {
@@ -362,67 +349,53 @@ describe('JobsService hardening', () => {
     expect(result.cvFileUrl).toBe('/api/upload/private/11111111-1111-4111-8111-111111111111');
   });
 
-  it('funds milestones with a wallet hold on creation', async () => {
+  it('creates non-financial milestones without escrow', async () => {
     queryMock
       .mockResolvedValueOnce({}) // BEGIN
       .mockResolvedValueOnce({ rows: [makeApp({ status: 'accepted' })] })
       .mockResolvedValueOnce({ rows: [makeJob()] })
       .mockResolvedValueOnce({}); // COMMIT
     const repo = {
-      createMilestone: vi.fn().mockResolvedValue(makeMilestone({ wallet_hold_id: null })),
-      updateMilestoneEscrow: vi.fn().mockResolvedValue(makeMilestone({ status: 'active' })),
-    };
-    const walletRepo = {
-      getOrCreateUserWalletInTransaction: vi.fn().mockResolvedValue({ id: 'wallet-business' }),
-      createHoldInTransaction: vi.fn().mockResolvedValue({ id: 'hold-1' }),
-    };
-    const service = new JobsService(
-      repo as never,
-      {} as never,
-      {} as never,
-      {} as never,
-      walletRepo as never,
-      {
-        getAppStatus: vi.fn().mockResolvedValue({
-          commissionPercent: 10,
-          commissionMinEgp: 0,
+      createMilestone: vi.fn().mockResolvedValue(
+        makeMilestone({
+          amount: '0',
+          wallet_hold_id: null,
+          commission_amount: '0',
+          provider_payout_amount: '0',
         }),
-      } as never,
-    );
+      ),
+      updateMilestoneStatus: vi.fn().mockResolvedValue(
+        makeMilestone({
+          amount: '0',
+          status: 'active',
+          wallet_hold_id: null,
+          commission_amount: '0',
+          provider_payout_amount: '0',
+        }),
+      ),
+    };
+    const service = new JobsService(repo as never);
 
     const result = await service.createMilestone('app-1', 'business-1', {
       title: 'M1',
       amount: 50,
     });
 
-    expect(walletRepo.createHoldInTransaction).toHaveBeenCalledWith(
-      expect.any(Object),
-      'wallet-business',
-      'business-1',
-      50,
-      'EGP',
-      'job_milestone',
+    expect(repo.createMilestone).toHaveBeenCalledWith('app-1', 'M1', 0, expect.any(Object));
+    expect(repo.updateMilestoneStatus).toHaveBeenCalledWith(
       'milestone-1',
-      expect.objectContaining({
-        applicationId: 'app-1',
-        commissionAmount: 5,
-        providerPayoutAmount: 45,
-      }),
-    );
-    expect(repo.updateMilestoneEscrow).toHaveBeenCalledWith(
-      'milestone-1',
-      expect.objectContaining({
-        status: 'active',
-        walletHoldId: 'hold-1',
-        commissionAmount: 5,
-        providerPayoutAmount: 45,
-      }),
+      'active',
       expect.any(Object),
     );
-    expect(result.walletHoldId).toBe('hold-1');
+    expect(result).toMatchObject({
+      amount: '0',
+      walletHoldId: null,
+      commissionAmount: '0',
+      providerPayoutAmount: '0',
+    });
   });
 
-  it('approves submitted milestones by capturing hold and crediting payout plus commission', async () => {
+  it('approves submitted milestones without payout or commission', async () => {
     queryMock
       .mockResolvedValueOnce({}) // BEGIN
       .mockResolvedValueOnce({ rows: [makeMilestone({ status: 'submitted' })] })
@@ -430,20 +403,7 @@ describe('JobsService hardening', () => {
       .mockResolvedValueOnce({ rows: [makeJob()] })
       .mockResolvedValueOnce({}); // COMMIT
     const repo = {
-      updateMilestoneEscrow: vi.fn().mockResolvedValue(
-        makeMilestone({
-          status: 'approved',
-          commission_amount: '5',
-          provider_payout_amount: '45',
-          settled_at: new Date().toISOString(),
-        }),
-      ),
-    };
-    const walletRepo = {
-      captureHoldInTransaction: vi.fn().mockResolvedValue({ id: 'hold-1' }),
-      getOrCreateUserWalletInTransaction: vi.fn().mockResolvedValue({ id: 'wallet-expert' }),
-      getOrCreateCommissionWallet: vi.fn().mockResolvedValue('wallet-platform'),
-      creditWithTypeInTransaction: vi.fn().mockResolvedValue(undefined),
+      updateMilestoneStatus: vi.fn().mockResolvedValue(makeMilestone({ status: 'approved' })),
     };
     const notificationsService = { createForUser: vi.fn().mockResolvedValue(undefined) };
     const service = new JobsService(
@@ -451,48 +411,14 @@ describe('JobsService hardening', () => {
       notificationsService as never,
       {} as never,
       {} as never,
-      walletRepo as never,
-      {
-        getAppStatus: vi.fn().mockResolvedValue({
-          commissionPercent: 10,
-          commissionMinEgp: 0,
-          commissionReceiverId: 'platform-1',
-        }),
-      } as never,
     );
 
     const result = await service.reviewMilestone('milestone-1', 'business-1', 'approved');
 
-    expect(walletRepo.captureHoldInTransaction).toHaveBeenCalledWith(
-      expect.any(Object),
-      'hold-1',
-      'Job milestone approved',
-      expect.objectContaining({
-        commissionAmount: 5,
-        providerPayoutAmount: 45,
-      }),
-    );
-    expect(walletRepo.creditWithTypeInTransaction).toHaveBeenNthCalledWith(
-      1,
-      expect.any(Object),
-      'wallet-expert',
-      'expert-1',
-      45,
-      'payment',
-      'Job milestone payout',
-      'job_milestone',
+    expect(repo.updateMilestoneStatus).toHaveBeenCalledWith(
       'milestone-1',
-    );
-    expect(walletRepo.creditWithTypeInTransaction).toHaveBeenNthCalledWith(
-      2,
+      'approved',
       expect.any(Object),
-      'wallet-platform',
-      'platform-1',
-      5,
-      'commission',
-      'Job milestone commission',
-      'job_milestone',
-      'milestone-1',
     );
     expect(result.status).toBe('approved');
   });
@@ -535,42 +461,20 @@ describe('JobsService hardening', () => {
     expect(result.status).toBe('rejected');
   });
 
-  it('refunds non-approved held milestones when closing a job', async () => {
+  it('closes jobs without releasing historical escrow records', async () => {
     queryMock
       .mockResolvedValueOnce({})
       .mockResolvedValueOnce({ rows: [makeJob()] })
       .mockResolvedValueOnce({});
     const repo = {
-      listRefundableMilestonesForJob: vi
-        .fn()
-        .mockResolvedValue([makeMilestone({ status: 'active' })]),
-      updateMilestoneEscrow: vi.fn().mockResolvedValue(makeMilestone({ status: 'refunded' })),
+      listRefundableMilestonesForJob: vi.fn(),
       updateJobStatus: vi.fn().mockResolvedValue(makeJob({ status: 'closed' })),
     };
-    const walletRepo = {
-      releaseHoldInTransaction: vi.fn().mockResolvedValue({ id: 'hold-1', status: 'released' }),
-    };
-    const service = new JobsService(
-      repo as never,
-      {} as never,
-      {} as never,
-      {} as never,
-      walletRepo as never,
-    );
+    const service = new JobsService(repo as never);
 
     const result = await service.closeJob('job-1', 'business-1');
 
-    expect(walletRepo.releaseHoldInTransaction).toHaveBeenCalledWith(
-      expect.any(Object),
-      'hold-1',
-      'Job closed - milestone escrow refunded',
-      { milestoneId: 'milestone-1', jobId: 'job-1' },
-    );
-    expect(repo.updateMilestoneEscrow).toHaveBeenCalledWith(
-      'milestone-1',
-      expect.objectContaining({ status: 'refunded' }),
-      expect.any(Object),
-    );
+    expect(repo.listRefundableMilestonesForJob).not.toHaveBeenCalled();
     expect(result.status).toBe('closed');
   });
 

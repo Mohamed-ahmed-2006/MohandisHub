@@ -10,7 +10,8 @@ const createJobSchema = z.object({
   description: z.string().min(10),
   requirements: z.string().optional(),
   salaryRange: z.string().optional(),
-  applicationFeeAmount: z.number().min(0),
+  // Accepted only for backward-compatible clients; JobsService always stores 0.
+  applicationFeeAmount: z.number().min(0).optional(),
   interviewEnabled: z.boolean().optional(),
   interviewInstructions: z.string().max(4000).optional(),
 });
@@ -33,7 +34,8 @@ const applyJobSchema = z
 
 const createMilestoneSchema = z.object({
   title: z.string().min(3).max(300),
-  amount: z.number().positive(),
+  // Historical clients may still send this retired EGP field. It is ignored.
+  amount: z.number().min(0).optional(),
 });
 
 const submitMilestoneSchema = z.object({
@@ -140,7 +142,6 @@ class JobsController {
       const job = await this.service.createJob(user.id, {
         title: data.title,
         description: data.description,
-        applicationFeeAmount: data.applicationFeeAmount,
         ...(data.requirements !== undefined ? { requirements: data.requirements } : {}),
         ...(data.salaryRange !== undefined ? { salaryRange: data.salaryRange } : {}),
         ...(data.interviewEnabled !== undefined ? { interviewEnabled: data.interviewEnabled } : {}),
@@ -319,7 +320,10 @@ class JobsController {
       const user = req.user!;
       const appId = req.params.appId!;
       const data = parseBody(createMilestoneSchema, req.body);
-      const milestone = await this.service.createMilestone(appId, user.id, data);
+      const milestone = await this.service.createMilestone(appId, user.id, {
+        title: data.title,
+        ...(data.amount !== undefined ? { amount: data.amount } : {}),
+      });
       res.status(201).json({ ok: true, data: milestone });
     } catch (err) {
       next(err);

@@ -43,7 +43,6 @@ export const BusinessMilestoneManager = ({ accessToken, applicationId, copy }: P
     try {
       await jobsApiClient.createMilestone(accessToken, applicationId, {
         title: (form.elements.namedItem('title') as HTMLInputElement).value,
-        amount: parseFloat((form.elements.namedItem('amount') as HTMLInputElement).value),
       });
       form.reset();
       void loadMilestones();
@@ -97,17 +96,10 @@ export const BusinessMilestoneManager = ({ accessToken, applicationId, copy }: P
                 style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}
               >
                 <strong>{m.title}</strong>
-                <span>
-                  {m.amount} EGP -{' '}
-                  <span className={`badge badge--${m.status}`}>
-                    {formatMilestoneStatus(m.status, copy)}
-                  </span>
+                <span className={`badge badge--${m.status}`}>
+                  {formatMilestoneStatus(m.status, copy)}
                 </span>
               </div>
-              <p className="dashboard-card-meta">
-                {copy.businessGets}: {m.providerPayoutAmount} EGP | {copy.platformGets}:{' '}
-                {m.commissionAmount} EGP
-              </p>
 
               {m.status === 'submitted' && (
                 <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem' }}>
@@ -144,14 +136,6 @@ export const BusinessMilestoneManager = ({ accessToken, applicationId, copy }: P
           placeholder={copy.milestoneTitlePlaceholder}
           required
           style={{ flex: 2 }}
-        />
-        <input
-          name="amount"
-          type="number"
-          className="dashboard-input"
-          placeholder={copy.milestoneAmountPlaceholder}
-          required
-          style={{ flex: 1 }}
         />
         <button
           type="submit"

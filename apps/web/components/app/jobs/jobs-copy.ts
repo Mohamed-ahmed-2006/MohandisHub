@@ -15,9 +15,6 @@ const defaultJobsCopy = {
   cvUploaded: 'CV uploaded',
   profileSnapshot: 'Profile snapshot',
   appProfile: 'App profile',
-  paid: 'Paid',
-  businessGets: 'Business gets',
-  platformGets: 'Platform gets',
   openCv: 'Open CV',
   appProfileSnapshotAttached: 'App profile snapshot attached.',
   interviewInvitedAt: 'Interview invited at',
@@ -44,7 +41,6 @@ const defaultJobsCopy = {
   descriptionPlaceholder: 'Description',
   requirementsPlaceholder: 'Requirements',
   salaryRangePlaceholder: 'Salary range',
-  applicationFeePlaceholder: 'Application fee (EGP)',
   enableInterviews: 'Enable interviews',
   interviewInstructionsPlaceholder: 'Interview instructions (optional)',
   cancel: 'Cancel',
@@ -54,11 +50,9 @@ const defaultJobsCopy = {
   noOpenJobs: 'No open jobs found.',
   apply: 'Apply',
   applyFor: 'Apply for',
-  applyChargeNotice: 'You will be charged {amount} EGP when this application is submitted.',
   cvUpload: 'CV upload',
   chooseCvError: 'Please select a CV file.',
   coverLetterPlaceholder: 'Why are you a good fit?',
-  payAndSubmit: 'Pay {amount} EGP and submit',
   applicationSubmitted: 'Application submitted successfully.',
   failedToApply: 'Failed to apply',
   hiringPostCreated: 'Hiring post created.',
@@ -76,7 +70,6 @@ const defaultJobsCopy = {
   profileSnapshotStored: 'Profile snapshot was attached to this application.',
   openDetails: 'Open Details',
   submissionReceipt: 'Submission Receipt',
-  applicationFee: 'Application fee',
   submissionType: 'Submission type',
   expertProfileSnapshotStored: 'Your expert profile snapshot was stored with this application.',
   interviewReservationId: 'Interview reservation ID',
@@ -105,7 +98,6 @@ const defaultJobsCopy = {
   failedToCreateMilestone: 'Failed to create milestone',
   failedToReviewMilestone: 'Failed to review milestone',
   milestoneTitlePlaceholder: 'Milestone Title',
-  milestoneAmountPlaceholder: 'Amount (EGP)',
   adding: 'Adding...',
   add: 'Add',
   noRange: 'No range',
@@ -143,13 +135,6 @@ export function getJobsCopy(dictionary?: Dictionary): JobsCopy {
       ...(copy.statusLabels ?? {}),
     },
   };
-}
-
-export function interpolate(template: string, values: Record<string, string>): string {
-  return Object.entries(values).reduce(
-    (text, [key, value]) => text.replaceAll(`{${key}}`, value),
-    template,
-  );
 }
 
 export function formatApplicationStatus(status: JobApplication['status'], copy: JobsCopy): string {

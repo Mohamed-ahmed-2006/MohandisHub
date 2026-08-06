@@ -20,10 +20,6 @@ import { jobsApiClient } from '@/lib/jobs/client';
 import { reservationsApiClient } from '@/lib/reservations/client';
 import { getPrivateFileOpenableUrl } from '@/lib/upload/client';
 
-function formatMoney(value: number): string {
-  return `${value.toFixed(2)} EGP`;
-}
-
 function formatDateTime(value: string): string {
   return new Date(value).toLocaleString();
 }
@@ -172,8 +168,7 @@ export const ExpertApplications = ({
                   </p>
                   <p className="dashboard-card-meta">
                     {copy.submittedVia}{' '}
-                    {app.submissionType === 'cv_upload' ? copy.cvUpload : copy.appProfile} |{' '}
-                    {copy.paid} {formatMoney(app.applicationFeeAmount)}
+                    {app.submissionType === 'cv_upload' ? copy.cvUpload : copy.appProfile}
                   </p>
                   {app.coverLetter && <p style={{ marginTop: '0.75rem' }}>{app.coverLetter}</p>}
                   {app.cvFileUrl ? (
@@ -229,9 +224,6 @@ export const ExpertApplications = ({
                   >
                     <h4 style={{ marginBottom: '0.75rem' }}>{copy.submissionReceipt}</h4>
                     <p className="dashboard-card-meta">
-                      {copy.applicationFee}: {formatMoney(app.applicationFeeAmount)}
-                    </p>
-                    <p className="dashboard-card-meta">
                       {copy.submissionType}:{' '}
                       {app.submissionType === 'cv_upload' ? copy.cvUpload : copy.profileSnapshot}
                     </p>
@@ -283,15 +275,8 @@ export const ExpertApplications = ({
                                 }}
                               >
                                 <strong>{milestone.title}</strong>
-                                <span>
-                                  {milestone.amount} EGP |{' '}
-                                  {formatMilestoneStatus(milestone.status, copy)}
-                                </span>
+                                <span>{formatMilestoneStatus(milestone.status, copy)}</span>
                               </div>
-                              <p className="dashboard-card-meta" style={{ marginBottom: '0.5rem' }}>
-                                {copy.businessGets}: {milestone.providerPayoutAmount} EGP |{' '}
-                                {copy.platformGets}: {milestone.commissionAmount} EGP
-                              </p>
                               {['pending', 'active', 'rejected'].includes(milestone.status) && (
                                 <form
                                   style={{ display: 'flex', gap: '0.5rem' }}
