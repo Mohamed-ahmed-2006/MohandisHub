@@ -59,7 +59,16 @@ const seedUser = async (role: string): Promise<string> => {
   return rows[0]!.id;
 };
 
-/** A Business account with a workspace, an owner membership, a role and a profile. */
+/**
+ * A Business account with a workspace, an owner membership, a role and a profile.
+ *
+ * The workspace, its role and its owner membership are created inside ONE
+ * transaction. `trg_business_teams_owner_present` (20260731120000) is a
+ * DEFERRABLE INITIALLY DEFERRED constraint trigger that asserts a committed
+ * workspace has exactly one owner, so three autocommitted statements would
+ * commit an ownerless workspace at the first one and be refused — correctly.
+ * A real workspace is provisioned transactionally for the same reason.
+ */
 const seedBusinessWithWorkspace = async (): Promise<{
   businessId: string;
   teamId: string;
@@ -69,39 +78,61 @@ const seedBusinessWithWorkspace = async (): Promise<{
 }> => {
   const businessId = await seedUser('business');
 
-  const { rows: profileRows } = await pool.query<{ id: string }>(
-    `INSERT INTO business_profiles (user_id, company_name) VALUES ($1, $2) RETURNING id`,
-    [businessId, `Company ${seq}`],
-  );
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
 
-  const { rows: teamRows } = await pool.query<{ id: string }>(
-    `INSERT INTO business_teams (business_id, name) VALUES ($1, $2) RETURNING id`,
-    [businessId, `Workspace ${seq}`],
-  );
-  const teamId = teamRows[0]!.id;
+    const { rows: profileRows } = await client.query<{ id: string }>(
+      `INSERT INTO business_profiles (user_id, company_name) VALUES ($1, $2) RETURNING id`,
+      [businessId, `Company ${seq}`],
+    );
 
-  const { rows: roleRows } = await pool.query<{ id: string }>(
-    `INSERT INTO business_team_roles (team_id, role_key, name, built_in, permissions)
-     VALUES ($1, 'owner', 'Owner', true, '["manage_team"]'::jsonb)
-     RETURNING id`,
-    [teamId],
-  );
-  const roleId = roleRows[0]!.id;
+    const { rows: teamRows } = await client.query<{ id: string }>(
+      `INSERT INTO business_teams (business_id, name) VALUES ($1, $2) RETURNING id`,
+      [businessId, `Workspace ${seq}`],
+    );
+    const teamId = teamRows[0]!.id;
 
-  const { rows: memberRows } = await pool.query<{ id: string }>(
-    `INSERT INTO business_members (team_id, user_id, role, role_id)
-     VALUES ($1, $2, 'owner', $3)
-     RETURNING id`,
-    [teamId, businessId, roleId],
-  );
+    const { rows: roleRows } = await client.query<{ id: string }>(
+      `INSERT INTO business_team_roles (team_id, role_key, name, built_in, permissions)
+       VALUES ($1, 'owner', 'Owner', true, '["manage_team"]'::jsonb)
+       RETURNING id`,
+      [teamId],
+    );
+    const roleId = roleRows[0]!.id;
 
-  return {
-    businessId,
-    teamId,
-    memberId: memberRows[0]!.id,
-    roleId,
-    profileId: profileRows[0]!.id,
-  };
+    const { rows: memberRows } = await client.query<{ id: string }>(
+      `INSERT INTO business_members (team_id, user_id, role, role_id)
+       VALUES ($1, $2, 'owner', $3)
+       RETURNING id`,
+      [teamId, businessId, roleId],
+    );
+
+    await client.query('COMMIT');
+
+    return {
+      businessId,
+      teamId,
+      memberId: memberRows[0]!.id,
+      roleId,
+      profileId: profileRows[0]!.id,
+    };
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => {});
+    throw error;
+  } finally {
+    client.release();
+  }
+};
+
+/** Every table in the public schema, so the migration's footprint can be diffed. */
+const publicTables = async (): Promise<string[]> => {
+  const { rows } = await pool.query<{ table_name: string }>(
+    `SELECT table_name FROM information_schema.tables
+      WHERE table_schema = 'public' AND table_type = 'BASE TABLE'
+      ORDER BY table_name`,
+  );
+  return rows.map((row) => row.table_name);
 };
 
 /** A snapshot of everything the migration must not touch. */
@@ -210,13 +241,45 @@ describe.skipIf(!pgIntegrationEnabled())('deterministic backfill', () => {
   });
 
   it('computes in PostgreSQL exactly what Node computes', async () => {
-    const account = await seedUser('business');
-    const { rows } = await pool.query<{ id: string }>(
-      `SELECT public.business_commercial_identity_deterministic_id($1) AS id`,
-      [account],
+    // Fixed inputs, so this pins the rule rather than sampling it. The set
+    // spans the variant nibble's whole range: the derivation keeps two bits of
+    // the hash and forces two, and a mistake there shows up on some inputs and
+    // not others.
+    const accounts = [
+      '00000000-0000-4000-8000-000000000000',
+      '11111111-1111-4111-8111-111111111111',
+      '22222222-2222-4222-8222-222222222222',
+      '7f3a1c9e-5b2d-4e8a-9c1f-0d6b4a2e8c37',
+      'ffffffff-ffff-4fff-bfff-ffffffffffff',
+    ];
+
+    const { rows } = await pool.query<{ input: string; id: string }>(
+      `SELECT u AS input, public.business_commercial_identity_deterministic_id(u::uuid) AS id
+         FROM unnest($1::text[]) AS u`,
+      [accounts],
     );
 
-    expect(rows[0]!.id).toBe(deterministicInitialIdentityId(account));
+    expect(rows).toHaveLength(accounts.length);
+    for (const row of rows) {
+      expect([row.input, row.id]).toEqual([row.input, deterministicInitialIdentityId(row.input)]);
+      expect(row.id).toMatch(
+        /^[0-9a-f]{8}-[0-9a-f]{4}-3[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/,
+      );
+    }
+    // Distinct inputs, distinct identities.
+    expect(new Set(rows.map((r) => r.id)).size).toBe(accounts.length);
+  });
+
+  it('creates no identity for a Business account that gains the role later, until re-run', async () => {
+    await rollback();
+    const account = await seedUser('customer');
+    await applyMigration();
+    expect(await mappedIdentityFor(account)).toBeNull();
+
+    await pool.query(`UPDATE users SET primary_role = 'business' WHERE id = $1`, [account]);
+    await applyMigration();
+
+    expect(await mappedIdentityFor(account)).toBe(deterministicInitialIdentityId(account));
   });
 
   it('includes a deactivated Business account', async () => {
@@ -518,19 +581,19 @@ describe.skipIf(!pgIntegrationEnabled())('the migration is additive', () => {
 
   it('creates no unrelated Wave 3 table', async () => {
     await rollback();
+    const before = await publicTables();
+
     await applyMigration();
+    const after = await publicTables();
 
-    const { rows } = await pool.query<{ table_name: string }>(
-      `SELECT table_name FROM information_schema.tables
-        WHERE table_schema = 'public'
-          AND (table_name LIKE '%engagement%'
-            OR table_name LIKE '%settlement%'
-            OR table_name LIKE '%personal_commercial%'
-            OR table_name LIKE '%fulfillment%'
-            OR table_name LIKE '%proposal%')`,
-    );
-
-    expect(rows).toEqual([]);
+    // The migration's entire table footprint, diffed rather than pattern-matched.
+    // A name filter would both miss a table this slice must not create and trip
+    // over pre-existing ones such as `reservation_location_proposals`.
+    expect(after.filter((table) => !before.includes(table))).toEqual([
+      'business_commercial_identities',
+      'business_commercial_identity_legacy_map',
+    ]);
+    expect(before.filter((table) => !after.includes(table))).toEqual([]);
   });
 
   it('keeps the two new tables backend-only', async () => {
