@@ -13,8 +13,11 @@ const adminId = '33333333-3333-4333-8333-333333333333';
 const uploadId = '44444444-4444-4444-8444-444444444444';
 const key = '1690000000-abc-photo.jpg';
 const publicUrl = `https://project.supabase.co/storage/v1/object/public/uploads/${key}`;
+// Source text is asserted verbatim, including line breaks. Normalize CRLF so the
+// assertions hold on checkouts where git materializes native (Windows) line endings;
+// the asserted content itself is unchanged.
 const readSource = (relative: string): string =>
-  readFileSync(new URL(relative, import.meta.url), 'utf8');
+  readFileSync(new URL(relative, import.meta.url), 'utf8').replace(/\r\n/g, '\n');
 
 const row = (overrides: Partial<PublicUploadObject> = {}): PublicUploadObject => ({
   id: uploadId,
