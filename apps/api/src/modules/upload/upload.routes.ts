@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -7,9 +8,12 @@ import { Router } from 'express';
 import multer from 'multer';
 
 import { env } from '../../config/env.js';
+import { deleteLocalUploadBasenameIfExists } from '../../lib/local-upload-storage.js';
 import {
   createPrivateSignedUrl,
+  deleteObjectsFromBucket,
   isSupabaseStorageConfigured,
+  UPLOADS_BUCKET,
   uploadToSupabase,
   uploadToSupabasePrivate,
 } from '../../lib/supabase-storage.js';
@@ -21,6 +25,8 @@ import { asyncHandler } from '../../utils/async-handler.js';
 import { HttpError } from '../../utils/http-error.js';
 import { SettingsService } from '../settings/settings.service.js';
 
+import { PublicUploadDeletionService } from './public-upload-deletion.service.js';
+import { PublicUploadRepository } from './public-upload.repository.js';
 import {
   findPrivateUploadById,
   insertPrivateUpload,
@@ -31,6 +37,8 @@ import {
 } from './upload.repository.js';
 
 const settingsService = new SettingsService();
+const publicUploadRepository = new PublicUploadRepository();
+const publicUploadDeletionService = new PublicUploadDeletionService(publicUploadRepository);
 const PRIVATE_BUCKET = 'verification-docs';
 const PRIVATE_BUCKET_LOCAL = 'local';
 
@@ -147,6 +155,7 @@ uploadRouter.post(
     }
     let fileUrl: string;
     let filename: string;
+    let bucket: string;
     if (isSupabaseStorageConfigured() && req.file.buffer) {
       const result = await uploadToSupabase(
         req.file.buffer,
@@ -155,16 +164,82 @@ uploadRouter.post(
       );
       fileUrl = result.url;
       filename = result.path;
+      bucket = UPLOADS_BUCKET;
     } else {
       const diskFile = req.file as Express.Multer.File & { filename?: string };
       filename = diskFile.filename ?? req.file.originalname;
       fileUrl = `/uploads/${filename}`;
+      bucket = PRIVATE_BUCKET_LOCAL;
     }
-    const response: ApiSuccessBody<{ url: string; filename: string; originalName: string }> = {
+    const bytes = req.file.buffer ?? fs.readFileSync(req.file.path);
+    let registered;
+    try {
+      registered = await publicUploadRepository.insertActive({
+        userId: req.user!.id,
+        bucket,
+        storagePath: filename,
+        originalName: req.file.originalname,
+        detectedMime: req.file.mimetype,
+        sizeBytes: req.file.size,
+        sha256: createHash('sha256').update(bytes).digest('hex'),
+      });
+    } catch (error) {
+      // Both targets were created by this request and never came from client
+      // input, so compensating cleanup cannot cross an ownership boundary.
+      try {
+        if (bucket === UPLOADS_BUCKET) {
+          await deleteObjectsFromBucket(UPLOADS_BUCKET, [filename]);
+        } else {
+          deleteLocalUploadBasenameIfExists(filename);
+        }
+      } catch {
+        // Preserve the database failure; orphan cleanup can be handled safely
+        // from server-owned logs without accepting a client URL.
+      }
+      throw error;
+    }
+    const response: ApiSuccessBody<{
+      url: string;
+      filename: string;
+      originalName: string;
+      uploadId: string;
+    }> = {
       ok: true,
-      data: { url: fileUrl, filename, originalName: req.file.originalname },
+      data: {
+        url: fileUrl,
+        filename,
+        originalName: req.file.originalname,
+        uploadId: registered.id,
+      },
     };
     res.status(201).json(response);
+  }),
+);
+
+uploadRouter.delete(
+  '/public/:id',
+  authenticate,
+  requireEmailVerified,
+  loadAdminFromDb,
+  asyncHandler(async (req, res) => {
+    const id = req.params.id;
+    if (
+      !id ||
+      !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id)
+    ) {
+      throw new HttpError({
+        statusCode: 400,
+        code: 'INVALID_PUBLIC_UPLOAD_ID',
+        message: 'A valid public upload id is required.',
+      });
+    }
+    const user = req.user!;
+    const result = await publicUploadDeletionService.deleteById({
+      uploadObjectId: id,
+      actorId: user.id,
+      allowAdmin: hasAdminPermission(user, 'manage_media'),
+    });
+    res.json({ ok: true, data: result } satisfies ApiSuccessBody<typeof result>);
   }),
 );
 

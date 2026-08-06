@@ -71,6 +71,14 @@ export async function listActiveMediaAssets(usageType: string): Promise<MediaIte
   return rows;
 }
 
+export async function findMediaAssetById(id: string): Promise<MediaItemRow | null> {
+  await ensureTable();
+  const { rows } = await getPool().query<MediaItemRow>(`SELECT * FROM media_assets WHERE id = $1`, [
+    id,
+  ]);
+  return rows[0] ?? null;
+}
+
 export async function createMediaAsset(input: {
   title: string;
   altText: string | null;

@@ -2,11 +2,14 @@ import { fetchWithAuthRetry } from '@/lib/auth/fetch-with-auth-retry';
 import { getApiBaseUrl } from '@/lib/env';
 
 type UploadResponse = { data: { url: string; filename: string; originalName: string } };
+type PublicUploadResponse = {
+  data: { url: string; filename: string; originalName: string; uploadId: string };
+};
 
 export async function uploadFile(
   accessToken: string,
   file: File,
-): Promise<{ url: string; filename: string; originalName: string }> {
+): Promise<{ url: string; filename: string; originalName: string; uploadId: string }> {
   const formData = new FormData();
   formData.append('file', file);
 
@@ -25,8 +28,23 @@ export async function uploadFile(
     throw new Error(body?.error?.message ?? 'Upload failed');
   }
 
-  const json = (await res.json()) as unknown as UploadResponse;
+  const json = (await res.json()) as unknown as PublicUploadResponse;
   return json.data;
+}
+
+export async function deletePublicUpload(accessToken: string, uploadId: string): Promise<void> {
+  const res = await fetchWithAuthRetry(
+    `${getApiBaseUrl()}/api/upload/public/${encodeURIComponent(uploadId)}`,
+    {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${accessToken}` },
+    },
+    accessToken,
+  );
+  if (!res.ok) {
+    const body = (await res.json().catch(() => ({}))) as { error?: { message?: string } };
+    throw new Error(body?.error?.message ?? 'Could not delete upload');
+  }
 }
 
 /** Upload sensitive file (CV, verification docs). Stored in private bucket; URL is an API path that requires auth to resolve. */

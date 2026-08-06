@@ -9,10 +9,12 @@ import { requireAdminPermission, requireRole } from '../../middleware/require-ro
 import { asyncHandler } from '../../utils/async-handler.js';
 import { HttpError } from '../../utils/http-error.js';
 import { logAudit } from '../audit/audit.service.js';
+import { PublicUploadDeletionService } from '../upload/public-upload-deletion.service.js';
 
 import {
   createMediaAsset,
   deleteMediaAsset,
+  findMediaAssetById,
   listActiveMediaAssets,
   listMediaAssets,
   updateMediaAsset,
@@ -32,6 +34,7 @@ const createSchema = z.object({
 });
 
 const updateSchema = createSchema.partial();
+const publicUploadDeletion = new PublicUploadDeletionService();
 
 const mediaRouter = Router();
 
@@ -206,20 +209,37 @@ mediaRouter.delete(
         message: 'Media id is required.',
       });
     }
-    const deleted = await deleteMediaAsset(mediaId);
-    if (!deleted) {
+    const media = await findMediaAssetById(mediaId);
+    if (!media) {
       throw new HttpError({
         statusCode: 404,
         code: 'MEDIA_NOT_FOUND',
         message: 'Media asset not found.',
       });
     }
+    let filesRemoved = 0;
+    if (media.created_by) {
+      try {
+        const result = await publicUploadDeletion.deleteTrustedReference({
+          referenceUrl: media.image_url,
+          expectedOwnerId: media.created_by,
+          actorId: req.user!.id,
+          allowAdmin: true,
+        });
+        filesRemoved = result.filesRemoved;
+      } catch (error) {
+        if (!(error instanceof HttpError && error.code === 'UNTRUSTED_PUBLIC_UPLOAD_REFERENCE')) {
+          throw error;
+        }
+      }
+    }
+    await deleteMediaAsset(mediaId);
     await logAudit({
       actorId: req.user?.id ?? null,
       action: 'admin.media.delete',
       resourceType: 'media_asset',
       resourceId: mediaId,
-      details: { deleted: true },
+      details: { deleted: true, filesRemoved },
       ip: req.ip ?? req.socket?.remoteAddress ?? null,
     });
     res.json({ ok: true, data: { deleted: true } } satisfies ApiSuccessBody<{ deleted: boolean }>);

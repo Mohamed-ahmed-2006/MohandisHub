@@ -1,42 +1,45 @@
 import { getPool } from '../../db/pool.js';
-import { deleteLocalUploadBasenameIfExists } from '../../lib/local-upload-storage.js';
-import {
-  deleteObjectsFromBucket,
-  isSupabaseStorageConfigured,
-  resolvePublicUploadRef,
-  UPLOADS_BUCKET,
-} from '../../lib/supabase-storage.js';
 import { HttpError } from '../../utils/http-error.js';
 import { parseNeedReferenceUrls } from '../retention/retention.urls.js';
+import { PublicUploadDeletionService } from '../upload/public-upload-deletion.service.js';
 
 import { ModerationRepository } from './moderation.repository.js';
 
-async function deleteUrlsFromStorage(urls: string[]): Promise<number> {
-  let n = 0;
-  const supaPaths: string[] = [];
-  for (const url of urls) {
-    const ref = resolvePublicUploadRef(url);
-    if (!ref) continue;
-    if (ref.kind === 'supabase') {
-      supaPaths.push(ref.path);
-    } else if (deleteLocalUploadBasenameIfExists(ref.basename)) {
-      n += 1;
-    }
-  }
-  if (supaPaths.length > 0 && isSupabaseStorageConfigured()) {
-    await deleteObjectsFromBucket(UPLOADS_BUCKET, supaPaths);
-    n += supaPaths.length;
-  }
-  return n;
-}
-
 export class ModerationService {
-  private readonly logRepo = new ModerationRepository();
+  constructor(
+    private readonly logRepo: ModerationRepository = new ModerationRepository(),
+    private readonly uploadDeletion: PublicUploadDeletionService = new PublicUploadDeletionService(),
+  ) {}
+
+  private async deleteTrustedReferences(
+    urls: string[],
+    resourceOwnerId: string,
+    adminId: string,
+  ): Promise<number> {
+    let filesRemoved = 0;
+    for (const referenceUrl of urls) {
+      try {
+        const result = await this.uploadDeletion.deleteTrustedReference({
+          referenceUrl,
+          expectedOwnerId: resourceOwnerId,
+          actorId: adminId,
+          allowAdmin: true,
+        });
+        filesRemoved += result.filesRemoved;
+      } catch (error) {
+        if (error instanceof HttpError && error.code === 'UNTRUSTED_PUBLIC_UPLOAD_REFERENCE') {
+          continue;
+        }
+        throw error;
+      }
+    }
+    return filesRemoved;
+  }
 
   async clearNeedReferences(needId: string, adminId: string): Promise<{ filesRemoved: number }> {
     const pool = getPool();
-    const { rows } = await pool.query<{ reference_url: string | null }>(
-      `SELECT reference_url FROM needs WHERE id = $1`,
+    const { rows } = await pool.query<{ reference_url: string | null; customer_id: string }>(
+      `SELECT reference_url, customer_id FROM needs WHERE id = $1`,
       [needId],
     );
     const row = rows[0];
@@ -44,7 +47,7 @@ export class ModerationService {
       throw new HttpError({ statusCode: 404, code: 'NOT_FOUND', message: 'Need not found.' });
     }
     const urls = parseNeedReferenceUrls(row.reference_url);
-    const filesRemoved = await deleteUrlsFromStorage(urls);
+    const filesRemoved = await this.deleteTrustedReferences(urls, row.customer_id, adminId);
     await pool.query(`UPDATE needs SET reference_url = NULL, updated_at = now() WHERE id = $1`, [
       needId,
     ]);
@@ -60,8 +63,8 @@ export class ModerationService {
 
   async clearBidAttachment(messageId: string, adminId: string): Promise<{ filesRemoved: number }> {
     const pool = getPool();
-    const { rows } = await pool.query<{ attachment_url: string | null }>(
-      `SELECT attachment_url FROM bid_messages WHERE id = $1`,
+    const { rows } = await pool.query<{ attachment_url: string | null; sender_id: string }>(
+      `SELECT attachment_url, sender_id FROM bid_messages WHERE id = $1`,
       [messageId],
     );
     const row = rows[0];
@@ -69,7 +72,7 @@ export class ModerationService {
       throw new HttpError({ statusCode: 404, code: 'NOT_FOUND', message: 'Message not found.' });
     }
     const u = row.attachment_url?.trim();
-    const filesRemoved = u ? await deleteUrlsFromStorage([u]) : 0;
+    const filesRemoved = u ? await this.deleteTrustedReferences([u], row.sender_id, adminId) : 0;
     await pool.query(`UPDATE bid_messages SET attachment_url = NULL WHERE id = $1`, [messageId]);
     await this.logRepo.insertLog({
       adminUserId: adminId,
@@ -87,8 +90,8 @@ export class ModerationService {
     adminId: string,
   ): Promise<{ filesRemoved: number }> {
     const pool = getPool();
-    const { rows } = await pool.query<{ images: string[] | null }>(
-      `SELECT images FROM services WHERE id = $1`,
+    const { rows } = await pool.query<{ images: string[] | null; provider_id: string }>(
+      `SELECT images, provider_id FROM services WHERE id = $1`,
       [serviceId],
     );
     const row = rows[0];
@@ -105,7 +108,9 @@ export class ModerationService {
     }
     const removed = images[urlIndex]!;
     const next = images.filter((_, i) => i !== urlIndex);
-    const filesRemoved = removed ? await deleteUrlsFromStorage([removed]) : 0;
+    const filesRemoved = removed
+      ? await this.deleteTrustedReferences([removed], row.provider_id, adminId)
+      : 0;
     await pool.query(`UPDATE services SET images = $2::text[], updated_at = now() WHERE id = $1`, [
       serviceId,
       next,

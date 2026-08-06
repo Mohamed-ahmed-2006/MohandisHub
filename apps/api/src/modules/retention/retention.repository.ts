@@ -252,9 +252,13 @@ export class RetentionRepository {
   async listCompletedNeedsWithOldReferences(
     client: PoolClient,
     hours: number,
-  ): Promise<Array<{ id: string; reference_url: string | null }>> {
-    const { rows } = await client.query<{ id: string; reference_url: string | null }>(
-      `SELECT id, reference_url FROM needs
+  ): Promise<Array<{ id: string; reference_url: string | null; customer_id: string }>> {
+    const { rows } = await client.query<{
+      id: string;
+      reference_url: string | null;
+      customer_id: string;
+    }>(
+      `SELECT id, reference_url, customer_id FROM needs
        WHERE status = 'completed'
          AND reference_url IS NOT NULL
          AND trim(reference_url) <> ''
@@ -274,9 +278,13 @@ export class RetentionRepository {
   async listBidMessagesWithOldAttachments(
     client: PoolClient,
     hours: number,
-  ): Promise<Array<{ id: string; attachment_url: string | null }>> {
-    const { rows } = await client.query<{ id: string; attachment_url: string | null }>(
-      `SELECT id, attachment_url FROM bid_messages
+  ): Promise<Array<{ id: string; attachment_url: string | null; sender_id: string }>> {
+    const { rows } = await client.query<{
+      id: string;
+      attachment_url: string | null;
+      sender_id: string;
+    }>(
+      `SELECT id, attachment_url, sender_id FROM bid_messages
        WHERE attachment_url IS NOT NULL
          AND trim(attachment_url) <> ''
          AND created_at < NOW() - ($1::int * INTERVAL '1 hour')`,

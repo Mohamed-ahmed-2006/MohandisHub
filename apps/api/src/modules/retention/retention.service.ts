@@ -1,17 +1,14 @@
 import { env } from '../../config/env.js';
 import { logger } from '../../config/logger.js';
 import { getPool } from '../../db/pool.js';
-import {
-  deleteLocalUploadBasenameIfExists,
-  deleteLocalUploadRelativePathIfExists,
-} from '../../lib/local-upload-storage.js';
+import { deleteLocalUploadRelativePathIfExists } from '../../lib/local-upload-storage.js';
 import {
   deleteObjectsFromBucket,
   isSupabaseStorageConfigured,
   parsePrivateUploadIdFromUrl,
-  resolvePublicUploadRef,
-  UPLOADS_BUCKET,
 } from '../../lib/supabase-storage.js';
+import { HttpError } from '../../utils/http-error.js';
+import { PublicUploadDeletionService } from '../upload/public-upload-deletion.service.js';
 
 import { checkDeleteThresholds, sendRetentionAlert } from './retention.alerts.js';
 import { mergeRetentionHours } from './retention.merge.js';
@@ -23,31 +20,32 @@ const ADVISORY_LOCK_KEY = 912_345_678_901;
 
 export class RetentionService {
   private readonly repo = new RetentionRepository();
+  private readonly publicUploadDeletion = new PublicUploadDeletionService();
 
-  private async deletePublicMediaUrls(urls: string[], dryRun: boolean): Promise<number> {
+  private async deletePublicMediaUrls(
+    urls: string[],
+    resourceOwnerId: string,
+    dryRun: boolean,
+  ): Promise<number> {
     if (dryRun) return 0;
-    let n = 0;
-    const supaPaths: string[] = [];
-    for (const url of urls) {
-      const ref = resolvePublicUploadRef(url);
-      if (!ref) continue;
-      if (ref.kind === 'supabase') {
-        supaPaths.push(ref.path);
-      } else if (deleteLocalUploadBasenameIfExists(ref.basename)) {
-        n += 1;
-      }
-    }
-    if (supaPaths.length > 0 && isSupabaseStorageConfigured()) {
+    let filesRemoved = 0;
+    for (const referenceUrl of urls) {
       try {
-        await deleteObjectsFromBucket(UPLOADS_BUCKET, supaPaths);
-        n += supaPaths.length;
-      } catch (e) {
-        logger.error('Retention: Supabase delete batch failed', {
-          error: e instanceof Error ? e.message : 'unknown',
+        const result = await this.publicUploadDeletion.deleteTrustedReference({
+          referenceUrl,
+          expectedOwnerId: resourceOwnerId,
+          actorId: resourceOwnerId,
+          allowAdmin: false,
         });
+        filesRemoved += result.filesRemoved;
+      } catch (error) {
+        if (error instanceof HttpError && error.code === 'UNTRUSTED_PUBLIC_UPLOAD_REFERENCE') {
+          continue;
+        }
+        throw error;
       }
     }
-    return n;
+    return filesRemoved;
   }
 
   private async deletePrivateUploadObjects(
@@ -201,7 +199,7 @@ export class RetentionService {
         let deletedFiles = 0;
         for (const row of rows) {
           const urls = parseNeedReferenceUrls(row.reference_url);
-          deletedFiles += await this.deletePublicMediaUrls(urls, dryRun);
+          deletedFiles += await this.deletePublicMediaUrls(urls, row.customer_id, dryRun);
           await this.repo.clearNeedReferenceUrl(client, row.id, dryRun);
         }
         results.needReferenceAfterCompleted = {
@@ -223,7 +221,7 @@ export class RetentionService {
         for (const row of rows) {
           const u = row.attachment_url?.trim();
           if (u) {
-            deletedFiles += await this.deletePublicMediaUrls([u], dryRun);
+            deletedFiles += await this.deletePublicMediaUrls([u], row.sender_id, dryRun);
           }
           await this.repo.clearBidMessageAttachment(client, row.id, dryRun);
         }

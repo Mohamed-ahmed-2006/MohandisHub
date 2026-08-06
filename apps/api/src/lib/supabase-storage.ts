@@ -108,6 +108,15 @@ export type UploadResult = { url: string; path: string };
 
 export type PrivateUploadResult = { path: string };
 
+const safeStorageFilename = (filename: string): string => {
+  const normalized = filename
+    .replaceAll('\\', '_')
+    .replaceAll('/', '_')
+    .replace(/[^a-zA-Z0-9._-]/g, '_')
+    .replace(/\.\.+/g, '_');
+  return normalized && normalized !== '.' && normalized !== '..' ? normalized : 'upload';
+};
+
 /** Upload to public bucket; returns public URL. Use for non-sensitive assets only. */
 export async function uploadToSupabase(
   buffer: Buffer,
@@ -118,7 +127,7 @@ export async function uploadToSupabase(
   if (!supabase) {
     throw new Error('Supabase Storage is not configured');
   }
-  const path = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}-${filename}`;
+  const path = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}-${safeStorageFilename(filename)}`;
   const { data, error } = await supabase.storage.from(UPLOADS_BUCKET).upload(path, buffer, {
     contentType,
     upsert: false,
@@ -140,7 +149,7 @@ export async function uploadToSupabasePrivate(
   if (!supabase) {
     throw new Error('Supabase Storage is not configured');
   }
-  const path = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}-${filename}`;
+  const path = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}-${safeStorageFilename(filename)}`;
   const { error } = await supabase.storage.from(VERIFICATION_DOCS_BUCKET).upload(path, buffer, {
     contentType,
     upsert: false,
