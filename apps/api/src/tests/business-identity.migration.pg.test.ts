@@ -36,8 +36,19 @@ let pool: Pool;
 /** The migration under test, applied from its own file rather than a copy. */
 const MIGRATION_FILE = '20260806090000_business_commercial_identity_compatibility.sql';
 
-/** The reversal documented in that migration's header. */
+/**
+ * The reversal documented in that migration's header.
+ *
+ * Prefixed with the one dependency a LATER migration created: 20260807090000
+ * anchors advertisement ownership to the legacy map with a composite foreign
+ * key, and the map cannot be dropped while that key names it. Releasing it here
+ * keeps this suite's subject the BCI spine alone — the advertisement slice
+ * proves its own reversal in `advertisement-ownership.migration.pg.test.ts`.
+ */
 const ROLLBACK_SQL = `
+ALTER TABLE IF EXISTS public.advertisements
+  DROP CONSTRAINT IF EXISTS fk_advertisements_business_identity_anchor;
+
 DROP TRIGGER IF EXISTS trg_business_commercial_identities_immutable_owner
   ON public.business_commercial_identities;
 DROP FUNCTION IF EXISTS public.business_commercial_identities_reject_owner_change();

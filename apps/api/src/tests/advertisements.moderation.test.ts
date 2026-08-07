@@ -226,6 +226,34 @@ const makeService = (
   return new AdvertisementsService(repo, undefined, undefined, mhc, billing, renewalRepo, renewal);
 };
 
+/**
+ * The commercial-ownership row the resolver reads before every advertiser
+ * mutation (20260807090000).
+ *
+ * PROVIDER is an Expert here, so the fixture states what a correct database
+ * states for one: no Business mapping, no commercial identity, ownership still
+ * resolved through the legacy advertiser. That is the compatibility state these
+ * moderation tests have always exercised — the assertions below are unchanged
+ * because the answer is unchanged.
+ */
+const ownershipRow = () => ({
+  id: AD_ID,
+  advertiser_id: PROVIDER,
+  commercial_owner_kind: null,
+  business_commercial_identity_id: null,
+  commercial_ownership_state: 'legacy_user_owned',
+  advertiser_role: 'expert',
+  identity_id: null,
+  identity_owner_user_id: null,
+  identity_status: null,
+  identity_origin: null,
+  assigned_anchor_account_id: null,
+  advertiser_initial_identity_id: null,
+  advertiser_initial_identity_status: null,
+  advertiser_initial_identity_origin: null,
+  advertiser_mapping_count: '0',
+});
+
 beforeEach(() => {
   // restore before clear: a spy left on a prototype by one test would otherwise
   // silently change what the next test is exercising.
@@ -233,6 +261,13 @@ beforeEach(() => {
   vi.clearAllMocks();
   client = makeClient();
   poolConnectMock.mockReturnValue(client);
+  poolQueryMock.mockImplementation((sql: string) =>
+    Promise.resolve(
+      typeof sql === 'string' && sql.includes('FROM advertisements a')
+        ? { rows: [ownershipRow()], rowCount: 1 }
+        : { rows: [], rowCount: 0 },
+    ),
+  );
   chargeSpy = vi.spyOn(MhcService.prototype, 'chargeAction');
 });
 
