@@ -232,6 +232,43 @@ export class AdvertisementsRepository {
     return rows[0]!;
   }
 
+  /**
+   * Record the commercial identity that owns a just-created campaign.
+   *
+   * The SAME rule the backfill in 20260807090000 applies, expressed as the same
+   * query: an advertiser with an authoritative initial BCI in
+   * `business_commercial_identity_legacy_map` gets that identity, and nobody
+   * else gets anything. Nothing is inferred from `owner_user_id`, so a second
+   * identity the same owner created natively is not a candidate.
+   *
+   * Runs inside the caller's transaction, immediately after the insert, on a row
+   * that transaction already holds. An advertiser with no mapping — every
+   * personal provider, and a Business registered after the spine migration —
+   * matches nothing, updates nothing, and keeps the legacy ownership the insert
+   * gave it. That is the compatibility state, not a failure, so this returns
+   * null and the caller keeps the row it already has.
+   */
+  async stampCommercialOwnerInTx(
+    client: PoolClient,
+    advertisementId: string,
+  ): Promise<AdvertisementRow | null> {
+    const { rows } = await client.query<AdvertisementRow>(
+      `UPDATE advertisements a
+          SET commercial_owner_kind            = 'business',
+              business_commercial_identity_id  = m.bci_id,
+              commercial_ownership_state       = 'commercial_identity_owned',
+              commercial_ownership_assigned_at = now()
+         FROM business_commercial_identity_legacy_map m
+        WHERE a.id = $1
+          AND m.business_account_id = a.advertiser_id
+          AND a.business_commercial_identity_id IS NULL
+          AND a.commercial_ownership_state = 'legacy_user_owned'
+        RETURNING a.*`,
+      [advertisementId],
+    );
+    return rows[0] ?? null;
+  }
+
   async getAdById(id: string): Promise<AdvertisementRow | null> {
     const { rows } = await getPool().query<AdvertisementRow>(
       `SELECT a.*, COALESCE(u.display_name, u.email) AS advertiser_name

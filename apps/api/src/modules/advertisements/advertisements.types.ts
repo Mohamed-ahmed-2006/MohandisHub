@@ -1,3 +1,8 @@
+import type {
+  AdvertisementCommercialOwnerKind,
+  AdvertisementOwnershipState,
+} from './advertisement-ownership.constants.js';
+
 /**
  * `advertisements.link_type`. `need` and `external` exist in the database CHECK
  * for historical rows, but `advertisements_destination_check` (20260727100000)
@@ -132,6 +137,12 @@ export type AdPricingRuleRow = {
 
 export type AdvertisementRow = {
   id: string;
+  /**
+   * LEGACY owner. Preserved unchanged for the whole Wave 3 compatibility period
+   * — it remains the moderation, billing and renewal anchor, and it is still the
+   * account weekly billing charges. Commercial ownership is resolved through
+   * `advertisement-ownership.repository.ts`, never by reading this column alone.
+   */
   advertiser_id: string;
   title_en: string;
   title_ar: string | null;
@@ -194,6 +205,14 @@ export type AdvertisementRow = {
   auto_renew_paused_at: string | null;
   last_renewal_outcome: AdLastRenewalOutcome | null;
   last_renewal_attempt_at: string | null;
+
+  // Commercial identity ownership (20260807090000). Additive beside
+  // `advertiser_id`, which is untouched. NULL/`legacy_user_owned` is the correct
+  // state for every personal provider campaign until the PCI slice.
+  commercial_owner_kind: AdvertisementCommercialOwnerKind | null;
+  business_commercial_identity_id: string | null;
+  commercial_ownership_state: AdvertisementOwnershipState;
+  commercial_ownership_assigned_at: string | null;
 };
 
 /** One paid seven-day advertisement week. */

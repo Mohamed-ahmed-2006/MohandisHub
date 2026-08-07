@@ -7,6 +7,7 @@ import { WalletRepository } from '../wallet/wallet.repository.js';
 
 import { AdCenterService } from './adcenter.service.js';
 import { AdvertisementBillingService } from './advertisement-billing.service.js';
+import { requireAdvertisementCommercialAuthority } from './advertisement-ownership.authorization.js';
 import { AdvertisementRenewalRepository } from './advertisement-renewal.repository.js';
 import {
   AUTO_RENEW_CONSENT_VERSION,
@@ -156,6 +157,37 @@ export class AdvertisementsService {
   }
 
   // -------------------------------------------------------------------------
+  // Commercial authority
+  // -------------------------------------------------------------------------
+
+  /**
+   * The commercial-identity gate every advertiser-initiated mutation passes
+   * through.
+   *
+   * It answers "is this actor the canonical controller of the identity that owns
+   * this campaign?", which for a Business advertisement is a question about the
+   * BCI and never about the workspace: team membership, `manage_team`, an
+   * Admin-labelled team role, a reserved permission and a selected workspace are
+   * all denied by not being consulted at all.
+   *
+   * It does NOT replace the ownership re-check each mutation performs inside the
+   * transaction that locks the campaign. That check remains the race-safe last
+   * word; this one refuses earlier, and refuses things a bare `advertiser_id`
+   * comparison cannot see — an advertisement whose recorded commercial owner and
+   * legacy anchor contradict each other authorizes nobody.
+   *
+   * Platform moderation does not come through here. The admin routes gate on
+   * admin permissions, and an administrator never acquires the Business's
+   * commercial authority.
+   */
+  private async requireCommercialAuthority(adId: string, userId: string) {
+    return requireAdvertisementCommercialAuthority(getPool(), {
+      advertisementId: adId,
+      actorUserId: userId,
+    });
+  }
+
+  // -------------------------------------------------------------------------
   // Submission
   // -------------------------------------------------------------------------
 
@@ -214,8 +246,12 @@ export class AdvertisementsService {
         clientIdempotencyKey,
         destination,
       );
+      // Ownership is recorded in the same transaction as the campaign, so a
+      // Business campaign is never briefly visible without its commercial owner
+      // and a rollback takes both away together.
+      const owned = await this.repo.stampCommercialOwnerInTx(client, ad.id);
       await client.query('COMMIT');
-      return ad;
+      return owned ?? ad;
     } catch (err: unknown) {
       await client.query('ROLLBACK').catch(() => {});
       // Lost the domain idempotency race: a concurrent identical request
@@ -302,14 +338,8 @@ export class AdvertisementsService {
    * advertiser approve their own campaign.
    */
   async updateAd(adId: string, userId: string, input: UpdateAdInput) {
+    await this.requireCommercialAuthority(adId, userId);
     const ad = await this.getAd(adId);
-    if (ad.advertiser_id !== userId) {
-      throw new HttpError({
-        statusCode: 403,
-        code: 'FORBIDDEN',
-        message: 'This ad does not belong to you.',
-      });
-    }
     if (ad.billing_model === 'weekly' && ad.status !== 'pending_review') {
       throw new HttpError({
         statusCode: 409,
@@ -516,6 +546,13 @@ export class AdvertisementsService {
     adId: string,
     options: { requireAdvertiserId?: string | null; actorUserId?: string | null } = {},
   ): Promise<AdvertisementPeriodResult> {
+    // Only when an ADVERTISER is driving it. The admin route and the scheduler
+    // pass no `requireAdvertiserId`, and neither of them is claiming commercial
+    // authority over the campaign — an administrator activating a due week is
+    // platform moderation, not the Business acting.
+    if (options.requireAdvertiserId) {
+      await this.requireCommercialAuthority(adId, options.requireAdvertiserId);
+    }
     return this.billing.activateDuePeriod(adId, options);
   }
 
@@ -535,6 +572,7 @@ export class AdvertisementsService {
     userId: string,
     idempotencyKey?: string | null,
   ): Promise<AdvertisementPeriodResult> {
+    await this.requireCommercialAuthority(adId, userId);
     return this.billing.renewManually({
       advertisementId: adId,
       providerId: userId,
@@ -555,6 +593,7 @@ export class AdvertisementsService {
     userId: string,
     input: AutoRenewalInput,
   ): Promise<AutoRenewalStateView> {
+    await this.requireCommercialAuthority(adId, userId);
     return this.renewal.configureAutoRenewal({
       advertisementId: adId,
       providerId: userId,
@@ -580,6 +619,7 @@ export class AdvertisementsService {
    * failure set. There is no second charging path for a human to reach.
    */
   async retryAutomaticRenewal(adId: string, userId: string): Promise<AutomaticRenewalResult> {
+    await this.requireCommercialAuthority(adId, userId);
     return this.renewal.renewAutomatically(adId, {
       blocking: true,
       clearPause: true,
@@ -743,14 +783,8 @@ export class AdvertisementsService {
    * what they were promised.
    */
   async cancelAd(adId: string, userId: string) {
+    await this.requireCommercialAuthority(adId, userId);
     const ad = await this.getAd(adId);
-    if (ad.advertiser_id !== userId) {
-      throw new HttpError({
-        statusCode: 403,
-        code: 'FORBIDDEN',
-        message: 'This ad does not belong to you.',
-      });
-    }
 
     if (ad.billing_model === 'weekly') {
       return this.cancelWeeklyAd(adId, userId);
