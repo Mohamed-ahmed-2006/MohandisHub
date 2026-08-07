@@ -6,6 +6,7 @@ import type { Pool } from 'pg';
 
 import { getPool } from '../../db/pool.js';
 import { HttpError } from '../../utils/http-error.js';
+import { ensureInitialBusinessCommercialIdentity } from '../business-identity/business-identity.provisioning.js';
 
 import type {
   BidActivityRow,
@@ -310,6 +311,19 @@ export class AdminRepository {
             `INSERT INTO business_profiles (user_id, company_name) VALUES ($1, $2) ON CONFLICT (user_id) DO NOTHING`,
             [userId, cur.rows[0]?.display_name?.trim() || 'Unnamed Company'],
           );
+          // An account BECOMING a Business is a Business coming into existence
+          // as far as the commercial spine is concerned, so it acquires its
+          // initial identity here, in the same transaction as the role itself.
+          // The `primary_role` UPDATE above is already visible to this
+          // transaction, which is what lets the provisioning read confirm the
+          // account is a Business principal before it writes anything.
+          //
+          // Switching a Business back to another role does NOT remove the
+          // identity: identities are not deleted, ownership is not transferable
+          // self-serve, and the assets already associated with it must stay
+          // associated. Switching back to `business` reuses the same
+          // deterministic identity rather than minting a second one.
+          await ensureInitialBusinessCommercialIdentity(client, userId);
           break;
       }
 

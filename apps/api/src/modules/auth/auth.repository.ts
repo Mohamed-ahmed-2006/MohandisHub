@@ -8,6 +8,7 @@ import type { UserRole } from '@mohandishub/shared';
 import type { Pool } from 'pg';
 
 import { getPool } from '../../db/pool.js';
+import { ensureInitialBusinessCommercialIdentity } from '../business-identity/business-identity.provisioning.js';
 
 import type {
   BusinessVerificationRow,
@@ -222,6 +223,12 @@ export class AuthRepository {
             'INSERT INTO business_profiles (user_id, company_name) VALUES ($1, $2)',
             [created.id, params.companyName ?? 'Unnamed Company'],
           );
+          // The Business's commercial identity is part of creating the Business,
+          // not a step that follows it. Inside this transaction, so a registered
+          // Business never commits without the identity its assets will hang
+          // off; if the spine refuses, the whole registration rolls back and no
+          // half-provisioned account survives.
+          await ensureInitialBusinessCommercialIdentity(client, created.id);
           break;
       }
 
