@@ -9,20 +9,29 @@
 
 ## 1. Verdict
 
-**BCI SLICE DATABASE-VALIDATED WITH NON-BLOCKING RISKS.**
+**BCI SLICE COMPLETE WITH NON-BLOCKING RISKS — READY FOR MERGE REVIEW.**
 
-_Updated 2026-08-06 after PostgreSQL execution — see §17._
+_Updated 2026-08-06 after PostgreSQL execution (§17), and 2026-08-07 after the B5 compatibility
+correction found in independent review (§18)._
 
 The additive spine, the deterministic backfill, the constraint set, the domain layer, the
-authorization boundary and the B1–B5 coverage are implemented, committed and now **executed
-against a real PostgreSQL server**. All 104 migrations replay from an empty database, migration
-104 applies and reconciles, and all 23 BCI PostgreSQL tests pass. **No change to the migration
-was required.**
+authorization boundary and B1–B5 are implemented, committed and **executed against a real
+PostgreSQL server**. All 104 migrations replay from an empty database, migration 104 applies and
+reconciles, and all 23 BCI PostgreSQL tests pass. **No change to the migration was required, at
+any point.**
+
+One merge blocker was found in independent review and is now closed: the legacy compatibility
+projection resolved the Business profile from the identity's owner rather than from the
+authoritative legacy map, so a second, natively created BCI controlled by the same account could
+reach the legacy Business's profile. That is a B5 isolation failure. It is fixed in the domain
+layer, and the fix is protected by eight behavioural regression tests — verified to fail when
+the correction is reverted. **§18 records it in full; the B5 row in §3 and the isolation claim
+in §10 have been corrected rather than left standing.**
 
 Two non-blocking risks remain, neither in this slice: two pre-existing schema-fingerprint tests
 in unrelated suites fail on PostgreSQL 18 for a reason proven independent of migration 104, and
-the validation ran on PostgreSQL 18.4 rather than the deployment's PostgreSQL major version.
-See §14.
+the database validation ran on PostgreSQL 18.4 rather than the PostgreSQL 17 the committed
+Supabase configuration targets. See §14.
 
 ---
 
@@ -46,13 +55,13 @@ All six pre-flight verification checks matched their expected values before any 
 
 Wording taken verbatim from `docs/architecture/wave-3/16-wave-3-scope.md` §1.12 B.
 
-| #      | Requirement                                                                                                                      | Implementation                                                                                                                                                                                                             | Tests                                                                                                                                                                                           |
-| ------ | -------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **B1** | A legacy Business account maps to **exactly one** initial BCI, deterministically; re-running creates none                        | `business_commercial_identity_deterministic_id()`; `PRIMARY KEY (business_account_id)`; `UNIQUE (bci_id)`; `CHECK (bci_id = deterministic(business_account_id))`; backfill with `ON CONFLICT … DO NOTHING` on both inserts | `B1 — a legacy Business account maps to exactly one initial BCI` (6 tests) + pg `deterministic backfill` / `idempotency and concurrency` (9)                                                    |
-| **B2** | **Team/workspace IDs remain unchanged** across the migration                                                                     | The migration issues no `INSERT`/`UPDATE`/`DELETE`/`ALTER` against `business_teams`; the table is read only by the preflight                                                                                               | `renumbers no workspace…`, `writes only to the two tables it creates`; pg `leaves team IDs, members, roles, invitations and profiles byte-identical`                                            |
-| **B3** | **Memberships, invitations, roles and audit history remain unchanged**, including roles carrying a reserved permission           | Same: `business_members`, `business_team_roles`, `business_team_invites`, `business_team_audit_log` are never written                                                                                                      | `renumbers no workspace…`; pg `…byte-identical` (seeds a role carrying `manage_jobs` + `view_analytics`) and `preserves a reserved permission on the role that carries it`                      |
-| **B4** | **User-owned historical assets remain readable** throughout the compatibility period                                             | No asset is re-keyed, no owner column is added, no BCI column is made mandatory anywhere. `business_profiles.user_id` remains the profile owner and the legacy read path is untouched                                      | `adds no owner column to any existing commercial asset`; pg `leaves every existing commercial asset ownership column untouched`; projection tests prove the same profile row resolves both ways |
-| **B5** | **One owner may control multiple BCIs without asset mixing** — assets, balance, reputation and enforcement stay separate per BCI | `owner_user_id` is indexed but deliberately **not** unique; only the _initial_ identity is mapped, so a second identity the same owner controls has no legacy anchor and no shared row. No aggregate is computed anywhere  | `B5 — one owner may control multiple BCIs without asset mixing` (3 tests) + the no-asset-mixing group                                                                                           |
+| #      | Requirement                                                                                                                      | Implementation                                                                                                                                                                                                                                                                                                                                                     | Tests                                                                                                                                                                                           |
+| ------ | -------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **B1** | A legacy Business account maps to **exactly one** initial BCI, deterministically; re-running creates none                        | `business_commercial_identity_deterministic_id()`; `PRIMARY KEY (business_account_id)`; `UNIQUE (bci_id)`; `CHECK (bci_id = deterministic(business_account_id))`; backfill with `ON CONFLICT … DO NOTHING` on both inserts                                                                                                                                         | `B1 — a legacy Business account maps to exactly one initial BCI` (6 tests) + pg `deterministic backfill` / `idempotency and concurrency` (9)                                                    |
+| **B2** | **Team/workspace IDs remain unchanged** across the migration                                                                     | The migration issues no `INSERT`/`UPDATE`/`DELETE`/`ALTER` against `business_teams`; the table is read only by the preflight                                                                                                                                                                                                                                       | `renumbers no workspace…`, `writes only to the two tables it creates`; pg `leaves team IDs, members, roles, invitations and profiles byte-identical`                                            |
+| **B3** | **Memberships, invitations, roles and audit history remain unchanged**, including roles carrying a reserved permission           | Same: `business_members`, `business_team_roles`, `business_team_invites`, `business_team_audit_log` are never written                                                                                                                                                                                                                                              | `renumbers no workspace…`; pg `…byte-identical` (seeds a role carrying `manage_jobs` + `view_analytics`) and `preserves a reserved permission on the role that carries it`                      |
+| **B4** | **User-owned historical assets remain readable** throughout the compatibility period                                             | No asset is re-keyed, no owner column is added, no BCI column is made mandatory anywhere. `business_profiles.user_id` remains the profile owner and the legacy read path is untouched                                                                                                                                                                              | `adds no owner column to any existing commercial asset`; pg `leaves every existing commercial asset ownership column untouched`; projection tests prove the same profile row resolves both ways |
+| **B5** | **One owner may control multiple BCIs without asset mixing** — assets, balance, reputation and enforcement stay separate per BCI | `owner_user_id` is indexed but deliberately **not** unique; only the _initial_ identity is mapped, so a second identity the same owner controls has no legacy anchor and no shared row. No aggregate is computed anywhere. **The compatibility projection resolves through the authoritative legacy map, never through ownership — corrected 2026-08-07, see §18** | `B5 — one owner may control multiple BCIs without asset mixing` (3 tests) + the no-asset-mixing group + the legacy-anchor group (8 tests, §18)                                                  |
 
 ---
 
@@ -244,14 +253,14 @@ boundary only.
 
 ## 10. No-Asset-Mixing Guarantees
 
-| Guarantee                                            | How                                                                                                                           |
-| ---------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| Business A's BCI never resolves Business B's profile | The projection reads `business_profiles` by `identity.ownerUserId` only; tested with two seeded Businesses                    |
-| Business A's team cannot attach to Business B's BCI  | The BCI schema has no team column at all, and the migration writes nothing to any team table                                  |
-| A malformed mapping never picks a random BCI         | `CHECK (bci_id = deterministic(business_account_id))` in the database; named ambiguity instead of `rows[0]` in the repository |
-| No cross-BCI aggregation exists                      | `listIdentitiesControlledBy` returns rows; nothing sums, averages or joins across identities                                  |
-| No existing commercial asset is reassigned           | Zero writes outside the two new tables, asserted by parsing the migration's own statements                                    |
-| Two Businesses cannot share one identity             | `UNIQUE (bci_id)` on the map, plus the composite foreign key                                                                  |
+| Guarantee                                            | How                                                                                                                                                                                                                                                                                   |
+| ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Business A's BCI never resolves Business B's profile | The projection resolves the authoritative legacy map for the supplied BCI and reads `business_profiles` by the account that map names. **Corrected 2026-08-07** — it previously read by `identity.ownerUserId`, which also let a same-owner native BCI reach the legacy profile (§18) |
+| Business A's team cannot attach to Business B's BCI  | The BCI schema has no team column at all, and the migration writes nothing to any team table                                                                                                                                                                                          |
+| A malformed mapping never picks a random BCI         | `CHECK (bci_id = deterministic(business_account_id))` in the database; named ambiguity instead of `rows[0]` in the repository                                                                                                                                                         |
+| No cross-BCI aggregation exists                      | `listIdentitiesControlledBy` returns rows; nothing sums, averages or joins across identities                                                                                                                                                                                          |
+| No existing commercial asset is reassigned           | Zero writes outside the two new tables, asserted by parsing the migration's own statements                                                                                                                                                                                            |
+| Two Businesses cannot share one identity             | `UNIQUE (bci_id)` on the map, plus the composite foreign key                                                                                                                                                                                                                          |
 
 ---
 
@@ -591,3 +600,154 @@ BCI tables with nothing removed.
 The migration, the domain layer and the ordinary test suite were **not** modified. Ordinary
 counts are unchanged at **941 passing**; `typecheck`, `lint`, `validate:i18n`, `build`,
 changed-file Prettier and `git diff --check` all pass.
+
+---
+
+## 18. B5 Compatibility Correction — 2026-08-07
+
+Independent review found one merge-blocking defect in this slice. It is recorded here in full,
+including the claims elsewhere in this report that it invalidated.
+
+### 18.1 The defect
+
+`projectLegacyBusinessProfile` in
+`apps/api/src/modules/business-identity/business-identity.repository.ts` resolved the legacy
+Business profile like this:
+
+```
+projectLegacyBusinessProfile(db, identity)
+  → SELECT id, company_name FROM business_profiles WHERE user_id = identity.ownerUserId
+```
+
+The authoritative mapping table was never consulted. The function also reported
+`businessAccountId: identity.ownerUserId`, presenting the controller as though it were the
+legacy Business anchor.
+
+### 18.2 Why owner-only lookup violates BCI isolation
+
+`owner_user_id` answers _who controls this identity_. The legacy map answers _which legacy
+Business this identity is the initial BCI of_. For an initial BCI the two coincide, which is
+exactly why the defect passed every test written against a single migrated Business — and they
+are still different facts.
+
+The model permits one account to control several BCIs, of which **exactly one** is its legacy
+Business's initial identity ([09 §4.4](../architecture/wave-3/09-business-buying-and-providing.md),
+scope §1.12 B5). A second, natively created BCI shares the owner and has no legacy anchor at
+all. Under owner-only lookup it projected the same legacy Business profile — two commercial
+identities reading one Business's compatibility state, which is precisely the asset mixing B5
+forbids. The blast radius grows with the next slice: once assets are re-associated onto the
+spine, an identity that can reach a Business's legacy profile is an identity that can reach its
+legacy assets.
+
+This was a defect in the **domain layer only**. The schema was already correct: only the initial
+BCI is mapped, and the map's primary key, unique key, deterministic CHECK and composite foreign
+key all held. The repository simply was not reading them.
+
+### 18.3 The authoritative legacy-anchor rule
+
+Legacy compatibility now flows through the persisted mapping and through nothing else. The
+function takes an **identity id** rather than an identity object, so the anchor cannot be
+supplied by the caller, and it resolves the identity through the same validated path every other
+read uses. Four conditions must hold before a single profile column is read:
+
+1. the identity resolves cleanly — `resolveIdentityById` has already rejected duplicate mappings
+   and orphaned initial identities;
+2. it carries an authoritative mapping row at all;
+3. that row names the identity's own owner;
+4. the mapped identity is the deterministic identity for that account, and declares
+   `legacy_business_account` origin.
+
+The profile is then read by **`legacy.businessAccountId`** — the account the map names — not by
+`owner_user_id`.
+
+Condition (4) is defence in depth over the database's own CHECK, **not a substitute for the
+persisted map**: the map is read first and remains the trust boundary, and the locally computed
+identifier is only ever used to _contradict_ it. Ownership, controller identity, team membership
+and workspace ownership are consulted nowhere in this path.
+
+Two ambiguity reasons were added for the contradictions this exposes — `non_deterministic_anchor`
+and `origin_conflict` — alongside the existing `owner_mismatch`, `duplicate_legacy_mappings`,
+`multiple_identities_resolved` and `orphan_initial_identity`.
+
+### 18.4 Result shape
+
+The projection now returns a discriminated result, matching the repository's existing
+`found / not_found / ambiguous` convention:
+
+| Outcome                            | Meaning                                                                                              |
+| ---------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| `{ kind: 'found', projection }`    | A validated legacy anchor exists; the profile is projected                                           |
+| `{ kind: 'no_legacy_anchor' }`     | Ordinary absence — a native BCI, or an identity that does not exist. No legacy Business is reachable |
+| `{ kind: 'ambiguous', ambiguity }` | The anchor is contradictory. Fails closed, naming the reason                                         |
+
+`no_legacy_anchor` is deliberately not an error: a natively created identity having no legacy
+Business behind it is a normal fact about a normal identity, not a failure.
+
+### 18.5 Behaviour
+
+| Case                                              | Behaviour                                         |
+| ------------------------------------------------- | ------------------------------------------------- |
+| Initial BCI with a valid map                      | Projects its own Business profile                 |
+| **Native BCI, same owner** (the merge blocker)    | `no_legacy_anchor` — the profile is never reached |
+| BCI with no mapping                               | `no_legacy_anchor`                                |
+| Identity that does not exist                      | `no_legacy_anchor`                                |
+| Map names an account the identity is not owned by | `ambiguous: owner_mismatch`                       |
+| Mapped identity is not the deterministic one      | `ambiguous: non_deterministic_anchor`             |
+| Native-origin identity carrying a legacy anchor   | `ambiguous: origin_conflict`                      |
+| Anchor duplicated across two Businesses           | `ambiguous: duplicate_legacy_mappings`            |
+| Business A's BCI against Business B               | Reaches only A; B's BCI reaches only B            |
+
+### 18.6 Tests added
+
+Eight behavioural repository tests in `business-identity.compatibility.test.ts`, exercising the
+real resolution path against a modelled database rather than asserting on source text:
+
+1. a native BCI with the same owner does not project the legacy profile, while the initial BCI
+   still does — the primary merge-blocker regression;
+2. a BCI with no mapping reports no legacy anchor;
+3. an identity that does not exist reports no legacy anchor;
+4. an anchor naming another account fails closed as `owner_mismatch`;
+5. a non-deterministic anchor fails closed;
+6. a native-origin identity carrying an anchor fails closed;
+7. a duplicated anchor fails closed rather than choosing one;
+8. one owner controlling three identities keeps each one's compatibility state separate,
+   re-checked after the unanchored identity is resolved so the result cannot depend on read
+   order.
+
+The cross-Business test was extended to assert both directions from one fixture.
+
+**The tests were verified to bite.** Reverting the correction to the owner-only lookup fails
+five of them, including the primary regression; restoring it returns the suite to green. A
+regression test that has never been seen to fail is a comment.
+
+### 18.7 Validation
+
+| Check                     | Result                                                             |
+| ------------------------- | ------------------------------------------------------------------ |
+| BCI compatibility suite   | **54 passing** (was 46)                                            |
+| Ordinary `npm test`       | **949 passing** (was 941) — 20 shared + 609 api + 320 web          |
+| `npm run typecheck`       | PASS                                                               |
+| `npm run lint`            | PASS — `--max-warnings=0`                                          |
+| `npm run validate:i18n`   | PASS                                                               |
+| `npm run build`           | PASS                                                               |
+| Prettier on changed files | PASS                                                               |
+| `git diff --check`        | PASS                                                               |
+| Migration 104             | **byte-for-byte unchanged** — no PostgreSQL re-validation required |
+
+### 18.8 Files changed
+
+- `apps/api/src/modules/business-identity/business-identity.repository.ts` — the projection
+  binds to the authoritative legacy anchor; two ambiguity reasons added; the result becomes a
+  discriminated union.
+- `apps/api/src/tests/business-identity.compatibility.test.ts` — eight regression tests, and the
+  four pre-existing projection tests updated to the new signature and result shape.
+
+No migration, no authorization code, and no other module was touched.
+
+### 18.9 Final B5 result
+
+**B5 satisfied.** One owner may control multiple BCIs, and legacy compatibility now belongs to
+the one identity the authoritative map anchors — proven by tests that fail without the
+correction. The earlier claim in §3 and §10 that B5 was satisfied by the data model alone was
+true of the schema and **not** true of the read path; both have been corrected in place rather
+than left standing.
