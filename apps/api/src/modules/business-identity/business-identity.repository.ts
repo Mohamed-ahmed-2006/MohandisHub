@@ -26,6 +26,8 @@
 
 import type { Pool, PoolClient } from 'pg';
 
+import { deterministicInitialIdentityId } from './business-identity.constants.js';
+
 type Queryable = Pick<Pool | PoolClient, 'query'>;
 
 export type BusinessIdentityStatus = 'active' | 'suspended' | 'archived';
@@ -63,7 +65,12 @@ export type BusinessIdentityAmbiguity = {
     | 'multiple_identities_resolved'
     | 'duplicate_legacy_mappings'
     | 'owner_mismatch'
-    | 'orphan_initial_identity';
+    | 'orphan_initial_identity'
+    // The mapping names an identity that is not the deterministic one for its
+    // account, so the anchor cannot be the initial BCI it claims to be.
+    | 'non_deterministic_anchor'
+    // An identity carrying a legacy anchor while declaring native origin.
+    | 'origin_conflict';
   ownerUserId: string | null;
 };
 
@@ -244,19 +251,97 @@ export const listIdentitiesControlledBy = async (
  */
 export type BusinessIdentityProfileProjection = {
   identityId: string;
-  /** The legacy Business account — still the owner of every existing asset. */
+  /**
+   * The legacy Business account, taken from the authoritative mapping — NOT
+   * from the identity's owner column. The two agree for an initial BCI and are
+   * validated against each other below; they are different facts, and reading
+   * the wrong one is what let a native identity project a legacy profile.
+   */
   businessAccountId: string;
   businessProfileId: string | null;
   companyName: string | null;
 };
 
+/**
+ * Outcome of a legacy compatibility projection.
+ *
+ * `no_legacy_anchor` is an ordinary answer, not a failure: a natively created
+ * BCI has no legacy Business behind it and therefore no legacy profile to
+ * reach. An unknown identity resolves the same way, because in both cases the
+ * honest answer is that no legacy Business is reachable through this identity.
+ */
+export type BusinessIdentityProfileResolution =
+  | { kind: 'found'; projection: BusinessIdentityProfileProjection }
+  | { kind: 'no_legacy_anchor' }
+  | { kind: 'ambiguous'; ambiguity: BusinessIdentityAmbiguity };
+
+/**
+ * Project the legacy Business profile a BCI is the initial identity for.
+ *
+ * Legacy compatibility flows through the authoritative mapping in
+ * `business_commercial_identity_legacy_map` and through nothing else. It is
+ * deliberately NOT derived from ownership: one account may control several
+ * BCIs, exactly one of which is the initial identity of its legacy Business, so
+ * "same owner" and "same legacy Business" are different claims. Resolving the
+ * profile from `owner_user_id` conflates them and lets a second, natively
+ * created identity read the legacy Business's profile — the B5 isolation
+ * failure this function exists to make impossible.
+ *
+ * The identity is resolved here rather than accepted as an argument, so the
+ * anchor cannot be supplied by the caller. Four things must hold before a
+ * single profile column is read:
+ *
+ *   1. the identity resolves cleanly — `resolveIdentityById` has already
+ *      rejected duplicate mappings and orphaned initial identities;
+ *   2. it carries an authoritative mapping row at all;
+ *   3. that row names the identity's own owner;
+ *   4. the mapped identity is THE deterministic identity for that account, and
+ *      declares legacy origin.
+ *
+ * (4) is defence in depth over the database's own CHECK, not a replacement for
+ * the persisted map: the map is read first and stays the trust boundary, and a
+ * locally computed identifier is only ever used to CONTRADICT it, never to
+ * stand in for it.
+ */
 export const projectLegacyBusinessProfile = async (
   db: Queryable,
-  identity: BusinessCommercialIdentity,
-): Promise<BusinessIdentityProfileProjection> => {
+  identityId: string,
+): Promise<BusinessIdentityProfileResolution> => {
+  const resolution = await resolveIdentityById(db, identityId);
+
+  if (resolution.kind === 'not_found') return { kind: 'no_legacy_anchor' };
+  if (resolution.kind === 'ambiguous') {
+    return { kind: 'ambiguous', ambiguity: resolution.ambiguity };
+  }
+
+  const { identity, legacy } = resolution;
+
+  // A natively created identity. Nothing is wrong with it; it simply is not any
+  // legacy Business's initial BCI, so there is no legacy profile to project.
+  if (legacy === null) return { kind: 'no_legacy_anchor' };
+
+  const ambiguous = (
+    reason: BusinessIdentityAmbiguity['reason'],
+  ): BusinessIdentityProfileResolution => ({
+    kind: 'ambiguous',
+    ambiguity: { reason, ownerUserId: identity.ownerUserId },
+  });
+
+  // `interpret` already refuses this, and it is restated because THIS is the
+  // read that turns an anchor into legacy data. A mapping that names one
+  // account attached to an identity owned by another is the exact shape of a
+  // cross-Business leak.
+  if (legacy.businessAccountId !== identity.ownerUserId) return ambiguous('owner_mismatch');
+
+  if (identity.id !== deterministicInitialIdentityId(legacy.businessAccountId)) {
+    return ambiguous('non_deterministic_anchor');
+  }
+
+  if (identity.origin !== 'legacy_business_account') return ambiguous('origin_conflict');
+
   const { rows } = await db.query<{ id: string; company_name: string | null }>(
     `SELECT id, company_name FROM business_profiles WHERE user_id = $1`,
-    [identity.ownerUserId],
+    [legacy.businessAccountId],
   );
 
   // `business_profiles.user_id` is UNIQUE, so more than one row cannot exist.
@@ -265,9 +350,12 @@ export const projectLegacyBusinessProfile = async (
   const row = rows.length === 1 ? rows[0]! : null;
 
   return {
-    identityId: identity.id,
-    businessAccountId: identity.ownerUserId,
-    businessProfileId: row?.id ?? null,
-    companyName: row?.company_name ?? null,
+    kind: 'found',
+    projection: {
+      identityId: identity.id,
+      businessAccountId: legacy.businessAccountId,
+      businessProfileId: row?.id ?? null,
+      companyName: row?.company_name ?? null,
+    },
   };
 };

@@ -423,6 +423,17 @@ describe('BCI resolution', () => {
 // ===========================================================================
 
 describe('compatibility projection to the legacy Business profile', () => {
+  /** Fails the test rather than the type checker when a projection is expected. */
+  const projected = async (db: Pool, identityId: string) => {
+    const result = await projectLegacyBusinessProfile(db, identityId);
+    if (result.kind !== 'found') {
+      throw new Error(`expected a projection, got ${result.kind}`);
+    }
+    return result.projection;
+  };
+
+  const nativeIdentityId = '66666666-6666-4666-8666-666666666666';
+
   it('resolves the same business_profiles row the legacy read resolves', async () => {
     const a = migratedBusiness(businessA);
     const db = fakeDb({
@@ -431,11 +442,7 @@ describe('compatibility projection to the legacy Business profile', () => {
       profiles: [{ id: 'profile-a', user_id: businessA, company_name: 'Alpha Engineering' }],
     });
 
-    const resolution = await resolveIdentityById(db, a.identity.id);
-    expect(resolution.kind).toBe('found');
-    if (resolution.kind !== 'found') return;
-
-    const projection = await projectLegacyBusinessProfile(db, resolution.identity);
+    const projection = await projected(db, a.identity.id);
 
     expect(projection.businessAccountId).toBe(businessA);
     expect(projection.businessProfileId).toBe('profile-a');
@@ -450,9 +457,7 @@ describe('compatibility projection to the legacy Business profile', () => {
       profiles: [{ id: 'profile-a', user_id: businessA, company_name: 'Alpha Engineering' }],
     });
 
-    const resolution = await resolveIdentityById(db, a.identity.id);
-    if (resolution.kind !== 'found') throw new Error('expected a resolved identity');
-    const projection = await projectLegacyBusinessProfile(db, resolution.identity);
+    const projection = await projected(db, a.identity.id);
 
     expect(Object.keys(projection).sort()).toEqual([
       'businessAccountId',
@@ -479,10 +484,7 @@ describe('compatibility projection to the legacy Business profile', () => {
       ],
     });
 
-    const resolution = await resolveIdentityById(db, a.identity.id);
-    if (resolution.kind !== 'found') throw new Error('expected a resolved identity');
-
-    const projection = await projectLegacyBusinessProfile(db, resolution.identity);
+    const projection = await projected(db, a.identity.id);
 
     expect(projection.businessProfileId).toBeNull();
     expect(projection.companyName).toBeNull();
@@ -500,12 +502,160 @@ describe('compatibility projection to the legacy Business profile', () => {
       ],
     });
 
-    const resolution = await resolveIdentityById(db, a.identity.id);
-    if (resolution.kind !== 'found') throw new Error('expected a resolved identity');
-    const projection = await projectLegacyBusinessProfile(db, resolution.identity);
+    const projection = await projected(db, a.identity.id);
 
     expect(projection.businessProfileId).toBe('profile-a');
     expect(projection.companyName).not.toBe('Beta');
+    // ...and the reverse direction, from the same fixture.
+    expect((await projected(db, b.identity.id)).businessProfileId).toBe('profile-b');
+  });
+
+  // -------------------------------------------------------------------------
+  // The legacy anchor is the authority — not ownership.
+  // -------------------------------------------------------------------------
+  // Legacy compatibility used to be resolved from `owner_user_id`, which is a
+  // fact about who controls an identity, not about which legacy Business the
+  // identity IS. One account may control several BCIs; exactly one of them is
+  // its legacy Business's initial identity. The tests below are the difference.
+
+  it('does not project the legacy profile through a native BCI with the same owner', async () => {
+    const a = migratedBusiness(businessA);
+    const db = fakeDb({
+      identities: [
+        a.identity,
+        { id: nativeIdentityId, owner_user_id: businessA, origin: 'native' },
+      ],
+      // Only the initial identity is anchored. The native one never is.
+      maps: [a.map],
+      profiles: [{ id: 'profile-a', user_id: businessA, company_name: 'Alpha Engineering' }],
+    });
+
+    // The initial identity still projects...
+    expect((await projected(db, a.identity.id)).businessProfileId).toBe('profile-a');
+
+    // ...and the second identity the same account controls does not.
+    const result = await projectLegacyBusinessProfile(db, nativeIdentityId);
+
+    expect(result.kind).toBe('no_legacy_anchor');
+    expect(JSON.stringify(result)).not.toContain('profile-a');
+    expect(JSON.stringify(result)).not.toContain('Alpha Engineering');
+  });
+
+  it('reports no legacy anchor for a BCI that has no mapping at all', async () => {
+    const db = fakeDb({
+      identities: [{ id: nativeIdentityId, owner_user_id: businessA, origin: 'native' }],
+      maps: [],
+      profiles: [{ id: 'profile-a', user_id: businessA, company_name: 'Alpha' }],
+    });
+
+    expect((await projectLegacyBusinessProfile(db, nativeIdentityId)).kind).toBe(
+      'no_legacy_anchor',
+    );
+  });
+
+  it('reports no legacy anchor for an identity that does not exist', async () => {
+    const a = migratedBusiness(businessA);
+    const db = fakeDb({
+      identities: [a.identity],
+      maps: [a.map],
+      profiles: [{ id: 'profile-a', user_id: businessA, company_name: 'Alpha' }],
+    });
+
+    expect(
+      (await projectLegacyBusinessProfile(db, '88888888-8888-4888-8888-888888888888')).kind,
+    ).toBe('no_legacy_anchor');
+  });
+
+  it('fails closed when the anchor names an account the identity is not owned by', async () => {
+    // The composite foreign key makes this unreachable in the database. It is
+    // exercised through the repository's own read path so the code does not
+    // depend on the constraint still being there.
+    const identityId = deterministicInitialIdentityId(businessA);
+    const db = fakeDb({
+      identities: [{ id: identityId, owner_user_id: businessA }],
+      maps: [{ business_account_id: businessB, bci_id: identityId }],
+      profiles: [
+        { id: 'profile-a', user_id: businessA, company_name: 'Alpha' },
+        { id: 'profile-b', user_id: businessB, company_name: 'Beta' },
+      ],
+    });
+
+    const result = await projectLegacyBusinessProfile(db, identityId);
+
+    expect(result.kind).toBe('ambiguous');
+    if (result.kind !== 'ambiguous') return;
+    expect(result.ambiguity.reason).toBe('owner_mismatch');
+    expect(JSON.stringify(result)).not.toContain('profile-');
+  });
+
+  it('fails closed when the anchored identity is not the deterministic one', async () => {
+    const strayId = '77777777-7777-4777-8777-777777777777';
+    const db = fakeDb({
+      identities: [{ id: strayId, owner_user_id: businessA }],
+      maps: [{ business_account_id: businessA, bci_id: strayId }],
+      profiles: [{ id: 'profile-a', user_id: businessA, company_name: 'Alpha' }],
+    });
+
+    const result = await projectLegacyBusinessProfile(db, strayId);
+
+    expect(result.kind).toBe('ambiguous');
+    if (result.kind !== 'ambiguous') return;
+    expect(result.ambiguity.reason).toBe('non_deterministic_anchor');
+  });
+
+  it('fails closed when a natively created identity carries a legacy anchor', async () => {
+    const identityId = deterministicInitialIdentityId(businessA);
+    const db = fakeDb({
+      identities: [{ id: identityId, owner_user_id: businessA, origin: 'native' }],
+      maps: [{ business_account_id: businessA, bci_id: identityId }],
+      profiles: [{ id: 'profile-a', user_id: businessA, company_name: 'Alpha' }],
+    });
+
+    const result = await projectLegacyBusinessProfile(db, identityId);
+
+    expect(result.kind).toBe('ambiguous');
+    if (result.kind !== 'ambiguous') return;
+    expect(result.ambiguity.reason).toBe('origin_conflict');
+  });
+
+  it('fails closed on a duplicated anchor rather than choosing one', async () => {
+    const a = migratedBusiness(businessA);
+    const db = fakeDb({
+      identities: [a.identity],
+      maps: [a.map, { business_account_id: businessB, bci_id: a.identity.id }],
+      profiles: [{ id: 'profile-a', user_id: businessA, company_name: 'Alpha' }],
+    });
+
+    const result = await projectLegacyBusinessProfile(db, a.identity.id);
+
+    expect(result.kind).toBe('ambiguous');
+    if (result.kind !== 'ambiguous') return;
+    expect(result.ambiguity.reason).toBe('duplicate_legacy_mappings');
+  });
+
+  it('keeps compatibility state separate across every BCI one owner controls', async () => {
+    const a = migratedBusiness(businessA);
+    const b = migratedBusiness(businessB);
+    const secondForA = { id: nativeIdentityId, owner_user_id: businessA, origin: 'native' };
+    const db = fakeDb({
+      identities: [a.identity, b.identity, secondForA],
+      maps: [a.map, b.map],
+      profiles: [
+        { id: 'profile-a', user_id: businessA, company_name: 'Alpha' },
+        { id: 'profile-b', user_id: businessB, company_name: 'Beta' },
+      ],
+    });
+
+    // Each initial identity reaches its own Business, and only its own.
+    expect((await projected(db, a.identity.id)).businessProfileId).toBe('profile-a');
+    expect((await projected(db, b.identity.id)).businessProfileId).toBe('profile-b');
+
+    // The extra identity reaches neither, and resolving it does not disturb the
+    // two that do — compatibility is a property of the anchor, not of the read
+    // order.
+    expect((await projectLegacyBusinessProfile(db, secondForA.id)).kind).toBe('no_legacy_anchor');
+    expect((await projected(db, a.identity.id)).businessProfileId).toBe('profile-a');
+    expect((await projected(db, b.identity.id)).businessProfileId).toBe('profile-b');
   });
 });
 
